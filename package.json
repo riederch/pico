@@ -8,7 +8,9 @@
     "build": "pnpm -r build",
     "check": "pnpm -r check",
     "dev:core": "pnpm --filter @pico/core dev",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "release:verify": "pnpm check && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
