@@ -10,11 +10,6 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "baseUrl": ".",
-    "paths": {
-      "@pico/protocol": ["packages/protocol/src/index.ts"],
-      "@pico/sync": ["packages/sync/src/index.ts"]
-    }
+    "resolveJsonModule": true
   }
 }
