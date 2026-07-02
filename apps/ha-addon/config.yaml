@@ -1,0 +1,22 @@
+name: Pico Core
+version: "0.1.0"
+slug: pico_core
+description: Local-first Pico Core for Home Assistant.
+url: https://github.com/riederch/pico
+arch:
+  - amd64
+  - aarch64
+startup: services
+boot: auto
+init: false
+ports:
+  3100/tcp: 3100
+ports_description:
+  3100/tcp: Pico Core API and WebSocket endpoint
+map:
+  - addon_config:rw
+options:
+  pico_port: 3100
+schema:
+  pico_port: int
+image: ghcr.io/riederch/pico/core
