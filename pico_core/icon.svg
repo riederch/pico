@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pico Core add-on icon">
+  <rect width="512" height="512" rx="96" fill="#0F172A"/>
+  <path d="M96 352V160C96 124.654 124.654 96 160 96H352C387.346 96 416 124.654 416 160V352C416 387.346 387.346 416 352 416H160C124.654 416 96 387.346 96 352Z" fill="#1E1B4B" stroke="#7C3AED" stroke-width="18"/>
+  <path d="M168 204C168 177.49 189.49 156 216 156H296C322.51 156 344 177.49 344 204V288C344 314.51 322.51 336 296 336H216C189.49 336 168 314.51 168 288V204Z" fill="#111827" stroke="#A78BFA" stroke-width="14"/>
+  <circle cx="224" cy="238" r="16" fill="#E0E7FF"/>
+  <circle cx="288" cy="238" r="16" fill="#E0E7FF"/>
+  <path d="M222 286C242 304 270 304 290 286" stroke="#E0E7FF" stroke-width="14" stroke-linecap="round"/>
+  <path d="M256 112V150" stroke="#A78BFA" stroke-width="16" stroke-linecap="round"/>
+  <circle cx="256" cy="104" r="17" fill="#A78BFA"/>
+  <path d="M136 256H168" stroke="#7C3AED" stroke-width="16" stroke-linecap="round"/>
+  <path d="M344 256H376" stroke="#7C3AED" stroke-width="16" stroke-linecap="round"/>
+  <text x="256" y="392" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="700" fill="#E0E7FF">Pico</text>
+</svg>
