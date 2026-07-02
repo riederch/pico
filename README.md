@@ -1,6 +1,6 @@
 # Pico
 
-![Pico project mark](docs/assets/pico-mark.svg)
+![Pico hero](docs/assets/pico-readme-hero.png)
 
 Pico is a local-first personal AI companion foundation.
 
@@ -9,6 +9,8 @@ The project starts deliberately small: a tested core service, a shared protocol,
 ## Visual identity
 
 Pico's design basis is a small floating digital companion: rounded body, glossy light shell, black face display, expressive glowing eyes, antenna identity light, and a bright chest core.
+
+![Pico design concept](docs/assets/pico-design-concept.png)
 
 The avatar is not just decoration. It communicates state, context, risk, and activity:
 
@@ -156,13 +158,16 @@ The add-on exposes Pico Core on port `3100` and defines a watchdog against:
 /health
 ```
 
-Current add-on icon source:
+Current add-on icon assets:
 
 ```text
 pico_core/icon.svg
+pico_core/icon.png
 ```
 
-The icon follows the simplified neutral Pico silhouette: dark rounded background, white companion shell, cyan eyes, antenna light, and chest core. If Home Assistant requires PNG in a specific context, export `pico_core/icon.svg` to `pico_core/icon.png` during packaging.
+![Pico Home Assistant icon](docs/assets/pico-ha-icon.png)
+
+The icon follows the simplified neutral Pico silhouette: dark rounded background, white companion shell, cyan eyes, antenna light, and chest core.
 
 ## Local development
 
@@ -212,6 +217,19 @@ curl http://localhost:3100/api/events
 | `GET /api/events` | list stored events |
 | `POST /api/events` | append an event |
 | `WS /ws` | event stream endpoint |
+
+## Binary asset workflow
+
+Large or binary files such as PNG design assets are not edited directly through the GitHub text-file connector. When such files are needed, they are prepared as a ZIP archive with the correct repository folder structure. The ZIP can be extracted in the repository root and committed locally.
+
+Expected image asset paths:
+
+```text
+docs/assets/pico-design-concept.png
+docs/assets/pico-ha-icon.png
+docs/assets/pico-readme-hero.png
+pico_core/icon.png
+```
 
 ## Concept documents
 
