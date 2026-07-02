@@ -10,7 +10,7 @@
     "dev:core": "pnpm --filter @pico/core dev",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
-    "release:verify": "pnpm check && pnpm test && pnpm build"
+    "release:verify": "pnpm build && pnpm check && pnpm test"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
