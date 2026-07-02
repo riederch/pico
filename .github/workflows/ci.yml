@@ -15,8 +15,8 @@ permissions:
   packages: write
 
 jobs:
-  build:
-    name: Build and check
+  verify:
+    name: Verify release gates
     runs-on: ubuntu-latest
 
     steps:
@@ -37,16 +37,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
 
-      - name: Type check
-        run: pnpm check
-
-      - name: Build packages
-        run: pnpm build
+      - name: Type check, test and build
+        run: pnpm release:verify
 
   container:
-    name: Build Pico Core container
+    name: Build and smoke-test Pico Core container
     runs-on: ubuntu-latest
-    needs: build
+    needs: verify
 
     steps:
       - name: Checkout
@@ -73,7 +70,29 @@ jobs:
             type=ref,event=tag
             type=sha,prefix=sha-
 
-      - name: Build and optionally push
+      - name: Build local smoke-test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/core.Dockerfile
+          load: true
+          tags: pico-core:test
+
+      - name: Smoke-test container health endpoint
+        run: |
+          docker run --rm -d --name pico-core-smoke -p 3100:3100 pico-core:test
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3100/health; then
+              docker stop pico-core-smoke
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs pico-core-smoke || true
+          docker stop pico-core-smoke || true
+          exit 1
+
+      - name: Build and optionally push release image
         uses: docker/build-push-action@v6
         with:
           context: .
