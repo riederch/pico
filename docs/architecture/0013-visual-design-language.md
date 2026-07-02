@@ -10,6 +10,19 @@ Pico should have a recognizable visual identity. The chosen design basis is a sm
 
 The visual language should communicate state, context, and risk without implying that the avatar itself has authority to bypass policy.
 
+## Image assets
+
+The checked-in image assets are expected at:
+
+```text
+docs/assets/pico-design-concept.png
+docs/assets/pico-ha-icon.png
+docs/assets/pico-readme-hero.png
+pico_core/icon.png
+```
+
+Large or binary visual assets should be provided as a ZIP archive with the correct repository folder structure and then committed locally.
+
 ## Primary avatar shape
 
 The default Pico avatar uses:
@@ -116,6 +129,18 @@ For Home Assistant and app icons:
 - use strong contrast against a dark rounded square
 - preserve the cyan core glow for default state
 - avoid overly detailed status miniatures
+
+The Home Assistant add-on icon is expected at:
+
+```text
+pico_core/icon.png
+```
+
+The SVG source version is kept at:
+
+```text
+pico_core/icon.svg
+```
 
 ## README and presentation assets
 
