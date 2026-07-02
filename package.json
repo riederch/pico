@@ -1,0 +1,20 @@
+{
+  "name": "pico",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local-first assistant prototype.",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "dev:core": "pnpm --filter @pico/core dev",
+    "test": "pnpm -r test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "tsx": "^4.19.0",
+    "vitest": "^2.0.0"
+  },
+  "packageManager": "pnpm@9.0.0"
+}
