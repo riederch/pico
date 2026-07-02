@@ -16,6 +16,13 @@ interface IncomingEventBody {
   payload?: unknown;
 }
 
+interface RealtimeSocket {
+  readyState: number;
+  OPEN: number;
+  send(payload: string): void;
+  on(event: 'close', listener: () => void): void;
+}
+
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
   await app.register(websocket);
@@ -23,7 +30,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const store = new EventStore(config.databasePath);
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
-  const sockets = new Set<WebSocket>();
+  const sockets = new Set<RealtimeSocket>();
 
   function broadcast(event: PicoEvent): void {
     const serialized = JSON.stringify({ type: 'pico.event.created', event });
@@ -75,11 +82,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.get('/ws', { websocket: true }, (connection) => {
-    sockets.add(connection);
-    connection.send(JSON.stringify({ type: 'pico.core.connected', deviceId: config.deviceId }));
+    const socket = connection as RealtimeSocket;
+    sockets.add(socket);
+    socket.send(JSON.stringify({ type: 'pico.core.connected', deviceId: config.deviceId }));
 
-    connection.addEventListener('close', () => {
-      sockets.delete(connection);
+    socket.on('close', () => {
+      sockets.delete(socket);
     });
   });
 
