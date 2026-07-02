@@ -6,6 +6,22 @@ Pico is a local-first personal AI companion foundation.
 
 The project starts deliberately small: a tested core service, a shared protocol, sync primitives, a release pipeline, and a Home Assistant add-on path. The long-term goal is a personal assistant that can run across trusted devices, understand context, interact through text/voice/avatar surfaces, and execute tools only through explicit policy and audit boundaries.
 
+## Visual identity
+
+Pico's design basis is a small floating digital companion: rounded body, glossy light shell, black face display, expressive glowing eyes, antenna identity light, and a bright chest core.
+
+The avatar is not just decoration. It communicates state, context, risk, and activity:
+
+| Color | Meaning |
+|---|---|
+| Blue / cyan | normal, active, available |
+| Violet | thinking, analysing, AI reasoning |
+| Yellow / amber | warning, uncertainty, confirmation needed |
+| Red | blocked, critical, policy stop |
+| Green | success, safe completion, positive result |
+
+The richer concept board from the design discussion is documented in `docs/architecture/0013-visual-design-language.md`. Product icons use a simplified neutral Pico silhouette, while larger UI/README/landing-page assets may use the richer companion scene with panels and context cards.
+
 ## Project intent
 
 Pico is not meant to become an uncontrolled chatbot with system access.
@@ -146,7 +162,7 @@ Current add-on icon source:
 pico_core/icon.svg
 ```
 
-For Home Assistant Store compatibility, this SVG should be exported to `pico_core/icon.png` once binary asset upload is available in the repository workflow.
+The icon follows the simplified neutral Pico silhouette: dark rounded background, white companion shell, cyan eyes, antenna light, and chest core. If Home Assistant requires PNG in a specific context, export `pico_core/icon.svg` to `pico_core/icon.png` during packaging.
 
 ## Local development
 
@@ -215,6 +231,7 @@ The project concept is persisted as architecture notes:
 | `0010-tool-policy-and-executor-model.md` | tool policy, executor, and risk classes |
 | `0011-privacy-security-and-audit-model.md` | privacy, security, and audit principles |
 | `0012-roadmap-foundation-to-companion.md` | roadmap from foundation to companion |
+| `0013-visual-design-language.md` | visual identity, avatar states, status colors, and context modes |
 
 ## Roadmap
 
@@ -238,6 +255,7 @@ flowchart TD
 - Append-only event and audit thinking
 - Tests block releases
 - Updates must become reversible before real data matters
+- Friendly visual companion layer, strict execution layer
 
 ## Next implementation steps
 
