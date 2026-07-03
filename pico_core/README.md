@@ -29,6 +29,8 @@ Pico Core should eventually provide the Home Assistant-side foundation for a com
 - understand device, event and household context safely
 - store and stream events
 - support policy-gated tool execution
+- support shared commitments, reminders and context-aware nudging
+- respect scoped presence, location and emergency context rules
 - explain and audit what it did
 - ask for confirmation before risky actions
 - stay separate from the friendly companion UI layer
@@ -40,6 +42,7 @@ Pico Core is not intended to become:
 - an uncontrolled chatbot with system access
 - a hidden Home Assistant automation layer
 - a cloud-only personal data silo
+- a global human scoring or reputation system
 - a replacement for explicit user approval
 - a production-ready personal data store yet
 - a project that invents its own cryptography
@@ -51,6 +54,19 @@ Pico separates the friendly assistant surface from the authority model:
 > The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
 
 That means Pico may eventually feel helpful and present in Home Assistant, but risky actions still need clear rules, confirmation and traceability.
+
+## Current concept boundaries
+
+Pico's current concept work defines several important boundaries:
+
+- full clients own knowledge and backups; light clients are interaction surfaces
+- relay servers transport encrypted messages but do not own Pico memory or authority
+- trust signals are contextual evidence, not global person scores
+- presence and location sharing must be scoped, visible, revocable and minimally precise
+- service and emergency disclosures must be role-, context-, purpose- and necessity-bound
+- personal context should remain private unless a clear purpose and policy allow otherwise
+- shared commitments should manage next actions, not judge people
+- motivational pressure must be user-owned
 
 ## Current status
 
@@ -120,6 +136,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../ReadmeTech.md`](../ReadmeTech.md) - full technical project documentation
 - [`../docs/architecture`](../docs/architecture) - architecture decisions and concept notes
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
+- [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 
 ## Design principles
 
@@ -132,4 +149,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - Friendly companion layer, strict execution layer
 - Full clients own knowledge and backups; light clients are interaction surfaces
 - Home Assistant integration must not bypass Pico's policy and audit model
+- Presence and location sharing must be scoped, visible, revocable and minimally precise
+- Shared commitments should manage next actions, not judge people
+- Motivational pressure must be user-owned
 - Use reviewed cryptographic primitives; do not invent cryptography
