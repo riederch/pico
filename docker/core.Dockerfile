@@ -20,7 +20,7 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN pnpm build
-RUN mkdir -p /data && chown -R node:node /app /data
+RUN mkdir -p /data
 
 EXPOSE 3100
 
@@ -31,6 +31,8 @@ ENV PICO_DATABASE_PATH=/data/pico.sqlite
 
 VOLUME ["/data"]
 
-USER node
-
-CMD ["pnpm", "--filter", "@pico/core", "start"]
+# Home Assistant mounts /data at runtime. Running as the image's non-root
+# node user makes that mounted directory read-only for SQLite on some add-on
+# installations. Keep the foundation add-on root-based until an entrypoint can
+# safely prepare /data ownership and drop privileges.
+CMD ["node", "apps/core/dist/index.js"]
