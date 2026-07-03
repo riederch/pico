@@ -152,7 +152,7 @@ ghcr.io/riederch/pico/core
 Current tag:
 
 ```text
-0.1.1
+0.1.2
 ```
 
 The add-on exposes Pico Core on port `3100` and defines a watchdog against:
@@ -165,7 +165,7 @@ Current add-on icon assets:
 
 ```text
 pico_core/icon.svg
-pico_core/icon.png
+pico_core/logo.svg
 ```
 
 ![Pico Home Assistant icon](docs/assets/pico-ha-icon.png)
