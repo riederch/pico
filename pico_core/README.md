@@ -1,68 +1,135 @@
 # Pico Core
 
-![Pico Hero](../docs/assets/pico-readme-hero.png)
+![Pico hero](../docs/assets/pico-readme-hero.png)
 
-**Pico Core bringt die Grundlage eines persönlichen AI-Companions in Home Assistant.**
+Pico Core is the Home Assistant add-on foundation for Pico.
 
-Pico ist als **local-first persönlicher Assistent** gedacht, der nicht einfach nur antwortet, sondern langfristig Geräte, Kontext, Ereignisse und Alltagsabläufe verstehen und sinnvoll unterstützen kann.  
-Dabei stehen **Datensouveränität, Transparenz und klare Grenzen** im Mittelpunkt: AI darf unterstützen, aber Kontrolle, Bestätigung und Nachvollziehbarkeit bleiben beim Nutzer.
+Pico is a local-first personal AI companion foundation. The goal is not simply to build another chatbot. Pico is meant to become a personal agent foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved tools only through clear policy and audit boundaries.
 
-## Was ist Pico Core?
+This add-on is the Home Assistant entry point for the current Pico Core service.
 
-Pico Core ist das technische Fundament des Pico-Projekts innerhalb von Home Assistant.  
-Es schafft die Basis für einen zukünftigen persönlichen Assistenten, der lokal betrieben werden kann und sich schrittweise zu einem vertrauenswürdigen Companion für Zuhause, Geräte und digitale Abläufe weiterentwickelt.
+For full technical project documentation, see [`../ReadmeTech.md`](../ReadmeTech.md). For add-on installation and operation details, see [`DOCS.md`](DOCS.md).
 
-![Pico Konzept](../docs/assets/pico-design-concept.png)
+## Why Pico exists
 
-## Warum Home Assistant?
+Many assistant and smart-home systems are controlled by one account, one cloud, or one technical owner. That is convenient, but shared homes, families, partnerships, and organisations need clearer ownership, permissions, exit paths, and auditability.
 
-Home Assistant ist ein idealer Startpunkt für Pico, weil hier bereits viele relevante Informationen zusammenlaufen:
+Pico is designed around a different premise:
 
-- Geräte und Sensoren
-- Zustände und Ereignisse
-- Automationen und Routinen
-- lokale Infrastruktur und Services
+> Personal AI should help people without taking away their control over their own data and decisions.
 
-Dadurch entsteht eine natürliche Umgebung für einen Assistenten, der nicht losgelöst arbeitet, sondern den tatsächlichen Kontext des Nutzers verstehen soll.
+Home Assistant is a useful starting point because it already brings together local devices, sensors, states, events, automations and routines. Pico Core uses that environment as the first add-on packaging and runtime path.
 
-## Was Pico Core heute bereits mitbringt
+## What Pico Core should become
 
-Die aktuelle Foundation-Version liefert bereits die erste lauffähige technische Basis:
+Pico Core should eventually provide the Home Assistant-side foundation for a companion that can:
 
-- eine lokale HTTP API
-- einen Realtime-WebSocket-Endpunkt
-- SQLite-basierte Event-Speicherung
-- einen Health-Check für die Add-on-Überwachung
-- die erste Packaging- und Update-Basis für spätere Pico-Funktionen
+- run locally where practical
+- connect to Home Assistant and other local tools
+- understand device, event and household context safely
+- store and stream events
+- support policy-gated tool execution
+- explain and audit what it did
+- ask for confirmation before risky actions
+- stay separate from the friendly companion UI layer
 
-## Projektvision
+## What Pico Core is not
 
-Pico soll langfristig **mehr als ein Chatbot** werden.  
-Ziel ist ein persönlicher AI-Companion, der:
+Pico Core is not intended to become:
 
-- lokal und datensparsam arbeitet
-- Kontext über Geräte und Ereignisse hinweg versteht
-- nachvollziehbar und kontrollierbar bleibt
-- schrittweise mit weiteren Fähigkeiten erweitert werden kann
+- an uncontrolled chatbot with system access
+- a hidden Home Assistant automation layer
+- a cloud-only personal data silo
+- a replacement for explicit user approval
+- a production-ready personal data store yet
+- a project that invents its own cryptography
 
-Dabei ist wichtig: Pico soll nicht einfach unkontrolliert handeln, sondern sich in ein Modell einfügen, bei dem **Vorschläge, Regeln, Bestätigung und Auditierbarkeit** sauber zusammenspielen.
+## Core idea
 
-## Technische Einstiegspunkte
+Pico separates the friendly assistant surface from the authority model:
 
-- **HTTP API:** Port `3100`
-- **WebSocket:** `/ws`
-- **Health Endpoint:** `/health`
-- **Event API:** `/api/events`
+> The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
 
-## Aktueller Entwicklungsstand
+That means Pico may eventually feel helpful and present in Home Assistant, but risky actions still need clear rules, confirmation and traceability.
 
-Pico Core befindet sich aktuell in der **Foundation-Phase**.  
-Die bestehende Version eignet sich bereits, um das Add-on, den Update-Weg, die API-Oberfläche und das Event-Modell zu testen.
+## Current status
 
-Für den produktiven Einsatz fehlen derzeit noch unter anderem:
+Pico Core is in the foundation phase.
 
-- Authentifizierung und Berechtigungen
-- policy-gesteuerte Tool-Ausführung
-- Migrations- und Backup-/Rollback-Konzepte
-- verschlüsselte Datendomänen
-- die eigentliche Companion-Oberfläche
+Current version:
+
+```text
+0.1.4
+```
+
+The current foundation add-on provides:
+
+- local HTTP API
+- realtime WebSocket endpoint
+- SQLite-backed event storage
+- health check endpoint for add-on monitoring
+- first packaging and update path for later Pico functions
+
+Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, backup/rollback behaviour and real companion clients still need to be built.
+
+## Visual direction
+
+Pico's visual direction is a small floating digital companion with a light shell, dark face display, glowing eyes, an antenna identity light and a bright chest core.
+
+![Pico design concept](../docs/assets/pico-design-concept.png)
+
+The avatar communicates state and risk. For example:
+
+| Color | Meaning |
+|---|---|
+| Blue / cyan | normal and available |
+| Violet | thinking or analysing |
+| Yellow / amber | warning or confirmation needed |
+| Red | blocked or critical |
+| Green | success |
+
+## Home Assistant entry points
+
+| Entry point | Purpose |
+|---|---|
+| Port `3100` | Pico Core HTTP API and WebSocket endpoint |
+| `/health` | add-on health check |
+| `/api/events` | event list and event creation |
+| `/ws` | realtime event stream |
+
+Persistent data is stored in the Home Assistant add-on data directory:
+
+```text
+/data/pico.sqlite
+```
+
+## Roadmap in plain language
+
+1. Build a safe technical foundation.
+2. Make updates and migrations safe before real user data matters.
+3. Build the first usable client.
+4. Add policy-gated tool execution.
+5. Add memory only after deletion and privacy-domain semantics are clear.
+6. Add richer companion UX after the control and audit layers are solid.
+
+## Documentation map
+
+- [`DOCS.md`](DOCS.md) - Home Assistant add-on installation and operation details
+- [`CHANGELOG.md`](CHANGELOG.md) - add-on-specific changelog
+- [`../README.md`](../README.md) - non-technical project overview
+- [`../ReadmeTech.md`](../ReadmeTech.md) - full technical project documentation
+- [`../docs/architecture`](../docs/architecture) - architecture decisions and concept notes
+- [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
+
+## Design principles
+
+- Local-first where practical
+- User control over identity and personal data
+- Explicit privacy domains
+- Policy-gated tool execution
+- Confirmation for risky actions
+- Auditability instead of hidden automation
+- Friendly companion layer, strict execution layer
+- Full clients own knowledge and backups; light clients are interaction surfaces
+- Home Assistant integration must not bypass Pico's policy and audit model
+- Use reviewed cryptographic primitives; do not invent cryptography
