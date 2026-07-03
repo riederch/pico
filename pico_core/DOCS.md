@@ -33,6 +33,24 @@ The foundation add-on currently exposes port `3100` as a fixed port. A configura
 
 The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
 
+## Add-on image assets
+
+Home Assistant add-on presentation expects PNG image assets in the add-on directory:
+
+| Path | Purpose | Required format |
+| --- | --- | --- |
+| `pico_core/icon.png` | square add-on icon | PNG, 1:1 aspect ratio, recommended 128x128px |
+| `pico_core/logo.png` | wide add-on logo | PNG, recommended around 250x100px |
+
+The repository currently also contains SVG source assets:
+
+```text
+pico_core/icon.svg
+pico_core/logo.svg
+```
+
+If Home Assistant still shows the default or an old add-on image, verify that `icon.png` and `logo.png` exist in `pico_core/`, then reload the Home Assistant Supervisor repository cache.
+
 ## Persistent data
 
 Pico Core stores its SQLite database in the add-on persistent data directory:
