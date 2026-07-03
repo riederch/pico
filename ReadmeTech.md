@@ -33,6 +33,9 @@ Pico should eventually be able to:
 - support light clients such as watches or small displays
 - work with Home Assistant and other local tools
 - remember useful personal context safely
+- share presence, activity, location and emergency context only under clear rules
+- support shared commitments, reminders and cooperative nudging
+- adapt its tone to the user while preserving user control
 - explain and audit what it did
 - ask for confirmation before risky actions
 - keep companion UX separate from execution authority
@@ -44,9 +47,9 @@ Pico is not intended to become:
 - an uncontrolled chatbot with system access
 - a cloud-only personal data silo
 - a hidden surveillance or control tool
+- a global human scoring or reputation system
 - a replacement for explicit user confirmation
 - a project that invents its own cryptography
-- a global human scoring or reputation system
 
 ## Core authority model
 
@@ -256,9 +259,37 @@ Design rule:
 
 > Pico assists. Pico does not police.
 
-Pico should be liberal in private life, strict where real harm, coercion, exploitation, duty risk or danger to others begins. It may warn about legal, health, safety, relationship or practical risks, but must not become a moral police agent or general compliance tool for partners, families, employers, organisations or authorities.
+Pico should be liberal in private life, strict where real harm, coercion, exploitation, duty risk or danger to others begins. It may warn about legal, health, safety, relationship or practical risks, but must not become a general compliance tool for partners, families, employers, organisations or authorities.
 
 Details are documented in `docs/architecture/0021-private-behaviour-legal-risk-and-harm.md`.
+
+## Shared commitments and cooperative nudging
+
+Pico may support shared commitments such as appointments, reservations, shared chores, project steps, service tasks, care responsibilities and duty tasks.
+
+It should coordinate reminders, confirmations and progress nudges based on importance, external dependency, harm of failure, procrastination risk and participant responsibility.
+
+Design rule:
+
+> Loose plans get gentle reminders. Binding plans require confirmation. Unpleasant duties get small next steps. Critical tasks may escalate. People are not scored; commitments are managed.
+
+Pico must assist cooperation without turning commitments into surveillance, blame, shame or coercive control.
+
+Details are documented in `docs/architecture/0022-shared-commitments-and-cooperative-nudging.md`.
+
+## Adaptive tone, motivation and self-binding
+
+Pico may adapt tone, directness, humour and motivational pressure to the user's preferences and observed effectiveness.
+
+Strong tone is allowed when desired by the user. Real-world consequences require explicit user-owned self-binding policy and must not be imposed by others.
+
+Design rule:
+
+> The tone may be personal. The pressure must be user-owned. Real interventions require policy.
+
+Self-binding may allow bounded actions such as starting focus mode, reducing distractions or controlling a Home Assistant device, but only inside explicit, revocable, audited user-owned policy.
+
+Details are documented in `docs/architecture/0023-adaptive-tone-motivation-and-self-binding.md`.
 
 ## Release and update flow
 
@@ -428,7 +459,7 @@ The project concept is persisted as architecture notes:
 | `0020-contextual-service-and-emergency-access.md` | service assistance, emergency infrastructure disclosure and medical emergency disclosure |
 | `0021-private-behaviour-legal-risk-and-harm.md` | private behaviour, legal risk, harm, autonomy and anti-authoritarian posture |
 | `0022-shared-commitments-and-cooperative-nudging.md` | shared commitments, confirmations, reminders, nudging and anti-procrastination support |
-| `0023-adaptive-tone-motivation-and-self-binding.md` | adaptive tone, motivation profiles and user-owned commitment rules |
+| `0023-adaptive-tone-motivation-and-self-binding.md` | adaptive tone, motivation profiles and user-owned self-binding interventions |
 
 ## Roadmap
 
