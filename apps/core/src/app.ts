@@ -101,6 +101,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     protocolVersion: PROTOCOL_VERSION,
   }));
 
+  app.get('/api/system/status', async () => ({
+    service: 'pico-core',
+    version: SERVICE_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
+    deviceId: config.deviceId,
+    database: {
+      maxLamport: store.maxLamport(),
+      migrations: store.appliedMigrations(),
+    },
+  }));
+
   app.get('/api/events', async (request, reply) => {
     const query = request.query as { limit?: string };
     const limitResult = parseLimit(query.limit);
