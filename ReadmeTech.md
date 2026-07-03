@@ -101,7 +101,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.1.4
+0.1.6
 ```
 
 Implemented or prepared:
@@ -110,8 +110,10 @@ Implemented or prepared:
 - Fastify-based Pico Core
 - SQLite-backed append-only event store
 - Lamport clock and version-vector helpers
+- migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state, and tool payloads
 - WebSocket endpoint for event streaming
+- foundation diagnostics dashboard
 - CI release gates
 - Docker image build
 - multi-arch GHCR publishing path
@@ -316,7 +318,7 @@ Documentation consistency rules are documented in `docs/release/documentation-co
 .
 ├── apps
 │   ├── core              # Fastify backend service
-│   └── web               # first web client placeholder
+│   └── web               # foundation diagnostics dashboard
 ├── docker
 │   └── core.Dockerfile   # Pico Core container image
 ├── docs
@@ -352,10 +354,10 @@ ghcr.io/riederch/pico/core
 Current tag:
 
 ```text
-0.1.4
+0.1.6
 ```
 
-The add-on exposes Pico Core on port `3100` and defines a watchdog against:
+The add-on exposes Pico Core on port `3100`, serves the foundation dashboard at `/`, and defines a watchdog against:
 
 ```text
 /health
@@ -390,6 +392,12 @@ Start Pico Core:
 pnpm dev:core
 ```
 
+Open the foundation dashboard:
+
+```text
+http://localhost:3100/
+```
+
 Health check:
 
 ```bash
@@ -414,7 +422,10 @@ curl http://localhost:3100/api/events
 
 | Endpoint | Purpose |
 |---|---|
+| `GET /` | foundation diagnostics dashboard |
 | `GET /health` | service health check |
+| `GET /api/system/version` | service and protocol version information |
+| `GET /api/system/status` | diagnostic service and database migration status |
 | `GET /api/events` | list stored events |
 | `POST /api/events` | append an event |
 | `WS /ws` | event stream endpoint |
@@ -497,10 +508,7 @@ flowchart TD
 
 ## Next implementation steps
 
-- Add `GET /api/system/version`
-- Add migration tracking
-- Add backup-before-migration concept and tests
 - Validate the Home Assistant add-on on a real HA installation
+- Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
-- Build the first real web client connected to `/ws`
 - Add the first policy-gated read-only tool

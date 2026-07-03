@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.6
+
+Foundation web dashboard delivery.
+
+- Serves the framework-free diagnostics dashboard from Pico Core at `/`.
+- Adds a container smoke-test check for the dashboard shell.
+- Keeps the existing Foundation API and WebSocket paths unchanged.
+- Aligns root workspace, Pico Core, web, protocol, sync, active Home Assistant add-on metadata, and CI image tag on `0.1.6`.
+- Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.6`.
+
 ## 0.1.5
 
 Foundation runtime and release metadata update.
