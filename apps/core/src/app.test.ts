@@ -64,6 +64,54 @@ describe('Pico Core app', () => {
     await app.close();
   });
 
+  it('rejects reserved policy and executor event types on the foundation API', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'tool.call_requested',
+        payload: {
+          toolName: 'homeassistant.get_entity_state',
+          riskLevel: 'read_only',
+          arguments: { entityId: 'sensor.pico_status' },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'This event type is reserved for a later policy-gated API.',
+    });
+
+    await app.close();
+  });
+
+  it('rejects invalid list limits', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/events?limit=-1' });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'limit must be a positive integer.',
+    });
+
+    await app.close();
+  });
+
   it('creates and lists events', async () => {
     const app = await buildApp({
       host: '127.0.0.1',
@@ -88,6 +136,7 @@ describe('Pico Core app', () => {
 
     expect(created.statusCode).toBe(201);
     const createdBody = created.json();
+    expect(createdBody.appendResult).toBe('inserted');
     expect(createdBody.event.deviceId).toBe('desktop-dev');
     expect(createdBody.event.type).toBe('message.created');
     expect(createdBody.event.lamport).toBe(1);
