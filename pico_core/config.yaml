@@ -1,5 +1,5 @@
 name: Pico Core
-version: "0.1.3"
+version: "0.1.4"
 slug: pico_core
 description: Local-first personal AI companion core for Home Assistant.
 url: https://github.com/riederch/pico
