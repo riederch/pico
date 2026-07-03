@@ -52,6 +52,15 @@ interface IncomingEventBody {
   payload?: unknown;
 }
 
+interface ValidatedIncomingEventBody {
+  deviceId: string;
+  sessionId?: string;
+  type: PicoEventType;
+  stream?: string;
+  lamport?: number;
+  payload: unknown;
+}
+
 interface RealtimeSocket {
   readyState: number;
   OPEN: number;
@@ -99,19 +108,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.post('/api/events', async (request, reply) => {
     const body = request.body as IncomingEventBody | undefined;
-    const validationError = validateIncomingEvent(body);
+    const validation = validateIncomingEvent(body);
 
-    if (validationError) {
-      return reply.code(400).send({ error: validationError });
+    if (!validation.ok) {
+      return reply.code(400).send({ error: validation.error });
     }
 
     const event = factory.create({
-      deviceId: body.deviceId,
-      sessionId: body.sessionId,
-      type: body.type,
-      stream: body.stream,
-      payload: body.payload,
-      remoteLamport: body.lamport,
+      deviceId: validation.body.deviceId,
+      sessionId: validation.body.sessionId,
+      type: validation.body.type,
+      stream: validation.body.stream,
+      payload: validation.body.payload,
+      remoteLamport: validation.body.lamport,
     });
 
     const appendResult = store.append(event);
@@ -154,37 +163,52 @@ function parseLimit(rawLimit: string | undefined): { ok: true; limit: number } |
   return { ok: true, limit: Math.min(limit, MAX_EVENT_LIMIT) };
 }
 
-function validateIncomingEvent(body: IncomingEventBody | undefined): string | null {
+function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true; body: ValidatedIncomingEventBody } | { ok: false; error: string } {
   if (!isRecord(body)) {
-    return 'Request body must be an object.';
+    return { ok: false, error: 'Request body must be an object.' };
   }
 
   if (!isNonEmptyString(body.deviceId, 128) || !isKnownEventType(body.type) || body.payload === undefined) {
-    return 'deviceId, type and payload are required.';
+    return { ok: false, error: 'deviceId, type and payload are required.' };
   }
 
   if (!writableEventTypes.has(body.type)) {
-    return 'This event type is reserved for a later policy-gated API.';
+    return { ok: false, error: 'This event type is reserved for a later policy-gated API.' };
   }
 
   if (body.sessionId !== undefined && !isNonEmptyString(body.sessionId, 128)) {
-    return 'sessionId must be a non-empty string when provided.';
+    return { ok: false, error: 'sessionId must be a non-empty string when provided.' };
   }
 
   if (body.stream !== undefined && !isNonEmptyString(body.stream, 256)) {
-    return 'stream must be a non-empty string when provided.';
+    return { ok: false, error: 'stream must be a non-empty string when provided.' };
   }
 
   if (body.lamport !== undefined && (!Number.isInteger(body.lamport) || body.lamport < 0 || body.lamport > MAX_LAMPORT_VALUE)) {
-    return 'lamport is outside the accepted range.';
+    return { ok: false, error: 'lamport is outside the accepted range.' };
   }
 
   const payloadSize = Buffer.byteLength(JSON.stringify(body.payload), 'utf8');
   if (payloadSize > MAX_PAYLOAD_BYTES) {
-    return 'payload is too large.';
+    return { ok: false, error: 'payload is too large.' };
   }
 
-  return validatePayload(body.type, body.payload);
+  const payloadError = validatePayload(body.type, body.payload);
+  if (payloadError) {
+    return { ok: false, error: payloadError };
+  }
+
+  return {
+    ok: true,
+    body: {
+      deviceId: body.deviceId,
+      sessionId: body.sessionId,
+      type: body.type,
+      stream: body.stream,
+      lamport: body.lamport,
+      payload: body.payload,
+    },
+  };
 }
 
 function validatePayload(type: PicoEventType, payload: unknown): string | null {
