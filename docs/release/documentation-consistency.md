@@ -125,6 +125,7 @@ In particular:
 - cryptography claims must remain consistent with `0016`
 - trust-signal language must remain consistent with `0017`
 - presence, activity and location sharing language must remain consistent with `0018`
+- Home Assistant threat-model language must remain consistent with `0019`
 - service and emergency access language must remain consistent with `0020`
 - private behaviour, legal risk and harm language must remain consistent with `0021`
 - shared commitment and cooperative nudging language must remain consistent with `0022`
