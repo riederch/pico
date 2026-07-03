@@ -1,0 +1,49 @@
+<svg width="1024" height="256" viewBox="0 0 1024 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pico Core add-on logo">
+  <defs>
+    <radialGradient id="bg" cx="28%" cy="45%" r="85%">
+      <stop offset="0%" stop-color="#083A66"/>
+      <stop offset="56%" stop-color="#071A33"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#A5F3FC"/>
+      <stop offset="45%" stop-color="#22D3EE"/>
+      <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shell" x1="91" y1="55" x2="193" y2="212" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.38" stop-color="#D7DEE9"/>
+      <stop offset="1" stop-color="#8FA3BF"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="256" rx="48" fill="url(#bg)"/>
+  <rect x="12" y="12" width="1000" height="232" rx="38" stroke="#1E3A5F" stroke-width="6"/>
+
+  <ellipse cx="144" cy="218" rx="58" ry="11" fill="url(#glow)" opacity="0.75"/>
+  <line x1="144" y1="22" x2="144" y2="44" stroke="#BAE6FD" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="144" cy="20" r="15" fill="url(#glow)" filter="url(#softGlow)"/>
+
+  <ellipse cx="144" cy="84" rx="73" ry="54" fill="url(#shell)"/>
+  <ellipse cx="144" cy="86" rx="58" ry="36" fill="#030712" stroke="#CBD5E1" stroke-width="6"/>
+  <ellipse cx="119" cy="86" rx="10" ry="18" fill="#67E8F9" filter="url(#softGlow)"/>
+  <ellipse cx="169" cy="86" rx="10" ry="18" fill="#67E8F9" filter="url(#softGlow)"/>
+  <path d="M133 108C139 112 150 112 155 108" stroke="#38BDF8" stroke-width="5" stroke-linecap="round"/>
+
+  <path d="M105 138C90 145 82 164 87 183" stroke="#94A3B8" stroke-width="14" stroke-linecap="round"/>
+  <path d="M183 138C198 145 206 164 201 183" stroke="#94A3B8" stroke-width="14" stroke-linecap="round"/>
+  <path d="M105 146C113 130 127 122 144 122C161 122 175 130 183 146C191 163 184 203 164 216C153 224 135 224 124 216C104 203 97 163 105 146Z" fill="url(#shell)"/>
+  <circle cx="144" cy="169" r="27" fill="#0F172A"/>
+  <circle cx="144" cy="169" r="19" fill="url(#glow)" filter="url(#softGlow)"/>
+
+  <text x="260" y="112" fill="#E0F2FE" font-family="Inter, Arial, sans-serif" font-size="56" font-weight="700">Pico Core</text>
+  <text x="262" y="160" fill="#A5F3FC" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="500">Local-first personal AI companion core for Home Assistant</text>
+  <text x="262" y="196" fill="#94A3B8" font-family="Inter, Arial, sans-serif" font-size="18">Policy-gated execution, sync primitives, and auditable local context</text>
+</svg>
