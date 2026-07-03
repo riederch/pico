@@ -5,7 +5,7 @@ This document is the central checklist for version bumps in Pico.
 ## Current version
 
 ```text
-0.1.1
+0.1.2
 ```
 
 ## Version locations
@@ -35,7 +35,7 @@ The older draft under `apps/ha-addon/config.yaml` is historical/internal. While 
 
 ## Release bump procedure
 
-1. Choose the next semantic version, for example `0.1.2`.
+1. Choose the next semantic version, for example `0.1.3`.
 2. Update every location listed in the table above.
 3. Run the release gates locally:
 
@@ -48,8 +48,8 @@ The older draft under `apps/ha-addon/config.yaml` is historical/internal. While 
 6. For a tagged release, create and push the matching Git tag:
 
    ```bash
-   git tag v0.1.2
-   git push origin v0.1.2
+   git tag v0.1.3
+   git push origin v0.1.3
    ```
 
 ## Home Assistant check after release
