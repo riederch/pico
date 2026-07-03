@@ -427,6 +427,8 @@ The project concept is persisted as architecture notes:
 | `0018-presence-context-and-location-sharing.md` | scoped presence, activity, ETA, emergency and location sharing |
 | `0020-contextual-service-and-emergency-access.md` | service assistance, emergency infrastructure disclosure and medical emergency disclosure |
 | `0021-private-behaviour-legal-risk-and-harm.md` | private behaviour, legal risk, harm, autonomy and anti-authoritarian posture |
+| `0022-shared-commitments-and-cooperative-nudging.md` | shared commitments, confirmations, reminders, nudging and anti-procrastination support |
+| `0023-adaptive-tone-motivation-and-self-binding.md` | adaptive tone, motivation profiles and user-owned commitment rules |
 
 ## Roadmap
 
@@ -459,6 +461,8 @@ flowchart TD
 - Service and emergency disclosures must be role-, context-, purpose- and necessity-bound, minimal, expiring and auditable
 - Private behaviour must be evaluated by harm and risk, not by legality, taboo or obedience alone
 - Pico assists; Pico does not police
+- Shared commitments should manage next actions, not judge people
+- Motivational pressure must be user-owned
 
 ## Next implementation steps
 
