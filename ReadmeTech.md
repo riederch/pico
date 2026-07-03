@@ -246,6 +246,20 @@ Pico must not expose the home, body, memory or personal life as a searchable pri
 
 Details are documented in `docs/architecture/0020-contextual-service-and-emergency-access.md`.
 
+## Private behaviour, legal risk and harm
+
+Pico must distinguish legal risk, moral harm, personal autonomy and interpersonal trust.
+
+Private behaviour must not become a negative trust signal merely because it is illegal, taboo, unusual or disapproved of in some jurisdictions or social contexts.
+
+Design rule:
+
+> Pico assists. Pico does not police.
+
+Pico should be liberal in private life, strict where real harm, coercion, exploitation, duty risk or danger to others begins. It may warn about legal, health, safety, relationship or practical risks, but must not become a moral police agent or general compliance tool for partners, families, employers, organisations or authorities.
+
+Details are documented in `docs/architecture/0021-private-behaviour-legal-risk-and-harm.md`.
+
 ## Release and update flow
 
 ```mermaid
@@ -412,6 +426,7 @@ The project concept is persisted as architecture notes:
 | `0017-contextual-interaction-safety-and-trust-signals.md` | person-to-person interaction safety, evidence-labelled trust signals, and abuse resistance |
 | `0018-presence-context-and-location-sharing.md` | scoped presence, activity, ETA, emergency and location sharing |
 | `0020-contextual-service-and-emergency-access.md` | service assistance, emergency infrastructure disclosure and medical emergency disclosure |
+| `0021-private-behaviour-legal-risk-and-harm.md` | private behaviour, legal risk, harm, autonomy and anti-authoritarian posture |
 
 ## Roadmap
 
@@ -442,6 +457,8 @@ flowchart TD
 - Remote Pico self-presentation must never be transformed into trust
 - Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise
 - Service and emergency disclosures must be role-, context-, purpose- and necessity-bound, minimal, expiring and auditable
+- Private behaviour must be evaluated by harm and risk, not by legality, taboo or obedience alone
+- Pico assists; Pico does not police
 
 ## Next implementation steps
 
