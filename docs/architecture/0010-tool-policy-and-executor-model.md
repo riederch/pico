@@ -33,14 +33,34 @@ The audit log records the decision and result.
 
 Tools should be classified by risk:
 
-- read_only
-- local_write
-- external_write
-- destructive
-- security_sensitive
-- privileged_system_action
+- `read_only`
+- `local_write`
+- `external_write`
+- `destructive`
+- `security_sensitive`
+- `privileged_system_action`
 
 The risk class is part of the tool request, not just UI wording.
+
+`forbidden` is not a tool risk class. It is a policy decision outcome. A tool can be high risk because of what it does, but a concrete request is allowed, denied or sent to confirmation by policy.
+
+## Policy decision outcomes
+
+Policy decisions should use explicit outcomes:
+
+- `allow`
+- `require_confirmation`
+- `deny`
+
+This keeps static tool risk separate from contextual policy decisions.
+
+Example:
+
+```text
+Tool risk: external_write
+Policy decision: require_confirmation
+Reason: sending a message to another person requires explicit user approval
+```
 
 ## Confirmation model
 
@@ -91,6 +111,14 @@ For every tool call, Pico should eventually record:
 - timestamp
 - device identity
 - affected data domain
+
+Audit records should avoid storing full sensitive payloads when a summary or reference is enough.
+
+## Current foundation API boundary
+
+The current generic `POST /api/events` endpoint is only a foundation event ingestion surface.
+
+It must not be treated as the policy, executor or audit API. Policy, confirmation, executor and audit event types may exist in the shared protocol before their dedicated write paths exist, but they must not be accepted through the generic unauthenticated foundation event endpoint.
 
 ## Design rule
 
