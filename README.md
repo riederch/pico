@@ -152,7 +152,7 @@ ghcr.io/riederch/pico/core
 Current tag:
 
 ```text
-0.1.2
+0.1.4
 ```
 
 The add-on exposes Pico Core on port `3100` and defines a watchdog against:
