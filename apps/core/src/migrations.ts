@@ -1,4 +1,6 @@
 import type Database from 'better-sqlite3';
+import type { SqliteBackupResult } from './sqlite-backup.js';
+import { createSqliteBackup } from './sqlite-backup.js';
 
 export interface AppliedMigration {
   id: string;
@@ -8,6 +10,18 @@ export interface AppliedMigration {
 export interface MigrationOptions {
   requireBackupBeforeMigration?: boolean;
   backupConfirmed?: boolean;
+}
+
+export interface BackupAwareMigrationOptions {
+  databasePath: string;
+  backupDirectory: string;
+  requireBackupBeforeMigration?: boolean;
+  createBackup?: (databasePath: string, backupDirectory: string) => Promise<SqliteBackupResult>;
+}
+
+export interface MigrationRunResult {
+  appliedMigrationIds: string[];
+  backup?: SqliteBackupResult;
 }
 
 interface Migration {
@@ -51,9 +65,51 @@ const migrations: Migration[] = [
   },
 ];
 
-export function runMigrations(db: Database.Database, options: MigrationOptions = {}): void {
+export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {
   ensureMigrationTable(db);
 
+  const pendingMigrations = listPendingMigrations(db);
+  assertBackupContract(pendingMigrations, options);
+
+  applyPendingMigrations(db, pendingMigrations);
+
+  return {
+    appliedMigrationIds: pendingMigrations.map((migration) => migration.id),
+  };
+}
+
+export async function runMigrationsWithBackup(db: Database.Database, options: BackupAwareMigrationOptions): Promise<MigrationRunResult> {
+  ensureMigrationTable(db);
+
+  const pendingMigrations = listPendingMigrations(db);
+  const backupRequired = pendingMigrations.some((migration) => migration.requiresBackup);
+  let backup: SqliteBackupResult | undefined;
+
+  if (options.requireBackupBeforeMigration && backupRequired) {
+    const backupProvider = options.createBackup ?? createSqliteBackup;
+    backup = await backupProvider(options.databasePath, options.backupDirectory);
+  }
+
+  const result = runMigrations(db, {
+    requireBackupBeforeMigration: options.requireBackupBeforeMigration,
+    backupConfirmed: backupRequired ? backup !== undefined : false,
+  });
+
+  return {
+    ...result,
+    backup,
+  };
+}
+
+export function listAppliedMigrations(db: Database.Database): AppliedMigration[] {
+  ensureMigrationTable(db);
+
+  return db
+    .prepare('SELECT id, applied_at AS appliedAt FROM schema_migration ORDER BY id ASC')
+    .all() as AppliedMigration[];
+}
+
+function listPendingMigrations(db: Database.Database): Migration[] {
   const applied = new Set(
     db
       .prepare('SELECT id FROM schema_migration')
@@ -61,9 +117,10 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
       .map((row) => (row as { id: string }).id),
   );
 
-  const pendingMigrations = migrations.filter((migration) => !applied.has(migration.id));
-  assertBackupContract(pendingMigrations, options);
+  return migrations.filter((migration) => !applied.has(migration.id));
+}
 
+function applyPendingMigrations(db: Database.Database, pendingMigrations: Migration[]): void {
   const applyMigration = db.transaction((migration: Migration) => {
     migration.up(db);
     db
@@ -74,14 +131,6 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
   for (const migration of pendingMigrations) {
     applyMigration(migration);
   }
-}
-
-export function listAppliedMigrations(db: Database.Database): AppliedMigration[] {
-  ensureMigrationTable(db);
-
-  return db
-    .prepare('SELECT id, applied_at AS appliedAt FROM schema_migration ORDER BY id ASC')
-    .all() as AppliedMigration[];
 }
 
 function assertBackupContract(pendingMigrations: Migration[], options: MigrationOptions): void {
