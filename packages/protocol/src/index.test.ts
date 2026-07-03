@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { AvatarStateChangedPayload, PicoEvent, ToolCallRequestedPayload } from './index.js';
+import type {
+  AuditEventCreatedPayload,
+  AvatarStateChangedPayload,
+  PicoEvent,
+  PolicyDecisionCreatedPayload,
+  ToolCallRequestedPayload,
+} from './index.js';
 
 describe('Pico protocol types', () => {
   it('accepts a minimal message event shape', () => {
@@ -32,7 +38,7 @@ describe('Pico protocol types', () => {
     expect(payload.state).toBe('thinking');
   });
 
-  it('accepts a tool call payload with an explicit risk level', () => {
+  it('accepts a tool call payload with an explicit granular risk level', () => {
     const payload: ToolCallRequestedPayload = {
       toolName: 'homeassistant.get_entity_state',
       riskLevel: 'read_only',
@@ -42,5 +48,31 @@ describe('Pico protocol types', () => {
     };
 
     expect(payload.riskLevel).toBe('read_only');
+  });
+
+  it('keeps policy decisions separate from tool risk classes', () => {
+    const payload: PolicyDecisionCreatedPayload = {
+      requestedEventId: 'evt-tool-request',
+      decision: 'require_confirmation',
+      reason: 'External write requires user confirmation.',
+      riskLevel: 'external_write',
+      dataDomain: 'home_assistant',
+    };
+
+    expect(payload.decision).toBe('require_confirmation');
+  });
+
+  it('supports redacted audit records', () => {
+    const payload: AuditEventCreatedPayload = {
+      subjectEventId: 'evt-policy-decision',
+      actorDeviceId: 'desktop-dev',
+      action: 'policy.decision_created',
+      decision: 'deny',
+      dataDomain: 'personal',
+      redaction: 'summary',
+      summary: 'Policy result was recorded without storing the original payload.',
+    };
+
+    expect(payload.redaction).toBe('summary');
   });
 });
