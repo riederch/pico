@@ -46,6 +46,7 @@ Pico is not intended to become:
 - a hidden surveillance or control tool
 - a replacement for explicit user confirmation
 - a project that invents its own cryptography
+- a global human scoring or reputation system
 
 ## Core authority model
 
@@ -166,6 +167,7 @@ The most dangerous areas are treated as explicit architecture constraints:
 - Lamport clocks provide ordering, not merge semantics
 - light clients are interaction surfaces, not knowledge owners
 - companion UX must not outrun policy, audit, update safety, and deletion semantics
+- trust signals must never become global person scores or safety guarantees
 
 ## Deletability and append-only events
 
@@ -199,6 +201,20 @@ The project will not build custom:
 Future encryption work should evaluate established building blocks such as MLS, libsodium, age-style backup encryption, platform keystores, passkeys, or hardware-backed identity where appropriate.
 
 Details are documented in `docs/architecture/0016-cryptography-boundaries-and-non-goals.md`.
+
+## Contextual interaction safety and trust signals
+
+Pico may help users reason about the safety of concrete person-to-person interactions, but it must not become a global reputation system.
+
+Design rule:
+
+> Evaluate the action, not the human as a whole. Evaluate the context, not the reputation. Use trust signals as evidence-labelled hints, never as a free pass.
+
+A remote Pico cannot prove that its owner is trustworthy. It can only provide limited claims, commitments, attestations, or evidence references. The receiving Pico must decide locally, conservatively, and in context.
+
+Hard safety boundaries remain active regardless of positive reputation signals, especially around minors, dependency, isolation, money, physical access, digital access, transport, private spaces, secrecy, urgency, and guardianship boundaries.
+
+Details are documented in `docs/architecture/0017-contextual-interaction-safety-and-trust-signals.md`.
 
 ## Release and update flow
 
@@ -363,6 +379,7 @@ The project concept is persisted as architecture notes:
 | `0014-deletability-and-append-only-events.md` | deleteable memory, tombstones, payload references, and crypto-shredding direction |
 | `0015-full-clients-light-clients-and-relay.md` | full clients, light clients, backups, and relay topology |
 | `0016-cryptography-boundaries-and-non-goals.md` | cryptography scope, non-goals, and dependency on reviewed primitives |
+| `0017-contextual-interaction-safety-and-trust-signals.md` | person-to-person interaction safety, evidence-labelled trust signals, and abuse resistance |
 
 ## Roadmap
 
@@ -389,6 +406,8 @@ flowchart TD
 - Friendly visual companion layer, strict execution layer
 - Use reviewed cryptographic primitives; do not invent cryptography
 - Full Clients own knowledge and backups; Light Clients are interaction surfaces
+- Trust signals are contextual evidence, not global human scores
+- Remote Pico self-presentation must never be transformed into trust
 
 ## Next implementation steps
 
