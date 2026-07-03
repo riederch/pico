@@ -5,14 +5,21 @@ export interface AppliedMigration {
   appliedAt: string;
 }
 
+export interface MigrationOptions {
+  requireBackupBeforeMigration?: boolean;
+  backupConfirmed?: boolean;
+}
+
 interface Migration {
   id: string;
+  requiresBackup: boolean;
   up(db: Database.Database): void;
 }
 
 const migrations: Migration[] = [
   {
     id: '0001_event_store',
+    requiresBackup: false,
     up(db) {
       db.exec(`
         CREATE TABLE IF NOT EXISTS pico_event (
@@ -44,7 +51,7 @@ const migrations: Migration[] = [
   },
 ];
 
-export function runMigrations(db: Database.Database): void {
+export function runMigrations(db: Database.Database, options: MigrationOptions = {}): void {
   ensureMigrationTable(db);
 
   const applied = new Set(
@@ -54,6 +61,9 @@ export function runMigrations(db: Database.Database): void {
       .map((row) => (row as { id: string }).id),
   );
 
+  const pendingMigrations = migrations.filter((migration) => !applied.has(migration.id));
+  assertBackupContract(pendingMigrations, options);
+
   const applyMigration = db.transaction((migration: Migration) => {
     migration.up(db);
     db
@@ -61,10 +71,8 @@ export function runMigrations(db: Database.Database): void {
       .run(migration.id, new Date().toISOString());
   });
 
-  for (const migration of migrations) {
-    if (!applied.has(migration.id)) {
-      applyMigration(migration);
-    }
+  for (const migration of pendingMigrations) {
+    applyMigration(migration);
   }
 }
 
@@ -74,6 +82,17 @@ export function listAppliedMigrations(db: Database.Database): AppliedMigration[]
   return db
     .prepare('SELECT id, applied_at AS appliedAt FROM schema_migration ORDER BY id ASC')
     .all() as AppliedMigration[];
+}
+
+function assertBackupContract(pendingMigrations: Migration[], options: MigrationOptions): void {
+  if (!options.requireBackupBeforeMigration) {
+    return;
+  }
+
+  const backupRequired = pendingMigrations.some((migration) => migration.requiresBackup);
+  if (backupRequired && !options.backupConfirmed) {
+    throw new Error('Backup confirmation is required before applying backup-requiring migrations.');
+  }
 }
 
 function ensureMigrationTable(db: Database.Database): void {
