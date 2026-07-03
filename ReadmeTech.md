@@ -230,6 +230,22 @@ Relationship alone must not grant permanent access. A partner, family member, or
 
 Details are documented in `docs/architecture/0018-presence-context-and-location-sharing.md`.
 
+## Contextual service and emergency access
+
+Pico may disclose private service, infrastructure, access or emergency context only when role, context, purpose and necessity justify it.
+
+This covers service assistance, emergency infrastructure disclosure and emergency medical disclosure.
+
+Design rule:
+
+> Role + context + purpose + necessity + minimal data + expiry + audit.
+
+For service work, Pico may help authorised people find task-relevant things, such as a water meter, shutoff valve, heating system or service panel. For emergency response, Pico may disclose safety-relevant infrastructure such as the main electrical panel, PV disconnect, battery storage, gas shutoff, water shutoff, hazards or rescue access. For medical emergencies, Pico may disclose a limited source-labelled Emergency Medical Card when the user cannot consent and disclosure is necessary to protect life or health.
+
+Pico must not expose the home, body, memory or personal life as a searchable private database.
+
+Details are documented in `docs/architecture/0020-contextual-service-and-emergency-access.md`.
+
 ## Release and update flow
 
 ```mermaid
@@ -395,6 +411,7 @@ The project concept is persisted as architecture notes:
 | `0016-cryptography-boundaries-and-non-goals.md` | cryptography scope, non-goals, and dependency on reviewed primitives |
 | `0017-contextual-interaction-safety-and-trust-signals.md` | person-to-person interaction safety, evidence-labelled trust signals, and abuse resistance |
 | `0018-presence-context-and-location-sharing.md` | scoped presence, activity, ETA, emergency and location sharing |
+| `0020-contextual-service-and-emergency-access.md` | service assistance, emergency infrastructure disclosure and medical emergency disclosure |
 
 ## Roadmap
 
@@ -424,6 +441,7 @@ flowchart TD
 - Trust signals are contextual evidence, not global human scores
 - Remote Pico self-presentation must never be transformed into trust
 - Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise
+- Service and emergency disclosures must be role-, context-, purpose- and necessity-bound, minimal, expiring and auditable
 
 ## Next implementation steps
 
