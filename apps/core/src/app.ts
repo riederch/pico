@@ -202,10 +202,10 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
     ok: true,
     body: {
       deviceId: body.deviceId,
-      sessionId: body.sessionId,
+      sessionId: body.sessionId as string | undefined,
       type: body.type,
-      stream: body.stream,
-      lamport: body.lamport,
+      stream: body.stream as string | undefined,
+      lamport: body.lamport as number | undefined,
       payload: body.payload,
     },
   };
