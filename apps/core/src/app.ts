@@ -7,6 +7,8 @@ import { EventFactory } from './event-factory.js';
 import { EventStore } from './event-store.js';
 import type { CoreConfig } from './config.js';
 
+const SERVICE_VERSION = '0.1.4';
+const PROTOCOL_VERSION = '0.1.4';
 const DEFAULT_EVENT_LIMIT = 100;
 const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;
@@ -91,6 +93,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     ok: true,
     service: 'pico-core',
     deviceId: config.deviceId,
+  }));
+
+  app.get('/api/system/version', async () => ({
+    service: 'pico-core',
+    version: SERVICE_VERSION,
+    protocolVersion: PROTOCOL_VERSION,
   }));
 
   app.get('/api/events', async (request, reply) => {
