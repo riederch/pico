@@ -8,8 +8,8 @@ import { EventStore } from './event-store.js';
 import { registerWebDashboard } from './static-web.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
-const SERVICE_VERSION = '0.1.5';
-const PROTOCOL_VERSION = '0.1.5';
+const SERVICE_VERSION = '0.1.6';
+const PROTOCOL_VERSION = '0.1.6';
 const DEFAULT_EVENT_LIMIT = 100;
 const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;

@@ -101,7 +101,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.1.5
+0.1.6
 ```
 
 Implemented or prepared:
@@ -354,7 +354,7 @@ ghcr.io/riederch/pico/core
 Current tag:
 
 ```text
-0.1.5
+0.1.6
 ```
 
 The add-on exposes Pico Core on port `3100`, serves the foundation dashboard at `/`, and defines a watchdog against:

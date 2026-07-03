@@ -5,7 +5,7 @@ This document is the central checklist for version bumps in Pico.
 ## Current version
 
 ```text
-0.1.5
+0.1.6
 ```
 
 ## Version locations
@@ -80,8 +80,8 @@ Before a release with backup-requiring migrations is tagged, the release must do
 7. For a tagged release, create and push the matching Git tag:
 
    ```bash
-   git tag v0.1.5
-   git push origin v0.1.5
+   git tag v0.1.6
+   git push origin v0.1.6
    ```
 
 ## Home Assistant check after release

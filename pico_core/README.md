@@ -75,7 +75,7 @@ Pico Core is in the foundation phase.
 Current version:
 
 ```text
-0.1.5
+0.1.6
 ```
 
 The current foundation add-on provides:
