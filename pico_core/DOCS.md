@@ -13,6 +13,8 @@
 | --- | --- |
 | `3100/tcp` | Pico Core HTTP API and WebSocket endpoint |
 
+The foundation add-on currently exposes port `3100` as a fixed port. A configurable runtime port can be added later, but is not active in the current add-on metadata.
+
 ## Endpoints
 
 | Endpoint | Purpose |
@@ -33,9 +35,13 @@ This directory is managed by Home Assistant add-on storage.
 
 ## Options
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `pico_port` | `3100` | Planned runtime port option. The first foundation image currently uses port `3100`. |
+The current foundation add-on does not expose user-configurable options yet.
+
+Planned future options may include:
+
+| Option | Purpose |
+| --- | --- |
+| `pico_port` | Runtime port selection, if the add-on entrypoint is changed to apply it safely. |
 
 ## Update behavior
 
