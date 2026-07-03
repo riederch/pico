@@ -1,7 +1,9 @@
-import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
 import type { PicoEvent } from '@pico/protocol';
+
+export type AppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
 
 export class EventStore {
   private readonly db: Database.Database;
@@ -13,9 +15,18 @@ export class EventStore {
     this.migrate();
   }
 
-  public append(event: PicoEvent): void {
+  public append(event: PicoEvent): AppendResult {
+    const payloadJson = JSON.stringify(event.payload);
+    const existing = this.db
+      .prepare('SELECT payload_json FROM pico_event WHERE event_id = ?')
+      .get(event.eventId) as { payload_json: string } | undefined;
+
+    if (existing) {
+      return existing.payload_json === payloadJson ? 'duplicate_same_payload' : 'duplicate_conflict';
+    }
+
     const statement = this.db.prepare(`
-      INSERT OR IGNORE INTO pico_event (
+      INSERT INTO pico_event (
         event_id,
         device_id,
         session_id,
@@ -37,10 +48,12 @@ export class EventStore {
       event.wallTime,
       event.type,
       event.stream,
-      JSON.stringify(event.payload),
+      payloadJson,
       event.signature ?? null,
       new Date().toISOString(),
     );
+
+    return 'inserted';
   }
 
   public list(limit = 100): PicoEvent[] {
@@ -61,6 +74,11 @@ export class EventStore {
 
   private migrate(): void {
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migration (
+        id TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS pico_event (
         event_id TEXT PRIMARY KEY,
         device_id TEXT NOT NULL,
@@ -79,7 +97,18 @@ export class EventStore {
 
       CREATE INDEX IF NOT EXISTS idx_pico_event_stream
       ON pico_event (stream, lamport);
+
+      CREATE INDEX IF NOT EXISTS idx_pico_event_type
+      ON pico_event (type, lamport);
+
+      CREATE INDEX IF NOT EXISTS idx_pico_event_device
+      ON pico_event (device_id, lamport);
     `);
+
+    this.db.prepare(`
+      INSERT OR IGNORE INTO schema_migration (id, applied_at)
+      VALUES (?, ?)
+    `).run('0001_event_store', new Date().toISOString());
   }
 
   private mapRow(row: EventRow): PicoEvent {
