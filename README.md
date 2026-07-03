@@ -4,260 +4,112 @@
 
 Pico is a local-first personal AI companion foundation.
 
-The project starts deliberately small: a tested core service, a shared protocol, sync primitives, a release pipeline, and a Home Assistant add-on path. The long-term goal is a personal assistant that can run across trusted devices, understand context, interact through text/voice/avatar surfaces, and execute approved tools through clear policy and audit boundaries.
+The goal is not simply to build another chatbot. Pico is meant to become a personal agent foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved tools only through clear policy and audit boundaries.
 
-## Visual identity
+For the full technical documentation, see [`ReadmeTech.md`](ReadmeTech.md).
 
-Pico's design basis is a small floating digital companion: rounded body, glossy light shell, black face display, expressive glowing eyes, antenna identity light, and a bright chest core.
+## Why Pico exists
 
-![Pico design concept](docs/assets/pico-design-concept.png)
+Many assistant and smart-home systems are controlled by one account, one cloud, or one technical owner. That is convenient, but shared homes, families, partnerships, and organisations need clearer ownership, permissions, exit paths, and auditability.
 
-The avatar communicates state, context, risk, and activity:
+Pico is designed around a different premise:
 
-| Color | Meaning |
-|---|---|
-| Blue / cyan | normal, active, available |
-| Violet | thinking, analysing, AI reasoning |
-| Yellow / amber | warning, uncertainty, confirmation needed |
-| Red | blocked, critical, policy stop |
-| Green | success, safe completion, positive result |
+> Personal AI should help people without taking away their control over their own data and decisions.
 
-The richer concept board from the design discussion is documented in `docs/architecture/0013-visual-design-language.md`.
+This means Pico treats identity, ownership, privacy, relationship boundaries, exit rights, and auditability as product features, not as afterthoughts.
 
-## Project intent
+## What Pico should become
 
-Pico separates the companion experience from the authority model:
+Pico should eventually be able to:
+
+- run locally where practical
+- sync between trusted full clients
+- support light clients such as watches or small displays
+- work with Home Assistant and other local tools
+- remember useful personal context safely
+- explain and audit what it did
+- ask for confirmation before risky actions
+- keep companion UX separate from execution authority
+
+## What Pico is not
+
+Pico is not intended to become:
+
+- an uncontrolled chatbot with system access
+- a cloud-only personal data silo
+- a background automation layer without clear confirmation
+- a replacement for explicit user approval
+- a project that invents its own cryptography
+
+## Core idea
+
+Pico separates the friendly assistant surface from the authority model:
 
 > The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
 
+That means the companion can feel helpful and present, but risky actions still need clear rules, confirmation, and traceability.
+
 ## Current status
 
-Foundation phase.
+Pico is in the foundation phase.
 
-Implemented or prepared:
-
-- TypeScript monorepo
-- Fastify-based Pico Core
-- SQLite-backed append-only event store
-- Lamport clock and version-vector helpers
-- shared protocol package for events, avatar state, and tool payloads
-- WebSocket endpoint for event streaming
-- CI release gates
-- Docker image build
-- multi-arch GHCR publishing path
-- Home Assistant add-on metadata
-- architecture notes under `docs/architecture`
-
-Not production-ready yet:
-
-- authentication and authorization
-- policy engine implementation
-- tool executor implementation
-- encrypted personal data domains
-- migration/rollback system
-- real companion UI
-- voice/avatar runtime
-
-## Architecture overview
-
-```mermaid
-flowchart TD
-    User[User] --> Client[Client surfaces\nWeb / Mobile / Desktop / HA]
-    Client --> Core[Pico Core]
-    Core --> EventStore[(SQLite event store)]
-    Core --> Sync[Sync primitives\nLamport clock / version vectors]
-    Core --> Protocol[Shared protocol]
-    Core --> Policy[Policy engine\nplanned]
-    Policy --> Executor[Executor\nplanned]
-    Executor --> Tools[Tools\nHA / files / services / devices]
-    Core --> Audit[(Audit log\nplanned)]
-```
-
-## Release and update flow
-
-```mermaid
-flowchart LR
-    Commit[Commit to main or tag] --> CI[CI release gates]
-    CI --> Tests[Typecheck / tests / build]
-    Tests --> Smoke[Container smoke test]
-    Smoke --> Image[GHCR image]
-    Image --> HA[Home Assistant add-on update]
-```
-
-Release rule:
-
-> No green pipeline, no release.
-
-Version bump locations and the release checklist are documented in `docs/release/versioning.md`.
-
-## Repository structure
-
-```text
-.
-├── apps
-│   ├── core              # Fastify backend service
-│   └── web               # first web client placeholder
-├── docker
-│   └── core.Dockerfile   # Pico Core container image
-├── docs
-│   ├── architecture      # architecture decision notes and concept docs
-│   ├── assets            # README/project assets
-│   └── release           # release and versioning notes
-├── packages
-│   ├── protocol          # shared event and payload types
-│   └── sync              # Lamport clock and version-vector helpers
-├── pico_core             # active Home Assistant add-on metadata
-├── repository.yaml       # Home Assistant add-on repository metadata
-└── .github/workflows     # CI pipeline
-```
-
-## Home Assistant add-on
-
-Pico currently ships a foundation add-on definition under:
-
-```text
-pico_core/
-```
-
-`pico_core/` is the single source of truth for the Home Assistant add-on metadata.
-
-The add-on uses the prebuilt container image:
-
-```text
-ghcr.io/riederch/pico/core
-```
-
-Current tag:
+Current version:
 
 ```text
 0.1.4
 ```
 
-The add-on exposes Pico Core on port `3100` and defines a watchdog against:
+Prepared foundation pieces include:
 
-```text
-/health
-```
+- Pico Core service
+- event storage
+- sync primitives
+- release pipeline
+- Home Assistant add-on path
+- architecture notes
 
-Current add-on icon assets:
+Pico is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, and real companion clients still need to be built.
 
-```text
-pico_core/icon.svg
-pico_core/logo.svg
-```
+## Visual direction
 
-![Pico Home Assistant icon](docs/assets/pico-ha-icon.png)
+Pico's visual direction is a small floating digital companion with a light shell, dark face display, glowing eyes, an antenna identity light, and a bright chest core.
 
-## Local development
+![Pico design concept](docs/assets/pico-design-concept.png)
 
-Install dependencies:
+The avatar communicates state and risk. For example:
 
-```bash
-pnpm install
-```
-
-Run the full release verification locally:
-
-```bash
-pnpm release:verify
-```
-
-Start Pico Core:
-
-```bash
-pnpm dev:core
-```
-
-Health check:
-
-```bash
-curl http://localhost:3100/health
-```
-
-Create a test event:
-
-```bash
-curl -X POST http://localhost:3100/api/events \
-  -H 'content-type: application/json' \
-  -d '{"deviceId":"desktop-dev","type":"message.created","payload":{"role":"user","text":"Hallo Pico"}}'
-```
-
-List events:
-
-```bash
-curl http://localhost:3100/api/events
-```
-
-## Current API surface
-
-| Endpoint | Purpose |
+| Color | Meaning |
 |---|---|
-| `GET /health` | service health check |
-| `GET /api/events` | list stored events |
-| `POST /api/events` | append an event |
-| `WS /ws` | event stream endpoint |
+| Blue / cyan | normal and available |
+| Violet | thinking or analysing |
+| Yellow / amber | warning or confirmation needed |
+| Red | blocked or critical |
+| Green | success |
 
-## Binary asset workflow
+## Roadmap in plain language
 
-Large or binary files such as PNG design assets are not edited directly through the GitHub text-file connector. When such files are needed, they are prepared as a ZIP archive with the correct repository folder structure. The ZIP can be extracted in the repository root and committed locally.
+1. Build a safe technical foundation.
+2. Make updates and migrations safe before real user data matters.
+3. Build the first usable client.
+4. Add policy-gated tool execution.
+5. Add memory only after deletion and privacy-domain semantics are clear.
+6. Add richer companion UX after the control and audit layers are solid.
 
-Expected image asset paths:
+## Documentation map
 
-```text
-docs/assets/pico-design-concept.png
-docs/assets/pico-ha-icon.png
-docs/assets/pico-readme-hero.png
-pico_core/icon.png
-```
-
-## Concept documents
-
-The project concept is persisted as architecture notes:
-
-| Document | Topic |
-|---|---|
-| `0001-foundation.md` | foundation architecture |
-| `0002-peer-trust-and-relationships.md` | trust relationships between Pico instances |
-| `0003-family-server-and-user-sovereignty.md` | shared server without loss of user sovereignty |
-| `0004-parent-child-relationship.md` | guardian/child model |
-| `0005-release-and-update-platform.md` | repo, release, and update model |
-| `0006-testing-and-release-gates.md` | tests as release blockers |
-| `0007-home-assistant-add-on-release.md` | HA add-on update path |
-| `0008-product-vision-and-persona.md` | product vision and Pico persona |
-| `0009-avatar-and-interaction-model.md` | avatar, voice, and interaction boundaries |
-| `0010-tool-policy-and-executor-model.md` | tool policy, executor, and risk classes |
-| `0011-privacy-security-and-audit-model.md` | privacy, security, and audit principles |
-| `0012-roadmap-foundation-to-companion.md` | roadmap from foundation to companion |
-| `0013-visual-design-language.md` | visual identity, avatar states, status colors, and context modes |
-
-## Roadmap
-
-```mermaid
-flowchart TD
-    F1[1. Foundation] --> F2[2. Versioning, migrations, update safety]
-    F2 --> F3[3. First real client]
-    F3 --> F4[4. Policy and tool execution]
-    F4 --> F5[5. Memory and personal context]
-    F5 --> F6[6. Companion UX\nAvatar / Voice / Mobile / Desktop / HA]
-```
+- [`ReadmeTech.md`](ReadmeTech.md) - full technical README
+- [`docs/architecture`](docs/architecture) - architecture decisions and concept notes
+- [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
+- [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 
 ## Design principles
 
 - Local-first where practical
-- User sovereignty over identity and personal data
+- User control over identity and personal data
 - Explicit privacy domains
 - Policy-gated tool execution
 - Confirmation for risky actions
-- Append-only event and audit thinking
-- Tests block releases
-- Updates must become reversible before real data matters
-- Friendly visual companion layer, strict execution layer
-
-## Next implementation steps
-
-- Add `GET /api/system/version`
-- Add migration tracking
-- Add backup-before-migration concept and tests
-- Validate the Home Assistant add-on on a real HA installation
-- Build the first real web client connected to `/ws`
-- Add the first policy-gated read-only tool
+- Auditability instead of hidden automation
+- Friendly companion layer, strict execution layer
+- Full clients own knowledge and backups; light clients are interaction surfaces
+- Use reviewed cryptographic primitives; do not invent cryptography
