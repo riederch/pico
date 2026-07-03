@@ -1,8 +1,15 @@
+import { fileURLToPath } from 'node:url';
+
 export interface CoreConfig {
   host: string;
   port: number;
   databasePath: string;
   deviceId: string;
+  webRootPath?: string;
+}
+
+export function defaultWebRootPath(): string {
+  return fileURLToPath(new URL('../../web', import.meta.url));
 }
 
 export function loadConfig(): CoreConfig {
@@ -11,5 +18,6 @@ export function loadConfig(): CoreConfig {
     port: Number.parseInt(process.env.PICO_PORT ?? '3100', 10),
     databasePath: process.env.PICO_DATABASE_PATH ?? 'apps/core/data/pico.sqlite',
     deviceId: process.env.PICO_DEVICE_ID ?? 'pico-core',
+    webRootPath: process.env.PICO_WEB_ROOT ?? defaultWebRootPath(),
   };
 }

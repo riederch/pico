@@ -83,10 +83,11 @@ The current foundation add-on provides:
 - local HTTP API
 - realtime WebSocket endpoint
 - SQLite-backed event storage
+- foundation diagnostics dashboard
 - health check endpoint for add-on monitoring
 - first packaging and update path for later Pico functions
 
-Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, backup/rollback behaviour and real companion clients still need to be built.
+Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, backup/rollback behaviour and companion clients still need to be built.
 
 ## Visual direction
 
@@ -109,6 +110,7 @@ The avatar communicates state and risk. For example:
 | Entry point | Purpose |
 |---|---|
 | Port `3100` | Pico Core HTTP API and WebSocket endpoint |
+| `/` | foundation diagnostics dashboard |
 | `/health` | add-on health check |
 | `/api/events` | event list and event creation |
 | `/ws` | realtime event stream |

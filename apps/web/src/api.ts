@@ -3,6 +3,14 @@ import { isPicoEvent, isRecord } from './types.js';
 
 export const DEFAULT_CORE_URL = 'http://localhost:3100';
 
+export function defaultCoreUrl(location: Location): string {
+  if (location.protocol === 'http:' || location.protocol === 'https:') {
+    return location.origin;
+  }
+
+  return DEFAULT_CORE_URL;
+}
+
 export function normalizeCoreUrl(rawValue: string): string {
   const trimmedValue = rawValue.trim() || DEFAULT_CORE_URL;
   const candidate = hasProtocol(trimmedValue) ? trimmedValue : `http://${trimmedValue}`;

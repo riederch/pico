@@ -1,4 +1,4 @@
-import { DEFAULT_CORE_URL, loadDashboardSnapshot, normalizeCoreUrl } from './api.js';
+import { defaultCoreUrl, loadDashboardSnapshot, normalizeCoreUrl } from './api.js';
 import { createDashboardView } from './render.js';
 import type { DashboardState, PicoEvent, RealtimeMessage } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
@@ -7,8 +7,9 @@ const MAX_VISIBLE_EVENTS = 500;
 
 export function startDashboard(document: Document): void {
   const view = createDashboardView(document);
+  const initialBaseUrl = defaultCoreUrl(document.location);
   const state: DashboardState = {
-    baseUrl: DEFAULT_CORE_URL,
+    baseUrl: initialBaseUrl,
     httpStatus: 'idle',
     websocketStatus: 'idle',
     lastUpdatedAt: null,

@@ -82,11 +82,12 @@ Prepared foundation pieces include:
 - Pico Core service
 - event storage
 - sync primitives
+- foundation web dashboard
 - release pipeline
 - Home Assistant add-on path
 - architecture notes
 
-Pico is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, and real companion clients still need to be built.
+Pico is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, and companion clients still need to be built.
 
 ## Visual direction
 

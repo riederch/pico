@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Foundation web dashboard delivery.
+
+- Serves the framework-free diagnostics dashboard from Pico Core at `/`.
+- Adds a container smoke-test check for the dashboard shell.
+- Keeps the existing Foundation API and WebSocket paths unchanged.
+
 ## 0.1.5
 
 Foundation runtime and release metadata update.

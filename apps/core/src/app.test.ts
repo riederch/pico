@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,6 +12,18 @@ function createDatabasePath(): string {
   return join(dir, 'pico.sqlite');
 }
 
+function createWebRootPath(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-web-test-'));
+  tempDirs.push(dir);
+  mkdirSync(join(dir, 'dist'), { recursive: true });
+  writeFileSync(
+    join(dir, 'index.html'),
+    '<!doctype html><html><head><title>Pico Foundation Dashboard</title></head><body><script type="module" src="./dist/main.js"></script></body></html>',
+  );
+  writeFileSync(join(dir, 'dist', 'main.js'), 'console.log("pico dashboard");');
+  return dir;
+}
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -19,6 +31,44 @@ afterEach(() => {
 });
 
 describe('Pico Core app', () => {
+  it('serves the dashboard shell from the default web root', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/' });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['content-type']).toContain('text/html');
+    expect(response.body).toContain('Pico Foundation Dashboard');
+
+    await app.close();
+  });
+
+  it('serves the foundation dashboard shell and built assets', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      webRootPath: createWebRootPath(),
+    });
+
+    const index = await app.inject({ method: 'GET', url: '/' });
+    expect(index.statusCode).toBe(200);
+    expect(index.headers['content-type']).toContain('text/html');
+    expect(index.body).toContain('Pico Foundation Dashboard');
+
+    const script = await app.inject({ method: 'GET', url: '/dist/main.js' });
+    expect(script.statusCode).toBe(200);
+    expect(script.headers['content-type']).toContain('application/javascript');
+    expect(script.body).toContain('pico dashboard');
+
+    await app.close();
+  });
+
   it('returns health information', async () => {
     const app = await buildApp({
       host: '127.0.0.1',

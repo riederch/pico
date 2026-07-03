@@ -11,7 +11,7 @@ The current add-on has no authentication model, no Home Assistant entity integra
 1. Add this repository as a Home Assistant add-on repository.
 2. Install the `Pico Core` add-on.
 3. Start the add-on.
-4. Call the health endpoint. A real web UI does not exist yet.
+4. Open the foundation dashboard on the add-on web UI link or call the health endpoint directly.
 
 ## Ports
 
@@ -25,6 +25,7 @@ The foundation add-on currently exposes port `3100` as a fixed port. A configura
 
 | Endpoint | Purpose |
 | --- | --- |
+| `/` | Foundation diagnostics dashboard |
 | `/health` | Add-on health check |
 | `/api/system/version` | Service and protocol version information |
 | `/api/system/status` | Diagnostic service and database migration status |
@@ -32,6 +33,8 @@ The foundation add-on currently exposes port `3100` as a fixed port. A configura
 | `/ws` | Realtime event stream |
 
 The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
+
+The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console or user-management interface.
 
 ## Add-on image assets
 
@@ -85,6 +88,7 @@ Before production use, Pico needs migration tests, backup-before-migration, and 
 
 - No Home Assistant entity integration yet.
 - No ingress panel yet.
+- No companion chat UI yet.
 - No authentication model yet.
 - No authorization model yet.
 - No policy engine yet.
