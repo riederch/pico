@@ -6,6 +6,11 @@ export type PicoEventType =
   | 'avatar.state_changed'
   | 'tool.call_requested'
   | 'tool.call_completed'
+  | 'policy.decision_created'
+  | 'confirmation.requested'
+  | 'confirmation.resolved'
+  | 'executor.action_started'
+  | 'executor.action_completed'
   | 'audit.event_created';
 
 export type DeviceType = 'core' | 'web' | 'mobile' | 'desktop' | 'home_assistant' | 'browser_extension' | 'unknown';
@@ -26,7 +31,15 @@ export type AvatarStateName =
   | 'success'
   | 'sleeping';
 
-export type ToolRiskLevel = 'read_only' | 'draft' | 'write' | 'destructive' | 'forbidden';
+export type ToolRiskLevel =
+  | 'read_only'
+  | 'local_write'
+  | 'external_write'
+  | 'destructive'
+  | 'security_sensitive'
+  | 'privileged_system_action';
+
+export type PolicyDecision = 'allow' | 'require_confirmation' | 'deny';
 
 export interface PicoEvent<TPayload = unknown> {
   eventId: string;
@@ -77,5 +90,49 @@ export interface ToolCallRequestedPayload {
 export interface ToolCallCompletedPayload {
   toolName: string;
   success: boolean;
+  summary: string;
+}
+
+export interface PolicyDecisionCreatedPayload {
+  requestedEventId: string;
+  decision: PolicyDecision;
+  reason: string;
+  riskLevel?: ToolRiskLevel;
+  dataDomain?: string;
+}
+
+export interface ConfirmationRequestedPayload {
+  requestedEventId: string;
+  prompt: string;
+  riskLevel: ToolRiskLevel;
+  expiresAt?: string;
+}
+
+export interface ConfirmationResolvedPayload {
+  confirmationEventId: string;
+  approved: boolean;
+  resolvedAt: string;
+}
+
+export interface ExecutorActionStartedPayload {
+  requestedEventId: string;
+  toolName: string;
+  riskLevel: ToolRiskLevel;
+}
+
+export interface ExecutorActionCompletedPayload {
+  startedEventId: string;
+  toolName: string;
+  success: boolean;
+  summary: string;
+}
+
+export interface AuditEventCreatedPayload {
+  subjectEventId?: string;
+  actorDeviceId?: string;
+  action: string;
+  decision?: PolicyDecision;
+  dataDomain?: string;
+  redaction: 'none' | 'summary' | 'reference_only';
   summary: string;
 }
