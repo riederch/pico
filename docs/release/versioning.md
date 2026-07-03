@@ -21,7 +21,8 @@ When the Pico version changes, update all version-bearing files in the same comm
 | `packages/sync/package.json` | `version` | Sync helper package version | Yes |
 | `pico_core/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
 | `.github/workflows/ci.yml` | `type=raw,value=<version>` | Default-branch GHCR container tag | Yes |
-| `README.md` | Home Assistant add-on tag/version text | Human-facing documentation | Yes |
+| `README.md` | Current version text | Non-technical documentation | Yes |
+| `ReadmeTech.md` | Current version and Home Assistant add-on tag/version text | Technical documentation | Yes |
 | `pico_core/CHANGELOG.md` | version heading | Home Assistant-facing update notes | Yes |
 
 ## Active Home Assistant add-on path
@@ -33,6 +34,25 @@ pico_core/config.yaml
 ```
 
 `pico_core/` is the single source of truth for the Home Assistant add-on repository metadata. Historical add-on drafts must not be kept as live `config.yaml` files with the same slug, because that creates versioning and automation ambiguity.
+
+## README split
+
+The repository has two root README files:
+
+```text
+README.md
+ReadmeTech.md
+```
+
+`README.md` is the non-technical project introduction.
+
+`ReadmeTech.md` is the full technical README. It must contain all information from `README.md` and may add additional technical detail.
+
+Documentation consistency rules are documented in:
+
+```text
+docs/release/documentation-consistency.md
+```
 
 ## Release bump procedure
 
