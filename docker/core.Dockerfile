@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS build
+FROM node:22-bookworm-slim AS base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -20,24 +20,17 @@ COPY apps ./apps
 COPY packages ./packages
 
 RUN pnpm build
-RUN pnpm deploy --filter @pico/core --prod /runtime
+RUN mkdir -p /data && chown -R node:node /app /data
 
-FROM node:22-bookworm-slim AS runtime
+EXPOSE 3100
 
 ENV NODE_ENV=production
 ENV PICO_HOST=0.0.0.0
 ENV PICO_PORT=3100
 ENV PICO_DATABASE_PATH=/data/pico.sqlite
 
-WORKDIR /app
-
-COPY --from=build /runtime ./
-
-RUN mkdir -p /data && chown -R node:node /app /data
+VOLUME ["/data"]
 
 USER node
 
-EXPOSE 3100
-VOLUME ["/data"]
-
-CMD ["node", "dist/index.js"]
+CMD ["pnpm", "--filter", "@pico/core", "start"]
