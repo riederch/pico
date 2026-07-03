@@ -27,6 +27,7 @@ The foundation add-on currently exposes port `3100` as a fixed port. A configura
 | --- | --- |
 | `/health` | Add-on health check |
 | `/api/system/version` | Service and protocol version information |
+| `/api/system/status` | Diagnostic service and database migration status |
 | `/api/events` | Development event list and limited event creation |
 | `/ws` | Realtime event stream |
 
