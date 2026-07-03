@@ -7,8 +7,8 @@ import { EventFactory } from './event-factory.js';
 import { EventStore } from './event-store.js';
 import type { CoreConfig } from './config.js';
 
-const SERVICE_VERSION = '0.1.4';
-const PROTOCOL_VERSION = '0.1.4';
+const SERVICE_VERSION = '0.1.5';
+const PROTOCOL_VERSION = '0.1.5';
 const DEFAULT_EVENT_LIMIT = 100;
 const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;
