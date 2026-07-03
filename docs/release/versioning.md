@@ -16,12 +16,13 @@ When the Pico version changes, update all version-bearing files in the same comm
 |---|---|---|---|
 | `package.json` | `version` | Root workspace/package version | Yes |
 | `apps/core/package.json` | `version` | Pico Core service package version | Yes |
+| `apps/web/package.json` | `version` | Web client package version | Yes |
 | `packages/protocol/package.json` | `version` | Shared protocol package version | Yes |
 | `packages/sync/package.json` | `version` | Sync helper package version | Yes |
 | `pico_core/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
-| `apps/ha-addon/config.yaml` | `version` | Historical/internal add-on draft; keep aligned while it exists | Yes, or delete the draft |
 | `.github/workflows/ci.yml` | `type=raw,value=<version>` | Default-branch GHCR container tag | Yes |
 | `README.md` | Home Assistant add-on tag/version text | Human-facing documentation | Yes |
+| `pico_core/CHANGELOG.md` | version heading | Home Assistant-facing update notes | Yes |
 
 ## Active Home Assistant add-on path
 
@@ -31,7 +32,7 @@ The active Home Assistant add-on metadata lives in:
 pico_core/config.yaml
 ```
 
-The older draft under `apps/ha-addon/config.yaml` is historical/internal. While it remains in the repository, its `version` field must stay aligned with `pico_core/config.yaml` to avoid confusion for Home Assistant, Codex, and future automation.
+`pico_core/` is the single source of truth for the Home Assistant add-on repository metadata. Historical add-on drafts must not be kept as live `config.yaml` files with the same slug, because that creates versioning and automation ambiguity.
 
 ## Release bump procedure
 
