@@ -1,11 +1,17 @@
 # Pico Core add-on documentation
 
+## Current status
+
+Pico Core is a foundation add-on, not a production-ready Home Assistant assistant.
+
+The current add-on has no authentication model, no Home Assistant entity integration, no ingress panel, no policy engine and no protected personal data domains. Port `3100` is currently a development interface for a trusted local test environment.
+
 ## Installation
 
 1. Add this repository as a Home Assistant add-on repository.
 2. Install the `Pico Core` add-on.
 3. Start the add-on.
-4. Open the web UI or call the health endpoint.
+4. Call the health endpoint. A real web UI does not exist yet.
 
 ## Ports
 
@@ -20,8 +26,10 @@ The foundation add-on currently exposes port `3100` as a fixed port. A configura
 | Endpoint | Purpose |
 | --- | --- |
 | `/health` | Add-on health check |
-| `/api/events` | Event list and event creation |
+| `/api/events` | Development event list and limited event creation |
 | `/ws` | Realtime event stream |
+
+The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
 
 ## Persistent data
 
@@ -32,6 +40,8 @@ Pico Core stores its SQLite database in the add-on persistent data directory:
 ```
 
 This directory is managed by Home Assistant add-on storage.
+
+The current foundation event store is not a production memory, location history, private context or Home Assistant control data store.
 
 ## Options
 
@@ -56,5 +66,9 @@ Before production use, Pico needs migration tests, backup-before-migration, and 
 - No Home Assistant entity integration yet.
 - No ingress panel yet.
 - No authentication model yet.
+- No authorization model yet.
 - No policy engine yet.
-- No encrypted personal data domains yet.
+- No tool executor yet.
+- No protected personal data domains yet.
+- No production memory model yet.
+- No backup-before-migration flow yet.
