@@ -111,6 +111,8 @@ Release rule:
 
 > No green pipeline, no release.
 
+Version bump locations and the release checklist are documented in `docs/release/versioning.md`.
+
 ## Repository structure
 
 ```text
@@ -123,7 +125,8 @@ Release rule:
 │   └── core.Dockerfile   # Pico Core container image
 ├── docs
 │   ├── architecture      # architecture decision notes and concept docs
-│   └── assets            # README/project assets
+│   ├── assets            # README/project assets
+│   └── release           # release and versioning notes
 ├── packages
 │   ├── protocol          # shared event and payload types
 │   └── sync              # Lamport clock and version-vector helpers
@@ -146,10 +149,10 @@ The add-on uses the prebuilt container image:
 ghcr.io/riederch/pico/core
 ```
 
-Expected initial tag:
+Current tag:
 
 ```text
-0.1.0
+0.1.1
 ```
 
 The add-on exposes Pico Core on port `3100` and defines a watchdog against:
