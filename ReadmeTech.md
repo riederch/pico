@@ -216,6 +216,20 @@ Hard safety boundaries remain active regardless of positive reputation signals, 
 
 Details are documented in `docs/architecture/0017-contextual-interaction-safety-and-trust-signals.md`.
 
+## Presence, context and location sharing
+
+Pico may support sharing presence, activity, ETA, status, approximate location, exact location, live location, emergency state, and similar context between trusted Picos.
+
+This must be consent-based, scoped, visible, revocable, purpose-bound, and as imprecise as possible.
+
+Design rule:
+
+> Pico should share context to support care, coordination and safety — not surveillance, coercion or control.
+
+Relationship alone must not grant permanent access. A partner, family member, organisation, guardian, or family server does not automatically get unlimited location or activity access. Full Clients decide. Light Clients request or display. Relays transport but do not own context.
+
+Details are documented in `docs/architecture/0018-presence-context-and-location-sharing.md`.
+
 ## Release and update flow
 
 ```mermaid
@@ -380,6 +394,7 @@ The project concept is persisted as architecture notes:
 | `0015-full-clients-light-clients-and-relay.md` | full clients, light clients, backups, and relay topology |
 | `0016-cryptography-boundaries-and-non-goals.md` | cryptography scope, non-goals, and dependency on reviewed primitives |
 | `0017-contextual-interaction-safety-and-trust-signals.md` | person-to-person interaction safety, evidence-labelled trust signals, and abuse resistance |
+| `0018-presence-context-and-location-sharing.md` | scoped presence, activity, ETA, emergency and location sharing |
 
 ## Roadmap
 
@@ -408,6 +423,7 @@ flowchart TD
 - Full Clients own knowledge and backups; Light Clients are interaction surfaces
 - Trust signals are contextual evidence, not global human scores
 - Remote Pico self-presentation must never be transformed into trust
+- Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise
 
 ## Next implementation steps
 
