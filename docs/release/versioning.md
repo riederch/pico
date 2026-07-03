@@ -5,7 +5,7 @@ This document is the central checklist for version bumps in Pico.
 ## Current version
 
 ```text
-0.1.6
+0.1.7
 ```
 
 ## Version locations
@@ -66,7 +66,7 @@ Before a release with backup-requiring migrations is tagged, the release must do
 
 ## Release bump procedure
 
-1. Choose the next semantic version, for example `0.1.6`.
+1. Choose the next semantic version, for example `0.1.7`.
 2. Update every location listed in the table above.
 3. Check whether the release contains backup-requiring database migrations. If yes, apply the backup-before-migration release rule.
 4. Run the release gates locally:
@@ -80,8 +80,8 @@ Before a release with backup-requiring migrations is tagged, the release must do
 7. For a tagged release, create and push the matching Git tag:
 
    ```bash
-   git tag v0.1.6
-   git push origin v0.1.6
+   git tag v0.1.7
+   git push origin v0.1.7
    ```
 
 ## Home Assistant check after release

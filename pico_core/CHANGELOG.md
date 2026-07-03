@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7
+
+Foundation release metadata update.
+
+- Aligns root workspace, Pico Core, web, protocol, sync, active Home Assistant add-on metadata, and CI image tag on `0.1.7`.
+- Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.7`.
+- Does not introduce database migrations or API changes.
+
 ## 0.1.6
 
 Foundation web dashboard delivery.

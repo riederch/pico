@@ -102,8 +102,8 @@ describe('Pico Core app', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       service: 'pico-core',
-      version: '0.1.6',
-      protocolVersion: '0.1.6',
+      version: '0.1.7',
+      protocolVersion: '0.1.7',
     });
 
     await app.close();
@@ -122,8 +122,8 @@ describe('Pico Core app', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       service: 'pico-core',
-      version: '0.1.6',
-      protocolVersion: '0.1.6',
+      version: '0.1.7',
+      protocolVersion: '0.1.7',
       deviceId: 'test-core',
       database: {
         maxLamport: 0,
