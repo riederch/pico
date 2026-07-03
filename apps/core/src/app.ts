@@ -184,8 +184,10 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
     return { ok: false, error: 'stream must be a non-empty string when provided.' };
   }
 
-  if (body.lamport !== undefined && (!Number.isInteger(body.lamport) || body.lamport < 0 || body.lamport > MAX_LAMPORT_VALUE)) {
-    return { ok: false, error: 'lamport is outside the accepted range.' };
+  if (body.lamport !== undefined) {
+    if (typeof body.lamport !== 'number' || !Number.isInteger(body.lamport) || body.lamport < 0 || body.lamport > MAX_LAMPORT_VALUE) {
+      return { ok: false, error: 'lamport is outside the accepted range.' };
+    }
   }
 
   const payloadSize = Buffer.byteLength(JSON.stringify(body.payload), 'utf8');
@@ -205,7 +207,7 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
       sessionId: body.sessionId as string | undefined,
       type: body.type,
       stream: body.stream as string | undefined,
-      lamport: body.lamport as number | undefined,
+      lamport: body.lamport,
       payload: body.payload,
     },
   };
