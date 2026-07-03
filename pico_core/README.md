@@ -1,38 +1,68 @@
 # Pico Core
 
-Pico Core brings the foundation of a personal AI companion into Home Assistant.
+![Pico Hero](../docs/assets/pico-readme-hero.png)
 
-It is designed as the local-first core for Pico: a companion service that can grow from simple event handling into a trusted assistant for home, devices, context, and everyday workflows. The focus is privacy, clear boundaries, and a future execution model where AI may suggest actions, but policy, confirmation, and auditability decide what is allowed to happen.
+**Pico Core bringt die Grundlage eines persönlichen AI-Companions in Home Assistant.**
 
-## What Pico Core provides today
+Pico ist als **local-first persönlicher Assistent** gedacht, der nicht einfach nur antwortet, sondern langfristig Geräte, Kontext, Ereignisse und Alltagsabläufe verstehen und sinnvoll unterstützen kann.  
+Dabei stehen **Datensouveränität, Transparenz und klare Grenzen** im Mittelpunkt: AI darf unterstützen, aber Kontrolle, Bestätigung und Nachvollziehbarkeit bleiben beim Nutzer.
 
-This foundation release gives Home Assistant a runnable Pico Core service with:
+## Was ist Pico Core?
 
-- a local HTTP API
-- a realtime WebSocket endpoint
-- SQLite-backed event storage
-- a health check for add-on supervision
-- the first packaging and update path for future Pico features
+Pico Core ist das technische Fundament des Pico-Projekts innerhalb von Home Assistant.  
+Es schafft die Basis für einen zukünftigen persönlichen Assistenten, der lokal betrieben werden kann und sich schrittweise zu einem vertrauenswürdigen Companion für Zuhause, Geräte und digitale Abläufe weiterentwickelt.
 
-## Why it exists
+![Pico Konzept](../docs/assets/pico-design-concept.png)
 
-Pico is intended to become more than a chatbot. The long-term goal is a personal companion that can run across trusted devices, understand context, and help with tasks while keeping control local and transparent.
+## Warum Home Assistant?
 
-Home Assistant is a natural first home for Pico because it already connects many of the systems, sensors, devices, and automations that a useful companion should understand.
+Home Assistant ist ein idealer Startpunkt für Pico, weil hier bereits viele relevante Informationen zusammenlaufen:
 
-## Current status
+- Geräte und Sensoren
+- Zustände und Ereignisse
+- Automationen und Routinen
+- lokale Infrastruktur und Services
 
-Pico Core is in the foundation phase. It is suitable for testing the add-on packaging, update flow, API surface, and event protocol.
+Dadurch entsteht eine natürliche Umgebung für einen Assistenten, der nicht losgelöst arbeitet, sondern den tatsächlichen Kontext des Nutzers verstehen soll.
 
-It is not production-ready yet. Authentication, policy-gated tool execution, migrations, backup/rollback support, encrypted data domains, and the real companion UI are planned next steps.
+## Was Pico Core heute bereits mitbringt
 
-## Technical entry points
+Die aktuelle Foundation-Version liefert bereits die erste lauffähige technische Basis:
 
-- HTTP API: port `3100`
-- WebSocket endpoint: `/ws`
-- Health endpoint: `/health`
-- Event API: `/api/events`
+- eine lokale HTTP API
+- einen Realtime-WebSocket-Endpunkt
+- SQLite-basierte Event-Speicherung
+- einen Health-Check für die Add-on-Überwachung
+- die erste Packaging- und Update-Basis für spätere Pico-Funktionen
 
-## Release and updates
+## Projektvision
 
-Updates are delivered through Home Assistant's normal add-on update flow. The add-on version follows the Pico Core container image tag published by the repository workflow.
+Pico soll langfristig **mehr als ein Chatbot** werden.  
+Ziel ist ein persönlicher AI-Companion, der:
+
+- lokal und datensparsam arbeitet
+- Kontext über Geräte und Ereignisse hinweg versteht
+- nachvollziehbar und kontrollierbar bleibt
+- schrittweise mit weiteren Fähigkeiten erweitert werden kann
+
+Dabei ist wichtig: Pico soll nicht einfach unkontrolliert handeln, sondern sich in ein Modell einfügen, bei dem **Vorschläge, Regeln, Bestätigung und Auditierbarkeit** sauber zusammenspielen.
+
+## Technische Einstiegspunkte
+
+- **HTTP API:** Port `3100`
+- **WebSocket:** `/ws`
+- **Health Endpoint:** `/health`
+- **Event API:** `/api/events`
+
+## Aktueller Entwicklungsstand
+
+Pico Core befindet sich aktuell in der **Foundation-Phase**.  
+Die bestehende Version eignet sich bereits, um das Add-on, den Update-Weg, die API-Oberfläche und das Event-Modell zu testen.
+
+Für den produktiven Einsatz fehlen derzeit noch unter anderem:
+
+- Authentifizierung und Berechtigungen
+- policy-gesteuerte Tool-Ausführung
+- Migrations- und Backup-/Rollback-Konzepte
+- verschlüsselte Datendomänen
+- die eigentliche Companion-Oberfläche
