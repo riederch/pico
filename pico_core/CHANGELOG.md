@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.5
+
+Foundation runtime and release metadata update.
+
+- Adds `/api/system/version` and `/api/system/status` to expose service, protocol and database migration status.
+- Adds explicit database migration runner tests and a backup-before-migration contract.
+- Aligns root workspace, Pico Core, web, protocol, sync, active Home Assistant add-on metadata, and CI image tag on `0.1.5`.
+- Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.5`.
+- Notes that Home Assistant add-on presentation requires PNG assets named `icon.png` and `logo.png` in the add-on folder.
+
 ## 0.1.4
 
 Release metadata and documentation consistency update.
