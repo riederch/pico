@@ -4,7 +4,7 @@
 
 Pico is a local-first personal AI companion foundation.
 
-The project starts deliberately small: a tested core service, a shared protocol, sync primitives, a release pipeline, and a Home Assistant add-on path. The long-term goal is a personal assistant that can run across trusted devices, understand context, interact through text/voice/avatar surfaces, and execute tools only through explicit policy and audit boundaries.
+The project starts deliberately small: a tested core service, a shared protocol, sync primitives, a release pipeline, and a Home Assistant add-on path. The long-term goal is a personal assistant that can run across trusted devices, understand context, interact through text/voice/avatar surfaces, and execute approved tools through clear policy and audit boundaries.
 
 ## Visual identity
 
@@ -12,7 +12,7 @@ Pico's design basis is a small floating digital companion: rounded body, glossy 
 
 ![Pico design concept](docs/assets/pico-design-concept.png)
 
-The avatar is not just decoration. It communicates state, context, risk, and activity:
+The avatar communicates state, context, risk, and activity:
 
 | Color | Meaning |
 |---|---|
@@ -22,17 +22,13 @@ The avatar is not just decoration. It communicates state, context, risk, and act
 | Red | blocked, critical, policy stop |
 | Green | success, safe completion, positive result |
 
-The richer concept board from the design discussion is documented in `docs/architecture/0013-visual-design-language.md`. Product icons use a simplified neutral Pico silhouette, while larger UI/README/landing-page assets may use the richer companion scene with panels and context cards.
+The richer concept board from the design discussion is documented in `docs/architecture/0013-visual-design-language.md`.
 
 ## Project intent
 
-Pico is not meant to become an uncontrolled chatbot with system access.
+Pico separates the companion experience from the authority model:
 
-The core design rule is:
-
-> The LLM may think and suggest. The policy engine decides. The executor acts. The user confirms risk. The audit log records what happened.
-
-This keeps the companion user experience separate from the authority model.
+> The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
 
 ## Current status
 
@@ -77,25 +73,6 @@ flowchart TD
     Core --> Audit[(Audit log\nplanned)]
 ```
 
-## Authority model
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant LLM
-    participant Policy
-    participant Executor
-    participant Audit
-
-    User->>LLM: Request
-    LLM->>Policy: Proposed action + risk class
-    Policy-->>User: Ask for confirmation if needed
-    User-->>Policy: Confirm / deny
-    Policy->>Executor: Approved action only
-    Executor->>Audit: Record result
-    Audit-->>User: Explainable history
-```
-
 ## Release and update flow
 
 ```mermaid
@@ -119,8 +96,7 @@ Version bump locations and the release checklist are documented in `docs/release
 .
 ├── apps
 │   ├── core              # Fastify backend service
-│   ├── web               # first web client placeholder
-│   └── ha-addon          # historical/internal add-on draft
+│   └── web               # first web client placeholder
 ├── docker
 │   └── core.Dockerfile   # Pico Core container image
 ├── docs
@@ -130,7 +106,7 @@ Version bump locations and the release checklist are documented in `docs/release
 ├── packages
 │   ├── protocol          # shared event and payload types
 │   └── sync              # Lamport clock and version-vector helpers
-├── pico_core             # Home Assistant add-on metadata
+├── pico_core             # active Home Assistant add-on metadata
 ├── repository.yaml       # Home Assistant add-on repository metadata
 └── .github/workflows     # CI pipeline
 ```
@@ -142,6 +118,8 @@ Pico currently ships a foundation add-on definition under:
 ```text
 pico_core/
 ```
+
+`pico_core/` is the single source of truth for the Home Assistant add-on metadata.
 
 The add-on uses the prebuilt container image:
 
@@ -169,8 +147,6 @@ pico_core/logo.svg
 ```
 
 ![Pico Home Assistant icon](docs/assets/pico-ha-icon.png)
-
-The icon follows the simplified neutral Pico silhouette: dark rounded background, white companion shell, cyan eyes, antenna light, and chest core.
 
 ## Local development
 
@@ -270,7 +246,6 @@ flowchart TD
 - Local-first where practical
 - User sovereignty over identity and personal data
 - Explicit privacy domains
-- No unrestricted shell for the LLM
 - Policy-gated tool execution
 - Confirmation for risky actions
 - Append-only event and audit thinking
