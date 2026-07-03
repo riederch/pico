@@ -54,19 +54,30 @@ Documentation consistency rules are documented in:
 docs/release/documentation-consistency.md
 ```
 
+## Migration and backup rule
+
+Database migration safety rules are documented in:
+
+```text
+docs/release/backup-before-migration.md
+```
+
+Before a release with backup-requiring migrations is tagged, the release must document affected data, backup creation, restore expectations and the missing-backup failure behaviour.
+
 ## Release bump procedure
 
 1. Choose the next semantic version, for example `0.1.5`.
 2. Update every location listed in the table above.
-3. Run the release gates locally:
+3. Check whether the release contains backup-requiring database migrations. If yes, apply the backup-before-migration release rule.
+4. Run the release gates locally:
 
    ```bash
    pnpm release:verify
    ```
 
-4. Commit all version changes together.
-5. Push to `main` and confirm the CI workflow builds and pushes the matching GHCR tag.
-6. For a tagged release, create and push the matching Git tag:
+5. Commit all version changes together.
+6. Push to `main` and confirm the CI workflow builds and pushes the matching GHCR tag.
+7. For a tagged release, create and push the matching Git tag:
 
    ```bash
    git tag v0.1.5
