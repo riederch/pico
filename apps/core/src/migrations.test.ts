@@ -53,6 +53,15 @@ describe('database migrations', () => {
     db.close();
   });
 
+  it('can require backup confirmation without blocking safe foundation migrations', () => {
+    const db = new Database(createDatabasePath());
+
+    expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
+    expect(listAppliedMigrations(db)).toHaveLength(1);
+
+    db.close();
+  });
+
   it('preserves existing event data when rerun', () => {
     const db = new Database(createDatabasePath());
 
