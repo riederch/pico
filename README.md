@@ -27,6 +27,9 @@ Pico should eventually be able to:
 - support light clients such as watches or small displays
 - work with Home Assistant and other local tools
 - remember useful personal context safely
+- share presence, activity, location and emergency context only under clear rules
+- support shared commitments, reminders and cooperative nudging
+- adapt its tone to the user while preserving user control
 - explain and audit what it did
 - ask for confirmation before risky actions
 - keep companion UX separate from execution authority
@@ -38,6 +41,8 @@ Pico is not intended to become:
 - an uncontrolled chatbot with system access
 - a cloud-only personal data silo
 - a background automation layer without clear confirmation
+- a hidden surveillance or control tool
+- a global human scoring or reputation system
 - a replacement for explicit user approval
 - a project that invents its own cryptography
 
@@ -48,6 +53,19 @@ Pico separates the friendly assistant surface from the authority model:
 > The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
 
 That means the companion can feel helpful and present, but risky actions still need clear rules, confirmation, and traceability.
+
+## Current concept boundaries
+
+Pico's current concept work defines several important boundaries:
+
+- full clients own knowledge and backups; light clients are interaction surfaces
+- relay servers transport encrypted messages but do not own Pico memory or authority
+- trust signals are contextual evidence, not global person scores
+- presence and location sharing must be scoped, visible, revocable and minimally precise
+- service and emergency disclosures must be role-, context-, purpose- and necessity-bound
+- personal context should remain private unless a clear purpose and policy allow otherwise
+- shared commitments should manage next actions, not judge people
+- motivational pressure must be user-owned
 
 ## Current status
 
@@ -98,6 +116,8 @@ The avatar communicates state and risk. For example:
 ## Documentation map
 
 - [`ReadmeTech.md`](ReadmeTech.md) - full technical README
+- [`pico_core/README.md`](pico_core/README.md) - Home Assistant add-on overview
+- [`pico_core/DOCS.md`](pico_core/DOCS.md) - Home Assistant add-on installation and operation details
 - [`docs/architecture`](docs/architecture) - architecture decisions and concept notes
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
@@ -112,4 +132,9 @@ The avatar communicates state and risk. For example:
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
 - Full clients own knowledge and backups; light clients are interaction surfaces
+- Presence and location sharing must be scoped, visible, revocable and minimally precise
+- Trust signals are contextual evidence, not global human scores
+- Personal context needs purpose, policy and clear boundaries
+- Shared commitments should manage next actions, not judge people
+- Motivational pressure must be user-owned
 - Use reviewed cryptographic primitives; do not invent cryptography
