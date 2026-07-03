@@ -59,6 +59,36 @@ describe('Pico Core app', () => {
     await app.close();
   });
 
+  it('returns system status information', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/system/status' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      service: 'pico-core',
+      version: '0.1.4',
+      protocolVersion: '0.1.4',
+      deviceId: 'test-core',
+      database: {
+        maxLamport: 0,
+        migrations: [
+          {
+            id: '0001_event_store',
+            appliedAt: expect.any(String),
+          },
+        ],
+      },
+    });
+
+    await app.close();
+  });
+
   it('rejects invalid event creation requests', async () => {
     const app = await buildApp({
       host: '127.0.0.1',
