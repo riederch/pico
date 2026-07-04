@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { extname, isAbsolute, relative, resolve } from 'node:path';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
@@ -24,8 +24,17 @@ async function sendStaticFile(reply: FastifyReply, rootPath: string, requestedPa
   }
 
   try {
+    const fileStat = await stat(filePath);
+
+    if (!fileStat.isFile()) {
+      return reply.code(404).send({ error: 'Not found.' });
+    }
+
     const file = await readFile(filePath);
-    return reply.type(contentTypeFor(filePath)).send(file);
+    return reply
+      .header('x-content-type-options', 'nosniff')
+      .type(contentTypeFor(filePath))
+      .send(file);
   } catch (error) {
     if (isFileNotFound(error)) {
       return reply.code(404).send({ error: 'Not found.' });
@@ -63,5 +72,7 @@ function contentTypeFor(filePath: string): string {
 }
 
 function isFileNotFound(error: unknown): boolean {
-  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+  return error instanceof Error
+    && 'code' in error
+    && (error.code === 'ENOENT' || error.code === 'ENOTDIR');
 }

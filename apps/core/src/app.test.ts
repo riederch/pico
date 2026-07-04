@@ -64,7 +64,32 @@ describe('Pico Core app', () => {
     const script = await app.inject({ method: 'GET', url: '/dist/main.js' });
     expect(script.statusCode).toBe(200);
     expect(script.headers['content-type']).toContain('application/javascript');
+    expect(script.headers['x-content-type-options']).toBe('nosniff');
     expect(script.body).toContain('pico dashboard');
+
+    await app.close();
+  });
+
+  it('returns 404 for missing dashboard assets and directories', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      webRootPath: createWebRootPath(),
+    });
+
+    const missingAsset = await app.inject({ method: 'GET', url: '/dist/missing.js' });
+    expect(missingAsset.statusCode).toBe(404);
+    expect(missingAsset.json()).toEqual({ error: 'Not found.' });
+
+    const directory = await app.inject({ method: 'GET', url: '/dist/.' });
+    expect(directory.statusCode).toBe(404);
+    expect(directory.json()).toEqual({ error: 'Not found.' });
+
+    const traversal = await app.inject({ method: 'GET', url: '/dist/%2e%2e%2findex.html' });
+    expect(traversal.statusCode).toBe(404);
+    expect(traversal.body).not.toContain('Pico Foundation Dashboard');
 
     await app.close();
   });
