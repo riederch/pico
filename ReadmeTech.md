@@ -134,6 +134,7 @@ Not production-ready yet:
 - real companion UI
 - voice/avatar runtime
 - multi-resident Core Host tenancy implementation
+- inter-Pico and Pico Home protocol conformance tests
 
 ## Architecture overview
 
@@ -337,6 +338,20 @@ Design rule:
 
 Details are documented in `docs/architecture/0024-server-bootstrap-tenancy-and-eviction.md`.
 
+## Inter-Pico and Pico Home compatibility
+
+Pico is open source and may be forked or modified. Internal implementation may differ between compatible implementations.
+
+However, an implementation that claims Pico protocol compatibility must preserve the published inter-Pico communication semantics for the protocol version it advertises.
+
+The same applies to the Pico Home / Core Host interface. A real Pico should be able to move into a compatible fork server if that server faithfully implements the advertised host claim, residency, eviction, sync, routing and privacy-domain semantics.
+
+Design rule:
+
+> Fork the code freely. Extend Pico carefully. Do not claim the same Pico or Pico Home protocol compatibility unless inter-Pico and Pico-to-host communication remain compatible for the advertised protocol version.
+
+Details are documented in `docs/architecture/0025-inter-pico-communication-compatibility.md`.
+
 ## Release and update flow
 
 ```mermaid
@@ -519,6 +534,7 @@ The project concept is persisted as architecture notes:
 | `0022-shared-commitments-and-cooperative-nudging.md` | shared commitments, confirmations, reminders, nudging and anti-procrastination support |
 | `0023-adaptive-tone-motivation-and-self-binding.md` | adaptive tone, motivation profiles and user-owned self-binding interventions |
 | `0024-server-bootstrap-tenancy-and-eviction.md` | unclaimed Core Host bootstrap, Gastgeber Pico, resident tenancy and eviction boundaries |
+| `0025-inter-pico-communication-compatibility.md` | inter-Pico and Pico Home protocol compatibility, fork compatibility and conformance expectations |
 
 ## Roadmap
 
@@ -547,6 +563,7 @@ flowchart TD
 - Full Clients own knowledge and backups; Light Clients are interaction surfaces
 - Core Hosts provide infrastructure; hosting is not ownership
 - A Gastgeber Pico may manage residency on a host, not resident private data
+- Pico-compatible forks must preserve inter-Pico and Pico Home protocol semantics for the advertised protocol version
 - Trust signals are contextual evidence, not global human scores
 - Remote Pico self-presentation must never be transformed into trust
 - Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise
@@ -562,3 +579,4 @@ flowchart TD
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
 - Add the first policy-gated read-only tool
+- Define public protocol surfaces for inter-Pico and Pico Home compatibility
