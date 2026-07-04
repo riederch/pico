@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listAppliedMigrations, runMigrations } from './migrations.js';
+import { listAppliedMigrations, listMigrationAuditRecords, runMigrations } from './migrations.js';
 
 const tempDirs: string[] = [];
 
@@ -31,10 +31,15 @@ describe('database migrations', () => {
       .map((row) => (row as { name: string }).name);
 
     expect(tables).toContain('schema_migration');
+    expect(tables).toContain('schema_migration_audit');
     expect(tables).toContain('pico_event');
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: '0001_event_store',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0002_schema_migration_audit',
         appliedAt: expect.any(String),
       },
     ]);
@@ -48,7 +53,8 @@ describe('database migrations', () => {
     runMigrations(db);
     runMigrations(db);
 
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
   });
@@ -57,7 +63,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
 
     db.close();
   });
@@ -96,7 +102,32 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
+
+    db.close();
+  });
+
+  it('records applied migrations in the schema migration audit log', () => {
+    const db = new Database(createDatabasePath());
+
+    const result = runMigrations(db);
+
+    expect(result.appliedMigrationIds).toEqual([
+      '0001_event_store',
+      '0002_schema_migration_audit',
+    ]);
+    expect(listMigrationAuditRecords(db)).toEqual([
+      {
+        id: 1,
+        startedAt: expect.any(String),
+        finishedAt: expect.any(String),
+        status: 'applied',
+        migrationIds: [
+          '0001_event_store',
+          '0002_schema_migration_audit',
+        ],
+      },
+    ]);
 
     db.close();
   });

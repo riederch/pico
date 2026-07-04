@@ -84,6 +84,8 @@ The add-on version in `config.yaml` must match the published container image tag
 
 The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. The add-on runtime does not yet run an automatic backup or rollback workflow during startup.
 
+Schema updates are recorded in an internal `schema_migration_audit` table when migrations are applied. This is diagnostic update metadata only; it is not the future policy/tool audit trail.
+
 ## Manual rollback path
 
 For the current foundation add-on, rollback is a manual recovery procedure:

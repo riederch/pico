@@ -7,6 +7,14 @@ export interface AppliedMigration {
   appliedAt: string;
 }
 
+export interface MigrationAuditRecord {
+  id: number;
+  startedAt: string;
+  finishedAt: string;
+  status: 'applied';
+  migrationIds: string[];
+}
+
 export interface MigrationOptions {
   requireBackupBeforeMigration?: boolean;
   backupConfirmed?: boolean;
@@ -63,9 +71,29 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0002_schema_migration_audit',
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migration_audit (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          started_at TEXT NOT NULL,
+          finished_at TEXT NOT NULL,
+          status TEXT NOT NULL,
+          migration_ids_json TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_schema_migration_audit_finished_at
+        ON schema_migration_audit (finished_at);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {
+  const startedAt = new Date().toISOString();
+
   ensureMigrationTable(db);
 
   const appliedMigrationIds = listAppliedMigrationIds(db);
@@ -76,8 +104,18 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
 
   applyPendingMigrations(db, pendingMigrations);
 
+  const appliedPendingMigrationIds = pendingMigrations.map((migration) => migration.id);
+
+  if (appliedPendingMigrationIds.length > 0) {
+    recordMigrationAudit(db, {
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      migrationIds: appliedPendingMigrationIds,
+    });
+  }
+
   return {
-    appliedMigrationIds: pendingMigrations.map((migration) => migration.id),
+    appliedMigrationIds: appliedPendingMigrationIds,
   };
 }
 
@@ -113,6 +151,26 @@ export function listAppliedMigrations(db: Database.Database): AppliedMigration[]
   return db
     .prepare('SELECT id, applied_at AS appliedAt FROM schema_migration ORDER BY id ASC')
     .all() as AppliedMigration[];
+}
+
+export function listMigrationAuditRecords(db: Database.Database): MigrationAuditRecord[] {
+  if (!tableExists(db, 'schema_migration_audit')) {
+    return [];
+  }
+
+  return db
+    .prepare(`
+      SELECT
+        id,
+        started_at AS startedAt,
+        finished_at AS finishedAt,
+        status,
+        migration_ids_json AS migrationIdsJson
+      FROM schema_migration_audit
+      ORDER BY id ASC
+    `)
+    .all()
+    .map((row) => mapMigrationAuditRecord(row as MigrationAuditRow));
 }
 
 function listAppliedMigrationIds(db: Database.Database): string[] {
@@ -152,6 +210,41 @@ function applyPendingMigrations(db: Database.Database, pendingMigrations: Migrat
   }
 }
 
+function recordMigrationAudit(
+  db: Database.Database,
+  record: { startedAt: string; finishedAt: string; migrationIds: string[] },
+): void {
+  if (!tableExists(db, 'schema_migration_audit')) {
+    return;
+  }
+
+  db
+    .prepare(`
+      INSERT INTO schema_migration_audit (
+        started_at,
+        finished_at,
+        status,
+        migration_ids_json
+      ) VALUES (?, ?, ?, ?)
+    `)
+    .run(
+      record.startedAt,
+      record.finishedAt,
+      'applied',
+      JSON.stringify(record.migrationIds),
+    );
+}
+
+function mapMigrationAuditRecord(row: MigrationAuditRow): MigrationAuditRecord {
+  return {
+    id: row.id,
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+    status: 'applied',
+    migrationIds: JSON.parse(row.migrationIdsJson) as string[],
+  };
+}
+
 function assertBackupContract(pendingMigrations: Migration[], options: MigrationOptions): void {
   if (!options.requireBackupBeforeMigration) {
     return;
@@ -170,4 +263,20 @@ function ensureMigrationTable(db: Database.Database): void {
       applied_at TEXT NOT NULL
     );
   `);
+}
+
+function tableExists(db: Database.Database, tableName: string): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName) as { name: string } | undefined;
+
+  return row !== undefined;
+}
+
+interface MigrationAuditRow {
+  id: number;
+  startedAt: string;
+  finishedAt: string;
+  status: string;
+  migrationIdsJson: string;
 }
