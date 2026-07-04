@@ -34,7 +34,7 @@ export interface DashboardSnapshot {
   events: PicoEvent[];
 }
 
-export type ConnectionStatus = 'idle' | 'checking' | 'connecting' | 'connected' | 'disconnected' | 'error';
+export type ConnectionStatus = 'idle' | 'checking' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
 
 export interface EventFilters {
   type: string;
@@ -46,6 +46,7 @@ export interface DashboardState {
   baseUrl: string;
   httpStatus: ConnectionStatus;
   websocketStatus: ConnectionStatus;
+  websocketRetryAt: Date | null;
   lastUpdatedAt: Date | null;
   systemStatus: SystemStatus | null;
   events: PicoEvent[];

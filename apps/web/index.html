@@ -227,7 +227,8 @@
       }
 
       .status-pill[data-status="checking"] .status-dot,
-      .status-pill[data-status="connecting"] .status-dot {
+      .status-pill[data-status="connecting"] .status-dot,
+      .status-pill[data-status="reconnecting"] .status-dot {
         background: #d29922;
       }
 
@@ -459,6 +460,10 @@
               <span class="metric-value">
                 <span id="ws-status" class="status-pill" data-status="idle"><span class="status-dot"></span><span>disconnected</span></span>
               </span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-key">WS retry</span>
+              <span id="ws-retry" class="metric-value">none</span>
             </div>
             <div class="metric-row">
               <span class="metric-key">Last update</span>

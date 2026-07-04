@@ -4,6 +4,7 @@ import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from '.
 import { connectRealtime, type RealtimeClient } from './websocket.js';
 
 const MAX_VISIBLE_EVENTS = 500;
+const REALTIME_RECONNECT_DELAYS_MS = [1_000, 2_000, 5_000, 10_000];
 const EMPTY_EVENT_FILTERS: EventFilters = {
   type: '',
   stream: '',
@@ -17,6 +18,7 @@ export function startDashboard(document: Document): void {
     baseUrl: initialBaseUrl,
     httpStatus: 'idle',
     websocketStatus: 'idle',
+    websocketRetryAt: null,
     lastUpdatedAt: null,
     systemStatus: null,
     events: [],
@@ -26,6 +28,8 @@ export function startDashboard(document: Document): void {
   };
 
   let realtimeClient: RealtimeClient | null = null;
+  let realtimeReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let realtimeReconnectAttempt = 0;
   let connectionGeneration = 0;
 
   view.setBaseUrl(state.baseUrl);
@@ -55,6 +59,7 @@ export function startDashboard(document: Document): void {
     const generation = connectionGeneration + 1;
     connectionGeneration = generation;
 
+    cancelRealtimeReconnect();
     realtimeClient?.close();
     realtimeClient = null;
 
@@ -73,6 +78,7 @@ export function startDashboard(document: Document): void {
     state.baseUrl = baseUrl;
     state.httpStatus = 'checking';
     state.websocketStatus = 'connecting';
+    state.websocketRetryAt = null;
     state.errorMessage = null;
     view.setBaseUrl(baseUrl);
     view.render(state);
@@ -148,6 +154,8 @@ export function startDashboard(document: Document): void {
           }
 
           state.websocketStatus = 'connected';
+          state.websocketRetryAt = null;
+          realtimeReconnectAttempt = 0;
           state.lastUpdatedAt = new Date();
           view.render(state);
         },
@@ -156,16 +164,15 @@ export function startDashboard(document: Document): void {
             return;
           }
 
-          state.websocketStatus = state.websocketStatus === 'error' ? 'error' : 'disconnected';
-          view.render(state);
+          realtimeClient = null;
+          scheduleRealtimeReconnect(baseUrl, generation);
         },
-        onError(message: string): void {
+        onError(_message: string): void {
           if (generation !== connectionGeneration) {
             return;
           }
 
           state.websocketStatus = 'error';
-          state.errorMessage = message;
           view.render(state);
         },
         onMessage(message: RealtimeMessage): void {
@@ -182,7 +189,43 @@ export function startDashboard(document: Document): void {
       state.websocketStatus = 'error';
       state.errorMessage = formatUnknownError(error);
       view.render(state);
+      scheduleRealtimeReconnect(baseUrl, generation);
     }
+  }
+
+  function scheduleRealtimeReconnect(baseUrl: string, generation: number): void {
+    cancelRealtimeReconnect();
+
+    if (generation !== connectionGeneration) {
+      return;
+    }
+
+    const delay = REALTIME_RECONNECT_DELAYS_MS[Math.min(realtimeReconnectAttempt, REALTIME_RECONNECT_DELAYS_MS.length - 1)];
+    realtimeReconnectAttempt += 1;
+    state.websocketStatus = 'reconnecting';
+    state.websocketRetryAt = new Date(Date.now() + delay);
+    view.render(state);
+
+    realtimeReconnectTimer = setTimeout(() => {
+      if (generation !== connectionGeneration) {
+        return;
+      }
+
+      realtimeReconnectTimer = null;
+      state.websocketStatus = 'connecting';
+      state.websocketRetryAt = null;
+      view.render(state);
+      openRealtime(baseUrl, generation);
+    }, delay);
+  }
+
+  function cancelRealtimeReconnect(): void {
+    if (realtimeReconnectTimer !== null) {
+      clearTimeout(realtimeReconnectTimer);
+      realtimeReconnectTimer = null;
+    }
+
+    state.websocketRetryAt = null;
   }
 
   function handleRealtimeMessage(message: RealtimeMessage): void {

@@ -18,6 +18,7 @@ interface DashboardElements {
   errorBanner: HTMLElement;
   httpStatus: HTMLElement;
   websocketStatus: HTMLElement;
+  websocketRetry: HTMLElement;
   lastUpdate: HTMLElement;
   coreSummary: HTMLElement;
   databaseSummary: HTMLElement;
@@ -55,6 +56,7 @@ export function createDashboardView(document: Document): DashboardView {
     errorBanner: requireElement(document, 'error-banner', HTMLElement),
     httpStatus: requireElement(document, 'http-status', HTMLElement),
     websocketStatus: requireElement(document, 'ws-status', HTMLElement),
+    websocketRetry: requireElement(document, 'ws-retry', HTMLElement),
     lastUpdate: requireElement(document, 'last-update', HTMLElement),
     coreSummary: requireElement(document, 'core-summary', HTMLElement),
     databaseSummary: requireElement(document, 'database-summary', HTMLElement),
@@ -109,6 +111,7 @@ export function createDashboardView(document: Document): DashboardView {
     render(state: DashboardState): void {
       renderStatusPill(elements.httpStatus, state.httpStatus, httpLabel(state.httpStatus));
       renderStatusPill(elements.websocketStatus, state.websocketStatus, websocketLabel(state.websocketStatus));
+      elements.websocketRetry.textContent = state.websocketRetryAt === null ? 'none' : formatDateTime(state.websocketRetryAt.toISOString());
       elements.lastUpdate.textContent = state.lastUpdatedAt === null ? 'never' : dateTimeFormatter.format(state.lastUpdatedAt);
       elements.connectButton.disabled = state.httpStatus === 'checking' || state.websocketStatus === 'connecting';
       elements.connectButton.textContent = connectButtonLabel(state);
@@ -351,6 +354,8 @@ function httpLabel(status: ConnectionStatus): string {
       return 'checking';
     case 'connected':
       return 'reachable';
+    case 'reconnecting':
+      return 'checking';
     case 'error':
       return 'unreachable';
     case 'connecting':
@@ -368,6 +373,8 @@ function websocketLabel(status: ConnectionStatus): string {
       return 'connecting';
     case 'connected':
       return 'connected';
+    case 'reconnecting':
+      return 'reconnecting';
     case 'error':
       return 'error';
     case 'checking':
