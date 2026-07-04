@@ -81,6 +81,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const factory = new EventFactory(clock);
   const sockets = new Set<RealtimeSocket>();
 
+  app.addHook('onClose', async () => {
+    sockets.clear();
+    store.close();
+  });
+
   function broadcast(event: PicoEvent): void {
     const serialized = JSON.stringify({ type: 'pico.event.created', event });
 

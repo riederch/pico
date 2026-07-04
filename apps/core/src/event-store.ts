@@ -8,6 +8,7 @@ export type AppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_co
 
 export class EventStore {
   private readonly db: Database.Database;
+  private closed = false;
 
   public constructor(databasePath: string) {
     mkdirSync(dirname(databasePath), { recursive: true });
@@ -17,6 +18,8 @@ export class EventStore {
   }
 
   public append(event: PicoEvent): AppendResult {
+    this.ensureOpen();
+
     const payloadJson = JSON.stringify(event.payload);
     const existing = this.db
       .prepare('SELECT payload_json FROM pico_event WHERE event_id = ?')
@@ -58,6 +61,8 @@ export class EventStore {
   }
 
   public list(limit = 100): PicoEvent[] {
+    this.ensureOpen();
+
     const statement = this.db.prepare(`
       SELECT *
       FROM pico_event
@@ -69,12 +74,31 @@ export class EventStore {
   }
 
   public maxLamport(): number {
+    this.ensureOpen();
+
     const row = this.db.prepare('SELECT MAX(lamport) AS max_lamport FROM pico_event').get() as { max_lamport: number | null };
     return row.max_lamport ?? 0;
   }
 
   public appliedMigrations(): AppliedMigration[] {
+    this.ensureOpen();
+
     return listAppliedMigrations(this.db);
+  }
+
+  public close(): void {
+    if (this.closed) {
+      return;
+    }
+
+    this.db.close();
+    this.closed = true;
+  }
+
+  private ensureOpen(): void {
+    if (this.closed) {
+      throw new Error('EventStore is closed.');
+    }
   }
 
   private mapRow(row: EventRow): PicoEvent {
