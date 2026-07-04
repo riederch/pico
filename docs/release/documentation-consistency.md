@@ -131,6 +131,7 @@ In particular:
 - shared commitment and cooperative nudging language must remain consistent with `0022`
 - adaptive tone, motivation and self-binding language must remain consistent with `0023`
 - server bootstrap, Gastgeber Pico, residency, eviction and Core Host ownership language must remain consistent with `0024`
+- inter-Pico protocol compatibility language must remain consistent with `0025`
 
 ## Review checklist
 
@@ -147,6 +148,7 @@ Before merging documentation changes, check:
 9. Are roadmap and concept statements consistent with ADRs?
 10. Are Home Assistant ports, endpoints, image tags and limitations accurate?
 11. Do Core Host, Full Client, Light Client, Relay, Gastgeber Pico and resident Pico roles remain distinct?
+12. Do protocol compatibility claims preserve inter-Pico communication semantics for the advertised protocol version?
 
 ## Design rule
 
