@@ -27,12 +27,25 @@ describe('LamportClock', () => {
   it('rejects invalid initial values', () => {
     expect(() => new LamportClock(-1)).toThrow();
     expect(() => new LamportClock(1.5)).toThrow();
+    expect(() => new LamportClock(Number.MAX_SAFE_INTEGER + 1)).toThrow();
   });
 
   it('rejects invalid remote values', () => {
     const clock = new LamportClock();
     expect(() => clock.receive(-1)).toThrow();
     expect(() => clock.receive(1.5)).toThrow();
+    expect(() => clock.receive(Number.MAX_SAFE_INTEGER + 1)).toThrow();
+  });
+
+  it('rejects advancing beyond safe integer range', () => {
+    expect(() => new LamportClock(Number.MAX_SAFE_INTEGER).tick()).toThrow(
+      'LamportClock cannot advance beyond Number.MAX_SAFE_INTEGER.',
+    );
+
+    const clock = new LamportClock(Number.MAX_SAFE_INTEGER - 1);
+    expect(() => clock.receive(Number.MAX_SAFE_INTEGER)).toThrow(
+      'LamportClock cannot advance beyond Number.MAX_SAFE_INTEGER.',
+    );
   });
 });
 
@@ -52,6 +65,15 @@ describe('VersionVector helpers', () => {
 
   it('rejects invalid device or lamport input', () => {
     expect(() => updateVersionVector({}, '', 1)).toThrow();
+    expect(() => updateVersionVector({}, '   ', 1)).toThrow();
     expect(() => updateVersionVector({}, 'phone', -1)).toThrow();
+    expect(() => updateVersionVector({}, 'phone', Number.MAX_SAFE_INTEGER + 1)).toThrow();
+  });
+
+  it('rejects invalid existing vector entries', () => {
+    expect(() => mergeVersionVector({ '': 1 }, {})).toThrow();
+    expect(() => mergeVersionVector({}, { phone: -1 })).toThrow();
+    expect(() => mergeVersionVector({}, { phone: 1.5 })).toThrow();
+    expect(() => updateVersionVector({ phone: Number.MAX_SAFE_INTEGER + 1 }, 'phone', 1)).toThrow();
   });
 });
