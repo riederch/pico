@@ -18,6 +18,18 @@ export interface MigrationAuditRecord {
 
 type MigrationAuditStatus = 'applied' | 'failed';
 
+export interface MigrationState {
+  appliedMigrationIds: string[];
+  pendingMigrations: MigrationPlanItem[];
+  unknownMigrationIds: string[];
+  backupRequired: boolean;
+}
+
+export interface MigrationPlanItem {
+  id: string;
+  requiresBackup: boolean;
+}
+
 export interface MigrationOptions {
   requireBackupBeforeMigration?: boolean;
   backupConfirmed?: boolean;
@@ -193,6 +205,25 @@ export function listMigrationAuditRecords(db: Database.Database): MigrationAudit
     `)
     .all()
     .map((row) => mapMigrationAuditRecord(row as MigrationAuditRow));
+}
+
+export function describeMigrationState(db: Database.Database): MigrationState {
+  const appliedMigrationIds = tableExists(db, 'schema_migration') ? listAppliedMigrationIds(db) : [];
+  const knownMigrationIds = new Set(migrations.map((migration) => migration.id));
+  const applied = new Set(appliedMigrationIds);
+  const pendingMigrations = migrations
+    .filter((migration) => !applied.has(migration.id))
+    .map((migration) => ({
+      id: migration.id,
+      requiresBackup: migration.requiresBackup,
+    }));
+
+  return {
+    appliedMigrationIds,
+    pendingMigrations,
+    unknownMigrationIds: appliedMigrationIds.filter((migrationId) => !knownMigrationIds.has(migrationId)),
+    backupRequired: pendingMigrations.some((migration) => migration.requiresBackup),
+  };
 }
 
 function listAppliedMigrationIds(db: Database.Database): string[] {

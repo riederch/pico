@@ -30,6 +30,14 @@ restoreSqliteBackup(backupPath, databasePath, { overwrite: true });
 
 The restore helper validates the backup as a readable SQLite database before replacing an existing database path. Replacement is explicit: callers must set `overwrite: true`, and the service must be stopped before restoring a live Home Assistant add-on database.
 
+The core package can inspect migration state without applying migrations:
+
+```ts
+describeMigrationState(db);
+```
+
+This diagnostic path reports applied migration IDs, pending migration IDs, unknown future migration IDs and whether the pending migrations require backup. It must not be treated as a public API or a policy decision point.
+
 The migration runner refuses to run when the database contains applied migration IDs that are not known to the current Pico Core build. This protects downgrade and rollback cases from silently running older code against a newer schema.
 
 Applied and failed schema update attempts are recorded in `schema_migration_audit` when the audit table is available. This is a foundation update-safety log, not the future product audit trail for policy or tool execution.

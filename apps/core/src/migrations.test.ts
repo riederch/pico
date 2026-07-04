@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listAppliedMigrations, listMigrationAuditRecords, runMigrations } from './migrations.js';
+import { describeMigrationState, listAppliedMigrations, listMigrationAuditRecords, runMigrations } from './migrations.js';
 
 const tempDirs: string[] = [];
 
@@ -20,6 +20,38 @@ afterEach(() => {
 });
 
 describe('database migrations', () => {
+  it('describes pending migrations without creating migration tables', () => {
+    const db = new Database(createDatabasePath());
+
+    expect(describeMigrationState(db)).toEqual({
+      appliedMigrationIds: [],
+      pendingMigrations: [
+        {
+          id: '0001_event_store',
+          requiresBackup: false,
+        },
+        {
+          id: '0002_schema_migration_audit',
+          requiresBackup: false,
+        },
+        {
+          id: '0003_schema_migration_audit_errors',
+          requiresBackup: false,
+        },
+      ],
+      unknownMigrationIds: [],
+      backupRequired: false,
+    });
+
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+      .all();
+
+    expect(tables).toEqual([]);
+
+    db.close();
+  });
+
   it('applies the event store migration', () => {
     const db = new Database(createDatabasePath());
 
@@ -57,6 +89,16 @@ describe('database migrations', () => {
     runMigrations(db);
     runMigrations(db);
 
+    expect(describeMigrationState(db)).toEqual({
+      appliedMigrationIds: [
+        '0001_event_store',
+        '0002_schema_migration_audit',
+        '0003_schema_migration_audit_errors',
+      ],
+      pendingMigrations: [],
+      unknownMigrationIds: [],
+      backupRequired: false,
+    });
     expect(listAppliedMigrations(db)).toHaveLength(3);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
@@ -213,6 +255,9 @@ describe('database migrations', () => {
     expect(() => runMigrations(db)).toThrow(
       'Database contains unsupported migration(s): 9999_future_schema. Refusing to run with this Pico Core version.',
     );
+    expect(describeMigrationState(db).unknownMigrationIds).toEqual([
+      '9999_future_schema',
+    ]);
 
     db.close();
   });
