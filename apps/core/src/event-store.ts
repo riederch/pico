@@ -20,7 +20,7 @@ export class EventStore {
   public append(event: PicoEvent): AppendResult {
     this.ensureOpen();
 
-    const payloadJson = JSON.stringify(event.payload);
+    const payloadJson = serializePayload(event.payload);
     const existing = this.db
       .prepare('SELECT * FROM pico_event WHERE event_id = ?')
       .get(event.eventId) as EventRow | undefined;
@@ -136,6 +136,37 @@ function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string)
     && row.wall_time === event.wallTime
     && row.type === event.type
     && row.stream === event.stream
-    && row.payload_json === payloadJson
+    && serializeStoredPayload(row.payload_json) === payloadJson
     && row.signature === (event.signature ?? null);
 }
+
+function serializePayload(payload: unknown): string {
+  const serialized = JSON.stringify(payload);
+
+  if (serialized === undefined) {
+    throw new Error('Event payload must be JSON serializable.');
+  }
+
+  return stringifyStableJson(JSON.parse(serialized) as JsonValue);
+}
+
+function serializeStoredPayload(payloadJson: string): string {
+  return stringifyStableJson(JSON.parse(payloadJson) as JsonValue);
+}
+
+function stringifyStableJson(value: JsonValue): string {
+  if (value === null || typeof value !== 'object') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stringifyStableJson(item)).join(',')}]`;
+  }
+
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stringifyStableJson(value[key])}`)
+    .join(',')}}`;
+}
+
+type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };

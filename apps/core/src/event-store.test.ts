@@ -31,6 +31,35 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('treats semantically equal payload objects with different key order as idempotent duplicates', () => {
+    const store = new EventStore(createDatabasePath());
+    const event = createEvent({
+      payload: {
+        role: 'user',
+        text: 'Hallo Pico',
+        metadata: {
+          source: 'test',
+          priority: 'normal',
+        },
+      },
+    });
+
+    expect(store.append(event)).toBe('inserted');
+    expect(store.append({
+      ...event,
+      payload: {
+        metadata: {
+          priority: 'normal',
+          source: 'test',
+        },
+        text: 'Hallo Pico',
+        role: 'user',
+      },
+    })).toBe('duplicate_same_payload');
+
+    store.close();
+  });
+
   it('treats the same event id with a changed envelope as a duplicate conflict', () => {
     const store = new EventStore(createDatabasePath());
     const event = createEvent();
