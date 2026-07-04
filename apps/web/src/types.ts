@@ -36,6 +36,12 @@ export interface DashboardSnapshot {
 
 export type ConnectionStatus = 'idle' | 'checking' | 'connecting' | 'connected' | 'disconnected' | 'error';
 
+export interface EventFilters {
+  type: string;
+  stream: string;
+  deviceId: string;
+}
+
 export interface DashboardState {
   baseUrl: string;
   httpStatus: ConnectionStatus;
@@ -43,6 +49,8 @@ export interface DashboardState {
   lastUpdatedAt: Date | null;
   systemStatus: SystemStatus | null;
   events: PicoEvent[];
+  eventFilters: EventFilters;
+  selectedEventId: string | null;
   errorMessage: string | null;
 }
 

@@ -1,9 +1,14 @@
 import { defaultCoreUrl, loadDashboardSnapshot, normalizeCoreUrl } from './api.js';
 import { createDashboardView } from './render.js';
-import type { DashboardState, PicoEvent, RealtimeMessage } from './types.js';
+import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
 
 const MAX_VISIBLE_EVENTS = 500;
+const EMPTY_EVENT_FILTERS: EventFilters = {
+  type: '',
+  stream: '',
+  deviceId: '',
+};
 
 export function startDashboard(document: Document): void {
   const view = createDashboardView(document);
@@ -15,6 +20,8 @@ export function startDashboard(document: Document): void {
     lastUpdatedAt: null,
     systemStatus: null,
     events: [],
+    eventFilters: EMPTY_EVENT_FILTERS,
+    selectedEventId: null,
     errorMessage: null,
   };
 
@@ -26,6 +33,20 @@ export function startDashboard(document: Document): void {
 
   view.onConnectRequested(() => {
     void connect(view.getBaseUrl());
+  });
+
+  view.onRefreshRequested(() => {
+    void refreshCurrentSnapshot();
+  });
+
+  view.onEventFiltersChanged((filters) => {
+    state.eventFilters = filters;
+    view.render(state);
+  });
+
+  view.onEventSelected((eventId) => {
+    state.selectedEventId = eventId;
+    view.render(state);
   });
 
   void connect(state.baseUrl);
@@ -57,18 +78,16 @@ export function startDashboard(document: Document): void {
     view.render(state);
 
     try {
-      const snapshot = await loadDashboardSnapshot(baseUrl);
+      const snapshotLoaded = await refreshSnapshot(generation);
 
       if (generation !== connectionGeneration) {
         return;
       }
 
-      state.httpStatus = snapshot.health.ok ? 'connected' : 'error';
-      state.systemStatus = snapshot.systemStatus;
-      state.events = sortEventsAscending(snapshot.events).slice(-MAX_VISIBLE_EVENTS);
-      state.lastUpdatedAt = new Date();
-      state.errorMessage = snapshot.health.ok ? null : 'Health endpoint returned ok=false.';
-      view.render(state);
+      if (!snapshotLoaded) {
+        return;
+      }
+
       openRealtime(baseUrl, generation);
     } catch (error) {
       if (generation !== connectionGeneration) {
@@ -80,6 +99,43 @@ export function startDashboard(document: Document): void {
       state.errorMessage = formatUnknownError(error);
       view.render(state);
     }
+  }
+
+  async function refreshCurrentSnapshot(): Promise<void> {
+    const generation = connectionGeneration;
+
+    try {
+      await refreshSnapshot(generation);
+    } catch (error) {
+      if (generation !== connectionGeneration) {
+        return;
+      }
+
+      state.httpStatus = 'error';
+      state.errorMessage = formatUnknownError(error);
+      view.render(state);
+    }
+  }
+
+  async function refreshSnapshot(generation: number): Promise<boolean> {
+    state.httpStatus = 'checking';
+    state.errorMessage = null;
+    view.render(state);
+
+    const snapshot = await loadDashboardSnapshot(state.baseUrl);
+
+    if (generation !== connectionGeneration) {
+      return false;
+    }
+
+    state.httpStatus = snapshot.health.ok ? 'connected' : 'error';
+    state.systemStatus = snapshot.systemStatus;
+    state.events = sortEventsAscending(snapshot.events).slice(-MAX_VISIBLE_EVENTS);
+    state.selectedEventId = keepSelectedEvent(state.events, state.selectedEventId);
+    state.lastUpdatedAt = new Date();
+    state.errorMessage = snapshot.health.ok ? null : 'Health endpoint returned ok=false.';
+    view.render(state);
+    return true;
   }
 
   function openRealtime(baseUrl: string, generation: number): void {
@@ -132,6 +188,7 @@ export function startDashboard(document: Document): void {
   function handleRealtimeMessage(message: RealtimeMessage): void {
     if (message.type === 'pico.event.created') {
       state.events = upsertEvent(state.events, message.event).slice(-MAX_VISIBLE_EVENTS);
+      state.selectedEventId = keepSelectedEvent(state.events, state.selectedEventId);
     }
   }
 }
@@ -153,6 +210,14 @@ function sortEventsAscending(events: PicoEvent[]): PicoEvent[] {
     || left.wallTime.localeCompare(right.wallTime)
     || left.eventId.localeCompare(right.eventId)
   ));
+}
+
+function keepSelectedEvent(events: PicoEvent[], selectedEventId: string | null): string | null {
+  if (selectedEventId === null) {
+    return null;
+  }
+
+  return events.some((event) => event.eventId === selectedEventId) ? selectedEventId : null;
 }
 
 function formatUnknownError(error: unknown): string {
