@@ -172,6 +172,87 @@ describe('Pico Core app', () => {
     await app.close();
   });
 
+  it('rejects blank event identifiers and text fields', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const blankDeviceId = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: '   ',
+        type: 'message.created',
+        payload: {
+          role: 'user',
+          text: 'Hallo Pico',
+        },
+      },
+    });
+    expect(blankDeviceId.statusCode).toBe(400);
+    expect(blankDeviceId.json()).toEqual({
+      error: 'deviceId, type and payload are required.',
+    });
+
+    const blankSessionId = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        sessionId: '   ',
+        type: 'message.created',
+        payload: {
+          role: 'user',
+          text: 'Hallo Pico',
+        },
+      },
+    });
+    expect(blankSessionId.statusCode).toBe(400);
+    expect(blankSessionId.json()).toEqual({
+      error: 'sessionId must be a non-empty string when provided.',
+    });
+
+    const blankStream = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        stream: '   ',
+        type: 'message.created',
+        payload: {
+          role: 'user',
+          text: 'Hallo Pico',
+        },
+      },
+    });
+    expect(blankStream.statusCode).toBe(400);
+    expect(blankStream.json()).toEqual({
+      error: 'stream must be a non-empty string when provided.',
+    });
+
+    const blankMessageText = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        payload: {
+          role: 'user',
+          text: '   ',
+        },
+      },
+    });
+    expect(blankMessageText.statusCode).toBe(400);
+    expect(blankMessageText.json()).toEqual({
+      error: 'message.created payload requires role and text.',
+    });
+
+    await app.close();
+  });
+
   it('rejects reserved policy and executor event types on the foundation API', async () => {
     const app = await buildApp({
       host: '127.0.0.1',

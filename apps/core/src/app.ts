@@ -281,7 +281,7 @@ function isStringMember(value: unknown, allowedValues: Set<string>): value is st
 }
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= maxLength;
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= maxLength;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
