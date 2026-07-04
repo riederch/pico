@@ -30,6 +30,8 @@ restoreSqliteBackup(backupPath, databasePath, { overwrite: true });
 
 The restore helper validates the backup as a readable SQLite database before replacing an existing database path. Replacement is explicit: callers must set `overwrite: true`, and the service must be stopped before restoring a live Home Assistant add-on database.
 
+Backup creation must not overwrite an existing backup file. If the deterministic timestamp-based backup name already exists, the backup helper chooses the next available suffixed filename.
+
 The core package can inspect migration state without applying migrations:
 
 ```ts

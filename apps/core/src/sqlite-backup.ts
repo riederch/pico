@@ -28,8 +28,8 @@ export async function createSqliteBackup(databasePath: string, backupDirectory: 
 
   const createdAt = now.toISOString();
   const sourceName = basename(databasePath).replace(/[^a-zA-Z0-9._-]/g, '_');
-  const backupName = `${sourceName}.${toSafeTimestamp(createdAt)}.bak`;
-  const backupPath = join(backupDirectory, backupName);
+  const backupBaseName = `${sourceName}.${toSafeTimestamp(createdAt)}`;
+  const backupPath = nextAvailableBackupPath(backupDirectory, backupBaseName);
 
   const db = new Database(databasePath, { readonly: true, fileMustExist: true });
 
@@ -75,6 +75,18 @@ export function restoreSqliteBackup(backupPath: string, databasePath: string, op
 
 function toSafeTimestamp(value: string): string {
   return value.replace(/[:.]/g, '-');
+}
+
+function nextAvailableBackupPath(backupDirectory: string, backupBaseName: string): string {
+  let backupPath = join(backupDirectory, `${backupBaseName}.bak`);
+  let suffix = 1;
+
+  while (existsSync(backupPath)) {
+    backupPath = join(backupDirectory, `${backupBaseName}.${suffix}.bak`);
+    suffix += 1;
+  }
+
+  return backupPath;
 }
 
 function removeSqliteDatabaseFiles(databasePath: string): void {

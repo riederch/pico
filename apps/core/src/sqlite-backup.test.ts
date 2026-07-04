@@ -71,6 +71,45 @@ describe('createSqliteBackup', () => {
     expect(existsSync(result.backupPath)).toBe(true);
   });
 
+  it('does not overwrite an existing backup with the same timestamp', async () => {
+    const dir = createTempDir();
+    const databasePath = join(dir, 'pico.sqlite');
+    const backupDirectory = join(dir, 'backups');
+    const createdAt = new Date('2026-07-03T12:34:56.789Z');
+
+    const source = new Database(databasePath);
+    source.exec(`
+      CREATE TABLE sample (
+        id TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    source.prepare('INSERT INTO sample (id, value) VALUES (?, ?)').run('row-1', 'first');
+    source.close();
+
+    const firstBackup = await createSqliteBackup(databasePath, backupDirectory, createdAt);
+
+    const changed = new Database(databasePath);
+    changed.prepare('UPDATE sample SET value = ? WHERE id = ?').run('second', 'row-1');
+    changed.close();
+
+    const secondBackup = await createSqliteBackup(databasePath, backupDirectory, createdAt);
+
+    expect(firstBackup.backupPath).toBe(join(backupDirectory, 'pico.sqlite.2026-07-03T12-34-56-789Z.bak'));
+    expect(secondBackup.backupPath).toBe(join(backupDirectory, 'pico.sqlite.2026-07-03T12-34-56-789Z.1.bak'));
+
+    const first = new Database(firstBackup.backupPath, { readonly: true, fileMustExist: true });
+    const firstRow = first.prepare('SELECT value FROM sample WHERE id = ?').get('row-1') as { value: string };
+    first.close();
+
+    const second = new Database(secondBackup.backupPath, { readonly: true, fileMustExist: true });
+    const secondRow = second.prepare('SELECT value FROM sample WHERE id = ?').get('row-1') as { value: string };
+    second.close();
+
+    expect(firstRow.value).toBe('first');
+    expect(secondRow.value).toBe('second');
+  });
+
   it('rejects missing source databases', async () => {
     const dir = createTempDir();
     const databasePath = join(dir, 'missing.sqlite');
