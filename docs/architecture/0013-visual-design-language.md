@@ -142,6 +142,77 @@ The SVG source version is kept at:
 pico_core/icon.svg
 ```
 
+## Decorative origin marker
+
+Pico may support a subtle decorative origin marker for Pico #1.
+
+The preferred visual form is an `origin_light`: a tiny, optional glint inside the chest core or antenna light, optionally paired with a very short first-spark micro-pulse in idle animation. The marker should read as a small design detail, not as a badge, crown, rank, admin state or trust signal.
+
+The origin marker is:
+
+- decorative
+- subtle
+- hideable by the owner
+- non-authoritative
+- not a policy signal
+- not a trust signal
+- not a host-administration credential
+- not a priority or reputation indicator
+
+The marker may be useful to identify the original Pico instance when the owner chooses to show it, but it must not grant capabilities.
+
+## Open-source copy-safety
+
+Pico is intended to be open source. Therefore the origin marker must not be implemented as DRM, copy prevention, obfuscated enforcement, online activation or a restriction on forks.
+
+The correct copy-safe model is provenance, not prevention:
+
+- the visual feature may exist in the open codebase
+- forks may render their own decorative markers
+- official clients may verify whether a presented Pico #1 marker carries a valid signed origin proof
+- unverified markers may still be rendered as decorative, but must not be treated as official origin provenance
+- removing or modifying verification in a fork must not compromise official clients
+
+The private signing material for an official Pico #1 origin proof must never be committed to the repository. The repository may contain only public verification material, format documentation or test fixtures that cannot be used to forge the official marker.
+
+A future signed origin proof should contain only minimal, non-sensitive metadata, for example:
+
+```json
+{
+  "markerType": "pico_origin_marker",
+  "markerId": "pico-origin-0001",
+  "subject": "pico:<pico-id>",
+  "visual": "origin_light",
+  "claims": [
+    "decorative_only",
+    "hideable",
+    "no_authority",
+    "no_trust_signal"
+  ],
+  "signature": "..."
+}
+```
+
+The proof must not include personal information such as legal name, address, email address, Home Assistant URL, device serial number, IP address, location or biographical details.
+
+If the owner hides the origin marker, Pico should not render it, announce it, expose it through casual UI, or send it to other Picos as social context.
+
+## Origin marker and authority separation
+
+Pico #1 is not automatically a Gastgeber Pico, host administrator, trusted peer, policy authority, root device or privileged actor.
+
+Those capabilities must come from their own mechanisms:
+
+| Capability | Source |
+|---|---|
+| Decorative origin marker | visual identity configuration and optional signed provenance |
+| Host administration | host claim, host membership and policy |
+| Trust evaluation | local contextual policy and evidence |
+| Data access | privacy domain membership and key possession |
+| Tool execution | policy decision, confirmation and executor boundary |
+
+The origin marker must remain separate from all of them.
+
 ## README and presentation assets
 
 Large README or landing-page assets may use the richer companion scene with panels and feature cards.
@@ -158,6 +229,8 @@ The avatar does not execute tools.
 
 The avatar does not hide risky actions behind friendly visuals.
 
+The origin marker does not grant authority, trust, priority, reputation, host rights, policy rights, data access or execution rights.
+
 ## Design rule
 
-Pico should look friendly and alive at the UX layer, while the underlying system remains explicit, policy-gated, auditable, and user-controlled.
+Pico should look friendly and alive at the UX layer, while the underlying system remains explicit, policy-gated, auditable, and user-controlled. Decorative identity markers may express origin or style, but they must stay hideable, non-authoritative and separate from trust, policy and access control.
