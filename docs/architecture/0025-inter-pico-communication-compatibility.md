@@ -6,11 +6,11 @@ Accepted as a protocol compatibility constraint.
 
 ## Context
 
-Pico is intended to become open source. Users should be able to inspect, modify, fork and self-host Pico code.
+Pico is source-available for private and non-commercial use. Users should be able to inspect, modify and self-host Pico code within the project license.
 
 At the same time, Pico instances must be able to communicate safely and predictably. A modified Pico implementation should not silently break inter-Pico communication while still presenting itself as protocol-compatible.
 
-This also applies to the interface between a Pico and its Pico Home, meaning the Pico Core Host that provides residency, storage, routing, sync and host services. A real Pico should be able to move into a compatible fork server if that server faithfully implements the advertised Pico Home / Core Host protocol.
+This also applies to the interface between a Pico and its Pico Home, meaning the Pico Core Host that provides residency, storage, routing, sync and host services. A real Pico should be able to move into a compatible fork server if that server faithfully implements the advertised Pico Home / Core Host protocol and is used within the project license or with commercial permission where required.
 
 This is especially important for:
 
@@ -30,7 +30,7 @@ This is especially important for:
 
 ## Decision
 
-Code may be changed, forked and adapted under the project license.
+Code may be changed, adapted and self-hosted within the project license. Commercial use requires prior written permission from the designated Pico rights holder.
 
 However, an implementation that claims Pico protocol compatibility must preserve the published inter-Pico communication semantics for the protocol version it advertises.
 
@@ -40,17 +40,19 @@ Breaking communication changes must not be hidden behind the same protocol versi
 
 ## Core design rule
 
-> You may change the implementation. You must not silently change what a Pico-compatible Pico or Pico Home means on the wire.
+> You may change the implementation within the license. You must not silently change what a Pico-compatible Pico or Pico Home means on the wire.
 
 Operational form:
 
-> A modified Pico or fork server may be different internally. If it claims compatibility with a Pico protocol version, it must speak that protocol faithfully or clearly negotiate a different version or extension.
+> A modified Pico or permitted fork server may be different internally. If it claims compatibility with a Pico protocol version, it must speak that protocol faithfully or clearly negotiate a different version or extension.
 
 ## License boundary
 
-The open-source license should allow modification and forks.
+The source-available license should allow private and non-commercial modification and self-hosting, including private Pico Home and private Pico WG use.
 
-Protocol compatibility should therefore be handled through:
+Commercial use, including paid hosting, managed Pico Home services, SaaS operation, paid support, business-internal use and commercial product integration, requires prior written permission.
+
+Protocol compatibility should be handled through:
 
 - published protocol specifications
 - semantic protocol versioning
@@ -59,9 +61,9 @@ Protocol compatibility should therefore be handled through:
 - compatibility claims
 - trademark or naming policy where needed
 
-It should not rely on DRM, obfuscation, remote activation, anti-fork logic or hidden enforcement.
+Compatibility claims do not grant commercial permission.
 
-A fork may change the protocol. But if it does, it must not pretend to be compatible with the unchanged Pico protocol version.
+A permitted fork may change the protocol. But if it does, it must not pretend to be compatible with the unchanged Pico protocol version.
 
 ## Compatibility surfaces
 
@@ -76,7 +78,7 @@ These surfaces may share transport and message formats, but they must be tested 
 
 ## Pico Home / Core Host compatibility
 
-A compatible fork server may implement Pico Core differently internally. It may use a different storage engine, runtime language, deployment model, UI or operating system.
+A compatible permitted fork server may implement Pico Core differently internally. It may use a different storage engine, runtime language, deployment model, UI or operating system.
 
 It may still be a valid Pico Home if it preserves the host-facing contract that resident Picos rely on.
 
@@ -91,7 +93,7 @@ A Pico Home-compatible host must not:
 - silently reinterpret resident sync data
 - make a resident Pico non-portable while claiming host compatibility
 
-A Pico should be able to evaluate a fork server by its advertised host protocol version, capabilities and conformance status before moving in.
+A Pico should be able to evaluate a permitted fork server by its advertised host protocol version, capabilities and conformance status before moving in.
 
 ## Compatibility requirements
 
@@ -173,7 +175,7 @@ A release that changes protocol behaviour should add or update tests for:
 - privacy-domain semantics
 - host claim and residency semantics
 - Pico Home move-in and eviction semantics
-- fork-server compatibility expectations
+- permitted fork-server compatibility expectations
 - relay-safe transport assumptions
 
 The long-term rule should be:
@@ -208,11 +210,11 @@ Not allowed under the same compatibility claim:
 
 ## Naming and user trust
 
-A modified implementation that remains compatible may describe itself as Pico-compatible or Pico Home-compatible for the advertised protocol version.
+A modified implementation that remains compatible may describe itself as Pico-compatible or Pico Home-compatible for the advertised protocol version, provided that the applicable license, commercial permission and naming requirements are also satisfied.
 
 A modified implementation that intentionally breaks compatibility should use a clear fork name, protocol name or compatibility statement so users and other Picos are not misled.
 
-This is separate from copyright licensing. It protects user expectations, inter-Pico safety and Pico Home portability without preventing open-source forks.
+This is separate from commercial permission. It protects user expectations, inter-Pico safety and Pico Home portability without turning compatibility into a hosting license.
 
 ## Interaction with other ADRs
 
@@ -252,17 +254,17 @@ Open questions before implementation:
 - How are extension namespaces reserved?
 - Which tests are required before a fork can claim Pico or Pico Home compatibility?
 - How should official clients display compatibility warnings?
-- How should a Pico decide whether a fork server is safe enough to move into?
+- How should a Pico decide whether a permitted fork server is safe enough to move into?
 
 ## Consequences
 
 Positive:
 
-- supports open-source modification without breaking the Pico network model
-- allows compatible fork servers to host resident Picos
+- supports private and non-commercial modification without breaking the Pico network model
+- allows compatible private or permitted fork servers to host resident Picos
 - prevents silent protocol fragmentation
 - protects users from misleading compatibility claims
-- gives forks a clean extension path
+- gives permitted forks a clean extension path
 - makes inter-Pico and Pico Home communication part of the release safety model
 
 Negative:
@@ -271,7 +273,8 @@ Negative:
 - adds compatibility test burden
 - can slow breaking protocol changes
 - requires careful version negotiation and extension design
+- requires clear separation between compatibility and commercial permission
 
 ## Design rule
 
-Fork the code freely. Extend Pico carefully. Do not claim the same Pico or Pico Home protocol compatibility unless inter-Pico and Pico-to-host communication remain compatible for the advertised protocol version.
+Modify Pico within the license. Extend Pico carefully. Do not claim the same Pico or Pico Home protocol compatibility unless inter-Pico and Pico-to-host communication remain compatible for the advertised protocol version. Do not treat compatibility as commercial hosting permission.
