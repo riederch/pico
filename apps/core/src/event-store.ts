@@ -19,6 +19,7 @@ export class EventStore {
 
   public append(event: PicoEvent): AppendResult {
     this.ensureOpen();
+    assertStoredEvent(event);
 
     const payloadJson = serializePayload(event.payload);
     const existing = this.db
@@ -62,6 +63,7 @@ export class EventStore {
 
   public list(limit = 100): PicoEvent[] {
     this.ensureOpen();
+    assertListLimit(limit);
 
     const statement = this.db.prepare(`
       SELECT *
@@ -138,6 +140,42 @@ function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string)
     && row.stream === event.stream
     && serializeStoredPayload(row.payload_json) === payloadJson
     && row.signature === (event.signature ?? null);
+}
+
+function assertStoredEvent(event: PicoEvent): void {
+  assertNonEmptyString(event.eventId, 'eventId');
+  assertNonEmptyString(event.deviceId, 'deviceId');
+
+  if (event.sessionId !== undefined) {
+    assertNonEmptyString(event.sessionId, 'sessionId');
+  }
+
+  assertLamportValue(event.lamport);
+  assertNonEmptyString(event.wallTime, 'wallTime');
+  assertNonEmptyString(event.type, 'type');
+  assertNonEmptyString(event.stream, 'stream');
+
+  if (event.signature !== undefined) {
+    assertNonEmptyString(event.signature, 'signature');
+  }
+}
+
+function assertNonEmptyString(value: string, label: string): void {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error(`Event ${label} must be a non-empty string.`);
+  }
+}
+
+function assertLamportValue(value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error('Event lamport must be a non-negative safe integer.');
+  }
+}
+
+function assertListLimit(limit: number): void {
+  if (!Number.isSafeInteger(limit) || limit < 1) {
+    throw new Error('EventStore list limit must be a positive safe integer.');
+  }
 }
 
 function serializePayload(payload: unknown): string {

@@ -74,6 +74,62 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('lists events in stable Lamport order and applies the requested limit', () => {
+    const store = new EventStore(createDatabasePath());
+
+    store.append(createEvent({
+      eventId: 'event-3',
+      lamport: 2,
+      wallTime: '2026-07-04T12:02:00.000Z',
+    }));
+    store.append(createEvent({
+      eventId: 'event-1',
+      lamport: 1,
+      wallTime: '2026-07-04T12:00:00.000Z',
+    }));
+    store.append(createEvent({
+      eventId: 'event-2',
+      lamport: 2,
+      wallTime: '2026-07-04T12:01:00.000Z',
+    }));
+
+    expect(store.list().map((event) => event.eventId)).toEqual(['event-1', 'event-2', 'event-3']);
+    expect(store.list(2).map((event) => event.eventId)).toEqual(['event-1', 'event-2']);
+
+    store.close();
+  });
+
+  it('rejects invalid list limits at the store boundary', () => {
+    const store = new EventStore(createDatabasePath());
+
+    for (const limit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => store.list(limit)).toThrow('EventStore list limit must be a positive safe integer.');
+    }
+
+    store.close();
+  });
+
+  it('rejects invalid stored event envelopes', () => {
+    const invalidEvents: Array<[Partial<PicoEvent>, string]> = [
+      [{ eventId: '   ' }, 'Event eventId must be a non-empty string.'],
+      [{ deviceId: '   ' }, 'Event deviceId must be a non-empty string.'],
+      [{ sessionId: '   ' }, 'Event sessionId must be a non-empty string.'],
+      [{ lamport: -1 }, 'Event lamport must be a non-negative safe integer.'],
+      [{ lamport: Number.MAX_SAFE_INTEGER + 1 }, 'Event lamport must be a non-negative safe integer.'],
+      [{ wallTime: '   ' }, 'Event wallTime must be a non-empty string.'],
+      [{ stream: '   ' }, 'Event stream must be a non-empty string.'],
+      [{ signature: '   ' }, 'Event signature must be a non-empty string.'],
+    ];
+
+    for (const [overrides, error] of invalidEvents) {
+      const store = new EventStore(createDatabasePath());
+
+      expect(() => store.append(createEvent(overrides))).toThrow(error);
+
+      store.close();
+    }
+  });
+
   it('closes the SQLite connection idempotently', () => {
     const store = new EventStore(createDatabasePath());
 
