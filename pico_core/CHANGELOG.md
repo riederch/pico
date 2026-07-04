@@ -2,8 +2,9 @@
 
 ## 0.1.7
 
-Foundation release metadata update.
+Home Assistant add-on permission fix.
 
+- Keeps Pico Core running with a writable Home Assistant `/data` mount so SQLite can create and update `/data/pico.sqlite`.
 - Aligns root workspace, Pico Core, web, protocol, sync, active Home Assistant add-on metadata, and CI image tag on `0.1.7`.
 - Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.7`.
 - Does not introduce database migrations or API changes.
