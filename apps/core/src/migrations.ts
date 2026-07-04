@@ -102,14 +102,11 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
   const pendingMigrations = listPendingMigrations(appliedMigrationIds);
   assertBackupContract(pendingMigrations, options);
 
-  applyPendingMigrations(db, pendingMigrations);
-
   const appliedPendingMigrationIds = pendingMigrations.map((migration) => migration.id);
 
   if (appliedPendingMigrationIds.length > 0) {
-    recordMigrationAudit(db, {
+    applyPendingMigrations(db, pendingMigrations, {
       startedAt,
-      finishedAt: new Date().toISOString(),
       migrationIds: appliedPendingMigrationIds,
     });
   }
@@ -197,17 +194,26 @@ function assertKnownAppliedMigrations(appliedMigrationIds: string[]): void {
   }
 }
 
-function applyPendingMigrations(db: Database.Database, pendingMigrations: Migration[]): void {
-  const applyMigration = db.transaction((migration: Migration) => {
-    migration.up(db);
-    db
-      .prepare('INSERT INTO schema_migration (id, applied_at) VALUES (?, ?)')
-      .run(migration.id, new Date().toISOString());
+function applyPendingMigrations(
+  db: Database.Database,
+  pendingMigrations: Migration[],
+  auditRecord: { startedAt: string; migrationIds: string[] },
+): void {
+  const applyMigrationRun = db.transaction(() => {
+    for (const migration of pendingMigrations) {
+      migration.up(db);
+      db
+        .prepare('INSERT INTO schema_migration (id, applied_at) VALUES (?, ?)')
+        .run(migration.id, new Date().toISOString());
+    }
+
+    recordMigrationAudit(db, {
+      ...auditRecord,
+      finishedAt: new Date().toISOString(),
+    });
   });
 
-  for (const migration of pendingMigrations) {
-    applyMigration(migration);
-  }
+  applyMigrationRun();
 }
 
 function recordMigrationAudit(

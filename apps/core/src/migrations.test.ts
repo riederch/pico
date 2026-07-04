@@ -132,6 +132,29 @@ describe('database migrations', () => {
     db.close();
   });
 
+  it('rolls back migration registry changes when audit recording fails', () => {
+    const db = new Database(createDatabasePath());
+
+    runMigrations(db);
+    db.prepare('DELETE FROM schema_migration WHERE id = ?').run('0002_schema_migration_audit');
+    db.prepare('DELETE FROM schema_migration_audit').run();
+    db.exec(`
+      CREATE TRIGGER reject_schema_migration_audit_insert
+      BEFORE INSERT ON schema_migration_audit
+      BEGIN
+        SELECT RAISE(ABORT, 'schema migration audit insert blocked');
+      END;
+    `);
+
+    expect(() => runMigrations(db)).toThrow('schema migration audit insert blocked');
+    expect(listAppliedMigrations(db).map((migration) => migration.id)).toEqual([
+      '0001_event_store',
+    ]);
+    expect(listMigrationAuditRecords(db)).toEqual([]);
+
+    db.close();
+  });
+
   it('refuses to run when the database contains unknown future migrations', () => {
     const db = new Database(createDatabasePath());
 

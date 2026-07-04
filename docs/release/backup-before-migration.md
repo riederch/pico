@@ -34,6 +34,8 @@ The migration runner refuses to run when the database contains applied migration
 
 Applied schema updates are recorded in `schema_migration_audit`. This is a foundation update-safety log, not the future product audit trail for policy or tool execution.
 
+Pending migrations and their schema migration audit record are written in one SQLite transaction. Pico must not leave `schema_migration` claiming that a migration succeeded when the matching migration audit record could not be written.
+
 Future production runtimes should call the runner with:
 
 ```ts
