@@ -6,7 +6,7 @@ Pico Core is the Home Assistant add-on foundation for Pico.
 
 Pico is a local-first personal AI companion foundation. The goal is not simply to build another chatbot. Pico is meant to become a personal agent foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved tools only through clear policy and audit boundaries.
 
-This add-on is the Home Assistant entry point for the current Pico Core service.
+This add-on is the Home Assistant entry point for the current Pico Core service. Home Assistant is the first packaging and runtime path, not the only intended platform and not an ownership layer for resident Pico identities or private data.
 
 For full technical project documentation, see [`../ReadmeTech.md`](../ReadmeTech.md). For add-on installation and operation details, see [`DOCS.md`](DOCS.md).
 
@@ -18,7 +18,7 @@ Pico is designed around a different premise:
 
 > Personal AI should help people without taking away their control over their own data and decisions.
 
-Home Assistant is a useful starting point because it already brings together local devices, sensors, states, events, automations and routines. Pico Core uses that environment as the first add-on packaging and runtime path.
+Home Assistant is a useful starting point because it already brings together local devices, sensors, states, events, automations and routines. Pico Core uses that environment as the first add-on packaging and runtime path, while the broader Pico Core host model must also work on other trusted platforms.
 
 ## What Pico Core should become
 
@@ -45,6 +45,7 @@ Pico Core is not intended to become:
 - a global human scoring or reputation system
 - a replacement for explicit user approval
 - a production-ready personal data store yet
+- an owner of every resident Pico identity just because it hosts the service
 - a project that invents its own cryptography
 
 ## Core idea
@@ -60,6 +61,9 @@ That means Pico may eventually feel helpful and present in Home Assistant, but r
 Pico's current concept work defines several important boundaries:
 
 - full clients own knowledge and backups; light clients are interaction surfaces
+- Pico Core hosts provide infrastructure, but hosting is not ownership over resident Pico identities or private data
+- a freshly installed Pico Core host starts unclaimed; a one-time bootstrap claim token lets the first Pico become the host administrator
+- the Gastgeber Pico may invite or evict residents from that host, but must not decrypt, impersonate, rewrite or own resident Picos
 - relay servers transport encrypted messages but do not own Pico memory or authority
 - trust signals are contextual evidence, not global person scores
 - presence and location sharing must be scoped, visible, revocable and minimally precise
@@ -150,6 +154,8 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
 - Full clients own knowledge and backups; light clients are interaction surfaces
+- Core hosts provide infrastructure; hosting is not ownership
+- A Gastgeber Pico may manage residency on a host, not resident private data
 - Home Assistant integration must not bypass Pico's policy and audit model
 - Presence and location sharing must be scoped, visible, revocable and minimally precise
 - Shared commitments should manage next actions, not judge people
