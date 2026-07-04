@@ -8,16 +8,44 @@ export interface CoreConfig {
   webRootPath?: string;
 }
 
+type Environment = Record<string, string | undefined>;
+
 export function defaultWebRootPath(): string {
   return fileURLToPath(new URL('../../web', import.meta.url));
 }
 
-export function loadConfig(): CoreConfig {
+export function loadConfig(env: Environment = process.env): CoreConfig {
   return {
-    host: process.env.PICO_HOST ?? '0.0.0.0',
-    port: Number.parseInt(process.env.PICO_PORT ?? '3100', 10),
-    databasePath: process.env.PICO_DATABASE_PATH ?? 'apps/core/data/pico.sqlite',
-    deviceId: process.env.PICO_DEVICE_ID ?? 'pico-core',
-    webRootPath: process.env.PICO_WEB_ROOT ?? defaultWebRootPath(),
+    host: readNonEmptyString(env, 'PICO_HOST', '0.0.0.0'),
+    port: readPort(env.PICO_PORT),
+    databasePath: readNonEmptyString(env, 'PICO_DATABASE_PATH', 'apps/core/data/pico.sqlite'),
+    deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
+    webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
   };
+}
+
+function readPort(rawPort: string | undefined): number {
+  const port = rawPort ?? '3100';
+
+  if (!/^[1-9]\d*$/.test(port)) {
+    throw new Error('PICO_PORT must be an integer from 1 to 65535.');
+  }
+
+  const parsedPort = Number.parseInt(port, 10);
+
+  if (parsedPort > 65_535) {
+    throw new Error('PICO_PORT must be an integer from 1 to 65535.');
+  }
+
+  return parsedPort;
+}
+
+function readNonEmptyString(env: Environment, name: string, defaultValue: string): string {
+  const value = env[name] ?? defaultValue;
+
+  if (!value.trim()) {
+    throw new Error(`${name} must be a non-empty string.`);
+  }
+
+  return value;
 }
