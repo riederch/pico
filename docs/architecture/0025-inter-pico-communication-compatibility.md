@@ -1,4 +1,4 @@
-# 0025 - Inter-Pico Communication Compatibility
+# 0025 - Inter-Pico and Pico Home Communication Compatibility
 
 ## Status
 
@@ -10,11 +10,15 @@ Pico is intended to become open source. Users should be able to inspect, modify,
 
 At the same time, Pico instances must be able to communicate safely and predictably. A modified Pico implementation should not silently break inter-Pico communication while still presenting itself as protocol-compatible.
 
+This also applies to the interface between a Pico and its Pico Home, meaning the Pico Core Host that provides residency, storage, routing, sync and host services. A real Pico should be able to move into a compatible fork server if that server faithfully implements the advertised Pico Home / Core Host protocol.
+
 This is especially important for:
 
 - peer invitations
 - resident Pico onboarding
 - host claim and residency messages
+- Pico to Pico Home claim and move-in flow
+- Pico Home to resident Pico sync and routing
 - Full Client sync
 - Light Client requests
 - relay-carried encrypted transport
@@ -30,15 +34,17 @@ Code may be changed, forked and adapted under the project license.
 
 However, an implementation that claims Pico protocol compatibility must preserve the published inter-Pico communication semantics for the protocol version it advertises.
 
+A server or host implementation that claims Pico Home / Pico Core Host compatibility must also preserve the published Pico-to-host semantics for the protocol version it advertises.
+
 Breaking communication changes must not be hidden behind the same protocol version or the same compatibility claim.
 
 ## Core design rule
 
-> You may change the implementation. You must not silently change what a Pico-compatible Pico means on the wire.
+> You may change the implementation. You must not silently change what a Pico-compatible Pico or Pico Home means on the wire.
 
 Operational form:
 
-> A modified Pico may be different internally. If it claims compatibility with a Pico protocol version, it must speak that protocol faithfully or clearly negotiate a different version or extension.
+> A modified Pico or fork server may be different internally. If it claims compatibility with a Pico protocol version, it must speak that protocol faithfully or clearly negotiate a different version or extension.
 
 ## License boundary
 
@@ -56,6 +62,36 @@ Protocol compatibility should therefore be handled through:
 It should not rely on DRM, obfuscation, remote activation, anti-fork logic or hidden enforcement.
 
 A fork may change the protocol. But if it does, it must not pretend to be compatible with the unchanged Pico protocol version.
+
+## Compatibility surfaces
+
+Pico compatibility has at least two public surfaces:
+
+| Surface | Meaning | Compatibility requirement |
+|---|---|---|
+| Inter-Pico communication | communication between Pico identities, peers, Full Clients, Light Clients or relayed peers | same message semantics for the advertised protocol version |
+| Pico Home / Core Host interface | communication between a Pico and the host it can claim, join, reside on, sync with or leave | same host claim, residency, eviction, sync, routing and privacy-domain semantics for the advertised protocol version |
+
+These surfaces may share transport and message formats, but they must be tested as separate compatibility contracts.
+
+## Pico Home / Core Host compatibility
+
+A compatible fork server may implement Pico Core differently internally. It may use a different storage engine, runtime language, deployment model, UI or operating system.
+
+It may still be a valid Pico Home if it preserves the host-facing contract that resident Picos rely on.
+
+A Pico Home-compatible host must not:
+
+- change the meaning of the bootstrap claim flow while advertising the same version
+- change resident invitation semantics while advertising the same version
+- change eviction semantics while advertising the same version
+- treat host administration as ownership of resident Pico private domains
+- require resident private keys to be disclosed to the host
+- weaken privacy-domain or key-envelope semantics while advertising compatibility
+- silently reinterpret resident sync data
+- make a resident Pico non-portable while claiming host compatibility
+
+A Pico should be able to evaluate a fork server by its advertised host protocol version, capabilities and conformance status before moving in.
 
 ## Compatibility requirements
 
@@ -92,6 +128,7 @@ Examples of breaking changes:
 - changing signed payload canonicalization
 - changing encryption envelope interpretation
 - changing host claim or eviction semantics
+- changing Pico Home residency semantics
 - changing trust-signal evidence classes
 
 ## Extensions
@@ -103,10 +140,10 @@ Extensions should be:
 - namespaced
 - capability-advertised
 - optional unless negotiated
-- safe to ignore by older compatible peers
+- safe to ignore by older compatible peers or hosts
 - documented before broad use
 
-An extension must not redefine the meaning of an existing core field or event type.
+An extension must not redefine the meaning of an existing core field, event type or host operation.
 
 Example direction:
 
@@ -115,6 +152,7 @@ Example direction:
   "protocolVersion": "0.1.7",
   "capabilities": {
     "pico.core.events.v1": true,
+    "pico.home.residency.v1": true,
     "example.fork.custom_visuals.v1": true
   }
 }
@@ -122,7 +160,7 @@ Example direction:
 
 ## Conformance tests
 
-The repository should eventually include inter-Pico protocol conformance tests.
+The repository should eventually include inter-Pico and Pico Home protocol conformance tests.
 
 A release that changes protocol behaviour should add or update tests for:
 
@@ -134,6 +172,8 @@ A release that changes protocol behaviour should add or update tests for:
 - policy and confirmation semantics
 - privacy-domain semantics
 - host claim and residency semantics
+- Pico Home move-in and eviction semantics
+- fork-server compatibility expectations
 - relay-safe transport assumptions
 
 The long-term rule should be:
@@ -160,6 +200,7 @@ Not allowed under the same compatibility claim:
 
 - incompatible wire messages
 - incompatible meaning of existing event types
+- incompatible meaning of existing Pico Home host operations
 - silent change of authority semantics
 - silent change of privacy semantics
 - silent change of trust-signal semantics
@@ -167,11 +208,11 @@ Not allowed under the same compatibility claim:
 
 ## Naming and user trust
 
-A modified implementation that remains compatible may describe itself as Pico-compatible.
+A modified implementation that remains compatible may describe itself as Pico-compatible or Pico Home-compatible for the advertised protocol version.
 
 A modified implementation that intentionally breaks compatibility should use a clear fork name, protocol name or compatibility statement so users and other Picos are not misled.
 
-This is separate from copyright licensing. It protects user expectations and inter-Pico safety without preventing open-source forks.
+This is separate from copyright licensing. It protects user expectations, inter-Pico safety and Pico Home portability without preventing open-source forks.
 
 ## Interaction with other ADRs
 
@@ -193,6 +234,7 @@ It reinforces that interoperability is part of Pico's safety model.
 This ADR does not define:
 
 - final protocol schema
+- final Pico Home API schema
 - final transport encryption
 - final conformance test runner
 - final trademark policy
@@ -206,20 +248,22 @@ Open questions before implementation:
 - Which protocol surfaces are public stable interfaces and which are internal foundation APIs?
 - How long must old protocol versions remain supported?
 - Which breaking changes are acceptable before `1.0.0`?
-- How should compatibility be advertised between Picos?
+- How should compatibility be advertised between Picos and Pico Homes?
 - How are extension namespaces reserved?
-- Which tests are required before a fork can claim compatibility?
+- Which tests are required before a fork can claim Pico or Pico Home compatibility?
 - How should official clients display compatibility warnings?
+- How should a Pico decide whether a fork server is safe enough to move into?
 
 ## Consequences
 
 Positive:
 
 - supports open-source modification without breaking the Pico network model
+- allows compatible fork servers to host resident Picos
 - prevents silent protocol fragmentation
 - protects users from misleading compatibility claims
 - gives forks a clean extension path
-- makes inter-Pico communication part of the release safety model
+- makes inter-Pico and Pico Home communication part of the release safety model
 
 Negative:
 
@@ -230,4 +274,4 @@ Negative:
 
 ## Design rule
 
-Fork the code freely. Extend Pico carefully. Do not claim the same Pico protocol compatibility unless inter-Pico communication remains compatible for the advertised protocol version.
+Fork the code freely. Extend Pico carefully. Do not claim the same Pico or Pico Home protocol compatibility unless inter-Pico and Pico-to-host communication remain compatible for the advertised protocol version.
