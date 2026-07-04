@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createSqliteBackup } from './sqlite-backup.js';
+import { listAppliedMigrations, runMigrations } from './migrations.js';
+import { createSqliteBackup, restoreSqliteBackup } from './sqlite-backup.js';
 
 const tempDirs: string[] = [];
 
@@ -77,6 +78,133 @@ describe('createSqliteBackup', () => {
 
     await expect(createSqliteBackup(databasePath, backupDirectory)).rejects.toThrow(
       `SQLite database does not exist: ${databasePath}`,
+    );
+  });
+});
+
+describe('restoreSqliteBackup', () => {
+  it('restores a backup over an existing database and keeps migrations idempotent', async () => {
+    const dir = createTempDir();
+    const databasePath = join(dir, 'pico.sqlite');
+    const backupDirectory = join(dir, 'backups');
+
+    const source = new Database(databasePath);
+    runMigrations(source);
+    source.prepare(`
+      INSERT INTO pico_event (
+        event_id,
+        device_id,
+        session_id,
+        lamport,
+        wall_time,
+        type,
+        stream,
+        payload_json,
+        signature,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'event-before-backup',
+      'device-1',
+      null,
+      1,
+      '2026-07-03T12:00:00.000Z',
+      'message.created',
+      'device:device-1',
+      '{"role":"user","text":"before backup"}',
+      null,
+      '2026-07-03T12:00:00.000Z',
+    );
+    source.close();
+
+    const backup = await createSqliteBackup(databasePath, backupDirectory);
+
+    const changed = new Database(databasePath);
+    changed.prepare('DELETE FROM pico_event').run();
+    changed.prepare(`
+      INSERT INTO pico_event (
+        event_id,
+        device_id,
+        session_id,
+        lamport,
+        wall_time,
+        type,
+        stream,
+        payload_json,
+        signature,
+        created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'event-after-backup',
+      'device-1',
+      null,
+      2,
+      '2026-07-03T12:05:00.000Z',
+      'message.created',
+      'device:device-1',
+      '{"role":"user","text":"after backup"}',
+      null,
+      '2026-07-03T12:05:00.000Z',
+    );
+    changed.close();
+
+    const result = restoreSqliteBackup(backup.backupPath, databasePath, {
+      overwrite: true,
+      now: new Date('2026-07-03T12:10:00.000Z'),
+    });
+
+    expect(result).toEqual({
+      backupPath: backup.backupPath,
+      restoredPath: databasePath,
+      restoredAt: '2026-07-03T12:10:00.000Z',
+    });
+
+    const restored = new Database(databasePath);
+    runMigrations(restored);
+
+    const rows = restored
+      .prepare('SELECT event_id AS eventId, payload_json AS payloadJson FROM pico_event ORDER BY lamport ASC')
+      .all() as Array<{ eventId: string; payloadJson: string }>;
+
+    expect(rows).toEqual([
+      {
+        eventId: 'event-before-backup',
+        payloadJson: '{"role":"user","text":"before backup"}',
+      },
+    ]);
+    expect(listAppliedMigrations(restored)).toEqual([
+      {
+        id: '0001_event_store',
+        appliedAt: expect.any(String),
+      },
+    ]);
+
+    restored.close();
+  });
+
+  it('refuses to replace an existing database without explicit overwrite', async () => {
+    const dir = createTempDir();
+    const databasePath = join(dir, 'pico.sqlite');
+    const backupDirectory = join(dir, 'backups');
+
+    const source = new Database(databasePath);
+    source.exec('CREATE TABLE sample (id TEXT PRIMARY KEY);');
+    source.close();
+
+    const backup = await createSqliteBackup(databasePath, backupDirectory);
+
+    expect(() => restoreSqliteBackup(backup.backupPath, databasePath)).toThrow(
+      `SQLite database already exists: ${databasePath}`,
+    );
+  });
+
+  it('rejects missing backup files', () => {
+    const dir = createTempDir();
+    const backupPath = join(dir, 'missing.bak');
+    const databasePath = join(dir, 'pico.sqlite');
+
+    expect(() => restoreSqliteBackup(backupPath, databasePath)).toThrow(
+      `SQLite backup does not exist: ${backupPath}`,
     );
   });
 });

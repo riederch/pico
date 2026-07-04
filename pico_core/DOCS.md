@@ -82,7 +82,19 @@ Updates are delivered through the normal Home Assistant add-on update flow.
 
 The add-on version in `config.yaml` must match the published container image tag.
 
-Before production use, Pico needs migration tests, backup-before-migration, and rollback documentation.
+The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. The add-on runtime does not yet run an automatic backup or rollback workflow during startup.
+
+## Manual rollback path
+
+For the current foundation add-on, rollback is a manual recovery procedure:
+
+1. Stop the Pico Core add-on.
+2. Keep a copy of `/data/pico.sqlite` before replacing it.
+3. Reinstall or select the previous Pico Core add-on/container version through Home Assistant.
+4. Restore the matching SQLite backup to `/data/pico.sqlite` while the add-on is stopped.
+5. Start the add-on and check `/health` and `/api/system/status`.
+
+Do not restore over a running Pico Core database. The tested restore helper replaces the database file only through an explicit overwrite call and removes stale SQLite WAL/SHM sidecar files for that target path.
 
 ## Current limitations
 
@@ -95,4 +107,4 @@ Before production use, Pico needs migration tests, backup-before-migration, and 
 - No tool executor yet.
 - No protected personal data domains yet.
 - No production memory model yet.
-- No backup-before-migration flow yet.
+- No automatic backup-before-migration runtime flow yet.

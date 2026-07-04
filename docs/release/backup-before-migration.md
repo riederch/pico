@@ -21,6 +21,15 @@ The migration runner accepts:
 
 The default foundation runtime currently calls the migration runner without requiring backup confirmation because the initial schema migration only creates empty foundation tables.
 
+The core package also provides SQLite backup and restore helpers:
+
+```ts
+await createSqliteBackup(databasePath, backupDirectory);
+restoreSqliteBackup(backupPath, databasePath, { overwrite: true });
+```
+
+The restore helper validates the backup as a readable SQLite database before replacing an existing database path. Replacement is explicit: callers must set `overwrite: true`, and the service must be stopped before restoring a live Home Assistant add-on database.
+
 Future production runtimes should call the runner with:
 
 ```ts
@@ -71,6 +80,8 @@ A release containing backup-requiring migrations must document:
 
 ## Current limitation
 
-Pico does not yet create backup files automatically.
+Pico can create and restore SQLite backup files through explicit helper calls, and the restore path is covered by tests.
 
-The current contract only prevents future backup-requiring migrations from silently running in runtimes that enforce backup confirmation. Automatic backup creation, restore verification and rollback documentation must be added before Pico stores production personal data.
+The default runtime does not yet perform automatic backup creation, restore verification, or rollback during startup.
+
+The current contract only prevents future backup-requiring migrations from silently running in runtimes that enforce backup confirmation. Automatic backup orchestration and production rollback behaviour must be added before Pico stores production personal data.
