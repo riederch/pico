@@ -96,6 +96,8 @@ For the current foundation add-on, rollback is a manual recovery procedure:
 
 Do not restore over a running Pico Core database. The tested restore helper replaces the database file only through an explicit overwrite call and removes stale SQLite WAL/SHM sidecar files for that target path.
 
+If the add-on fails after selecting an older version and reports an unsupported migration, keep the add-on stopped and restore the database backup created for that older version. The older Core is expected to refuse databases that contain migrations from a newer Core.
+
 ## Current limitations
 
 - No Home Assistant entity integration yet.

@@ -68,7 +68,10 @@ const migrations: Migration[] = [
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {
   ensureMigrationTable(db);
 
-  const pendingMigrations = listPendingMigrations(db);
+  const appliedMigrationIds = listAppliedMigrationIds(db);
+  assertKnownAppliedMigrations(appliedMigrationIds);
+
+  const pendingMigrations = listPendingMigrations(appliedMigrationIds);
   assertBackupContract(pendingMigrations, options);
 
   applyPendingMigrations(db, pendingMigrations);
@@ -81,7 +84,10 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
 export async function runMigrationsWithBackup(db: Database.Database, options: BackupAwareMigrationOptions): Promise<MigrationRunResult> {
   ensureMigrationTable(db);
 
-  const pendingMigrations = listPendingMigrations(db);
+  const appliedMigrationIds = listAppliedMigrationIds(db);
+  assertKnownAppliedMigrations(appliedMigrationIds);
+
+  const pendingMigrations = listPendingMigrations(appliedMigrationIds);
   const backupRequired = pendingMigrations.some((migration) => migration.requiresBackup);
   let backup: SqliteBackupResult | undefined;
 
@@ -109,15 +115,28 @@ export function listAppliedMigrations(db: Database.Database): AppliedMigration[]
     .all() as AppliedMigration[];
 }
 
-function listPendingMigrations(db: Database.Database): Migration[] {
-  const applied = new Set(
-    db
-      .prepare('SELECT id FROM schema_migration')
-      .all()
-      .map((row) => (row as { id: string }).id),
-  );
+function listAppliedMigrationIds(db: Database.Database): string[] {
+  return db
+    .prepare('SELECT id FROM schema_migration ORDER BY id ASC')
+    .all()
+    .map((row) => (row as { id: string }).id);
+}
+
+function listPendingMigrations(appliedMigrationIds: string[]): Migration[] {
+  const applied = new Set(appliedMigrationIds);
 
   return migrations.filter((migration) => !applied.has(migration.id));
+}
+
+function assertKnownAppliedMigrations(appliedMigrationIds: string[]): void {
+  const knownMigrationIds = new Set(migrations.map((migration) => migration.id));
+  const unknownMigrationIds = appliedMigrationIds.filter((migrationId) => !knownMigrationIds.has(migrationId));
+
+  if (unknownMigrationIds.length > 0) {
+    throw new Error(
+      `Database contains unsupported migration(s): ${unknownMigrationIds.join(', ')}. Refusing to run with this Pico Core version.`,
+    );
+  }
 }
 
 function applyPendingMigrations(db: Database.Database, pendingMigrations: Migration[]): void {

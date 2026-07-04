@@ -30,6 +30,8 @@ restoreSqliteBackup(backupPath, databasePath, { overwrite: true });
 
 The restore helper validates the backup as a readable SQLite database before replacing an existing database path. Replacement is explicit: callers must set `overwrite: true`, and the service must be stopped before restoring a live Home Assistant add-on database.
 
+The migration runner refuses to run when the database contains applied migration IDs that are not known to the current Pico Core build. This protects downgrade and rollback cases from silently running older code against a newer schema.
+
 Future production runtimes should call the runner with:
 
 ```ts
@@ -77,6 +79,8 @@ A release containing backup-requiring migrations must document:
 3. How the backup is created.
 4. How restore is expected to work.
 5. How the migration behaves if backup confirmation is missing.
+
+If a rollback crosses a migration boundary, restore the database backup that matches the target Pico Core version. An older Core must not delete or reinterpret unknown future migrations.
 
 ## Current limitation
 

@@ -100,4 +100,19 @@ describe('database migrations', () => {
 
     db.close();
   });
+
+  it('refuses to run when the database contains unknown future migrations', () => {
+    const db = new Database(createDatabasePath());
+
+    runMigrations(db);
+    db
+      .prepare('INSERT INTO schema_migration (id, applied_at) VALUES (?, ?)')
+      .run('9999_future_schema', '2026-07-04T00:00:00.000Z');
+
+    expect(() => runMigrations(db)).toThrow(
+      'Database contains unsupported migration(s): 9999_future_schema. Refusing to run with this Pico Core version.',
+    );
+
+    db.close();
+  });
 });
