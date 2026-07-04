@@ -1,9 +1,21 @@
-export type PicoEventType =
+export type FoundationEventType =
   | 'device.registered'
   | 'device.seen'
   | 'session.created'
   | 'message.created'
-  | 'avatar.state_changed'
+  | 'avatar.state_changed';
+
+export type ActionEventType =
+  | 'action.requested'
+  | 'action.completed'
+  | 'pico_rules.decision_created'
+  | 'approval.requested'
+  | 'approval.resolved'
+  | 'action_runner.action_started'
+  | 'action_runner.action_completed'
+  | 'action_history.event_created';
+
+export type LegacyToolPolicyEventType =
   | 'tool.call_requested'
   | 'tool.call_completed'
   | 'policy.decision_created'
@@ -13,9 +25,33 @@ export type PicoEventType =
   | 'executor.action_completed'
   | 'audit.event_created';
 
-export type DeviceType = 'core' | 'web' | 'mobile' | 'desktop' | 'home_assistant' | 'browser_extension' | 'unknown';
+export type PicoHomeEventType =
+  | 'pico_home.claim_requested'
+  | 'pico_home.claim_completed'
+  | 'pico_home.invite_created'
+  | 'pico_home.resident_joined'
+  | 'pico_home.resident_removed';
 
-export type TrustedLevel = 'untrusted' | 'known' | 'trusted' | 'admin';
+export type PicoEventType = FoundationEventType | ActionEventType | LegacyToolPolicyEventType | PicoHomeEventType;
+
+export type PicoNodeType =
+  | 'pico_home'
+  | 'pico_vault'
+  | 'pico_surface'
+  | 'pico_relay'
+  | 'mobile'
+  | 'desktop'
+  | 'home_assistant'
+  | 'browser_extension'
+  | 'unknown';
+
+/** @deprecated Use PicoNodeType. */
+export type DeviceType = PicoNodeType | 'core' | 'web';
+
+export type ContextSignalLevel = 'untrusted' | 'known' | 'trusted' | 'admin';
+
+/** @deprecated Use ContextSignalLevel. */
+export type TrustedLevel = ContextSignalLevel;
 
 export type AvatarMode = 'everyday' | 'technical' | 'wwg' | 'firefighter' | 'security' | 'organization' | 'smart_home';
 
@@ -31,7 +67,7 @@ export type AvatarStateName =
   | 'success'
   | 'sleeping';
 
-export type ToolRiskLevel =
+export type ActionRisk =
   | 'read_only'
   | 'local_write'
   | 'external_write'
@@ -39,6 +75,12 @@ export type ToolRiskLevel =
   | 'security_sensitive'
   | 'privileged_system_action';
 
+/** @deprecated Use ActionRisk. */
+export type ToolRiskLevel = ActionRisk;
+
+export type PicoRulesDecision = 'allow' | 'require_approval' | 'deny';
+
+/** @deprecated Use PicoRulesDecision. */
 export type PolicyDecision = 'allow' | 'require_confirmation' | 'deny';
 
 export interface PicoEvent<TPayload = unknown> {
@@ -62,10 +104,26 @@ export interface PicoDevice {
   lastSeenAt?: string;
 }
 
+export interface PicoNode {
+  nodeId: string;
+  name: string;
+  type: PicoNodeType;
+  contextSignalLevel: ContextSignalLevel;
+  capabilities: Record<string, boolean>;
+  lastSeenAt?: string;
+}
+
 export interface PicoSession {
   sessionId: string;
   activeDeviceId: string;
   createdAt: string;
+}
+
+export interface PicoHomeMembership {
+  picoId: string;
+  homeId: string;
+  role: 'home_host' | 'home_member';
+  status: 'invited' | 'active' | 'removed';
 }
 
 export interface MessageCreatedPayload {
@@ -81,18 +139,77 @@ export interface AvatarStateChangedPayload {
   message?: string;
 }
 
+export interface ActionRequestedPayload {
+  actionName: string;
+  risk: ActionRisk;
+  input: Record<string, unknown>;
+}
+
+export interface ActionCompletedPayload {
+  actionName: string;
+  success: boolean;
+  summary: string;
+}
+
+export interface PicoRulesDecisionCreatedPayload {
+  requestedEventId: string;
+  decision: PicoRulesDecision;
+  reason: string;
+  risk?: ActionRisk;
+  dataSpace?: string;
+}
+
+export interface ApprovalRequestedPayload {
+  requestedEventId: string;
+  prompt: string;
+  risk: ActionRisk;
+  expiresAt?: string;
+}
+
+export interface ApprovalResolvedPayload {
+  approvalEventId: string;
+  approved: boolean;
+  resolvedAt: string;
+}
+
+export interface ActionRunnerStartedPayload {
+  requestedEventId: string;
+  actionName: string;
+  risk: ActionRisk;
+}
+
+export interface ActionRunnerCompletedPayload {
+  startedEventId: string;
+  actionName: string;
+  success: boolean;
+  summary: string;
+}
+
+export interface ActionHistoryEventPayload {
+  subjectEventId?: string;
+  actorDeviceId?: string;
+  action: string;
+  decision?: PicoRulesDecision;
+  dataSpace?: string;
+  redaction: 'none' | 'summary' | 'reference_only';
+  summary: string;
+}
+
+/** @deprecated Use ActionRequestedPayload. */
 export interface ToolCallRequestedPayload {
   toolName: string;
   riskLevel: ToolRiskLevel;
   arguments: Record<string, unknown>;
 }
 
+/** @deprecated Use ActionCompletedPayload. */
 export interface ToolCallCompletedPayload {
   toolName: string;
   success: boolean;
   summary: string;
 }
 
+/** @deprecated Use PicoRulesDecisionCreatedPayload. */
 export interface PolicyDecisionCreatedPayload {
   requestedEventId: string;
   decision: PolicyDecision;
@@ -101,6 +218,7 @@ export interface PolicyDecisionCreatedPayload {
   dataDomain?: string;
 }
 
+/** @deprecated Use ApprovalRequestedPayload. */
 export interface ConfirmationRequestedPayload {
   requestedEventId: string;
   prompt: string;
@@ -108,18 +226,21 @@ export interface ConfirmationRequestedPayload {
   expiresAt?: string;
 }
 
+/** @deprecated Use ApprovalResolvedPayload. */
 export interface ConfirmationResolvedPayload {
   confirmationEventId: string;
   approved: boolean;
   resolvedAt: string;
 }
 
+/** @deprecated Use ActionRunnerStartedPayload. */
 export interface ExecutorActionStartedPayload {
   requestedEventId: string;
   toolName: string;
   riskLevel: ToolRiskLevel;
 }
 
+/** @deprecated Use ActionRunnerCompletedPayload. */
 export interface ExecutorActionCompletedPayload {
   startedEventId: string;
   toolName: string;
@@ -127,6 +248,7 @@ export interface ExecutorActionCompletedPayload {
   summary: string;
 }
 
+/** @deprecated Use ActionHistoryEventPayload. */
 export interface AuditEventCreatedPayload {
   subjectEventId?: string;
   actorDeviceId?: string;
