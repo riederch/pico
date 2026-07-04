@@ -22,11 +22,11 @@ export class EventStore {
 
     const payloadJson = JSON.stringify(event.payload);
     const existing = this.db
-      .prepare('SELECT payload_json FROM pico_event WHERE event_id = ?')
-      .get(event.eventId) as { payload_json: string } | undefined;
+      .prepare('SELECT * FROM pico_event WHERE event_id = ?')
+      .get(event.eventId) as EventRow | undefined;
 
     if (existing) {
-      return existing.payload_json === payloadJson ? 'duplicate_same_payload' : 'duplicate_conflict';
+      return isSameStoredEvent(existing, event, payloadJson) ? 'duplicate_same_payload' : 'duplicate_conflict';
     }
 
     const statement = this.db.prepare(`
@@ -126,4 +126,16 @@ interface EventRow {
   stream: string;
   payload_json: string;
   signature: string | null;
+}
+
+function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string): boolean {
+  return row.event_id === event.eventId
+    && row.device_id === event.deviceId
+    && row.session_id === (event.sessionId ?? null)
+    && row.lamport === event.lamport
+    && row.wall_time === event.wallTime
+    && row.type === event.type
+    && row.stream === event.stream
+    && row.payload_json === payloadJson
+    && row.signature === (event.signature ?? null);
 }
