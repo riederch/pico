@@ -23,9 +23,9 @@ This means Pico treats identity, ownership, privacy, relationship boundaries, ex
 Pico should eventually be able to:
 
 - run locally where practical
-- run Pico Core on multiple host platforms, with Home Assistant as the first packaging path
-- sync between trusted full clients
-- support light clients such as watches or small displays
+- run Pico Home on multiple host platforms, with Home Assistant as the first packaging path
+- sync between trusted Pico Vaults
+- support Pico Surfaces such as watches or small displays
 - work with Home Assistant and other local tools
 - remember useful personal context safely
 - share presence, activity, location and emergency context only under clear rules
@@ -51,7 +51,7 @@ Pico is not intended to become:
 
 Pico separates the friendly assistant surface from the authority model:
 
-> The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
+> Pico may suggest. Pico Rules decide. The Action Runner acts only after approval. Action History records what happened.
 
 That means the companion can feel helpful and present, but risky actions still need clear rules, confirmation, and traceability.
 
@@ -59,16 +59,16 @@ That means the companion can feel helpful and present, but risky actions still n
 
 Pico's current concept work defines several important boundaries:
 
-- full clients own knowledge and backups; light clients are interaction surfaces
-- Pico Core hosts provide infrastructure, but hosting is not ownership over resident Pico identities or private data
-- a freshly installed Pico Core host starts unclaimed; a one-time bootstrap claim token lets the first Pico become the host administrator
-- the Gastgeber Pico may invite or evict residents from that host, but must not decrypt, impersonate, rewrite or own resident Picos
-- relay servers transport encrypted messages but do not own Pico memory or authority
-- trust signals are contextual evidence, not global person scores
-- presence and location sharing must be scoped, visible, revocable and minimally precise
+- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
+- Pico Homes provide infrastructure, but hosting is not ownership over resident Pico identities or private data
+- a freshly installed Pico Home starts empty; a one-time Move-In Code lets the first Pico become the Home Host Pico
+- the Home Host Pico may invite or remove Home Member Picos from that Pico Home, but must not decrypt, impersonate, rewrite or own them
+- Pico Relays transport encrypted messages but do not own Pico memory or authority
+- Context Signals are contextual evidence, not global person scores
+- Context Sharing and location sharing must be scoped, visible, revocable and minimally precise
 - service and emergency disclosures must be role-, context-, purpose- and necessity-bound
 - personal context should remain private unless a clear purpose and policy allow otherwise
-- shared commitments should manage next actions, not judge people
+- Shared Plans should manage next actions, not judge people
 - motivational pressure must be user-owned
 
 ## Current status
@@ -83,7 +83,7 @@ Current version:
 
 Prepared foundation pieces include:
 
-- Pico Core service
+- Pico Home Core service
 - event storage
 - sync primitives
 - foundation web dashboard
@@ -92,6 +92,22 @@ Prepared foundation pieces include:
 - architecture notes
 
 Pico is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, and companion clients still need to be built.
+
+## License and commercial use
+
+Pico is source-available for private and non-commercial use under the PolyForm Noncommercial License 1.0.0.
+
+Private Pico use, private Pico Home use and private Pico WG use are permitted, including family, household, private shared-home and private non-commercial friend-group use.
+
+Commercial use requires prior written permission from the designated Pico rights holder. This includes paid hosting, managed Pico Home services, Pico Home rental, SaaS operation, paid support, business-internal use and integration into commercial products or services.
+
+Current commercial permission contact:
+
+```text
+https://github.com/riederch
+```
+
+See [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) and [`COMMERCIAL.md`](COMMERCIAL.md).
 
 ## Visual direction
 
@@ -136,12 +152,12 @@ The avatar communicates state and risk. For example:
 - Confirmation for risky actions
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
-- Full clients own knowledge and backups; light clients are interaction surfaces
-- Core hosts provide infrastructure; hosting is not ownership
-- A Gastgeber Pico may manage residency on a host, not resident private data
-- Presence and location sharing must be scoped, visible, revocable and minimally precise
-- Trust signals are contextual evidence, not global human scores
+- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
+- Pico Homes provide infrastructure; hosting is not ownership
+- A Home Host Pico may manage residency on a Pico Home, not resident private data
+- Context Sharing and location sharing must be scoped, visible, revocable and minimally precise
+- Context Signals are contextual evidence, not global human scores
 - Personal context needs purpose, policy and clear boundaries
-- Shared commitments should manage next actions, not judge people
+- Shared Plans should manage next actions, not judge people
 - Motivational pressure must be user-owned
 - Use reviewed cryptographic primitives; do not invent cryptography
