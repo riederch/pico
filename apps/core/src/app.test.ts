@@ -328,6 +328,84 @@ describe('Pico Core app', () => {
     await app.close();
   });
 
+  it('sends a websocket connection message', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    await app.ready();
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS('/ws', {}, {
+      onInit(ws) {
+        initialMessage = readSocketJson(ws as unknown as TestWebSocket);
+      },
+    });
+
+    try {
+      const message = await requireMessagePromise(initialMessage);
+
+      expect(message).toEqual({
+        type: 'pico.core.connected',
+        deviceId: 'test-core',
+      });
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
+  it('broadcasts inserted events to websocket clients', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    await app.ready();
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS('/ws', {}, {
+      onInit(ws) {
+        initialMessage = readSocketJson(ws as unknown as TestWebSocket);
+      },
+    });
+
+    try {
+      await requireMessagePromise(initialMessage);
+      const broadcastPromise = readSocketJson(socket as unknown as TestWebSocket);
+
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          sessionId: 'session-1',
+          type: 'message.created',
+          payload: {
+            role: 'user',
+            text: 'Hallo Pico',
+          },
+        },
+      });
+
+      expect(created.statusCode).toBe(201);
+
+      const broadcast = await broadcastPromise;
+      const createdBody = created.json();
+
+      expect(broadcast).toEqual({
+        type: 'pico.event.created',
+        event: createdBody.event,
+      });
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
   it('creates and lists events', async () => {
     const app = await buildApp({
       host: '127.0.0.1',
@@ -399,3 +477,46 @@ describe('Pico Core app', () => {
     await secondApp.close();
   });
 });
+
+interface TestWebSocket {
+  terminate(): void;
+  once(event: 'message', listener: (data: unknown) => void): void;
+}
+
+async function readSocketJson(socket: TestWebSocket): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error('Timed out waiting for websocket message.'));
+    }, 1_000);
+
+    socket.once('message', (data) => {
+      clearTimeout(timeout);
+
+      try {
+        resolve(JSON.parse(socketMessageToString(data)) as unknown);
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+function requireMessagePromise(messagePromise: Promise<unknown> | null): Promise<unknown> {
+  if (messagePromise === null) {
+    throw new Error('WebSocket message listener was not initialized.');
+  }
+
+  return messagePromise;
+}
+
+function socketMessageToString(data: unknown): string {
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  if (data instanceof Buffer) {
+    return data.toString('utf8');
+  }
+
+  return String(data);
+}
