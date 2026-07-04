@@ -210,12 +210,14 @@ describe('Pico Core app', () => {
       deviceId: 'test-core',
     });
 
-    const response = await app.inject({ method: 'GET', url: '/api/events?limit=-1' });
+    for (const limit of ['-1', '1abc', '1.5']) {
+      const response = await app.inject({ method: 'GET', url: `/api/events?limit=${limit}` });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      error: 'limit must be a positive integer.',
-    });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({
+        error: 'limit must be a positive integer.',
+      });
+    }
 
     await app.close();
   });

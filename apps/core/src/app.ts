@@ -180,11 +180,11 @@ function parseLimit(rawLimit: string | undefined): { ok: true; limit: number } |
     return { ok: true, limit: DEFAULT_EVENT_LIMIT };
   }
 
-  const limit = Number.parseInt(rawLimit, 10);
-
-  if (!Number.isInteger(limit) || limit <= 0) {
+  if (!/^[1-9]\d*$/.test(rawLimit)) {
     return { ok: false, error: 'limit must be a positive integer.' };
   }
+
+  const limit = Number.parseInt(rawLimit, 10);
 
   return { ok: true, limit: Math.min(limit, MAX_EVENT_LIMIT) };
 }
