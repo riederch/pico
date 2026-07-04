@@ -2,6 +2,7 @@
   "name": "pico",
   "private": true,
   "version": "0.1.7",
+  "license": "Apache-2.0",
   "description": "Local-first assistant prototype.",
   "type": "module",
   "scripts": {
