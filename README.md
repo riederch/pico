@@ -23,6 +23,7 @@ This means Pico treats identity, ownership, privacy, relationship boundaries, ex
 Pico should eventually be able to:
 
 - run locally where practical
+- run Pico Core on multiple host platforms, with Home Assistant as the first packaging path
 - sync between trusted full clients
 - support light clients such as watches or small displays
 - work with Home Assistant and other local tools
@@ -59,6 +60,9 @@ That means the companion can feel helpful and present, but risky actions still n
 Pico's current concept work defines several important boundaries:
 
 - full clients own knowledge and backups; light clients are interaction surfaces
+- Pico Core hosts provide infrastructure, but hosting is not ownership over resident Pico identities or private data
+- a freshly installed Pico Core host starts unclaimed; a one-time bootstrap claim token lets the first Pico become the host administrator
+- the Gastgeber Pico may invite or evict residents from that host, but must not decrypt, impersonate, rewrite or own resident Picos
 - relay servers transport encrypted messages but do not own Pico memory or authority
 - trust signals are contextual evidence, not global person scores
 - presence and location sharing must be scoped, visible, revocable and minimally precise
@@ -133,6 +137,8 @@ The avatar communicates state and risk. For example:
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
 - Full clients own knowledge and backups; light clients are interaction surfaces
+- Core hosts provide infrastructure; hosting is not ownership
+- A Gastgeber Pico may manage residency on a host, not resident private data
 - Presence and location sharing must be scoped, visible, revocable and minimally precise
 - Trust signals are contextual evidence, not global human scores
 - Personal context needs purpose, policy and clear boundaries
