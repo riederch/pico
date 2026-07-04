@@ -42,6 +42,10 @@ describe('database migrations', () => {
         id: '0002_schema_migration_audit',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0003_schema_migration_audit_errors',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     db.close();
@@ -53,7 +57,7 @@ describe('database migrations', () => {
     runMigrations(db);
     runMigrations(db);
 
-    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listAppliedMigrations(db)).toHaveLength(3);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -63,7 +67,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listAppliedMigrations(db)).toHaveLength(3);
 
     db.close();
   });
@@ -102,7 +106,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listAppliedMigrations(db)).toHaveLength(3);
 
     db.close();
   });
@@ -115,6 +119,7 @@ describe('database migrations', () => {
     expect(result.appliedMigrationIds).toEqual([
       '0001_event_store',
       '0002_schema_migration_audit',
+      '0003_schema_migration_audit_errors',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -125,6 +130,7 @@ describe('database migrations', () => {
         migrationIds: [
           '0001_event_store',
           '0002_schema_migration_audit',
+          '0003_schema_migration_audit_errors',
         ],
       },
     ]);
@@ -135,10 +141,23 @@ describe('database migrations', () => {
   it('rolls back migration registry changes when audit recording fails', () => {
     const db = new Database(createDatabasePath());
 
-    runMigrations(db);
-    db.prepare('DELETE FROM schema_migration WHERE id = ?').run('0002_schema_migration_audit');
-    db.prepare('DELETE FROM schema_migration_audit').run();
     db.exec(`
+      CREATE TABLE schema_migration (
+        id TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+
+      INSERT INTO schema_migration (id, applied_at)
+      VALUES ('0001_event_store', '2026-07-04T00:00:00.000Z');
+
+      CREATE TABLE schema_migration_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        finished_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        migration_ids_json TEXT NOT NULL
+      );
+
       CREATE TRIGGER reject_schema_migration_audit_insert
       BEFORE INSERT ON schema_migration_audit
       BEGIN
@@ -151,6 +170,34 @@ describe('database migrations', () => {
       '0001_event_store',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([]);
+
+    db.close();
+  });
+
+  it('records failed migration attempts when the audit table supports error messages', () => {
+    const db = new Database(createDatabasePath());
+
+    runMigrations(db);
+    db.prepare('DELETE FROM schema_migration WHERE id = ?').run('0003_schema_migration_audit_errors');
+    db.prepare('DELETE FROM schema_migration_audit').run();
+
+    expect(() => runMigrations(db)).toThrow(/error_message/);
+    expect(listAppliedMigrations(db).map((migration) => migration.id)).toEqual([
+      '0001_event_store',
+      '0002_schema_migration_audit',
+    ]);
+    expect(listMigrationAuditRecords(db)).toEqual([
+      {
+        id: 2,
+        startedAt: expect.any(String),
+        finishedAt: expect.any(String),
+        status: 'failed',
+        migrationIds: [
+          '0003_schema_migration_audit_errors',
+        ],
+        errorMessage: expect.stringContaining('error_message'),
+      },
+    ]);
 
     db.close();
   });

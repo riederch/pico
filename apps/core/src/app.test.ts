@@ -136,6 +136,10 @@ describe('Pico Core app', () => {
             id: '0002_schema_migration_audit',
             appliedAt: expect.any(String),
           },
+          {
+            id: '0003_schema_migration_audit_errors',
+            appliedAt: expect.any(String),
+          },
         ],
       },
     });

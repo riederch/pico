@@ -11,9 +11,12 @@ export interface MigrationAuditRecord {
   id: number;
   startedAt: string;
   finishedAt: string;
-  status: 'applied';
+  status: MigrationAuditStatus;
   migrationIds: string[];
+  errorMessage?: string;
 }
+
+type MigrationAuditStatus = 'applied' | 'failed';
 
 export interface MigrationOptions {
   requireBackupBeforeMigration?: boolean;
@@ -89,6 +92,16 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0003_schema_migration_audit_errors',
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE schema_migration_audit
+        ADD COLUMN error_message TEXT NULL;
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {
@@ -105,10 +118,21 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
   const appliedPendingMigrationIds = pendingMigrations.map((migration) => migration.id);
 
   if (appliedPendingMigrationIds.length > 0) {
-    applyPendingMigrations(db, pendingMigrations, {
-      startedAt,
-      migrationIds: appliedPendingMigrationIds,
-    });
+    try {
+      applyPendingMigrations(db, pendingMigrations, {
+        startedAt,
+        migrationIds: appliedPendingMigrationIds,
+      });
+    } catch (error) {
+      recordFailedMigrationAudit(db, {
+        startedAt,
+        finishedAt: new Date().toISOString(),
+        migrationIds: appliedPendingMigrationIds,
+        errorMessage: toErrorMessage(error),
+      });
+
+      throw error;
+    }
   }
 
   return {
@@ -162,7 +186,8 @@ export function listMigrationAuditRecords(db: Database.Database): MigrationAudit
         started_at AS startedAt,
         finished_at AS finishedAt,
         status,
-        migration_ids_json AS migrationIdsJson
+        migration_ids_json AS migrationIdsJson,
+        ${columnExists(db, 'schema_migration_audit', 'error_message') ? 'error_message' : 'NULL'} AS errorMessage
       FROM schema_migration_audit
       ORDER BY id ASC
     `)
@@ -210,6 +235,7 @@ function applyPendingMigrations(
     recordMigrationAudit(db, {
       ...auditRecord,
       finishedAt: new Date().toISOString(),
+      status: 'applied',
     });
   });
 
@@ -218,9 +244,31 @@ function applyPendingMigrations(
 
 function recordMigrationAudit(
   db: Database.Database,
-  record: { startedAt: string; finishedAt: string; migrationIds: string[] },
+  record: { startedAt: string; finishedAt: string; status: MigrationAuditStatus; migrationIds: string[]; errorMessage?: string },
 ): void {
   if (!tableExists(db, 'schema_migration_audit')) {
+    return;
+  }
+
+  if (columnExists(db, 'schema_migration_audit', 'error_message')) {
+    db
+      .prepare(`
+        INSERT INTO schema_migration_audit (
+          started_at,
+          finished_at,
+          status,
+          migration_ids_json,
+          error_message
+        ) VALUES (?, ?, ?, ?, ?)
+      `)
+      .run(
+        record.startedAt,
+        record.finishedAt,
+        record.status,
+        JSON.stringify(record.migrationIds),
+        record.errorMessage ?? null,
+      );
+
     return;
   }
 
@@ -236,19 +284,43 @@ function recordMigrationAudit(
     .run(
       record.startedAt,
       record.finishedAt,
-      'applied',
+      record.status,
       JSON.stringify(record.migrationIds),
     );
 }
 
+function recordFailedMigrationAudit(
+  db: Database.Database,
+  record: { startedAt: string; finishedAt: string; migrationIds: string[]; errorMessage: string },
+): void {
+  try {
+    recordMigrationAudit(db, {
+      ...record,
+      status: 'failed',
+    });
+  } catch {
+    // Keep the original migration failure as the caller-visible error.
+  }
+}
+
 function mapMigrationAuditRecord(row: MigrationAuditRow): MigrationAuditRecord {
-  return {
+  const record: MigrationAuditRecord = {
     id: row.id,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
-    status: 'applied',
+    status: toMigrationAuditStatus(row.status),
     migrationIds: JSON.parse(row.migrationIdsJson) as string[],
   };
+
+  if (row.errorMessage !== null) {
+    record.errorMessage = row.errorMessage;
+  }
+
+  return record;
+}
+
+function toMigrationAuditStatus(value: string): MigrationAuditStatus {
+  return value === 'failed' ? 'failed' : 'applied';
 }
 
 function assertBackupContract(pendingMigrations: Migration[], options: MigrationOptions): void {
@@ -279,10 +351,26 @@ function tableExists(db: Database.Database, tableName: string): boolean {
   return row !== undefined;
 }
 
+function columnExists(db: Database.Database, tableName: string, columnName: string): boolean {
+  return db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all()
+    .some((row) => (row as { name: string }).name === columnName);
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
 interface MigrationAuditRow {
   id: number;
   startedAt: string;
   finishedAt: string;
   status: string;
   migrationIdsJson: string;
+  errorMessage: string | null;
 }
