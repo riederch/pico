@@ -1,0 +1,107 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
+const packageFiles = [
+  'apps/core/package.json',
+  'apps/web/package.json',
+  'packages/protocol/package.json',
+  'packages/sync/package.json',
+];
+const errors = [];
+const rootPackage = readJson('package.json');
+const currentVersion = rootPackage.version;
+
+if (!isSemver(currentVersion)) {
+  errors.push(`package.json version must be a semantic version, got ${JSON.stringify(currentVersion)}.`);
+}
+
+for (const packageFile of packageFiles) {
+  const packageJson = readJson(packageFile);
+  assertVersion(packageJson.version, `${packageFile} version`);
+}
+
+assertVersion(matchRequired('pico_core/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_core/config.yaml version');
+assertVersion(matchRequired('.github/workflows/ci.yml', /type=raw,value=([^,\s]+),enable=\{\{is_default_branch\}\}/, 'default-branch image tag'), '.github/workflows/ci.yml default-branch image tag');
+assertVersion(matchRequired('apps/core/src/app.ts', /const SERVICE_VERSION = '([^']+)'/, 'service version'), 'apps/core/src/app.ts SERVICE_VERSION');
+assertVersion(matchRequired('apps/core/src/app.ts', /const PROTOCOL_VERSION = '([^']+)'/, 'protocol version'), 'apps/core/src/app.ts PROTOCOL_VERSION');
+assertVersion(currentVersionFence('README.md'), 'README.md current version');
+assertVersion(currentVersionFence('ReadmeTech.md'), 'ReadmeTech.md current version');
+assertVersion(matchRequired('ReadmeTech.md', /Current tag:\n\n```text\n([0-9]+\.[0-9]+\.[0-9]+)\n```/, 'Home Assistant add-on current tag'), 'ReadmeTech.md current add-on tag');
+assertVersion(currentVersionFence('pico_core/README.md'), 'pico_core/README.md current version');
+assertVersion(matchRequired('pico_core/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest changelog heading'), 'pico_core/CHANGELOG.md latest heading');
+assertVersion(matchRequired('pico_core/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/core:([0-9]+\.[0-9]+\.[0-9]+)/, 'current add-on image tag'), 'pico_core/CHANGELOG.md current image tag');
+assertAllVersions('docs/release/versioning.md', collectSemvers('docs/release/versioning.md'), 'docs/release/versioning.md version references');
+assertVersion(matchRequired('docs/protocol/public-surfaces.md', /claims compatibility with protocol version `([0-9]+\.[0-9]+\.[0-9]+)`/, 'public protocol compatibility claim version'), 'docs/protocol/public-surfaces.md compatibility claim version');
+assertVersion(matchRequired('docs/protocol/public-surfaces.md', /"protocolVersion": "([0-9]+\.[0-9]+\.[0-9]+)"/, 'public protocol claim example version'), 'docs/protocol/public-surfaces.md protocolVersion example');
+assertVersion(matchRequired('docs/protocol/public-surfaces.md', /Compatible with Pico Home Link protocol version ([0-9]+\.[0-9]+\.[0-9]+)\./, 'public protocol wording example version'), 'docs/protocol/public-surfaces.md wording example');
+assertVersion(matchRequired('docs/protocol/compatibility-levels.md', /Experimental L1 foundation event compatibility with Pico protocol ([0-9]+\.[0-9]+\.[0-9]+)\./, 'L1 compatibility example version'), 'docs/protocol/compatibility-levels.md L1 example');
+assertVersion(matchRequired('docs/protocol/compatibility-levels.md', /L3 Pico Home Link compatibility for protocol ([0-9]+\.[0-9]+\.[0-9]+),/, 'L3 compatibility example version'), 'docs/protocol/compatibility-levels.md L3 example');
+assertVersion(matchRequired('docs/architecture/0025-inter-pico-communication-compatibility.md', /"protocolVersion": "([0-9]+\.[0-9]+\.[0-9]+)"/, 'protocol compatibility example version'), 'docs/architecture/0025-inter-pico-communication-compatibility.md protocolVersion example');
+
+if (errors.length > 0) {
+  console.error('Version consistency check failed:');
+  for (const error of errors) {
+    console.error(`- ${error}`);
+  }
+  process.exit(1);
+}
+
+console.log(`Version consistency check passed for ${currentVersion}.`);
+
+function read(path) {
+  return readFileSync(join(repoRoot, path), 'utf8');
+}
+
+function readJson(path) {
+  return JSON.parse(read(path));
+}
+
+function currentVersionFence(path) {
+  return matchRequired(path, /Current version:\n\n```text\n([0-9]+\.[0-9]+\.[0-9]+)\n```/, 'current version block');
+}
+
+function matchRequired(path, pattern, label) {
+  const match = pattern.exec(read(path));
+  if (!match) {
+    errors.push(`${path}: missing ${label}.`);
+    return undefined;
+  }
+  return match[1];
+}
+
+function collectSemvers(path) {
+  return Array.from(read(path).matchAll(/\b[0-9]+\.[0-9]+\.[0-9]+\b/g), (match) => match[0]);
+}
+
+function assertAllVersions(path, versions, label) {
+  if (versions.length === 0) {
+    errors.push(`${path}: missing ${label}.`);
+    return;
+  }
+
+  for (const version of versions) {
+    assertVersion(version, label);
+  }
+}
+
+function assertVersion(actual, label) {
+  if (actual === undefined) {
+    return;
+  }
+  if (!isSemver(actual)) {
+    errors.push(`${label} must be a semantic version, got ${JSON.stringify(actual)}.`);
+    return;
+  }
+  if (!isSemver(currentVersion)) {
+    return;
+  }
+  if (actual !== currentVersion) {
+    errors.push(`${label} must be ${currentVersion}, got ${actual}.`);
+  }
+}
+
+function isSemver(value) {
+  return typeof value === 'string' && /^[0-9]+\.[0-9]+\.[0-9]+$/.test(value);
+}

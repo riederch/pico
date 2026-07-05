@@ -10,9 +10,10 @@
     "check": "pnpm -r check",
     "dev:core": "pnpm --filter @pico/core dev",
     "license:check": "node scripts/check-license.mjs",
+    "version:check": "node scripts/check-version.mjs",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
-    "release:verify": "pnpm license:check && pnpm build && pnpm check && pnpm test"
+    "release:verify": "pnpm license:check && pnpm version:check && pnpm build && pnpm check && pnpm test"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

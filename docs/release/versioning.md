@@ -54,6 +54,16 @@ Documentation consistency rules are documented in:
 docs/release/documentation-consistency.md
 ```
 
+## Version consistency gate
+
+The release gate includes:
+
+```bash
+pnpm version:check
+```
+
+This check compares the root package version with package metadata, Pico Home Core runtime version constants, Home Assistant add-on metadata, the default-branch CI image tag, README current-version blocks, the latest add-on changelog heading, and current protocol compatibility examples.
+
 ## Migration and backup rule
 
 Database migration safety rules are documented in:
