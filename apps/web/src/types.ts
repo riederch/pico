@@ -13,12 +13,19 @@ export interface AppliedMigration {
   appliedAt: string;
 }
 
+export type PicoHomeClaimStateName = 'unclaimed' | 'claimed';
+
 export interface SystemStatus {
   service: string;
   version: string;
   protocolVersion: string;
   deviceId: string;
   capabilities: Record<string, boolean>;
+  picoHome: {
+    claimState: {
+      state: PicoHomeClaimStateName;
+    };
+  };
   database: {
     maxLamport: number;
     migrations: AppliedMigration[];

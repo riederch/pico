@@ -153,6 +153,11 @@ describe('Pico Home Core app', () => {
       protocolVersion: '0.1.7',
       deviceId: 'test-core',
       capabilities: protocolCapabilities,
+      picoHome: {
+        claimState: {
+          state: 'unclaimed',
+        },
+      },
       database: {
         maxLamport: 0,
         migrations: [

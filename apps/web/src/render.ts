@@ -159,6 +159,7 @@ function renderCoreSummary(container: HTMLElement, status: SystemStatus | null):
     { key: 'Protocol Version', value: status.protocolVersion, monospace: true },
     { key: 'Device ID', value: status.deviceId, monospace: true },
     { key: 'Capabilities', value: enabledCapabilityNames(status), monospace: true },
+    { key: 'Pico Home Claim', value: status.picoHome.claimState.state, monospace: true },
   ]);
 }
 

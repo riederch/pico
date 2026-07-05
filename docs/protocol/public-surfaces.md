@@ -34,7 +34,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 |---|---|---|
 | `GET /health` | experimental diagnostic surface | Health check for the current Pico Home Core process. |
 | `GET /api/system/version` | experimental diagnostic surface | Reports service and protocol version information. |
-| `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability and database migration state. |
+| `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability, Pico Home claim-state and database migration state. |
 | `GET /api/events` | experimental foundation API | Lists stored foundation events. |
 | `POST /api/events` | experimental foundation API | Accepts only currently writable foundation events. Not a full sync API. |
 | `WS /ws` | experimental event stream | Streams events and connection messages. |

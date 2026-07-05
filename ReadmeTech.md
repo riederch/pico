@@ -549,7 +549,7 @@ curl http://localhost:3100/api/events
 | `GET /` | foundation diagnostics dashboard |
 | `GET /health` | service health check |
 | `GET /api/system/version` | service and protocol version information |
-| `GET /api/system/status` | diagnostic service, capability and database migration status |
+| `GET /api/system/status` | diagnostic service, capability, Pico Home claim-state and database migration status |
 | `GET /api/events` | list stored events |
 | `POST /api/events` | append an event |
 | `WS /ws` | event stream endpoint |

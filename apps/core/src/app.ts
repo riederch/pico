@@ -93,6 +93,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     protocolVersion: PROTOCOL_VERSION,
     deviceId: config.deviceId,
     capabilities: protocolCapabilities,
+    picoHome: {
+      claimState: {
+        state: store.picoHomeClaimState().state,
+      },
+    },
     database: {
       maxLamport: store.maxLamport(),
       migrations: store.appliedMigrations(),

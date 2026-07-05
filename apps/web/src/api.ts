@@ -117,6 +117,7 @@ function isSystemStatus(value: unknown): value is SystemStatus {
     && typeof value.protocolVersion === 'string'
     && typeof value.deviceId === 'string'
     && isCapabilityMap(value.capabilities)
+    && isPicoHomeStatus(value.picoHome)
     && isRecord(value.database)
     && typeof value.database.maxLamport === 'number'
     && Number.isInteger(value.database.maxLamport)
@@ -127,6 +128,14 @@ function isSystemStatus(value: unknown): value is SystemStatus {
 
 function isCapabilityMap(value: unknown): value is Record<string, boolean> {
   return isRecord(value) && Object.values(value).every((enabled) => typeof enabled === 'boolean');
+}
+
+function isPicoHomeStatus(value: unknown): value is SystemStatus['picoHome'] {
+  return (
+    isRecord(value)
+    && isRecord(value.claimState)
+    && (value.claimState.state === 'unclaimed' || value.claimState.state === 'claimed')
+  );
 }
 
 function isAppliedMigration(value: unknown): value is SystemStatus['database']['migrations'][number] {
