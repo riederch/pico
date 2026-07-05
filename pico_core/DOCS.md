@@ -6,6 +6,8 @@ Pico Core is a foundation add-on, not a production-ready Home Assistant assistan
 
 The current add-on has no authentication model, no Home Assistant entity integration, no ingress panel, no policy engine and no protected personal data domains. Port `3100` is currently a development interface for a trusted local test environment.
 
+Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
+
 ## Installation
 
 1. Add this repository as a Home Assistant add-on repository.
@@ -17,9 +19,11 @@ The current add-on has no authentication model, no Home Assistant entity integra
 
 | Port | Purpose |
 | --- | --- |
-| `3100/tcp` | Pico Core HTTP API and WebSocket endpoint |
+| `3100/tcp` | Pico Core local foundation HTTP API and WebSocket endpoint |
 
 The foundation add-on currently exposes port `3100` as a fixed port. A configurable runtime port can be added later, but is not active in the current add-on metadata.
+
+Port `3100` is a trusted local foundation interface for development and diagnostics. It is not the intended public remote-access surface for Pico Home.
 
 ## Endpoints
 
@@ -28,13 +32,38 @@ The foundation add-on currently exposes port `3100` as a fixed port. A configura
 | `/` | Foundation diagnostics dashboard |
 | `/health` | Add-on health check |
 | `/api/system/version` | Service and protocol version information |
-| `/api/system/status` | Diagnostic service and database migration status |
+| `/api/system/status` | Diagnostic service, capability, Pico Home claim-state and database migration status |
 | `/api/events` | Development event list and limited event creation |
 | `/ws` | Realtime event stream |
 
 The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
 
-The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console or user-management interface.
+The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console, user-management interface, relay protocol or public remote-access endpoint.
+
+## Remote access boundary
+
+The current add-on should be reachable only through trusted local access paths such as the Home Assistant environment, local network testing, or developer-controlled local tunnelling for diagnostics.
+
+Product-level remote reachability should later use:
+
+```text
+Pico Vault outside home
+-> Pico Link Transport Facade
+-> Pico Relay / Relay Network
+-> Pico Home Endpoint
+```
+
+Do not model remote access as:
+
+```text
+Internet
+-> router port forwarding / public reverse proxy
+-> Pico Core port 3100
+```
+
+Pico Relay is transport only. It must not become an owner of resident identities, memory, actions, relationships or private data.
+
+Meshtastic or other future radio standards may be considered only as optional low-bandwidth transport adapters for small encrypted Pico Link packets. They must not replace Pico identity, encryption, authorization or audit boundaries.
 
 ## Add-on image assets
 
@@ -64,7 +93,7 @@ Pico Core stores its SQLite database in the add-on persistent data directory:
 
 This directory is managed by Home Assistant add-on storage.
 
-The current foundation event store is not a production memory, location history, private context or Home Assistant control data store.
+The current foundation event store is not a production memory, location history, private context, relay queue, encrypted Pico Link inbox or Home Assistant control data store.
 
 ## Options
 
@@ -75,6 +104,7 @@ Planned future options may include:
 | Option | Purpose |
 | --- | --- |
 | `pico_port` | Runtime port selection, if the add-on entrypoint is changed to apply it safely. |
+| `relay_enabled` | Future opt-in outbound Pico Relay connection, if the Relay and Pico Link security model exists. |
 
 ## Update behavior
 
@@ -112,3 +142,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 - No protected personal data domains yet.
 - No production memory model yet.
 - No automatic backup-before-migration runtime flow yet.
+- No Pico Link transport facade yet.
+- No Pico Relay support yet.
+- No Meshtastic or other low-bandwidth transport adapter yet.
+- No Pico identity, Home identity or device key model yet.
