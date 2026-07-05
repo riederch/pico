@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type {
   ActionHistoryEventPayload,
@@ -17,6 +20,8 @@ import {
   picoEventTypes,
   picoHomeEventTypes,
 } from './index.js';
+
+const repoRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
 describe('Pico protocol types', () => {
   it('exports runtime event type lists for compatibility checks', () => {
@@ -40,6 +45,40 @@ describe('Pico protocol types', () => {
       ...legacyToolPolicyEventTypes,
       ...picoHomeEventTypes,
     ]);
+  });
+
+  it('keeps public protocol event docs aligned with runtime event type lists', () => {
+    const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
+
+    expect(textFenceAfterHeading(publicSurfaces, '### Foundation event types')).toEqual([...foundationEventTypes]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Product action event types')).toEqual([...actionEventTypes]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Legacy tool/policy event types')).toEqual([...legacyToolPolicyEventTypes]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Pico Home event direction')).toEqual([...picoHomeEventTypes]);
+  });
+
+  it('keeps compatibility level event docs aligned with runtime event type lists', () => {
+    const compatibilityLevels = readRepoFile('docs/protocol/compatibility-levels.md');
+
+    expect(textFenceAfterHeading(compatibilityLevels, '## L1 - Foundation event compatibility')).toEqual([...foundationEventTypes]);
+  });
+
+  it('keeps architecture wire event examples aligned with known protocol event types', () => {
+    const terminology = readRepoFile('docs/architecture/0026-product-terminology-and-naming.md');
+    const examples = textFenceAfterHeading(terminology, '## Wire naming rule');
+    const knownTypes = new Set<string>(picoEventTypes);
+
+    expect(examples).toEqual([
+      'action.requested',
+      'pico_rules.decision_created',
+      'action_runner.action_started',
+      'action_history.event_created',
+      'pico_home.claim_requested',
+      'pico_home.invite_created',
+    ]);
+
+    for (const example of examples) {
+      expect(knownTypes.has(example)).toBe(true);
+    }
   });
 
   it('accepts a minimal message event shape', () => {
@@ -159,3 +198,24 @@ describe('Pico protocol types', () => {
     expect(membership.role).toBe('home_member');
   });
 });
+
+function readRepoFile(path: string): string {
+  return readFileSync(resolve(repoRootPath, path), 'utf8');
+}
+
+function textFenceAfterHeading(markdown: string, heading: string): string[] {
+  const headingIndex = markdown.indexOf(heading);
+  if (headingIndex === -1) {
+    throw new Error(`Heading not found: ${heading}`);
+  }
+
+  const fenceMatch = /\n```text\n([\s\S]*?)\n```/.exec(markdown.slice(headingIndex));
+  if (!fenceMatch) {
+    throw new Error(`Text fence not found after heading: ${heading}`);
+  }
+
+  return fenceMatch[1]
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}

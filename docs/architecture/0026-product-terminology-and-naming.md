@@ -127,7 +127,7 @@ pico_rules.decision_created
 action_runner.action_started
 action_history.event_created
 pico_home.claim_requested
-pico_home.resident_invited
+pico_home.invite_created
 ```
 
 ## UI naming rule
