@@ -38,6 +38,22 @@ interface MetricRow {
   monospace?: boolean;
 }
 
+interface EventTableColumn {
+  label: string;
+  value(event: PicoEvent): string;
+  monospace?: boolean;
+}
+
+const eventTableColumns: EventTableColumn[] = [
+  { label: 'Lamport', value: (event) => event.lamport.toString(), monospace: true },
+  { label: 'Time', value: (event) => formatDateTime(event.wallTime) },
+  { label: 'Type', value: (event) => event.type },
+  { label: 'Stream', value: (event) => event.stream, monospace: true },
+  { label: 'Device', value: (event) => event.deviceId, monospace: true },
+];
+
+export const eventTableColumnLabels = eventTableColumns.map((column) => column.label);
+
 const dateTimeFormatter = new Intl.DateTimeFormat(undefined, {
   dateStyle: 'medium',
   timeStyle: 'medium',
@@ -268,11 +284,7 @@ function createEventRow(
     }
   });
   row.replaceChildren(
-    createCell(document, event.lamport.toString(), true),
-    createCell(document, event.type),
-    createCell(document, event.stream, true),
-    createCell(document, event.deviceId, true),
-    createCell(document, formatDateTime(event.wallTime)),
+    ...eventTableColumns.map((column) => createCell(document, column.value(event), column.monospace === true)),
   );
   return row;
 }
