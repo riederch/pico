@@ -38,6 +38,10 @@ describe('database migrations', () => {
           id: '0003_schema_migration_audit_errors',
           requiresBackup: false,
         },
+        {
+          id: '0004_pico_home_claim_state',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -65,6 +69,7 @@ describe('database migrations', () => {
     expect(tables).toContain('schema_migration');
     expect(tables).toContain('schema_migration_audit');
     expect(tables).toContain('pico_event');
+    expect(tables).toContain('pico_home_claim_state');
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: '0001_event_store',
@@ -78,7 +83,69 @@ describe('database migrations', () => {
         id: '0003_schema_migration_audit_errors',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0004_pico_home_claim_state',
+        appliedAt: expect.any(String),
+      },
     ]);
+
+    db.close();
+  });
+
+  it('creates an internal unclaimed Pico Home claim state skeleton', () => {
+    const db = new Database(createDatabasePath());
+
+    runMigrations(db);
+
+    const rows = db
+      .prepare(`
+        SELECT
+          id,
+          state,
+          host_admin_pico_id AS hostAdminPicoId,
+          claimed_at AS claimedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM pico_home_claim_state
+      `)
+      .all();
+
+    expect(rows).toEqual([
+      {
+        id: 1,
+        state: 'unclaimed',
+        hostAdminPicoId: null,
+        claimedAt: null,
+        createdAt: expect.any(String),
+        updatedAt: expect.any(String),
+      },
+    ]);
+
+    expect(() => {
+      db
+        .prepare(`
+          UPDATE pico_home_claim_state
+          SET state = 'claimed',
+              host_admin_pico_id = NULL,
+              claimed_at = ?,
+              updated_at = ?
+          WHERE id = 1
+        `)
+        .run('2026-07-05T00:00:00.000Z', '2026-07-05T00:00:00.000Z');
+    }).toThrow();
+
+    expect(() => {
+      db
+        .prepare(`
+          INSERT INTO pico_home_claim_state (
+            id,
+            state,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?)
+        `)
+        .run(2, 'unclaimed', '2026-07-05T00:00:00.000Z', '2026-07-05T00:00:00.000Z');
+    }).toThrow();
 
     db.close();
   });
@@ -94,12 +161,13 @@ describe('database migrations', () => {
         '0001_event_store',
         '0002_schema_migration_audit',
         '0003_schema_migration_audit_errors',
+        '0004_pico_home_claim_state',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(3);
+    expect(listAppliedMigrations(db)).toHaveLength(4);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -109,7 +177,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(3);
+    expect(listAppliedMigrations(db)).toHaveLength(4);
 
     db.close();
   });
@@ -148,7 +216,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(3);
+    expect(listAppliedMigrations(db)).toHaveLength(4);
 
     db.close();
   });
@@ -162,6 +230,7 @@ describe('database migrations', () => {
       '0001_event_store',
       '0002_schema_migration_audit',
       '0003_schema_migration_audit_errors',
+      '0004_pico_home_claim_state',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -173,6 +242,7 @@ describe('database migrations', () => {
           '0001_event_store',
           '0002_schema_migration_audit',
           '0003_schema_migration_audit_errors',
+          '0004_pico_home_claim_state',
         ],
       },
     ]);
@@ -227,6 +297,7 @@ describe('database migrations', () => {
     expect(listAppliedMigrations(db).map((migration) => migration.id)).toEqual([
       '0001_event_store',
       '0002_schema_migration_audit',
+      '0004_pico_home_claim_state',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {

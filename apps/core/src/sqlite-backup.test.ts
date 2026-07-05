@@ -224,6 +224,10 @@ describe('restoreSqliteBackup', () => {
         id: '0003_schema_migration_audit_errors',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0004_pico_home_claim_state',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

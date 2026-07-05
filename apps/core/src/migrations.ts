@@ -114,6 +114,49 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: '0004_pico_home_claim_state',
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_home_claim_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          state TEXT NOT NULL CHECK (state IN ('unclaimed', 'claimed')),
+          host_admin_pico_id TEXT NULL,
+          claimed_at TEXT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK (
+            (
+              state = 'unclaimed'
+              AND host_admin_pico_id IS NULL
+              AND claimed_at IS NULL
+            )
+            OR (
+              state = 'claimed'
+              AND host_admin_pico_id IS NOT NULL
+              AND length(trim(host_admin_pico_id)) > 0
+              AND claimed_at IS NOT NULL
+            )
+          )
+        );
+      `);
+
+      const now = new Date().toISOString();
+      db
+        .prepare(`
+          INSERT OR IGNORE INTO pico_home_claim_state (
+            id,
+            state,
+            host_admin_pico_id,
+            claimed_at,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `)
+        .run(1, 'unclaimed', null, null, now, now);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

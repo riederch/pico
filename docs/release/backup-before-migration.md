@@ -105,6 +105,7 @@ Current migration classifications:
 | `0001_event_store` | No | Creates the initial foundation event store tables and indexes. |
 | `0002_schema_migration_audit` | No | Creates an additive migration audit table and index without rewriting existing data. |
 | `0003_schema_migration_audit_errors` | No | Adds nullable migration failure diagnostics to the migration audit table. |
+| `0004_pico_home_claim_state` | No | Creates an internal additive Pico Home claim-state skeleton with an initial unclaimed row. |
 
 ## Current limitation
 

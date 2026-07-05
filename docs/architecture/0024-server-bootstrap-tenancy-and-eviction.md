@@ -211,7 +211,9 @@ replica_manifest
 signed_event_segment
 ```
 
-The current foundation implementation does not yet implement this model. Until it does, Pico Core must not be treated as a production multi-resident personal data host.
+The current foundation implementation only has an internal, non-public Pico Home claim-state skeleton. It records that a fresh host starts as `unclaimed`, but it does not yet implement bootstrap claim tokens, host admin membership, resident membership, invitations, eviction, privacy domains, key envelopes or claim APIs.
+
+Until the full model exists, Pico Core must not be treated as a production multi-resident personal data host.
 
 ## Interaction with other ADRs
 
