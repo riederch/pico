@@ -10,8 +10,38 @@ import type {
   PolicyDecisionCreatedPayload,
   ToolCallRequestedPayload,
 } from './index.js';
+import {
+  actionEventTypes,
+  foundationEventTypes,
+  legacyToolPolicyEventTypes,
+  picoEventTypes,
+  picoHomeEventTypes,
+} from './index.js';
 
 describe('Pico protocol types', () => {
+  it('exports runtime event type lists for compatibility checks', () => {
+    expect(foundationEventTypes).toEqual([
+      'device.registered',
+      'device.seen',
+      'session.created',
+      'message.created',
+      'avatar.state_changed',
+    ]);
+
+    expect(actionEventTypes).toContain('action.requested');
+    expect(actionEventTypes).toContain('pico_rules.decision_created');
+    expect(legacyToolPolicyEventTypes).toContain('tool.call_requested');
+    expect(legacyToolPolicyEventTypes).toContain('policy.decision_created');
+    expect(picoHomeEventTypes).toContain('pico_home.claim_requested');
+
+    expect(picoEventTypes).toEqual([
+      ...foundationEventTypes,
+      ...actionEventTypes,
+      ...legacyToolPolicyEventTypes,
+      ...picoHomeEventTypes,
+    ]);
+  });
+
   it('accepts a minimal message event shape', () => {
     const event: PicoEvent<{ role: 'user'; text: string }> = {
       eventId: 'evt-1',

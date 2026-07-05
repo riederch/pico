@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
-import type { PicoEvent, PicoEventType } from '@pico/protocol';
+import { foundationEventTypes, picoEventTypes, type PicoEvent, type PicoEventType } from '@pico/protocol';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore } from './event-store.js';
@@ -16,42 +16,8 @@ const MAX_TEXT_LENGTH = 8_000;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
 const MAX_LAMPORT_VALUE = 1_000_000_000;
 
-const writableEventTypes = new Set<PicoEventType>([
-  'device.registered',
-  'device.seen',
-  'session.created',
-  'message.created',
-  'avatar.state_changed',
-]);
-
-const knownEventTypes = new Set<PicoEventType>([
-  'device.registered',
-  'device.seen',
-  'session.created',
-  'message.created',
-  'avatar.state_changed',
-  'action.requested',
-  'action.completed',
-  'pico_rules.decision_created',
-  'approval.requested',
-  'approval.resolved',
-  'action_runner.action_started',
-  'action_runner.action_completed',
-  'action_history.event_created',
-  'tool.call_requested',
-  'tool.call_completed',
-  'policy.decision_created',
-  'confirmation.requested',
-  'confirmation.resolved',
-  'executor.action_started',
-  'executor.action_completed',
-  'audit.event_created',
-  'pico_home.claim_requested',
-  'pico_home.claim_completed',
-  'pico_home.invite_created',
-  'pico_home.resident_joined',
-  'pico_home.resident_removed',
-]);
+const writableEventTypes = new Set<PicoEventType>(foundationEventTypes);
+const knownEventTypes = new Set<PicoEventType>(picoEventTypes);
 
 const messageRoles = new Set(['user', 'assistant', 'system', 'tool']);
 const avatarModes = new Set(['everyday', 'technical', 'wwg', 'firefighter', 'security', 'organization', 'smart_home']);

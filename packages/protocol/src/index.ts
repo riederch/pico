@@ -1,38 +1,57 @@
-export type FoundationEventType =
-  | 'device.registered'
-  | 'device.seen'
-  | 'session.created'
-  | 'message.created'
-  | 'avatar.state_changed';
+export const foundationEventTypes = [
+  'device.registered',
+  'device.seen',
+  'session.created',
+  'message.created',
+  'avatar.state_changed',
+] as const;
 
-export type ActionEventType =
-  | 'action.requested'
-  | 'action.completed'
-  | 'pico_rules.decision_created'
-  | 'approval.requested'
-  | 'approval.resolved'
-  | 'action_runner.action_started'
-  | 'action_runner.action_completed'
-  | 'action_history.event_created';
+export type FoundationEventType = typeof foundationEventTypes[number];
 
-export type LegacyToolPolicyEventType =
-  | 'tool.call_requested'
-  | 'tool.call_completed'
-  | 'policy.decision_created'
-  | 'confirmation.requested'
-  | 'confirmation.resolved'
-  | 'executor.action_started'
-  | 'executor.action_completed'
-  | 'audit.event_created';
+export const actionEventTypes = [
+  'action.requested',
+  'action.completed',
+  'pico_rules.decision_created',
+  'approval.requested',
+  'approval.resolved',
+  'action_runner.action_started',
+  'action_runner.action_completed',
+  'action_history.event_created',
+] as const;
 
-export type PicoHomeEventType =
-  | 'pico_home.claim_requested'
-  | 'pico_home.claim_completed'
-  | 'pico_home.invite_created'
-  | 'pico_home.resident_joined'
-  | 'pico_home.resident_removed';
+export type ActionEventType = typeof actionEventTypes[number];
 
-export type PicoEventType = FoundationEventType | ActionEventType | LegacyToolPolicyEventType | PicoHomeEventType;
+export const legacyToolPolicyEventTypes = [
+  'tool.call_requested',
+  'tool.call_completed',
+  'policy.decision_created',
+  'confirmation.requested',
+  'confirmation.resolved',
+  'executor.action_started',
+  'executor.action_completed',
+  'audit.event_created',
+] as const;
+
+export type LegacyToolPolicyEventType = typeof legacyToolPolicyEventTypes[number];
+
+export const picoHomeEventTypes = [
+  'pico_home.claim_requested',
+  'pico_home.claim_completed',
+  'pico_home.invite_created',
+  'pico_home.resident_joined',
+  'pico_home.resident_removed',
+] as const;
+
+export type PicoHomeEventType = typeof picoHomeEventTypes[number];
+
+export const picoEventTypes = [
+  ...foundationEventTypes,
+  ...actionEventTypes,
+  ...legacyToolPolicyEventTypes,
+  ...picoHomeEventTypes,
+] as const;
+
+export type PicoEventType = typeof picoEventTypes[number];
 
 export type PicoNodeType =
   | 'pico_home'

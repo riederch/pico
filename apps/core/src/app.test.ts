@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { actionEventTypes, legacyToolPolicyEventTypes, picoHomeEventTypes } from '@pico/protocol';
 import { buildApp } from './app.js';
 
 const tempDirs: string[] = [];
@@ -197,7 +198,7 @@ describe('Pico Home Core app', () => {
   it('rejects reserved legacy and product event types on the foundation API', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 
-    for (const type of ['tool.call_requested', 'action.requested', 'pico_rules.decision_created', 'action_runner.action_started', 'action_history.event_created', 'pico_home.claim_requested']) {
+    for (const type of [...actionEventTypes, ...legacyToolPolicyEventTypes, ...picoHomeEventTypes]) {
       const response = await app.inject({
         method: 'POST',
         url: '/api/events',
