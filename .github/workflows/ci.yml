@@ -85,7 +85,7 @@ jobs:
         run: |
           docker run --rm -d --name pico-core-smoke -p 3100:3100 pico-core:test
           for i in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:3100/health && curl -fsS http://127.0.0.1:3100/ | grep -q "Pico Foundation Dashboard"; then
+            if curl -fsS http://127.0.0.1:3100/health && curl -fsS http://127.0.0.1:3100/ | grep -q "Pico Home Foundation Dashboard"; then
               docker stop pico-core-smoke
               exit 0
             fi
