@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 
 const tempDirs: string[] = [];
+const RESERVED_EVENT_ERROR = 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.';
 
 function createDatabasePath(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pico-core-test-'));
@@ -18,7 +19,7 @@ function createWebRootPath(): string {
   mkdirSync(join(dir, 'dist'), { recursive: true });
   writeFileSync(
     join(dir, 'index.html'),
-    '<!doctype html><html><head><title>Pico Foundation Dashboard</title></head><body><script type="module" src="./dist/main.js"></script></body></html>',
+    '<!doctype html><html><head><title>Pico Home Foundation Dashboard</title></head><body><script type="module" src="./dist/main.js"></script></body></html>',
   );
   writeFileSync(join(dir, 'dist', 'main.js'), 'console.log("pico dashboard");');
   return dir;
@@ -30,7 +31,7 @@ afterEach(() => {
   }
 });
 
-describe('Pico Core app', () => {
+describe('Pico Home Core app', () => {
   it('serves the dashboard shell from the default web root', async () => {
     const app = await buildApp({
       host: '127.0.0.1',
@@ -42,7 +43,7 @@ describe('Pico Core app', () => {
     const response = await app.inject({ method: 'GET', url: '/' });
     expect(response.statusCode).toBe(200);
     expect(response.headers['content-type']).toContain('text/html');
-    expect(response.body).toContain('Pico Foundation Dashboard');
+    expect(response.body).toContain('Pico Home Foundation Dashboard');
 
     await app.close();
   });
@@ -59,7 +60,7 @@ describe('Pico Core app', () => {
     const index = await app.inject({ method: 'GET', url: '/' });
     expect(index.statusCode).toBe(200);
     expect(index.headers['content-type']).toContain('text/html');
-    expect(index.body).toContain('Pico Foundation Dashboard');
+    expect(index.body).toContain('Pico Home Foundation Dashboard');
 
     const script = await app.inject({ method: 'GET', url: '/dist/main.js' });
     expect(script.statusCode).toBe(200);
@@ -89,7 +90,7 @@ describe('Pico Core app', () => {
 
     const traversal = await app.inject({ method: 'GET', url: '/dist/%2e%2e%2findex.html' });
     expect(traversal.statusCode).toBe(404);
-    expect(traversal.body).not.toContain('Pico Foundation Dashboard');
+    expect(traversal.body).not.toContain('Pico Home Foundation Dashboard');
 
     await app.close();
   });
@@ -107,7 +108,7 @@ describe('Pico Core app', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       ok: true,
-      service: 'pico-core',
+      service: 'pico-home-core',
       deviceId: 'test-core',
     });
 
@@ -126,7 +127,7 @@ describe('Pico Core app', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      service: 'pico-core',
+      service: 'pico-home-core',
       version: '0.1.7',
       protocolVersion: '0.1.7',
     });
@@ -146,25 +147,16 @@ describe('Pico Core app', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
-      service: 'pico-core',
+      service: 'pico-home-core',
       version: '0.1.7',
       protocolVersion: '0.1.7',
       deviceId: 'test-core',
       database: {
         maxLamport: 0,
         migrations: [
-          {
-            id: '0001_event_store',
-            appliedAt: expect.any(String),
-          },
-          {
-            id: '0002_schema_migration_audit',
-            appliedAt: expect.any(String),
-          },
-          {
-            id: '0003_schema_migration_audit_errors',
-            appliedAt: expect.any(String),
-          },
+          { id: '0001_event_store', appliedAt: expect.any(String) },
+          { id: '0002_schema_migration_audit', appliedAt: expect.any(String) },
+          { id: '0003_schema_migration_audit_errors', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -173,184 +165,74 @@ describe('Pico Core app', () => {
   });
 
   it('rejects invalid event creation requests', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        type: 'message.created',
-      },
-    });
-
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+    const response = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created' } });
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      error: 'deviceId, type and payload are required.',
-    });
-
+    expect(response.json()).toEqual({ error: 'deviceId, type and payload are required.' });
     await app.close();
   });
 
   it('rejects blank event identifiers and text fields', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 
-    const blankDeviceId = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: '   ',
-        type: 'message.created',
-        payload: {
-          role: 'user',
-          text: 'Hallo Pico',
-        },
-      },
-    });
+    const blankDeviceId = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: '   ', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } });
     expect(blankDeviceId.statusCode).toBe(400);
-    expect(blankDeviceId.json()).toEqual({
-      error: 'deviceId, type and payload are required.',
-    });
+    expect(blankDeviceId.json()).toEqual({ error: 'deviceId, type and payload are required.' });
 
-    const blankSessionId = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        sessionId: '   ',
-        type: 'message.created',
-        payload: {
-          role: 'user',
-          text: 'Hallo Pico',
-        },
-      },
-    });
+    const blankSessionId = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', sessionId: '   ', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } });
     expect(blankSessionId.statusCode).toBe(400);
-    expect(blankSessionId.json()).toEqual({
-      error: 'sessionId must be a non-empty string when provided.',
-    });
+    expect(blankSessionId.json()).toEqual({ error: 'sessionId must be a non-empty string when provided.' });
 
-    const blankStream = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        stream: '   ',
-        type: 'message.created',
-        payload: {
-          role: 'user',
-          text: 'Hallo Pico',
-        },
-      },
-    });
+    const blankStream = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', stream: '   ', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } });
     expect(blankStream.statusCode).toBe(400);
-    expect(blankStream.json()).toEqual({
-      error: 'stream must be a non-empty string when provided.',
-    });
+    expect(blankStream.json()).toEqual({ error: 'stream must be a non-empty string when provided.' });
 
-    const blankMessageText = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        type: 'message.created',
-        payload: {
-          role: 'user',
-          text: '   ',
-        },
-      },
-    });
+    const blankMessageText = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: '   ' } } });
     expect(blankMessageText.statusCode).toBe(400);
-    expect(blankMessageText.json()).toEqual({
-      error: 'message.created payload requires role and text.',
-    });
+    expect(blankMessageText.json()).toEqual({ error: 'message.created payload requires role and text.' });
 
     await app.close();
   });
 
-  it('rejects reserved policy and executor event types on the foundation API', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
+  it('rejects reserved legacy and product event types on the foundation API', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        type: 'tool.call_requested',
+    for (const type of ['tool.call_requested', 'action.requested', 'pico_rules.decision_created', 'action_runner.action_started', 'action_history.event_created', 'pico_home.claim_requested']) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
         payload: {
-          toolName: 'homeassistant.get_entity_state',
-          riskLevel: 'read_only',
-          arguments: { entityId: 'sensor.pico_status' },
+          deviceId: 'desktop-dev',
+          type,
+          payload: { actionName: 'homeassistant.get_entity_state', risk: 'read_only', input: { entityId: 'sensor.pico_status' } },
         },
-      },
-    });
-
-    expect(response.statusCode).toBe(400);
-    expect(response.json()).toEqual({
-      error: 'This event type is reserved for a later policy-gated API.',
-    });
-
-    await app.close();
-  });
-
-  it('rejects invalid list limits', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
-
-    for (const limit of ['-1', '1abc', '1.5']) {
-      const response = await app.inject({ method: 'GET', url: `/api/events?limit=${limit}` });
+      });
 
       expect(response.statusCode).toBe(400);
-      expect(response.json()).toEqual({
-        error: 'limit must be a positive integer.',
-      });
+      expect(response.json()).toEqual({ error: RESERVED_EVENT_ERROR });
     }
 
     await app.close();
   });
 
-  it('sends a websocket connection message', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
+  it('rejects invalid list limits', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+    for (const limit of ['-1', '1abc', '1.5']) {
+      const response = await app.inject({ method: 'GET', url: `/api/events?limit=${limit}` });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: 'limit must be a positive integer.' });
+    }
+    await app.close();
+  });
 
+  it('sends a websocket connection message', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
     await app.ready();
     let initialMessage: Promise<unknown> | null = null;
-    const socket = await app.injectWS('/ws', {}, {
-      onInit(ws) {
-        initialMessage = readSocketJson(ws as unknown as TestWebSocket);
-      },
-    });
-
+    const socket = await app.injectWS('/ws', {}, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
     try {
       const message = await requireMessagePromise(initialMessage);
-
-      expect(message).toEqual({
-        type: 'pico.core.connected',
-        deviceId: 'test-core',
-      });
+      expect(message).toEqual({ type: 'pico.core.connected', deviceId: 'test-core' });
     } finally {
       socket.terminate();
       await app.close();
@@ -358,48 +240,18 @@ describe('Pico Core app', () => {
   });
 
   it('broadcasts inserted events to websocket clients', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
-
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
     await app.ready();
     let initialMessage: Promise<unknown> | null = null;
-    const socket = await app.injectWS('/ws', {}, {
-      onInit(ws) {
-        initialMessage = readSocketJson(ws as unknown as TestWebSocket);
-      },
-    });
-
+    const socket = await app.injectWS('/ws', {}, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
     try {
       await requireMessagePromise(initialMessage);
       const broadcastPromise = readSocketJson(socket as unknown as TestWebSocket);
-
-      const created = await app.inject({
-        method: 'POST',
-        url: '/api/events',
-        payload: {
-          deviceId: 'desktop-dev',
-          sessionId: 'session-1',
-          type: 'message.created',
-          payload: {
-            role: 'user',
-            text: 'Hallo Pico',
-          },
-        },
-      });
-
+      const created = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', sessionId: 'session-1', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } });
       expect(created.statusCode).toBe(201);
-
       const broadcast = await broadcastPromise;
       const createdBody = created.json();
-
-      expect(broadcast).toEqual({
-        type: 'pico.event.created',
-        event: createdBody.event,
-      });
+      expect(broadcast).toEqual({ type: 'pico.event.created', event: createdBody.event });
     } finally {
       socket.terminate();
       await app.close();
@@ -407,27 +259,8 @@ describe('Pico Core app', () => {
   });
 
   it('creates and lists events', async () => {
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath: createDatabasePath(),
-      deviceId: 'test-core',
-    });
-
-    const created = await app.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        sessionId: 'session-1',
-        type: 'message.created',
-        payload: {
-          role: 'user',
-          text: 'Hallo Pico',
-        },
-      },
-    });
-
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+    const created = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', sessionId: 'session-1', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } });
     expect(created.statusCode).toBe(201);
     const createdBody = created.json();
     expect(createdBody.appendResult).toBe('inserted');
@@ -441,39 +274,19 @@ describe('Pico Core app', () => {
     const listedBody = listed.json();
     expect(listedBody.events).toHaveLength(1);
     expect(listedBody.events[0].payload.text).toBe('Hallo Pico');
-
     await app.close();
   });
 
   it('continues Lamport order from persisted events', async () => {
     const databasePath = createDatabasePath();
-
     const firstApp = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
-    await firstApp.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        type: 'message.created',
-        payload: { role: 'user', text: 'First' },
-      },
-    });
+    await firstApp.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'First' } } });
     await firstApp.close();
 
     const secondApp = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
-    const response = await secondApp.inject({
-      method: 'POST',
-      url: '/api/events',
-      payload: {
-        deviceId: 'desktop-dev',
-        type: 'message.created',
-        payload: { role: 'user', text: 'Second' },
-      },
-    });
-
+    const response = await secondApp.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Second' } } });
     expect(response.statusCode).toBe(201);
     expect(response.json().event.lamport).toBe(2);
-
     await secondApp.close();
   });
 });
@@ -485,13 +298,9 @@ interface TestWebSocket {
 
 async function readSocketJson(socket: TestWebSocket): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error('Timed out waiting for websocket message.'));
-    }, 1_000);
-
+    const timeout = setTimeout(() => { reject(new Error('Timed out waiting for websocket message.')); }, 1_000);
     socket.once('message', (data) => {
       clearTimeout(timeout);
-
       try {
         resolve(JSON.parse(socketMessageToString(data)) as unknown);
       } catch (error) {
@@ -505,7 +314,6 @@ function requireMessagePromise(messagePromise: Promise<unknown> | null): Promise
   if (messagePromise === null) {
     throw new Error('WebSocket message listener was not initialized.');
   }
-
   return messagePromise;
 }
 
@@ -513,10 +321,8 @@ function socketMessageToString(data: unknown): string {
   if (typeof data === 'string') {
     return data;
   }
-
   if (data instanceof Buffer) {
     return data.toString('utf8');
   }
-
   return String(data);
 }
