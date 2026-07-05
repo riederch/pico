@@ -1,28 +1,37 @@
 import type { DashboardSnapshot, EventListResponse, HealthResponse, SystemStatus } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
 
-export const DEFAULT_CORE_URL = 'http://localhost:3100';
+export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
 
-export function defaultCoreUrl(location: Location): string {
+/** @deprecated Use DEFAULT_PICO_HOME_URL. */
+export const DEFAULT_CORE_URL = DEFAULT_PICO_HOME_URL;
+
+export function defaultPicoHomeUrl(location: Location): string {
   if (location.protocol === 'http:' || location.protocol === 'https:') {
     return location.origin;
   }
 
-  return DEFAULT_CORE_URL;
+  return DEFAULT_PICO_HOME_URL;
 }
 
-export function normalizeCoreUrl(rawValue: string): string {
-  const trimmedValue = rawValue.trim() || DEFAULT_CORE_URL;
+/** @deprecated Use defaultPicoHomeUrl. */
+export const defaultCoreUrl = defaultPicoHomeUrl;
+
+export function normalizePicoHomeUrl(rawValue: string): string {
+  const trimmedValue = rawValue.trim() || DEFAULT_PICO_HOME_URL;
   const candidate = hasProtocol(trimmedValue) ? trimmedValue : `http://${trimmedValue}`;
   const url = new URL(candidate);
 
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Core URL must use http or https.');
+    throw new Error('Pico Home URL must use http or https.');
   }
 
   const pathname = url.pathname.replace(/\/+$/, '');
   return `${url.origin}${pathname === '/' ? '' : pathname}`;
 }
+
+/** @deprecated Use normalizePicoHomeUrl. */
+export const normalizeCoreUrl = normalizePicoHomeUrl;
 
 export function buildEndpointUrl(baseUrl: string, endpoint: string): URL {
   const url = new URL(baseUrl);
