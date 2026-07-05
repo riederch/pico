@@ -161,14 +161,14 @@ The origin marker is:
 
 The marker may be useful to identify the original Pico instance when the owner chooses to show it, but it must not grant capabilities.
 
-## Open-source copy-safety
+## Source-available copy-safety
 
-Pico is intended to be open source. Therefore the origin marker must not be implemented as DRM, copy prevention, obfuscated enforcement, online activation or a restriction on forks.
+Pico is source-available for private and non-commercial use. Therefore the origin marker must not be implemented as DRM, copy prevention, obfuscated enforcement, online activation or hidden anti-fork logic.
 
 The correct copy-safe model is provenance, not prevention:
 
-- the visual feature may exist in the open codebase
-- forks may render their own decorative markers
+- the visual feature may exist in the visible codebase
+- private and non-commercial forks may render their own decorative markers within the license boundaries
 - official clients may verify whether a presented Pico #1 marker carries a valid signed origin proof
 - unverified markers may still be rendered as decorative, but must not be treated as official origin provenance
 - removing or modifying verification in a fork must not compromise official clients
