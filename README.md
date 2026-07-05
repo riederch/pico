@@ -107,7 +107,7 @@ Current commercial permission contact:
 https://github.com/riederch
 ```
 
-See [`LICENSE`](LICENSE), [`NOTICE`](NOTICE) and [`COMMERCIAL.md`](COMMERCIAL.md).
+See [`LICENSE`](LICENSE), [`NOTICE`](NOTICE), [`COMMERCIAL.md`](COMMERCIAL.md), [`LICENSE-FAQ.md`](LICENSE-FAQ.md), [`TRADEMARK.md`](TRADEMARK.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Visual direction
 
@@ -142,6 +142,8 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture`](docs/architecture) - architecture decisions and concept notes
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
+- [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
+- [`docs/protocol/compatibility-levels.md`](docs/protocol/compatibility-levels.md) - compatibility level definitions
 
 ## Design principles
 
