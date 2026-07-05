@@ -28,6 +28,8 @@ Pico Core should eventually provide the Home Assistant-side foundation for a com
 - connect to Home Assistant and other local tools
 - understand device, event and household context safely
 - store and stream events
+- act as a Pico Home endpoint in the Pico Link / Relay network
+- support remote reachability through Pico Relay instead of public inbound Home APIs
 - support policy-gated tool execution
 - support shared commitments, reminders and context-aware nudging
 - respect scoped presence, location and emergency context rules
@@ -46,6 +48,8 @@ Pico Core is not intended to become:
 - a replacement for explicit user approval
 - a production-ready personal data store yet
 - an owner of every resident Pico identity just because it hosts the service
+- a public internet endpoint for remote access to the Pico Home API
+- a relay provider, transport authority or cryptographic identity provider by default
 - a project that invents its own cryptography
 
 ## Core idea
@@ -60,11 +64,16 @@ That means Pico may eventually feel helpful and present in Home Assistant, but r
 
 Pico's current concept work defines several important boundaries:
 
-- full clients own knowledge and backups; light clients are interaction surfaces
+- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Pico Core hosts provide infrastructure, but hosting is not ownership over resident Pico identities or private data
-- a freshly installed Pico Core host starts unclaimed; a one-time bootstrap claim token lets the first Pico become the host administrator
-- the Gastgeber Pico may invite or evict residents from that host, but must not decrypt, impersonate, rewrite or own resident Picos
-- relay servers transport encrypted messages but do not own Pico memory or authority
+- a freshly installed Pico Core host starts unclaimed; a one-time bootstrap claim token / Move-In Code lets the first Pico become the host administrator / Home Host Pico
+- the Gastgeber Pico / Home Host Pico may invite or evict residents from that host, but must not decrypt, impersonate, rewrite or own resident Picos
+- a future Pico Home Image is an appliance-style installation path for the same host model, not a separate trust model
+- Pico Home should be treated as a local endpoint in the Pico Link / Relay network, not as a public inbound API server
+- external reachability should use Pico Link transports, primarily Pico Relay, rather than port forwarding into the add-on API
+- Pico Relays transport encrypted packets but do not own Pico memory, identity, relationships, actions or authority
+- Pico Link is transport-neutral; Meshtastic and future radio standards belong behind transport adapters
+- Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
 - trust signals are contextual evidence, not global person scores
 - presence and location sharing must be scoped, visible, revocable and minimally precise
 - service and emergency disclosures must be role-, context-, purpose- and necessity-bound
@@ -91,7 +100,7 @@ The current foundation add-on provides:
 - health check endpoint for add-on monitoring
 - first packaging and update path for later Pico functions
 
-Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, backup/rollback behaviour and companion clients still need to be built.
+Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, relay transport, Pico Link transport security, migration safety, backup/rollback behaviour and companion clients still need to be built.
 
 ## Visual direction
 
@@ -113,11 +122,13 @@ The avatar communicates state and risk. For example:
 
 | Entry point | Purpose |
 |---|---|
-| Port `3100` | Pico Core HTTP API and WebSocket endpoint |
+| Port `3100` | Pico Core local foundation HTTP API and WebSocket endpoint |
 | `/` | foundation diagnostics dashboard |
 | `/health` | add-on health check |
 | `/api/events` | event list and event creation |
 | `/ws` | realtime event stream |
+
+Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the add-on API to the internet.
 
 Persistent data is stored in the Home Assistant add-on data directory:
 
@@ -130,9 +141,10 @@ Persistent data is stored in the Home Assistant add-on data directory:
 1. Build a safe technical foundation.
 2. Make updates and migrations safe before real user data matters.
 3. Build the first usable client.
-4. Add policy-gated tool execution.
-5. Add memory only after deletion and privacy-domain semantics are clear.
-6. Add richer companion UX after the control and audit layers are solid.
+4. Define identity, transport, relay and encryption boundaries before real remote communication.
+5. Add policy-gated tool execution.
+6. Add memory only after deletion and privacy-domain semantics are clear.
+7. Add richer companion UX after the control and audit layers are solid.
 
 ## Documentation map
 
@@ -141,6 +153,8 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../README.md`](../README.md) - non-technical project overview
 - [`../ReadmeTech.md`](../ReadmeTech.md) - full technical project documentation
 - [`../docs/architecture`](../docs/architecture) - architecture decisions and concept notes
+- [`../docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md`](../docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md) - dedicated Pico Home Image and first-boot setup concept
+- [`../docs/architecture/0028-pico-link-transport-facade-and-relay-network.md`](../docs/architecture/0028-pico-link-transport-facade-and-relay-network.md) - Pico Link transport facade, relay network and low-bandwidth transport concept
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 
@@ -153,9 +167,13 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - Confirmation for risky actions
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
-- Full clients own knowledge and backups; light clients are interaction surfaces
+- Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Core hosts provide infrastructure; hosting is not ownership
-- A Gastgeber Pico may manage residency on a host, not resident private data
+- Pico Home is a local endpoint in the Pico Link / Relay network, not a public inbound API server
+- Pico Relay provides transport, not authority
+- Pico Link remains transport-neutral; specific transports belong behind adapters
+- Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
+- A Gastgeber Pico / Home Host Pico may manage residency on a host, not resident private data
 - Home Assistant integration must not bypass Pico's policy and audit model
 - Presence and location sharing must be scoped, visible, revocable and minimally precise
 - Shared commitments should manage next actions, not judge people
