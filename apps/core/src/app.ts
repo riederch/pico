@@ -30,6 +30,14 @@ const knownEventTypes = new Set<PicoEventType>([
   'session.created',
   'message.created',
   'avatar.state_changed',
+  'action.requested',
+  'action.completed',
+  'pico_rules.decision_created',
+  'approval.requested',
+  'approval.resolved',
+  'action_runner.action_started',
+  'action_runner.action_completed',
+  'action_history.event_created',
   'tool.call_requested',
   'tool.call_completed',
   'policy.decision_created',
@@ -38,6 +46,11 @@ const knownEventTypes = new Set<PicoEventType>([
   'executor.action_started',
   'executor.action_completed',
   'audit.event_created',
+  'pico_home.claim_requested',
+  'pico_home.claim_completed',
+  'pico_home.invite_created',
+  'pico_home.resident_joined',
+  'pico_home.resident_removed',
 ]);
 
 const messageRoles = new Set(['user', 'assistant', 'system', 'tool']);
@@ -98,18 +111,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.get('/health', async () => ({
     ok: true,
-    service: 'pico-core',
+    service: 'pico-home-core',
     deviceId: config.deviceId,
   }));
 
   app.get('/api/system/version', async () => ({
-    service: 'pico-core',
+    service: 'pico-home-core',
     version: SERVICE_VERSION,
     protocolVersion: PROTOCOL_VERSION,
   }));
 
   app.get('/api/system/status', async () => ({
-    service: 'pico-core',
+    service: 'pico-home-core',
     version: SERVICE_VERSION,
     protocolVersion: PROTOCOL_VERSION,
     deviceId: config.deviceId,
@@ -199,7 +212,7 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
   }
 
   if (!writableEventTypes.has(body.type)) {
-    return { ok: false, error: 'This event type is reserved for a later policy-gated API.' };
+    return { ok: false, error: 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.' };
   }
 
   if (body.sessionId !== undefined && !isNonEmptyString(body.sessionId, 128)) {
