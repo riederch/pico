@@ -19,7 +19,11 @@ const packageFiles = [
   'packages/sync/package.json',
 ];
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'coverage', '.turbo']);
-const ignoredFiles = new Set(['scripts/check-license.mjs']);
+const ignoredFiles = new Set([
+  'scripts/check-license.mjs',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+]);
 const textExtensions = new Set(['.md', '.json', '.ts', '.tsx', '.js', '.mjs', '.yml', '.yaml', '.html', '.txt']);
 const forbiddenPatterns = [
   {
