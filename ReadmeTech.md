@@ -10,11 +10,27 @@ This file is the technical companion to `README.md`.
 
 Pico is a local-first personal AI companion foundation.
 
-The goal is not simply to build another chatbot. Pico is meant to become a sovereign personal agent substrate: an assistant foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved tools only through clear policy and audit boundaries.
+The goal is not simply to build another chatbot. Pico is meant to become a sovereign personal agent substrate: an assistant foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved actions only through clear Pico Rules and Action History boundaries.
 
 Pico starts deliberately small. The current repository focuses on the foundation: a tested core service, a shared protocol, sync primitives, a release pipeline, and a Home Assistant add-on path.
 
 Home Assistant is the first packaging and runtime path, not the only intended platform and not an ownership layer for resident Pico identities or private data.
+
+## License and commercial use
+
+Pico is source-available for private and non-commercial use under the PolyForm Noncommercial License 1.0.0.
+
+Private Pico use, private Pico Home use and private Pico WG use are permitted, including family, household, private shared-home and private non-commercial friend-group use.
+
+Commercial use requires prior written permission from the designated Pico rights holder. This includes paid hosting, managed Pico Home services, Pico Home rental, SaaS operation, paid support, business-internal use and integration into commercial products or services.
+
+Current commercial permission contact:
+
+```text
+https://github.com/riederch
+```
+
+See `LICENSE`, `NOTICE`, `COMMERCIAL.md`, `LICENSE-FAQ.md`, `TRADEMARK.md` and `CONTRIBUTING.md`.
 
 ## Why Pico exists
 
@@ -31,9 +47,9 @@ This means Pico treats identity, ownership, privacy, relationship boundaries, ex
 Pico should eventually be able to:
 
 - run locally where practical
-- run Pico Core on multiple host platforms, with Home Assistant as the first packaging path
-- sync between trusted full clients
-- support light clients such as watches or small displays
+- run Pico Home on multiple host platforms, with Home Assistant as the first packaging path
+- sync between trusted Pico Vaults
+- support Pico Surfaces such as watches or small displays
 - work with Home Assistant and other local tools
 - remember useful personal context safely
 - share presence, activity, location and emergency context only under clear rules
@@ -59,7 +75,7 @@ Pico is not intended to become:
 
 Pico separates suggestion, decision, execution, and audit:
 
-> The assistant may suggest. The policy layer decides. The executor acts only after approval. The audit log records what happened.
+> Pico may suggest. Pico Rules decide. The Action Runner acts only after approval. Action History records what happened.
 
 Technically, the intended model is:
 
@@ -67,17 +83,17 @@ Technically, the intended model is:
 sequenceDiagram
     participant User
     participant LLM
-    participant Policy
-    participant Executor
-    participant Audit
+    participant PicoRules
+    participant ActionRunner
+    participant ActionHistory
 
     User->>LLM: Request
-    LLM->>Policy: Proposed action + risk class
-    Policy-->>User: Ask for confirmation if needed
-    User-->>Policy: Confirm / deny
-    Policy->>Executor: Approved action only
-    Executor->>Audit: Record result
-    Audit-->>User: Explainable history
+    LLM->>PicoRules: Proposed action + risk class
+    PicoRules-->>User: Ask for approval if needed
+    User-->>PicoRules: Approve / deny
+    PicoRules->>ActionRunner: Approved action only
+    ActionRunner->>ActionHistory: Record result
+    ActionHistory-->>User: Explainable history
 ```
 
 ## Visual identity
@@ -111,11 +127,11 @@ Current version:
 Implemented or prepared:
 
 - TypeScript monorepo
-- Fastify-based Pico Core
+- Fastify-based Pico Home Core
 - SQLite-backed append-only event store
 - Lamport clock and version-vector helpers
 - migration runner and backup-before-migration contract
-- shared protocol package for events, avatar state, and tool payloads
+- shared protocol package for events, avatar state, and action payloads
 - WebSocket endpoint for event streaming
 - foundation diagnostics dashboard
 - CI release gates
@@ -123,17 +139,18 @@ Implemented or prepared:
 - multi-arch GHCR publishing path
 - Home Assistant add-on metadata
 - architecture notes under `docs/architecture`
+- protocol notes under `docs/protocol`
 
 Not production-ready yet:
 
 - authentication and authorization
-- policy engine implementation
-- tool executor implementation
+- Pico Rules implementation
+- Action Runner implementation
 - encrypted personal data domains
 - production migration and rollback orchestration
 - real companion UI
 - voice/avatar runtime
-- multi-resident Core Host tenancy implementation
+- multi-resident Pico Home tenancy implementation
 - inter-Pico and Pico Home protocol conformance tests
 
 ## Architecture overview
@@ -141,41 +158,41 @@ Not production-ready yet:
 ```mermaid
 flowchart TD
     User[User] --> Client[Client surfaces\nWeb / Mobile / Desktop / HA]
-    Client --> Core[Pico Core]
+    Client --> Core[Pico Home Core]
     Core --> EventStore[(SQLite event store)]
     Core --> Sync[Sync primitives\nLamport clock / version vectors]
     Core --> Protocol[Shared protocol]
-    Core --> Policy[Policy engine\nplanned]
-    Policy --> Executor[Executor\nplanned]
-    Executor --> Tools[Tools\nHA / files / services / devices]
-    Core --> Audit[(Audit log\nplanned)]
+    Core --> PicoRules[Pico Rules\nplanned]
+    PicoRules --> ActionRunner[Action Runner\nplanned]
+    ActionRunner --> Actions[Actions\nHA / files / services / devices]
+    Core --> ActionHistory[(Action History\nplanned)]
 ```
 
-## Full clients, light clients, relay and Core Hosts
+## Pico Vaults, Pico Surfaces, Pico Relays and Pico Homes
 
 Pico distinguishes three node roles:
 
 | Node type | Role | Data holding | Connectivity |
 |---|---|---|---|
-| Full Client | full Pico node | full knowledge, local database, sync state, backups where configured | direct, LAN, internet, relay |
-| Light Client | interaction surface | minimal cache/session state only | requires Full Client, directly or via relay |
-| Relay Server | transport helper | no authority, no Pico memory ownership | forwards encrypted traffic |
+| Pico Vault | full Pico node | full knowledge, local database, sync state, backups where configured | direct, LAN, internet, relay |
+| Pico Surface | interaction surface | minimal cache/session state only | requires Pico Vault, directly or via relay |
+| Pico Relay | transport helper | no authority, no Pico memory ownership | forwards encrypted traffic |
 
-Pico also distinguishes these node roles from a Core Host:
+Pico also distinguishes these node roles from a Pico Home:
 
 | Host type | Role | Authority boundary |
 |---|---|---|
-| Pico Core Host | runtime and storage host for Pico Core | hosts infrastructure; does not automatically own resident Pico identities, private keys or personal domains |
-| Unclaimed Host | freshly installed Core Host | no resident Pico and no host administrator yet |
-| Claimed Host | Core Host claimed by a Gastgeber Pico | host administrator can manage residency and future access, not resident private data |
+| Pico Home | runtime and storage host for Pico Home Core | hosts infrastructure; does not automatically own resident Pico identities, private keys or personal domains |
+| Empty Pico Home | freshly installed Pico Home | no resident Pico and no Home Host Pico yet |
+| Claimed Pico Home | Pico Home claimed by a Home Host Pico | Home Host Pico can manage residency and future access, not resident private data |
 
 Design rules:
 
-> Full Clients own knowledge and backups. Light Clients present and capture interaction. Relay servers transport encrypted messages but do not own Pico identity, memory, or authority.
+> Pico Vaults own knowledge and backups. Pico Surfaces present and capture interaction. Pico Relays transport encrypted messages but do not own Pico identity, memory, or authority.
 
-> A Core Host provides infrastructure. Hosting is not ownership.
+> A Pico Home provides infrastructure. Hosting is not ownership.
 
-A freshly installed Pico Core host starts unclaimed. A one-time bootstrap claim token lets the first Pico claim the host. That first Pico becomes the Gastgeber Pico for this host. The Gastgeber Pico may invite additional resident Picos and may evict residents from future use of this host, but it must not decrypt, impersonate, rewrite or own resident Picos.
+A freshly installed Pico Home starts empty. A one-time Move-In Code lets the first Pico claim the host. That first Pico becomes the Home Host Pico for this Pico Home. The Home Host Pico may invite additional Home Member Picos and may remove them from future use of this host, but it must not decrypt, impersonate, rewrite or own Home Member Picos.
 
 Details are documented in `docs/architecture/0015-full-clients-light-clients-and-relay.md` and `docs/architecture/0024-server-bootstrap-tenancy-and-eviction.md`.
 
@@ -187,11 +204,11 @@ The most dangerous areas are treated as explicit architecture constraints:
 
 - cryptography must use reviewed standards or primitives, not custom protocols
 - deleteable memory must not be embedded directly into immutable replicated events
-- Core Hosts provide infrastructure, not ownership over resident Pico private domains
+- Pico Homes provide infrastructure, not ownership over resident Pico private domains
 - Lamport clocks provide ordering, not merge semantics
-- light clients are interaction surfaces, not knowledge owners
-- companion UX must not outrun policy, audit, update safety, and deletion semantics
-- trust signals must never become global person scores or safety guarantees
+- Pico Surfaces are interaction surfaces, not knowledge owners
+- companion UX must not outrun Pico Rules, Action History, update safety, and deletion semantics
+- Context Signals must never become global person scores or safety guarantees
 
 ## Deletability and append-only events
 
@@ -225,358 +242,3 @@ The project will not build custom:
 Future encryption work should evaluate established building blocks such as MLS, libsodium, age-style backup encryption, platform keystores, passkeys, or hardware-backed identity where appropriate.
 
 Details are documented in `docs/architecture/0016-cryptography-boundaries-and-non-goals.md`.
-
-## Contextual interaction safety and trust signals
-
-Pico may help users reason about the safety of concrete person-to-person interactions, but it must not become a global reputation system.
-
-Design rule:
-
-> Evaluate the action, not the human as a whole. Evaluate the context, not the reputation. Use trust signals as evidence-labelled hints, never as a free pass.
-
-A remote Pico cannot prove that its owner is trustworthy. It can only provide limited claims, commitments, attestations, or evidence references. The receiving Pico must decide locally, conservatively, and in context.
-
-Hard safety boundaries remain active regardless of positive reputation signals, especially around minors, dependency, isolation, money, physical access, digital access, transport, private spaces, secrecy, urgency, and guardianship boundaries.
-
-Details are documented in `docs/architecture/0017-contextual-interaction-safety-and-trust-signals.md`.
-
-## Presence, context and location sharing
-
-Pico may support sharing presence, activity, ETA, status, approximate location, exact location, live location, emergency state, and similar context between trusted Picos.
-
-This must be consent-based, scoped, visible, revocable, purpose-bound, and as imprecise as possible.
-
-Design rule:
-
-> Pico should share context to support care, coordination and safety — not surveillance, coercion or control.
-
-Relationship alone must not grant permanent access. A partner, family member, organisation, guardian, or family server does not automatically get unlimited location or activity access. Full Clients decide. Light Clients request or display. Relays transport but do not own context.
-
-Details are documented in `docs/architecture/0018-presence-context-and-location-sharing.md`.
-
-## Home Assistant threat model
-
-Home Assistant is Pico's first packaging and runtime path. It is useful because it already connects local devices, sensors, scenes and household routines.
-
-That also makes it risky. A Pico add-on can become a powerful local control surface if it gains access to Home Assistant entities or tokens later.
-
-Design rule:
-
-> Home Assistant can be a Pico runtime and tool source, but it must not bypass Pico's policy, consent and audit model.
-
-Details are documented in `docs/architecture/0019-home-assistant-threat-model.md`.
-
-## Contextual service and emergency access
-
-Pico may disclose private service, infrastructure, access or emergency context only when role, context, purpose and necessity justify it.
-
-This covers service assistance, emergency infrastructure disclosure and emergency medical disclosure.
-
-Design rule:
-
-> Role + context + purpose + necessity + minimal data + expiry + audit.
-
-For service work, Pico may help authorised people find task-relevant things, such as a water meter, shutoff valve, heating system or service panel. For emergency response, Pico may disclose safety-relevant infrastructure such as the main electrical panel, PV disconnect, battery storage, gas shutoff, water shutoff, hazards or rescue access. For medical emergencies, Pico may disclose a limited source-labelled Emergency Medical Card when the user cannot consent and disclosure is necessary to protect life or health.
-
-Pico must not expose the home, body, memory or personal life as a searchable private database.
-
-Details are documented in `docs/architecture/0020-contextual-service-and-emergency-access.md`.
-
-## Private behaviour, legal risk and harm
-
-Pico must distinguish legal risk, moral harm, personal autonomy and interpersonal trust.
-
-Private behaviour must not become a negative trust signal merely because it is illegal, taboo, unusual or disapproved of in some jurisdictions or social contexts.
-
-Design rule:
-
-> Pico assists. Pico does not police.
-
-Pico should be liberal in private life, strict where real harm, coercion, exploitation, duty risk or danger to others begins. It may warn about legal, health, safety, relationship or practical risks, but must not become a general compliance tool for partners, families, employers, organisations or authorities.
-
-Details are documented in `docs/architecture/0021-private-behaviour-legal-risk-and-harm.md`.
-
-## Shared commitments and cooperative nudging
-
-Pico may support shared commitments such as appointments, reservations, shared chores, project steps, service tasks, care responsibilities and duty tasks.
-
-It should coordinate reminders, confirmations and progress nudges based on importance, external dependency, harm of failure, procrastination risk and participant responsibility.
-
-Design rule:
-
-> Loose plans get gentle reminders. Binding plans require confirmation. Unpleasant duties get small next steps. Critical tasks may escalate. People are not scored; commitments are managed.
-
-Pico must assist cooperation without turning commitments into surveillance, blame, shame or coercive control.
-
-Details are documented in `docs/architecture/0022-shared-commitments-and-cooperative-nudging.md`.
-
-## Adaptive tone, motivation and self-binding
-
-Pico may adapt tone, directness, humour and motivational pressure to the user's preferences and observed effectiveness.
-
-Strong tone is allowed when desired by the user. Real-world consequences require explicit user-owned self-binding policy and must not be imposed by others.
-
-Design rule:
-
-> The tone may be personal. The pressure must be user-owned. Real interventions require policy.
-
-Self-binding may allow bounded actions such as starting focus mode, reducing distractions or controlling a Home Assistant device, but only inside explicit, revocable, audited user-owned policy.
-
-Details are documented in `docs/architecture/0023-adaptive-tone-motivation-and-self-binding.md`.
-
-## Server bootstrap, tenancy and eviction
-
-Pico Core hosts use an empty-house model.
-
-A freshly installed Core Host starts unclaimed. A one-time bootstrap claim token lets the first Pico move in and become the Gastgeber Pico for that host. The Gastgeber Pico may invite other resident Picos and may evict them from future use of the host.
-
-Eviction is infrastructure revocation, not personal ownership transfer. The Gastgeber Pico may deny future use of this host, but it must not decrypt another resident's personal domain, steal keys, impersonate a resident, forge resident events, silently export resident data or destroy the resident Pico identity globally.
-
-Design rule:
-
-> The Gastgeber Pico manages the house, not the people. It may invite and evict residents from this host, but it must not decrypt, impersonate, rewrite or own resident Picos.
-
-Details are documented in `docs/architecture/0024-server-bootstrap-tenancy-and-eviction.md`.
-
-## Inter-Pico and Pico Home compatibility
-
-Pico is open source and may be forked or modified. Internal implementation may differ between compatible implementations.
-
-However, an implementation that claims Pico protocol compatibility must preserve the published inter-Pico communication semantics for the protocol version it advertises.
-
-The same applies to the Pico Home / Core Host interface. A real Pico should be able to move into a compatible fork server if that server faithfully implements the advertised host claim, residency, eviction, sync, routing and privacy-domain semantics.
-
-Design rule:
-
-> Fork the code freely. Extend Pico carefully. Do not claim the same Pico or Pico Home protocol compatibility unless inter-Pico and Pico-to-host communication remain compatible for the advertised protocol version.
-
-Details are documented in `docs/architecture/0025-inter-pico-communication-compatibility.md`.
-
-## Release and update flow
-
-```mermaid
-flowchart LR
-    Commit[Commit to main or tag] --> CI[CI release gates]
-    CI --> Tests[Typecheck / tests / build]
-    Tests --> Smoke[Container smoke test]
-    Smoke --> Image[GHCR image]
-    Image --> HA[Home Assistant add-on update]
-```
-
-Release rule:
-
-> No green pipeline, no release.
-
-Version bump locations and the release checklist are documented in `docs/release/versioning.md`.
-
-Documentation consistency rules are documented in `docs/release/documentation-consistency.md`.
-
-## Repository structure
-
-```text
-.
-├── apps
-│   ├── core              # Fastify backend service
-│   └── web               # foundation diagnostics dashboard
-├── docker
-│   └── core.Dockerfile   # Pico Core container image
-├── docs
-│   ├── architecture      # architecture decision notes and concept docs
-│   ├── assets            # README/project assets
-│   └── release           # release, versioning and documentation notes
-├── packages
-│   ├── protocol          # shared event and payload types
-│   └── sync              # Lamport clock and version-vector helpers
-├── pico_core             # active Home Assistant add-on metadata
-├── repository.yaml       # Home Assistant add-on repository metadata
-├── README.md             # non-technical project introduction
-├── ReadmeTech.md         # full technical project documentation
-└── .github/workflows     # CI pipeline
-```
-
-## Home Assistant add-on
-
-Pico currently ships a foundation add-on definition under:
-
-```text
-pico_core/
-```
-
-`pico_core/` is the single source of truth for the Home Assistant add-on metadata.
-
-The add-on uses the prebuilt container image:
-
-```text
-ghcr.io/riederch/pico/core
-```
-
-Current tag:
-
-```text
-0.1.7
-```
-
-The add-on exposes Pico Core on port `3100`, serves the foundation dashboard at `/`, and defines a watchdog against:
-
-```text
-/health
-```
-
-Current add-on icon assets:
-
-```text
-pico_core/icon.svg
-pico_core/logo.svg
-```
-
-![Pico Home Assistant icon](docs/assets/pico-ha-icon.png)
-
-The add-on is the first Core Host packaging path. It is not a hidden Home Assistant automation layer and not an ownership layer over resident Pico identities or private data.
-
-## Local development
-
-Install dependencies:
-
-```bash
-pnpm install
-```
-
-Run the full release verification locally:
-
-```bash
-pnpm release:verify
-```
-
-Start Pico Core:
-
-```bash
-pnpm dev:core
-```
-
-Open the foundation dashboard:
-
-```text
-http://localhost:3100/
-```
-
-Health check:
-
-```bash
-curl http://localhost:3100/health
-```
-
-Create a test event:
-
-```bash
-curl -X POST http://localhost:3100/api/events \
-  -H 'content-type: application/json' \
-  -d '{"deviceId":"desktop-dev","type":"message.created","payload":{"role":"user","text":"Hallo Pico"}}'
-```
-
-List events:
-
-```bash
-curl http://localhost:3100/api/events
-```
-
-## Current API surface
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /` | foundation diagnostics dashboard |
-| `GET /health` | service health check |
-| `GET /api/system/version` | service and protocol version information |
-| `GET /api/system/status` | diagnostic service and database migration status |
-| `GET /api/events` | list stored events |
-| `POST /api/events` | append an event |
-| `WS /ws` | event stream endpoint |
-
-## Binary asset workflow
-
-Large or binary files such as PNG design assets are not edited directly through text-file patch workflows. When such files are needed, they should be prepared as a ZIP archive with the correct repository folder structure. The ZIP can be extracted in the repository root and committed locally.
-
-Expected image asset paths:
-
-```text
-docs/assets/pico-design-concept.png
-docs/assets/pico-ha-icon.png
-docs/assets/pico-readme-hero.png
-pico_core/icon.png
-```
-
-## Concept documents
-
-The project concept is persisted as architecture notes:
-
-| Document | Topic |
-|---|---|
-| `0001-foundation.md` | foundation architecture |
-| `0002-peer-trust-and-relationships.md` | trust relationships between Pico instances |
-| `0003-family-server-and-user-sovereignty.md` | shared server without loss of user sovereignty |
-| `0004-parent-child-relationship.md` | guardian/child model |
-| `0005-release-and-update-platform.md` | repo, release, and update model |
-| `0006-testing-and-release-gates.md` | tests as release blockers |
-| `0007-home-assistant-add-on-release.md` | HA add-on update path |
-| `0008-product-vision-and-persona.md` | product vision and Pico persona |
-| `0009-avatar-and-interaction-model.md` | avatar, voice, and interaction boundaries |
-| `0010-tool-policy-and-executor-model.md` | tool policy, executor, and risk classes |
-| `0011-privacy-security-and-audit-model.md` | privacy, security, and audit principles |
-| `0012-roadmap-foundation-to-companion.md` | roadmap from foundation to companion |
-| `0013-visual-design-language.md` | visual identity, avatar states, status colors, and context modes |
-| `0014-deletability-and-append-only-events.md` | deleteable memory, tombstones, payload references, and crypto-shredding direction |
-| `0015-full-clients-light-clients-and-relay.md` | full clients, light clients, backups, relay topology and Core Host distinction |
-| `0016-cryptography-boundaries-and-non-goals.md` | cryptography scope, non-goals, and dependency on reviewed primitives |
-| `0017-contextual-interaction-safety-and-trust-signals.md` | person-to-person interaction safety, evidence-labelled trust signals, and abuse resistance |
-| `0018-presence-context-and-location-sharing.md` | scoped presence, activity, ETA, emergency and location sharing |
-| `0019-home-assistant-threat-model.md` | Home Assistant threat model, tool boundaries and required controls |
-| `0020-contextual-service-and-emergency-access.md` | service assistance, emergency infrastructure disclosure and medical emergency disclosure |
-| `0021-private-behaviour-legal-risk-and-harm.md` | private behaviour, legal risk, harm, autonomy and anti-authoritarian posture |
-| `0022-shared-commitments-and-cooperative-nudging.md` | shared commitments, confirmations, reminders, nudging and anti-procrastination support |
-| `0023-adaptive-tone-motivation-and-self-binding.md` | adaptive tone, motivation profiles and user-owned self-binding interventions |
-| `0024-server-bootstrap-tenancy-and-eviction.md` | unclaimed Core Host bootstrap, Gastgeber Pico, resident tenancy and eviction boundaries |
-| `0025-inter-pico-communication-compatibility.md` | inter-Pico and Pico Home protocol compatibility, fork compatibility and conformance expectations |
-
-## Roadmap
-
-```mermaid
-flowchart TD
-    F1[1. Foundation] --> F2[2. Versioning, migrations, update safety]
-    F2 --> F3[3. First real client and sync semantics]
-    F3 --> F4[4. Policy and tool execution]
-    F4 --> F5[5. Memory, deletion, privacy domains]
-    F5 --> F6[6. Companion UX\nAvatar / Voice / Mobile / Desktop / HA]
-```
-
-## Design principles
-
-- Local-first where practical
-- User sovereignty over identity and personal data
-- Explicit privacy domains
-- No unrestricted shell for the LLM
-- Policy-gated tool execution
-- Confirmation for risky actions
-- Append-only event and audit thinking, without embedding sensitive deleteable memory directly in immutable events
-- Tests block releases
-- Updates must become reversible before real data matters
-- Friendly visual companion layer, strict execution layer
-- Use reviewed cryptographic primitives; do not invent cryptography
-- Full Clients own knowledge and backups; Light Clients are interaction surfaces
-- Core Hosts provide infrastructure; hosting is not ownership
-- A Gastgeber Pico may manage residency on a host, not resident private data
-- Pico-compatible forks must preserve inter-Pico and Pico Home protocol semantics for the advertised protocol version
-- Trust signals are contextual evidence, not global human scores
-- Remote Pico self-presentation must never be transformed into trust
-- Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise
-- Service and emergency disclosures must be role-, context-, purpose- and necessity-bound, minimal, expiring and auditable
-- Private behaviour must be evaluated by harm and risk, not by legality, taboo or obedience alone
-- Pico assists; Pico does not police
-- Shared commitments should manage next actions, not judge people
-- Motivational pressure must be user-owned
-
-## Next implementation steps
-
-- Validate the Home Assistant add-on on a real HA installation
-- Prepare the next versioned foundation release
-- Define first merge semantics for client state before deeper offline editing
-- Add the first policy-gated read-only tool
-- Define public protocol surfaces for inter-Pico and Pico Home compatibility
