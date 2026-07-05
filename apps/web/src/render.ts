@@ -142,6 +142,7 @@ function renderCoreSummary(container: HTMLElement, status: SystemStatus | null):
     { key: 'Version', value: status.version, monospace: true },
     { key: 'Protocol Version', value: status.protocolVersion, monospace: true },
     { key: 'Device ID', value: status.deviceId, monospace: true },
+    { key: 'Capabilities', value: enabledCapabilityNames(status), monospace: true },
   ]);
 }
 
@@ -186,6 +187,15 @@ function renderEventTypeFilter(select: HTMLSelectElement, events: PicoEvent[], s
 
   select.replaceChildren(...options);
   select.value = selectedType;
+}
+
+function enabledCapabilityNames(status: SystemStatus): string {
+  const enabled = Object.entries(status.capabilities)
+    .filter(([, isEnabled]) => isEnabled)
+    .map(([name]) => name)
+    .sort();
+
+  return enabled.length === 0 ? 'none' : enabled.join(', ');
 }
 
 function createOption(document: Document, value: string, label: string): HTMLOptionElement {

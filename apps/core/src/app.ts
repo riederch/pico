@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
-import { foundationEventTypes, picoEventTypes, type PicoEvent, type PicoEventType } from '@pico/protocol';
+import { foundationEventTypes, picoEventTypes, protocolCapabilities, type PicoEvent, type PicoEventType } from '@pico/protocol';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore } from './event-store.js';
@@ -92,6 +92,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     version: SERVICE_VERSION,
     protocolVersion: PROTOCOL_VERSION,
     deviceId: config.deviceId,
+    capabilities: protocolCapabilities,
     database: {
       maxLamport: store.maxLamport(),
       migrations: store.appliedMigrations(),

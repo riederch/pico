@@ -116,12 +116,17 @@ function isSystemStatus(value: unknown): value is SystemStatus {
     && typeof value.version === 'string'
     && typeof value.protocolVersion === 'string'
     && typeof value.deviceId === 'string'
+    && isCapabilityMap(value.capabilities)
     && isRecord(value.database)
     && typeof value.database.maxLamport === 'number'
     && Number.isInteger(value.database.maxLamport)
     && Array.isArray(value.database.migrations)
     && value.database.migrations.every(isAppliedMigration)
   );
+}
+
+function isCapabilityMap(value: unknown): value is Record<string, boolean> {
+  return isRecord(value) && Object.values(value).every((enabled) => typeof enabled === 'boolean');
 }
 
 function isAppliedMigration(value: unknown): value is SystemStatus['database']['migrations'][number] {

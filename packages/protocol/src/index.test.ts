@@ -19,6 +19,7 @@ import {
   legacyToolPolicyEventTypes,
   picoEventTypes,
   picoHomeEventTypes,
+  protocolCapabilities,
 } from './index.js';
 
 const repoRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -45,6 +46,12 @@ describe('Pico protocol types', () => {
       ...legacyToolPolicyEventTypes,
       ...picoHomeEventTypes,
     ]);
+
+    expect(protocolCapabilities).toEqual({
+      'pico.core.events.v1': true,
+      'pico.core.websocket.v1': true,
+      'pico.avatar_state.v1': true,
+    });
   });
 
   it('keeps public protocol event docs aligned with runtime event type lists', () => {
@@ -54,6 +61,12 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '### Product action event types')).toEqual([...actionEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Legacy tool/policy event types')).toEqual([...legacyToolPolicyEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Pico Home event direction')).toEqual([...picoHomeEventTypes]);
+  });
+
+  it('keeps public protocol capability docs aligned with runtime capability names', () => {
+    const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
+
+    expect(textFenceAfterHeading(publicSurfaces, '### Current runtime capability flags')).toEqual(Object.keys(protocolCapabilities));
   });
 
   it('keeps compatibility level event docs aligned with runtime event type lists', () => {

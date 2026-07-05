@@ -53,6 +53,15 @@ export const picoEventTypes = [
 
 export type PicoEventType = typeof picoEventTypes[number];
 
+export const protocolCapabilities = {
+  'pico.core.events.v1': true,
+  'pico.core.websocket.v1': true,
+  'pico.avatar_state.v1': true,
+} as const;
+
+export type PicoProtocolCapability = keyof typeof protocolCapabilities;
+export type PicoProtocolCapabilities = typeof protocolCapabilities;
+
 export type PicoNodeType =
   | 'pico_home'
   | 'pico_vault'

@@ -34,7 +34,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 |---|---|---|
 | `GET /health` | experimental diagnostic surface | Health check for the current Pico Home Core process. |
 | `GET /api/system/version` | experimental diagnostic surface | Reports service and protocol version information. |
-| `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service and database migration state. |
+| `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability and database migration state. |
 | `GET /api/events` | experimental foundation API | Lists stored foundation events. |
 | `POST /api/events` | experimental foundation API | Accepts only currently writable foundation events. Not a full sync API. |
 | `WS /ws` | experimental event stream | Streams events and connection messages. |
@@ -135,10 +135,23 @@ Breaking changes require at least one of:
 
 Capability names should be lowercase, namespaced and versioned.
 
+### Current runtime capability flags
+
+The current Pico Home Core status response advertises these implemented experimental runtime capability flags:
+
+```text
+pico.core.events.v1
+pico.core.websocket.v1
+pico.avatar_state.v1
+```
+
+These flags do not imply L2 Pico Link compatibility, L3 Pico Home Link compatibility, production readiness or commercial permission.
+
 Examples:
 
 ```text
-pico.events.v1
+pico.core.events.v1
+pico.core.websocket.v1
 pico.avatar_state.v1
 pico_link.messages.v1
 pico_home.claim.v1

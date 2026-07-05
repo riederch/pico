@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { actionEventTypes, legacyToolPolicyEventTypes, picoHomeEventTypes } from '@pico/protocol';
+import { actionEventTypes, legacyToolPolicyEventTypes, picoHomeEventTypes, protocolCapabilities } from '@pico/protocol';
 import { buildApp } from './app.js';
 
 const tempDirs: string[] = [];
@@ -152,6 +152,7 @@ describe('Pico Home Core app', () => {
       version: '0.1.7',
       protocolVersion: '0.1.7',
       deviceId: 'test-core',
+      capabilities: protocolCapabilities,
       database: {
         maxLamport: 0,
         migrations: [

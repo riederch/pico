@@ -18,6 +18,7 @@ export interface SystemStatus {
   version: string;
   protocolVersion: string;
   deviceId: string;
+  capabilities: Record<string, boolean>;
   database: {
     maxLamport: number;
     migrations: AppliedMigration[];
