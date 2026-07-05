@@ -19,6 +19,7 @@ const packageFiles = [
   'packages/sync/package.json',
 ];
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'coverage', '.turbo']);
+const ignoredFiles = new Set(['scripts/check-license.mjs']);
 const textExtensions = new Set(['.md', '.json', '.ts', '.tsx', '.js', '.mjs', '.yml', '.yaml', '.html', '.txt']);
 const forbiddenPatterns = [
   {
@@ -82,13 +83,14 @@ function listTextFiles(directory) {
 
     const path = join(directory, entry);
     const stat = statSync(path);
+    const relativePath = relative(repoRoot, path);
 
     if (stat.isDirectory()) {
       files.push(...listTextFiles(path));
       continue;
     }
 
-    if (stat.isFile() && isTextFile(path)) {
+    if (stat.isFile() && isTextFile(path) && !ignoredFiles.has(relativePath)) {
       files.push(path);
     }
   }
