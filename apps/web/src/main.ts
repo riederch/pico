@@ -1,4 +1,4 @@
-import { defaultCoreUrl, loadDashboardSnapshot, normalizeCoreUrl } from './api.js';
+import { defaultPicoHomeUrl, loadDashboardSnapshot, normalizePicoHomeUrl } from './api.js';
 import { createDashboardView } from './render.js';
 import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
@@ -13,7 +13,7 @@ const EMPTY_EVENT_FILTERS: EventFilters = {
 
 export function startDashboard(document: Document): void {
   const view = createDashboardView(document);
-  const initialBaseUrl = defaultCoreUrl(document.location);
+  const initialBaseUrl = defaultPicoHomeUrl(document.location);
   const state: DashboardState = {
     baseUrl: initialBaseUrl,
     httpStatus: 'idle',
@@ -66,7 +66,7 @@ export function startDashboard(document: Document): void {
     let baseUrl: string;
 
     try {
-      baseUrl = normalizeCoreUrl(rawBaseUrl);
+      baseUrl = normalizePicoHomeUrl(rawBaseUrl);
     } catch (error) {
       state.httpStatus = 'error';
       state.websocketStatus = 'disconnected';
