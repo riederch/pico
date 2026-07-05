@@ -6,6 +6,22 @@ import { listAppliedMigrations, runMigrations, type AppliedMigration } from './m
 
 export type AppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
 
+export type PicoHomeClaimState =
+  | {
+    state: 'unclaimed';
+    hostAdminPicoId: null;
+    claimedAt: null;
+    createdAt: string;
+    updatedAt: string;
+  }
+  | {
+    state: 'claimed';
+    hostAdminPicoId: string;
+    claimedAt: string;
+    createdAt: string;
+    updatedAt: string;
+  };
+
 export class EventStore {
   private readonly db: Database.Database;
   private closed = false;
@@ -88,6 +104,29 @@ export class EventStore {
     return listAppliedMigrations(this.db);
   }
 
+  public picoHomeClaimState(): PicoHomeClaimState {
+    this.ensureOpen();
+
+    const row = this.db
+      .prepare(`
+        SELECT
+          state,
+          host_admin_pico_id AS hostAdminPicoId,
+          claimed_at AS claimedAt,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+        FROM pico_home_claim_state
+        WHERE id = 1
+      `)
+      .get() as PicoHomeClaimStateRow | undefined;
+
+    if (row === undefined) {
+      throw new Error('Pico Home claim state is missing.');
+    }
+
+    return mapPicoHomeClaimState(row);
+  }
+
   public close(): void {
     if (this.closed) {
       return;
@@ -128,6 +167,38 @@ interface EventRow {
   stream: string;
   payload_json: string;
   signature: string | null;
+}
+
+interface PicoHomeClaimStateRow {
+  state: string;
+  hostAdminPicoId: string | null;
+  claimedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
+  if (row.state === 'unclaimed' && row.hostAdminPicoId === null && row.claimedAt === null) {
+    return {
+      state: 'unclaimed',
+      hostAdminPicoId: null,
+      claimedAt: null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  if (row.state === 'claimed' && row.hostAdminPicoId !== null && row.hostAdminPicoId.trim() !== '' && row.claimedAt !== null) {
+    return {
+      state: 'claimed',
+      hostAdminPicoId: row.hostAdminPicoId,
+      claimedAt: row.claimedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  throw new Error('Pico Home claim state is invalid.');
 }
 
 function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string): boolean {

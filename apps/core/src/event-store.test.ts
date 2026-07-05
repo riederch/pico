@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PicoEvent } from '@pico/protocol';
 import { EventStore } from './event-store.js';
@@ -130,14 +131,62 @@ describe('EventStore', () => {
     }
   });
 
+  it('reads the initial internal Pico Home claim state', () => {
+    const store = new EventStore(createDatabasePath());
+
+    expect(store.picoHomeClaimState()).toEqual({
+      state: 'unclaimed',
+      hostAdminPicoId: null,
+      claimedAt: null,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+
+    store.close();
+  });
+
+  it('reads a claimed internal Pico Home claim state without providing a write API', () => {
+    const databasePath = createDatabasePath();
+    const store = new EventStore(databasePath);
+    store.close();
+
+    const claimedAt = '2026-07-05T12:00:00.000Z';
+    const db = new Database(databasePath);
+    db
+      .prepare(`
+        UPDATE pico_home_claim_state
+        SET state = ?,
+            host_admin_pico_id = ?,
+            claimed_at = ?,
+            updated_at = ?
+        WHERE id = 1
+      `)
+      .run('claimed', 'pico:home-host', claimedAt, claimedAt);
+    db.close();
+
+    const reopenedStore = new EventStore(databasePath);
+
+    expect(reopenedStore.picoHomeClaimState()).toEqual({
+      state: 'claimed',
+      hostAdminPicoId: 'pico:home-host',
+      claimedAt,
+      createdAt: expect.any(String),
+      updatedAt: claimedAt,
+    });
+
+    reopenedStore.close();
+  });
+
   it('closes the SQLite connection idempotently', () => {
     const store = new EventStore(createDatabasePath());
 
     expect(store.maxLamport()).toBe(0);
+    expect(store.picoHomeClaimState().state).toBe('unclaimed');
 
     store.close();
     expect(() => store.close()).not.toThrow();
     expect(() => store.maxLamport()).toThrow('EventStore is closed.');
+    expect(() => store.picoHomeClaimState()).toThrow('EventStore is closed.');
   });
 });
 
