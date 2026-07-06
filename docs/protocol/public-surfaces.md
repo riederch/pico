@@ -35,11 +35,32 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `GET /health` | experimental diagnostic surface | Health check for the current Pico Home Core process. |
 | `GET /api/system/version` | experimental diagnostic surface | Reports service and protocol version information. |
 | `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability, Pico Home claim-state and database migration state. |
-| `GET /api/events` | experimental foundation API | Lists stored foundation events. |
+| `GET /api/events` | experimental foundation API | Lists stored foundation events with additive cursor metadata. |
 | `POST /api/events` | experimental foundation API | Accepts only currently writable foundation events. Not a full sync API. |
 | `WS /ws` | experimental event stream | Streams events and connection messages. |
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.
+
+### Current `GET /api/events` shape
+
+`GET /api/events` accepts:
+
+| Query parameter | Meaning |
+|---|---|
+| `limit` | Optional positive integer, clamped to the implementation maximum. |
+| `after` | Optional opaque cursor returned by a previous response. |
+
+The response keeps `events` as the primary additive field and adds cursor metadata:
+
+```json
+{
+  "events": [],
+  "nextCursor": null,
+  "hasMore": false
+}
+```
+
+`nextCursor` is opaque. Clients must not parse it or rely on its internal format.
 
 ## Current event compatibility classes
 
@@ -218,11 +239,3 @@ This document does not define:
 - final event schemas
 - final sync protocol
 - final encryption envelopes
-- final claim-token format
-- final residency model
-- final conformance test runner
-- final production security model
-
-## Design rule
-
-Expose only the surfaces you can preserve. Claim only the compatibility you implement. Do not treat protocol compatibility as commercial hosting permission.
