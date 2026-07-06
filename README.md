@@ -75,8 +75,8 @@ Pico's current concept work defines several important boundaries:
 - external reachability should use Pico Link transports, primarily Pico Relay, instead of port forwarding into the home network
 - Pico Relays transport encrypted packets but do not own Pico identity, memory, relationships, actions or authority
 - Pico Link is transport-neutral; Relay, LAN, VPN/direct, Meshtastic and future radio transports belong behind transport adapters
-- befreundete Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
-- Pico identities, devices and Homes need asymmetric cryptographic identity material; Pico must still use reviewed primitives and must not invent cryptography
+- befriended Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
+- Pico identity, device, Home, transport and domain keys are separate roles; Pico must still use reviewed primitives and must not invent cryptography
 - Context Signals are contextual evidence, not global person scores
 - Context Sharing and location sharing must be scoped, visible, revocable and minimally precise
 - service and emergency disclosures must be role-, context-, purpose- and necessity-bound
@@ -143,7 +143,7 @@ The avatar communicates state and risk. For example:
 1. Build a safe technical foundation.
 2. Make updates and migrations safe before real user data matters.
 3. Build the first usable client.
-4. Define identity, transport, relay and encryption boundaries before real remote communication.
+4. Turn identity, transport, relay and encryption boundaries into concrete threat models and protocol schemas before real remote communication.
 5. Add policy-gated tool execution.
 6. Add memory only after deletion and privacy-domain semantics are clear.
 7. Add richer companion UX after the control and audit layers are solid.
@@ -156,6 +156,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture`](docs/architecture) - architecture decisions and concept notes
 - [`docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md`](docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md) - future dedicated Pico Home Image and first-boot setup concept
 - [`docs/architecture/0028-pico-link-transport-facade-and-relay-network.md`](docs/architecture/0028-pico-link-transport-facade-and-relay-network.md) - Pico Link transport facade, relay network, Home endpoints and low-bandwidth transport concept
+- [`docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md`](docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md) - Pico identity, device, Home, transport and domain key boundaries
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
@@ -176,6 +177,7 @@ The avatar communicates state and risk. For example:
 - Pico Relays provide transport, not authority
 - Pico Link remains transport-neutral; specific transports belong behind adapters
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
+- Pico identity, device, Home, transport and domain keys are separate roles
 - A Home Host Pico may manage residency on a Pico Home, not resident private data
 - Picos can communicate across Homes; relationships belong to Picos, not Homes
 - Context Sharing and location sharing must be scoped, visible, revocable and minimally precise

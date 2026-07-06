@@ -78,7 +78,7 @@ Not production-ready yet:
 - voice/avatar runtime
 - multi-resident Pico Home tenancy implementation
 - Pico Link relay transport implementation
-- Pico identity, home identity and device key model
+- Pico identity, home identity and device key lifecycle implementation
 - inter-Pico and Pico Home protocol conformance tests
 
 ## Architecture overview
@@ -179,12 +179,13 @@ Pico must not invent cryptography.
 
 Future encryption work should evaluate established building blocks such as MLS, libsodium, age-style backup encryption, platform keystores, passkeys or hardware-backed identity where appropriate.
 
-Pico Link requires asymmetric cryptographic identity material for Picos, devices and Homes. Public keys can act as portable identity material; private keys must remain under the control of Pico Vaults or other trusted key storage. PGP is an acceptable mental model for public/private key identity and signed messages, but it is not automatically the Pico Link wire protocol.
+Pico Link requires asymmetric cryptographic identity material for Picos, devices and Homes. Public keys can act as portable identity material; private keys must remain under the control of Pico Vaults or other trusted key storage. Pico identity, device, Home, transport and domain keys are separate roles. PGP is an acceptable mental model for public/private key identity and signed messages, but it is not automatically the Pico Link wire protocol.
 
 Details are documented in:
 
 - `docs/architecture/0016-cryptography-boundaries-and-non-goals.md`
 - `docs/architecture/0028-pico-link-transport-facade-and-relay-network.md`
+- `docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md`
 
 ## Server bootstrap, tenancy and eviction
 
@@ -427,6 +428,7 @@ The project concept is persisted as architecture notes:
 | `0026-product-terminology-and-naming.md` | product terminology map, naming aliases and authority boundaries |
 | `0027-dedicated-pico-home-image-and-first-boot-setup.md` | dedicated Pico Home Image, appliance first boot, Setup Mode and Move-In Code boundaries |
 | `0028-pico-link-transport-facade-and-relay-network.md` | Pico Link Transport Facade, Relay Network, Pico Home endpoints, decentralised relays and low-bandwidth transport adapters |
+| `0029-identity-device-home-keys-and-e2e-boundaries.md` | Pico identity keys, device keys, Home keys, transport keys, signatures and E2E encryption boundaries |
 
 Protocol documents:
 
@@ -467,6 +469,7 @@ flowchart TD
 - Pico Relays provide transport, not authority
 - Pico Link remains transport-neutral; Relay, LAN, VPN/direct, Meshtastic and future radio transports belong behind adapters
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
+- Pico identity, device, Home, transport and domain keys are separate roles
 - A Home Host Pico may manage residency on a Pico Home, not resident private data
 - Picos can communicate across Homes; relationships belong to Picos, not Homes
 - Pico-compatible permitted forks must preserve inter-Pico and Pico Home protocol semantics for the advertised protocol version
@@ -485,7 +488,7 @@ flowchart TD
 - Validate the Home Assistant add-on on a real HA installation
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
-- Define Pico identity keys, device keys, home keys, signatures and E2E encryption boundaries before real Pico Link communication
+- Define the concrete identity/device/home key threat model, wire schemas, rotation semantics and conformance tests before real Pico Link communication
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
 - Add the first Pico Rules-gated read-only action only after the relevant policy boundary is in place
