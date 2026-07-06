@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { foundationEventTypes, picoEventTypes, protocolCapabilities, type PicoEvent, type PicoEventType } from '@pico/protocol';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
-import { EventStore } from './event-store.js';
+import { EventStore, type EventCursor } from './event-store.js';
 import { registerWebDashboard } from './static-web.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
@@ -105,15 +105,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   }));
 
   app.get('/api/events', async (request, reply) => {
-    const query = request.query as { limit?: string };
+    const query = request.query as { limit?: string; after?: string };
     const limitResult = parseLimit(query.limit);
 
     if (!limitResult.ok) {
       return reply.code(400).send({ error: limitResult.error });
     }
 
+    const cursorResult = parseEventCursor(query.after);
+
+    if (!cursorResult.ok) {
+      return reply.code(400).send({ error: cursorResult.error });
+    }
+
+    const page = store.listPage({
+      limit: limitResult.limit,
+      after: cursorResult.cursor,
+    });
+
     return {
-      events: store.list(limitResult.limit),
+      events: page.events,
+      nextCursor: page.nextCursor === null ? null : encodeEventCursor(page.nextCursor),
+      hasMore: page.hasMore,
     };
   });
 
@@ -172,6 +185,42 @@ function parseLimit(rawLimit: string | undefined): { ok: true; limit: number } |
   const limit = Number.parseInt(rawLimit, 10);
 
   return { ok: true, limit: Math.min(limit, MAX_EVENT_LIMIT) };
+}
+
+function parseEventCursor(rawCursor: string | undefined): { ok: true; cursor: EventCursor | null } | { ok: false; error: string } {
+  if (rawCursor === undefined) {
+    return { ok: true, cursor: null };
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')) as unknown;
+  } catch {
+    return { ok: false, error: 'after cursor is invalid.' };
+  }
+
+  if (!isEventCursor(parsed)) {
+    return { ok: false, error: 'after cursor is invalid.' };
+  }
+
+  return { ok: true, cursor: parsed };
+}
+
+function encodeEventCursor(cursor: EventCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function isEventCursor(value: unknown): value is EventCursor {
+  return isRecord(value)
+    && typeof value.eventId === 'string'
+    && value.eventId.trim() !== ''
+    && typeof value.wallTime === 'string'
+    && value.wallTime.trim() !== ''
+    && typeof value.lamport === 'number'
+    && Number.isInteger(value.lamport)
+    && value.lamport >= 0
+    && value.lamport <= MAX_LAMPORT_VALUE;
 }
 
 function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true; body: ValidatedIncomingEventBody } | { ok: false; error: string } {
