@@ -46,6 +46,7 @@ Local verification performed:
 pnpm install --store-dir /tmp/pico-pnpm-store
 pnpm release:verify
 pnpm install --frozen-lockfile --store-dir /tmp/pico-pnpm-store
+podman build -f docker/core.Dockerfile -t pico-core:frozen-install-smoke .
 ```
 
 The first install required network approval because the sandbox could not resolve `registry.npmjs.org`.
