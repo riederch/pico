@@ -1,7 +1,9 @@
-import type { DashboardSnapshot, EventListResponse, HealthResponse, SystemStatus } from './types.js';
+import type { DashboardSnapshot, EventListResponse, HealthResponse, PicoEvent, SystemStatus } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
 
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
+const EVENT_PAGE_LIMIT = 500;
+const MAX_EVENT_PAGES = 20;
 
 /** @deprecated Use DEFAULT_PICO_HOME_URL. */
 export const DEFAULT_CORE_URL = DEFAULT_PICO_HOME_URL;
@@ -43,16 +45,16 @@ export function buildEndpointUrl(baseUrl: string, endpoint: string): URL {
 }
 
 export async function loadDashboardSnapshot(baseUrl: string): Promise<DashboardSnapshot> {
-  const [health, systemStatus, eventList] = await Promise.all([
+  const [health, systemStatus, events] = await Promise.all([
     fetchHealth(baseUrl),
     fetchSystemStatus(baseUrl),
-    fetchEvents(baseUrl),
+    fetchAllEvents(baseUrl),
   ]);
 
   return {
     health,
     systemStatus,
-    events: eventList.events,
+    events,
   };
 }
 
@@ -64,8 +66,33 @@ async function fetchSystemStatus(baseUrl: string): Promise<SystemStatus> {
   return fetchJson(buildEndpointUrl(baseUrl, '/api/system/status'), isSystemStatus, 'system status');
 }
 
-async function fetchEvents(baseUrl: string): Promise<EventListResponse> {
-  return fetchJson(buildEndpointUrl(baseUrl, '/api/events'), isEventListResponse, 'events');
+async function fetchAllEvents(baseUrl: string): Promise<PicoEvent[]> {
+  const events: PicoEvent[] = [];
+  let cursor: string | null = null;
+
+  for (let page = 0; page < MAX_EVENT_PAGES; page += 1) {
+    const eventList = await fetchEvents(baseUrl, cursor);
+    events.push(...eventList.events);
+
+    if (!eventList.hasMore || eventList.nextCursor === null) {
+      return events;
+    }
+
+    cursor = eventList.nextCursor;
+  }
+
+  return events;
+}
+
+async function fetchEvents(baseUrl: string, cursor: string | null): Promise<EventListResponse> {
+  const url = buildEndpointUrl(baseUrl, '/api/events');
+  url.searchParams.set('limit', String(EVENT_PAGE_LIMIT));
+
+  if (cursor !== null) {
+    url.searchParams.set('after', cursor);
+  }
+
+  return fetchJson(url, isEventListResponse, 'events');
 }
 
 async function fetchJson<T>(url: URL, validate: (value: unknown) => value is T, label: string): Promise<T> {
@@ -143,7 +170,13 @@ function isAppliedMigration(value: unknown): value is SystemStatus['database']['
 }
 
 function isEventListResponse(value: unknown): value is EventListResponse {
-  return isRecord(value) && Array.isArray(value.events) && value.events.every(isPicoEvent);
+  return (
+    isRecord(value)
+    && Array.isArray(value.events)
+    && value.events.every(isPicoEvent)
+    && (value.nextCursor === null || typeof value.nextCursor === 'string')
+    && typeof value.hasMore === 'boolean'
+  );
 }
 
 function hasProtocol(value: string): boolean {
