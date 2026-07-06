@@ -6,6 +6,18 @@ import { listAppliedMigrations, runMigrations, type AppliedMigration } from './m
 
 export type AppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
 
+export interface EventCursor {
+  lamport: number;
+  wallTime: string;
+  eventId: string;
+}
+
+export interface EventListPage {
+  events: PicoEvent[];
+  nextCursor: EventCursor | null;
+  hasMore: boolean;
+}
+
 export type PicoHomeClaimState =
   | {
     state: 'unclaimed';
@@ -78,17 +90,28 @@ export class EventStore {
   }
 
   public list(limit = 100): PicoEvent[] {
+    return this.listPage({ limit }).events;
+  }
+
+  public listPage(options: { limit?: number; after?: EventCursor | null } = {}): EventListPage {
     this.ensureOpen();
+    const limit = options.limit ?? 100;
     assertListLimit(limit);
 
-    const statement = this.db.prepare(`
-      SELECT *
-      FROM pico_event
-      ORDER BY lamport ASC, wall_time ASC, event_id ASC
-      LIMIT ?
-    `);
+    const rows = this.selectPageRows(limit + 1, options.after ?? null);
+    const pageRows = rows.slice(0, limit);
+    const events = pageRows.map((row) => this.mapRow(row));
+    const lastEvent = events.at(-1) ?? null;
 
-    return statement.all(limit).map((row) => this.mapRow(row as EventRow));
+    return {
+      events,
+      nextCursor: lastEvent === null ? null : {
+        lamport: lastEvent.lamport,
+        wallTime: lastEvent.wallTime,
+        eventId: lastEvent.eventId,
+      },
+      hasMore: rows.length > limit,
+    };
   }
 
   public maxLamport(): number {
@@ -136,6 +159,28 @@ export class EventStore {
     this.closed = true;
   }
 
+  private selectPageRows(limit: number, after: EventCursor | null): EventRow[] {
+    if (after === null) {
+      return this.db.prepare(`
+        SELECT *
+        FROM pico_event
+        ORDER BY lamport ASC, wall_time ASC, event_id ASC
+        LIMIT ?
+      `).all(limit) as EventRow[];
+    }
+
+    return this.db.prepare(`
+      SELECT *
+      FROM pico_event
+      WHERE
+        lamport > ?
+        OR (lamport = ? AND wall_time > ?)
+        OR (lamport = ? AND wall_time = ? AND event_id > ?)
+      ORDER BY lamport ASC, wall_time ASC, event_id ASC
+      LIMIT ?
+    `).all(after.lamport, after.lamport, after.wallTime, after.lamport, after.wallTime, after.eventId, limit) as EventRow[];
+  }
+
   private ensureOpen(): void {
     if (this.closed) {
       throw new Error('EventStore is closed.');
@@ -179,23 +224,11 @@ interface PicoHomeClaimStateRow {
 
 function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
   if (row.state === 'unclaimed' && row.hostAdminPicoId === null && row.claimedAt === null) {
-    return {
-      state: 'unclaimed',
-      hostAdminPicoId: null,
-      claimedAt: null,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+    return { state: 'unclaimed', hostAdminPicoId: null, claimedAt: null, createdAt: row.createdAt, updatedAt: row.updatedAt };
   }
 
   if (row.state === 'claimed' && row.hostAdminPicoId !== null && row.hostAdminPicoId.trim() !== '' && row.claimedAt !== null) {
-    return {
-      state: 'claimed',
-      hostAdminPicoId: row.hostAdminPicoId,
-      claimedAt: row.claimedAt,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    };
+    return { state: 'claimed', hostAdminPicoId: row.hostAdminPicoId, claimedAt: row.claimedAt, createdAt: row.createdAt, updatedAt: row.updatedAt };
   }
 
   throw new Error('Pico Home claim state is invalid.');
