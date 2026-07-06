@@ -2,9 +2,9 @@
 
 ## Status
 
-Follow-up note for the next Codex run after the cursor/shutdown/lockfile-cleanup work.
+Completed follow-up note for the cursor/shutdown/lockfile-cleanup work.
 
-This file exists because `.agent-context.md` could not be updated through the GitHub connector in the previous ChatGPT run. Treat this file as a temporary handoff supplement.
+This file originally existed because `.agent-context.md` could not be updated through the GitHub connector in the previous ChatGPT run. The local lockfile and frozen-install follow-up has now been completed.
 
 ## What changed
 
@@ -21,60 +21,34 @@ The following changes were made through the GitHub connector:
 - extended `apps/core/src/event-store.test.ts`
 - documented the event cursor response in `docs/protocol/public-surfaces.md`
 
-## What was intentionally not done
+## Local follow-up completed
 
-The lockfile part is incomplete on purpose.
+The lockfile and frozen-install follow-up was completed locally after the GitHub-connector commits landed.
 
-The previous tool environment could not clone GitHub or run `pnpm install`, so no trustworthy `pnpm-lock.yaml` could be generated. Do not fabricate a lockfile.
+Completed commits:
 
-Still open:
+- `9fa2cba chore: add pnpm lockfile`
+- `f15b659 ci: enforce frozen pnpm installs`
 
-- generate `pnpm-lock.yaml` locally with the actual package manager
-- commit `pnpm-lock.yaml`
-- switch CI to frozen pnpm install
-- switch Dockerfile to frozen pnpm install
-- enable pnpm cache in GitHub Actions
+Completed changes:
 
-## Required local verification
+- generated a real `pnpm-lock.yaml` with `pnpm install`
+- committed `pnpm-lock.yaml` separately
+- switched CI to `pnpm install --frozen-lockfile`
+- enabled `cache: pnpm` under `actions/setup-node@v4`
+- switched `docker/core.Dockerfile` to copy `pnpm-lock.yaml` before install
+- switched `docker/core.Dockerfile` to `pnpm install --frozen-lockfile`
+- removed the stale Dockerfile comment about a missing lockfile
 
-After pulling the current `main`, run:
+Local verification performed:
 
 ```bash
-pnpm install
+pnpm install --store-dir /tmp/pico-pnpm-store
 pnpm release:verify
+pnpm install --frozen-lockfile --store-dir /tmp/pico-pnpm-store
 ```
 
-If install creates `pnpm-lock.yaml`, commit it separately before changing CI/Docker frozen install behaviour.
-
-## Expected follow-up commits
-
-### Commit 1
-
-```text
-chore: add pnpm lockfile
-```
-
-Contents:
-
-- `pnpm-lock.yaml`
-
-### Commit 2
-
-```text
-ci: enforce frozen pnpm installs
-```
-
-Contents:
-
-- `.github/workflows/ci.yml`
-  - use `cache: pnpm` under `actions/setup-node@v4`
-  - use `pnpm install --frozen-lockfile`
-- `docker/core.Dockerfile`
-  - copy `pnpm-lock.yaml` before install
-  - replace `pnpm install --no-frozen-lockfile` with `pnpm install --frozen-lockfile`
-  - remove the stale lockfile comment
-
-Run `pnpm release:verify` after these changes.
+The first install required network approval because the sandbox could not resolve `registry.npmjs.org`.
 
 ## Cursor implementation review points
 
@@ -93,15 +67,15 @@ Potential improvement for a future cleanup:
 - add a small protocol type for the event-list response once API schemas move toward `@pico/protocol`
 - consider class split only if `app.ts` grows further; no forced split is necessary yet
 
-## Known risk
+## Verification notes
 
-The GitHub connector could not run TypeScript or tests. There may be small compile issues that only local `pnpm release:verify` will catch.
+The local `pnpm release:verify` run passed after the cursor commits and after the lockfile/frozen-install changes.
 
-Pay attention to:
+The checked areas included:
 
 - `Buffer.from(..., 'base64url')` support in the configured Node version
 - strict TypeScript inference around `eventList.events.map(eventText)` in the new test
-- any `version:check` assumptions around `docs/protocol/public-surfaces.md`
+- `version:check` assumptions around `docs/protocol/public-surfaces.md`
 
 ## Do not add yet
 
