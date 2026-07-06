@@ -34,6 +34,8 @@ export interface SystemStatus {
 
 export interface EventListResponse {
   events: PicoEvent[];
+  nextCursor: string | null;
+  hasMore: boolean;
 }
 
 export interface DashboardSnapshot {
