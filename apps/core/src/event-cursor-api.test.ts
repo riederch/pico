@@ -1,0 +1,84 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { buildApp } from './app.js';
+
+const tempDirs: string[] = [];
+
+function createDatabasePath(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-event-cursor-api-test-'));
+  tempDirs.push(dir);
+  return join(dir, 'pico.sqlite');
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe('event cursor API', () => {
+  it('returns additive cursor metadata on event lists', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const listed = await app.inject({ method: 'GET', url: '/api/events' });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json()).toMatchObject({
+      events: [expect.objectContaining({ type: 'message.created' })],
+      nextCursor: expect.any(String),
+      hasMore: false,
+    });
+
+    await app.close();
+  });
+
+  it('paginates events using nextCursor', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    for (const text of ['one', 'two', 'three']) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text } },
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    const firstPage = await app.inject({ method: 'GET', url: '/api/events?limit=2' });
+    expect(firstPage.statusCode).toBe(200);
+    const firstPageBody = firstPage.json();
+    expect(firstPageBody.events.map(eventText)).toEqual(['one', 'two']);
+    expect(firstPageBody.nextCursor).toEqual(expect.any(String));
+    expect(firstPageBody.hasMore).toBe(true);
+
+    const secondPage = await app.inject({ method: 'GET', url: `/api/events?limit=2&after=${encodeURIComponent(firstPageBody.nextCursor)}` });
+    expect(secondPage.statusCode).toBe(200);
+    const secondPageBody = secondPage.json();
+    expect(secondPageBody.events.map(eventText)).toEqual(['three']);
+    expect(secondPageBody.hasMore).toBe(false);
+
+    await app.close();
+  });
+
+  it('rejects invalid cursors', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const response = await app.inject({ method: 'GET', url: '/api/events?after=not-a-cursor' });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'after cursor is invalid.' });
+
+    await app.close();
+  });
+});
+
+function eventText(event: { payload: { text: string } }): string {
+  return event.payload.text;
+}
