@@ -8,3 +8,5 @@ coverage/
 *.log
 .pnpm-store/
 apps/core/data/
+package-lock.json
+yarn.lock
