@@ -191,6 +191,7 @@ Details are documented in:
 - `docs/architecture/0031-pico-link-identity-relay-and-domain-threat-model.md`
 - `docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md`
 - `docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md`
+- `docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md`
 
 ## Server bootstrap, tenancy and eviction
 
@@ -440,6 +441,7 @@ The project concept is persisted as architecture notes:
 | `0031-pico-link-identity-relay-and-domain-threat-model.md` | Pico Link identity, relay metadata and protected-domain threat model |
 | `0032-pico-link-envelope-and-credential-schema-direction.md` | Pico Link envelope, protected payload, signed history, key envelope and membership credential schema direction |
 | `0033-key-lifecycle-rotation-revocation-and-recovery.md` | key lifecycle, rotation, revocation, lost-device, reset and recovery boundaries |
+| `0034-canonicalization-signature-inputs-and-test-vectors.md` | canonicalization, signature-input, rejection and test-vector boundaries |
 
 Protocol documents:
 
@@ -462,7 +464,7 @@ flowchart TD
 
 ### Optional walking-skeleton tech demo
 
-A small executable architecture sketch may be useful after the identity, transport, relay and encryption boundaries have concrete threat-model and wire-schema drafts.
+A small executable architecture sketch may be useful after the identity, transport, relay, encryption, lifecycle and canonicalization boundaries have concrete threat-model, wire-schema and fixture drafts.
 
 This demo should be non-blocking and deliberately thin:
 
@@ -515,7 +517,7 @@ The demo must not become the path for production remote access. If it starts for
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
 - Define the production auth, ingress and local pairing boundary before exposing Pico Home APIs beyond trusted local paths
-- Use ADR 0031, ADR 0032 and ADR 0033 to refine identity/device/home key wire schemas, rotation semantics and conformance tests before real Pico Link communication
+- Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

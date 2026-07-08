@@ -193,6 +193,8 @@ ADR `0032-pico-link-envelope-and-credential-schema-direction.md` defines the con
 
 ADR `0033-key-lifecycle-rotation-revocation-and-recovery.md` defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for these key roles before implementation.
 
+ADR `0034-canonicalization-signature-inputs-and-test-vectors.md` defines how future signature inputs, hashes and fixtures must be specified before these signatures become security-relevant.
+
 ## End-to-end encryption boundary
 
 Pico Link payloads should be encrypted above the transport.
@@ -344,6 +346,7 @@ This ADR extends and constrains:
 - `0031-pico-link-identity-relay-and-domain-threat-model.md`
 - `0032-pico-link-envelope-and-credential-schema-direction.md`
 - `0033-key-lifecycle-rotation-revocation-and-recovery.md`
+- `0034-canonicalization-signature-inputs-and-test-vectors.md`
 
 The continuity rule is:
 

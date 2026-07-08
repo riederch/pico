@@ -109,6 +109,8 @@ A future conformance test suite should test:
 - capability reporting
 - event parsing
 - event compatibility
+- canonicalization fixtures for signed or hashed surfaces
+- signature and lifecycle negative vectors once signatures exist
 - unknown extension handling
 - downgrade resistance
 - host claim semantics

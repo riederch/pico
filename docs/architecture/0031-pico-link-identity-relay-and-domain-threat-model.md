@@ -16,6 +16,8 @@ ADR 0032 defines conceptual schema families for Pico Link packet envelopes, prot
 
 ADR 0033 defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for the key and credential roles described here.
 
+ADR 0034 defines canonicalization, signature-input and test-vector boundaries required before signatures, hashes or compatibility claims can carry security meaning.
+
 Before Pico can design wire schemas, key lifecycle or an executable walking-skeleton demo, it needs a concrete threat model for identity, device, Home, relay metadata and encrypted content domains.
 
 ## Decision
@@ -310,5 +312,6 @@ This ADR extends and constrains:
 - `0030-foundation-api-exposure-and-local-trust-boundary.md`
 - `0032-pico-link-envelope-and-credential-schema-direction.md`
 - `0033-key-lifecycle-rotation-revocation-and-recovery.md`
+- `0034-canonicalization-signature-inputs-and-test-vectors.md`
 
 It does not replace those ADRs. It defines the minimum threat-model boundary that future Pico Link schemas, relay work, Home membership, domain key work and walking-skeleton demos must respect.

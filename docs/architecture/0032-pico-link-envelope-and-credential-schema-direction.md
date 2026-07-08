@@ -14,6 +14,8 @@ ADR 0031 defines the threat model for identity, relay metadata and protected dom
 
 ADR 0033 defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for the key and credential roles referenced by these schema families.
 
+ADR 0034 defines canonicalization, signature-input and test-vector boundaries for future signed objects, manifests, credentials and compatibility claims.
+
 The project now needs conceptual schema families that future protocol work can refine without accidentally turning the current Foundation API into Pico Link or making premature cryptographic claims.
 
 ## Decision
@@ -368,7 +370,7 @@ Future schema work must define:
 
 - semantic meaning of `schemaVersion`
 - protocol version interaction
-- canonical serialization for signatures
+- canonical serialization for signatures, constrained by ADR 0034
 - unknown field handling
 - required versus optional fields
 - downgrade handling
@@ -440,5 +442,6 @@ This ADR extends and constrains:
 - `0030-foundation-api-exposure-and-local-trust-boundary.md`
 - `0031-pico-link-identity-relay-and-domain-threat-model.md`
 - `0033-key-lifecycle-rotation-revocation-and-recovery.md`
+- `0034-canonicalization-signature-inputs-and-test-vectors.md`
 
 It does not replace those ADRs. It gives future Pico Link, Pico Home Link, relay, membership, key envelope and conformance work a shared schema vocabulary.

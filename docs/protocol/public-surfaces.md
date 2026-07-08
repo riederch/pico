@@ -65,7 +65,7 @@ The response keeps `events` as the primary additive field and adds cursor metada
 
 `nextCursor` is opaque. Clients must not parse it or rely on its internal format.
 
-The current `PicoEvent.signature` field is stored and returned as opaque metadata only. Pico Home Core does not verify signatures yet. Clients must not treat a populated `signature` field as proof of authorship, integrity or Pico identity until the key lifecycle, signature format and verification model exist.
+The current `PicoEvent.signature` field is stored and returned as opaque metadata only. Pico Home Core does not verify signatures yet. Clients must not treat a populated `signature` field as proof of authorship, integrity or Pico identity until the key lifecycle, canonicalization, signature format, test vectors and verification model exist.
 
 ### Current `WS /ws` message types
 

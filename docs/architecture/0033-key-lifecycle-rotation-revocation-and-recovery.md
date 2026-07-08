@@ -18,6 +18,8 @@ ADR 0031 defines the threat model for identity, devices, Homes, relays, metadata
 
 ADR 0032 defines conceptual schema families for packet envelopes, protected payload envelopes, signed event segments, replica manifests, key envelopes, Home membership credentials and compatibility advertisements.
 
+ADR 0034 defines canonicalization, signature-input and test-vector boundaries for future signed lifecycle-sensitive objects and conformance fixtures.
+
 The next boundary needed before implementation is lifecycle semantics: when keys are created, delegated, rotated, revoked, replaced, reset, backed up or recovered.
 
 ## Decision
@@ -444,5 +446,6 @@ This ADR extends and constrains:
 - `0029-identity-device-home-keys-and-e2e-boundaries.md`
 - `0031-pico-link-identity-relay-and-domain-threat-model.md`
 - `0032-pico-link-envelope-and-credential-schema-direction.md`
+- `0034-canonicalization-signature-inputs-and-test-vectors.md`
 
 It does not replace those ADRs. It defines how future Pico key, credential, membership and recovery implementations must behave across their lifecycle.

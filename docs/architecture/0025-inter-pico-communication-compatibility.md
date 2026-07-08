@@ -228,6 +228,7 @@ This ADR constrains future implementation of:
 - `0017-contextual-interaction-safety-and-trust-signals.md`
 - `0018-presence-context-and-location-sharing.md`
 - `0024-server-bootstrap-tenancy-and-eviction.md`
+- `0034-canonicalization-signature-inputs-and-test-vectors.md`
 
 It reinforces that interoperability is part of Pico's safety model.
 

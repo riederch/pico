@@ -56,6 +56,8 @@ ADR `0031-pico-link-identity-relay-and-domain-threat-model.md` defines the first
 
 ADR `0033-key-lifecycle-rotation-revocation-and-recovery.md` defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for future key and credential work.
 
+ADR `0034-canonicalization-signature-inputs-and-test-vectors.md` defines canonicalization, signature-input and test-vector boundaries before future signatures or hashes become security-relevant.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

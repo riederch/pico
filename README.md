@@ -144,7 +144,7 @@ The avatar communicates state and risk. For example:
 1. Build a safe technical foundation.
 2. Make updates and migrations safe before real user data matters.
 3. Build the first usable client.
-4. Turn identity, transport, relay and encryption boundaries into concrete threat models and protocol schemas before real remote communication; after that, optionally build a small non-blocking walking-skeleton tech demo.
+4. Turn identity, transport, relay, encryption, lifecycle and canonicalization boundaries into concrete threat models, protocol schemas and test fixtures before real remote communication; after that, optionally build a small non-blocking walking-skeleton tech demo.
 5. Add policy-gated tool execution.
 6. Add memory only after deletion and privacy-domain semantics are clear.
 7. Add richer companion UX after the control and audit layers are solid.
@@ -162,6 +162,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0031-pico-link-identity-relay-and-domain-threat-model.md`](docs/architecture/0031-pico-link-identity-relay-and-domain-threat-model.md) - Pico Link identity, relay metadata and protected-domain threat model
 - [`docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md`](docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md) - Pico Link envelope, credential and key-envelope schema direction
 - [`docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md`](docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md) - key lifecycle, rotation, revocation and recovery boundaries
+- [`docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md`](docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md) - canonicalization, signature-input and test-vector boundaries
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
