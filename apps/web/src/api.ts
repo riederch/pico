@@ -1,3 +1,4 @@
+import { picoHomeClaimStates } from '@pico/protocol';
 import type { DashboardSnapshot, EventHistoryStatus, EventListResponse, HealthResponse, PicoEvent, SystemStatus } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
 
@@ -174,7 +175,8 @@ function isPicoHomeStatus(value: unknown): value is SystemStatus['picoHome'] {
   return (
     isRecord(value)
     && isRecord(value.claimState)
-    && (value.claimState.state === 'unclaimed' || value.claimState.state === 'claimed')
+    && typeof value.claimState.state === 'string'
+    && picoHomeClaimStates.includes(value.claimState.state as SystemStatus['picoHome']['claimState']['state'])
   );
 }
 

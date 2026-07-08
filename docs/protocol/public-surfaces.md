@@ -268,6 +268,15 @@ pico.avatar_state.v1
 
 These flags do not imply L2 Pico Link compatibility, L3 Pico Home Link compatibility, production readiness or commercial permission.
 
+### Current Pico Home claim-state values
+
+The current `GET /api/system/status` diagnostic shape exposes a minimal Pico Home claim-state value. This is diagnostic metadata only. It is not a claim API, membership credential or authorization boundary.
+
+```text
+unclaimed
+claimed
+```
+
 Examples:
 
 ```text

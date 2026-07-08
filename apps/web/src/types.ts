@@ -1,43 +1,20 @@
-import type { PicoEvent as ProtocolPicoEvent, PicoRealtimeMessage as ProtocolPicoRealtimeMessage } from '@pico/protocol';
+import type {
+  PicoAppliedMigration,
+  PicoEvent as ProtocolPicoEvent,
+  PicoEventListResponse,
+  PicoHealthResponse,
+  PicoHomeClaimStateName as ProtocolPicoHomeClaimStateName,
+  PicoRealtimeMessage as ProtocolPicoRealtimeMessage,
+  PicoSystemStatusResponse,
+} from '@pico/protocol';
 
 export type PicoEvent = ProtocolPicoEvent;
 export type RealtimeMessage = ProtocolPicoRealtimeMessage;
-
-export interface HealthResponse {
-  ok: boolean;
-  service: string;
-  deviceId: string;
-}
-
-export interface AppliedMigration {
-  id: string;
-  appliedAt: string;
-}
-
-export type PicoHomeClaimStateName = 'unclaimed' | 'claimed';
-
-export interface SystemStatus {
-  service: string;
-  version: string;
-  protocolVersion: string;
-  deviceId: string;
-  capabilities: Record<string, boolean>;
-  picoHome: {
-    claimState: {
-      state: PicoHomeClaimStateName;
-    };
-  };
-  database: {
-    maxLamport: number;
-    migrations: AppliedMigration[];
-  };
-}
-
-export interface EventListResponse {
-  events: PicoEvent[];
-  nextCursor: string | null;
-  hasMore: boolean;
-}
+export type HealthResponse = PicoHealthResponse;
+export type AppliedMigration = PicoAppliedMigration;
+export type PicoHomeClaimStateName = ProtocolPicoHomeClaimStateName;
+export type SystemStatus = PicoSystemStatusResponse;
+export type EventListResponse = PicoEventListResponse;
 
 export interface EventHistoryStatus {
   loadedCount: number;

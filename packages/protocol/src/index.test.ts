@@ -23,6 +23,7 @@ import {
   foundationEventTypes,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
+  picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
   protocolCapabilities,
@@ -82,6 +83,10 @@ describe('Pico protocol types', () => {
     ]);
   });
 
+  it('exports runtime Pico Home claim state lists for foundation status compatibility checks', () => {
+    expect(picoHomeClaimStates).toEqual(['unclaimed', 'claimed']);
+  });
+
   it('keeps public protocol event docs aligned with runtime event type lists', () => {
     const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
 
@@ -111,6 +116,12 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.state`')).toEqual([...avatarStates]);
     expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.intensity`')).toEqual([...avatarIntensities]);
     expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.statusColor`')).toEqual([...avatarStatusColors]);
+  });
+
+  it('keeps public protocol claim-state docs aligned with runtime claim-state value lists', () => {
+    const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
+
+    expect(textFenceAfterHeading(publicSurfaces, '### Current Pico Home claim-state values')).toEqual([...picoHomeClaimStates]);
   });
 
   it('keeps compatibility level event docs aligned with runtime event type lists', () => {

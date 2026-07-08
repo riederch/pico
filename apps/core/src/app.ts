@@ -14,7 +14,12 @@ import {
   type PicoCoreConnectedMessage,
   type PicoEvent,
   type PicoEventCreatedMessage,
+  type PicoEventCreateResponse,
+  type PicoEventListResponse,
   type PicoEventType,
+  type PicoHealthResponse,
+  type PicoSystemStatusResponse,
+  type PicoSystemVersionResponse,
 } from '@pico/protocol';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
@@ -112,19 +117,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
   }
 
-  app.get('/health', async () => ({
+  app.get('/health', async (): Promise<PicoHealthResponse> => ({
     ok: true,
     service: 'pico-home-core',
     deviceId: config.deviceId,
   }));
 
-  app.get('/api/system/version', async () => ({
+  app.get('/api/system/version', async (): Promise<PicoSystemVersionResponse> => ({
     service: 'pico-home-core',
     version: SERVICE_VERSION,
     protocolVersion: PROTOCOL_VERSION,
   }));
 
-  app.get('/api/system/status', async () => ({
+  app.get('/api/system/status', async (): Promise<PicoSystemStatusResponse> => ({
     service: 'pico-home-core',
     version: SERVICE_VERSION,
     protocolVersion: PROTOCOL_VERSION,
@@ -160,11 +165,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       after: cursorResult.cursor,
     });
 
-    return {
+    const response: PicoEventListResponse = {
       events: page.events,
       nextCursor: page.nextCursor === null ? null : encodeEventCursor(page.nextCursor),
       hasMore: page.hasMore,
     };
+
+    return response;
   });
 
   app.post('/api/events', async (request, reply) => {
@@ -194,7 +201,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       broadcast(event);
     }
 
-    return reply.code(201).send({ event, appendResult });
+    const response: PicoEventCreateResponse = { event, appendResult };
+    return reply.code(201).send(response);
   });
 
   app.get('/ws', {

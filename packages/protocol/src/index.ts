@@ -62,6 +62,13 @@ export const protocolCapabilities = {
 export type PicoProtocolCapability = keyof typeof protocolCapabilities;
 export type PicoProtocolCapabilities = typeof protocolCapabilities;
 
+export const picoHomeClaimStates = [
+  'unclaimed',
+  'claimed',
+] as const;
+
+export type PicoHomeClaimStateName = typeof picoHomeClaimStates[number];
+
 export const realtimeMessageType = {
   coreConnected: 'pico.core.connected',
   eventCreated: 'pico.event.created',
@@ -174,6 +181,53 @@ export interface PicoEvent<TPayload = unknown> {
   stream: string;
   payload: TPayload;
   signature?: string;
+}
+
+export interface PicoHealthResponse {
+  ok: boolean;
+  service: string;
+  deviceId: string;
+}
+
+export interface PicoSystemVersionResponse {
+  service: string;
+  version: string;
+  protocolVersion: string;
+}
+
+export interface PicoAppliedMigration {
+  id: string;
+  appliedAt: string;
+}
+
+export interface PicoSystemStatusResponse {
+  service: string;
+  version: string;
+  protocolVersion: string;
+  deviceId: string;
+  capabilities: Record<string, boolean>;
+  picoHome: {
+    claimState: {
+      state: PicoHomeClaimStateName;
+    };
+  };
+  database: {
+    maxLamport: number;
+    migrations: PicoAppliedMigration[];
+  };
+}
+
+export interface PicoEventListResponse<TPayload = unknown> {
+  events: PicoEvent<TPayload>[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export type PicoEventAppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
+
+export interface PicoEventCreateResponse<TPayload = unknown> {
+  event: PicoEvent<TPayload>;
+  appendResult: PicoEventAppendResult;
 }
 
 export interface PicoCoreConnectedMessage {

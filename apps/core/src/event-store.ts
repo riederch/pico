@@ -1,10 +1,10 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import Database from 'better-sqlite3';
-import type { PicoEvent } from '@pico/protocol';
+import type { PicoEvent, PicoEventAppendResult } from '@pico/protocol';
 import { listAppliedMigrations, runMigrations, type AppliedMigration } from './migrations.js';
 
-export type AppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
+export type AppendResult = PicoEventAppendResult;
 
 export interface EventCursor {
   lamport: number;
