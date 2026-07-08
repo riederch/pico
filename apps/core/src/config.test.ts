@@ -11,6 +11,7 @@ describe('Core config', () => {
       databasePath: 'apps/core/data/pico.sqlite',
       deviceId: 'pico-core',
       webRootPath: expect.stringContaining('/apps/web'),
+      wsAllowedOrigins: [],
     });
   });
 
@@ -21,6 +22,7 @@ describe('Core config', () => {
       PICO_DATABASE_PATH: '/tmp/pico.sqlite',
       PICO_DEVICE_ID: 'test-core',
       PICO_WEB_ROOT: '/tmp/pico-web',
+      PICO_WS_ALLOWED_ORIGINS: 'https://dev.example.test, http://localhost:5173/',
     });
 
     expect(config).toEqual({
@@ -29,6 +31,7 @@ describe('Core config', () => {
       databasePath: '/tmp/pico.sqlite',
       deviceId: 'test-core',
       webRootPath: '/tmp/pico-web',
+      wsAllowedOrigins: ['https://dev.example.test', 'http://localhost:5173'],
     });
   });
 
@@ -41,6 +44,12 @@ describe('Core config', () => {
   it('rejects blank string settings', () => {
     for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
       expect(() => loadConfig({ [name]: '   ' })).toThrow(`${name} must be a non-empty string.`);
+    }
+  });
+
+  it('rejects invalid WebSocket allowed origins', () => {
+    for (const origins of ['ws://dev.example.test', 'https://dev.example.test/path', 'not-a-url']) {
+      expect(() => loadConfig({ PICO_WS_ALLOWED_ORIGINS: origins })).toThrow('PICO_WS_ALLOWED_ORIGINS must contain comma-separated http(s) origins.');
     }
   });
 });

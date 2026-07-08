@@ -1,5 +1,9 @@
 # Release and update platform
 
+## Status
+
+Accepted for the foundation phase.
+
 The repository is the release point for Pico.
 
 The first supported target is Pico Core as a Home Assistant add-on. Later targets can include standalone server containers, desktop agents, mobile clients, browser extensions, and web/PWA clients.

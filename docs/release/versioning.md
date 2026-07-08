@@ -20,7 +20,6 @@ When the Pico version changes, update all version-bearing files in the same comm
 | `packages/protocol/package.json` | `version` | Shared protocol package version | Yes |
 | `packages/sync/package.json` | `version` | Sync helper package version | Yes |
 | `pico_core/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
-| `.github/workflows/ci.yml` | `type=raw,value=<version>` | Default-branch GHCR container tag | Yes |
 | `README.md` | Current version text | Non-technical documentation | Yes |
 | `ReadmeTech.md` | Current version and Home Assistant add-on tag/version text | Technical documentation | Yes |
 | `pico_core/CHANGELOG.md` | version heading | Home Assistant-facing update notes | Yes |
@@ -62,7 +61,27 @@ The release gate includes:
 pnpm version:check
 ```
 
-This check compares the root package version with package metadata, Pico Home Core runtime version constants, Home Assistant add-on metadata, the default-branch CI image tag, README current-version blocks, the latest add-on changelog heading, and current protocol compatibility examples.
+This check compares the root package version with package metadata, Pico Home Core runtime version constants, Home Assistant add-on metadata, README current-version blocks, the latest add-on changelog heading, and current protocol compatibility examples.
+
+The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.1.7`, so `.github/workflows/ci.yml` is not a version-bearing file.
+
+## Container image tags
+
+The CI workflow publishes different tag classes for different events:
+
+| Event | Expected GHCR tags |
+|---|---|
+| Push to `main` | `main` and `sha-*` tags only |
+| Push to `v*` tag | Git ref tag, semver version tag and `sha-*` tag |
+| Pull request | Build only; no push |
+
+The Home Assistant add-on versioned image tag must be created by pushing the matching Git tag. A plain docs or code commit to `main` must not mutate an existing semver image tag.
+
+## Multi-arch smoke-test limitation
+
+The CI workflow builds and publishes a multi-arch image for `linux/amd64` and `linux/arm64`, but the current container smoke test runs only on `linux/amd64`.
+
+This is an accepted foundation-stage release limitation until the workflow either adds a QEMU-based arm64 smoke test or records a stricter release qualification for arm64 images.
 
 ## Migration and backup rule
 
@@ -86,8 +105,8 @@ Before a release with backup-requiring migrations is tagged, the release must do
    ```
 
 5. Commit all version changes together.
-6. Push to `main` and confirm the CI workflow builds and pushes the matching GHCR tag.
-7. For a tagged release, create and push the matching Git tag:
+6. Push to `main` and confirm the CI workflow is green. The `main` build publishes only mutable `main` and immutable `sha-*` image tags.
+7. Create and push the matching Git tag. The tag build publishes the versioned image tag:
 
    ```bash
    git tag v0.1.7

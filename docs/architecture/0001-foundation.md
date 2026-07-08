@@ -1,5 +1,9 @@
 # Pico foundation
 
+## Status
+
+Accepted for the foundation phase.
+
 ## Current scope
 
 The first implementation step creates a small monorepo with a shared protocol package, sync primitives, and a minimal core service.

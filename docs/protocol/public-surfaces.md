@@ -32,6 +32,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 
 | Surface | Current status | Notes |
 |---|---|---|
+| `GET /` | experimental diagnostic surface | Serves the current foundation dashboard. Not a companion UI, policy console or remote-access UI. |
 | `GET /health` | experimental diagnostic surface | Health check for the current Pico Home Core process. |
 | `GET /api/system/version` | experimental diagnostic surface | Reports service and protocol version information. |
 | `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability, Pico Home claim-state and database migration state. |
@@ -40,6 +41,8 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `WS /ws` | experimental event stream | Streams events and connection messages. |
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.
+
+They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`.
 
 ### Current `GET /api/events` shape
 
@@ -61,6 +64,8 @@ The response keeps `events` as the primary additive field and adds cursor metada
 ```
 
 `nextCursor` is opaque. Clients must not parse it or rely on its internal format.
+
+The current `PicoEvent.signature` field is stored and returned as opaque metadata only. Pico Home Core does not verify signatures yet. Clients must not treat a populated `signature` field as proof of authorship, integrity or Pico identity until the key lifecycle, signature format and verification model exist.
 
 ## Current event compatibility classes
 

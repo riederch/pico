@@ -70,7 +70,6 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=semver,pattern={{version}}
-            type=raw,value=0.1.7,enable={{is_default_branch}}
             type=sha,prefix=sha-
 
       - name: Build local smoke-test image

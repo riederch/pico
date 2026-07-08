@@ -1,5 +1,9 @@
 # Family server and user sovereignty
 
+## Status
+
+Accepted as a concept note.
+
 Pico may run as a shared family server, but each person's Pico identity, data access, and export path must remain under that person's control.
 
 A family server is shared infrastructure, not ownership over the people using it.

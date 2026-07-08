@@ -1,5 +1,9 @@
 # Peer trust and relationship model
 
+## Status
+
+Accepted as a concept note.
+
 Pico-to-Pico communication must reflect the real relationship between the owners. A stranger's Pico may communicate with the local Pico, but only at a basic and privacy-preserving level. A spouse or long-term partner may be allowed to share much more, but not without personal boundaries.
 
 ## Principle

@@ -1,5 +1,9 @@
 # Home Assistant add-on release structure
 
+## Status
+
+Accepted for the foundation phase.
+
 The Pico repository is also the first Home Assistant add-on repository.
 
 ## Repository layout

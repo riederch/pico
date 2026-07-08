@@ -68,6 +68,42 @@ describe('event cursor API', () => {
     await app.close();
   });
 
+  it('accepts cursors issued for Lamport values above the incoming event cap', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const highLamport = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        lamport: 1_000_000_000,
+        payload: { role: 'user', text: 'high lamport' },
+      },
+    });
+    expect(highLamport.statusCode).toBe(201);
+
+    const next = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'next event' } },
+    });
+    expect(next.statusCode).toBe(201);
+
+    const firstPage = await app.inject({ method: 'GET', url: '/api/events?limit=1' });
+    expect(firstPage.statusCode).toBe(200);
+    const firstPageBody = firstPage.json();
+    expect(firstPageBody.events.map(eventText)).toEqual(['high lamport']);
+    expect(firstPageBody.nextCursor).toEqual(expect.any(String));
+    expect(firstPageBody.hasMore).toBe(true);
+
+    const secondPage = await app.inject({ method: 'GET', url: `/api/events?limit=1&after=${encodeURIComponent(firstPageBody.nextCursor)}` });
+    expect(secondPage.statusCode).toBe(200);
+    expect(secondPage.json().events.map(eventText)).toEqual(['next event']);
+
+    await app.close();
+  });
+
   it('rejects invalid cursors', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 

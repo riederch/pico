@@ -16,6 +16,8 @@ Home Assistant is the first packaging and runtime path, not the only intended pl
 
 Remote reachability is intended to work through Pico Link transports, primarily Pico Relay, not by exposing Pico Home as a public inbound HTTP server.
 
+The current Foundation HTTP API is a trusted local diagnostics and foundation interface. It is not a production authentication surface, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
+
 ## License and commercial use
 
 Pico is source-available for private and non-commercial use under the PolyForm Noncommercial License 1.0.0.
@@ -316,6 +318,8 @@ Port `3100` is a trusted local foundation interface for the current add-on. It i
 
 The current API surface is a foundation API. It is not yet a complete Pico Link or Pico Home Link specification, not a production authentication surface, not a public remote-access API and not a relay protocol.
 
+The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`.
+
 ## Local development
 
 Install dependencies:
@@ -429,6 +433,7 @@ The project concept is persisted as architecture notes:
 | `0027-dedicated-pico-home-image-and-first-boot-setup.md` | dedicated Pico Home Image, appliance first boot, Setup Mode and Move-In Code boundaries |
 | `0028-pico-link-transport-facade-and-relay-network.md` | Pico Link Transport Facade, Relay Network, Pico Home endpoints, decentralised relays and low-bandwidth transport adapters |
 | `0029-identity-device-home-keys-and-e2e-boundaries.md` | Pico identity keys, device keys, Home keys, transport keys, signatures and E2E encryption boundaries |
+| `0030-foundation-api-exposure-and-local-trust-boundary.md` | current Foundation API exposure, local trust boundary and prerequisites before broader access |
 
 Protocol documents:
 
@@ -470,6 +475,7 @@ flowchart TD
 - Pico Link remains transport-neutral; Relay, LAN, VPN/direct, Meshtastic and future radio transports belong behind adapters
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
 - Pico identity, device, Home, transport and domain keys are separate roles
+- The current Foundation API remains local/trusted until auth, membership, policy and Pico Link boundaries exist
 - A Home Host Pico may manage residency on a Pico Home, not resident private data
 - Picos can communicate across Homes; relationships belong to Picos, not Homes
 - Pico-compatible permitted forks must preserve inter-Pico and Pico Home protocol semantics for the advertised protocol version
@@ -488,6 +494,7 @@ flowchart TD
 - Validate the Home Assistant add-on on a real HA installation
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
+- Define the production auth, ingress and local pairing boundary before exposing Pico Home APIs beyond trusted local paths
 - Define the concrete identity/device/home key threat model, wire schemas, rotation semantics and conformance tests before real Pico Link communication
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

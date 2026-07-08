@@ -14,7 +14,8 @@ const DEFAULT_EVENT_LIMIT = 100;
 const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
-const MAX_LAMPORT_VALUE = 1_000_000_000;
+const MAX_INCOMING_LAMPORT = 1_000_000_000;
+const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 
 const writableEventTypes = new Set<PicoEventType>(foundationEventTypes);
 const knownEventTypes = new Set<PicoEventType>(picoEventTypes);
@@ -46,8 +47,11 @@ interface ValidatedIncomingEventBody {
 interface RealtimeSocket {
   readyState: number;
   OPEN: number;
+  isAlive?: boolean;
   send(payload: string): void;
-  on(event: 'close', listener: () => void): void;
+  ping(): void;
+  terminate(): void;
+  on(event: 'close' | 'pong', listener: () => void): void;
 }
 
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
@@ -59,8 +63,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
   const sockets = new Set<RealtimeSocket>();
+  const websocketKeepalive = setInterval(() => {
+    for (const socket of sockets) {
+      if (socket.isAlive === false) {
+        socket.terminate();
+        sockets.delete(socket);
+        continue;
+      }
+
+      socket.isAlive = false;
+
+      if (socket.readyState === socket.OPEN) {
+        socket.ping();
+      }
+    }
+  }, WEBSOCKET_KEEPALIVE_INTERVAL_MS);
+
+  websocketKeepalive.unref();
 
   app.addHook('onClose', async () => {
+    clearInterval(websocketKeepalive);
     sockets.clear();
     store.close();
   });
@@ -160,10 +182,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return reply.code(201).send({ event, appendResult });
   });
 
-  app.get('/ws', { websocket: true }, (connection) => {
+  app.get('/ws', {
+    websocket: true,
+    preValidation: async (request, reply) => {
+      if (!isWebSocketOriginAllowed(request.headers.origin, request.headers.host, config.wsAllowedOrigins ?? [])) {
+        return reply.code(403).send({ error: 'WebSocket origin is not allowed.' });
+      }
+    },
+  }, (connection) => {
     const socket = connection as RealtimeSocket;
+    socket.isAlive = true;
     sockets.add(socket);
     socket.send(JSON.stringify({ type: 'pico.core.connected', deviceId: config.deviceId }));
+
+    socket.on('pong', () => {
+      socket.isAlive = true;
+    });
 
     socket.on('close', () => {
       sockets.delete(socket);
@@ -211,6 +245,66 @@ function encodeEventCursor(cursor: EventCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
 }
 
+function isWebSocketOriginAllowed(originHeader: string | string[] | undefined, hostHeader: string | string[] | undefined, allowedOrigins: readonly string[]): boolean {
+  if (originHeader === undefined) {
+    return true;
+  }
+
+  if (typeof originHeader !== 'string') {
+    return false;
+  }
+
+  const origin = parseHttpOrigin(originHeader);
+
+  if (origin === null) {
+    return false;
+  }
+
+  if (allowedOrigins.includes(origin.origin)) {
+    return true;
+  }
+
+  const requestHost = parseHostHeader(hostHeader);
+
+  return requestHost !== null && origin.host === requestHost;
+}
+
+function parseHttpOrigin(rawOrigin: string): { origin: string; host: string } | null {
+  let url: URL;
+
+  try {
+    url = new URL(rawOrigin);
+  } catch {
+    return null;
+  }
+
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+    return null;
+  }
+
+  return { origin: url.origin, host: url.host };
+}
+
+function parseHostHeader(hostHeader: string | string[] | undefined): string | null {
+  if (typeof hostHeader !== 'string' || hostHeader.trim() === '') {
+    return null;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(`http://${hostHeader}`);
+  } catch {
+    return null;
+  }
+
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+    return null;
+  }
+
+  return url.host;
+}
+
 function isEventCursor(value: unknown): value is EventCursor {
   return isRecord(value)
     && typeof value.eventId === 'string'
@@ -218,9 +312,8 @@ function isEventCursor(value: unknown): value is EventCursor {
     && typeof value.wallTime === 'string'
     && value.wallTime.trim() !== ''
     && typeof value.lamport === 'number'
-    && Number.isInteger(value.lamport)
-    && value.lamport >= 0
-    && value.lamport <= MAX_LAMPORT_VALUE;
+    && Number.isSafeInteger(value.lamport)
+    && value.lamport >= 0;
 }
 
 function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true; body: ValidatedIncomingEventBody } | { ok: false; error: string } {
@@ -245,7 +338,7 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
   }
 
   if (body.lamport !== undefined) {
-    if (typeof body.lamport !== 'number' || !Number.isInteger(body.lamport) || body.lamport < 0 || body.lamport > MAX_LAMPORT_VALUE) {
+    if (typeof body.lamport !== 'number' || !Number.isInteger(body.lamport) || body.lamport < 0 || body.lamport > MAX_INCOMING_LAMPORT) {
       return { ok: false, error: 'lamport is outside the accepted range.' };
     }
   }

@@ -133,6 +133,10 @@ In particular:
 - server bootstrap, Gastgeber Pico, residency, eviction and Core Host ownership language must remain consistent with `0024`
 - inter-Pico protocol compatibility language must remain consistent with `0025`
 - product terminology and naming language must remain consistent with `0026`
+- dedicated Pico Home Image, Setup Mode and Move-In Code language must remain consistent with `0027`
+- Pico Link, Relay Network, transport facade and low-bandwidth transport language must remain consistent with `0028`
+- identity, device, Home, transport and domain key language must remain consistent with `0029`
+- Foundation API exposure and local trust boundary language must remain consistent with `0030`
 
 ## Review checklist
 

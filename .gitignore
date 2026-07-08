@@ -5,6 +5,7 @@ coverage/
 .env.*
 !.env.example
 .DS_Store
+.idea/
 *.log
 .pnpm-store/
 apps/core/data/

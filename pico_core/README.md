@@ -74,6 +74,8 @@ Pico's current concept work defines several important boundaries:
 - Pico Relays transport encrypted packets but do not own Pico memory, identity, relationships, actions or authority
 - Pico Link is transport-neutral; Meshtastic and future radio standards belong behind transport adapters
 - Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
+- Pico identity, device, Home, transport and domain keys are separate roles; Pico must use reviewed primitives and must not invent cryptography
+- the current Foundation HTTP API is a trusted local diagnostics and foundation interface, not a public remote-access API
 - trust signals are contextual evidence, not global person scores
 - presence and location sharing must be scoped, visible, revocable and minimally precise
 - service and emergency disclosures must be role-, context-, purpose- and necessity-bound
@@ -155,6 +157,8 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture`](../docs/architecture) - architecture decisions and concept notes
 - [`../docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md`](../docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md) - dedicated Pico Home Image and first-boot setup concept
 - [`../docs/architecture/0028-pico-link-transport-facade-and-relay-network.md`](../docs/architecture/0028-pico-link-transport-facade-and-relay-network.md) - Pico Link transport facade, relay network and low-bandwidth transport concept
+- [`../docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md`](../docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md) - Pico identity, device, Home, transport and domain key boundaries
+- [`../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`](../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md) - current Foundation API exposure and local trust boundary
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 
@@ -173,6 +177,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - Pico Relay provides transport, not authority
 - Pico Link remains transport-neutral; specific transports belong behind adapters
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
+- The current Foundation API remains local/trusted until auth, membership, policy and Pico Link boundaries exist
 - A Gastgeber Pico / Home Host Pico may manage residency on a host, not resident private data
 - Home Assistant integration must not bypass Pico's policy and audit model
 - Presence and location sharing must be scoped, visible, revocable and minimally precise

@@ -1,5 +1,9 @@
 # Testing and release gates
 
+## Status
+
+Accepted for the foundation phase.
+
 Pico must treat automated tests as release blockers. A broken release must be stopped before it reaches Home Assistant servers, clients, or update channels.
 
 ## Release rule

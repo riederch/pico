@@ -1,5 +1,9 @@
 # Parent-child relationship model
 
+## Status
+
+Accepted as a concept note.
+
 A parent-child relationship between Picos must be modeled explicitly. It is not the same as a partner relationship and not the same as a normal family relationship.
 
 The key difference is asymmetry: parents may have protective and administrative rights, while the child must still retain age-appropriate privacy, autonomy, and a path to full ownership later.

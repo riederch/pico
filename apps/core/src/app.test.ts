@@ -247,6 +247,62 @@ describe('Pico Home Core app', () => {
     }
   });
 
+  it('allows same-origin websocket browser connections', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+    await app.ready();
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS('/ws', {
+      headers: {
+        host: 'localhost:3100',
+        origin: 'http://localhost:3100',
+      },
+    }, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
+    try {
+      const message = await requireMessagePromise(initialMessage);
+      expect(message).toEqual({ type: 'pico.core.connected', deviceId: 'test-core' });
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
+  it('rejects cross-origin websocket browser connections', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+    await app.ready();
+    await expect(app.injectWS('/ws', {
+      headers: {
+        host: 'localhost:3100',
+        origin: 'http://evil.example.test',
+      },
+    })).rejects.toThrow('Unexpected server response: 403');
+    await app.close();
+  });
+
+  it('allows explicitly configured websocket browser origins', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      wsAllowedOrigins: ['https://dev.example.test'],
+    });
+    await app.ready();
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS('/ws', {
+      headers: {
+        host: 'localhost:3100',
+        origin: 'https://dev.example.test',
+      },
+    }, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
+    try {
+      const message = await requireMessagePromise(initialMessage);
+      expect(message).toEqual({ type: 'pico.core.connected', deviceId: 'test-core' });
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
   it('broadcasts inserted events to websocket clients', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
     await app.ready();

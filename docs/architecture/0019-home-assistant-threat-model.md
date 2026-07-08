@@ -20,7 +20,10 @@ The add-on must not become a hidden automation or control layer.
 
 The current add-on provides only:
 
+- `/`
 - `/health`
+- `/api/system/version`
+- `/api/system/status`
 - limited `/api/events`
 - `/ws`
 - persistent SQLite storage

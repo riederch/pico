@@ -8,6 +8,8 @@ The current add-on has no authentication model, no Home Assistant entity integra
 
 Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
 
+The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`.
+
 ## Installation
 
 1. Add this repository as a Home Assistant add-on repository.
@@ -43,6 +45,8 @@ The dashboard is a development and diagnostics surface only. It is not a chat cl
 ## Remote access boundary
 
 The current add-on should be reachable only through trusted local access paths such as the Home Assistant environment, local network testing, or developer-controlled local tunnelling for diagnostics.
+
+The WebSocket endpoint rejects browser connections whose `Origin` host does not match the request host. Development setups that serve a dashboard from another origin can allow explicit browser origins with `PICO_WS_ALLOWED_ORIGINS`, a comma-separated list such as `http://localhost:5173`. This is a defensive browser boundary, not production authentication.
 
 Product-level remote reachability should later use:
 

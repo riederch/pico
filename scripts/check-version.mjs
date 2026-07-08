@@ -23,7 +23,6 @@ for (const packageFile of packageFiles) {
 }
 
 assertVersion(matchRequired('pico_core/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_core/config.yaml version');
-assertVersion(matchRequired('.github/workflows/ci.yml', /type=raw,value=([^,\s]+),enable=\{\{is_default_branch\}\}/, 'default-branch image tag'), '.github/workflows/ci.yml default-branch image tag');
 assertVersion(matchRequired('apps/core/src/app.ts', /const SERVICE_VERSION = '([^']+)'/, 'service version'), 'apps/core/src/app.ts SERVICE_VERSION');
 assertVersion(matchRequired('apps/core/src/app.ts', /const PROTOCOL_VERSION = '([^']+)'/, 'protocol version'), 'apps/core/src/app.ts PROTOCOL_VERSION');
 assertVersion(currentVersionFence('README.md'), 'README.md current version');
