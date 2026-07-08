@@ -188,6 +188,7 @@ Details are documented in:
 - `docs/architecture/0016-cryptography-boundaries-and-non-goals.md`
 - `docs/architecture/0028-pico-link-transport-facade-and-relay-network.md`
 - `docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md`
+- `docs/architecture/0031-pico-link-identity-relay-and-domain-threat-model.md`
 
 ## Server bootstrap, tenancy and eviction
 
@@ -434,6 +435,7 @@ The project concept is persisted as architecture notes:
 | `0028-pico-link-transport-facade-and-relay-network.md` | Pico Link Transport Facade, Relay Network, Pico Home endpoints, decentralised relays and low-bandwidth transport adapters |
 | `0029-identity-device-home-keys-and-e2e-boundaries.md` | Pico identity keys, device keys, Home keys, transport keys, signatures and E2E encryption boundaries |
 | `0030-foundation-api-exposure-and-local-trust-boundary.md` | current Foundation API exposure, local trust boundary and prerequisites before broader access |
+| `0031-pico-link-identity-relay-and-domain-threat-model.md` | Pico Link identity, relay metadata and protected-domain threat model |
 
 Protocol documents:
 
@@ -509,7 +511,7 @@ The demo must not become the path for production remote access. If it starts for
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
 - Define the production auth, ingress and local pairing boundary before exposing Pico Home APIs beyond trusted local paths
-- Define the concrete identity/device/home key threat model, wire schemas, rotation semantics and conformance tests before real Pico Link communication
+- Use the concrete ADR 0031 threat model to define identity/device/home key wire schemas, rotation semantics and conformance tests before real Pico Link communication
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

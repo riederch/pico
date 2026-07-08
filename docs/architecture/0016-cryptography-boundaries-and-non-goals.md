@@ -52,6 +52,8 @@ Before implementing protected domains, document:
 - how backup restore works
 - how deletion interacts with protected payloads
 
+ADR `0031-pico-link-identity-relay-and-domain-threat-model.md` defines the first concrete threat-model boundary for Pico Link identity, relay metadata and protected-domain work.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

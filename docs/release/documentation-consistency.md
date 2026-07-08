@@ -137,6 +137,7 @@ In particular:
 - Pico Link, Relay Network, transport facade and low-bandwidth transport language must remain consistent with `0028`
 - identity, device, Home, transport and domain key language must remain consistent with `0029`
 - Foundation API exposure and local trust boundary language must remain consistent with `0030`
+- Pico Link identity, relay metadata and protected-domain threat-model language must remain consistent with `0031`
 
 ## Review checklist
 
