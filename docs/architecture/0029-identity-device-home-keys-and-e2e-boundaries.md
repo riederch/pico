@@ -191,6 +191,8 @@ The current foundation event API does not yet implement signed events, signed ma
 
 ADR `0032-pico-link-envelope-and-credential-schema-direction.md` defines the conceptual schema families that future signed event segments, replica manifests, key envelopes and Home membership credentials should refine before implementation.
 
+ADR `0033-key-lifecycle-rotation-revocation-and-recovery.md` defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for these key roles before implementation.
+
 ## End-to-end encryption boundary
 
 Pico Link payloads should be encrypted above the transport.
@@ -341,6 +343,7 @@ This ADR extends and constrains:
 - `0028-pico-link-transport-facade-and-relay-network.md`
 - `0031-pico-link-identity-relay-and-domain-threat-model.md`
 - `0032-pico-link-envelope-and-credential-schema-direction.md`
+- `0033-key-lifecycle-rotation-revocation-and-recovery.md`
 
 The continuity rule is:
 

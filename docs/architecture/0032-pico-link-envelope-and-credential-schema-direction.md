@@ -12,6 +12,8 @@ ADR 0029 defines separate key roles for Pico identity, devices, Homes, domains, 
 
 ADR 0031 defines the threat model for identity, relay metadata and protected domains. It also requires draft packet-envelope and signed/encrypted envelope semantics before a walking-skeleton tech demo can be safe.
 
+ADR 0033 defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for the key and credential roles referenced by these schema families.
+
 The project now needs conceptual schema families that future protocol work can refine without accidentally turning the current Foundation API into Pico Link or making premature cryptographic claims.
 
 ## Decision
@@ -437,5 +439,6 @@ This ADR extends and constrains:
 - `0029-identity-device-home-keys-and-e2e-boundaries.md`
 - `0030-foundation-api-exposure-and-local-trust-boundary.md`
 - `0031-pico-link-identity-relay-and-domain-threat-model.md`
+- `0033-key-lifecycle-rotation-revocation-and-recovery.md`
 
 It does not replace those ADRs. It gives future Pico Link, Pico Home Link, relay, membership, key envelope and conformance work a shared schema vocabulary.

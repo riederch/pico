@@ -54,6 +54,8 @@ Before implementing protected domains, document:
 
 ADR `0031-pico-link-identity-relay-and-domain-threat-model.md` defines the first concrete threat-model boundary for Pico Link identity, relay metadata and protected-domain work.
 
+ADR `0033-key-lifecycle-rotation-revocation-and-recovery.md` defines lifecycle, rotation, revocation, lost-device, reset and recovery boundaries for future key and credential work.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.
