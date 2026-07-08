@@ -81,6 +81,65 @@ message.created
 avatar.state_changed
 ```
 
+### Current foundation payload values
+
+The current Foundation API validates small development payloads for implemented writable Foundation event types. These value sets describe the current experimental foundation surface only. They are not a final companion, memory, Pico Link or Pico Home Link schema.
+
+#### `message.created.payload.role`
+
+```text
+user
+assistant
+system
+tool
+```
+
+#### `avatar.state_changed.payload.mode`
+
+```text
+everyday
+technical
+wwg
+firefighter
+security
+organization
+smart_home
+```
+
+#### `avatar.state_changed.payload.state`
+
+```text
+idle
+listening
+thinking
+working
+unsure
+warning
+confirmation_required
+blocked
+success
+sleeping
+```
+
+#### `avatar.state_changed.payload.intensity`
+
+```text
+low
+normal
+high
+```
+
+#### `avatar.state_changed.payload.statusColor`
+
+```text
+neutral
+blue
+green
+yellow
+red
+violet
+```
+
 ### Product action event types
 
 These names are product-facing protocol direction and may be reserved until their APIs exist:

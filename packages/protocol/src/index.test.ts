@@ -82,6 +82,16 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '### Current runtime capability flags')).toEqual(Object.keys(protocolCapabilities));
   });
 
+  it('keeps public protocol payload value docs aligned with runtime payload value lists', () => {
+    const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
+
+    expect(textFenceAfterHeading(publicSurfaces, '#### `message.created.payload.role`')).toEqual([...messageCreatedRoles]);
+    expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.mode`')).toEqual([...avatarModes]);
+    expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.state`')).toEqual([...avatarStates]);
+    expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.intensity`')).toEqual([...avatarIntensities]);
+    expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.statusColor`')).toEqual([...avatarStatusColors]);
+  });
+
   it('keeps compatibility level event docs aligned with runtime event type lists', () => {
     const compatibilityLevels = readRepoFile('docs/protocol/compatibility-levels.md');
 
