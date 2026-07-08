@@ -6,6 +6,8 @@ Pico is a local-first personal AI companion foundation.
 
 The goal is not simply to build another chatbot. Pico is meant to become a personal agent foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved tools only through clear policy and audit boundaries.
 
+A Pico can be understood as a digital companion and, technically, as a digital twin of something meaningful to the user: a person, home, site, organisation, project, asset, device, or another explicit context.
+
 For the full technical documentation, see [`ReadmeTech.md`](ReadmeTech.md).
 
 ## Why Pico exists
@@ -22,6 +24,7 @@ This means Pico treats identity, ownership, privacy, relationship boundaries, ex
 
 Pico should eventually be able to:
 
+- act as a digital companion for a user-chosen subject such as a person, home, site, organisation, project, asset or device
 - run locally where practical
 - run Pico Home on multiple host platforms, with Home Assistant as the first packaging path
 - support a future Pico Home Image for dedicated local appliance-style hosts
@@ -32,10 +35,12 @@ Pico should eventually be able to:
 - allow Picos to communicate across different Pico Homes
 - support optional low-bandwidth transports such as Meshtastic through adapters
 - work with Home Assistant and other local tools
+- use capabilities through native connectors, MCP-style tools or future tool protocols without bypassing Pico Rules
 - remember useful personal context safely
 - share presence, activity, location and emergency context only under clear rules
 - support shared commitments, reminders and cooperative nudging
 - adapt its tone to the user while preserving user control
+- notice relevant state changes and prepare useful actions under explicit delegation rules
 - explain and audit what it did
 - ask for confirmation before risky actions
 - keep companion UX separate from execution authority
@@ -53,6 +58,7 @@ Pico is not intended to become:
 - a project that invents its own cryptography
 - a public home server that requires exposing local Pico Home APIs to the internet
 - a project that binds its core protocol to one relay provider or one radio transport
+- a tool protocol wrapper that lets MCP or any connector bypass Pico's policy and audit model
 
 ## Core idea
 
@@ -66,6 +72,7 @@ That means the companion can feel helpful and present, but risky actions still n
 
 Pico's current concept work defines several important boundaries:
 
+- Pico can act as a digital companion and technical digital twin for a user-chosen subject
 - Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Pico Homes provide infrastructure, but hosting is not ownership over resident Pico identities or private data
 - a freshly installed Pico Home starts empty; a one-time Move-In Code lets the first Pico become the Home Host Pico
@@ -76,6 +83,8 @@ Pico's current concept work defines several important boundaries:
 - Pico Relays transport encrypted packets but do not own Pico identity, memory, relationships, actions or authority
 - Pico Link is transport-neutral; Relay, LAN, VPN/direct, Meshtastic and future radio transports belong behind transport adapters
 - befriended Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
+- capabilities are evaluated above connector protocols; MCP is a tool connection method, not Pico authority
+- proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
 - Pico identity, device, Home, transport and domain keys are separate roles; Pico must still use reviewed primitives and must not invent cryptography
 - the current Foundation HTTP API is a trusted local diagnostics and foundation interface, not a public remote-access API
 - Context Signals are contextual evidence, not global person scores
@@ -163,6 +172,9 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md`](docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md) - Pico Link envelope, credential and key-envelope schema direction
 - [`docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md`](docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md) - key lifecycle, rotation, revocation and recovery boundaries
 - [`docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md`](docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md) - canonicalization, signature-input and test-vector boundaries
+- [`docs/architecture/0035-pico-as-digital-companion-and-twin-model.md`](docs/architecture/0035-pico-as-digital-companion-and-twin-model.md) - Pico as digital companion and technical twin model
+- [`docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md`](docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md) - capabilities, connectors and MCP boundary
+- [`docs/architecture/0037-proactive-companion-delegation-and-procurement.md`](docs/architecture/0037-proactive-companion-delegation-and-procurement.md) - proactive delegation and procurement reference case
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
@@ -177,11 +189,14 @@ The avatar communicates state and risk. For example:
 - Confirmation for risky actions
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
+- Pico can be a digital companion and technical digital twin of a user-chosen subject
 - Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Pico Homes provide infrastructure; hosting is not ownership
 - Pico Homes are local endpoints in the Pico Link / Relay network, not public inbound API servers
 - Pico Relays provide transport, not authority
 - Pico Link remains transport-neutral; specific transports belong behind adapters
+- Capabilities are evaluated above connector protocols; MCP is not an authority layer
+- Proactive behaviour must be explicit, bounded, revocable and auditable
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
 - Pico identity, device, Home, transport and domain keys are separate roles
 - The current Foundation API remains local/trusted until auth, membership, policy and Pico Link boundaries exist
