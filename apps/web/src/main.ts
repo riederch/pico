@@ -22,6 +22,7 @@ export function startDashboard(document: Document): void {
     lastUpdatedAt: null,
     systemStatus: null,
     events: [],
+    eventHistory: null,
     eventFilters: EMPTY_EVENT_FILTERS,
     selectedEventId: null,
     errorMessage: null,
@@ -137,6 +138,7 @@ export function startDashboard(document: Document): void {
     state.httpStatus = snapshot.health.ok ? 'connected' : 'error';
     state.systemStatus = snapshot.systemStatus;
     state.events = sortEventsAscending(snapshot.events).slice(-MAX_VISIBLE_EVENTS);
+    state.eventHistory = snapshot.eventHistory;
     state.selectedEventId = keepSelectedEvent(state.events, state.selectedEventId);
     state.lastUpdatedAt = new Date();
     state.errorMessage = snapshot.health.ok ? null : 'Health endpoint returned ok=false.';
@@ -230,10 +232,26 @@ export function startDashboard(document: Document): void {
 
   function handleRealtimeMessage(message: RealtimeMessage): void {
     if (message.type === 'pico.event.created') {
+      const isNewEvent = !state.events.some((event) => event.eventId === message.event.eventId);
       state.events = upsertEvent(state.events, message.event).slice(-MAX_VISIBLE_EVENTS);
+      state.eventHistory = updateEventHistoryAfterRealtimeEvent(state.eventHistory, isNewEvent);
       state.selectedEventId = keepSelectedEvent(state.events, state.selectedEventId);
     }
   }
+}
+
+function updateEventHistoryAfterRealtimeEvent(
+  eventHistory: DashboardState['eventHistory'],
+  isNewEvent: boolean,
+): DashboardState['eventHistory'] {
+  if (eventHistory === null || !isNewEvent) {
+    return eventHistory;
+  }
+
+  return {
+    ...eventHistory,
+    loadedCount: eventHistory.loadedCount + 1,
+  };
 }
 
 function upsertEvent(events: PicoEvent[], event: PicoEvent): PicoEvent[] {

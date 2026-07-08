@@ -43,6 +43,7 @@
       .status-pill[data-status="error"] .status-dot { background: #f85149; }
       .table-wrap { overflow: auto; border: 1px solid #30363d; border-radius: 8px; }
       .event-toolbar { display: grid; grid-template-columns: minmax(160px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; margin-bottom: 14px; }
+      .event-notice { margin: -4px 0 14px; border: 1px solid #d29922; border-radius: 6px; padding: 10px 12px; background: #251a08; color: #f0c36a; font-size: 13px; line-height: 1.4; }
       .filter-field { display: grid; gap: 6px; }
       .filter-field label { color: #8b949e; font-size: 12px; font-weight: 700; text-transform: uppercase; }
       .events-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 16px; align-items: start; }
@@ -127,6 +128,7 @@
             <div class="filter-field"><label for="event-stream-filter">Stream</label><input id="event-stream-filter" type="search" placeholder="Filter stream" autocomplete="off" /></div>
             <div class="filter-field"><label for="event-device-filter">Device</label><input id="event-device-filter" type="search" placeholder="Filter device ID" autocomplete="off" /></div>
           </div>
+          <p id="events-notice" class="event-notice" role="status" aria-live="polite" hidden></p>
           <div class="events-layout">
             <div class="table-wrap">
               <table>

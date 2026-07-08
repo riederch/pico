@@ -26,6 +26,7 @@ interface DashboardElements {
   eventTypeFilter: HTMLSelectElement;
   eventStreamFilter: HTMLInputElement;
   eventDeviceFilter: HTMLInputElement;
+  eventsNotice: HTMLElement;
   eventsBody: HTMLTableSectionElement;
   eventsEmpty: HTMLElement;
   eventDetail: HTMLElement;
@@ -80,6 +81,7 @@ export function createDashboardView(document: Document): DashboardView {
     eventTypeFilter: requireElement(document, 'event-type-filter', HTMLSelectElement),
     eventStreamFilter: requireElement(document, 'event-stream-filter', HTMLInputElement),
     eventDeviceFilter: requireElement(document, 'event-device-filter', HTMLInputElement),
+    eventsNotice: requireElement(document, 'events-notice', HTMLElement),
     eventsBody: requireElement(document, 'events-body', HTMLTableSectionElement),
     eventsEmpty: requireElement(document, 'events-empty', HTMLElement),
     eventDetail: requireElement(document, 'event-detail', HTMLElement),
@@ -229,6 +231,9 @@ function renderEvents(
 ): void {
   const filteredEvents = filterEvents(state.events, state.eventFilters);
   elements.eventCount.textContent = eventCountLabel(filteredEvents.length, state.events.length);
+  const eventNotice = eventHistoryNoticeLabel(state.eventHistory, state.events.length);
+  elements.eventsNotice.hidden = eventNotice === null;
+  elements.eventsNotice.textContent = eventNotice ?? '';
   elements.eventsEmpty.hidden = filteredEvents.length > 0;
   elements.eventsEmpty.textContent = state.events.length === 0 ? 'No events loaded.' : 'No events match the current filters.';
 
@@ -369,6 +374,26 @@ function eventCountLabel(filteredCount: number, totalCount: number): string {
   }
 
   return `${filteredLabel} of ${totalCount}`;
+}
+
+export function eventHistoryNoticeLabel(eventHistory: DashboardState['eventHistory'], visibleCount: number): string | null {
+  if (eventHistory === null) {
+    return null;
+  }
+
+  if (eventHistory.hasMore) {
+    return `Loaded ${formatCount(eventHistory.loadedCount)} events and stopped at the dashboard clamp. This view may not include the latest stored events.`;
+  }
+
+  if (eventHistory.loadedCount > visibleCount) {
+    return `Showing latest ${formatCount(visibleCount)} of ${formatCount(eventHistory.loadedCount)} loaded events.`;
+  }
+
+  return null;
+}
+
+function formatCount(value: number): string {
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 function httpLabel(status: ConnectionStatus): string {

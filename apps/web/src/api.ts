@@ -1,4 +1,4 @@
-import type { DashboardSnapshot, EventListResponse, HealthResponse, PicoEvent, SystemStatus } from './types.js';
+import type { DashboardSnapshot, EventHistoryStatus, EventListResponse, HealthResponse, PicoEvent, SystemStatus } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
 
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
@@ -54,7 +54,8 @@ export async function loadDashboardSnapshot(baseUrl: string): Promise<DashboardS
   return {
     health,
     systemStatus,
-    events,
+    events: events.events,
+    eventHistory: events.history,
   };
 }
 
@@ -66,7 +67,7 @@ async function fetchSystemStatus(baseUrl: string): Promise<SystemStatus> {
   return fetchJson(buildEndpointUrl(baseUrl, '/api/system/status'), isSystemStatus, 'system status');
 }
 
-async function fetchAllEvents(baseUrl: string): Promise<PicoEvent[]> {
+async function fetchAllEvents(baseUrl: string): Promise<{ events: PicoEvent[]; history: EventHistoryStatus }> {
   const events: PicoEvent[] = [];
   let cursor: string | null = null;
 
@@ -75,13 +76,25 @@ async function fetchAllEvents(baseUrl: string): Promise<PicoEvent[]> {
     events.push(...eventList.events);
 
     if (!eventList.hasMore || eventList.nextCursor === null) {
-      return events;
+      return {
+        events,
+        history: {
+          loadedCount: events.length,
+          hasMore: eventList.hasMore,
+        },
+      };
     }
 
     cursor = eventList.nextCursor;
   }
 
-  return events;
+  return {
+    events,
+    history: {
+      loadedCount: events.length,
+      hasMore: true,
+    },
+  };
 }
 
 async function fetchEvents(baseUrl: string, cursor: string | null): Promise<EventListResponse> {

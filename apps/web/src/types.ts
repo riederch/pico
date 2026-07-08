@@ -38,10 +38,16 @@ export interface EventListResponse {
   hasMore: boolean;
 }
 
+export interface EventHistoryStatus {
+  loadedCount: number;
+  hasMore: boolean;
+}
+
 export interface DashboardSnapshot {
   health: HealthResponse;
   systemStatus: SystemStatus;
   events: PicoEvent[];
+  eventHistory: EventHistoryStatus;
 }
 
 export type ConnectionStatus = 'idle' | 'checking' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'error';
@@ -60,6 +66,7 @@ export interface DashboardState {
   lastUpdatedAt: Date | null;
   systemStatus: SystemStatus | null;
   events: PicoEvent[];
+  eventHistory: EventHistoryStatus | null;
   eventFilters: EventFilters;
   selectedEventId: string | null;
   errorMessage: string | null;
