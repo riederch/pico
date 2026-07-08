@@ -449,6 +449,7 @@ Protocol documents:
 |---|---|
 | `docs/protocol/public-surfaces.md` | current and planned public compatibility surfaces |
 | `docs/protocol/compatibility-levels.md` | compatibility level definitions and claim boundaries |
+| `docs/protocol/conformance-fixtures.md` | planned non-cryptographic conformance fixture layout and future suite structure |
 
 ## Roadmap
 

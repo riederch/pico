@@ -164,6 +164,8 @@ Example direction:
 
 The repository should eventually include inter-Pico and Pico Home protocol conformance tests.
 
+The planned non-cryptographic fixture layout is documented in `../protocol/conformance-fixtures.md`.
+
 A release that changes protocol behaviour should add or update tests for:
 
 - protocol version reporting

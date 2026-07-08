@@ -322,6 +322,14 @@ A future compatibility claim should include at least:
 
 `commercialPermission` is informational only and does not replace a written license grant.
 
+## Conformance fixture planning
+
+Future compatibility claims need published fixtures and runner semantics before they can become strong claims.
+
+The planned fixture layout is documented in [`conformance-fixtures.md`](conformance-fixtures.md).
+
+That document is planning-only. It does not publish a conformance suite, certify L4 compatibility or make current Foundation APIs production-ready.
+
 ## Naming and user trust
 
 A compatibility claim must not imply official status.

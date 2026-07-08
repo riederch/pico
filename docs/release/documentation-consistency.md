@@ -12,6 +12,7 @@ Pico keeps several README-style documents with different scopes.
 | `pico_core/DOCS.md` | Home Assistant add-on installation and operation documentation | Home Assistant users and administrators |
 | `pico_core/CHANGELOG.md` | add-on-specific change history | Home Assistant users and administrators |
 | `docs/architecture/*.md` | architecture decisions and concept constraints | architecture and design work |
+| `docs/protocol/*.md` | protocol surfaces, compatibility levels and conformance fixture planning | protocol and compatibility work |
 | `docs/release/*.md` | release, versioning and documentation rules | maintainers |
 
 ## Root README purpose
@@ -141,6 +142,7 @@ In particular:
 - Pico Link envelope, credential and key-envelope schema language must remain consistent with `0032`
 - key lifecycle, rotation, revocation, lost-device, reset and recovery language must remain consistent with `0033`
 - canonicalization, signature-input and test-vector language must remain consistent with `0034`
+- conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
 
@@ -159,6 +161,7 @@ Before merging documentation changes, check:
 11. Do Pico Home, Pico Vault, Pico Surface, Pico Relay, Home Host Pico and Home Member Pico roles remain distinct?
 12. Do protocol compatibility claims preserve inter-Pico communication semantics for the advertised protocol version?
 13. Do product terms explain function without implying false authority, ownership, trust or control?
+14. Do conformance fixture statements avoid implying certification, production security or commercial permission?
 
 ## Design rule
 

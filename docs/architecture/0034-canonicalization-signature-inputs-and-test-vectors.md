@@ -338,6 +338,8 @@ Pico should eventually publish fixtures in families:
 
 Test vectors should include machine-readable fixture files and human-readable fixture notes.
 
+The planned repository layout for future fixture files is documented in `../protocol/conformance-fixtures.md`.
+
 ## Fixture structure
 
 A future fixture should state:

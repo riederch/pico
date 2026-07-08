@@ -143,7 +143,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 1. Build a safe technical foundation.
 2. Make updates and migrations safe before real user data matters.
 3. Build the first usable client.
-4. Define identity, transport, relay and encryption boundaries before real remote communication; after that, optionally build a small non-blocking walking-skeleton tech demo.
+4. Define identity, transport, relay, encryption, lifecycle and canonicalization boundaries before real remote communication; after that, optionally build a small non-blocking walking-skeleton tech demo.
 5. Add policy-gated tool execution.
 6. Add memory only after deletion and privacy-domain semantics are clear.
 7. Add richer companion UX after the control and audit layers are solid.
@@ -165,6 +165,9 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md`](../docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md) - canonicalization, signature-input and test-vector boundaries
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
+- [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces
+- [`../docs/protocol/compatibility-levels.md`](../docs/protocol/compatibility-levels.md) - compatibility level definitions
+- [`../docs/protocol/conformance-fixtures.md`](../docs/protocol/conformance-fixtures.md) - planned non-cryptographic conformance fixture layout
 
 ## Design principles
 
