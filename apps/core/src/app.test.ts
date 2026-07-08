@@ -12,6 +12,7 @@ import {
   messageCreatedRoles,
   picoHomeEventTypes,
   protocolCapabilities,
+  realtimeMessageType,
 } from '@pico/protocol';
 import { buildApp } from './app.js';
 
@@ -326,7 +327,7 @@ describe('Pico Home Core app', () => {
     const socket = await app.injectWS('/ws', {}, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
     try {
       const message = await requireMessagePromise(initialMessage);
-      expect(message).toEqual({ type: 'pico.core.connected', deviceId: 'test-core' });
+      expect(message).toEqual({ type: realtimeMessageType.coreConnected, deviceId: 'test-core' });
     } finally {
       socket.terminate();
       await app.close();
@@ -345,7 +346,7 @@ describe('Pico Home Core app', () => {
     }, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
     try {
       const message = await requireMessagePromise(initialMessage);
-      expect(message).toEqual({ type: 'pico.core.connected', deviceId: 'test-core' });
+      expect(message).toEqual({ type: realtimeMessageType.coreConnected, deviceId: 'test-core' });
     } finally {
       socket.terminate();
       await app.close();
@@ -382,7 +383,7 @@ describe('Pico Home Core app', () => {
     }, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
     try {
       const message = await requireMessagePromise(initialMessage);
-      expect(message).toEqual({ type: 'pico.core.connected', deviceId: 'test-core' });
+      expect(message).toEqual({ type: realtimeMessageType.coreConnected, deviceId: 'test-core' });
     } finally {
       socket.terminate();
       await app.close();
@@ -401,7 +402,7 @@ describe('Pico Home Core app', () => {
       expect(created.statusCode).toBe(201);
       const broadcast = await broadcastPromise;
       const createdBody = created.json();
-      expect(broadcast).toEqual({ type: 'pico.event.created', event: createdBody.event });
+      expect(broadcast).toEqual({ type: realtimeMessageType.eventCreated, event: createdBody.event });
     } finally {
       socket.terminate();
       await app.close();

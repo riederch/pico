@@ -67,6 +67,42 @@ The response keeps `events` as the primary additive field and adds cursor metada
 
 The current `PicoEvent.signature` field is stored and returned as opaque metadata only. Pico Home Core does not verify signatures yet. Clients must not treat a populated `signature` field as proof of authorship, integrity or Pico identity until the key lifecycle, signature format and verification model exist.
 
+### Current `WS /ws` message types
+
+`WS /ws` currently emits connection and event-broadcast messages for the local Foundation dashboard. These messages are not Pico Link packets and do not define a production remote transport.
+
+```text
+pico.core.connected
+pico.event.created
+```
+
+Current message shapes:
+
+```json
+{
+  "type": "pico.core.connected",
+  "deviceId": "pico-home-core"
+}
+```
+
+```json
+{
+  "type": "pico.event.created",
+  "event": {
+    "eventId": "example-event",
+    "deviceId": "example-device",
+    "lamport": 1,
+    "wallTime": "2026-07-08T00:00:00.000Z",
+    "type": "message.created",
+    "stream": "session:example",
+    "payload": {
+      "role": "user",
+      "text": "Hallo Pico"
+    }
+  }
+}
+```
+
 ## Current event compatibility classes
 
 ### Foundation event types

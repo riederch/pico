@@ -1,3 +1,4 @@
+import { realtimeMessageType } from '@pico/protocol';
 import { defaultPicoHomeUrl, loadDashboardSnapshot, normalizePicoHomeUrl } from './api.js';
 import { createDashboardView } from './render.js';
 import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from './types.js';
@@ -231,7 +232,7 @@ export function startDashboard(document: Document): void {
   }
 
   function handleRealtimeMessage(message: RealtimeMessage): void {
-    if (message.type === 'pico.event.created') {
+    if (message.type === realtimeMessageType.eventCreated) {
       const isNewEvent = !state.events.some((event) => event.eventId === message.event.eventId);
       state.events = upsertEvent(state.events, message.event).slice(-MAX_VISIBLE_EVENTS);
       state.eventHistory = updateEventHistoryAfterRealtimeEvent(state.eventHistory, isNewEvent);

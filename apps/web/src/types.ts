@@ -1,6 +1,7 @@
-import type { PicoEvent as ProtocolPicoEvent } from '@pico/protocol';
+import type { PicoEvent as ProtocolPicoEvent, PicoRealtimeMessage as ProtocolPicoRealtimeMessage } from '@pico/protocol';
 
 export type PicoEvent = ProtocolPicoEvent;
+export type RealtimeMessage = ProtocolPicoRealtimeMessage;
 
 export interface HealthResponse {
   ok: boolean;
@@ -71,18 +72,6 @@ export interface DashboardState {
   selectedEventId: string | null;
   errorMessage: string | null;
 }
-
-export interface RealtimeConnectedMessage {
-  type: 'pico.core.connected';
-  deviceId: string;
-}
-
-export interface RealtimeEventCreatedMessage {
-  type: 'pico.event.created';
-  event: PicoEvent;
-}
-
-export type RealtimeMessage = RealtimeConnectedMessage | RealtimeEventCreatedMessage;
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

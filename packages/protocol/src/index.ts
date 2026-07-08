@@ -62,6 +62,18 @@ export const protocolCapabilities = {
 export type PicoProtocolCapability = keyof typeof protocolCapabilities;
 export type PicoProtocolCapabilities = typeof protocolCapabilities;
 
+export const realtimeMessageType = {
+  coreConnected: 'pico.core.connected',
+  eventCreated: 'pico.event.created',
+} as const;
+
+export const realtimeMessageTypes = [
+  realtimeMessageType.coreConnected,
+  realtimeMessageType.eventCreated,
+] as const;
+
+export type PicoRealtimeMessageType = typeof realtimeMessageTypes[number];
+
 export type PicoNodeType =
   | 'pico_home'
   | 'pico_vault'
@@ -163,6 +175,18 @@ export interface PicoEvent<TPayload = unknown> {
   payload: TPayload;
   signature?: string;
 }
+
+export interface PicoCoreConnectedMessage {
+  type: typeof realtimeMessageType.coreConnected;
+  deviceId: string;
+}
+
+export interface PicoEventCreatedMessage<TPayload = unknown> {
+  type: typeof realtimeMessageType.eventCreated;
+  event: PicoEvent<TPayload>;
+}
+
+export type PicoRealtimeMessage = PicoCoreConnectedMessage | PicoEventCreatedMessage;
 
 export interface PicoDevice {
   deviceId: string;

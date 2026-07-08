@@ -1,3 +1,4 @@
+import { realtimeMessageType } from '@pico/protocol';
 import { buildEndpointUrl } from './api.js';
 import type { RealtimeMessage } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
@@ -67,14 +68,14 @@ function parseRealtimeMessage(data: unknown): RealtimeMessage | null {
     return null;
   }
 
-  if (parsed.type === 'pico.core.connected' && typeof parsed.deviceId === 'string') {
+  if (parsed.type === realtimeMessageType.coreConnected && typeof parsed.deviceId === 'string') {
     return {
       type: parsed.type,
       deviceId: parsed.deviceId,
     };
   }
 
-  if (parsed.type === 'pico.event.created' && isPicoEvent(parsed.event)) {
+  if (parsed.type === realtimeMessageType.eventCreated && isPicoEvent(parsed.event)) {
     return {
       type: parsed.type,
       event: parsed.event,

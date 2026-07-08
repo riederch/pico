@@ -10,7 +10,10 @@ import {
   messageCreatedRoles,
   picoEventTypes,
   protocolCapabilities,
+  realtimeMessageType,
+  type PicoCoreConnectedMessage,
   type PicoEvent,
+  type PicoEventCreatedMessage,
   type PicoEventType,
 } from '@pico/protocol';
 import { LamportClock } from '@pico/sync';
@@ -99,7 +102,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   function broadcast(event: PicoEvent): void {
-    const serialized = JSON.stringify({ type: 'pico.event.created', event });
+    const message: PicoEventCreatedMessage = { type: realtimeMessageType.eventCreated, event };
+    const serialized = JSON.stringify(message);
 
     for (const socket of sockets) {
       if (socket.readyState === socket.OPEN) {
@@ -204,7 +208,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const socket = connection as RealtimeSocket;
     socket.isAlive = true;
     sockets.add(socket);
-    socket.send(JSON.stringify({ type: 'pico.core.connected', deviceId: config.deviceId }));
+    const message: PicoCoreConnectedMessage = { type: realtimeMessageType.coreConnected, deviceId: config.deviceId };
+    socket.send(JSON.stringify(message));
 
     socket.on('pong', () => {
       socket.isAlive = true;

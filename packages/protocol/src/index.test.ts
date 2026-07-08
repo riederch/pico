@@ -9,6 +9,7 @@ import type {
   AvatarStateChangedPayload,
   PicoEvent,
   PicoHomeMembership,
+  PicoRealtimeMessage,
   PicoRulesDecisionCreatedPayload,
   PolicyDecisionCreatedPayload,
   ToolCallRequestedPayload,
@@ -25,6 +26,8 @@ import {
   picoEventTypes,
   picoHomeEventTypes,
   protocolCapabilities,
+  realtimeMessageType,
+  realtimeMessageTypes,
 } from './index.js';
 
 const repoRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -67,6 +70,18 @@ describe('Pico protocol types', () => {
     expect(avatarStatusColors).toEqual(['neutral', 'blue', 'green', 'yellow', 'red', 'violet']);
   });
 
+  it('exports runtime realtime message type lists for websocket compatibility checks', () => {
+    expect(realtimeMessageType).toEqual({
+      coreConnected: 'pico.core.connected',
+      eventCreated: 'pico.event.created',
+    });
+
+    expect(realtimeMessageTypes).toEqual([
+      realtimeMessageType.coreConnected,
+      realtimeMessageType.eventCreated,
+    ]);
+  });
+
   it('keeps public protocol event docs aligned with runtime event type lists', () => {
     const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
 
@@ -80,6 +95,12 @@ describe('Pico protocol types', () => {
     const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
 
     expect(textFenceAfterHeading(publicSurfaces, '### Current runtime capability flags')).toEqual(Object.keys(protocolCapabilities));
+  });
+
+  it('keeps public protocol websocket message docs aligned with runtime message type lists', () => {
+    const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
+
+    expect(textFenceAfterHeading(publicSurfaces, '### Current `WS /ws` message types')).toEqual([...realtimeMessageTypes]);
   });
 
   it('keeps public protocol payload value docs aligned with runtime payload value lists', () => {
@@ -133,6 +154,28 @@ describe('Pico protocol types', () => {
 
     expect(event.type).toBe('message.created');
     expect(event.payload.text).toBe('Hallo Pico');
+  });
+
+  it('accepts current websocket realtime message shapes', () => {
+    const connected: PicoRealtimeMessage = {
+      type: realtimeMessageType.coreConnected,
+      deviceId: 'test-core',
+    };
+    const eventCreated: PicoRealtimeMessage = {
+      type: realtimeMessageType.eventCreated,
+      event: {
+        eventId: 'evt-1',
+        deviceId: 'desktop-dev',
+        lamport: 1,
+        wallTime: '2026-07-02T20:00:00.000Z',
+        type: 'message.created',
+        stream: 'session:test',
+        payload: { role: 'user', text: 'Hallo Pico' },
+      },
+    };
+
+    expect(connected.type).toBe('pico.core.connected');
+    expect(eventCreated.event.type).toBe('message.created');
   });
 
   it('accepts an avatar state change payload', () => {
