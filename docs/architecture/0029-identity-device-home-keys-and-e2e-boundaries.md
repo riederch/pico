@@ -189,6 +189,8 @@ Signatures should make these properties possible:
 
 The current foundation event API does not yet implement signed events, signed manifests or key envelopes.
 
+ADR `0032-pico-link-envelope-and-credential-schema-direction.md` defines the conceptual schema families that future signed event segments, replica manifests, key envelopes and Home membership credentials should refine before implementation.
+
 ## End-to-end encryption boundary
 
 Pico Link payloads should be encrypted above the transport.
@@ -337,6 +339,8 @@ This ADR extends and constrains:
 - `0026-product-terminology-and-naming.md`
 - `0027-dedicated-pico-home-image-and-first-boot-setup.md`
 - `0028-pico-link-transport-facade-and-relay-network.md`
+- `0031-pico-link-identity-relay-and-domain-threat-model.md`
+- `0032-pico-link-envelope-and-credential-schema-direction.md`
 
 The continuity rule is:
 

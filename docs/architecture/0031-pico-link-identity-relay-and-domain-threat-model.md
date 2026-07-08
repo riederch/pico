@@ -12,6 +12,8 @@ ADR 0029 separates Pico Identity Keys, Device Keys, Pico Home Host Keys, Home Me
 
 ADR 0030 keeps the current Foundation HTTP API inside a trusted local diagnostics boundary until authentication, membership, Pico Link and cryptographic boundaries exist.
 
+ADR 0032 defines conceptual schema families for Pico Link packet envelopes, protected payload envelopes, signed event segments, replica manifests, key envelopes, Home membership credentials and compatibility advertisements.
+
 Before Pico can design wire schemas, key lifecycle or an executable walking-skeleton demo, it needs a concrete threat model for identity, device, Home, relay metadata and encrypted content domains.
 
 ## Decision
@@ -304,5 +306,6 @@ This ADR extends and constrains:
 - `0028-pico-link-transport-facade-and-relay-network.md`
 - `0029-identity-device-home-keys-and-e2e-boundaries.md`
 - `0030-foundation-api-exposure-and-local-trust-boundary.md`
+- `0032-pico-link-envelope-and-credential-schema-direction.md`
 
 It does not replace those ADRs. It defines the minimum threat-model boundary that future Pico Link schemas, relay work, Home membership, domain key work and walking-skeleton demos must respect.

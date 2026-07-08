@@ -157,6 +157,8 @@ A future transport-neutral envelope may include fields such as:
 
 This is a conceptual envelope, not a committed wire format.
 
+ADR `0032-pico-link-envelope-and-credential-schema-direction.md` refines this into conceptual schema families for packet envelopes, protected payload envelopes, signed history, key envelopes, membership credentials and compatibility advertisements. It still does not define a final wire format.
+
 The envelope should be small enough to reason about low-bandwidth transports and rich enough to support:
 
 - duplicate detection

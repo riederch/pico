@@ -138,6 +138,7 @@ In particular:
 - identity, device, Home, transport and domain key language must remain consistent with `0029`
 - Foundation API exposure and local trust boundary language must remain consistent with `0030`
 - Pico Link identity, relay metadata and protected-domain threat-model language must remain consistent with `0031`
+- Pico Link envelope, credential and key-envelope schema language must remain consistent with `0032`
 
 ## Review checklist
 

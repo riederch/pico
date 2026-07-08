@@ -160,6 +160,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md`](docs/architecture/0029-identity-device-home-keys-and-e2e-boundaries.md) - Pico identity, device, Home, transport and domain key boundaries
 - [`docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`](docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md) - current Foundation API exposure and local trust boundary
 - [`docs/architecture/0031-pico-link-identity-relay-and-domain-threat-model.md`](docs/architecture/0031-pico-link-identity-relay-and-domain-threat-model.md) - Pico Link identity, relay metadata and protected-domain threat model
+- [`docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md`](docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md) - Pico Link envelope, credential and key-envelope schema direction
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
