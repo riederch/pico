@@ -15,8 +15,13 @@ import type {
 } from './index.js';
 import {
   actionEventTypes,
+  avatarIntensities,
+  avatarModes,
+  avatarStates,
+  avatarStatusColors,
   foundationEventTypes,
   legacyToolPolicyEventTypes,
+  messageCreatedRoles,
   picoEventTypes,
   picoHomeEventTypes,
   protocolCapabilities,
@@ -52,6 +57,14 @@ describe('Pico protocol types', () => {
       'pico.core.websocket.v1': true,
       'pico.avatar_state.v1': true,
     });
+  });
+
+  it('exports runtime payload value lists for foundation payload validation', () => {
+    expect(messageCreatedRoles).toEqual(['user', 'assistant', 'system', 'tool']);
+    expect(avatarModes).toEqual(['everyday', 'technical', 'wwg', 'firefighter', 'security', 'organization', 'smart_home']);
+    expect(avatarStates).toEqual(['idle', 'listening', 'thinking', 'working', 'unsure', 'warning', 'confirmation_required', 'blocked', 'success', 'sleeping']);
+    expect(avatarIntensities).toEqual(['low', 'normal', 'high']);
+    expect(avatarStatusColors).toEqual(['neutral', 'blue', 'green', 'yellow', 'red', 'violet']);
   });
 
   it('keeps public protocol event docs aligned with runtime event type lists', () => {

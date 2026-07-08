@@ -2,7 +2,17 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { actionEventTypes, legacyToolPolicyEventTypes, picoHomeEventTypes, protocolCapabilities } from '@pico/protocol';
+import {
+  actionEventTypes,
+  avatarIntensities,
+  avatarModes,
+  avatarStates,
+  avatarStatusColors,
+  legacyToolPolicyEventTypes,
+  messageCreatedRoles,
+  picoHomeEventTypes,
+  protocolCapabilities,
+} from '@pico/protocol';
 import { buildApp } from './app.js';
 
 const tempDirs: string[] = [];
@@ -198,6 +208,82 @@ describe('Pico Home Core app', () => {
     const blankMessageText = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: '   ' } } });
     expect(blankMessageText.statusCode).toBe(400);
     expect(blankMessageText.json()).toEqual({ error: 'message.created payload requires role and text.' });
+
+    await app.close();
+  });
+
+  it('accepts foundation payload values exported by the protocol package', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    for (const role of messageCreatedRoles) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'message.created',
+          payload: { role, text: `Message role ${role}` },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    }
+
+    for (const mode of avatarModes) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'avatar.state_changed',
+          payload: { mode, state: 'idle', intensity: 'normal', statusColor: 'neutral' },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    }
+
+    for (const state of avatarStates) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'avatar.state_changed',
+          payload: { mode: 'everyday', state, intensity: 'normal', statusColor: 'neutral' },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    }
+
+    for (const intensity of avatarIntensities) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'avatar.state_changed',
+          payload: { mode: 'everyday', state: 'idle', intensity, statusColor: 'neutral' },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    }
+
+    for (const statusColor of avatarStatusColors) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'avatar.state_changed',
+          payload: { mode: 'everyday', state: 'idle', intensity: 'normal', statusColor },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    }
 
     await app.close();
   });

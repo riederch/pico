@@ -81,19 +81,60 @@ export type ContextSignalLevel = 'untrusted' | 'known' | 'trusted' | 'admin';
 /** @deprecated Use ContextSignalLevel. */
 export type TrustedLevel = ContextSignalLevel;
 
-export type AvatarMode = 'everyday' | 'technical' | 'wwg' | 'firefighter' | 'security' | 'organization' | 'smart_home';
+export const messageCreatedRoles = [
+  'user',
+  'assistant',
+  'system',
+  'tool',
+] as const;
 
-export type AvatarStateName =
-  | 'idle'
-  | 'listening'
-  | 'thinking'
-  | 'working'
-  | 'unsure'
-  | 'warning'
-  | 'confirmation_required'
-  | 'blocked'
-  | 'success'
-  | 'sleeping';
+export type MessageCreatedRole = typeof messageCreatedRoles[number];
+
+export const avatarModes = [
+  'everyday',
+  'technical',
+  'wwg',
+  'firefighter',
+  'security',
+  'organization',
+  'smart_home',
+] as const;
+
+export type AvatarMode = typeof avatarModes[number];
+
+export const avatarStates = [
+  'idle',
+  'listening',
+  'thinking',
+  'working',
+  'unsure',
+  'warning',
+  'confirmation_required',
+  'blocked',
+  'success',
+  'sleeping',
+] as const;
+
+export type AvatarStateName = typeof avatarStates[number];
+
+export const avatarIntensities = [
+  'low',
+  'normal',
+  'high',
+] as const;
+
+export type AvatarIntensity = typeof avatarIntensities[number];
+
+export const avatarStatusColors = [
+  'neutral',
+  'blue',
+  'green',
+  'yellow',
+  'red',
+  'violet',
+] as const;
+
+export type AvatarStatusColor = typeof avatarStatusColors[number];
 
 export type ActionRisk =
   | 'read_only'
@@ -155,15 +196,15 @@ export interface PicoHomeMembership {
 }
 
 export interface MessageCreatedPayload {
-  role: 'user' | 'assistant' | 'system' | 'tool';
+  role: MessageCreatedRole;
   text: string;
 }
 
 export interface AvatarStateChangedPayload {
   mode: AvatarMode;
   state: AvatarStateName;
-  intensity: 'low' | 'normal' | 'high';
-  statusColor: 'neutral' | 'blue' | 'green' | 'yellow' | 'red' | 'violet';
+  intensity: AvatarIntensity;
+  statusColor: AvatarStatusColor;
   message?: string;
 }
 

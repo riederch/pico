@@ -1,7 +1,18 @@
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
-import { foundationEventTypes, picoEventTypes, protocolCapabilities, type PicoEvent, type PicoEventType } from '@pico/protocol';
+import {
+  avatarIntensities,
+  avatarModes,
+  avatarStates,
+  avatarStatusColors,
+  foundationEventTypes,
+  messageCreatedRoles,
+  picoEventTypes,
+  protocolCapabilities,
+  type PicoEvent,
+  type PicoEventType,
+} from '@pico/protocol';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore, type EventCursor } from './event-store.js';
@@ -20,11 +31,11 @@ const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 const writableEventTypes = new Set<PicoEventType>(foundationEventTypes);
 const knownEventTypes = new Set<PicoEventType>(picoEventTypes);
 
-const messageRoles = new Set(['user', 'assistant', 'system', 'tool']);
-const avatarModes = new Set(['everyday', 'technical', 'wwg', 'firefighter', 'security', 'organization', 'smart_home']);
-const avatarStates = new Set(['idle', 'listening', 'thinking', 'working', 'unsure', 'warning', 'confirmation_required', 'blocked', 'success', 'sleeping']);
-const avatarIntensities = new Set(['low', 'normal', 'high']);
-const avatarStatusColors = new Set(['neutral', 'blue', 'green', 'yellow', 'red', 'violet']);
+const messageRoleSet = new Set<string>(messageCreatedRoles);
+const avatarModeSet = new Set<string>(avatarModes);
+const avatarStateSet = new Set<string>(avatarStates);
+const avatarIntensitySet = new Set<string>(avatarIntensities);
+const avatarStatusColorSet = new Set<string>(avatarStatusColors);
 
 interface IncomingEventBody {
   deviceId?: unknown;
@@ -372,7 +383,7 @@ function validatePayload(type: PicoEventType, payload: unknown): string | null {
   }
 
   if (type === 'message.created') {
-    if (!isStringMember(payload.role, messageRoles) || !isNonEmptyString(payload.text, MAX_TEXT_LENGTH)) {
+    if (!isStringMember(payload.role, messageRoleSet) || !isNonEmptyString(payload.text, MAX_TEXT_LENGTH)) {
       return 'message.created payload requires role and text.';
     }
 
@@ -381,10 +392,10 @@ function validatePayload(type: PicoEventType, payload: unknown): string | null {
 
   if (type === 'avatar.state_changed') {
     if (
-      !isStringMember(payload.mode, avatarModes)
-      || !isStringMember(payload.state, avatarStates)
-      || !isStringMember(payload.intensity, avatarIntensities)
-      || !isStringMember(payload.statusColor, avatarStatusColors)
+      !isStringMember(payload.mode, avatarModeSet)
+      || !isStringMember(payload.state, avatarStateSet)
+      || !isStringMember(payload.intensity, avatarIntensitySet)
+      || !isStringMember(payload.statusColor, avatarStatusColorSet)
     ) {
       return 'avatar.state_changed payload is invalid.';
     }
