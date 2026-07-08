@@ -1,0 +1,10 @@
+{
+  "deviceId": "fixture-device",
+  "sessionId": "session:fixture",
+  "type": "message.created",
+  "stream": "session:fixture",
+  "payload": {
+    "role": "user",
+    "text": "Hallo Pico fixture"
+  }
+}

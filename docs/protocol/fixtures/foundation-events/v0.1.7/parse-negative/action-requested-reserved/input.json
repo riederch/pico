@@ -1,0 +1,11 @@
+{
+  "deviceId": "fixture-device",
+  "type": "action.requested",
+  "payload": {
+    "actionName": "homeassistant.get_entity_state",
+    "risk": "read_only",
+    "input": {
+      "entityId": "sensor.pico_status"
+    }
+  }
+}

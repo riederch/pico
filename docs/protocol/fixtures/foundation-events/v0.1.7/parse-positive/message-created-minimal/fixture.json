@@ -1,0 +1,28 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-positive.message-created-minimal",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-positive",
+  "case": "message.created minimal valid append body",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 201
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation fixture. This does not imply Pico Link, Pico Home Link, cryptographic or L4 compatibility."
+}

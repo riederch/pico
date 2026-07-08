@@ -326,9 +326,9 @@ A future compatibility claim should include at least:
 
 Future compatibility claims need published fixtures and runner semantics before they can become strong claims.
 
-The planned fixture layout is documented in [`conformance-fixtures.md`](conformance-fixtures.md).
+The planned fixture layout and current Foundation event fixture seed are documented in [`conformance-fixtures.md`](conformance-fixtures.md).
 
-That document is planning-only. It does not publish a conformance suite, certify L4 compatibility or make current Foundation APIs production-ready.
+That document and the seed fixtures do not publish a conformance suite, certify L4 compatibility or make current Foundation APIs production-ready.
 
 ## Naming and user trust
 

@@ -130,6 +130,60 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(compatibilityLevels, '## L1 - Foundation event compatibility')).toEqual([...foundationEventTypes]);
   });
 
+  it('keeps seed conformance fixtures aligned with current Foundation event semantics', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+
+    expect(stringField(suite, 'schema')).toBe('pico.conformance.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'protocolVersion')).toBe(currentVersion);
+    expect(stringArrayField(suite, 'surfaces')).toEqual(['foundation-events']);
+    expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
+    expect(fixturePaths).toEqual([
+      'foundation-events/v0.1.7/parse-positive/message-created-minimal',
+      'foundation-events/v0.1.7/parse-negative/action-requested-reserved',
+    ]);
+
+    for (const fixturePath of fixturePaths) {
+      const fixture = readRepoJsonObject(`docs/protocol/fixtures/${fixturePath}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const expectBlock = recordField(fixture, 'expect');
+      const input = readRepoJsonObject(`docs/protocol/fixtures/${fixturePath}/${stringField(source, 'file')}`);
+      const inputType = stringField(input, 'type');
+      const capabilitiesRequired = stringArrayField(fixture, 'capabilitiesRequired');
+
+      expect(stringField(fixture, 'schema')).toBe('pico.conformance.fixture');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'surface')).toBe('foundation-events');
+      expect(stringField(fixture, 'protocolVersion')).toBe(currentVersion);
+      expect(stringField(source, 'encoding')).toBe('json');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(capabilitiesRequired).toEqual(['pico.core.events.v1']);
+
+      for (const capability of capabilitiesRequired) {
+        expect(Object.keys(protocolCapabilities)).toContain(capability);
+      }
+
+      const family = stringField(fixture, 'family');
+      if (family === 'parse-positive') {
+        expect(stringField(expectBlock, 'parse')).toBe('accept');
+        expect(foundationEventTypes).toContain(inputType);
+        expect(inputType).toBe('message.created');
+        expect(messageCreatedRoles).toContain(stringField(recordField(input, 'payload'), 'role'));
+      } else if (family === 'parse-negative') {
+        expect(stringField(expectBlock, 'parse')).toBe('reject');
+        expect(picoEventTypes).toContain(inputType);
+        expect(foundationEventTypes).not.toContain(inputType);
+        expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+      } else {
+        throw new Error(`Unexpected fixture family: ${family}`);
+      }
+    }
+  });
+
   it('keeps architecture wire event examples aligned with known protocol event types', () => {
     const terminology = readRepoFile('docs/architecture/0026-product-terminology-and-naming.md');
     const examples = textFenceAfterHeading(terminology, '## Wire naming rule');
@@ -291,6 +345,50 @@ describe('Pico protocol types', () => {
 
 function readRepoFile(path: string): string {
   return readFileSync(resolve(repoRootPath, path), 'utf8');
+}
+
+function readRepoJsonObject(path: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(readRepoFile(path));
+  return asRecord(parsed, path);
+}
+
+function recordField(source: Record<string, unknown>, field: string): Record<string, unknown> {
+  return asRecord(source[field], field);
+}
+
+function stringField(source: Record<string, unknown>, field: string): string {
+  const value = source[field];
+  if (typeof value !== 'string') {
+    throw new Error(`${field} must be a string.`);
+  }
+
+  return value;
+}
+
+function numberField(source: Record<string, unknown>, field: string): number {
+  const value = source[field];
+  if (typeof value !== 'number') {
+    throw new Error(`${field} must be a number.`);
+  }
+
+  return value;
+}
+
+function stringArrayField(source: Record<string, unknown>, field: string): string[] {
+  const value = source[field];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+    throw new Error(`${field} must be a string array.`);
+  }
+
+  return value;
+}
+
+function asRecord(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error(`${label} must be an object.`);
+  }
+
+  return value as Record<string, unknown>;
 }
 
 function textFenceAfterHeading(markdown: string, heading: string): string[] {
