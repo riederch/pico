@@ -143,7 +143,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 1. Build a safe technical foundation.
 2. Make updates and migrations safe before real user data matters.
 3. Build the first usable client.
-4. Define identity, transport, relay and encryption boundaries before real remote communication.
+4. Define identity, transport, relay and encryption boundaries before real remote communication; after that, optionally build a small non-blocking walking-skeleton tech demo.
 5. Add policy-gated tool execution.
 6. Add memory only after deletion and privacy-domain semantics are clear.
 7. Add richer companion UX after the control and audit layers are solid.

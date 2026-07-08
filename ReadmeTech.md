@@ -454,6 +454,20 @@ flowchart TD
     F6 --> F7[7. Companion UX\nAvatar / Voice / Mobile / Desktop / HA]
 ```
 
+### Optional walking-skeleton tech demo
+
+A small executable architecture sketch may be useful after the identity, transport, relay and encryption boundaries have concrete threat-model and wire-schema drafts.
+
+This demo should be non-blocking and deliberately thin:
+
+- a demo Pico Vault creates an opaque Pico Link-style packet
+- a demo Pico Relay forwards or queues it while seeing only routing metadata
+- Pico Home acts as a local endpoint, not as a public inbound API server
+- a demo Pico Surface displays limited diagnostic state
+- cryptography, membership, claim, auth and conformance claims stay stubbed or explicitly out of scope unless the corresponding designs already exist
+
+The demo must not become the path for production remote access. If it starts forcing rushed decisions in key lifecycle, relay trust, Home membership, auth, payload encryption, deletion or conformance, it should wait.
+
 ## Design principles
 
 - Local-first where practical
@@ -496,6 +510,7 @@ flowchart TD
 - Define first merge semantics for client state before deeper offline editing
 - Define the production auth, ingress and local pairing boundary before exposing Pico Home APIs beyond trusted local paths
 - Define the concrete identity/device/home key threat model, wire schemas, rotation semantics and conformance tests before real Pico Link communication
+- Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
 - Add the first Pico Rules-gated read-only action only after the relevant policy boundary is in place

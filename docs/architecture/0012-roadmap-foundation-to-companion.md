@@ -172,6 +172,22 @@ Constraints:
 - document threat model before implementation
 - test hostile lockout and revocation scenarios
 
+## Optional checkpoint - walking-skeleton tech demo
+
+After the identity, transport, relay and encryption boundaries have concrete threat-model and wire-schema drafts, Pico may build a small executable architecture sketch across Pico Vault, Pico Relay, Pico Home and Pico Surface roles.
+
+This checkpoint is optional and non-blocking. It exists to validate role boundaries and message flow, not to ship remote communication.
+
+It should stay deliberately thin:
+
+- Pico Vault creates an opaque Pico Link-style packet.
+- Pico Relay forwards or queues it while seeing only routing metadata.
+- Pico Home acts as a local endpoint, not as a public inbound API server.
+- Pico Surface displays limited diagnostic state.
+- Cryptography, membership, claim, auth and conformance claims remain stubbed or out of scope unless their designs already exist.
+
+If this checkpoint forces rushed decisions about key lifecycle, relay trust, Home membership, authentication, payload encryption, deletion or conformance, it should wait.
+
 ## Design rule
 
 Pico should become more capable only after the safety, update, deletion, audit, and sovereignty foundations are strong enough to support that capability.
