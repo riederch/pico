@@ -16,7 +16,9 @@ Home Assistant is the first packaging and runtime path, not the only intended pl
 
 Remote reachability is intended to work through Pico Link transports, primarily Pico Relay, not by exposing Pico Home as a public inbound HTTP server.
 
-The current Foundation HTTP API is a trusted local diagnostics and foundation interface. It is not a production authentication surface, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
+The current Foundation HTTP and WebSocket API is an unauthenticated trusted-local diagnostics and foundation interface. It is not a production authentication surface, authorization boundary, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
+
+Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
 ## License and commercial use
 

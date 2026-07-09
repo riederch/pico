@@ -116,6 +116,8 @@ Prepared foundation pieces include:
 
 Pico is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, relay transport, Pico Link transport security, Home membership flows and companion clients still need to be built.
 
+The current Foundation HTTP and WebSocket API is unauthenticated local diagnostics only. Do not expose port `3100` outside a trusted local development or add-on boundary. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
+
 ## License and commercial use
 
 Pico is source-available for private and non-commercial use under the PolyForm Noncommercial License 1.0.0.
