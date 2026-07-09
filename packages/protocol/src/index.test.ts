@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -156,6 +156,7 @@ describe('Pico protocol types', () => {
       'foundation-realtime/v0.1.7/parse-negative/event-created-missing-event',
       'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
     ]);
+    expect([...fixturePaths].sort()).toEqual(listFixtureDirectories().sort());
 
     for (const fixturePath of fixturePaths) {
       const fixture = readRepoJsonObject(`docs/protocol/fixtures/${fixturePath}/fixture.json`);
@@ -456,6 +457,34 @@ function expectCurrentFoundationRealtimeFixture(
 
 function readRepoFile(path: string): string {
   return readFileSync(resolve(repoRootPath, path), 'utf8');
+}
+
+function listFixtureDirectories(): string[] {
+  const fixturesRootPath = resolve(repoRootPath, 'docs/protocol/fixtures');
+  const fixtureDirectories: string[] = [];
+
+  collectFixtureDirectories(fixturesRootPath, '', fixtureDirectories);
+
+  return fixtureDirectories;
+}
+
+function collectFixtureDirectories(directoryPath: string, relativePath: string, fixtureDirectories: string[]): void {
+  const entries = readdirSync(directoryPath, { withFileTypes: true });
+  const entryNames = new Set(entries.map((entry) => entry.name));
+
+  if (entryNames.has('fixture.json') && entryNames.has('input.json')) {
+    fixtureDirectories.push(relativePath);
+  }
+
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      collectFixtureDirectories(
+        resolve(directoryPath, entry.name),
+        relativePath === '' ? entry.name : `${relativePath}/${entry.name}`,
+        fixtureDirectories,
+      );
+    }
+  }
 }
 
 function readRepoJsonObject(path: string): Record<string, unknown> {
