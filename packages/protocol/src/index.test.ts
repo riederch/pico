@@ -159,6 +159,7 @@ describe('Pico protocol types', () => {
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories().sort());
 
     for (const fixturePath of fixturePaths) {
+      const [fixtureSurface, fixtureVersion, fixtureFamily, fixtureCase] = fixturePathParts(fixturePath);
       const fixture = readRepoJsonObject(`docs/protocol/fixtures/${fixturePath}/fixture.json`);
       const source = recordField(fixture, 'source');
       const expectBlock = recordField(fixture, 'expect');
@@ -168,9 +169,12 @@ describe('Pico protocol types', () => {
 
       expect(stringField(fixture, 'schema')).toBe('pico.conformance.fixture');
       expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(`${fixtureSurface}.${fixtureVersion.replaceAll('.', '_')}.${fixtureFamily}.${fixtureCase}`);
       expect(stringField(fixture, 'stage')).toBe('fixture_data');
       const surface = stringField(fixture, 'surface');
+      expect(surface).toBe(fixtureSurface);
       expect(stringArrayField(suite, 'surfaces')).toContain(surface);
+      expect(fixtureVersion).toBe(`v${currentVersion}`);
       expect(stringField(fixture, 'protocolVersion')).toBe(currentVersion);
       expect(stringField(source, 'encoding')).toBe('json');
       expect(stringField(source, 'file')).toBe('input.json');
@@ -180,6 +184,7 @@ describe('Pico protocol types', () => {
       }
 
       const family = stringField(fixture, 'family');
+      expect(family).toBe(fixtureFamily);
       expect(stringArrayField(suite, 'families')).toContain(family);
 
       if (surface === 'foundation-events') {
@@ -485,6 +490,16 @@ function collectFixtureDirectories(directoryPath: string, relativePath: string, 
       );
     }
   }
+}
+
+function fixturePathParts(path: string): [surface: string, version: string, family: string, fixtureCase: string] {
+  const parts = path.split('/');
+
+  if (parts.length !== 4 || parts.some((part) => part.trim() === '')) {
+    throw new Error(`Unexpected fixture path shape: ${path}`);
+  }
+
+  return parts as [string, string, string, string];
 }
 
 function readRepoJsonObject(path: string): Record<string, unknown> {
