@@ -143,6 +143,7 @@ These are not reasons to implement ad hoc authentication or custom cryptography.
 | `GET /api/system/version` | version diagnostic | Local/trusted diagnostic. Can reveal implementation and protocol version. |
 | `GET /api/system/status` | system diagnostic | Local/trusted diagnostic. Can reveal capability, claim-state and database migration metadata. |
 | `GET /api/events` | experimental foundation event listing | Local/trusted foundation API. Not full sync, not memory export, not stable Pico Link. |
+| `GET /api/events/tail` | experimental dashboard event tail | Local/trusted diagnostic API. Returns latest Foundation events for the dashboard only; not sync and no durable cursors. |
 | `POST /api/events` | experimental foundation event creation | Local/trusted foundation API. Only currently writable foundation events are accepted. |
 | `WS /ws` | experimental event stream | Local/trusted realtime surface. Not relay transport and not Pico Link. |
 
@@ -213,7 +214,7 @@ Internet
 
 A future Pico Link or Pico Home Link implementation may use WebSocket, HTTP, QUIC, WebRTC, relay sessions or other transports internally. That does not make the current `WS /ws` endpoint or current REST endpoints a Pico Link wire protocol.
 
-The dashboard currently loads event pages through the experimental `GET /api/events` surface. Showing the true latest events at large event counts requires a later maintained decision, either an additive query shape such as reverse ordering or an explicit dashboard truncation state. This ADR does not choose that API change.
+The dashboard currently uses the experimental `GET /api/events/tail` surface for the latest Foundation events. That endpoint is a diagnostics convenience only. It is not a replica sync protocol, does not provide durable sync cursors and must not become a hidden substitute for Pico Link or Pico Home Link.
 
 ## Requirements before broader exposure
 
