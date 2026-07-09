@@ -282,6 +282,10 @@ function assertListLimit(limit: number): void {
   }
 }
 
+// Storage comparison helper only. This is not Pico protocol canonicalization
+// and must not be used as a cryptographic signature or hash input. Future
+// security-relevant canonicalization is governed by ADR 0034 and must define
+// explicit test vectors.
 function serializePayload(payload: unknown): string {
   const serialized = JSON.stringify(payload);
 
