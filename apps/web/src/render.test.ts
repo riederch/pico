@@ -34,8 +34,8 @@ describe('dashboard event history notice', () => {
       .toBe('Showing latest 500 of 600 loaded events.');
   });
 
-  it('shows when the dashboard loader stops before the event history is exhausted', () => {
+  it('shows when the latest event tail omits older stored events', () => {
     expect(eventHistoryNoticeLabel({ loadedCount: 10_000, hasMore: true }, 500))
-      .toBe('Loaded 10,000 events and stopped at the dashboard clamp. This view may not include the latest stored events.');
+      .toBe('Showing latest 500 events. Older stored events may be omitted.');
   });
 });

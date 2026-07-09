@@ -174,6 +174,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return response;
   });
 
+  app.get('/api/events/tail', async (request, reply) => {
+    const query = request.query as { limit?: string };
+    const limitResult = parseLimit(query.limit);
+
+    if (!limitResult.ok) {
+      return reply.code(400).send({ error: limitResult.error });
+    }
+
+    const page = store.listTail(limitResult.limit);
+    const response: PicoEventListResponse = {
+      events: page.events,
+      nextCursor: null,
+      hasMore: page.hasMore,
+    };
+
+    return response;
+  });
+
   app.post('/api/events', async (request, reply) => {
     const body = request.body as IncomingEventBody | undefined;
     const validation = validateIncomingEvent(body);

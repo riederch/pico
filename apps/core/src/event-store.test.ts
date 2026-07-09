@@ -128,12 +128,42 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('returns the latest tail page in ascending event order', () => {
+    const store = new EventStore(createDatabasePath());
+
+    for (const event of [
+      createEvent({ eventId: 'event-1', lamport: 1, wallTime: '2026-07-04T12:00:00.000Z' }),
+      createEvent({ eventId: 'event-2', lamport: 2, wallTime: '2026-07-04T12:00:00.000Z' }),
+      createEvent({ eventId: 'event-3', lamport: 2, wallTime: '2026-07-04T12:01:00.000Z' }),
+      createEvent({ eventId: 'event-4', lamport: 3, wallTime: '2026-07-04T12:02:00.000Z' }),
+    ]) {
+      store.append(event);
+    }
+
+    const tail = store.listTail(2);
+
+    expect(tail.events.map((event) => event.eventId)).toEqual(['event-3', 'event-4']);
+    expect(tail.nextCursor).toBeNull();
+    expect(tail.hasMore).toBe(true);
+
+    store.close();
+  });
+
+  it('returns an empty tail page for an empty store', () => {
+    const store = new EventStore(createDatabasePath());
+
+    expect(store.listTail(2)).toEqual({ events: [], nextCursor: null, hasMore: false });
+
+    store.close();
+  });
+
   it('rejects invalid list limits at the store boundary', () => {
     const store = new EventStore(createDatabasePath());
 
     for (const limit of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
       expect(() => store.list(limit)).toThrow('EventStore list limit must be a positive safe integer.');
       expect(() => store.listPage({ limit })).toThrow('EventStore list limit must be a positive safe integer.');
+      expect(() => store.listTail(limit)).toThrow('EventStore list limit must be a positive safe integer.');
     }
 
     store.close();

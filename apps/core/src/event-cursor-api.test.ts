@@ -113,6 +113,44 @@ describe('event cursor API', () => {
 
     await app.close();
   });
+
+  it('returns the latest events from the tail endpoint without changing the cursor list', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    for (const text of ['one', 'two', 'three']) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text } },
+      });
+      expect(created.statusCode).toBe(201);
+    }
+
+    const tail = await app.inject({ method: 'GET', url: '/api/events/tail?limit=2' });
+    expect(tail.statusCode).toBe(200);
+    expect(tail.json()).toMatchObject({
+      nextCursor: null,
+      hasMore: true,
+    });
+    expect(tail.json().events.map(eventText)).toEqual(['two', 'three']);
+
+    const cursorList = await app.inject({ method: 'GET', url: '/api/events?limit=2' });
+    expect(cursorList.statusCode).toBe(200);
+    expect(cursorList.json().events.map(eventText)).toEqual(['one', 'two']);
+    expect(cursorList.json().nextCursor).toEqual(expect.any(String));
+
+    await app.close();
+  });
+
+  it('returns an empty tail response for an empty event store', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const tail = await app.inject({ method: 'GET', url: '/api/events/tail?limit=2' });
+    expect(tail.statusCode).toBe(200);
+    expect(tail.json()).toEqual({ events: [], nextCursor: null, hasMore: false });
+
+    await app.close();
+  });
 });
 
 function eventText(event: { payload: { text: string } }): string {

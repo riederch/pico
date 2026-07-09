@@ -114,6 +114,20 @@ export class EventStore {
     };
   }
 
+  public listTail(limit = 100): EventListPage {
+    this.ensureOpen();
+    assertListLimit(limit);
+
+    const rows = this.selectTailRows(limit + 1);
+    const pageRows = rows.slice(0, limit).reverse();
+
+    return {
+      events: pageRows.map((row) => this.mapRow(row)),
+      nextCursor: null,
+      hasMore: rows.length > limit,
+    };
+  }
+
   public maxLamport(): number {
     this.ensureOpen();
 
@@ -179,6 +193,15 @@ export class EventStore {
       ORDER BY lamport ASC, wall_time ASC, event_id ASC
       LIMIT ?
     `).all(after.lamport, after.lamport, after.wallTime, after.lamport, after.wallTime, after.eventId, limit) as EventRow[];
+  }
+
+  private selectTailRows(limit: number): EventRow[] {
+    return this.db.prepare(`
+      SELECT *
+      FROM pico_event
+      ORDER BY lamport DESC, wall_time DESC, event_id DESC
+      LIMIT ?
+    `).all(limit) as EventRow[];
   }
 
   private ensureOpen(): void {

@@ -3,8 +3,7 @@ import type { DashboardSnapshot, EventHistoryStatus, EventListResponse, HealthRe
 import { isPicoEvent, isRecord } from './types.js';
 
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
-const EVENT_PAGE_LIMIT = 500;
-const MAX_EVENT_PAGES = 20;
+const EVENT_TAIL_LIMIT = 500;
 
 /** @deprecated Use DEFAULT_PICO_HOME_URL. */
 export const DEFAULT_CORE_URL = DEFAULT_PICO_HOME_URL;
@@ -49,7 +48,7 @@ export async function loadDashboardSnapshot(baseUrl: string): Promise<DashboardS
   const [health, systemStatus, events] = await Promise.all([
     fetchHealth(baseUrl),
     fetchSystemStatus(baseUrl),
-    fetchAllEvents(baseUrl),
+    fetchLatestEvents(baseUrl),
   ]);
 
   return {
@@ -68,43 +67,21 @@ async function fetchSystemStatus(baseUrl: string): Promise<SystemStatus> {
   return fetchJson(buildEndpointUrl(baseUrl, '/api/system/status'), isSystemStatus, 'system status');
 }
 
-async function fetchAllEvents(baseUrl: string): Promise<{ events: PicoEvent[]; history: EventHistoryStatus }> {
-  const events: PicoEvent[] = [];
-  let cursor: string | null = null;
-
-  for (let page = 0; page < MAX_EVENT_PAGES; page += 1) {
-    const eventList = await fetchEvents(baseUrl, cursor);
-    events.push(...eventList.events);
-
-    if (!eventList.hasMore || eventList.nextCursor === null) {
-      return {
-        events,
-        history: {
-          loadedCount: events.length,
-          hasMore: eventList.hasMore,
-        },
-      };
-    }
-
-    cursor = eventList.nextCursor;
-  }
+async function fetchLatestEvents(baseUrl: string): Promise<{ events: PicoEvent[]; history: EventHistoryStatus }> {
+  const eventList = await fetchEventTail(baseUrl);
 
   return {
-    events,
+    events: eventList.events,
     history: {
-      loadedCount: events.length,
-      hasMore: true,
+      loadedCount: eventList.events.length,
+      hasMore: eventList.hasMore,
     },
   };
 }
 
-async function fetchEvents(baseUrl: string, cursor: string | null): Promise<EventListResponse> {
-  const url = buildEndpointUrl(baseUrl, '/api/events');
-  url.searchParams.set('limit', String(EVENT_PAGE_LIMIT));
-
-  if (cursor !== null) {
-    url.searchParams.set('after', cursor);
-  }
+async function fetchEventTail(baseUrl: string): Promise<EventListResponse> {
+  const url = buildEndpointUrl(baseUrl, '/api/events/tail');
+  url.searchParams.set('limit', String(EVENT_TAIL_LIMIT));
 
   return fetchJson(url, isEventListResponse, 'events');
 }

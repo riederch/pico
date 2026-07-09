@@ -55,6 +55,8 @@ The current Foundation API is unauthenticated local diagnostics only. Current `d
 | `limit` | Optional positive integer, clamped to the implementation maximum. |
 | `after` | Optional opaque cursor returned by a previous response. |
 
+`GET /api/events/tail` accepts `limit` and returns the latest stored events without changing the cursor contract for `GET /api/events`.
+
 The response keeps `events` as the primary additive field and adds cursor metadata:
 
 ```json
@@ -66,6 +68,8 @@ The response keeps `events` as the primary additive field and adds cursor metada
 ```
 
 `nextCursor` is opaque. Clients must not parse it or rely on its internal format.
+
+For `GET /api/events/tail`, `events` contains the latest page in chronological order, `nextCursor` is currently `null`, and `hasMore` means older stored events were omitted.
 
 The current `PicoEvent.signature` field is stored and returned as opaque metadata only. Pico Home Core does not verify signatures yet. Clients must not treat a populated `signature` field as proof of authorship, integrity or Pico identity until the key lifecycle, canonicalization, signature format, test vectors and verification model exist.
 

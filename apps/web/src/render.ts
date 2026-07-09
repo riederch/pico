@@ -382,7 +382,7 @@ export function eventHistoryNoticeLabel(eventHistory: DashboardState['eventHisto
   }
 
   if (eventHistory.hasMore) {
-    return `Loaded ${formatCount(eventHistory.loadedCount)} events and stopped at the dashboard clamp. This view may not include the latest stored events.`;
+    return `Showing latest ${formatCount(visibleCount)} events. Older stored events may be omitted.`;
   }
 
   if (eventHistory.loadedCount > visibleCount) {
