@@ -8,6 +8,10 @@ export const foundationEventTypes = [
 
 export type FoundationEventType = typeof foundationEventTypes[number];
 
+// Reserved product protocol direction. These event names are known for
+// compatibility and documentation, but the current Foundation POST /api/events
+// endpoint must reject them until dedicated Pico Rules, Action Runner or
+// Action History write paths exist.
 export const actionEventTypes = [
   'action.requested',
   'action.completed',
@@ -21,6 +25,9 @@ export const actionEventTypes = [
 
 export type ActionEventType = typeof actionEventTypes[number];
 
+// Reserved compatibility aliases for earlier tool/policy terminology. They are
+// exported so readers can map old names, but they are not writable Foundation
+// events and are not implemented policy or executor APIs.
 export const legacyToolPolicyEventTypes = [
   'tool.call_requested',
   'tool.call_completed',
@@ -34,6 +41,8 @@ export const legacyToolPolicyEventTypes = [
 
 export type LegacyToolPolicyEventType = typeof legacyToolPolicyEventTypes[number];
 
+// Reserved Pico Home Link direction. These names are not claim, membership or
+// residency write APIs in the current Foundation implementation.
 export const picoHomeEventTypes = [
   'pico_home.claim_requested',
   'pico_home.claim_completed',
@@ -155,6 +164,10 @@ export const avatarStatusColors = [
 
 export type AvatarStatusColor = typeof avatarStatusColors[number];
 
+// Reserved action/policy/audit protocol direction. The current Foundation API
+// exports these shapes for documentation and compatibility planning only; it
+// must not accept them on the generic event write path until dedicated product
+// APIs and policy gates exist.
 export type ActionRisk =
   | 'read_only'
   | 'local_write'
@@ -266,6 +279,8 @@ export interface PicoSession {
   createdAt: string;
 }
 
+// Reserved Pico Home membership direction. This is not an implemented host
+// claim, resident membership or eviction API in the current Foundation build.
 export interface PicoHomeMembership {
   picoId: string;
   homeId: string;

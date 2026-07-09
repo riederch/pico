@@ -107,7 +107,7 @@ Current message shapes:
 
 ### Foundation event types
 
-These are implemented foundation event types:
+These are the implemented and currently writable foundation event types for `POST /api/events`:
 
 ```text
 device.registered
@@ -178,7 +178,7 @@ violet
 
 ### Product action event types
 
-These names are product-facing protocol direction and may be reserved until their APIs exist:
+These names are product-facing protocol direction. They are reserved and not writable through the current Foundation `POST /api/events` endpoint until dedicated Pico Rules, Action Runner and Action History write paths exist:
 
 ```text
 action.requested
@@ -193,7 +193,7 @@ action_history.event_created
 
 ### Legacy tool/policy event types
 
-These names exist for compatibility with earlier technical terminology:
+These names exist as reserved compatibility aliases for earlier technical terminology:
 
 ```text
 tool.call_requested
@@ -206,7 +206,7 @@ executor.action_completed
 audit.event_created
 ```
 
-They must not be silently removed without an alias period, versioning or compatibility adapter.
+They are not writable through the current Foundation `POST /api/events` endpoint and must not be silently removed without an alias period, versioning or compatibility adapter.
 
 ### Pico Home event direction
 
@@ -220,7 +220,7 @@ pico_home.resident_joined
 pico_home.resident_removed
 ```
 
-They are not yet a complete host claim, residency or eviction protocol.
+They are not writable through the current Foundation `POST /api/events` endpoint. They are not yet a host claim API, membership API, residency protocol or eviction protocol.
 
 ## Compatibility surfaces to separate
 
