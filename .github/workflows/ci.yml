@@ -76,27 +76,50 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,prefix=sha-
 
-      - name: Build local smoke-test image
+      - name: Build local amd64 smoke-test image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/core.Dockerfile
           load: true
           platforms: linux/amd64
-          tags: pico-core:test
+          tags: pico-core:amd64-test
 
-      - name: Smoke-test container health endpoint and dashboard
+      - name: Smoke-test amd64 container health endpoint and dashboard
         run: |
-          docker run --rm -d --name pico-core-smoke -p 3100:3100 pico-core:test
+          docker run --rm -d --name pico-core-smoke-amd64 -p 3100:3100 pico-core:amd64-test
           for i in $(seq 1 20); do
             if curl -fsS http://127.0.0.1:3100/health && curl -fsS http://127.0.0.1:3100/ | grep -q "Pico Home Foundation Dashboard"; then
-              docker stop pico-core-smoke
+              docker stop pico-core-smoke-amd64
               exit 0
             fi
             sleep 1
           done
-          docker logs pico-core-smoke || true
-          docker stop pico-core-smoke || true
+          docker logs pico-core-smoke-amd64 || true
+          docker stop pico-core-smoke-amd64 || true
+          exit 1
+
+      - name: Build local arm64 smoke-test image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/core.Dockerfile
+          load: true
+          platforms: linux/arm64
+          tags: pico-core:arm64-test
+
+      - name: Smoke-test arm64 container health endpoint and dashboard
+        run: |
+          docker run --platform linux/arm64 --rm -d --name pico-core-smoke-arm64 -p 3101:3100 pico-core:arm64-test
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3101/health && curl -fsS http://127.0.0.1:3101/ | grep -q "Pico Home Foundation Dashboard"; then
+              docker stop pico-core-smoke-arm64
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs pico-core-smoke-arm64 || true
+          docker stop pico-core-smoke-arm64 || true
           exit 1
 
       - name: Build and optionally push multi-arch release image

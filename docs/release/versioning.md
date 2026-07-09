@@ -91,11 +91,13 @@ The CI workflow publishes different tag classes for different events:
 
 The Home Assistant add-on versioned image tag must be created by pushing the matching Git tag. A plain docs or code commit to `main` must not mutate an existing semver image tag.
 
-## Multi-arch smoke-test limitation
+## Multi-arch smoke tests
 
-The CI workflow builds and publishes a multi-arch image for `linux/amd64` and `linux/arm64`, but the current container smoke test runs only on `linux/amd64`.
+The CI workflow builds and publishes a multi-arch image for `linux/amd64` and `linux/arm64`.
 
-This is an accepted foundation-stage release limitation until the workflow either adds a QEMU-based arm64 smoke test or records a stricter release qualification for arm64 images.
+Before publishing, CI builds local smoke-test images for both `linux/amd64` and `linux/arm64`. The `linux/amd64` image runs natively on the GitHub-hosted runner. The `linux/arm64` image runs through QEMU and must pass the same `/health` and dashboard-shell smoke checks.
+
+This does not replace real Home Assistant installation testing on arm64 hardware, but it prevents publishing an arm64 image that cannot boot far enough to serve the current Foundation diagnostics surface in CI.
 
 ## Migration and backup rule
 
