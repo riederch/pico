@@ -3,6 +3,7 @@ import type { ConnectionStatus, DashboardState, EventFilters, PicoEvent, SystemS
 export interface DashboardView {
   getBaseUrl(): string;
   setBaseUrl(value: string): void;
+  getFoundationToken(): string;
   onConnectRequested(handler: () => void): void;
   onRefreshRequested(handler: () => void): void;
   onEventFiltersChanged(handler: (filters: EventFilters) => void): void;
@@ -13,6 +14,7 @@ export interface DashboardView {
 interface DashboardElements {
   form: HTMLFormElement;
   coreUrlInput: HTMLInputElement;
+  foundationTokenInput: HTMLInputElement;
   connectButton: HTMLButtonElement;
   refreshButton: HTMLButtonElement;
   errorBanner: HTMLElement;
@@ -68,6 +70,7 @@ export function createDashboardView(document: Document): DashboardView {
   const elements: DashboardElements = {
     form: requireElement(document, 'connection-form', HTMLFormElement),
     coreUrlInput: requireElement(document, 'core-url', HTMLInputElement),
+    foundationTokenInput: requireElement(document, 'foundation-token', HTMLInputElement),
     connectButton: requireElement(document, 'connect-button', HTMLButtonElement),
     refreshButton: requireElement(document, 'refresh-button', HTMLButtonElement),
     errorBanner: requireElement(document, 'error-banner', HTMLElement),
@@ -110,6 +113,9 @@ export function createDashboardView(document: Document): DashboardView {
     },
     setBaseUrl(value: string): void {
       elements.coreUrlInput.value = value;
+    },
+    getFoundationToken(): string {
+      return elements.foundationTokenInput.value;
     },
     onConnectRequested(handler: () => void): void {
       elements.form.addEventListener('submit', (event) => {

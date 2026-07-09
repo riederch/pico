@@ -183,6 +183,98 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  it('keeps the dashboard shell and health endpoint open when a foundation token is configured', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+
+    const dashboard = await app.inject({ method: 'GET', url: '/' });
+    expect(dashboard.statusCode).toBe(200);
+    expect(dashboard.body).toContain('Pico Home Foundation Dashboard');
+
+    const health = await app.inject({ method: 'GET', url: '/health' });
+    expect(health.statusCode).toBe(200);
+    expect(health.json()).toEqual({
+      ok: true,
+      service: 'pico-home-core',
+      deviceId: 'test-core',
+    });
+
+    await app.close();
+  });
+
+  it('requires the configured foundation token for direct Foundation API access', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+
+    for (const request of [
+      { method: 'GET', url: '/api/system/version' },
+      { method: 'GET', url: '/api/system/status' },
+      { method: 'GET', url: '/api/events' },
+      { method: 'GET', url: '/api/events/tail' },
+      { method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } },
+    ] as const) {
+      const response = await app.inject(request);
+      expect(response.statusCode).toBe(401);
+      expect(response.headers['www-authenticate']).toBe('Bearer realm="Pico Foundation"');
+      expect(response.json()).toEqual({ error: 'Foundation token is required.' });
+    }
+
+    const oversizedPost = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        payload: { role: 'user', text: 'Hallo Pico', padding: 'x'.repeat(50_000) },
+      }),
+    });
+
+    expect(oversizedPost.statusCode).toBe(401);
+    expect(oversizedPost.json()).toEqual({ error: 'Foundation token is required.' });
+
+    await app.close();
+  });
+
+  it('accepts a bearer foundation token for protected Foundation API access', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+
+    const headers = { authorization: 'Bearer dev-token' };
+
+    const version = await app.inject({ method: 'GET', url: '/api/system/version', headers });
+    expect(version.statusCode).toBe(200);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers,
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } },
+    });
+    expect(created.statusCode).toBe(201);
+
+    const listed = await app.inject({ method: 'GET', url: '/api/events', headers });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().events).toHaveLength(1);
+
+    await app.close();
+  });
+
   it('rejects invalid event creation requests', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
     const response = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created' } });

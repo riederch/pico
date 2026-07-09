@@ -7,7 +7,14 @@ describe('dashboard event table', () => {
   it('shows the foundation security warning in the static dashboard shell', () => {
     const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
 
-    expect(html).toContain('Foundation diagnostics only. No authentication. Do not expose port 3100.');
+    expect(html).toContain('Foundation diagnostics only. Optional token protection is not production authentication. Do not expose port 3100.');
+  });
+
+  it('keeps the static Foundation token field available for direct access hardening', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    expect(html).toContain('id="foundation-token"');
+    expect(html).toContain('type="password"');
   });
 
   it('keeps static table headers aligned with rendered event cells', () => {

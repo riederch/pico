@@ -17,6 +17,7 @@ export function startDashboard(document: Document): void {
   const initialBaseUrl = defaultPicoHomeUrl(document.location);
   const state: DashboardState = {
     baseUrl: initialBaseUrl,
+    foundationToken: '',
     httpStatus: 'idle',
     websocketStatus: 'idle',
     websocketRetryAt: null,
@@ -86,6 +87,7 @@ export function startDashboard(document: Document): void {
     view.render(state);
 
     try {
+      state.foundationToken = view.getFoundationToken();
       const snapshotLoaded = await refreshSnapshot(generation);
 
       if (generation !== connectionGeneration) {
@@ -111,6 +113,7 @@ export function startDashboard(document: Document): void {
 
   async function refreshCurrentSnapshot(): Promise<void> {
     const generation = connectionGeneration;
+    state.foundationToken = view.getFoundationToken();
 
     try {
       await refreshSnapshot(generation);
@@ -130,7 +133,7 @@ export function startDashboard(document: Document): void {
     state.errorMessage = null;
     view.render(state);
 
-    const snapshot = await loadDashboardSnapshot(state.baseUrl);
+    const snapshot = await loadDashboardSnapshot(state.baseUrl, { foundationToken: state.foundationToken });
 
     if (generation !== connectionGeneration) {
       return false;

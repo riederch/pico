@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
@@ -120,6 +121,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       }
     }
   }
+
+  app.addHook('onRequest', async (request, reply) => {
+    if (config.foundationToken === undefined || !isFoundationApiPath(request.url)) {
+      return;
+    }
+
+    if (!isBearerTokenAuthorized(request.headers.authorization, config.foundationToken)) {
+      return reply
+        .code(401)
+        .header('WWW-Authenticate', 'Bearer realm="Pico Foundation"')
+        .send({ error: 'Foundation token is required.' });
+    }
+  });
 
   app.get('/health', async (): Promise<PicoHealthResponse> => ({
     ok: true,
@@ -349,6 +363,42 @@ function parseHostHeader(hostHeader: string | string[] | undefined): string | nu
   }
 
   return url.host;
+}
+
+function isFoundationApiPath(requestUrl: string): boolean {
+  let url: URL;
+
+  try {
+    url = new URL(requestUrl, 'http://pico.local');
+  } catch {
+    return false;
+  }
+
+  return url.pathname.startsWith('/api/');
+}
+
+function isBearerTokenAuthorized(authorizationHeader: string | string[] | undefined, expectedToken: string): boolean {
+  if (typeof authorizationHeader !== 'string') {
+    return false;
+  }
+
+  const prefix = 'Bearer ';
+  if (!authorizationHeader.startsWith(prefix)) {
+    return false;
+  }
+
+  const providedToken = authorizationHeader.slice(prefix.length);
+  if (providedToken === '') {
+    return false;
+  }
+
+  return secureTokenEquals(providedToken, expectedToken);
+}
+
+function secureTokenEquals(left: string, right: string): boolean {
+  const leftDigest = createHash('sha256').update(left, 'utf8').digest();
+  const rightDigest = createHash('sha256').update(right, 'utf8').digest();
+  return timingSafeEqual(leftDigest, rightDigest);
 }
 
 function isEventCursor(value: unknown): value is EventCursor {

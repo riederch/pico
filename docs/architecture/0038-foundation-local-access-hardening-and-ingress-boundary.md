@@ -114,7 +114,7 @@ It must not be documented or implemented as:
 
 ## Token posture
 
-When the token is configured, future implementation should protect at least:
+When the token is configured, the current implementation protects the direct Foundation HTTP API endpoints and leaves WebSocket token/session handling for a later concrete design:
 
 | Endpoint | Token posture for direct access |
 |---|---|
@@ -125,7 +125,7 @@ When the token is configured, future implementation should protect at least:
 | `GET /api/events` | Token-protected for direct access. |
 | `GET /api/events/tail` | Token-protected for direct access. |
 | `POST /api/events` | Token-protected for direct access. |
-| `WS /ws` | Token-protected for direct access when browser and non-browser handshake details are defined. |
+| `WS /ws` | Not token-protected yet; requires a later browser and non-browser handshake design. |
 
 The WebSocket `Origin` check remains useful browser defense, but it remains separate from token validation.
 
@@ -168,15 +168,19 @@ For Home Assistant ingress, that milestone should define:
 - documentation for users who previously opened the web UI by port
 - tests or smoke checks that do not require a full production HA environment unless available
 
-For `PICO_FOUNDATION_TOKEN`, that milestone should define:
+For `PICO_FOUNDATION_TOKEN`, the first implementation milestone defines:
 
 - environment/config parsing and validation
-- which endpoints are protected
-- the status code and response shape for missing or invalid credentials
-- dashboard behavior when token protection is active
+- HTTP `/api/...` endpoint protection
+- `401` plus `WWW-Authenticate` behavior for missing or invalid credentials
+- dashboard token entry for direct local access
+- tests for protected HTTP reads and writes
+
+Remaining token work:
+
 - WebSocket authentication strategy
 - logging rules that avoid leaking the token
-- tests for protected reads, writes and WebSocket connection attempts
+- tests for protected WebSocket connection attempts once that strategy exists
 
 For bind behavior, that milestone should define:
 
@@ -235,7 +239,7 @@ Positive:
 Negative:
 
 - introduces two transitional access paths that must be documented carefully
-- token support will need dashboard and WebSocket details before implementation
+- WebSocket token support still needs a concrete design
 - Home Assistant ingress will need packaging-specific validation
 - does not remove the need for real auth, membership, policy, audit and Pico Link work
 

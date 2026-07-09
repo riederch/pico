@@ -107,7 +107,7 @@ The current foundation add-on provides:
 
 Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, relay transport, Pico Link transport security, migration safety, backup/rollback behaviour and companion clients still need to be built.
 
-The current Foundation HTTP and WebSocket API is unauthenticated local diagnostics only. Do not expose port `3100` outside a trusted local development or add-on boundary. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 ## Visual direction
 

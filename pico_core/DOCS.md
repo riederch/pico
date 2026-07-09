@@ -4,9 +4,9 @@
 
 Pico Core is a foundation add-on, not a production-ready Home Assistant assistant.
 
-The current add-on has no authentication model, no Home Assistant entity integration, no ingress panel, no policy engine and no protected personal data domains. Port `3100` is currently a development interface for a trusted local test environment.
+The current add-on has no production authentication model, no Home Assistant entity integration, no ingress panel, no policy engine and no protected personal data domains. Port `3100` is currently a development interface for a trusted local test environment.
 
-The current Foundation HTTP and WebSocket API is unauthenticated local diagnostics only. It is not an authorization, membership, claim or production memory boundary. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication, authorization, membership, claim or a production memory boundary. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
 
@@ -46,6 +46,8 @@ Port `3100` is a trusted local foundation interface for development and diagnost
 The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
 
 The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console, user-management interface, relay protocol or public remote-access endpoint.
+
+If `PICO_FOUNDATION_TOKEN` is configured in the Core process environment, direct HTTP calls to the `/api/...` endpoints require `Authorization: Bearer <token>`. `/health`, the dashboard shell and `WS /ws` are not protected by that temporary token in the current implementation.
 
 ## Remote access boundary
 
@@ -108,12 +110,14 @@ The current foundation event store is not a production memory, location history,
 
 The current foundation add-on does not expose user-configurable options yet.
 
+The underlying Core process supports `PICO_FOUNDATION_TOKEN` as an environment variable for temporary direct Foundation HTTP API protection. The Home Assistant add-on metadata does not expose a user-configurable option for it yet.
+
 Planned future options may include:
 
 | Option | Purpose |
 | --- | --- |
 | `pico_port` | Runtime port selection, if the add-on entrypoint is changed to apply it safely. |
-| `pico_foundation_token` | Future add-on option mapped to temporary `PICO_FOUNDATION_TOKEN`, if ADR 0038 hardening is implemented. |
+| `pico_foundation_token` | Future add-on option mapped to temporary `PICO_FOUNDATION_TOKEN`. |
 | `relay_enabled` | Future opt-in outbound Pico Relay connection, if the Relay and Pico Link security model exists. |
 
 ## Update behavior
@@ -157,7 +161,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 - No Home Assistant entity integration yet.
 - No ingress panel yet.
 - No companion chat UI yet.
-- No authentication model yet.
+- No production authentication model yet.
 - No authorization model yet.
 - No policy engine yet.
 - No tool executor yet.

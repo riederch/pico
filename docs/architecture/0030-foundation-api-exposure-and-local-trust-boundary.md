@@ -26,6 +26,7 @@ Current exposure facts:
 - the default Core port is `3100`
 - the Home Assistant add-on maps host port `3100/tcp`
 - the Home Assistant add-on does not yet use Home Assistant ingress
+- direct Foundation HTTP API endpoints under `/api/` can be protected with the temporary `PICO_FOUNDATION_TOKEN`
 - the Foundation REST API does not emit CORS allow headers
 - the WebSocket endpoint has only an Origin-boundary check, not authentication
 - `GET /api/system/status` exposes diagnostic claim-state, capability and migration metadata
@@ -88,6 +89,7 @@ The current implementation provides:
 - system status diagnostics including capabilities, database migration state and minimal Pico Home claim-state metadata
 - cursor-based listing of stored foundation events
 - limited creation of currently writable foundation events
+- optional temporary `PICO_FOUNDATION_TOKEN` protection for direct HTTP `/api/` endpoints
 - WebSocket connection and event broadcast messages
 - a minimal WebSocket Origin check for browser-initiated connections
 - WebSocket ping/pong keepalive and stale socket termination
@@ -125,8 +127,8 @@ The current local/trusted boundary is not a complete security model. The project
 | Threat | Current posture | Required direction |
 |---|---|---|
 | Cross-site WebSocket hijacking | Mitigated by rejecting browser WebSocket upgrades whose `Origin` does not match the request `Host` and is not explicitly allowlisted. | Keep the check as defensive plumbing, not as authentication. |
-| DNS rebinding against diagnostic GET endpoints | Not solved by CORS because a rebound origin can appear same-site to the browser. | Requires a real ingress/auth/session or local pairing boundary before broader exposure. |
-| Arbitrary LAN clients writing foundation events | Not solved; trusted-local assumption only. | Requires endpoint authorization, audit and abuse handling before the API is exposed beyond trusted local paths. |
+| DNS rebinding against diagnostic GET endpoints | Partially mitigated for direct `/api/` calls when `PICO_FOUNDATION_TOKEN` is configured; not solved for all browser/session cases. | Requires a real ingress/auth/session or local pairing boundary before broader exposure. |
+| Arbitrary LAN clients writing foundation events | Partially mitigated for direct `/api/` calls when `PICO_FOUNDATION_TOKEN` is configured; trusted-local assumption remains for deployments without it. | Requires endpoint authorization, audit and abuse handling before the API is exposed beyond trusted local paths. |
 | Lamport inflation through `POST /api/events` | Incoming Lamport values are bounded, but a trusted-local client can still advance ordering substantially. | Keep input bounds now; revisit once identity, device authorization and sync semantics exist. |
 | Information disclosure via `/api/system/status` | Diagnostic endpoint reveals version, capabilities, claim-state and migration metadata. | Classify diagnostics by sensitivity before production auth or remote access. |
 | Misinterpreting `signature` as verified | `signature` is stored but not checked against keys or signed manifests. | Treat it as unverified metadata until ADR 0029 follow-ups define keys, formats and verification. |

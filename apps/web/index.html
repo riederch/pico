@@ -90,10 +90,12 @@
             <input id="core-url" type="url" value="http://localhost:3100" spellcheck="false" autocomplete="off" />
             <button id="connect-button" type="submit">Connect</button>
           </div>
+          <label class="form-label" for="foundation-token">Foundation token</label>
+          <input id="foundation-token" type="password" spellcheck="false" autocomplete="off" />
         </form>
       </header>
 
-      <section class="security-banner" role="note">Foundation diagnostics only. No authentication. Do not expose port 3100.</section>
+      <section class="security-banner" role="note">Foundation diagnostics only. Optional token protection is not production authentication. Do not expose port 3100.</section>
 
       <section id="error-banner" class="error-banner" role="status" aria-live="polite" hidden></section>
 

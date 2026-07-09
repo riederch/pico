@@ -7,6 +7,7 @@ export interface CoreConfig {
   deviceId: string;
   webRootPath?: string;
   wsAllowedOrigins?: string[];
+  foundationToken?: string;
 }
 
 type Environment = Record<string, string | undefined>;
@@ -23,6 +24,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),
+    foundationToken: readOptionalNonEmptyString(env.PICO_FOUNDATION_TOKEN, 'PICO_FOUNDATION_TOKEN'),
   };
 }
 
@@ -47,6 +49,18 @@ function readNonEmptyString(env: Environment, name: string, defaultValue: string
 
   if (!value.trim()) {
     throw new Error(`${name} must be a non-empty string.`);
+  }
+
+  return value;
+}
+
+function readOptionalNonEmptyString(value: string | undefined, name: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!value.trim()) {
+    throw new Error(`${name} must be a non-empty string when provided.`);
   }
 
   return value;

@@ -12,6 +12,7 @@ describe('Core config', () => {
       deviceId: 'pico-core',
       webRootPath: expect.stringContaining('/apps/web'),
       wsAllowedOrigins: [],
+      foundationToken: undefined,
     });
   });
 
@@ -23,6 +24,7 @@ describe('Core config', () => {
       PICO_DEVICE_ID: 'test-core',
       PICO_WEB_ROOT: '/tmp/pico-web',
       PICO_WS_ALLOWED_ORIGINS: 'https://dev.example.test, http://localhost:5173/',
+      PICO_FOUNDATION_TOKEN: 'dev-token',
     });
 
     expect(config).toEqual({
@@ -32,6 +34,7 @@ describe('Core config', () => {
       deviceId: 'test-core',
       webRootPath: '/tmp/pico-web',
       wsAllowedOrigins: ['https://dev.example.test', 'http://localhost:5173'],
+      foundationToken: 'dev-token',
     });
   });
 
@@ -45,6 +48,10 @@ describe('Core config', () => {
     for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
       expect(() => loadConfig({ [name]: '   ' })).toThrow(`${name} must be a non-empty string.`);
     }
+  });
+
+  it('rejects a blank foundation token when provided', () => {
+    expect(() => loadConfig({ PICO_FOUNDATION_TOKEN: '   ' })).toThrow('PICO_FOUNDATION_TOKEN must be a non-empty string when provided.');
   });
 
   it('rejects invalid WebSocket allowed origins', () => {

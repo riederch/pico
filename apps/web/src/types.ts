@@ -38,6 +38,7 @@ export interface EventFilters {
 
 export interface DashboardState {
   baseUrl: string;
+  foundationToken: string;
   httpStatus: ConnectionStatus;
   websocketStatus: ConnectionStatus;
   websocketRetryAt: Date | null;

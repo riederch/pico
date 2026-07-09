@@ -5,6 +5,10 @@ import { isPicoEvent, isRecord } from './types.js';
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
 const EVENT_TAIL_LIMIT = 500;
 
+export interface FoundationAccessOptions {
+  foundationToken?: string;
+}
+
 /** @deprecated Use DEFAULT_PICO_HOME_URL. */
 export const DEFAULT_CORE_URL = DEFAULT_PICO_HOME_URL;
 
@@ -44,11 +48,11 @@ export function buildEndpointUrl(baseUrl: string, endpoint: string): URL {
   return url;
 }
 
-export async function loadDashboardSnapshot(baseUrl: string): Promise<DashboardSnapshot> {
+export async function loadDashboardSnapshot(baseUrl: string, options: FoundationAccessOptions = {}): Promise<DashboardSnapshot> {
   const [health, systemStatus, events] = await Promise.all([
     fetchHealth(baseUrl),
-    fetchSystemStatus(baseUrl),
-    fetchLatestEvents(baseUrl),
+    fetchSystemStatus(baseUrl, options),
+    fetchLatestEvents(baseUrl, options),
   ]);
 
   return {
@@ -63,12 +67,12 @@ async function fetchHealth(baseUrl: string): Promise<HealthResponse> {
   return fetchJson(buildEndpointUrl(baseUrl, '/health'), isHealthResponse, 'health');
 }
 
-async function fetchSystemStatus(baseUrl: string): Promise<SystemStatus> {
-  return fetchJson(buildEndpointUrl(baseUrl, '/api/system/status'), isSystemStatus, 'system status');
+async function fetchSystemStatus(baseUrl: string, options: FoundationAccessOptions): Promise<SystemStatus> {
+  return fetchJson(buildEndpointUrl(baseUrl, '/api/system/status'), isSystemStatus, 'system status', options);
 }
 
-async function fetchLatestEvents(baseUrl: string): Promise<{ events: PicoEvent[]; history: EventHistoryStatus }> {
-  const eventList = await fetchEventTail(baseUrl);
+async function fetchLatestEvents(baseUrl: string, options: FoundationAccessOptions): Promise<{ events: PicoEvent[]; history: EventHistoryStatus }> {
+  const eventList = await fetchEventTail(baseUrl, options);
 
   return {
     events: eventList.events,
@@ -79,21 +83,19 @@ async function fetchLatestEvents(baseUrl: string): Promise<{ events: PicoEvent[]
   };
 }
 
-async function fetchEventTail(baseUrl: string): Promise<EventListResponse> {
+async function fetchEventTail(baseUrl: string, options: FoundationAccessOptions): Promise<EventListResponse> {
   const url = buildEndpointUrl(baseUrl, '/api/events/tail');
   url.searchParams.set('limit', String(EVENT_TAIL_LIMIT));
 
-  return fetchJson(url, isEventListResponse, 'events');
+  return fetchJson(url, isEventListResponse, 'events', options);
 }
 
-async function fetchJson<T>(url: URL, validate: (value: unknown) => value is T, label: string): Promise<T> {
+async function fetchJson<T>(url: URL, validate: (value: unknown) => value is T, label: string, options: FoundationAccessOptions = {}): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-      },
+      headers: buildFoundationHeaders(options),
     });
   } catch (error) {
     throw new Error(`Could not reach ${label} endpoint at ${url.toString()}: ${formatUnknownError(error)}`);
@@ -116,6 +118,19 @@ async function fetchJson<T>(url: URL, validate: (value: unknown) => value is T, 
   }
 
   return data;
+}
+
+function buildFoundationHeaders(options: FoundationAccessOptions): HeadersInit {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  };
+
+  const token = options.foundationToken?.trim();
+  if (token !== undefined && token !== '') {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  return headers;
 }
 
 function isHealthResponse(value: unknown): value is HealthResponse {

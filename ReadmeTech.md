@@ -16,11 +16,11 @@ Home Assistant is the first packaging and runtime path, not the only intended pl
 
 Remote reachability is intended to work through Pico Link transports, primarily Pico Relay, not by exposing Pico Home as a public inbound HTTP server.
 
-The current Foundation HTTP and WebSocket API is an unauthenticated trusted-local diagnostics and foundation interface. It is not a production authentication surface, authorization boundary, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
+The current Foundation HTTP and WebSocket API is a trusted-local diagnostics and foundation interface. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not a production authentication surface, authorization boundary, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
 
 Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
-ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap.
+ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints only; WebSocket token/session handling and Home Assistant ingress are still separate follow-up work.
 
 ## License and commercial use
 
@@ -341,6 +341,8 @@ The current container keeps the platform default user so the Home Assistant `/da
 
 The current API surface is a foundation API. It is not yet a complete Pico Link or Pico Home Link specification, not a production authentication surface, not a public remote-access API and not a relay protocol.
 
+When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to `/api/system/version`, `/api/system/status`, `/api/events` and `/api/events/tail`, plus direct `POST /api/events`, require `Authorization: Bearer <token>`. `/health`, the dashboard shell and `WS /ws` are not protected by this temporary token in the current implementation.
+
 The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`.
 
 ## Local development
@@ -379,6 +381,15 @@ Create a test event:
 
 ```bash
 curl -X POST http://localhost:3100/api/events \
+  -H 'content-type: application/json' \
+  -d '{"deviceId":"desktop-dev","type":"message.created","payload":{"role":"user","text":"Hallo Pico"}}'
+```
+
+With `PICO_FOUNDATION_TOKEN` configured:
+
+```bash
+curl -X POST http://localhost:3100/api/events \
+  -H 'authorization: Bearer <token>' \
   -H 'content-type: application/json' \
   -d '{"deviceId":"desktop-dev","type":"message.created","payload":{"role":"user","text":"Hallo Pico"}}'
 ```
