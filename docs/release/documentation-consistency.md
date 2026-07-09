@@ -105,6 +105,7 @@ When changing architecture decisions, also check:
 - `README.md` if the concept affects public positioning
 - `ReadmeTech.md` if the concept affects technical framing
 - `pico_core/README.md` if the concept affects the Home Assistant add-on positioning
+- `docs/architecture/implementation-status.md` if the change affects whether an ADR is implemented, partially implemented, reserved, concept-only or blocked before production
 
 ## Concept consistency rule
 

@@ -85,6 +85,8 @@ Not production-ready yet:
 
 ## Architecture overview
 
+ADR decision status and runtime implementation status are tracked separately in `docs/architecture/implementation-status.md`. An accepted ADR may still be concept-only or blocked before production.
+
 ```mermaid
 flowchart TD
     User[User] --> Client[Client surfaces\nWeb / Mobile / Desktop / HA]
