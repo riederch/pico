@@ -64,6 +64,7 @@ That means Pico may eventually feel helpful and present in Home Assistant, but r
 
 Pico's current concept work defines several important boundaries:
 
+- Pico can act as a digital companion and technical twin for a user-chosen subject
 - Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Pico Core hosts provide infrastructure, but hosting is not ownership over resident Pico identities or private data
 - a freshly installed Pico Core host starts unclaimed; a one-time bootstrap claim token / Move-In Code lets the first Pico become the host administrator / Home Host Pico
@@ -74,6 +75,8 @@ Pico's current concept work defines several important boundaries:
 - Pico Relays transport encrypted packets but do not own Pico memory, identity, relationships, actions or authority
 - Pico Link is transport-neutral; Meshtastic and future radio standards belong behind transport adapters
 - Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
+- capabilities are evaluated above connector protocols; MCP is a tool connection method, not Pico authority
+- proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
 - Pico identity, device, Home, transport and domain keys are separate roles; Pico must use reviewed primitives and must not invent cryptography
 - the current Foundation HTTP API is a trusted local diagnostics and foundation interface, not a public remote-access API
 - trust signals are contextual evidence, not global person scores
@@ -163,11 +166,14 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md`](../docs/architecture/0032-pico-link-envelope-and-credential-schema-direction.md) - Pico Link envelope, credential and key-envelope schema direction
 - [`../docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md`](../docs/architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md) - key lifecycle, rotation, revocation and recovery boundaries
 - [`../docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md`](../docs/architecture/0034-canonicalization-signature-inputs-and-test-vectors.md) - canonicalization, signature-input and test-vector boundaries
+- [`../docs/architecture/0035-pico-as-digital-companion-and-twin-model.md`](../docs/architecture/0035-pico-as-digital-companion-and-twin-model.md) - Pico as digital companion and technical twin model
+- [`../docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md`](../docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md) - capabilities, connectors and MCP boundary
+- [`../docs/architecture/0037-proactive-companion-delegation-and-procurement.md`](../docs/architecture/0037-proactive-companion-delegation-and-procurement.md) - proactive delegation and procurement reference case
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces
 - [`../docs/protocol/compatibility-levels.md`](../docs/protocol/compatibility-levels.md) - compatibility level definitions
-- [`../docs/protocol/conformance-fixtures.md`](../docs/protocol/conformance-fixtures.md) - non-cryptographic conformance fixture layout and Foundation event fixture seed
+- [`../docs/protocol/conformance-fixtures.md`](../docs/protocol/conformance-fixtures.md) - non-cryptographic conformance fixture layout and Foundation event/realtime fixture seed
 
 ## Design principles
 
@@ -178,11 +184,14 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - Confirmation for risky actions
 - Auditability instead of hidden automation
 - Friendly companion layer, strict execution layer
+- Pico can be a digital companion and technical twin of a user-chosen subject
 - Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Core hosts provide infrastructure; hosting is not ownership
 - Pico Home is a local endpoint in the Pico Link / Relay network, not a public inbound API server
 - Pico Relay provides transport, not authority
 - Pico Link remains transport-neutral; specific transports belong behind adapters
+- Capabilities are evaluated above connector protocols; MCP is not an authority layer
+- Proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
 - The current Foundation API remains local/trusted until auth, membership, policy and Pico Link boundaries exist
 - A Gastgeber Pico / Home Host Pico may manage residency on a host, not resident private data

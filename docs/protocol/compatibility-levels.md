@@ -127,7 +127,7 @@ The long-term rule is:
 No compatibility claim without conformance tests.
 ```
 
-The planned fixture layout and current Foundation event fixture seed are documented in [`conformance-fixtures.md`](conformance-fixtures.md). Until runner semantics and conformance policy exist, compatibility statements should be marked experimental.
+The planned fixture layout and current Foundation event/realtime fixture seed are documented in [`conformance-fixtures.md`](conformance-fixtures.md). Until runner semantics and conformance policy exist, compatibility statements should be marked experimental.
 
 ## L5 - Official compatibility
 

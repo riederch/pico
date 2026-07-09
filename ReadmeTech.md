@@ -442,6 +442,9 @@ The project concept is persisted as architecture notes:
 | `0032-pico-link-envelope-and-credential-schema-direction.md` | Pico Link envelope, protected payload, signed history, key envelope and membership credential schema direction |
 | `0033-key-lifecycle-rotation-revocation-and-recovery.md` | key lifecycle, rotation, revocation, lost-device, reset and recovery boundaries |
 | `0034-canonicalization-signature-inputs-and-test-vectors.md` | canonicalization, signature-input, rejection and test-vector boundaries |
+| `0035-pico-as-digital-companion-and-twin-model.md` | Pico as digital companion and technical twin of a chosen subject |
+| `0036-capabilities-connectors-and-mcp-boundary.md` | capabilities, connectors and MCP as tool connection method rather than authority |
+| `0037-proactive-companion-delegation-and-procurement.md` | proactive delegation boundaries and procurement reference case |
 
 Protocol documents:
 
@@ -449,7 +452,7 @@ Protocol documents:
 |---|---|
 | `docs/protocol/public-surfaces.md` | current and planned public compatibility surfaces |
 | `docs/protocol/compatibility-levels.md` | compatibility level definitions and claim boundaries |
-| `docs/protocol/conformance-fixtures.md` | non-cryptographic conformance fixture layout and Foundation event fixture seed |
+| `docs/protocol/conformance-fixtures.md` | non-cryptographic conformance fixture layout and Foundation event/realtime fixture seed |
 
 ## Roadmap
 
@@ -490,6 +493,7 @@ The demo must not become the path for production remote access. If it starts for
 - Tests block releases
 - Updates must become reversible before real data matters
 - Friendly visual companion layer, strict execution layer
+- Pico can be a digital companion and technical twin of a user-chosen subject
 - Use reviewed cryptographic primitives; do not invent cryptography
 - Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
 - Pico Homes provide infrastructure; hosting is not ownership
@@ -503,6 +507,8 @@ The demo must not become the path for production remote access. If it starts for
 - Picos can communicate across Homes; relationships belong to Picos, not Homes
 - Pico-compatible permitted forks must preserve inter-Pico and Pico Home protocol semantics for the advertised protocol version
 - Compatibility does not grant commercial hosting permission
+- Capabilities are evaluated above connector protocols; MCP is not an authority layer
+- Proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
 - Context Signals are contextual evidence, not global human scores
 - Remote Pico self-presentation must never be transformed into trust
 - Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise

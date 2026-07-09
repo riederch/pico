@@ -1,12 +1,13 @@
 {
   "schema": "pico.conformance.suite",
   "schemaVersion": 1,
-  "suiteId": "pico.foundation-events.v0_1_7.seed",
+  "suiteId": "pico.foundation.v0_1_7.seed",
   "suiteVersion": "0.1.7",
   "stage": "fixture_data",
   "protocolVersion": "0.1.7",
   "surfaces": [
-    "foundation-events"
+    "foundation-events",
+    "foundation-realtime"
   ],
   "families": [
     "parse-positive",
@@ -20,7 +21,10 @@
   "disclaimer": "Fixtures are technical examples and grant no commercial permission.",
   "fixtures": [
     "foundation-events/v0.1.7/parse-positive/message-created-minimal",
-    "foundation-events/v0.1.7/parse-negative/action-requested-reserved"
+    "foundation-events/v0.1.7/parse-negative/action-requested-reserved",
+    "foundation-realtime/v0.1.7/parse-positive/core-connected",
+    "foundation-realtime/v0.1.7/parse-positive/event-created-message",
+    "foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime"
   ],
-  "notes": "Experimental Foundation event fixture seed. This is not a published conformance suite or L4 compatibility basis."
+  "notes": "Experimental Foundation event and realtime fixture seed. This is not a published conformance suite or L4 compatibility basis."
 }

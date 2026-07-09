@@ -1,0 +1,16 @@
+{
+  "type": "pico.event.created",
+  "event": {
+    "eventId": "evt-fixture-realtime-1",
+    "deviceId": "fixture-device",
+    "sessionId": "session:fixture",
+    "lamport": 1,
+    "wallTime": "2026-07-08T00:00:00.000Z",
+    "type": "message.created",
+    "stream": "session:fixture",
+    "payload": {
+      "role": "user",
+      "text": "Hallo Pico realtime fixture"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "type": "pico.link.packet",
+  "packet": {
+    "packetId": "pkt-fixture-1",
+    "routingId": "relay-route-fixture",
+    "payload": "opaque-demo-placeholder"
+  }
+}

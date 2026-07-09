@@ -1,6 +1,6 @@
 # Pico Conformance Fixture Layout
 
-This document defines the planned layout for future Pico conformance fixtures and the current experimental Foundation event fixture seed.
+This document defines the planned layout for future Pico conformance fixtures and the current experimental Foundation event and realtime fixture seed.
 
 It is a planning document for the foundation phase. It does not publish an executable conformance suite, certify compatibility, define final cryptographic vectors or make current Foundation APIs production-ready.
 
@@ -20,7 +20,7 @@ The fixture layout should let future implementations test:
 - lifecycle-aware rejection once key lifecycle state exists
 - compatibility-claim honesty
 
-The immediate goal is to define where and how such fixtures should be organized and to keep the first Foundation event examples small enough to review.
+The immediate goal is to define where and how such fixtures should be organized and to keep the first Foundation examples small enough to review.
 
 ## Relationship to architecture decisions
 
@@ -38,7 +38,7 @@ ADR 0034 defines the canonicalization and test-vector boundary. This document tu
 
 ## Current boundary
 
-The current repository contains a small experimental Foundation event fixture seed under `docs/protocol/fixtures/`.
+The current repository contains a small experimental Foundation event and realtime fixture seed under `docs/protocol/fixtures/`.
 
 The current repository does not contain a Pico Link or Pico Home Link conformance runner.
 
@@ -111,7 +111,7 @@ docs/protocol/fixtures/
       negative/
 ```
 
-This layout is implemented only for the current Foundation event seed. Other directories remain conceptual until fixture files are added.
+This layout is implemented only for the current Foundation event and realtime seed. Other directories remain conceptual until fixture files are added.
 
 ## Fixture stages
 
@@ -125,7 +125,7 @@ Each fixture or suite should declare a stage:
 | conformance_candidate | The fixture may be part of a future conformance suite. |
 | published_conformance | The fixture is part of a published suite for compatibility claims. |
 
-Current Foundation event seed fixtures are at `fixture_data`. There is still no official runner.
+Current Foundation seed fixtures are at `fixture_data`. There is still no official runner.
 
 ## Fixture families
 
@@ -372,7 +372,7 @@ Changing expected semantics for an existing fixture should create a new fixture 
 
 ## Current implementation status
 
-The current repository has this planning document and a small Foundation event fixture seed.
+The current repository has this planning document and a small Foundation event and realtime fixture seed.
 
 It includes:
 
@@ -380,7 +380,9 @@ It includes:
 - `docs/protocol/fixtures/suite.json`
 - one positive `message.created` Foundation event append fixture
 - one negative reserved `action.requested` Foundation event append fixture
-- protocol tests that validate seed fixture metadata, source files, capability names and current Foundation event semantics
+- two positive current Foundation WebSocket message fixtures
+- one negative Pico Link-like message fixture for the current Foundation WebSocket surface
+- protocol tests that validate seed fixture metadata, source files, capability names and current Foundation event/realtime semantics
 
 It does not include:
 
@@ -409,7 +411,7 @@ This document does not implement or define:
 
 Before expanding machine-readable fixtures:
 
-1. Keep the first fixture scope limited to current Foundation event compatibility.
+1. Keep the first fixture scope limited to current Foundation event and realtime compatibility.
 2. Add only tiny positive and negative fixture sets.
 3. Add or update tests that validate fixture metadata shape.
 4. Decide when a runner is worth the maintenance cost.

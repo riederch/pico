@@ -142,6 +142,9 @@ In particular:
 - Pico Link envelope, credential and key-envelope schema language must remain consistent with `0032`
 - key lifecycle, rotation, revocation, lost-device, reset and recovery language must remain consistent with `0033`
 - canonicalization, signature-input and test-vector language must remain consistent with `0034`
+- digital companion, technical twin and Pico subject language must remain consistent with `0035`
+- capability, connector and MCP boundary language must remain consistent with `0036`
+- proactive delegation, procurement and approval language must remain consistent with `0037`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
@@ -162,6 +165,7 @@ Before merging documentation changes, check:
 12. Do protocol compatibility claims preserve inter-Pico communication semantics for the advertised protocol version?
 13. Do product terms explain function without implying false authority, ownership, trust or control?
 14. Do conformance fixture statements avoid implying certification, production security or commercial permission?
+15. Do connector, MCP and proactive-delegation statements keep Pico Rules, confirmation and Action History above tool protocols?
 
 ## Design rule
 

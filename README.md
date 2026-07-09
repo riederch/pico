@@ -179,7 +179,7 @@ The avatar communicates state and risk. For example:
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
 - [`docs/protocol/compatibility-levels.md`](docs/protocol/compatibility-levels.md) - compatibility level definitions
-- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - non-cryptographic conformance fixture layout and Foundation event fixture seed
+- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - non-cryptographic conformance fixture layout and Foundation event/realtime fixture seed
 
 ## Design principles
 

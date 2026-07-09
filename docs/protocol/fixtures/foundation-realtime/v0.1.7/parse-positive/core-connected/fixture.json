@@ -1,0 +1,27 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-realtime.v0_1_7.parse-positive.core-connected",
+  "stage": "fixture_data",
+  "surface": "foundation-realtime",
+  "protocolVersion": "0.1.7",
+  "family": "parse-positive",
+  "case": "pico.core.connected WebSocket message",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "websocket": {
+      "path": "/ws",
+      "messageType": "pico.core.connected"
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.websocket.v1"
+  ],
+  "notes": "Experimental Foundation realtime fixture. This is not a Pico Link packet, production remote transport, cryptographic vector or L4 compatibility claim."
+}

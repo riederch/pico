@@ -130,20 +130,25 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(compatibilityLevels, '## L1 - Foundation event compatibility')).toEqual([...foundationEventTypes]);
   });
 
-  it('keeps seed conformance fixtures aligned with current Foundation event semantics', () => {
+  it('keeps seed conformance fixtures aligned with current Foundation semantics', () => {
     const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
     const suite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
 
     expect(stringField(suite, 'schema')).toBe('pico.conformance.suite');
     expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.foundation.v0_1_7.seed');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
     expect(stringField(suite, 'stage')).toBe('fixture_data');
     expect(stringField(suite, 'protocolVersion')).toBe(currentVersion);
-    expect(stringArrayField(suite, 'surfaces')).toEqual(['foundation-events']);
+    expect(stringArrayField(suite, 'surfaces')).toEqual(['foundation-events', 'foundation-realtime']);
     expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
     expect(fixturePaths).toEqual([
       'foundation-events/v0.1.7/parse-positive/message-created-minimal',
       'foundation-events/v0.1.7/parse-negative/action-requested-reserved',
+      'foundation-realtime/v0.1.7/parse-positive/core-connected',
+      'foundation-realtime/v0.1.7/parse-positive/event-created-message',
+      'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
     ]);
 
     for (const fixturePath of fixturePaths) {
@@ -157,29 +162,27 @@ describe('Pico protocol types', () => {
       expect(stringField(fixture, 'schema')).toBe('pico.conformance.fixture');
       expect(numberField(fixture, 'schemaVersion')).toBe(1);
       expect(stringField(fixture, 'stage')).toBe('fixture_data');
-      expect(stringField(fixture, 'surface')).toBe('foundation-events');
+      const surface = stringField(fixture, 'surface');
+      expect(stringArrayField(suite, 'surfaces')).toContain(surface);
       expect(stringField(fixture, 'protocolVersion')).toBe(currentVersion);
       expect(stringField(source, 'encoding')).toBe('json');
       expect(stringField(source, 'file')).toBe('input.json');
-      expect(capabilitiesRequired).toEqual(['pico.core.events.v1']);
 
       for (const capability of capabilitiesRequired) {
         expect(Object.keys(protocolCapabilities)).toContain(capability);
       }
 
       const family = stringField(fixture, 'family');
-      if (family === 'parse-positive') {
-        expect(stringField(expectBlock, 'parse')).toBe('accept');
-        expect(foundationEventTypes).toContain(inputType);
-        expect(inputType).toBe('message.created');
-        expect(messageCreatedRoles).toContain(stringField(recordField(input, 'payload'), 'role'));
-      } else if (family === 'parse-negative') {
-        expect(stringField(expectBlock, 'parse')).toBe('reject');
-        expect(picoEventTypes).toContain(inputType);
-        expect(foundationEventTypes).not.toContain(inputType);
-        expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      if (surface === 'foundation-events') {
+        expect(capabilitiesRequired).toEqual(['pico.core.events.v1']);
+        expectCurrentFoundationEventFixture(input, inputType, expectBlock, family);
+      } else if (surface === 'foundation-realtime') {
+        expect(capabilitiesRequired).toContain('pico.core.websocket.v1');
+        expectCurrentFoundationRealtimeFixture(input, inputType, expectBlock, family);
       } else {
-        throw new Error(`Unexpected fixture family: ${family}`);
+        throw new Error(`Unexpected fixture surface: ${surface}`);
       }
     }
   });
@@ -342,6 +345,64 @@ describe('Pico protocol types', () => {
     expect(membership.role).toBe('home_member');
   });
 });
+
+function expectCurrentFoundationEventFixture(
+  input: Record<string, unknown>,
+  inputType: string,
+  expectBlock: Record<string, unknown>,
+  family: string,
+): void {
+  if (family === 'parse-positive') {
+    expect(stringField(expectBlock, 'parse')).toBe('accept');
+    expect(foundationEventTypes).toContain(inputType);
+    expect(inputType).toBe('message.created');
+    expect(messageCreatedRoles).toContain(stringField(recordField(input, 'payload'), 'role'));
+  } else if (family === 'parse-negative') {
+    expect(stringField(expectBlock, 'parse')).toBe('reject');
+    expect(picoEventTypes).toContain(inputType);
+    expect(foundationEventTypes).not.toContain(inputType);
+    expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+  } else {
+    throw new Error(`Unexpected fixture family: ${family}`);
+  }
+}
+
+function expectCurrentFoundationRealtimeFixture(
+  input: Record<string, unknown>,
+  inputType: string,
+  expectBlock: Record<string, unknown>,
+  family: string,
+): void {
+  const websocket = recordField(expectBlock, 'websocket');
+
+  expect(stringField(websocket, 'path')).toBe('/ws');
+  expect(stringField(websocket, 'messageType')).toBe(inputType);
+
+  if (family === 'parse-positive') {
+    expect(stringField(expectBlock, 'parse')).toBe('accept');
+    expect(realtimeMessageTypes).toContain(inputType);
+
+    if (inputType === realtimeMessageType.coreConnected) {
+      expect(stringField(input, 'deviceId')).toBeTruthy();
+    } else if (inputType === realtimeMessageType.eventCreated) {
+      const event = recordField(input, 'event');
+      const eventType = stringField(event, 'type');
+      expect(foundationEventTypes).toContain(eventType);
+
+      if (eventType === 'message.created') {
+        expect(messageCreatedRoles).toContain(stringField(recordField(event, 'payload'), 'role'));
+      }
+    } else {
+      throw new Error(`Unexpected realtime fixture message type: ${inputType}`);
+    }
+  } else if (family === 'parse-negative') {
+    expect(stringField(expectBlock, 'parse')).toBe('reject');
+    expect(realtimeMessageTypes).not.toContain(inputType);
+    expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+  } else {
+    throw new Error(`Unexpected fixture family: ${family}`);
+  }
+}
 
 function readRepoFile(path: string): string {
   return readFileSync(resolve(repoRootPath, path), 'utf8');
