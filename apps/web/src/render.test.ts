@@ -4,6 +4,12 @@ import { describe, expect, it } from 'vitest';
 import { eventHistoryNoticeLabel, eventTableColumnLabels } from './render.js';
 
 describe('dashboard event table', () => {
+  it('shows the foundation security warning in the static dashboard shell', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    expect(html).toContain('Foundation diagnostics only. No authentication. Do not expose port 3100.');
+  });
+
   it('keeps static table headers aligned with rendered event cells', () => {
     const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
     const tableHead = /<thead><tr>([\s\S]*?)<\/tr><\/thead>/.exec(html);

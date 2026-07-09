@@ -21,6 +21,7 @@
       input, select { width: 100%; min-height: 44px; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; background: #161b22; color: #e6edf3; }
       button { cursor: pointer; min-height: 44px; border: 1px solid #54d2d9; border-radius: 6px; padding: 10px 16px; background: #54d2d9; color: #081014; font-weight: 700; }
       button:disabled { cursor: wait; opacity: 0.64; }
+      .security-banner { margin-bottom: 16px; border: 1px solid #d29922; border-radius: 8px; padding: 12px 14px; background: #251a08; color: #f0c36a; font-weight: 700; line-height: 1.4; }
       .error-banner { margin-bottom: 16px; border: 1px solid #f85149; border-radius: 8px; padding: 12px 14px; background: #2d1517; color: #ffd7d5; }
       [hidden] { display: none !important; }
       .dashboard-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
@@ -91,6 +92,8 @@
           </div>
         </form>
       </header>
+
+      <section class="security-banner" role="note">Foundation diagnostics only. No authentication. Do not expose port 3100.</section>
 
       <section id="error-banner" class="error-banner" role="status" aria-live="polite" hidden></section>
 
