@@ -43,9 +43,11 @@ The following surfaces are visible today but should be treated as foundation-sta
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.
 
-They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`.
+They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`; the future direct-access WebSocket ticket boundary is documented in `../architecture/0039-foundation-websocket-ticket-boundary.md`.
 
 The current Foundation API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication, authorization, membership, claim, production memory or Home Assistant control boundary. Current `deviceId` values are client-supplied metadata, not verified device identity.
+
+`WS /ws` is not token- or ticket-protected in the current implementation. ADR 0039 defines a future short-lived ticket strategy for direct WebSocket access when `PICO_FOUNDATION_TOKEN` is configured.
 
 ### Current `GET /api/events` shape
 
@@ -76,7 +78,7 @@ The current `PicoEvent.signature` field is stored and returned as opaque metadat
 
 ### Current `WS /ws` message types
 
-`WS /ws` currently emits connection and event-broadcast messages for the local Foundation dashboard. These messages are not Pico Link packets and do not define a production remote transport.
+`WS /ws` currently emits connection and event-broadcast messages for the local Foundation dashboard. These messages are not Pico Link packets and do not define a production remote transport. The current implementation uses an Origin check but does not yet implement the ADR 0039 ticket boundary.
 
 ```text
 pico.core.connected

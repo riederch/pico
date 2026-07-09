@@ -150,6 +150,7 @@ In particular:
 - capability, connector and MCP boundary language must remain consistent with `0036`
 - proactive delegation, procurement and approval language must remain consistent with `0037`
 - Foundation access hardening, Home Assistant ingress and temporary direct-access token language must remain consistent with `0038`
+- Foundation WebSocket ticket and direct-access realtime hardening language must remain consistent with `0039`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

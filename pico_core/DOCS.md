@@ -6,11 +6,11 @@ Pico Core is a foundation add-on, not a production-ready Home Assistant assistan
 
 The current add-on has no production authentication model, no Home Assistant entity integration, no ingress panel, no policy engine and no protected personal data domains. Port `3100` is currently a development interface for a trusted local test environment.
 
-The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication, authorization, membership, claim or a production memory boundary. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication, authorization, membership, claim or a production memory boundary. A future short-lived WebSocket ticket boundary is defined but not implemented yet. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
 
-The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged hardening direction for Home Assistant ingress and a temporary direct-access Foundation token is documented in `../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`.
+The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged hardening direction for Home Assistant ingress and a temporary direct-access Foundation token is documented in `../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The future direct-access WebSocket ticket boundary is documented in `../docs/architecture/0039-foundation-websocket-ticket-boundary.md`.
 
 ## Installation
 
@@ -47,13 +47,15 @@ The generic event API currently accepts only foundation-safe event types. Policy
 
 The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console, user-management interface, relay protocol or public remote-access endpoint.
 
-If `PICO_FOUNDATION_TOKEN` is configured in the Core process environment, direct HTTP calls to the `/api/...` endpoints require `Authorization: Bearer <token>`. `/health`, the dashboard shell and `WS /ws` are not protected by that temporary token in the current implementation.
+If `PICO_FOUNDATION_TOKEN` is configured in the Core process environment, direct HTTP calls to the `/api/...` endpoints require `Authorization: Bearer <token>`. `/health`, the dashboard shell and `WS /ws` are not protected by that temporary token in the current implementation. ADR 0039 defines a future short-lived WebSocket ticket flow for direct token-protected access.
 
 ## Remote access boundary
 
 The current add-on should be reachable only through trusted local access paths such as the Home Assistant environment, local network testing, or developer-controlled local tunnelling for diagnostics.
 
 The WebSocket endpoint rejects browser connections whose `Origin` host does not match the request host. Development setups that serve a dashboard from another origin can allow explicit browser origins with `PICO_WS_ALLOWED_ORIGINS`, a comma-separated list such as `http://localhost:5173`. This is a defensive browser boundary, not production authentication.
+
+The planned direct-access WebSocket hardening should mint short-lived, single-use realtime tickets through a token-protected HTTP endpoint before the browser opens `WS /ws`. The long-lived `PICO_FOUNDATION_TOKEN` must not be placed in a WebSocket URL.
 
 Product-level remote reachability should later use:
 

@@ -29,6 +29,7 @@ Current exposure facts:
 - direct Foundation HTTP API endpoints under `/api/` can be protected with the temporary `PICO_FOUNDATION_TOKEN`
 - the Foundation REST API does not emit CORS allow headers
 - the WebSocket endpoint has only an Origin-boundary check, not authentication
+- ADR 0039 defines a future short-lived ticket boundary for direct WebSocket access when `PICO_FOUNDATION_TOKEN` is configured, but it is not implemented yet
 - `GET /api/system/status` exposes diagnostic claim-state, capability and migration metadata
 - `POST /api/events` accepts bounded client-provided Lamport input for foundation events
 - the `signature` field on stored events is currently opaque, informational metadata and is not verified
@@ -126,7 +127,7 @@ The current local/trusted boundary is not a complete security model. The project
 
 | Threat | Current posture | Required direction |
 |---|---|---|
-| Cross-site WebSocket hijacking | Mitigated by rejecting browser WebSocket upgrades whose `Origin` does not match the request `Host` and is not explicitly allowlisted. | Keep the check as defensive plumbing, not as authentication. |
+| Cross-site WebSocket hijacking | Mitigated by rejecting browser WebSocket upgrades whose `Origin` does not match the request `Host` and is not explicitly allowlisted. ADR 0039 defines a future direct-access ticket boundary when token mode is enabled. | Keep the check as defensive plumbing; ticket/auth handling is still not production authentication and is not implemented yet. |
 | DNS rebinding against diagnostic GET endpoints | Partially mitigated for direct `/api/` calls when `PICO_FOUNDATION_TOKEN` is configured; not solved for all browser/session cases. | Requires a real ingress/auth/session or local pairing boundary before broader exposure. |
 | Arbitrary LAN clients writing foundation events | Partially mitigated for direct `/api/` calls when `PICO_FOUNDATION_TOKEN` is configured; trusted-local assumption remains for deployments without it. | Requires endpoint authorization, audit and abuse handling before the API is exposed beyond trusted local paths. |
 | Lamport inflation through `POST /api/events` | Incoming Lamport values are bounded, but a trusted-local client can still advance ordering substantially. | Keep input bounds now; revisit once identity, device authorization and sync semantics exist. |
@@ -195,7 +196,7 @@ Before broader browser or remote access, Pico needs a deliberate ingress decisio
 
 Neither option is implemented by this ADR. Whichever path is chosen must be explicitly documented as a temporary foundation boundary unless it is later replaced by Pico identity, Home membership and policy-aware authorization.
 
-ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap.
+ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines the direct WebSocket portion with a future short-lived ticket strategy.
 
 ## Remote access boundary
 
@@ -287,6 +288,7 @@ It also does not forbid controlled local diagnostics or developer testing. It de
 
 - Should standalone development default to loopback while the Home Assistant add-on and container keep explicit all-interface binding?
 - Which exact Home Assistant ingress implementation details should protect the dashboard before Pico identity and membership exist?
+- When should the ADR 0039 WebSocket ticket boundary be implemented relative to HA ingress and add-on option work?
 - Which diagnostics can remain unauthenticated after production auth exists?
 - How should local pairing work before a Pico identity has moved into an Empty Pico Home?
 - Which endpoints should survive unchanged once Pico Home Link has a stable schema?
