@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.7",
   "license": "SEE LICENSE IN LICENSE",
-  "description": "Local-first assistant prototype.",
+  "description": "Local-first personal AI companion foundation.",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
