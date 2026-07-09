@@ -164,6 +164,20 @@ export const avatarStatusColors = [
 
 export type AvatarStatusColor = typeof avatarStatusColors[number];
 
+// Reserved privacy/deletability protocol direction. These names prepare later
+// additive payload-posture documentation, but the current Foundation PicoEvent
+// shape does not expose a payloadPosture field and does not implement memory,
+// tombstone, retention or privacy-domain storage semantics.
+export const payloadPostures = [
+  'inline_operational',
+  'inline_test',
+  'reference_only',
+  'summary_only',
+  'redacted',
+] as const;
+
+export type PayloadPosture = typeof payloadPostures[number];
+
 // Reserved action/policy/audit protocol direction. The current Foundation API
 // exports these shapes for documentation and compatibility planning only; it
 // must not accept them on the generic event write path until dedicated product

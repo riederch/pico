@@ -182,6 +182,20 @@ red
 violet
 ```
 
+### Reserved payload posture direction
+
+These names are reserved privacy and deletability direction for later additive protocol work:
+
+```text
+inline_operational
+inline_test
+reference_only
+summary_only
+redacted
+```
+
+The current Foundation `PicoEvent` shape does not expose a `payloadPosture` field. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
+
 ### Product action event types
 
 These names are product-facing protocol direction. They are reserved and not writable through the current Foundation `POST /api/events` endpoint until dedicated Pico Rules, Action Runner and Action History write paths exist:

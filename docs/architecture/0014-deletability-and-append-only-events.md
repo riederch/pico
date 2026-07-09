@@ -61,7 +61,7 @@ The current foundation event API may still store small development payloads, for
 
 That does not make the event log suitable for real personal memory. Before memory, presence history, location context or tool execution become real features, Pico must add payload references, privacy domains and deletion semantics.
 
-The current implementation does not yet expose a `payloadPosture` field, reference target, tombstone mechanism, privacy-domain key envelope or deleteable memory store. `message.created` payloads are stored inline as plaintext foundation events and must remain development/foundation data, not productive personal memory.
+The current implementation does not yet expose a `payloadPosture` field, reference target, tombstone mechanism, privacy-domain key envelope or deleteable memory store. The protocol package may reserve payload-posture value names for documentation and additive compatibility planning, but current `PicoEvent` records do not carry that field. `message.created` payloads are stored inline as plaintext foundation events and must remain development/foundation data, not productive personal memory.
 
 A future payload-posture schema field can be added as an additive protocol and storage preparation step, but it must not be confused with the full memory, deletion, tombstone or privacy-domain implementation.
 

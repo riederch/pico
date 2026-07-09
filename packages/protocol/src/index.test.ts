@@ -10,6 +10,7 @@ import type {
   PicoEvent,
   PicoHomeMembership,
   PicoRealtimeMessage,
+  PayloadPosture,
   PicoRulesDecisionCreatedPayload,
   PolicyDecisionCreatedPayload,
   ToolCallRequestedPayload,
@@ -23,6 +24,7 @@ import {
   foundationEventTypes,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
+  payloadPostures,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -71,6 +73,10 @@ describe('Pico protocol types', () => {
     expect(avatarStatusColors).toEqual(['neutral', 'blue', 'green', 'yellow', 'red', 'violet']);
   });
 
+  it('exports reserved payload posture values for privacy and deletion planning', () => {
+    expect(payloadPostures).toEqual(['inline_operational', 'inline_test', 'reference_only', 'summary_only', 'redacted']);
+  });
+
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {
     expect(realtimeMessageType).toEqual({
       coreConnected: 'pico.core.connected',
@@ -116,6 +122,12 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.state`')).toEqual([...avatarStates]);
     expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.intensity`')).toEqual([...avatarIntensities]);
     expect(textFenceAfterHeading(publicSurfaces, '#### `avatar.state_changed.payload.statusColor`')).toEqual([...avatarStatusColors]);
+  });
+
+  it('keeps reserved payload posture docs aligned with runtime value lists', () => {
+    const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
+
+    expect(textFenceAfterHeading(publicSurfaces, '### Reserved payload posture direction')).toEqual([...payloadPostures]);
   });
 
   it('keeps public protocol claim-state docs aligned with runtime claim-state value lists', () => {
@@ -330,6 +342,12 @@ describe('Pico protocol types', () => {
     };
 
     expect(payload.redaction).toBe('summary');
+  });
+
+  it('accepts reserved payload posture terminology without changing the current event shape', () => {
+    const posture: PayloadPosture = 'reference_only';
+
+    expect(payloadPostures).toContain(posture);
   });
 
   it('keeps legacy redacted audit records available for compatibility', () => {
