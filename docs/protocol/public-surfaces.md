@@ -38,16 +38,17 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability, Pico Home claim-state and database migration state. |
 | `GET /api/events` | experimental foundation API | Lists stored foundation events with additive cursor metadata. |
 | `GET /api/events/tail` | experimental diagnostic surface | Returns the latest foundation events for diagnostics dashboard use. Not a replica sync protocol and no durable sync cursors. |
+| `POST /api/realtime/tickets` | experimental foundation realtime guardrail | Mints short-lived single-use tickets for direct `WS /ws` browser upgrades when token mode is enabled. |
 | `POST /api/events` | experimental foundation API | Accepts only currently writable foundation events. Not a full sync API. |
 | `WS /ws` | experimental event stream | Streams events and connection messages. |
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.
 
-They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`; the future direct-access WebSocket ticket boundary is documented in `../architecture/0039-foundation-websocket-ticket-boundary.md`.
+They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`; the direct-access WebSocket ticket boundary is documented in `../architecture/0039-foundation-websocket-ticket-boundary.md`.
 
 The current Foundation API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication, authorization, membership, claim, production memory or Home Assistant control boundary. Current `deviceId` values are client-supplied metadata, not verified device identity.
 
-`WS /ws` is not token- or ticket-protected in the current implementation. ADR 0039 defines a future short-lived ticket strategy for direct WebSocket access when `PICO_FOUNDATION_TOKEN` is configured.
+When `PICO_FOUNDATION_TOKEN` is configured, `WS /ws` requires either a non-browser bearer upgrade header or a short-lived single-use realtime ticket minted through the token-protected Foundation API. The long-lived token must not be placed in a WebSocket URL.
 
 ### Current `GET /api/events` shape
 
@@ -78,7 +79,7 @@ The current `PicoEvent.signature` field is stored and returned as opaque metadat
 
 ### Current `WS /ws` message types
 
-`WS /ws` currently emits connection and event-broadcast messages for the local Foundation dashboard. These messages are not Pico Link packets and do not define a production remote transport. The current implementation uses an Origin check but does not yet implement the ADR 0039 ticket boundary.
+`WS /ws` currently emits connection and event-broadcast messages for the local Foundation dashboard. These messages are not Pico Link packets and do not define a production remote transport. The current implementation uses an Origin check and, when `PICO_FOUNDATION_TOKEN` is configured, the ADR 0039 ticket/bearer upgrade boundary.
 
 ```text
 pico.core.connected

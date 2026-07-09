@@ -10,6 +10,7 @@ import type {
   PicoEvent,
   PicoHomeMembership,
   PicoRealtimeMessage,
+  PicoRealtimeTicketResponse,
   PayloadPosture,
   PicoRulesDecisionCreatedPayload,
   PolicyDecisionCreatedPayload,
@@ -268,6 +269,15 @@ describe('Pico protocol types', () => {
 
     expect(connected.type).toBe('pico.core.connected');
     expect(eventCreated.event.type).toBe('message.created');
+  });
+
+  it('accepts the current realtime ticket response shape', () => {
+    const response: PicoRealtimeTicketResponse = {
+      ticket: 'ticket-value',
+      expiresAt: '2026-07-09T12:00:30.000Z',
+    };
+
+    expect(response.ticket).toBe('ticket-value');
   });
 
   it('accepts an avatar state change payload', () => {

@@ -1,5 +1,5 @@
 import { picoHomeClaimStates } from '@pico/protocol';
-import type { DashboardSnapshot, EventHistoryStatus, EventListResponse, HealthResponse, PicoEvent, SystemStatus } from './types.js';
+import type { DashboardSnapshot, EventHistoryStatus, EventListResponse, HealthResponse, PicoEvent, RealtimeTicketResponse, SystemStatus } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
 
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
@@ -63,6 +63,18 @@ export async function loadDashboardSnapshot(baseUrl: string, options: Foundation
   };
 }
 
+export async function mintRealtimeTicket(baseUrl: string, options: FoundationAccessOptions): Promise<string> {
+  const response = await fetchJson(
+    buildEndpointUrl(baseUrl, '/api/realtime/tickets'),
+    isRealtimeTicketResponse,
+    'realtime ticket',
+    options,
+    { method: 'POST' },
+  );
+
+  return response.ticket;
+}
+
 async function fetchHealth(baseUrl: string): Promise<HealthResponse> {
   return fetchJson(buildEndpointUrl(baseUrl, '/health'), isHealthResponse, 'health');
 }
@@ -90,11 +102,18 @@ async function fetchEventTail(baseUrl: string, options: FoundationAccessOptions)
   return fetchJson(url, isEventListResponse, 'events', options);
 }
 
-async function fetchJson<T>(url: URL, validate: (value: unknown) => value is T, label: string, options: FoundationAccessOptions = {}): Promise<T> {
+async function fetchJson<T>(
+  url: URL,
+  validate: (value: unknown) => value is T,
+  label: string,
+  options: FoundationAccessOptions = {},
+  init: RequestInit = {},
+): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(url, {
+      ...init,
       headers: buildFoundationHeaders(options),
     });
   } catch (error) {
@@ -183,6 +202,15 @@ function isEventListResponse(value: unknown): value is EventListResponse {
     && value.events.every(isPicoEvent)
     && (value.nextCursor === null || typeof value.nextCursor === 'string')
     && typeof value.hasMore === 'boolean'
+  );
+}
+
+function isRealtimeTicketResponse(value: unknown): value is RealtimeTicketResponse {
+  return (
+    isRecord(value)
+    && typeof value.ticket === 'string'
+    && value.ticket !== ''
+    && typeof value.expiresAt === 'string'
   );
 }
 

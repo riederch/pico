@@ -114,7 +114,7 @@ It must not be documented or implemented as:
 
 ## Token posture
 
-When the token is configured, the current implementation protects the direct Foundation HTTP API endpoints and leaves the ADR 0039 WebSocket ticket/auth strategy for a later implementation milestone:
+When the token is configured, the current implementation protects direct Foundation HTTP API endpoints and direct `WS /ws` access:
 
 | Endpoint | Token posture for direct access |
 |---|---|
@@ -124,8 +124,9 @@ When the token is configured, the current implementation protects the direct Fou
 | `GET /api/system/status` | Token-protected for direct access. |
 | `GET /api/events` | Token-protected for direct access. |
 | `GET /api/events/tail` | Token-protected for direct access. |
+| `POST /api/realtime/tickets` | Token-protected for direct access; mints short-lived single-use tickets for `WS /ws`. |
 | `POST /api/events` | Token-protected for direct access. |
-| `WS /ws` | Not token-protected yet; ADR 0039 defines the later direct-access ticket/upgrade design. |
+| `WS /ws` | Token/ticket-protected for direct access: non-browser bearer upgrade header or short-lived single-use realtime ticket for browser upgrades. |
 
 The WebSocket `Origin` check remains useful browser defense, but it remains separate from token or ticket validation.
 
@@ -150,7 +151,7 @@ This ADR does not change `PICO_HOST`, Docker `ENV`, Home Assistant port mappings
 | Threat | Staged hardening effect | Remaining gap |
 |---|---|---|
 | DNS rebinding against diagnostic GET endpoints | Ingress or token-protected API calls reduce exposure if the token/session is not readable by the attacker. | A full browser session, same-site and local TLS model is still future work. |
-| Cross-site WebSocket hijacking | Existing `Origin` check remains useful; ADR 0039 defines a future short-lived ticket boundary for direct token mode. | WebSocket ticket/auth handling is not implemented yet. |
+| Cross-site WebSocket hijacking | Existing `Origin` check remains useful; ADR 0039 adds a short-lived ticket boundary for direct token mode. | Still not production auth or same-site session design. |
 | Arbitrary LAN writes to `POST /api/events` | A direct Foundation token can reduce casual local writes. | It is not endpoint authorization, identity, rate limiting or audit. |
 | Diagnostic metadata disclosure | Token or ingress can reduce direct access to version/status/event diagnostics. | Diagnostics still need sensitivity classification before production auth. |
 | Port-forwarding the current API | Still disallowed. | Product remote access must use Pico Link and Relay after their security model exists. |
@@ -158,7 +159,7 @@ This ADR does not change `PICO_HOST`, Docker `ENV`, Home Assistant port mappings
 
 ## Implementation implications
 
-A later implementation milestone should stay narrow and testable.
+Remaining implementation milestones should stay narrow and testable.
 
 For Home Assistant ingress, that milestone should define:
 
@@ -168,7 +169,7 @@ For Home Assistant ingress, that milestone should define:
 - documentation for users who previously opened the web UI by port
 - tests or smoke checks that do not require a full production HA environment unless available
 
-For `PICO_FOUNDATION_TOKEN`, the first implementation milestone defines:
+Implemented `PICO_FOUNDATION_TOKEN` HTTP work:
 
 - environment/config parsing and validation
 - HTTP `/api/...` endpoint protection
@@ -176,13 +177,17 @@ For `PICO_FOUNDATION_TOKEN`, the first implementation milestone defines:
 - dashboard token entry for direct local access
 - tests for protected HTTP reads and writes
 
-Remaining token work:
+Implemented ADR 0039 token work:
 
-- implement the ADR 0039 WebSocket ticket/auth strategy
-- logging rules that avoid leaking the token or realtime tickets
-- tests for protected WebSocket connection attempts once the ticket/auth strategy exists
+- short-lived single-use WebSocket ticket minting under `/api/realtime/tickets`
+- in-memory ticket digest storage, expiry and consume-on-use behavior
+- direct `WS /ws` credential checks when `PICO_FOUNDATION_TOKEN` is configured
+- non-browser bearer-token WebSocket upgrade support
+- dashboard ticket minting before WebSocket connect/reconnect
+- request-log redaction for `ticket` query parameters
+- tests for protected WebSocket connection attempts, ticket reuse, expiry and Origin behavior
 
-For bind behavior, that milestone should define:
+For bind behavior, a later milestone should define:
 
 - whether the default host changes for local development
 - whether Docker and Home Assistant keep explicit `0.0.0.0`
@@ -221,7 +226,7 @@ This ADR does not implement or define:
 - Should direct port `3100` remain exposed by the add-on after ingress exists, and if so in which mode?
 - Should `PICO_FOUNDATION_TOKEN` be optional, required when `PICO_HOST` is not loopback, or controlled by a separate access mode?
 - How should the dashboard store or hold the temporary token without encouraging long-lived secret leakage?
-- What exact WebSocket ticket TTL, outstanding-ticket cap and log-redaction behavior should the ADR 0039 implementation use?
+- Should the 30-second WebSocket ticket TTL and 128 outstanding-ticket cap remain fixed or become explicit configuration later?
 - Which failed access attempts should be recorded before Action History exists?
 - When should standalone development default to loopback?
 - How should local TLS, private CA, mDNS and browser trust be handled for dedicated Pico Home devices?
@@ -239,7 +244,7 @@ Positive:
 Negative:
 
 - introduces two transitional access paths that must be documented carefully
-- WebSocket ticket/auth support is designed separately in ADR 0039 but still needs implementation
+- WebSocket ticket/auth support is another transitional Foundation-only path that must not become product auth
 - Home Assistant ingress will need packaging-specific validation
 - does not remove the need for real auth, membership, policy, audit and Pico Link work
 
@@ -257,6 +262,6 @@ This ADR extends:
 
 It answers the ADR 0030 ingress-vs-token direction at the concept level.
 
-ADR `0039-foundation-websocket-ticket-boundary.md` refines this ADR's direct-access WebSocket token/session gap.
+ADR `0039-foundation-websocket-ticket-boundary.md` refines this ADR's direct-access WebSocket token/ticket boundary.
 
 It does not replace the future Setup Mode, Move-In, Home membership, Pico identity, Pico Link or Home Assistant tool policy decisions.

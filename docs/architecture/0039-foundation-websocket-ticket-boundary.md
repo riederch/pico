@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as a foundation WebSocket access-hardening direction.
+Accepted and implemented for the current Foundation direct-access scope.
 
 ## Context
 
@@ -52,7 +52,7 @@ The long-lived Foundation token never goes into a WebSocket URL.
 
 ## Ticket endpoint direction
 
-A later implementation milestone should add a narrow Foundation API endpoint for minting WebSocket tickets.
+The current implementation adds a narrow Foundation API endpoint for minting WebSocket tickets.
 
 Preferred shape:
 
@@ -94,6 +94,13 @@ Foundation realtime tickets should be:
 - invalidated by process restart
 - purged when expired
 - bounded by a maximum outstanding ticket count
+
+The current implementation uses:
+
+- 30 second ticket TTL
+- 128 maximum outstanding tickets per Core process
+- server-side SHA-256 ticket digests
+- in-memory ticket storage only
 
 They should not be:
 
@@ -186,21 +193,21 @@ Home Assistant ingress is still not Pico identity, Home membership, Pico Rules a
 
 ## Implementation implications
 
-A later implementation milestone should stay narrow and testable:
+The current implementation stays narrow and testable:
 
-- add ticket minting under `/api/realtime/tickets`
-- reuse the existing `PICO_FOUNDATION_TOKEN` validation boundary for ticket minting
-- generate high-entropy single-use tickets with Node's crypto APIs
-- store only ticket digests in memory
-- expire and purge tickets
-- require valid credentials in the WebSocket `preValidation` path when the token is configured
-- keep the existing WebSocket `Origin` check
-- allow non-browser bearer-token upgrade only if implemented explicitly and tested
-- update the dashboard to mint fresh tickets before WebSocket connect/reconnect
-- avoid token or ticket persistence in the dashboard
-- avoid logging raw token or ticket values
+- ticket minting under `/api/realtime/tickets`
+- reuse of the existing `PICO_FOUNDATION_TOKEN` validation boundary for ticket minting
+- high-entropy single-use ticket generation with Node's crypto APIs
+- in-memory digest-only ticket storage
+- ticket expiry and purge behavior
+- valid credentials in the WebSocket `preValidation` path when the token is configured
+- the existing WebSocket `Origin` check
+- non-browser bearer-token upgrade support
+- dashboard ticket minting before WebSocket connect/reconnect
+- no dashboard persistence for tokens or tickets
+- request-log redaction for `ticket` query parameters
 
-Expected tests:
+Implemented tests:
 
 - `WS /ws` remains available under the current trusted-local behavior when no token is configured.
 - Missing WebSocket credentials are rejected when `PICO_FOUNDATION_TOKEN` is configured.
@@ -209,7 +216,7 @@ Expected tests:
 - Expired tickets are rejected.
 - The long-lived token is not accepted as a query parameter.
 - A valid ticket does not bypass the existing Origin check.
-- A valid non-browser bearer upgrade is accepted only if that path is implemented.
+- A valid non-browser bearer upgrade is accepted.
 - Dashboard reconnect mints a fresh ticket.
 
 ## Non-goals
@@ -240,10 +247,10 @@ This ADR does not implement or define:
 
 ## Open questions
 
-- What exact ticket TTL and outstanding-ticket cap should the first implementation use?
-- Should non-browser bearer-token WebSocket upgrades be supported immediately or deferred until a real external client needs them?
+- Should the current 30-second ticket TTL and 128 outstanding-ticket cap remain fixed or become explicit configuration later?
+- Are non-browser bearer-token WebSocket upgrades sufficient for future non-browser direct clients, or should those clients prefer the ticket flow too?
 - Should failed WebSocket credential attempts be counted or recorded before Action History exists?
-- How should request logging be redacted in Fastify when a WebSocket ticket appears in the URL?
+- Is the current Fastify request serializer redaction sufficient for all future logging configurations?
 - How should the HA ingress milestone handle WebSocket ticketing if the direct port is no longer user-visible?
 - When should direct all-interface binding require `PICO_FOUNDATION_TOKEN`?
 - How should local TLS, private CA, mDNS and browser trust be handled for dedicated Pico Home devices?

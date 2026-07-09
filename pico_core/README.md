@@ -107,7 +107,7 @@ The current foundation add-on provides:
 
 Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, relay transport, Pico Link transport security, migration safety, backup/rollback behaviour and companion clients still need to be built.
 
-The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication or authorization. A future short-lived WebSocket ticket boundary is defined but not implemented yet. Do not expose port `3100` outside a trusted local development or add-on boundary. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 ## Visual direction
 
@@ -140,7 +140,7 @@ The avatar communicates state and risk. For example:
 
 Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the add-on API to the internet.
 
-ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the future direct-access WebSocket ticket boundary for token-protected deployments.
+ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments.
 
 Persistent data is stored in the Home Assistant add-on data directory:
 
@@ -177,7 +177,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md`](../docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md) - capabilities, connectors and MCP boundary
 - [`../docs/architecture/0037-proactive-companion-delegation-and-procurement.md`](../docs/architecture/0037-proactive-companion-delegation-and-procurement.md) - proactive delegation and procurement reference case
 - [`../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`](../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md) - staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary
-- [`../docs/architecture/0039-foundation-websocket-ticket-boundary.md`](../docs/architecture/0039-foundation-websocket-ticket-boundary.md) - future direct-access Foundation WebSocket ticket boundary
+- [`../docs/architecture/0039-foundation-websocket-ticket-boundary.md`](../docs/architecture/0039-foundation-websocket-ticket-boundary.md) - direct-access Foundation WebSocket ticket boundary
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

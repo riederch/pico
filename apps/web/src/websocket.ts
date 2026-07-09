@@ -9,6 +9,7 @@ export interface RealtimeClient {
 
 export interface RealtimeClientOptions {
   baseUrl: string;
+  ticket?: string;
   onOpen(): void;
   onClose(): void;
   onError(message: string): void;
@@ -16,7 +17,7 @@ export interface RealtimeClientOptions {
 }
 
 export function connectRealtime(options: RealtimeClientOptions): RealtimeClient {
-  const socket = new WebSocket(buildWebSocketUrl(options.baseUrl));
+  const socket = new WebSocket(buildWebSocketUrl(options.baseUrl, options.ticket));
 
   socket.addEventListener('open', () => {
     options.onOpen();
@@ -45,9 +46,14 @@ export function connectRealtime(options: RealtimeClientOptions): RealtimeClient 
   };
 }
 
-function buildWebSocketUrl(baseUrl: string): string {
+function buildWebSocketUrl(baseUrl: string, ticket: string | undefined): string {
   const url = buildEndpointUrl(baseUrl, '/ws');
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+
+  if (ticket !== undefined && ticket !== '') {
+    url.searchParams.set('ticket', ticket);
+  }
+
   return url.toString();
 }
 

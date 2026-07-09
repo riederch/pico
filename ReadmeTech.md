@@ -16,11 +16,11 @@ Home Assistant is the first packaging and runtime path, not the only intended pl
 
 Remote reachability is intended to work through Pico Link transports, primarily Pico Relay, not by exposing Pico Home as a public inbound HTTP server.
 
-The current Foundation HTTP and WebSocket API is a trusted-local diagnostics and foundation interface. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not a production authentication surface, authorization boundary, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
+The current Foundation HTTP and WebSocket API is a trusted-local diagnostics and foundation interface. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not a production authentication surface, authorization boundary, public remote-access API, Pico Link transport or Pico Home Link compatibility specification.
 
 Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
-ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints only; ADR 0039 defines a future short-lived WebSocket ticket boundary, and Home Assistant ingress remains separate follow-up work.
+ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. Home Assistant ingress remains separate follow-up work.
 
 ## License and commercial use
 
@@ -334,6 +334,7 @@ The current container keeps the platform default user so the Home Assistant `/da
 | `GET /api/system/status` | diagnostic service, capability, Pico Home claim-state and database migration status |
 | `GET /api/events` | list stored events |
 | `GET /api/events/tail` | latest foundation events for diagnostics dashboard use |
+| `POST /api/realtime/tickets` | mint a short-lived realtime ticket for `WS /ws` when token mode is enabled |
 | `POST /api/events` | append an event |
 | `WS /ws` | event stream endpoint |
 
@@ -341,9 +342,9 @@ The current container keeps the platform default user so the Home Assistant `/da
 
 The current API surface is a foundation API. It is not yet a complete Pico Link or Pico Home Link specification, not a production authentication surface, not a public remote-access API and not a relay protocol.
 
-When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to `/api/system/version`, `/api/system/status`, `/api/events` and `/api/events/tail`, plus direct `POST /api/events`, require `Authorization: Bearer <token>`. `/health`, the dashboard shell and `WS /ws` are not protected by this temporary token in the current implementation.
+When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to `/api/system/version`, `/api/system/status`, `/api/events`, `/api/events/tail` and `/api/realtime/tickets`, plus direct `POST /api/events`, require `Authorization: Bearer <token>`. `/health` and the dashboard shell remain open.
 
-ADR 0039 defines the future direct-access `WS /ws` strategy: mint a short-lived, single-use realtime ticket through a token-protected HTTP endpoint, use the ticket for the browser WebSocket upgrade, and never put the long-lived `PICO_FOUNDATION_TOKEN` in a WebSocket URL.
+For direct `WS /ws` access in token mode, browser clients mint a short-lived, single-use realtime ticket through `POST /api/realtime/tickets` and use only that ticket for the WebSocket upgrade. Non-browser clients may use `Authorization: Bearer <token>` on the upgrade request. The long-lived `PICO_FOUNDATION_TOKEN` must not be placed in a WebSocket URL.
 
 The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct WebSocket ticket boundary is documented in `docs/architecture/0039-foundation-websocket-ticket-boundary.md`.
 
@@ -394,6 +395,13 @@ curl -X POST http://localhost:3100/api/events \
   -H 'authorization: Bearer <token>' \
   -H 'content-type: application/json' \
   -d '{"deviceId":"desktop-dev","type":"message.created","payload":{"role":"user","text":"Hallo Pico"}}'
+```
+
+Mint a short-lived realtime ticket for browser WebSocket access:
+
+```bash
+curl -X POST http://localhost:3100/api/realtime/tickets \
+  -H 'authorization: Bearer <token>'
 ```
 
 List events:
@@ -478,7 +486,7 @@ The project concept is persisted as architecture notes:
 | `0036-capabilities-connectors-and-mcp-boundary.md` | capabilities, connectors and MCP as tool connection method rather than authority |
 | `0037-proactive-companion-delegation-and-procurement.md` | proactive delegation boundaries and procurement reference case |
 | `0038-foundation-local-access-hardening-and-ingress-boundary.md` | staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary |
-| `0039-foundation-websocket-ticket-boundary.md` | future direct-access Foundation WebSocket ticket boundary |
+| `0039-foundation-websocket-ticket-boundary.md` | direct-access Foundation WebSocket ticket boundary |
 
 Protocol documents:
 
@@ -557,7 +565,7 @@ The demo must not become the path for production remote access. If it starts for
 - Validate the Home Assistant add-on on a real HA installation
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
-- Implement the next narrow ADR 0038/0039 Foundation access-hardening milestone before exposing Pico Home APIs beyond trusted local paths
+- Implement the next narrow ADR 0038 Foundation access-hardening milestone before exposing Pico Home APIs beyond trusted local paths, especially Home Assistant ingress and add-on token options
 - Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link

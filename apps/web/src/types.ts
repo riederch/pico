@@ -5,6 +5,7 @@ import type {
   PicoHealthResponse,
   PicoHomeClaimStateName as ProtocolPicoHomeClaimStateName,
   PicoRealtimeMessage as ProtocolPicoRealtimeMessage,
+  PicoRealtimeTicketResponse,
   PicoSystemStatusResponse,
 } from '@pico/protocol';
 
@@ -15,6 +16,7 @@ export type AppliedMigration = PicoAppliedMigration;
 export type PicoHomeClaimStateName = ProtocolPicoHomeClaimStateName;
 export type SystemStatus = PicoSystemStatusResponse;
 export type EventListResponse = PicoEventListResponse;
+export type RealtimeTicketResponse = PicoRealtimeTicketResponse;
 
 export interface EventHistoryStatus {
   loadedCount: number;

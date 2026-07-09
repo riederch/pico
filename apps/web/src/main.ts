@@ -1,5 +1,5 @@
 import { realtimeMessageType } from '@pico/protocol';
-import { defaultPicoHomeUrl, loadDashboardSnapshot, normalizePicoHomeUrl } from './api.js';
+import { defaultPicoHomeUrl, loadDashboardSnapshot, mintRealtimeTicket, normalizePicoHomeUrl } from './api.js';
 import { createDashboardView } from './render.js';
 import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
@@ -98,7 +98,7 @@ export function startDashboard(document: Document): void {
         return;
       }
 
-      openRealtime(baseUrl, generation);
+      void openRealtime(baseUrl, generation);
     } catch (error) {
       if (generation !== connectionGeneration) {
         return;
@@ -150,10 +150,21 @@ export function startDashboard(document: Document): void {
     return true;
   }
 
-  function openRealtime(baseUrl: string, generation: number): void {
+  async function openRealtime(baseUrl: string, generation: number): Promise<void> {
     try {
+      const foundationToken = view.getFoundationToken();
+      state.foundationToken = foundationToken;
+      const realtimeTicket = foundationToken.trim() === ''
+        ? undefined
+        : await mintRealtimeTicket(baseUrl, { foundationToken });
+
+      if (generation !== connectionGeneration) {
+        return;
+      }
+
       realtimeClient = connectRealtime({
         baseUrl,
+        ticket: realtimeTicket,
         onOpen(): void {
           if (generation !== connectionGeneration) {
             return;
@@ -192,6 +203,10 @@ export function startDashboard(document: Document): void {
         },
       });
     } catch (error) {
+      if (generation !== connectionGeneration) {
+        return;
+      }
+
       state.websocketStatus = 'error';
       state.errorMessage = formatUnknownError(error);
       view.render(state);
@@ -221,7 +236,7 @@ export function startDashboard(document: Document): void {
       state.websocketStatus = 'connecting';
       state.websocketRetryAt = null;
       view.render(state);
-      openRealtime(baseUrl, generation);
+      void openRealtime(baseUrl, generation);
     }, delay);
   }
 

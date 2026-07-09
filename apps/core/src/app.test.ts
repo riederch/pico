@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   actionEventTypes,
   avatarIntensities,
@@ -38,6 +38,8 @@ function createWebRootPath(): string {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -273,6 +275,47 @@ describe('Pico Home Core app', () => {
     expect(listed.json().events).toHaveLength(1);
 
     await app.close();
+  });
+
+  it('mints realtime tickets only through protected Foundation API access', async () => {
+    const unprotectedApp = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const disabled = await unprotectedApp.inject({ method: 'POST', url: '/api/realtime/tickets' });
+    expect(disabled.statusCode).toBe(404);
+    expect(disabled.json()).toEqual({ error: 'Realtime tickets are not enabled.' });
+    await unprotectedApp.close();
+
+    const protectedApp = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+
+    const missingToken = await protectedApp.inject({ method: 'POST', url: '/api/realtime/tickets' });
+    expect(missingToken.statusCode).toBe(401);
+    expect(missingToken.headers['www-authenticate']).toBe('Bearer realm="Pico Foundation"');
+    expect(missingToken.json()).toEqual({ error: 'Foundation token is required.' });
+
+    const ticketResponse = await protectedApp.inject({
+      method: 'POST',
+      url: '/api/realtime/tickets',
+      headers: { authorization: 'Bearer dev-token' },
+    });
+    expect(ticketResponse.statusCode).toBe(201);
+    expect(ticketResponse.headers['cache-control']).toBe('no-store');
+    expect(ticketResponse.json()).toEqual({
+      ticket: expect.any(String),
+      expiresAt: expect.any(String),
+    });
+
+    await protectedApp.close();
   });
 
   it('rejects invalid event creation requests', async () => {
@@ -538,6 +581,127 @@ describe('Pico Home Core app', () => {
     }
   });
 
+  it('requires a realtime credential for websocket connections when a foundation token is configured', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+    await app.ready();
+
+    await expect(app.injectWS('/ws')).rejects.toThrow('Unexpected server response: 401');
+    await expect(app.injectWS('/ws?ticket=dev-token')).rejects.toThrow('Unexpected server response: 401');
+
+    await app.close();
+  });
+
+  it('accepts non-browser bearer websocket upgrades when a foundation token is configured', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+    await app.ready();
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS('/ws', {
+      headers: {
+        authorization: 'Bearer dev-token',
+      },
+    }, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
+
+    try {
+      const message = await requireMessagePromise(initialMessage);
+      expect(message).toEqual({ type: realtimeMessageType.coreConnected, deviceId: 'test-core' });
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
+  it('accepts a minted realtime ticket for one websocket upgrade only', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+    await app.ready();
+
+    const ticket = await mintRealtimeTicket(app);
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS(`/ws?ticket=${encodeURIComponent(ticket)}`, {}, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
+
+    try {
+      const message = await requireMessagePromise(initialMessage);
+      expect(message).toEqual({ type: realtimeMessageType.coreConnected, deviceId: 'test-core' });
+    } finally {
+      socket.terminate();
+    }
+
+    await expect(app.injectWS(`/ws?ticket=${encodeURIComponent(ticket)}`)).rejects.toThrow('Unexpected server response: 401');
+    await app.close();
+  });
+
+  it('rejects expired realtime tickets before websocket upgrade', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-07-09T12:00:00.000Z'));
+
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+    await app.ready();
+
+    const ticket = await mintRealtimeTicket(app);
+    vi.setSystemTime(new Date('2026-07-09T12:00:31.000Z'));
+
+    await expect(app.injectWS(`/ws?ticket=${encodeURIComponent(ticket)}`)).rejects.toThrow('Unexpected server response: 401');
+    await app.close();
+  });
+
+  it('keeps the websocket Origin check ahead of realtime ticket validation', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+    await app.ready();
+
+    const ticket = await mintRealtimeTicket(app);
+    await expect(app.injectWS(`/ws?ticket=${encodeURIComponent(ticket)}`, {
+      headers: {
+        host: 'localhost:3100',
+        origin: 'http://evil.example.test',
+      },
+    })).rejects.toThrow('Unexpected server response: 403');
+
+    let initialMessage: Promise<unknown> | null = null;
+    const socket = await app.injectWS(`/ws?ticket=${encodeURIComponent(ticket)}`, {
+      headers: {
+        host: 'localhost:3100',
+        origin: 'http://localhost:3100',
+      },
+    }, { onInit(ws) { initialMessage = readSocketJson(ws as unknown as TestWebSocket); } });
+
+    try {
+      const message = await requireMessagePromise(initialMessage);
+      expect(message).toEqual({ type: realtimeMessageType.coreConnected, deviceId: 'test-core' });
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
   it('broadcasts inserted events to websocket clients', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
     await app.ready();
@@ -614,6 +778,20 @@ function requireMessagePromise(messagePromise: Promise<unknown> | null): Promise
     throw new Error('WebSocket message listener was not initialized.');
   }
   return messagePromise;
+}
+
+async function mintRealtimeTicket(app: Awaited<ReturnType<typeof buildApp>>): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/realtime/tickets',
+    headers: { authorization: 'Bearer dev-token' },
+  });
+  expect(response.statusCode).toBe(201);
+  const body = response.json() as { ticket?: unknown };
+  if (typeof body.ticket !== 'string') {
+    throw new Error('Realtime ticket response did not include a string ticket.');
+  }
+  return body.ticket;
 }
 
 function socketMessageToString(data: unknown): string {

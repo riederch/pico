@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
@@ -19,6 +19,7 @@ import {
   type PicoEventListResponse,
   type PicoEventType,
   type PicoHealthResponse,
+  type PicoRealtimeTicketResponse,
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
 } from '@pico/protocol';
@@ -37,6 +38,8 @@ const MAX_PAYLOAD_BYTES = 32 * 1024;
 const REQUEST_BODY_LIMIT_BYTES = MAX_PAYLOAD_BYTES + (8 * 1024);
 const MAX_INCOMING_LAMPORT = 1_000_000_000;
 const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
+const REALTIME_TICKET_TTL_MS = 30_000;
+const MAX_OUTSTANDING_REALTIME_TICKETS = 128;
 
 const writableEventTypes = new Set<PicoEventType>(foundationEventTypes);
 const knownEventTypes = new Set<PicoEventType>(picoEventTypes);
@@ -75,9 +78,25 @@ interface RealtimeSocket {
   on(event: 'close' | 'pong', listener: () => void): void;
 }
 
+interface RealtimeTicketRecord {
+  expiresAtMs: number;
+}
+
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: true,
+    logger: {
+      serializers: {
+        req(request: { method?: string; url?: string; host?: string; remoteAddress?: string; remotePort?: number }) {
+          return {
+            method: request.method,
+            url: redactTicketQueryValue(request.url),
+            host: request.host,
+            remoteAddress: request.remoteAddress,
+            remotePort: request.remotePort,
+          };
+        },
+      },
+    },
     bodyLimit: REQUEST_BODY_LIMIT_BYTES,
   });
   await app.register(websocket);
@@ -87,6 +106,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
   const sockets = new Set<RealtimeSocket>();
+  const realtimeTickets = new Map<string, RealtimeTicketRecord>();
   const websocketKeepalive = setInterval(() => {
     for (const socket of sockets) {
       if (socket.isAlive === false) {
@@ -163,6 +183,23 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       migrations: store.appliedMigrations(),
     },
   }));
+
+  app.post('/api/realtime/tickets', async (request, reply) => {
+    if (config.foundationToken === undefined) {
+      return reply.code(404).send({ error: 'Realtime tickets are not enabled.' });
+    }
+
+    const ticket = createRealtimeTicket(realtimeTickets);
+    const response: PicoRealtimeTicketResponse = {
+      ticket: ticket.value,
+      expiresAt: new Date(ticket.expiresAtMs).toISOString(),
+    };
+
+    return reply
+      .code(201)
+      .header('Cache-Control', 'no-store')
+      .send(response);
+  });
 
   app.get('/api/events', async (request, reply) => {
     const query = request.query as { limit?: string; after?: string };
@@ -246,6 +283,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     preValidation: async (request, reply) => {
       if (!isWebSocketOriginAllowed(request.headers.origin, request.headers.host, config.wsAllowedOrigins ?? [])) {
         return reply.code(403).send({ error: 'WebSocket origin is not allowed.' });
+      }
+
+      if (config.foundationToken !== undefined && !isRealtimeConnectionAuthorized(request.url, request.headers.authorization, config.foundationToken, realtimeTickets)) {
+        return reply
+          .code(401)
+          .header('WWW-Authenticate', 'Bearer realm="Pico Foundation"')
+          .send({ error: 'Foundation realtime credential is required.' });
       }
     },
   }, (connection) => {
@@ -377,6 +421,82 @@ function isFoundationApiPath(requestUrl: string): boolean {
   return url.pathname.startsWith('/api/');
 }
 
+function createRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>): { value: string; expiresAtMs: number } {
+  purgeExpiredRealtimeTickets(tickets);
+
+  while (tickets.size >= MAX_OUTSTANDING_REALTIME_TICKETS) {
+    const oldestDigest = tickets.keys().next().value as string | undefined;
+    if (oldestDigest === undefined) {
+      break;
+    }
+
+    tickets.delete(oldestDigest);
+  }
+
+  const value = randomBytes(32).toString('base64url');
+  const expiresAtMs = Date.now() + REALTIME_TICKET_TTL_MS;
+  tickets.set(secureDigest(value), { expiresAtMs });
+  return { value, expiresAtMs };
+}
+
+function isRealtimeConnectionAuthorized(
+  requestUrl: string,
+  authorizationHeader: string | string[] | undefined,
+  expectedToken: string,
+  tickets: Map<string, RealtimeTicketRecord>,
+): boolean {
+  if (isBearerTokenAuthorized(authorizationHeader, expectedToken)) {
+    return true;
+  }
+
+  const ticket = readRealtimeTicketQueryValue(requestUrl);
+  if (ticket === null) {
+    return false;
+  }
+
+  return consumeRealtimeTicket(tickets, ticket);
+}
+
+function readRealtimeTicketQueryValue(requestUrl: string): string | null {
+  let url: URL;
+
+  try {
+    url = new URL(requestUrl, 'http://pico.local');
+  } catch {
+    return null;
+  }
+
+  const ticket = url.searchParams.get('ticket');
+  if (ticket === null || ticket.trim() === '') {
+    return null;
+  }
+
+  return ticket;
+}
+
+function consumeRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>, ticket: string): boolean {
+  purgeExpiredRealtimeTickets(tickets);
+
+  const digest = secureDigest(ticket);
+  const record = tickets.get(digest);
+  if (record === undefined) {
+    return false;
+  }
+
+  tickets.delete(digest);
+  return record.expiresAtMs > Date.now();
+}
+
+function purgeExpiredRealtimeTickets(tickets: Map<string, RealtimeTicketRecord>): void {
+  const now = Date.now();
+
+  for (const [digest, record] of tickets) {
+    if (record.expiresAtMs <= now) {
+      tickets.delete(digest);
+    }
+  }
+}
+
 function isBearerTokenAuthorized(authorizationHeader: string | string[] | undefined, expectedToken: string): boolean {
   if (typeof authorizationHeader !== 'string') {
     return false;
@@ -399,6 +519,31 @@ function secureTokenEquals(left: string, right: string): boolean {
   const leftDigest = createHash('sha256').update(left, 'utf8').digest();
   const rightDigest = createHash('sha256').update(right, 'utf8').digest();
   return timingSafeEqual(leftDigest, rightDigest);
+}
+
+function secureDigest(value: string): string {
+  return createHash('sha256').update(value, 'utf8').digest('base64url');
+}
+
+function redactTicketQueryValue(requestUrl: string | undefined): string | undefined {
+  if (requestUrl === undefined || !requestUrl.includes('ticket=')) {
+    return requestUrl;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(requestUrl, 'http://pico.local');
+  } catch {
+    return requestUrl.replace(/([?&]ticket=)[^&]*/g, '$1[redacted]');
+  }
+
+  if (url.searchParams.has('ticket')) {
+    url.searchParams.set('ticket', '[redacted]');
+  }
+
+  const path = `${url.pathname}${url.search}${url.hash}`;
+  return path || requestUrl;
 }
 
 function isEventCursor(value: unknown): value is EventCursor {

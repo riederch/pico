@@ -13,6 +13,7 @@ Pico Home Core currently exposes a small HTTP and WebSocket surface for the foun
 - `GET /api/system/version`
 - `GET /api/system/status`
 - `GET /api/events`
+- `POST /api/realtime/tickets`
 - `POST /api/events`
 - `WS /ws`
 
@@ -28,8 +29,8 @@ Current exposure facts:
 - the Home Assistant add-on does not yet use Home Assistant ingress
 - direct Foundation HTTP API endpoints under `/api/` can be protected with the temporary `PICO_FOUNDATION_TOKEN`
 - the Foundation REST API does not emit CORS allow headers
-- the WebSocket endpoint has only an Origin-boundary check, not authentication
-- ADR 0039 defines a future short-lived ticket boundary for direct WebSocket access when `PICO_FOUNDATION_TOKEN` is configured, but it is not implemented yet
+- the WebSocket endpoint has an Origin-boundary check
+- when `PICO_FOUNDATION_TOKEN` is configured, direct WebSocket access requires either a non-browser bearer upgrade header or a short-lived single-use ticket minted through the token-protected Foundation API
 - `GET /api/system/status` exposes diagnostic claim-state, capability and migration metadata
 - `POST /api/events` accepts bounded client-provided Lamport input for foundation events
 - the `signature` field on stored events is currently opaque, informational metadata and is not verified
@@ -93,6 +94,7 @@ The current implementation provides:
 - optional temporary `PICO_FOUNDATION_TOKEN` protection for direct HTTP `/api/` endpoints
 - WebSocket connection and event broadcast messages
 - a minimal WebSocket Origin check for browser-initiated connections
+- optional temporary token/ticket protection for direct `WS /ws` access when `PICO_FOUNDATION_TOKEN` is configured
 - WebSocket ping/pong keepalive and stale socket termination
 
 The current implementation does not provide:
@@ -127,7 +129,7 @@ The current local/trusted boundary is not a complete security model. The project
 
 | Threat | Current posture | Required direction |
 |---|---|---|
-| Cross-site WebSocket hijacking | Mitigated by rejecting browser WebSocket upgrades whose `Origin` does not match the request `Host` and is not explicitly allowlisted. ADR 0039 defines a future direct-access ticket boundary when token mode is enabled. | Keep the check as defensive plumbing; ticket/auth handling is still not production authentication and is not implemented yet. |
+| Cross-site WebSocket hijacking | Mitigated by rejecting browser WebSocket upgrades whose `Origin` does not match the request `Host` and is not explicitly allowlisted. In token mode, ADR 0039 adds a short-lived direct-access ticket boundary. | Keep the checks as defensive plumbing; they are still not production authentication. |
 | DNS rebinding against diagnostic GET endpoints | Partially mitigated for direct `/api/` calls when `PICO_FOUNDATION_TOKEN` is configured; not solved for all browser/session cases. | Requires a real ingress/auth/session or local pairing boundary before broader exposure. |
 | Arbitrary LAN clients writing foundation events | Partially mitigated for direct `/api/` calls when `PICO_FOUNDATION_TOKEN` is configured; trusted-local assumption remains for deployments without it. | Requires endpoint authorization, audit and abuse handling before the API is exposed beyond trusted local paths. |
 | Lamport inflation through `POST /api/events` | Incoming Lamport values are bounded, but a trusted-local client can still advance ordering substantially. | Keep input bounds now; revisit once identity, device authorization and sync semantics exist. |
@@ -147,6 +149,7 @@ These are not reasons to implement ad hoc authentication or custom cryptography.
 | `GET /api/system/status` | system diagnostic | Local/trusted diagnostic. Can reveal capability, claim-state and database migration metadata. |
 | `GET /api/events` | experimental foundation event listing | Local/trusted foundation API. Not full sync, not memory export, not stable Pico Link. |
 | `GET /api/events/tail` | experimental dashboard event tail | Local/trusted diagnostic API. Returns latest Foundation events for the dashboard only; not sync and no durable cursors. |
+| `POST /api/realtime/tickets` | experimental realtime ticket minting | Local/trusted Foundation guardrail. Mints short-lived tickets for `WS /ws`; not a login or product session API. |
 | `POST /api/events` | experimental foundation event creation | Local/trusted foundation API. Only currently writable foundation events are accepted. |
 | `WS /ws` | experimental event stream | Local/trusted realtime surface. Not relay transport and not Pico Link. |
 
@@ -196,7 +199,7 @@ Before broader browser or remote access, Pico needs a deliberate ingress decisio
 
 Neither option is implemented by this ADR. Whichever path is chosen must be explicitly documented as a temporary foundation boundary unless it is later replaced by Pico identity, Home membership and policy-aware authorization.
 
-ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines the direct WebSocket portion with a future short-lived ticket strategy.
+ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines and implements the direct WebSocket portion with a short-lived ticket strategy.
 
 ## Remote access boundary
 
@@ -288,7 +291,7 @@ It also does not forbid controlled local diagnostics or developer testing. It de
 
 - Should standalone development default to loopback while the Home Assistant add-on and container keep explicit all-interface binding?
 - Which exact Home Assistant ingress implementation details should protect the dashboard before Pico identity and membership exist?
-- When should the ADR 0039 WebSocket ticket boundary be implemented relative to HA ingress and add-on option work?
+- How should the implemented ADR 0039 WebSocket ticket boundary interact with HA ingress once ingress exists?
 - Which diagnostics can remain unauthenticated after production auth exists?
 - How should local pairing work before a Pico identity has moved into an Empty Pico Home?
 - Which endpoints should survive unchanged once Pico Home Link has a stable schema?

@@ -253,6 +253,11 @@ export interface PicoEventListResponse<TPayload = unknown> {
   hasMore: boolean;
 }
 
+export interface PicoRealtimeTicketResponse {
+  ticket: string;
+  expiresAt: string;
+}
+
 export type PicoEventAppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
 
 export interface PicoEventCreateResponse<TPayload = unknown> {
