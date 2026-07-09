@@ -55,11 +55,11 @@ AI-assisted contributions are allowed only when the contributor reviews, underst
 
 Do not submit AI-generated code or text if you cannot confirm that it is appropriate for the project and compatible with the contribution rules.
 
-## Tracked IDE project files
+## Local IDE metadata
 
-The currently versioned `.idea/` project files are intentionally kept in the repository. Do not remove them as repository drift.
+`.idea/` files are local IDE metadata and should not be committed.
 
-The `.gitignore` entry for `.idea/` is still intentional: it keeps new local IDE artifacts from being added accidentally while preserving the already tracked project files.
+The `.gitignore` entry for `.idea/` is intentional: it keeps local IDE artifacts from being added accidentally. Local `.idea/` files may remain in a developer working tree, but they are not part of the repository contract.
 
 ## Compatibility-sensitive contributions
 
