@@ -10,6 +10,7 @@
     "check": "pnpm -r check",
     "dev:core": "pnpm --filter @pico/core dev",
     "license:check": "node scripts/check-license.mjs",
+    "release:tag-check": "node scripts/check-release-tag.mjs",
     "version:check": "node scripts/check-version.mjs",
     "test": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",

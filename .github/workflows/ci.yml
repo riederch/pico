@@ -61,6 +61,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Verify release tag matches package version
+        if: github.ref_type == 'tag'
+        run: node scripts/check-release-tag.mjs
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5

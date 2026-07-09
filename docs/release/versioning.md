@@ -65,6 +65,8 @@ This check compares the root package version with package metadata, Pico Home Co
 
 The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.1.7`, so `.github/workflows/ci.yml` is not a version-bearing file.
 
+Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is generated. A tag build must use the exact Git tag `v${package.json.version}`; for example, package version `0.1.7` must be released from Git tag `v0.1.7`.
+
 ## Container image tags
 
 The CI workflow publishes different tag classes for different events:
