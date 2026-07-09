@@ -148,6 +148,8 @@ describe('Pico protocol types', () => {
       'foundation-events/v0.1.7/parse-positive/avatar-state-changed-thinking',
       'foundation-events/v0.1.7/parse-negative/action-requested-reserved',
       'foundation-events/v0.1.7/parse-negative/message-created-invalid-role',
+      'foundation-events/v0.1.7/parse-negative/message-created-empty-text',
+      'foundation-events/v0.1.7/parse-negative/avatar-state-invalid-status-color',
       'foundation-realtime/v0.1.7/parse-positive/core-connected',
       'foundation-realtime/v0.1.7/parse-positive/event-created-message',
       'foundation-realtime/v0.1.7/parse-negative/core-connected-missing-device-id',
@@ -385,8 +387,21 @@ function expectCurrentFoundationEventFixture(
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
 
     if (inputType === 'message.created') {
+      const payload = recordField(input, 'payload');
       expect(foundationEventTypes).toContain(inputType);
-      expect(messageCreatedRoles).not.toContain(stringField(recordField(input, 'payload'), 'role'));
+      expect(
+        !messageCreatedRoles.includes(stringField(payload, 'role') as typeof messageCreatedRoles[number])
+        || stringField(payload, 'text').trim() === '',
+      ).toBe(true);
+    } else if (inputType === 'avatar.state_changed') {
+      const payload = recordField(input, 'payload');
+      expect(foundationEventTypes).toContain(inputType);
+      expect(
+        !avatarModes.includes(stringField(payload, 'mode') as typeof avatarModes[number])
+        || !avatarStates.includes(stringField(payload, 'state') as typeof avatarStates[number])
+        || !avatarIntensities.includes(stringField(payload, 'intensity') as typeof avatarIntensities[number])
+        || !avatarStatusColors.includes(stringField(payload, 'statusColor') as typeof avatarStatusColors[number]),
+      ).toBe(true);
     } else {
       expect(foundationEventTypes).not.toContain(inputType);
     }

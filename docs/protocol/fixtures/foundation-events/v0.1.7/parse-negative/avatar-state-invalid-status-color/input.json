@@ -1,0 +1,10 @@
+{
+  "deviceId": "fixture-device",
+  "type": "avatar.state_changed",
+  "payload": {
+    "mode": "everyday",
+    "state": "thinking",
+    "intensity": "normal",
+    "statusColor": "purple"
+  }
+}

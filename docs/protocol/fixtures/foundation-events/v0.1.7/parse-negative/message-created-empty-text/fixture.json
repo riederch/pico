@@ -1,0 +1,33 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-negative.message-created-empty-text",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-negative",
+  "case": "message.created append body rejected when text is empty",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "schema_error"
+    ],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 400,
+      "body": {
+        "error": "message.created payload requires role and text."
+      }
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation fixture. Current payload validation examples are not final companion, memory, Pico Link or Pico Home Link schemas."
+}
