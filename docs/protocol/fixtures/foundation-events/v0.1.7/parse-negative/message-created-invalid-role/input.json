@@ -1,0 +1,8 @@
+{
+  "deviceId": "fixture-device",
+  "type": "message.created",
+  "payload": {
+    "role": "operator",
+    "text": "Unsupported role fixture"
+  }
+}

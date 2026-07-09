@@ -9,7 +9,9 @@ The current fixture set is a seed set for Foundation event and realtime compatib
 ```text
 suite.json
 foundation-events/v0.1.7/parse-positive/message-created-minimal/
+foundation-events/v0.1.7/parse-positive/avatar-state-changed-thinking/
 foundation-events/v0.1.7/parse-negative/action-requested-reserved/
+foundation-events/v0.1.7/parse-negative/message-created-invalid-role/
 foundation-realtime/v0.1.7/parse-positive/core-connected/
 foundation-realtime/v0.1.7/parse-positive/event-created-message/
 foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime/

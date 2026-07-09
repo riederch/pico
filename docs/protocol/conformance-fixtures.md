@@ -378,8 +378,8 @@ It includes:
 
 - `docs/protocol/fixtures/README.md`
 - `docs/protocol/fixtures/suite.json`
-- one positive `message.created` Foundation event append fixture
-- one negative reserved `action.requested` Foundation event append fixture
+- two positive Foundation event append fixtures for `message.created` and `avatar.state_changed`
+- two negative Foundation event append fixtures for a reserved event type and an invalid `message.created` role
 - two positive current Foundation WebSocket message fixtures
 - one negative Pico Link-like message fixture for the current Foundation WebSocket surface
 - protocol tests that validate seed fixture metadata, source files, capability names and current Foundation event/realtime semantics

@@ -145,7 +145,9 @@ describe('Pico protocol types', () => {
     expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
     expect(fixturePaths).toEqual([
       'foundation-events/v0.1.7/parse-positive/message-created-minimal',
+      'foundation-events/v0.1.7/parse-positive/avatar-state-changed-thinking',
       'foundation-events/v0.1.7/parse-negative/action-requested-reserved',
+      'foundation-events/v0.1.7/parse-negative/message-created-invalid-role',
       'foundation-realtime/v0.1.7/parse-positive/core-connected',
       'foundation-realtime/v0.1.7/parse-positive/event-created-message',
       'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
@@ -176,7 +178,7 @@ describe('Pico protocol types', () => {
       expect(stringArrayField(suite, 'families')).toContain(family);
 
       if (surface === 'foundation-events') {
-        expect(capabilitiesRequired).toEqual(['pico.core.events.v1']);
+        expect(capabilitiesRequired).toContain('pico.core.events.v1');
         expectCurrentFoundationEventFixture(input, inputType, expectBlock, family);
       } else if (surface === 'foundation-realtime') {
         expect(capabilitiesRequired).toContain('pico.core.websocket.v1');
@@ -352,16 +354,40 @@ function expectCurrentFoundationEventFixture(
   expectBlock: Record<string, unknown>,
   family: string,
 ): void {
+  const http = recordField(expectBlock, 'http');
+
+  expect(stringField(http, 'method')).toBe('POST');
+  expect(stringField(http, 'path')).toBe('/api/events');
+
   if (family === 'parse-positive') {
     expect(stringField(expectBlock, 'parse')).toBe('accept');
+    expect(numberField(http, 'status')).toBe(201);
     expect(foundationEventTypes).toContain(inputType);
-    expect(inputType).toBe('message.created');
-    expect(messageCreatedRoles).toContain(stringField(recordField(input, 'payload'), 'role'));
+
+    const payload = recordField(input, 'payload');
+    if (inputType === 'message.created') {
+      expect(messageCreatedRoles).toContain(stringField(payload, 'role'));
+      expect(stringField(payload, 'text')).toBeTruthy();
+    } else if (inputType === 'avatar.state_changed') {
+      expect(avatarModes).toContain(stringField(payload, 'mode'));
+      expect(avatarStates).toContain(stringField(payload, 'state'));
+      expect(avatarIntensities).toContain(stringField(payload, 'intensity'));
+      expect(avatarStatusColors).toContain(stringField(payload, 'statusColor'));
+    } else {
+      throw new Error(`Unexpected positive Foundation event fixture type: ${inputType}`);
+    }
   } else if (family === 'parse-negative') {
     expect(stringField(expectBlock, 'parse')).toBe('reject');
+    expect(numberField(http, 'status')).toBe(400);
     expect(picoEventTypes).toContain(inputType);
-    expect(foundationEventTypes).not.toContain(inputType);
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+
+    if (inputType === 'message.created') {
+      expect(foundationEventTypes).toContain(inputType);
+      expect(messageCreatedRoles).not.toContain(stringField(recordField(input, 'payload'), 'role'));
+    } else {
+      expect(foundationEventTypes).not.toContain(inputType);
+    }
   } else {
     throw new Error(`Unexpected fixture family: ${family}`);
   }

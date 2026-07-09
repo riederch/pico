@@ -1,0 +1,13 @@
+{
+  "deviceId": "fixture-device",
+  "sessionId": "session:fixture",
+  "type": "avatar.state_changed",
+  "stream": "avatar:fixture",
+  "payload": {
+    "mode": "everyday",
+    "state": "thinking",
+    "intensity": "normal",
+    "statusColor": "violet",
+    "message": "Thinking"
+  }
+}

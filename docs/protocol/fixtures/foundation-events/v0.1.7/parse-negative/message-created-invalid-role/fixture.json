@@ -1,0 +1,33 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-negative.message-created-invalid-role",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-negative",
+  "case": "message.created append body rejected when role is outside current Foundation values",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "schema_error"
+    ],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 400,
+      "body": {
+        "error": "message.created payload requires role and text."
+      }
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation fixture. Current Foundation payload value sets are runtime-validated but are not final companion, memory, Pico Link or Pico Home Link schemas."
+}
