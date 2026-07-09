@@ -20,6 +20,8 @@ The current Foundation HTTP and WebSocket API is an unauthenticated trusted-loca
 
 Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
+ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap.
+
 ## License and commercial use
 
 Pico is source-available for private and non-commercial use under the PolyForm Noncommercial License 1.0.0.
@@ -339,7 +341,7 @@ The current container keeps the platform default user so the Home Assistant `/da
 
 The current API surface is a foundation API. It is not yet a complete Pico Link or Pico Home Link specification, not a production authentication surface, not a public remote-access API and not a relay protocol.
 
-The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`.
+The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`.
 
 ## Local development
 
@@ -462,6 +464,7 @@ The project concept is persisted as architecture notes:
 | `0035-pico-as-digital-companion-and-twin-model.md` | Pico as digital companion and technical twin of a chosen subject |
 | `0036-capabilities-connectors-and-mcp-boundary.md` | capabilities, connectors and MCP as tool connection method rather than authority |
 | `0037-proactive-companion-delegation-and-procurement.md` | proactive delegation boundaries and procurement reference case |
+| `0038-foundation-local-access-hardening-and-ingress-boundary.md` | staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary |
 
 Protocol documents:
 
@@ -540,7 +543,7 @@ The demo must not become the path for production remote access. If it starts for
 - Validate the Home Assistant add-on on a real HA installation
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
-- Define the production auth, ingress and local pairing boundary before exposing Pico Home APIs beyond trusted local paths
+- Implement a narrow ADR 0038 Foundation access-hardening milestone before exposing Pico Home APIs beyond trusted local paths
 - Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link

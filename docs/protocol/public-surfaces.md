@@ -43,7 +43,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.
 
-They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`.
+They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`.
 
 The current Foundation API is unauthenticated local diagnostics only. Current `deviceId` values are client-supplied metadata, not verified device identity. The API is not a membership boundary, claim boundary, production memory layer or Home Assistant control boundary.
 

@@ -193,6 +193,8 @@ Before broader browser or remote access, Pico needs a deliberate ingress decisio
 
 Neither option is implemented by this ADR. Whichever path is chosen must be explicitly documented as a temporary foundation boundary unless it is later replaced by Pico identity, Home membership and policy-aware authorization.
 
+ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap.
+
 ## Remote access boundary
 
 Product-level remote access should use:
@@ -282,7 +284,7 @@ It also does not forbid controlled local diagnostics or developer testing. It de
 ## Open questions
 
 - Should standalone development default to loopback while the Home Assistant add-on and container keep explicit all-interface binding?
-- Which Home Assistant ingress model, if any, should protect the dashboard before Pico identity and membership exist?
+- Which exact Home Assistant ingress implementation details should protect the dashboard before Pico identity and membership exist?
 - Which diagnostics can remain unauthenticated after production auth exists?
 - How should local pairing work before a Pico identity has moved into an Empty Pico Home?
 - Which endpoints should survive unchanged once Pico Home Link has a stable schema?

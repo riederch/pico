@@ -10,7 +10,7 @@ The current Foundation HTTP and WebSocket API is unauthenticated local diagnosti
 
 Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
 
-The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`.
+The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged hardening direction for Home Assistant ingress and a temporary direct-access Foundation token is documented in `../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`.
 
 ## Installation
 
@@ -113,6 +113,7 @@ Planned future options may include:
 | Option | Purpose |
 | --- | --- |
 | `pico_port` | Runtime port selection, if the add-on entrypoint is changed to apply it safely. |
+| `pico_foundation_token` | Future add-on option mapped to temporary `PICO_FOUNDATION_TOKEN`, if ADR 0038 hardening is implemented. |
 | `relay_enabled` | Future opt-in outbound Pico Relay connection, if the Relay and Pico Link security model exists. |
 
 ## Update behavior

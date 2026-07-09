@@ -177,6 +177,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0035-pico-as-digital-companion-and-twin-model.md`](docs/architecture/0035-pico-as-digital-companion-and-twin-model.md) - Pico as digital companion and technical twin model
 - [`docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md`](docs/architecture/0036-capabilities-connectors-and-mcp-boundary.md) - capabilities, connectors and MCP boundary
 - [`docs/architecture/0037-proactive-companion-delegation-and-procurement.md`](docs/architecture/0037-proactive-companion-delegation-and-procurement.md) - proactive delegation and procurement reference case
+- [`docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`](docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md) - staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
