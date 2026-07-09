@@ -4,6 +4,12 @@ This matrix separates ADR decision status from implementation status. An `Accept
 
 Pico is currently foundation-stage. This document does not make Pico Home, Pico Link, Relay, Crypto, Membership, Pico Rules, Action Runner, Action History, Memory Store or Home Assistant control production-ready.
 
+## Scope
+
+This matrix currently tracks production-blocking, security-sensitive and compatibility-sensitive ADRs. It is not yet a complete inventory of every historical ADR in the repository.
+
+Older or purely local implementation ADRs may be added later if they become relevant for release, compatibility, migration or production-readiness decisions.
+
 ## Status categories
 
 | Category | Meaning |
