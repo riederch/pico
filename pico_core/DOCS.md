@@ -114,7 +114,19 @@ Planned future options may include:
 
 Updates are delivered through the normal Home Assistant add-on update flow.
 
-The add-on version in `config.yaml` must match the published container image tag.
+The add-on image in `config.yaml` is the tagless image name:
+
+```text
+ghcr.io/riederch/pico/core
+```
+
+The release artifact for the add-on version must exist as the matching semver image tag. For add-on version `0.1.7`, the required image is:
+
+```text
+ghcr.io/riederch/pico/core:0.1.7
+```
+
+The Git release tag, root `package.json` version, package versions, `pico_core/config.yaml` version, changelog entry and published semver container tag must stay aligned. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
 
 The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. The add-on runtime does not yet run an automatic backup or rollback workflow during startup.
 

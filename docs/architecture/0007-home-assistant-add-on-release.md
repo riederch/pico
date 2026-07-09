@@ -50,7 +50,7 @@ aarch64
 
 ## Version rule
 
-The add-on `version` in `pico_core/config.yaml` must match the release image tag.
+The add-on `version` in `pico_core/config.yaml` must match the release image tag. The `image` value in `config.yaml` intentionally names the image without a literal tag; the versioned release artifact is the matching semver GHCR tag.
 
 Example:
 

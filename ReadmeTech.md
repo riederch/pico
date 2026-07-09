@@ -294,6 +294,14 @@ The add-on uses the prebuilt container image:
 ghcr.io/riederch/pico/core
 ```
 
+`pico_core/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.1.7` is:
+
+```text
+ghcr.io/riederch/pico/core:0.1.7
+```
+
+The published Git tag must match the add-on version and root package version exactly, for example `v0.1.7` for version `0.1.7`. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
+
 Current tag:
 
 ```text

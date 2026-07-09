@@ -145,7 +145,7 @@ The active Home Assistant add-on version lives in:
 pico_core/config.yaml
 ```
 
-The default-branch GHCR image tag must match the add-on version.
+The matching semver GHCR image tag is created by the release Git tag build. Default-branch pushes publish only `main` and `sha-*` image tags and must not mutate semver image tags.
 
 ## Binary asset workflow
 

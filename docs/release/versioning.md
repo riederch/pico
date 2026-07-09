@@ -69,6 +69,18 @@ Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is g
 
 ## Container image tags
 
+`pico_core/config.yaml` stores the image name without a literal tag:
+
+```text
+ghcr.io/riederch/pico/core
+```
+
+The versioned release artifact for add-on version `0.1.7` is the matching semver image tag:
+
+```text
+ghcr.io/riederch/pico/core:0.1.7
+```
+
 The CI workflow publishes different tag classes for different events:
 
 | Event | Expected GHCR tags |
