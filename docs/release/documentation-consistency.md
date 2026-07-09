@@ -13,6 +13,7 @@ Pico keeps several README-style documents with different scopes.
 | `pico_core/CHANGELOG.md` | add-on-specific change history | Home Assistant users and administrators |
 | `docs/architecture/*.md` | architecture decisions and concept constraints | architecture and design work |
 | `docs/protocol/*.md` | protocol surfaces, compatibility levels and conformance fixture planning | protocol and compatibility work |
+| `docs/development/*.md` | development notes and preserved reviewer context that should not bloat root README files | maintainers and future agents |
 | `docs/release/*.md` | release, versioning and documentation rules | maintainers |
 
 ## Root README purpose
@@ -53,6 +54,8 @@ It must include all information from `README.md` and add the technical details n
 - release and update direction
 
 `ReadmeTech.md` may be more detailed, but it must not contradict the non-technical README.
+
+Long explanatory sections that are useful for reviewers but too detailed for the main technical README may live under `docs/development/`. Those files are companion notes, not replacements for ADRs or release rules.
 
 ## Home Assistant add-on README purpose
 
