@@ -33,6 +33,7 @@ const DEFAULT_EVENT_LIMIT = 100;
 const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;
 const MAX_PAYLOAD_BYTES = 32 * 1024;
+const REQUEST_BODY_LIMIT_BYTES = MAX_PAYLOAD_BYTES + (8 * 1024);
 const MAX_INCOMING_LAMPORT = 1_000_000_000;
 const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 
@@ -74,7 +75,10 @@ interface RealtimeSocket {
 }
 
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true });
+  const app = Fastify({
+    logger: true,
+    bodyLimit: REQUEST_BODY_LIMIT_BYTES,
+  });
   await app.register(websocket);
   registerWebDashboard(app, config.webRootPath ?? defaultWebRootPath());
 

@@ -213,6 +213,62 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  it('accepts legitimate event bodies below the request body limit', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        payload: { role: 'user', text: 'Hallo Pico', padding: 'x'.repeat(24_000) },
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+
+    await app.close();
+  });
+
+  it('keeps the semantic payload size check separate from the request body limit', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        payload: { role: 'user', text: 'Hallo Pico', padding: 'x'.repeat(33_000) },
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'payload is too large.' });
+
+    await app.close();
+  });
+
+  it('rejects oversized request bodies before event validation', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: { 'content-type': 'application/json' },
+      payload: JSON.stringify({
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        payload: { role: 'user', text: 'Hallo Pico', padding: 'x'.repeat(50_000) },
+      }),
+    });
+
+    expect(response.statusCode).toBe(413);
+
+    await app.close();
+  });
+
   it('accepts foundation payload values exported by the protocol package', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 
