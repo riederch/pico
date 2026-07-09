@@ -55,6 +55,12 @@ AI-assisted contributions are allowed only when the contributor reviews, underst
 
 Do not submit AI-generated code or text if you cannot confirm that it is appropriate for the project and compatible with the contribution rules.
 
+## Tracked IDE project files
+
+The currently versioned `.idea/` project files are intentionally kept in the repository. Do not remove them as repository drift.
+
+The `.gitignore` entry for `.idea/` is still intentional: it keeps new local IDE artifacts from being added accidentally while preserving the already tracked project files.
+
 ## Compatibility-sensitive contributions
 
 Changes to protocol semantics, event meanings, Pico Link, Pico Home Link, privacy-domain semantics, host claim semantics, residency, eviction, sync, Action Runner or Pico Rules behaviour are compatibility-sensitive.
