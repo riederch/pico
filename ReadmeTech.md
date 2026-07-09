@@ -329,8 +329,11 @@ Port `3100` is a trusted local foundation interface for the current add-on. It i
 | `GET /api/system/version` | service and protocol version information |
 | `GET /api/system/status` | diagnostic service, capability, Pico Home claim-state and database migration status |
 | `GET /api/events` | list stored events |
+| `GET /api/events/tail` | latest foundation events for diagnostics dashboard use |
 | `POST /api/events` | append an event |
 | `WS /ws` | event stream endpoint |
+
+`GET /api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.
 
 The current API surface is a foundation API. It is not yet a complete Pico Link or Pico Home Link specification, not a production authentication surface, not a public remote-access API and not a relay protocol.
 

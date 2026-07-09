@@ -133,7 +133,10 @@ The avatar communicates state and risk. For example:
 | `/` | foundation diagnostics dashboard |
 | `/health` | add-on health check |
 | `/api/events` | event list and event creation |
+| `/api/events/tail` | latest foundation events for diagnostics dashboard use |
 | `/ws` | realtime event stream |
+
+`/api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.
 
 Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the add-on API to the internet.
 

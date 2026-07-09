@@ -38,7 +38,10 @@ Port `3100` is a trusted local foundation interface for development and diagnost
 | `/api/system/version` | Service and protocol version information |
 | `/api/system/status` | Diagnostic service, capability, Pico Home claim-state and database migration status |
 | `/api/events` | Development event list and limited event creation |
+| `/api/events/tail` | Latest foundation events for diagnostics dashboard use |
 | `/ws` | Realtime event stream |
+
+`/api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.
 
 The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
 
