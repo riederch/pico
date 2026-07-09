@@ -26,6 +26,8 @@
     "foundation-events/v0.1.7/parse-negative/message-created-invalid-role",
     "foundation-realtime/v0.1.7/parse-positive/core-connected",
     "foundation-realtime/v0.1.7/parse-positive/event-created-message",
+    "foundation-realtime/v0.1.7/parse-negative/core-connected-missing-device-id",
+    "foundation-realtime/v0.1.7/parse-negative/event-created-missing-event",
     "foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime"
   ],
   "notes": "Experimental Foundation event and realtime fixture seed. This is not a published conformance suite or L4 compatibility basis."

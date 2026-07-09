@@ -150,6 +150,8 @@ describe('Pico protocol types', () => {
       'foundation-events/v0.1.7/parse-negative/message-created-invalid-role',
       'foundation-realtime/v0.1.7/parse-positive/core-connected',
       'foundation-realtime/v0.1.7/parse-positive/event-created-message',
+      'foundation-realtime/v0.1.7/parse-negative/core-connected-missing-device-id',
+      'foundation-realtime/v0.1.7/parse-negative/event-created-missing-event',
       'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
     ]);
 
@@ -423,8 +425,15 @@ function expectCurrentFoundationRealtimeFixture(
     }
   } else if (family === 'parse-negative') {
     expect(stringField(expectBlock, 'parse')).toBe('reject');
-    expect(realtimeMessageTypes).not.toContain(inputType);
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+
+    if (inputType === realtimeMessageType.coreConnected) {
+      expect(input.deviceId).toBeUndefined();
+    } else if (inputType === realtimeMessageType.eventCreated) {
+      expect(input.event).toBeUndefined();
+    } else {
+      expect(realtimeMessageTypes).not.toContain(inputType);
+    }
   } else {
     throw new Error(`Unexpected fixture family: ${family}`);
   }
