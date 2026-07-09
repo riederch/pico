@@ -131,6 +131,14 @@ A positive signal can reduce uncertainty only within its context. It must not gr
 
 A severe negative signal may trigger stronger protective behavior, but must still preserve dispute handling and avoid unsupported defamation.
 
+## Current protocol naming caveat
+
+The current TypeScript protocol package contains a reserved planning type named `ContextSignalLevel` and a deprecated alias named `TrustedLevel`.
+
+That type currently includes the legacy value `admin`. This value must not be treated as a role, permission, capability, host-administration grant, Home membership credential, Pico Rules decision or Action Runner authorization.
+
+Context signals are evidence hints for local evaluation only. Roles, capabilities, membership and authorization must be modeled separately before this area becomes writable or security-relevant.
+
 ## Interaction classes
 
 Pico should reason about concrete interaction classes, for example:

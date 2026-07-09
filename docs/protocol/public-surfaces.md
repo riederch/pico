@@ -197,6 +197,14 @@ redacted
 
 The current Foundation `PicoEvent` shape does not expose a `payloadPosture` field. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
 
+### Reserved context-signal direction
+
+`ContextSignalLevel` and its deprecated alias `TrustedLevel` are TypeScript planning types only. They are not fields in the current Foundation event payload schema and do not create an authorization, membership or host-administration boundary.
+
+The current compatibility type still contains the legacy value `admin`. That value must be read only as a reserved context-signal label. It is not a role, permission, capability, Home Host Pico membership grant, Pico Rules decision or Action Runner authorization.
+
+Future work should separate context evidence, roles, capabilities and membership credentials explicitly before any context-signal data becomes writable or security-relevant.
+
 ### Product action event types
 
 These names are product-facing protocol direction. They are reserved and not writable through the current Foundation `POST /api/events` endpoint until dedicated Pico Rules, Action Runner and Action History write paths exist:

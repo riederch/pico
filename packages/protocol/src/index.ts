@@ -104,6 +104,9 @@ export type PicoNodeType =
 /** @deprecated Use PicoNodeType. */
 export type DeviceType = PicoNodeType | 'core' | 'web';
 
+// Reserved context-signal posture. These values are compatibility and planning
+// direction only. `admin` is a legacy/placeholder signal label and must not be
+// used as an authorization role, host-administration grant or capability.
 export type ContextSignalLevel = 'untrusted' | 'known' | 'trusted' | 'admin';
 
 /** @deprecated Use ContextSignalLevel. */
@@ -282,6 +285,7 @@ export interface PicoNode {
   nodeId: string;
   name: string;
   type: PicoNodeType;
+  // Context signal only. This is not a role, permission or auth boundary.
   contextSignalLevel: ContextSignalLevel;
   capabilities: Record<string, boolean>;
   lastSeenAt?: string;
