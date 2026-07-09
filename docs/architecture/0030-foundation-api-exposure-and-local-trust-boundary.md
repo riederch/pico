@@ -130,6 +130,7 @@ The current local/trusted boundary is not a complete security model. The project
 | Lamport inflation through `POST /api/events` | Incoming Lamport values are bounded, but a trusted-local client can still advance ordering substantially. | Keep input bounds now; revisit once identity, device authorization and sync semantics exist. |
 | Information disclosure via `/api/system/status` | Diagnostic endpoint reveals version, capabilities, claim-state and migration metadata. | Classify diagnostics by sensitivity before production auth or remote access. |
 | Misinterpreting `signature` as verified | `signature` is stored but not checked against keys or signed manifests. | Treat it as unverified metadata until ADR 0029 follow-ups define keys, formats and verification. |
+| Container process privileges | The current image keeps the platform default user so the Home Assistant `/data` mount remains writable for SQLite across add-on installations. | Before production hardening, add a tested entrypoint or platform-specific setup that prepares `/data` ownership and drops privileges without breaking persistence. |
 
 These are not reasons to implement ad hoc authentication or custom cryptography. They define the backlog for a later foundation-hardening release.
 
@@ -243,6 +244,7 @@ Runtime and packaging work should avoid implying that the current port is safe f
 
 - safer default bind settings for non-add-on deployments
 - explicit configuration for exposed interfaces
+- container entrypoint or platform setup that prepares `/data` and drops privileges where supported
 - Home Assistant ingress support
 - local setup-mode access rules
 - authentication middleware

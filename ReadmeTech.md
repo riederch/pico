@@ -320,6 +320,8 @@ The add-on exposes Pico Home Core on port `3100`, serves the foundation dashboar
 
 Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of router port forwarding into the Pico Home API.
 
+The current container keeps the platform default user so the Home Assistant `/data` mount stays writable for SQLite. This is a foundation-stage packaging constraint, not a security claim. A later hardening step should prepare `/data` ownership and drop privileges through a tested entrypoint or platform-specific setup.
+
 ## Current API surface
 
 | Endpoint | Purpose |
