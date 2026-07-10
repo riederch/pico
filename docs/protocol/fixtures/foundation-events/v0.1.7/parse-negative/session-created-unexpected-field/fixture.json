@@ -1,0 +1,33 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-negative.session-created-unexpected-field",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-negative",
+  "case": "session.created append body rejected when payload contains an unexpected field",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "schema_error"
+    ],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 400,
+      "body": {
+        "error": "session.created payload has unexpected field: profile."
+      }
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation fixture. session.created carries no writable payload fields; sensitive or product data must not be hidden in extra fields."
+}

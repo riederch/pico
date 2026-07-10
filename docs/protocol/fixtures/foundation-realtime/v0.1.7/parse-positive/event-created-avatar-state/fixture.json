@@ -1,0 +1,28 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-realtime.v0_1_7.parse-positive.event-created-avatar-state",
+  "stage": "fixture_data",
+  "surface": "foundation-realtime",
+  "protocolVersion": "0.1.7",
+  "family": "parse-positive",
+  "case": "pico.event.created WebSocket message carrying an avatar.state_changed event with opaque signature metadata",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "websocket": {
+      "path": "/ws",
+      "messageType": "pico.event.created"
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.websocket.v1",
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation realtime fixture. The embedded event uses current Foundation event semantics only. The signature field is opaque, unverified metadata and grants no authorship, integrity or identity guarantee until key lifecycle, canonicalization and verification are defined."
+}

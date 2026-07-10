@@ -1,0 +1,9 @@
+{
+  "deviceId": "fixture-device",
+  "sessionId": "session:fixture",
+  "type": "session.created",
+  "stream": "session:fixture",
+  "payload": {
+    "profile": "not allowed"
+  }
+}

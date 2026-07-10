@@ -1,0 +1,20 @@
+{
+  "type": "pico.event.created",
+  "event": {
+    "eventId": "evt-fixture-realtime-avatar-1",
+    "deviceId": "fixture-device",
+    "sessionId": "session:fixture",
+    "lamport": 2,
+    "wallTime": "2026-07-08T00:00:01.000Z",
+    "type": "avatar.state_changed",
+    "stream": "avatar:fixture",
+    "payload": {
+      "mode": "everyday",
+      "state": "working",
+      "intensity": "normal",
+      "statusColor": "blue",
+      "message": "Working"
+    },
+    "signature": "fixture-opaque-signature"
+  }
+}
