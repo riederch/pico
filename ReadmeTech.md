@@ -20,7 +20,7 @@ The current Foundation HTTP and WebSocket API is a trusted-local diagnostics and
 
 Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
-ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. ADR 0040 now defines the Home Assistant ingress metadata, add-on token option and packaging-default direction. Current ADR 0040 slices implement ingress metadata, ingress-prefix-aware dashboard URLs and the `pico_foundation_token` add-on option bridge; real HA install validation and direct-port transition remain open. ADR 0041 defines the next `PICO_FOUNDATION_ACCESS_MODE` gate, but it is not implemented yet.
+ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. ADR 0040 now defines the Home Assistant ingress metadata, add-on token option and packaging-default direction. Current ADR 0040 slices implement ingress metadata, ingress-prefix-aware dashboard URLs, the `pico_foundation_token` add-on option bridge and default direct host-port disablement; real HA install validation remains open. ADR 0041 implements the `PICO_FOUNDATION_ACCESS_MODE` startup gate.
 
 ## License and commercial use
 
@@ -397,6 +397,17 @@ curl -X POST http://localhost:3100/api/events \
   -d '{"deviceId":"desktop-dev","type":"message.created","payload":{"role":"user","text":"Hallo Pico"}}'
 ```
 
+Standalone/container exposure beyond loopback must also use an explicit access mode:
+
+```bash
+PICO_HOST=0.0.0.0 \
+PICO_FOUNDATION_ACCESS_MODE=direct-token \
+PICO_FOUNDATION_TOKEN=<token> \
+pnpm dev:core
+```
+
+`PICO_FOUNDATION_ACCESS_MODE=unsafe-trusted-local` exists only for controlled diagnostics and CI smoke tests.
+
 Mint a short-lived realtime ticket for browser WebSocket access:
 
 ```bash
@@ -567,8 +578,8 @@ The demo must not become the path for production remote access. If it starts for
 - Validate the Home Assistant add-on on a real HA installation
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
-- Validate the ADR 0040 Home Assistant ingress slice on a real HA installation, including dashboard load, `/api/system/status`, `WS /ws`, watchdog `/health` and direct-port transitional behavior
-- Decide the next ADR 0040 packaging slice after HA validation: direct host-port disablement or optional mapping
+- Validate the ADR 0040 Home Assistant ingress slice on a real HA installation, including dashboard load, `/api/system/status`, `WS /ws` and watchdog `/health`
+- Decide whether a future explicit add-on debug port option is needed after HA ingress validation
 - Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link

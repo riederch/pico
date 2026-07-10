@@ -23,11 +23,12 @@ They are not yet protected by a production authentication model, authorization m
 
 Current exposure facts:
 
-- the default Core bind host is `0.0.0.0`
+- the default Core bind host is loopback for standalone local development
 - the default Core port is `3100`
-- the Home Assistant add-on maps host port `3100/tcp`
+- the Home Assistant add-on uses internal service port `3100/tcp` but does not publish it to the host by default
 - the Home Assistant add-on has Home Assistant ingress metadata, but real HA install validation is still pending
 - direct Foundation HTTP API endpoints under `/api/` can be protected with the temporary `PICO_FOUNDATION_TOKEN`
+- `PICO_FOUNDATION_ACCESS_MODE` fails closed for tokenless non-loopback startup unless an explicit mode is configured
 - the Foundation REST API does not emit CORS allow headers
 - the WebSocket endpoint has an Origin-boundary check
 - when `PICO_FOUNDATION_TOKEN` is configured, direct WebSocket access requires either a non-browser bearer upgrade header or a short-lived single-use ticket minted through the token-protected Foundation API
@@ -199,7 +200,7 @@ Before broader browser or remote access, Pico needs a deliberate ingress decisio
 
 Neither option is implemented by this ADR. Whichever path is chosen must be explicitly documented as a temporary foundation boundary unless it is later replaced by Pico identity, Home membership and policy-aware authorization.
 
-ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines and implements the direct WebSocket portion with a short-lived ticket strategy. ADR 0040 refines and partially implements the Home Assistant packaging portion with concrete ingress metadata, ingress-prefix URL requirements, add-on token option wiring and direct-port transition rules.
+ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines and implements the direct WebSocket portion with a short-lived ticket strategy. ADR 0040 refines and partially implements the Home Assistant packaging portion with concrete ingress metadata, ingress-prefix URL requirements, add-on token option wiring and closed default direct host-port mapping. ADR 0041 defines and implements explicit Foundation access modes.
 
 ## Remote access boundary
 

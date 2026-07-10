@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the implementation design for the next Foundation access-hardening step.
+Accepted and implemented for Foundation access-mode parsing, startup validation, Home Assistant add-on defaulting and default direct host-port disablement.
 
 ## Context
 
@@ -14,13 +14,13 @@ ADR 0038 chooses a staged hardening direction:
 - `PICO_FOUNDATION_TOKEN` should guard direct Foundation access.
 - local pairing, Setup Mode, Move-In, Home membership and Pico identity remain later work.
 
-ADR 0040 adds Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs and the add-on `pico_foundation_token` bridge, but the current add-on still maps host port `3100/tcp` by default. That means a tokenless add-on install still exposes the Foundation API directly to the local network while also offering an ingress panel.
+ADR 0040 adds Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs and the add-on `pico_foundation_token` bridge. Before this ADR was implemented, the add-on still mapped host port `3100/tcp` by default. That meant a tokenless add-on install exposed the Foundation API directly to the local network while also offering an ingress panel.
 
-The project now needs an explicit runtime and packaging contract before more product features are added. The next step must make unsafe exposure an explicit operator decision or a startup error, not an implicit default.
+This ADR makes unsafe exposure an explicit operator decision or a startup error, not an implicit default.
 
 ## Decision
 
-Pico Core will introduce an explicit Foundation access mode:
+Pico Core introduces an explicit Foundation access mode:
 
 ```text
 PICO_FOUNDATION_ACCESS_MODE
@@ -28,7 +28,7 @@ PICO_FOUNDATION_ACCESS_MODE
 
 The access mode is a Foundation deployment guardrail. It is not production authentication, Pico identity, Home membership, Pico Link security, Setup Mode or authorization.
 
-The implementation should support these modes:
+The implementation supports these modes:
 
 | Mode | Intended use | Runtime requirements |
 |---|---|---|
@@ -37,7 +37,7 @@ The implementation should support these modes:
 | `ha-ingress` | Home Assistant add-on ingress path. | Packaging must not expose the direct host port by default. Core may bind to the internal add-on interface. Token remains optional. |
 | `unsafe-trusted-local` | Temporary explicit compatibility escape hatch for controlled test environments. | Allows non-loopback without token only when explicitly configured. Must be documented as unsafe and temporary. |
 
-The default should be fail-closed for unsafe ambiguity:
+The default is fail-closed for unsafe ambiguity:
 
 | Configuration | Result |
 |---|---|
@@ -47,7 +47,7 @@ The default should be fail-closed for unsafe ambiguity:
 
 `unsafe-trusted-local` exists only to avoid hiding a breaking change behind ambiguous behavior. It must not be used by the Home Assistant add-on default, production docs or examples that publish `3100`.
 
-The implementation may change the standalone `PICO_HOST` default from `0.0.0.0` to a loopback host so ordinary local development starts in `loopback-dev`. Docker and Home Assistant packaging must set their bind host and access mode explicitly instead of relying on Core defaults.
+The standalone `PICO_HOST` default is `127.0.0.1` so ordinary local development starts in `loopback-dev`. Docker keeps explicit all-interface binding for container operation, and CI smokes set an explicit access mode. The Home Assistant add-on entrypoint sets `ha-ingress` when `/data/options.json` exists and no explicit access mode was already configured.
 
 ## Core design rule
 
@@ -61,19 +61,19 @@ No tokenless ha-ingress mode while the add-on direct host port is mapped.
 
 `ha-ingress` is only a valid safe default when the user-facing direct host port is disabled or made opt-in.
 
-The preferred add-on implementation sequence is:
+The implemented add-on sequence is:
 
 1. Add `PICO_FOUNDATION_ACCESS_MODE`.
 2. Keep ingress metadata and prefix-aware dashboard behavior.
-3. Disable the default direct host-port mapping with `3100/tcp: null`, or replace it with an explicit opt-in direct debug port if Home Assistant packaging supports that cleanly.
+3. Disable the default direct host-port mapping with `3100/tcp: null`.
 4. Set `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` only in the add-on runtime where the direct host port is not exposed by default.
-5. If a direct debug port remains or is enabled, require `direct-token` and `pico_foundation_token`.
+5. Leave any future direct debug port as an explicit follow-up decision that must require `direct-token` and `pico_foundation_token`.
 
 If real Home Assistant ingress validation is not available yet, the implementation must not claim the ingress path is fully validated. It may still add the Core access-mode validation first, but the add-on should not silently keep tokenless direct exposure as its normal path.
 
 ## Ingress headers
 
-The next implementation must not trust Home Assistant ingress user headers as a token bypass.
+The implementation does not trust Home Assistant ingress user headers as a token bypass.
 
 Ingress headers may later become useful diagnostic or audit context, but only after a separate decision proves that:
 
@@ -96,9 +96,9 @@ Until then, `ha-ingress` is a packaging boundary, not a header-authentication me
 
 The token remains a temporary Foundation guardrail and must not be documented as a long-lived admin password, device credential, Home membership credential or Pico Link credential.
 
-## Implementation implications
+## Implemented scope
 
-The next implementation commit should include:
+The implementation includes:
 
 - config parsing for `PICO_FOUNDATION_ACCESS_MODE`,
 - validation for valid modes and invalid host/token/mode combinations,
@@ -110,7 +110,7 @@ The next implementation commit should include:
 - docs for direct local, direct token and Home Assistant ingress operation,
 - tests for accepted and rejected configurations.
 
-It should not include:
+It does not include:
 
 - production authentication,
 - endpoint authorization,

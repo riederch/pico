@@ -10,9 +10,19 @@ export interface CoreConfig {
   webRootPath?: string;
   wsAllowedOrigins?: string[];
   foundationToken?: string;
+  foundationAccessMode?: FoundationAccessMode;
 }
 
 type Environment = Record<string, string | undefined>;
+
+export type FoundationAccessMode = typeof foundationAccessModes[number];
+
+const foundationAccessModes = [
+  'loopback-dev',
+  'direct-token',
+  'ha-ingress',
+  'unsafe-trusted-local',
+] as const;
 
 export function defaultWebRootPath(): string {
   return fileURLToPath(new URL('../../web', import.meta.url));
@@ -20,16 +30,24 @@ export function defaultWebRootPath(): string {
 
 export function loadConfig(env: Environment = process.env): CoreConfig {
   const databasePath = readNonEmptyString(env, 'PICO_DATABASE_PATH', 'apps/core/data/pico.sqlite');
+  const host = readNonEmptyString(env, 'PICO_HOST', '127.0.0.1');
+  const foundationToken = readOptionalNonEmptyString(env.PICO_FOUNDATION_TOKEN, 'PICO_FOUNDATION_TOKEN');
+  const foundationAccessMode = resolveFoundationAccessMode({
+    host,
+    foundationToken,
+    requestedAccessMode: readOptionalNonEmptyString(env.PICO_FOUNDATION_ACCESS_MODE, 'PICO_FOUNDATION_ACCESS_MODE'),
+  });
 
   return {
-    host: readNonEmptyString(env, 'PICO_HOST', '0.0.0.0'),
+    host,
     port: readPort(env.PICO_PORT),
     databasePath,
     backupDirectory: readNonEmptyString(env, 'PICO_BACKUP_DIRECTORY', join(dirname(databasePath), 'backups')),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),
-    foundationToken: readOptionalNonEmptyString(env.PICO_FOUNDATION_TOKEN, 'PICO_FOUNDATION_TOKEN'),
+    foundationToken,
+    foundationAccessMode,
   };
 }
 
@@ -81,6 +99,56 @@ function readAllowedOrigins(rawOrigins: string | undefined): string[] {
     .map((origin) => origin.trim())
     .filter((origin) => origin !== '')
     .map(normalizeHttpOrigin);
+}
+
+function resolveFoundationAccessMode(options: {
+  host: string;
+  foundationToken?: string;
+  requestedAccessMode?: string;
+}): FoundationAccessMode {
+  const requestedAccessMode = options.requestedAccessMode;
+
+  if (requestedAccessMode === undefined) {
+    if (isLoopbackHost(options.host)) {
+      return 'loopback-dev';
+    }
+
+    if (options.foundationToken !== undefined) {
+      return 'direct-token';
+    }
+
+    throw new Error(
+      'PICO_FOUNDATION_ACCESS_MODE must be set when PICO_HOST is not loopback and PICO_FOUNDATION_TOKEN is not configured.',
+    );
+  }
+
+  if (!isFoundationAccessMode(requestedAccessMode)) {
+    throw new Error('PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress, unsafe-trusted-local.');
+  }
+
+  if (requestedAccessMode === 'loopback-dev' && !isLoopbackHost(options.host)) {
+    throw new Error('PICO_FOUNDATION_ACCESS_MODE=loopback-dev requires PICO_HOST to be a loopback host.');
+  }
+
+  if (requestedAccessMode === 'direct-token' && options.foundationToken === undefined) {
+    throw new Error('PICO_FOUNDATION_ACCESS_MODE=direct-token requires PICO_FOUNDATION_TOKEN.');
+  }
+
+  return requestedAccessMode;
+}
+
+function isFoundationAccessMode(value: string): value is FoundationAccessMode {
+  return foundationAccessModes.includes(value as FoundationAccessMode);
+}
+
+function isLoopbackHost(host: string): boolean {
+  const normalized = host.trim().toLowerCase();
+
+  return normalized === 'localhost'
+    || normalized === '127.0.0.1'
+    || normalized.startsWith('127.')
+    || normalized === '::1'
+    || normalized === '[::1]';
 }
 
 function normalizeHttpOrigin(rawOrigin: string): string {

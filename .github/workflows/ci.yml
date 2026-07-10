@@ -87,7 +87,7 @@ jobs:
 
       - name: Smoke-test amd64 container health endpoint and dashboard
         run: |
-          docker run --rm -d --name pico-core-smoke-amd64 -p 3100:3100 pico-core:amd64-test
+          docker run --rm -d --name pico-core-smoke-amd64 -p 3100:3100 -e PICO_FOUNDATION_ACCESS_MODE=unsafe-trusted-local pico-core:amd64-test
           for i in $(seq 1 20); do
             if curl -fsS http://127.0.0.1:3100/health && curl -fsS http://127.0.0.1:3100/ | grep -q "Pico Home Foundation Dashboard"; then
               docker stop pico-core-smoke-amd64
@@ -103,7 +103,7 @@ jobs:
         run: |
           mkdir -p /tmp/pico-addon-options-amd64
           printf '{"pico_foundation_token":"ci-token"}\n' > /tmp/pico-addon-options-amd64/options.json
-          docker run --rm -d --name pico-core-token-amd64 -p 3102:3100 -v /tmp/pico-addon-options-amd64:/data pico-core:amd64-test
+          docker run --rm -d --name pico-core-token-amd64 -p 3102:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -v /tmp/pico-addon-options-amd64:/data pico-core:amd64-test
           for i in $(seq 1 20); do
             if curl -fsS http://127.0.0.1:3102/health; then
               status_without_token=$(curl -sS -o /tmp/pico-token-amd64-without-token.txt -w '%{http_code}' http://127.0.0.1:3102/api/system/status || true)
@@ -129,7 +129,7 @@ jobs:
 
       - name: Smoke-test arm64 container health endpoint and dashboard
         run: |
-          docker run --platform linux/arm64 --rm -d --name pico-core-smoke-arm64 -p 3101:3100 pico-core:arm64-test
+          docker run --platform linux/arm64 --rm -d --name pico-core-smoke-arm64 -p 3101:3100 -e PICO_FOUNDATION_ACCESS_MODE=unsafe-trusted-local pico-core:arm64-test
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3101/health && curl -fsS http://127.0.0.1:3101/ | grep -q "Pico Home Foundation Dashboard"; then
               docker stop pico-core-smoke-arm64
@@ -145,7 +145,7 @@ jobs:
         run: |
           mkdir -p /tmp/pico-addon-options-arm64
           printf '{"pico_foundation_token":"ci-token"}\n' > /tmp/pico-addon-options-arm64/options.json
-          docker run --platform linux/arm64 --rm -d --name pico-core-token-arm64 -p 3103:3100 -v /tmp/pico-addon-options-arm64:/data pico-core:arm64-test
+          docker run --platform linux/arm64 --rm -d --name pico-core-token-arm64 -p 3103:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -v /tmp/pico-addon-options-arm64:/data pico-core:arm64-test
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3103/health; then
               status_without_token=$(curl -sS -o /tmp/pico-token-arm64-without-token.txt -w '%{http_code}' http://127.0.0.1:3103/api/system/status || true)

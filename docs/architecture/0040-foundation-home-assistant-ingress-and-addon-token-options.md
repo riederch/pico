@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted and partially implemented for add-on ingress metadata, dashboard ingress-prefix URL handling and the optional direct-access `pico_foundation_token` bridge.
+Accepted and partially implemented for add-on ingress metadata, dashboard ingress-prefix URL handling, the optional direct-access `pico_foundation_token` bridge and the default direct host-port disablement.
 
 ## Context
 
@@ -14,7 +14,7 @@ ADR 0038 chooses a staged Foundation access hardening model:
 
 ADR 0039 implements the direct WebSocket portion for token mode with short-lived, single-use realtime tickets.
 
-The remaining ADR 0038 gap is packaging-specific. Before this ADR's first implementation slice:
+The first ADR 0040 implementation slice was packaging-specific. Before that slice:
 
 - `pico_core/config.yaml` still exposes a fixed host port mapping for `3100/tcp`.
 - the add-on still advertises `webui: "http://[HOST]:[PORT:3100]"`.
@@ -23,9 +23,9 @@ The remaining ADR 0038 gap is packaging-specific. Before this ADR's first implem
 - the Docker image has no add-on entrypoint layer that reads `/data/options.json`.
 - the dashboard currently derives its default base URL from `location.origin`, which is not sufficient for an ingress-prefixed URL.
 
-The first implementation slices add Home Assistant ingress metadata to `pico_core/config.yaml`, change the dashboard URL helpers so Foundation HTTP and `WS /ws` URLs preserve an ingress path prefix, and add a Core add-on entrypoint that maps a non-empty `pico_foundation_token` option from `/data/options.json` to `PICO_FOUNDATION_TOKEN`.
+The implementation slices add Home Assistant ingress metadata to `pico_core/config.yaml`, change the dashboard URL helpers so Foundation HTTP and `WS /ws` URLs preserve an ingress path prefix, add a Core add-on entrypoint that maps a non-empty `pico_foundation_token` option from `/data/options.json` to `PICO_FOUNDATION_TOKEN`, and close the default direct host-port mapping.
 
-The current implementation keeps the direct host port mapping and `webui` as transitional diagnostics paths.
+The current implementation uses `3100/tcp: null`, removes the direct `webui` entry and keeps `watchdog` on the internal `/health` path.
 
 The current Home Assistant app/add-on developer documentation describes ingress metadata such as `ingress`, `ingress_port`, `ingress_entry`, `ingress_stream`, `panel_icon`, `panel_title` and `panel_admin`. It also describes `ports` mappings where a `null` host port disables the mapping, and `options`/`schema` fields for add-on configuration. The Home Assistant security documentation says ingress requests can include authenticated Home Assistant user headers.
 
@@ -93,18 +93,16 @@ The conservative implementation sequence is:
 
 1. Add ingress metadata and path-prefix support while keeping the existing direct host port mapping for one validation slice. Done.
 2. Document that the direct port remains trusted-local and transitional. Done.
-3. Validate ingress dashboard loading, API calls, WebSocket reconnects and watchdog behavior in a real Home Assistant add-on install. Still open.
-4. After that validation, prefer disabling the default host-port mapping with Home Assistant's supported `null` host-port form or an equivalent optional-port configuration. Still open.
+3. Disable the default host-port mapping with Home Assistant's supported `null` host-port form. Done.
+4. Validate ingress dashboard loading, API calls, WebSocket reconnects and watchdog behavior in a real Home Assistant add-on install. Still open.
 
-Keeping the direct mapping during the first ingress metadata slice is allowed only to avoid combining ingress routing changes with a potentially breaking packaging default. It must not be documented as the product access model.
-
-If the direct port remains exposed after ingress exists, operators should either keep it on a trusted local boundary or configure `pico_foundation_token`.
+Keeping a direct mapping would require an explicit debug/direct-token decision. It must not be documented as the product access model.
 
 ## `webui` and watchdog posture
 
 `webui` should stop being the preferred add-on browser entry once ingress exists.
 
-During the transitional slice, `webui` may remain as a direct diagnostics escape hatch while the direct port is still mapped. Once the default direct host-port mapping is disabled, `webui` should be removed or treated as non-primary if Home Assistant still displays the ingress panel correctly without it.
+The default direct host-port mapping is disabled, so the direct `webui` entry is removed. Home Assistant ingress is the intended browser entry.
 
 The watchdog should continue to use the minimal `/health` endpoint:
 
@@ -256,7 +254,7 @@ This ADR does not implement or define:
 
 ## Open questions
 
-- After real HA ingress validation, should the first port-closing change set `3100/tcp: null`, remove `webui`, or introduce an explicit optional direct-port setting? ADR 0041 resolves the Core access-mode gate: tokenless `ha-ingress` is only a safe default when the direct host port is not exposed by default.
+- After real HA ingress validation, is an explicit optional direct debug port setting needed, or should the add-on stay ingress-only by default?
 - Should a future ingress-aware bridge trust Supervisor user headers for diagnostics or audit, and how should it prevent direct-port spoofing?
 - Does Home Assistant ingress proxy `WS /ws` reliably with the current Fastify WebSocket setup and `ingress_stream: true`?
 - Which Home Assistant install matrix is sufficient before declaring ingress complete?
@@ -273,7 +271,7 @@ Positive:
 
 Negative:
 
-- introduces a transitional period where ingress and direct port may both exist
+- leaves real Home Assistant ingress validation as a required follow-up before stronger packaging claims
 - may require an add-on-aware entrypoint before the token option is useful
 - does not remove the need for real HA install validation
 - does not solve product auth, membership, endpoint authorization or audit

@@ -8,11 +8,11 @@ Accepted as a foundation hardening direction.
 
 ADR 0030 defines the current Foundation HTTP and WebSocket API as a trusted local diagnostics and foundation interface.
 
-That boundary is documented, but not yet fully enforced by runtime access control:
+That boundary is now partially enforced by runtime access control, but production authentication is still absent:
 
-- Pico Home Core defaults to `PICO_HOST=0.0.0.0`.
+- Pico Home Core defaults to loopback for standalone local development.
 - The default port is `3100`.
-- The Home Assistant add-on maps `3100/tcp`.
+- The Home Assistant add-on does not publish `3100/tcp` to the host by default.
 - The add-on has Home Assistant ingress metadata, but real HA install validation is still pending.
 - The REST endpoints do not implement production authentication, authorization, CSRF protection or a session model.
 - `WS /ws` has a defensive browser `Origin` check, but no authentication.
@@ -27,7 +27,7 @@ ADR 0030 left a deliberate hardening decision open:
 - whether a temporary Foundation token should protect direct access
 - whether a different local pairing or auth path should come first
 
-This ADR resolves that direction for the next foundation hardening milestone without implementing it.
+This ADR resolves that direction for the next foundation hardening milestone.
 
 ## Decision
 
@@ -84,7 +84,7 @@ Home Assistant ingress must not become:
 
 The Home Assistant add-on may continue to need local health checks or internal service ports, but the user-facing browser path should move toward ingress rather than direct `http://host:3100` access.
 
-ADR 0040 refines this packaging milestone with target ingress metadata, ingress-prefix URL requirements, add-on token option direction and direct-port transition rules.
+ADR 0040 refines this packaging milestone with target ingress metadata, ingress-prefix URL requirements, add-on token option direction and closed default direct host-port mapping. ADR 0041 defines the explicit access-mode gate around direct exposure.
 
 ## Temporary Foundation token direction
 
@@ -144,7 +144,7 @@ Direction:
 - A future token-required mode should be considered for direct all-interface deployments.
 - Home Assistant ingress should reduce reliance on direct browser access to port `3100`.
 
-This ADR does not change `PICO_HOST`, Docker `ENV`, Home Assistant port mappings or CI smoke tests.
+ADR 0041 refines and implements the bind/port gate with `PICO_FOUNDATION_ACCESS_MODE`, a loopback standalone default, explicit direct-token mode, an explicit unsafe compatibility escape hatch for controlled smokes and a closed default Home Assistant host-port mapping.
 
 ## Threat posture
 
@@ -164,7 +164,7 @@ Remaining implementation milestones should stay narrow and testable.
 ADR 0040 defines the Home Assistant ingress packaging milestone:
 
 - add-on ingress metadata and routing
-- whether direct port `3100` remains user-visible, internal-only or transitional
+- closed default direct host-port mapping and any future explicit debug-port decision
 - watchdog and health-check behavior
 - documentation for users who previously opened the web UI by port
 - dashboard URL construction that preserves Home Assistant ingress path prefixes
@@ -196,11 +196,15 @@ Implemented ADR 0039 token work:
 - request-log redaction for `ticket` query parameters
 - tests for protected WebSocket connection attempts, ticket reuse, expiry and Origin behavior
 
-For bind behavior, a later milestone should define:
+Implemented ADR 0041 access-mode work:
 
-- whether the default host changes for local development
-- whether Docker and Home Assistant keep explicit `0.0.0.0`
-- whether direct all-interface binding without ingress/token emits a warning or fails in a future mode
+- `PICO_FOUNDATION_ACCESS_MODE` parsing and validation
+- standalone default `PICO_HOST=127.0.0.1`
+- fail-closed non-loopback startup when neither a token nor an explicit access mode is configured
+- `direct-token`, `ha-ingress`, `loopback-dev` and temporary `unsafe-trusted-local` modes
+- Home Assistant add-on entrypoint defaulting to `ha-ingress` when `/data/options.json` exists
+- Home Assistant host-port mapping disabled by default
+- CI direct-port smokes marked as explicit `unsafe-trusted-local` or `direct-token`
 
 No implementation should describe the result as production authentication or membership.
 
@@ -231,8 +235,8 @@ This ADR does not implement or define:
 
 ## Open questions
 
-- After real Home Assistant ingress validation, should direct port `3100` be disabled by default, made optional or kept as a diagnostics escape hatch?
-- Should `PICO_FOUNDATION_TOKEN` be optional, required when `PICO_HOST` is not loopback, or controlled by a separate access mode?
+- After real Home Assistant ingress validation, is an explicit opt-in direct debug port needed at all?
+- Are the current `PICO_FOUNDATION_ACCESS_MODE` mode names and failure messages sufficient for operator troubleshooting?
 - How should a future ingress-aware bridge use Home Assistant user headers without allowing direct-port spoofing?
 - Should the 30-second WebSocket ticket TTL and 128 outstanding-ticket cap remain fixed or become explicit configuration later?
 - Which failed access attempts should be recorded before Action History exists?

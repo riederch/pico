@@ -4,32 +4,32 @@
 
 Pico Core is a foundation add-on, not a production-ready Home Assistant assistant.
 
-The current add-on has no production authentication model, no Home Assistant entity integration, no policy engine and no protected personal data domains. It now declares Home Assistant ingress metadata for the foundation dashboard, but real Home Assistant install validation is still pending. Port `3100` remains mapped as a transitional development and diagnostics interface for a trusted local test environment.
+The current add-on has no production authentication model, no Home Assistant entity integration, no policy engine and no protected personal data domains. It now declares Home Assistant ingress metadata for the foundation dashboard, but real Home Assistant install validation is still pending. Port `3100` is the internal service port for ingress and watchdog use; it is not published to the Home Assistant host by default.
 
 The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication, authorization, membership, claim or a production memory boundary. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
 
-The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged hardening direction for Home Assistant ingress and a temporary direct-access Foundation token is documented in `../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct-access WebSocket ticket boundary is documented in `../docs/architecture/0039-foundation-websocket-ticket-boundary.md`. The concrete Home Assistant ingress metadata, add-on token option and packaging-default direction for the next add-on milestone are documented in `../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`.
+The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged hardening direction for Home Assistant ingress and a temporary direct-access Foundation token is documented in `../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct-access WebSocket ticket boundary is documented in `../docs/architecture/0039-foundation-websocket-ticket-boundary.md`. The concrete Home Assistant ingress metadata, add-on token option and packaging-default direction are documented in `../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`. The explicit Foundation access-mode gate is documented in `../docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md`.
 
 ## Installation
 
 1. Add this repository as a Home Assistant add-on repository.
 2. Install the `Pico Core` add-on.
 3. Start the add-on.
-4. Open the foundation dashboard through the Home Assistant add-on panel when available, or use the current direct web UI link as a transitional diagnostics path.
+4. Open the foundation dashboard through the Home Assistant add-on panel when available.
 
 ## Ports
 
 | Port | Purpose |
 | --- | --- |
-| `3100/tcp` | Pico Core local foundation HTTP API and WebSocket endpoint |
+| `3100/tcp` | Internal Pico Core ingress, API and WebSocket endpoint |
 
-The foundation add-on currently exposes port `3100` as a fixed port and also declares Home Assistant ingress metadata that points to the same internal service port. A configurable runtime port can be added later, but is not active in the current add-on metadata.
+The foundation add-on declares Home Assistant ingress metadata that points to internal service port `3100`. The host port mapping is disabled by default with Home Assistant's `null` port mapping form.
 
-Port `3100` is a trusted local foundation interface for development and diagnostics. It is not the intended public remote-access surface for Pico Home.
+Port `3100` is an internal foundation interface for the add-on. It is not the intended public remote-access surface for Pico Home.
 
-ADR 0040 makes Home Assistant ingress the preferred add-on browser path. The current metadata and option slice keeps the direct port mapping as a transitional diagnostics path for validation, but the target packaging direction is to stop treating `http://host:3100/` as the normal add-on browser entry and later disable or make optional the direct host-port mapping after real Home Assistant ingress validation.
+ADR 0040 makes Home Assistant ingress the preferred add-on browser path. ADR 0041 adds the explicit access-mode gate and closes the default direct host-port mapping. A future explicit debug port option can be considered after real Home Assistant ingress validation if operationally needed.
 
 ## Home Assistant ingress
 
@@ -136,7 +136,9 @@ The current foundation add-on exposes one user-configurable option:
 
 The add-on entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured.
 
-Leave `pico_foundation_token` unset for the default ingress-first dashboard path. Set it only when the transitional direct Foundation port needs token hardening.
+The add-on entrypoint also sets `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` when Home Assistant's options file exists and no explicit access mode was already configured.
+
+Leave `pico_foundation_token` unset for the default ingress-first dashboard path. Set it only when the current token guard should also protect ingress API calls.
 
 If `pico_foundation_token` is set, the current Core token guard protects `/api/...` requests regardless of whether the dashboard is opened through ingress or the direct port. Until a later ingress-aware session bridge exists, the dashboard may still need the same token entered in its Foundation token field to load diagnostic API data.
 
@@ -189,7 +191,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 
 - No Home Assistant entity integration yet.
 - Home Assistant ingress metadata exists, but real HA install validation is still pending.
-- Direct port `3100` is still mapped by default as a transitional diagnostics path.
+- Direct port `3100` is not mapped to the Home Assistant host by default.
 - No companion chat UI yet.
 - No production authentication model yet.
 - No authorization model yet.

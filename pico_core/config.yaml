@@ -21,8 +21,7 @@ options:
 schema:
   pico_foundation_token: password?
 ports:
-  3100/tcp: 3100
+  3100/tcp: null
 ports_description:
-  3100/tcp: Pico Core API and WebSocket endpoint
-webui: "http://[HOST]:[PORT:3100]"
+  3100/tcp: Pico Core internal ingress, API and WebSocket endpoint
 watchdog: "http://[HOST]:[PORT:3100]/health"

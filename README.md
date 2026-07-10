@@ -116,9 +116,9 @@ Prepared foundation pieces include:
 
 Pico is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, migration safety, relay transport, Pico Link transport security, Home membership flows and companion clients still need to be built.
 
-The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs and the optional add-on `pico_foundation_token` bridge are implemented as foundation hardening, but real HA install validation and direct-port transition remain open. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs, the optional add-on `pico_foundation_token` bridge and the `PICO_FOUNDATION_ACCESS_MODE` startup gate are implemented as foundation hardening, but real HA install validation remains open. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
 
-ADR 0041 defines the next access-mode gate for `PICO_FOUNDATION_ACCESS_MODE`; it is concept-only until implemented.
+The Home Assistant add-on no longer publishes the direct host port by default; direct standalone/container exposure must be selected explicitly.
 
 ## License and commercial use
 

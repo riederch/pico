@@ -13,6 +13,10 @@ export function applyHomeAssistantAddonOptions(env: Environment = process.env, o
     return;
   }
 
+  if (env.PICO_FOUNDATION_ACCESS_MODE === undefined) {
+    env.PICO_FOUNDATION_ACCESS_MODE = 'ha-ingress';
+  }
+
   const options = readHomeAssistantAddonOptions(optionsPath);
   const token = readOptionalStringOption(options, 'pico_foundation_token');
 

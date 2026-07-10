@@ -11,6 +11,25 @@ describe('Home Assistant add-on options', () => {
     applyHomeAssistantAddonOptions(env, join(tmpdir(), 'missing-pico-options.json'));
 
     expect(env.PICO_FOUNDATION_TOKEN).toBeUndefined();
+    expect(env.PICO_FOUNDATION_ACCESS_MODE).toBeUndefined();
+  });
+
+  it('sets Home Assistant ingress access mode when an options file exists', () => {
+    const env: Record<string, string | undefined> = {};
+
+    applyHomeAssistantAddonOptions(env, writeOptions({}));
+
+    expect(env.PICO_FOUNDATION_ACCESS_MODE).toBe('ha-ingress');
+  });
+
+  it('does not replace an explicitly configured access mode', () => {
+    const env: Record<string, string | undefined> = {
+      PICO_FOUNDATION_ACCESS_MODE: 'direct-token',
+    };
+
+    applyHomeAssistantAddonOptions(env, writeOptions({}));
+
+    expect(env.PICO_FOUNDATION_ACCESS_MODE).toBe('direct-token');
   });
 
   it('maps pico_foundation_token to PICO_FOUNDATION_TOKEN', () => {
@@ -20,6 +39,7 @@ describe('Home Assistant add-on options', () => {
     applyHomeAssistantAddonOptions(env, optionsPath);
 
     expect(env.PICO_FOUNDATION_TOKEN).toBe('direct-token');
+    expect(env.PICO_FOUNDATION_ACCESS_MODE).toBe('ha-ingress');
   });
 
   it('does not replace an explicitly configured environment token', () => {
