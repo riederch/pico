@@ -99,6 +99,25 @@ jobs:
           docker stop pico-core-smoke-amd64 || true
           exit 1
 
+      - name: Smoke-test amd64 add-on foundation token option
+        run: |
+          mkdir -p /tmp/pico-addon-options-amd64
+          printf '{"pico_foundation_token":"ci-token"}\n' > /tmp/pico-addon-options-amd64/options.json
+          docker run --rm -d --name pico-core-token-amd64 -p 3102:3100 -v /tmp/pico-addon-options-amd64:/data pico-core:amd64-test
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:3102/health; then
+              status_without_token=$(curl -sS -o /tmp/pico-token-amd64-without-token.txt -w '%{http_code}' http://127.0.0.1:3102/api/system/status || true)
+              if [ "$status_without_token" = "401" ] && curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:3102/api/system/status | grep -q '"service":"pico-home-core"'; then
+                docker stop pico-core-token-amd64
+                exit 0
+              fi
+            fi
+            sleep 1
+          done
+          docker logs pico-core-token-amd64 || true
+          docker stop pico-core-token-amd64 || true
+          exit 1
+
       - name: Build local arm64 smoke-test image
         uses: docker/build-push-action@v6
         with:
@@ -120,6 +139,25 @@ jobs:
           done
           docker logs pico-core-smoke-arm64 || true
           docker stop pico-core-smoke-arm64 || true
+          exit 1
+
+      - name: Smoke-test arm64 add-on foundation token option
+        run: |
+          mkdir -p /tmp/pico-addon-options-arm64
+          printf '{"pico_foundation_token":"ci-token"}\n' > /tmp/pico-addon-options-arm64/options.json
+          docker run --platform linux/arm64 --rm -d --name pico-core-token-arm64 -p 3103:3100 -v /tmp/pico-addon-options-arm64:/data pico-core:arm64-test
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3103/health; then
+              status_without_token=$(curl -sS -o /tmp/pico-token-arm64-without-token.txt -w '%{http_code}' http://127.0.0.1:3103/api/system/status || true)
+              if [ "$status_without_token" = "401" ] && curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:3103/api/system/status | grep -q '"service":"pico-home-core"'; then
+                docker stop pico-core-token-arm64
+                exit 0
+              fi
+            fi
+            sleep 1
+          done
+          docker logs pico-core-token-arm64 || true
+          docker stop pico-core-token-arm64 || true
           exit 1
 
       - name: Build and optionally push multi-arch release image

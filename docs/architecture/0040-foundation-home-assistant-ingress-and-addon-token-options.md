@@ -215,6 +215,8 @@ Current validation covers:
 
 - local unit tests for URL construction
 - local unit tests for the add-on option bridge
+- local container smoke with and without `pico_foundation_token`
+- CI container smoke for the add-on token option on `linux/amd64` and `linux/arm64`
 - existing Core/Web/Protocol checks
 - `pnpm release:verify`
 
