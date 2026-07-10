@@ -1,4 +1,4 @@
-import { constants, copyFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { constants, copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 
@@ -17,6 +17,11 @@ export interface SqliteRestoreResult {
   backupPath: string;
   restoredPath: string;
   restoredAt: string;
+}
+
+interface MovedSqliteSidecarFile {
+  originalPath: string;
+  movedPath: string;
 }
 
 export async function createSqliteBackup(databasePath: string, backupDirectory: string, now = new Date()): Promise<SqliteBackupResult> {
@@ -59,11 +64,27 @@ export function restoreSqliteBackup(backupPath: string, databasePath: string, op
 
   mkdirSync(dirname(databasePath), { recursive: true });
 
-  if (options.overwrite === true) {
-    removeSqliteDatabaseFiles(databasePath);
+  const temporaryRestorePath = nextAvailableRestorePath(databasePath);
+  let movedSidecars: MovedSqliteSidecarFile[] = [];
+
+  try {
+    copyFileSync(backupPath, temporaryRestorePath, constants.COPYFILE_EXCL);
+    assertReadableSqliteDatabase(temporaryRestorePath);
+
+    if (existsSync(databasePath) && options.overwrite !== true) {
+      throw new Error(`SQLite database already exists: ${databasePath}`);
+    }
+
+    movedSidecars = moveSqliteSidecarFilesAside(databasePath);
+    renameSync(temporaryRestorePath, databasePath);
+    removeMovedSqliteSidecarFiles(movedSidecars);
+    movedSidecars = [];
+  } catch (error) {
+    rmSync(temporaryRestorePath, { force: true });
+    restoreMovedSqliteSidecarFiles(movedSidecars);
+    throw error;
   }
 
-  copyFileSync(backupPath, databasePath, constants.COPYFILE_EXCL);
   assertReadableSqliteDatabase(databasePath);
 
   return {
@@ -89,10 +110,48 @@ function nextAvailableBackupPath(backupDirectory: string, backupBaseName: string
   return backupPath;
 }
 
-function removeSqliteDatabaseFiles(databasePath: string): void {
-  rmSync(databasePath, { force: true });
-  rmSync(`${databasePath}-wal`, { force: true });
-  rmSync(`${databasePath}-shm`, { force: true });
+function nextAvailableRestorePath(databasePath: string): string {
+  const restoreDirectory = dirname(databasePath);
+  const restoreName = basename(databasePath).replace(/[^a-zA-Z0-9._-]/g, '_');
+  let restorePath = join(restoreDirectory, `.${restoreName}.restore.tmp`);
+  let suffix = 1;
+
+  while (existsSync(restorePath)) {
+    restorePath = join(restoreDirectory, `.${restoreName}.restore.${suffix}.tmp`);
+    suffix += 1;
+  }
+
+  return restorePath;
+}
+
+function moveSqliteSidecarFilesAside(databasePath: string): MovedSqliteSidecarFile[] {
+  const movedFiles: MovedSqliteSidecarFile[] = [];
+
+  for (const sidecarPath of [`${databasePath}-wal`, `${databasePath}-shm`]) {
+    if (!existsSync(sidecarPath)) {
+      continue;
+    }
+
+    const movedPath = nextAvailableRestorePath(sidecarPath);
+    renameSync(sidecarPath, movedPath);
+    movedFiles.push({ originalPath: sidecarPath, movedPath });
+  }
+
+  return movedFiles;
+}
+
+function removeMovedSqliteSidecarFiles(movedFiles: MovedSqliteSidecarFile[]): void {
+  for (const movedFile of movedFiles) {
+    rmSync(movedFile.movedPath, { force: true });
+  }
+}
+
+function restoreMovedSqliteSidecarFiles(movedFiles: MovedSqliteSidecarFile[]): void {
+  for (const movedFile of [...movedFiles].reverse()) {
+    if (existsSync(movedFile.movedPath) && !existsSync(movedFile.originalPath)) {
+      renameSync(movedFile.movedPath, movedFile.originalPath);
+    }
+  }
 }
 
 function assertReadableSqliteDatabase(databasePath: string): void {

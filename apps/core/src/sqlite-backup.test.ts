@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -186,6 +186,8 @@ describe('restoreSqliteBackup', () => {
       '2026-07-03T12:05:00.000Z',
     );
     changed.close();
+    writeFileSync(`${databasePath}-wal`, 'old wal sidecar');
+    writeFileSync(`${databasePath}-shm`, 'old shm sidecar');
 
     const result = restoreSqliteBackup(backup.backupPath, databasePath, {
       overwrite: true,
@@ -231,6 +233,8 @@ describe('restoreSqliteBackup', () => {
     ]);
 
     restored.close();
+    expect(existsSync(`${databasePath}-wal`)).toBe(false);
+    expect(existsSync(`${databasePath}-shm`)).toBe(false);
   });
 
   it('refuses to replace an existing database without explicit overwrite', async () => {
@@ -257,5 +261,55 @@ describe('restoreSqliteBackup', () => {
     expect(() => restoreSqliteBackup(backupPath, databasePath)).toThrow(
       `SQLite backup does not exist: ${backupPath}`,
     );
+  });
+
+  it('keeps the existing database when a replacement backup is invalid', () => {
+    const dir = createTempDir();
+    const databasePath = join(dir, 'pico.sqlite');
+    const backupPath = join(dir, 'invalid.bak');
+
+    const source = new Database(databasePath);
+    source.exec('CREATE TABLE sample (id TEXT PRIMARY KEY, value TEXT NOT NULL);');
+    source.prepare('INSERT INTO sample (id, value) VALUES (?, ?)').run('row-1', 'live value');
+    source.close();
+    writeFileSync(backupPath, 'not a sqlite database');
+
+    expect(() => restoreSqliteBackup(backupPath, databasePath, { overwrite: true })).toThrow();
+
+    const live = new Database(databasePath, { readonly: true, fileMustExist: true });
+    const row = live.prepare('SELECT value FROM sample WHERE id = ?').get('row-1') as { value: string };
+    live.close();
+
+    expect(row.value).toBe('live value');
+    expect(readdirSync(dir).some((entry) => entry.includes('.restore'))).toBe(false);
+  });
+
+  it('does not overwrite an existing temporary restore file', async () => {
+    const dir = createTempDir();
+    const databasePath = join(dir, 'pico.sqlite');
+    const backupDirectory = join(dir, 'backups');
+    const reservedTemporaryPath = join(dir, '.pico.sqlite.restore.tmp');
+
+    const source = new Database(databasePath);
+    source.exec('CREATE TABLE sample (id TEXT PRIMARY KEY, value TEXT NOT NULL);');
+    source.prepare('INSERT INTO sample (id, value) VALUES (?, ?)').run('row-1', 'backup value');
+    source.close();
+
+    const backup = await createSqliteBackup(databasePath, backupDirectory);
+
+    const changed = new Database(databasePath);
+    changed.prepare('UPDATE sample SET value = ? WHERE id = ?').run('live value', 'row-1');
+    changed.close();
+    writeFileSync(reservedTemporaryPath, 'reserved temp file');
+
+    restoreSqliteBackup(backup.backupPath, databasePath, { overwrite: true });
+
+    const restored = new Database(databasePath, { readonly: true, fileMustExist: true });
+    const row = restored.prepare('SELECT value FROM sample WHERE id = ?').get('row-1') as { value: string };
+    restored.close();
+
+    expect(row.value).toBe('backup value');
+    expect(readFileSync(reservedTemporaryPath, 'utf8')).toBe('reserved temp file');
+    expect(readdirSync(dir).filter((entry) => entry.includes('.restore'))).toEqual(['.pico.sqlite.restore.tmp']);
   });
 });
