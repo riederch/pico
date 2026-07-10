@@ -28,9 +28,9 @@ The current add-on provides only:
 - `/ws`
 - persistent SQLite storage
 
-It does not yet provide Home Assistant entity access, ingress, policy execution or tool execution.
+It now declares Home Assistant ingress metadata for the foundation dashboard, but real Home Assistant install validation is still pending. It does not yet provide Home Assistant entity access, policy execution or tool execution.
 
-ADR 0040 defines the next Foundation add-on ingress packaging direction, but no runtime ingress implementation or Home Assistant tool boundary exists yet.
+ADR 0040 defines the Foundation add-on ingress packaging direction. It does not create a Home Assistant tool boundary.
 
 ## Risk domains
 

@@ -9,12 +9,19 @@ export interface FoundationAccessOptions {
   foundationToken?: string;
 }
 
+interface BrowserLocation {
+  href: string;
+  origin: string;
+  protocol: string;
+}
+
 /** @deprecated Use DEFAULT_PICO_HOME_URL. */
 export const DEFAULT_CORE_URL = DEFAULT_PICO_HOME_URL;
 
-export function defaultPicoHomeUrl(location: Location): string {
+export function defaultPicoHomeUrl(location: BrowserLocation): string {
   if (location.protocol === 'http:' || location.protocol === 'https:') {
-    return location.origin;
+    const basePath = defaultBasePath(location);
+    return `${location.origin}${basePath}`;
   }
 
   return DEFAULT_PICO_HOME_URL;
@@ -216,6 +223,26 @@ function isRealtimeTicketResponse(value: unknown): value is RealtimeTicketRespon
 
 function hasProtocol(value: string): boolean {
   return /^[a-z][a-z\d+.-]*:\/\//i.test(value);
+}
+
+function defaultBasePath(location: BrowserLocation): string {
+  const currentUrl = new URL(location.href);
+  let pathname = currentUrl.pathname;
+
+  if (pathname === '/' || pathname === '') {
+    return '';
+  }
+
+  if (!pathname.endsWith('/')) {
+    const lastSegment = pathname.slice(pathname.lastIndexOf('/') + 1);
+
+    if (lastSegment.includes('.')) {
+      pathname = pathname.slice(0, pathname.lastIndexOf('/'));
+    }
+  }
+
+  const trimmedPathname = pathname.replace(/\/+$/, '');
+  return trimmedPathname === '' ? '' : trimmedPathname;
 }
 
 function formatUnknownError(error: unknown): string {

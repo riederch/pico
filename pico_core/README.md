@@ -107,7 +107,7 @@ The current foundation add-on provides:
 
 Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, relay transport, Pico Link transport security, migration safety, backup/rollback behaviour and companion clients still need to be built.
 
-The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Home Assistant ingress is the preferred future add-on browser path and now has a concrete packaging concept, but it is not implemented yet. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Home Assistant ingress metadata and ingress-prefix-aware dashboard URLs are implemented as the preferred add-on browser direction, but real HA install validation, direct-port transition and add-on token option wiring remain open. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 ## Visual direction
 
@@ -129,6 +129,7 @@ The avatar communicates state and risk. For example:
 
 | Entry point | Purpose |
 |---|---|
+| Home Assistant ingress panel | Preferred add-on browser path for the foundation diagnostics dashboard, pending real HA install validation |
 | Port `3100` | Pico Core local foundation HTTP API and WebSocket endpoint |
 | `/` | foundation diagnostics dashboard |
 | `/health` | add-on health check |
@@ -140,7 +141,7 @@ The avatar communicates state and risk. For example:
 
 Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the add-on API to the internet.
 
-ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments. ADR 0040 defines the concrete ingress metadata, ingress-prefix URL requirement, add-on token option and packaging-default direction for the next add-on hardening milestone.
+ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments. ADR 0040 defines the concrete ingress metadata, ingress-prefix URL requirement, add-on token option and packaging-default direction. The current add-on metadata includes ingress, but real Home Assistant validation, direct-port transition and add-on token option wiring remain follow-up work.
 
 Persistent data is stored in the Home Assistant add-on data directory:
 

@@ -46,7 +46,7 @@ export function connectRealtime(options: RealtimeClientOptions): RealtimeClient 
   };
 }
 
-function buildWebSocketUrl(baseUrl: string, ticket: string | undefined): string {
+export function buildWebSocketUrl(baseUrl: string, ticket: string | undefined): string {
   const url = buildEndpointUrl(baseUrl, '/ws');
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
 

@@ -4,7 +4,7 @@
 
 Pico Core is a foundation add-on, not a production-ready Home Assistant assistant.
 
-The current add-on has no production authentication model, no Home Assistant entity integration, no implemented ingress panel, no policy engine and no protected personal data domains. Port `3100` is currently a development interface for a trusted local test environment.
+The current add-on has no production authentication model, no Home Assistant entity integration, no policy engine and no protected personal data domains. It now declares Home Assistant ingress metadata for the foundation dashboard, but real Home Assistant install validation is still pending. Port `3100` remains mapped as a transitional development and diagnostics interface for a trusted local test environment.
 
 The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication, authorization, membership, claim or a production memory boundary. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
 
@@ -17,7 +17,7 @@ The current Foundation API exposure boundary is documented in `../docs/architect
 1. Add this repository as a Home Assistant add-on repository.
 2. Install the `Pico Core` add-on.
 3. Start the add-on.
-4. Open the foundation dashboard on the current add-on web UI link or call the health endpoint directly.
+4. Open the foundation dashboard through the Home Assistant add-on panel when available, or use the current direct web UI link as a transitional diagnostics path.
 
 ## Ports
 
@@ -25,11 +25,26 @@ The current Foundation API exposure boundary is documented in `../docs/architect
 | --- | --- |
 | `3100/tcp` | Pico Core local foundation HTTP API and WebSocket endpoint |
 
-The foundation add-on currently exposes port `3100` as a fixed port. A configurable runtime port can be added later, but is not active in the current add-on metadata.
+The foundation add-on currently exposes port `3100` as a fixed port and also declares Home Assistant ingress metadata that points to the same internal service port. A configurable runtime port can be added later, but is not active in the current add-on metadata.
 
 Port `3100` is a trusted local foundation interface for development and diagnostics. It is not the intended public remote-access surface for Pico Home.
 
-ADR 0040 makes Home Assistant ingress the preferred future add-on browser path. The first ingress implementation may keep the direct port mapping as a transitional diagnostics path for validation, but the target packaging direction is to stop treating `http://host:3100/` as the normal add-on browser entry and later disable or make optional the direct host-port mapping after real Home Assistant ingress validation.
+ADR 0040 makes Home Assistant ingress the preferred add-on browser path. The current metadata slice keeps the direct port mapping as a transitional diagnostics path for validation, but the target packaging direction is to stop treating `http://host:3100/` as the normal add-on browser entry and later disable or make optional the direct host-port mapping after real Home Assistant ingress validation.
+
+## Home Assistant ingress
+
+The add-on metadata now declares:
+
+```yaml
+ingress: true
+ingress_port: 3100
+ingress_entry: /
+ingress_stream: true
+panel_title: Pico Core
+panel_admin: true
+```
+
+The dashboard preserves Home Assistant ingress path prefixes when it calls Foundation HTTP endpoints or opens `WS /ws`. This has local unit coverage, but it still needs a real Home Assistant add-on smoke test before the ingress path is considered fully validated.
 
 ## Endpoints
 
@@ -166,7 +181,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 ## Current limitations
 
 - No Home Assistant entity integration yet.
-- No implemented ingress panel yet; ADR 0040 defines the next ingress metadata and routing direction.
+- Home Assistant ingress metadata exists, but real HA install validation is still pending.
 - No companion chat UI yet.
 - No production authentication model yet.
 - No authorization model yet.

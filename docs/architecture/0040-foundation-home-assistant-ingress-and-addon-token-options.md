@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the next Home Assistant packaging hardening direction.
+Accepted and partially implemented for add-on ingress metadata and dashboard ingress-prefix URL handling.
 
 ## Context
 
@@ -14,7 +14,7 @@ ADR 0038 chooses a staged Foundation access hardening model:
 
 ADR 0039 implements the direct WebSocket portion for token mode with short-lived, single-use realtime tickets.
 
-The remaining ADR 0038 gap is packaging-specific:
+The remaining ADR 0038 gap is packaging-specific. Before this ADR's first implementation slice:
 
 - `pico_core/config.yaml` still exposes a fixed host port mapping for `3100/tcp`.
 - the add-on still advertises `webui: "http://[HOST]:[PORT:3100]"`.
@@ -22,6 +22,8 @@ The remaining ADR 0038 gap is packaging-specific:
 - the add-on has no user option for `PICO_FOUNDATION_TOKEN`.
 - the Docker image has no add-on entrypoint layer that reads `/data/options.json`.
 - the dashboard currently derives its default base URL from `location.origin`, which is not sufficient for an ingress-prefixed URL.
+
+The first implementation slice adds Home Assistant ingress metadata to `pico_core/config.yaml` and changes the dashboard URL helpers so Foundation HTTP and `WS /ws` URLs preserve an ingress path prefix. It keeps the direct host port mapping and `webui` as transitional diagnostics paths, and it does not expose `pico_foundation_token` because the add-on still has no runtime startup bridge from `/data/options.json` to `PICO_FOUNDATION_TOKEN`.
 
 The current Home Assistant app/add-on developer documentation describes ingress metadata such as `ingress`, `ingress_port`, `ingress_entry`, `ingress_stream`, `panel_icon`, `panel_title` and `panel_admin`. It also describes `ports` mappings where a `null` host port disables the mapping, and `options`/`schema` fields for add-on configuration. The Home Assistant security documentation says ingress requests can include authenticated Home Assistant user headers.
 
@@ -34,9 +36,9 @@ References:
 
 Pico will treat Home Assistant ingress as the primary add-on browser path for the Foundation dashboard.
 
-The next implementation milestone should add ingress metadata and dashboard ingress-prefix support before changing broader auth or product behavior.
+The first implementation milestone adds ingress metadata and dashboard ingress-prefix support before changing broader auth or product behavior.
 
-Target add-on metadata:
+Current target add-on metadata:
 
 ```yaml
 ingress: true
@@ -49,7 +51,7 @@ panel_admin: true
 
 `panel_icon` should use a Pico-appropriate Material Design icon if available, with the existing Home Assistant default acceptable if icon validation becomes a blocker.
 
-`ingress_stream: true` is the target posture because the current dashboard uses `WS /ws` as a long-lived realtime connection. The implementation must validate that WebSocket upgrade behavior works through ingress before claiming the add-on ingress path is complete.
+`ingress_stream: true` is the target posture because the current dashboard uses `WS /ws` as a long-lived realtime connection. The implementation must still validate that WebSocket upgrade behavior works through ingress before claiming the add-on ingress path is complete.
 
 ## Core design rule
 
@@ -69,7 +71,7 @@ This has three immediate consequences:
 2. `GET /`, `/api/...` and `WS /ws` must work when proxied under the Home Assistant ingress URL prefix.
 3. Documentation must stop treating `http://host:3100/` as the normal add-on browser path once ingress is implemented.
 
-The current webclient helper that defaults to `location.origin` is safe for direct local access but not for an ingress URL that includes a path prefix. The implementation milestone must change the default base URL or endpoint construction so same-origin requests preserve the current ingress base path.
+The current webclient helper preserves the current ingress base path for same-origin requests. Earlier versions defaulted only to `location.origin`, which was safe for direct local access but not for an ingress URL that includes a path prefix.
 
 The implementation should prefer relative or base-path-preserving URLs for:
 
@@ -87,10 +89,10 @@ Direct port `3100` is a transitional diagnostics path, not the intended Home Ass
 
 The conservative implementation sequence is:
 
-1. Add ingress metadata and path-prefix support while keeping the existing direct host port mapping for one validation slice.
-2. Document that the direct port remains trusted-local and transitional.
-3. Validate ingress dashboard loading, API calls, WebSocket reconnects and watchdog behavior in a real Home Assistant add-on install.
-4. After that validation, prefer disabling the default host-port mapping with Home Assistant's supported `null` host-port form or an equivalent optional-port configuration.
+1. Add ingress metadata and path-prefix support while keeping the existing direct host port mapping for one validation slice. Done.
+2. Document that the direct port remains trusted-local and transitional. Done.
+3. Validate ingress dashboard loading, API calls, WebSocket reconnects and watchdog behavior in a real Home Assistant add-on install. Still open.
+4. After that validation, prefer disabling the default host-port mapping with Home Assistant's supported `null` host-port form or an equivalent optional-port configuration. Still open.
 
 Keeping the direct mapping during the first ingress metadata slice is allowed only to avoid combining ingress routing changes with a potentially breaking packaging default. It must not be documented as the product access model.
 
@@ -173,15 +175,25 @@ Home Assistant API access remains gated by ADR 0019 and later Pico Rules, Action
 
 ## Implementation implications
 
-The next narrow implementation milestone should include:
+The first narrow implementation milestone includes:
 
 - `pico_core/config.yaml` ingress metadata
 - add-on docs that make ingress the preferred browser path
 - a dashboard base-URL change that preserves ingress path prefixes
 - WebSocket URL construction that preserves the same ingress prefix
 - tests for direct root and prefixed base URL endpoint construction
+
+The next narrow implementation milestone should include:
+
+- real Home Assistant add-on install smoke for ingress
+- dashboard load through ingress
+- `/api/system/status` through ingress
+- `WS /ws` through ingress
+- watchdog `/health`
+- direct-port behavior while the port remains transitional
+- direct-port disablement or optional mapping after ingress validation
 - the optional `pico_foundation_token` schema only if the same milestone also wires it safely into `PICO_FOUNDATION_TOKEN`
-- clear docs for the transitional direct port and token behavior
+- clear docs for any changed direct port and token behavior
 
 It should not include:
 
@@ -195,11 +207,14 @@ It should not include:
 - Pico identity sessions
 - a public reverse proxy model
 
-Validation should cover:
+Current validation covers:
 
 - local unit tests for URL construction
 - existing Core/Web/Protocol checks
 - `pnpm release:verify`
+
+Remaining validation should cover:
+
 - real Home Assistant add-on install smoke when available
 - dashboard load through ingress
 - `/api/system/status` through ingress
