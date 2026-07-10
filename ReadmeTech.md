@@ -20,7 +20,7 @@ The current Foundation HTTP and WebSocket API is a trusted-local diagnostics and
 
 Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
-ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. ADR 0040 now defines the Home Assistant ingress metadata, add-on token option and packaging-default direction. Current ADR 0040 slices implement ingress metadata, ingress-prefix-aware dashboard URLs and the `pico_foundation_token` add-on option bridge; real HA install validation and direct-port transition remain open.
+ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. ADR 0040 now defines the Home Assistant ingress metadata, add-on token option and packaging-default direction. Current ADR 0040 slices implement ingress metadata, ingress-prefix-aware dashboard URLs and the `pico_foundation_token` add-on option bridge; real HA install validation and direct-port transition remain open. ADR 0041 defines the next `PICO_FOUNDATION_ACCESS_MODE` gate, but it is not implemented yet.
 
 ## License and commercial use
 
@@ -346,7 +346,7 @@ When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to `/api/system/ve
 
 For direct `WS /ws` access in token mode, browser clients mint a short-lived, single-use realtime ticket through `POST /api/realtime/tickets` and use only that ticket for the WebSocket upgrade. Non-browser clients may use `Authorization: Bearer <token>` on the upgrade request. The long-lived `PICO_FOUNDATION_TOKEN` must not be placed in a WebSocket URL.
 
-The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct WebSocket ticket boundary is documented in `docs/architecture/0039-foundation-websocket-ticket-boundary.md`. The Home Assistant ingress and add-on packaging option direction is documented in `docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`.
+The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct WebSocket ticket boundary is documented in `docs/architecture/0039-foundation-websocket-ticket-boundary.md`. The Home Assistant ingress and add-on packaging option direction is documented in `docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`. The next explicit access-mode gate is documented in `docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md`.
 
 ## Local development
 
@@ -488,6 +488,7 @@ The project concept is persisted as architecture notes:
 | `0038-foundation-local-access-hardening-and-ingress-boundary.md` | staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary |
 | `0039-foundation-websocket-ticket-boundary.md` | direct-access Foundation WebSocket ticket boundary |
 | `0040-foundation-home-assistant-ingress-and-addon-token-options.md` | concrete Home Assistant ingress metadata, add-on token option and packaging-default direction |
+| `0041-foundation-access-modes-and-direct-port-gate.md` | explicit Foundation access modes and direct-port gate |
 
 Protocol documents:
 

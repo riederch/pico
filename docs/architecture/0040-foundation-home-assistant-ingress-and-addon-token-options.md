@@ -256,7 +256,7 @@ This ADR does not implement or define:
 
 ## Open questions
 
-- After real HA ingress validation, should the first port-closing change set `3100/tcp: null`, remove `webui`, or introduce an explicit optional direct-port setting?
+- After real HA ingress validation, should the first port-closing change set `3100/tcp: null`, remove `webui`, or introduce an explicit optional direct-port setting? ADR 0041 resolves the Core access-mode gate: tokenless `ha-ingress` is only a safe default when the direct host port is not exposed by default.
 - Should a future ingress-aware bridge trust Supervisor user headers for diagnostics or audit, and how should it prevent direct-port spoofing?
 - Does Home Assistant ingress proxy `WS /ws` reliably with the current Fastify WebSocket setup and `ingress_stream: true`?
 - Which Home Assistant install matrix is sufficient before declaring ingress complete?

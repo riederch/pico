@@ -141,7 +141,7 @@ The avatar communicates state and risk. For example:
 
 Port `3100` is a trusted local foundation interface for the current add-on. It is not the intended public remote-access surface. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the add-on API to the internet.
 
-ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments. ADR 0040 defines the concrete ingress metadata, ingress-prefix URL requirement, add-on token option and packaging-default direction. The current add-on metadata includes ingress and a working `pico_foundation_token` option bridge, but real Home Assistant validation and direct-port transition remain follow-up work.
+ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments. ADR 0040 defines the concrete ingress metadata, ingress-prefix URL requirement, add-on token option and packaging-default direction. ADR 0041 defines the next explicit access-mode gate. The current add-on metadata includes ingress and a working `pico_foundation_token` option bridge, but real Home Assistant validation, `PICO_FOUNDATION_ACCESS_MODE` and direct-port transition remain follow-up work.
 
 Persistent data is stored in the Home Assistant add-on data directory:
 
@@ -180,6 +180,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`](../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md) - staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary
 - [`../docs/architecture/0039-foundation-websocket-ticket-boundary.md`](../docs/architecture/0039-foundation-websocket-ticket-boundary.md) - direct-access Foundation WebSocket ticket boundary
 - [`../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`](../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md) - concrete Home Assistant ingress metadata, add-on token option and packaging-default direction
+- [`../docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md`](../docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md) - explicit Foundation access modes and direct-port gate
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

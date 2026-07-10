@@ -118,6 +118,8 @@ Pico is **not production-ready** yet. Authentication, authorization, policy exec
 
 The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs and the optional add-on `pico_foundation_token` bridge are implemented as foundation hardening, but real HA install validation and direct-port transition remain open. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
 
+ADR 0041 defines the next access-mode gate for `PICO_FOUNDATION_ACCESS_MODE`; it is concept-only until implemented.
+
 ## License and commercial use
 
 Pico is source-available for private and non-commercial use under the PolyForm Noncommercial License 1.0.0.
@@ -180,6 +182,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`](docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md) - staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary
 - [`docs/architecture/0039-foundation-websocket-ticket-boundary.md`](docs/architecture/0039-foundation-websocket-ticket-boundary.md) - direct-access Foundation WebSocket ticket boundary
 - [`docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`](docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md) - concrete Home Assistant ingress metadata, add-on token option and packaging-default direction
+- [`docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md`](docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md) - explicit Foundation access modes and direct-port gate
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

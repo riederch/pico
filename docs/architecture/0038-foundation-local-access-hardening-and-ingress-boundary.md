@@ -271,6 +271,7 @@ It is refined by:
 
 - `0039-foundation-websocket-ticket-boundary.md`
 - `0040-foundation-home-assistant-ingress-and-addon-token-options.md`
+- `0041-foundation-access-modes-and-direct-port-gate.md`
 
 It answers the ADR 0030 ingress-vs-token direction at the concept level.
 
