@@ -171,13 +171,14 @@ If no `PICO_FOUNDATION_TOKEN` is configured, the dashboard may keep the current 
 
 This ADR defines the direct-access WebSocket hardening path. It does not define the final Home Assistant ingress implementation.
 
-Home Assistant ingress remains the preferred protected browser path for the add-on dashboard under ADR 0038. The ingress milestone must still decide:
+Home Assistant ingress remains the preferred protected browser path for the add-on dashboard under ADR 0038. ADR 0040 defines the current ingress packaging direction:
 
-- whether the direct add-on port remains exposed
-- whether `PICO_FOUNDATION_TOKEN` is used inside the add-on package
-- how ingress proxies `WS /ws`
-- whether the dashboard needs a ticket when accessed only through ingress
-- how health checks and watchdogs avoid product-auth semantics
+- target Home Assistant ingress metadata
+- path-prefix-aware dashboard endpoint construction
+- WebSocket-through-ingress validation
+- optional add-on token option wiring
+- transitional direct-port behavior
+- watchdog and `/health` posture
 
 Home Assistant ingress is still not Pico identity, Home membership, Pico Rules authority or product remote access.
 
@@ -279,6 +280,10 @@ This ADR refines the WebSocket portion of:
 
 - `0030-foundation-api-exposure-and-local-trust-boundary.md`
 - `0038-foundation-local-access-hardening-and-ingress-boundary.md`
+
+Its Home Assistant ingress packaging interaction is refined by:
+
+- `0040-foundation-home-assistant-ingress-and-addon-token-options.md`
 
 It remains constrained by:
 

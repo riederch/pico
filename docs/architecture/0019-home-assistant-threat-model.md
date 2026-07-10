@@ -30,6 +30,8 @@ The current add-on provides only:
 
 It does not yet provide Home Assistant entity access, ingress, policy execution or tool execution.
 
+ADR 0040 defines the next Foundation add-on ingress packaging direction, but no runtime ingress implementation or Home Assistant tool boundary exists yet.
+
 ## Risk domains
 
 Future Home Assistant tools should classify entities and services by risk:

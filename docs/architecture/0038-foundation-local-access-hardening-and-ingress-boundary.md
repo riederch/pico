@@ -84,7 +84,7 @@ Home Assistant ingress must not become:
 
 The Home Assistant add-on may continue to need local health checks or internal service ports, but the user-facing browser path should move toward ingress rather than direct `http://host:3100` access.
 
-Exact Home Assistant metadata, port exposure and watchdog behavior are implementation details for a later packaging milestone.
+ADR 0040 refines this packaging milestone with target ingress metadata, ingress-prefix URL requirements, add-on token option direction and direct-port transition rules.
 
 ## Temporary Foundation token direction
 
@@ -161,12 +161,14 @@ This ADR does not change `PICO_HOST`, Docker `ENV`, Home Assistant port mappings
 
 Remaining implementation milestones should stay narrow and testable.
 
-For Home Assistant ingress, that milestone should define:
+ADR 0040 defines the Home Assistant ingress packaging milestone:
 
 - add-on ingress metadata and routing
 - whether direct port `3100` remains user-visible, internal-only or transitional
 - watchdog and health-check behavior
 - documentation for users who previously opened the web UI by port
+- dashboard URL construction that preserves Home Assistant ingress path prefixes
+- optional add-on token option wiring requirements
 - tests or smoke checks that do not require a full production HA environment unless available
 
 Implemented `PICO_FOUNDATION_TOKEN` HTTP work:
@@ -222,10 +224,9 @@ This ADR does not implement or define:
 
 ## Open questions
 
-- Which exact Home Assistant ingress metadata and routing model should the add-on use?
-- Should direct port `3100` remain exposed by the add-on after ingress exists, and if so in which mode?
+- After real Home Assistant ingress validation, should direct port `3100` be disabled by default, made optional or kept as a diagnostics escape hatch?
 - Should `PICO_FOUNDATION_TOKEN` be optional, required when `PICO_HOST` is not loopback, or controlled by a separate access mode?
-- How should the dashboard store or hold the temporary token without encouraging long-lived secret leakage?
+- How should a future ingress-aware bridge use Home Assistant user headers without allowing direct-port spoofing?
 - Should the 30-second WebSocket ticket TTL and 128 outstanding-ticket cap remain fixed or become explicit configuration later?
 - Which failed access attempts should be recorded before Action History exists?
 - When should standalone development default to loopback?
@@ -258,10 +259,14 @@ This ADR extends:
 - `0028-pico-link-transport-facade-and-relay-network.md`
 - `0029-identity-device-home-keys-and-e2e-boundaries.md`
 - `0030-foundation-api-exposure-and-local-trust-boundary.md`
-- `0031-pico-link-identity-relay-and-domain-threat-model.md`
+
+It is refined by:
+
+- `0039-foundation-websocket-ticket-boundary.md`
+- `0040-foundation-home-assistant-ingress-and-addon-token-options.md`
 
 It answers the ADR 0030 ingress-vs-token direction at the concept level.
 
-ADR `0039-foundation-websocket-ticket-boundary.md` refines this ADR's direct-access WebSocket token/ticket boundary.
+It remains constrained by the later Pico Link, identity, lifecycle and canonicalization ADRs, especially ADR 0031 through ADR 0034.
 
 It does not replace the future Setup Mode, Move-In, Home membership, Pico identity, Pico Link or Home Assistant tool policy decisions.

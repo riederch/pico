@@ -20,7 +20,7 @@ The current Foundation HTTP and WebSocket API is a trusted-local diagnostics and
 
 Do not expose port `3100` outside a trusted local development or Home Assistant add-on boundary. Current `deviceId` values are client-supplied event metadata, not verified device identity. Current `signature` values are stored as opaque, unverified metadata and are not cryptographic authorship or integrity proof.
 
-ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. Home Assistant ingress remains separate follow-up work.
+ADR 0038 chooses a staged hardening direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode work for real product bootstrap. The current implementation supports `PICO_FOUNDATION_TOKEN` for direct Foundation HTTP API endpoints and ADR 0039 short-lived WebSocket tickets for direct realtime access. ADR 0040 now defines the Home Assistant ingress metadata, add-on token option and packaging-default direction, but ingress is not implemented yet.
 
 ## License and commercial use
 
@@ -346,7 +346,7 @@ When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to `/api/system/ve
 
 For direct `WS /ws` access in token mode, browser clients mint a short-lived, single-use realtime ticket through `POST /api/realtime/tickets` and use only that ticket for the WebSocket upgrade. Non-browser clients may use `Authorization: Bearer <token>` on the upgrade request. The long-lived `PICO_FOUNDATION_TOKEN` must not be placed in a WebSocket URL.
 
-The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct WebSocket ticket boundary is documented in `docs/architecture/0039-foundation-websocket-ticket-boundary.md`.
+The exposure boundary for these endpoints is documented in `docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged local access hardening direction is documented in `docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct WebSocket ticket boundary is documented in `docs/architecture/0039-foundation-websocket-ticket-boundary.md`. The Home Assistant ingress and add-on packaging option direction is documented in `docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`.
 
 ## Local development
 
@@ -487,6 +487,7 @@ The project concept is persisted as architecture notes:
 | `0037-proactive-companion-delegation-and-procurement.md` | proactive delegation boundaries and procurement reference case |
 | `0038-foundation-local-access-hardening-and-ingress-boundary.md` | staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary |
 | `0039-foundation-websocket-ticket-boundary.md` | direct-access Foundation WebSocket ticket boundary |
+| `0040-foundation-home-assistant-ingress-and-addon-token-options.md` | concrete Home Assistant ingress metadata, add-on token option and packaging-default direction |
 
 Protocol documents:
 
@@ -565,7 +566,7 @@ The demo must not become the path for production remote access. If it starts for
 - Validate the Home Assistant add-on on a real HA installation
 - Prepare the next versioned foundation release
 - Define first merge semantics for client state before deeper offline editing
-- Implement the next narrow ADR 0038 Foundation access-hardening milestone before exposing Pico Home APIs beyond trusted local paths, especially Home Assistant ingress and add-on token options
+- Implement the next narrow ADR 0040 Foundation access-hardening milestone before exposing Pico Home APIs beyond trusted local paths: ingress metadata, ingress-prefix-aware dashboard URLs, WebSocket-through-ingress validation and the optional add-on token bridge only if it is wired safely
 - Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link

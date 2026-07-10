@@ -199,7 +199,7 @@ Before broader browser or remote access, Pico needs a deliberate ingress decisio
 
 Neither option is implemented by this ADR. Whichever path is chosen must be explicitly documented as a temporary foundation boundary unless it is later replaced by Pico identity, Home membership and policy-aware authorization.
 
-ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines and implements the direct WebSocket portion with a short-lived ticket strategy.
+ADR 0038 chooses the staged direction: Home Assistant ingress for the add-on browser path, a temporary `PICO_FOUNDATION_TOKEN` for direct standalone/container access, and later local pairing or Setup Mode for product bootstrap. ADR 0039 refines and implements the direct WebSocket portion with a short-lived ticket strategy. ADR 0040 refines the Home Assistant packaging portion with concrete ingress metadata, ingress-prefix URL requirements, add-on token option direction and direct-port transition rules.
 
 ## Remote access boundary
 
