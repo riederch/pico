@@ -8,6 +8,21 @@ export const foundationEventTypes = [
 
 export type FoundationEventType = typeof foundationEventTypes[number];
 
+export type DeviceRegisteredPayload = Record<string, never>;
+
+export const deviceSeenStatuses = [
+  'online',
+  'offline',
+] as const;
+
+export type DeviceSeenStatus = typeof deviceSeenStatuses[number];
+
+export interface DeviceSeenPayload {
+  status: DeviceSeenStatus;
+}
+
+export type SessionCreatedPayload = Record<string, never>;
+
 // Reserved product protocol direction. These event names are known for
 // compatibility and documentation, but the current Foundation POST /api/events
 // endpoint must reject them until dedicated Pico Rules, Action Runner or
@@ -121,6 +136,11 @@ export const messageCreatedRoles = [
 
 export type MessageCreatedRole = typeof messageCreatedRoles[number];
 
+export interface MessageCreatedPayload {
+  role: MessageCreatedRole;
+  text: string;
+}
+
 export const avatarModes = [
   'everyday',
   'technical',
@@ -166,6 +186,113 @@ export const avatarStatusColors = [
 ] as const;
 
 export type AvatarStatusColor = typeof avatarStatusColors[number];
+
+export interface AvatarStateChangedPayload {
+  mode: AvatarMode;
+  state: AvatarStateName;
+  intensity: AvatarIntensity;
+  statusColor: AvatarStatusColor;
+  message?: string;
+}
+
+export type FoundationEventPayload =
+  | DeviceRegisteredPayload
+  | DeviceSeenPayload
+  | SessionCreatedPayload
+  | MessageCreatedPayload
+  | AvatarStateChangedPayload;
+
+export type FoundationPayloadValidationResult =
+  | { ok: true; payload: FoundationEventPayload }
+  | { ok: false; error: string };
+
+export interface FoundationPayloadValidationOptions {
+  maxMessageTextLength?: number;
+  maxAvatarMessageLength?: number;
+}
+
+export function validateFoundationEventPayload(
+  type: FoundationEventType,
+  payload: unknown,
+  options: FoundationPayloadValidationOptions = {},
+): FoundationPayloadValidationResult {
+  if (!isRecord(payload)) {
+    return { ok: false, error: 'payload must be an object.' };
+  }
+
+  if (type === 'device.registered') {
+    const extraKey = firstUnexpectedKey(payload, []);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `device.registered payload has unexpected field: ${extraKey}.` };
+    }
+
+    return { ok: true, payload: {} };
+  }
+
+  if (type === 'device.seen') {
+    const extraKey = firstUnexpectedKey(payload, ['status']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `device.seen payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isStringMember(payload.status, deviceSeenStatuses)) {
+      return { ok: false, error: 'device.seen payload requires status.' };
+    }
+
+    return { ok: true, payload: { status: payload.status } };
+  }
+
+  if (type === 'session.created') {
+    const extraKey = firstUnexpectedKey(payload, []);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `session.created payload has unexpected field: ${extraKey}.` };
+    }
+
+    return { ok: true, payload: {} };
+  }
+
+  if (type === 'message.created') {
+    const extraKey = firstUnexpectedKey(payload, ['role', 'text']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `message.created payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isStringMember(payload.role, messageCreatedRoles) || !isNonEmptyString(payload.text, options.maxMessageTextLength)) {
+      return { ok: false, error: 'message.created payload requires role and text.' };
+    }
+
+    return { ok: true, payload: { role: payload.role, text: payload.text } };
+  }
+
+  const extraKey = firstUnexpectedKey(payload, ['mode', 'state', 'intensity', 'statusColor', 'message']);
+  if (extraKey !== undefined) {
+    return { ok: false, error: `avatar.state_changed payload has unexpected field: ${extraKey}.` };
+  }
+
+  if (
+    !isStringMember(payload.mode, avatarModes)
+    || !isStringMember(payload.state, avatarStates)
+    || !isStringMember(payload.intensity, avatarIntensities)
+    || !isStringMember(payload.statusColor, avatarStatusColors)
+  ) {
+    return { ok: false, error: 'avatar.state_changed payload is invalid.' };
+  }
+
+  if (payload.message !== undefined && !isNonEmptyString(payload.message, options.maxAvatarMessageLength)) {
+    return { ok: false, error: 'avatar.state_changed message must be a non-empty string when provided.' };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      mode: payload.mode,
+      state: payload.state,
+      intensity: payload.intensity,
+      statusColor: payload.statusColor,
+      ...(payload.message === undefined ? {} : { message: payload.message }),
+    },
+  };
+}
 
 // Reserved privacy/deletability protocol direction. These names prepare later
 // additive payload-posture documentation, but the current Foundation PicoEvent
@@ -442,4 +569,23 @@ export interface AuditEventCreatedPayload {
   dataDomain?: string;
   redaction: 'none' | 'summary' | 'reference_only';
   summary: string;
+}
+
+function firstUnexpectedKey(record: Record<string, unknown>, allowedKeys: readonly string[]): string | undefined {
+  const allowed = new Set(allowedKeys);
+  return Object.keys(record).find((key) => !allowed.has(key));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringMember<const TValues extends readonly string[]>(value: unknown, allowedValues: TValues): value is TValues[number] {
+  return typeof value === 'string' && allowedValues.includes(value);
+}
+
+function isNonEmptyString(value: unknown, maxLength: number | undefined): value is string {
+  return typeof value === 'string'
+    && value.trim().length > 0
+    && (maxLength === undefined || value.length <= maxLength);
 }

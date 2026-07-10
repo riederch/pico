@@ -127,9 +127,38 @@ message.created
 avatar.state_changed
 ```
 
-### Current foundation payload values
+### Current foundation payload schemas
 
-The current Foundation API validates small development payloads for implemented writable Foundation event types. These value sets describe the current experimental foundation surface only. They are not a final companion, memory, Pico Link or Pico Home Link schema.
+The current Foundation API validates exact development payload schemas for implemented writable Foundation event types. Unknown payload fields are rejected so clients cannot hide personal memory, credentials, location, health, relationship or product data inside append-only Foundation events.
+
+These schemas describe the current experimental foundation surface only. They are not a final companion, memory, Pico Link or Pico Home Link schema.
+
+#### `device.registered.payload`
+
+The current payload is an empty diagnostics marker:
+
+```json
+{}
+```
+
+It does not carry verified identity, device metadata, membership or trust claims.
+
+#### `device.seen.payload.status`
+
+```text
+online
+offline
+```
+
+#### `session.created.payload`
+
+The current payload is an empty diagnostics marker:
+
+```json
+{}
+```
+
+It does not define product session semantics.
 
 #### `message.created.payload.role`
 

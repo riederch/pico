@@ -1,17 +1,15 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
-  avatarIntensities,
-  avatarModes,
-  avatarStates,
-  avatarStatusColors,
+  validateFoundationEventPayload,
   foundationEventTypes,
-  messageCreatedRoles,
   picoEventTypes,
   protocolCapabilities,
   realtimeMessageType,
+  type FoundationEventPayload,
+  type FoundationEventType,
   type PicoCoreConnectedMessage,
   type PicoEvent,
   type PicoEventCreatedMessage,
@@ -41,14 +39,8 @@ const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 const REALTIME_TICKET_TTL_MS = 30_000;
 const MAX_OUTSTANDING_REALTIME_TICKETS = 128;
 
-const writableEventTypes = new Set<PicoEventType>(foundationEventTypes);
+const writableEventTypes = new Set<FoundationEventType>(foundationEventTypes);
 const knownEventTypes = new Set<PicoEventType>(picoEventTypes);
-
-const messageRoleSet = new Set<string>(messageCreatedRoles);
-const avatarModeSet = new Set<string>(avatarModes);
-const avatarStateSet = new Set<string>(avatarStates);
-const avatarIntensitySet = new Set<string>(avatarIntensities);
-const avatarStatusColorSet = new Set<string>(avatarStatusColors);
 
 interface IncomingEventBody {
   deviceId?: unknown;
@@ -62,10 +54,10 @@ interface IncomingEventBody {
 interface ValidatedIncomingEventBody {
   deviceId: string;
   sessionId?: string;
-  type: PicoEventType;
+  type: FoundationEventType;
   stream?: string;
   lamport?: number;
-  payload: unknown;
+  payload: FoundationEventPayload;
 }
 
 interface RealtimeSocket {
@@ -161,28 +153,36 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     deviceId: config.deviceId,
   }));
 
-  app.get('/api/system/version', async (): Promise<PicoSystemVersionResponse> => ({
-    service: 'pico-home-core',
-    version: SERVICE_VERSION,
-    protocolVersion: PROTOCOL_VERSION,
-  }));
+  app.get('/api/system/version', async (_request, reply) => {
+    const response: PicoSystemVersionResponse = {
+      service: 'pico-home-core',
+      version: SERVICE_VERSION,
+      protocolVersion: PROTOCOL_VERSION,
+    };
 
-  app.get('/api/system/status', async (): Promise<PicoSystemStatusResponse> => ({
-    service: 'pico-home-core',
-    version: SERVICE_VERSION,
-    protocolVersion: PROTOCOL_VERSION,
-    deviceId: config.deviceId,
-    capabilities: protocolCapabilities,
-    picoHome: {
-      claimState: {
-        state: store.picoHomeClaimState().state,
+    return sendNoStore(reply, response);
+  });
+
+  app.get('/api/system/status', async (_request, reply) => {
+    const response: PicoSystemStatusResponse = {
+      service: 'pico-home-core',
+      version: SERVICE_VERSION,
+      protocolVersion: PROTOCOL_VERSION,
+      deviceId: config.deviceId,
+      capabilities: protocolCapabilities,
+      picoHome: {
+        claimState: {
+          state: store.picoHomeClaimState().state,
+        },
       },
-    },
-    database: {
-      maxLamport: store.maxLamport(),
-      migrations: store.appliedMigrations(),
-    },
-  }));
+      database: {
+        maxLamport: store.maxLamport(),
+        migrations: store.appliedMigrations(),
+      },
+    };
+
+    return sendNoStore(reply, response);
+  });
 
   app.post('/api/realtime/tickets', async (request, reply) => {
     if (config.foundationToken === undefined) {
@@ -206,13 +206,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const limitResult = parseLimit(query.limit);
 
     if (!limitResult.ok) {
-      return reply.code(400).send({ error: limitResult.error });
+      return sendNoStore(reply.code(400), { error: limitResult.error });
     }
 
     const cursorResult = parseEventCursor(query.after);
 
     if (!cursorResult.ok) {
-      return reply.code(400).send({ error: cursorResult.error });
+      return sendNoStore(reply.code(400), { error: cursorResult.error });
     }
 
     const page = store.listPage({
@@ -226,7 +226,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       hasMore: page.hasMore,
     };
 
-    return response;
+    return sendNoStore(reply, response);
   });
 
   app.get('/api/events/tail', async (request, reply) => {
@@ -234,7 +234,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const limitResult = parseLimit(query.limit);
 
     if (!limitResult.ok) {
-      return reply.code(400).send({ error: limitResult.error });
+      return sendNoStore(reply.code(400), { error: limitResult.error });
     }
 
     const page = store.listTail(limitResult.limit);
@@ -244,7 +244,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       hasMore: page.hasMore,
     };
 
-    return response;
+    return sendNoStore(reply, response);
   });
 
   app.post('/api/events', async (request, reply) => {
@@ -252,7 +252,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const validation = validateIncomingEvent(body);
 
     if (!validation.ok) {
-      return reply.code(400).send({ error: validation.error });
+      return sendNoStore(reply.code(400), { error: validation.error });
     }
 
     const event = factory.create({
@@ -267,7 +267,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const appendResult = store.append(event);
 
     if (appendResult === 'duplicate_conflict') {
-      return reply.code(409).send({ error: 'Event id already exists with different payload.' });
+      return sendNoStore(reply.code(409), { error: 'Event id already exists with different payload.' });
     }
 
     if (appendResult === 'inserted') {
@@ -275,7 +275,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     const response: PicoEventCreateResponse = { event, appendResult };
-    return reply.code(201).send(response);
+    return sendNoStore(reply.code(201), response);
   });
 
   app.get('/ws', {
@@ -309,6 +309,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   return app;
+}
+
+function sendNoStore<TPayload>(reply: FastifyReply, payload: TPayload): FastifyReply {
+  return reply
+    .header('Cache-Control', 'no-store')
+    .send(payload);
 }
 
 function parseLimit(rawLimit: string | undefined): { ok: true; limit: number } | { ok: false; error: string } {
@@ -566,9 +572,11 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
     return { ok: false, error: 'deviceId, type and payload are required.' };
   }
 
-  if (!writableEventTypes.has(body.type)) {
+  if (!writableEventTypes.has(body.type as FoundationEventType)) {
     return { ok: false, error: 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.' };
   }
+
+  const type = body.type as FoundationEventType;
 
   if (body.sessionId !== undefined && !isNonEmptyString(body.sessionId, 128)) {
     return { ok: false, error: 'sessionId must be a non-empty string when provided.' };
@@ -589,9 +597,13 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
     return { ok: false, error: 'payload is too large.' };
   }
 
-  const payloadError = validatePayload(body.type, body.payload);
-  if (payloadError) {
-    return { ok: false, error: payloadError };
+  const payloadResult = validateFoundationEventPayload(type, body.payload, {
+    maxMessageTextLength: MAX_TEXT_LENGTH,
+    maxAvatarMessageLength: 1_000,
+  });
+
+  if (!payloadResult.ok) {
+    return { ok: false, error: payloadResult.error };
   }
 
   return {
@@ -599,53 +611,16 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
     body: {
       deviceId: body.deviceId,
       sessionId: body.sessionId as string | undefined,
-      type: body.type,
+      type,
       stream: body.stream as string | undefined,
       lamport: body.lamport,
-      payload: body.payload,
+      payload: payloadResult.payload,
     },
   };
 }
 
-function validatePayload(type: PicoEventType, payload: unknown): string | null {
-  if (!isRecord(payload)) {
-    return 'payload must be an object.';
-  }
-
-  if (type === 'message.created') {
-    if (!isStringMember(payload.role, messageRoleSet) || !isNonEmptyString(payload.text, MAX_TEXT_LENGTH)) {
-      return 'message.created payload requires role and text.';
-    }
-
-    return null;
-  }
-
-  if (type === 'avatar.state_changed') {
-    if (
-      !isStringMember(payload.mode, avatarModeSet)
-      || !isStringMember(payload.state, avatarStateSet)
-      || !isStringMember(payload.intensity, avatarIntensitySet)
-      || !isStringMember(payload.statusColor, avatarStatusColorSet)
-    ) {
-      return 'avatar.state_changed payload is invalid.';
-    }
-
-    if (payload.message !== undefined && !isNonEmptyString(payload.message, 1_000)) {
-      return 'avatar.state_changed message must be a non-empty string when provided.';
-    }
-
-    return null;
-  }
-
-  return null;
-}
-
 function isKnownEventType(value: unknown): value is PicoEventType {
   return typeof value === 'string' && knownEventTypes.has(value as PicoEventType);
-}
-
-function isStringMember(value: unknown, allowedValues: Set<string>): value is string {
-  return typeof value === 'string' && allowedValues.has(value);
 }
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {

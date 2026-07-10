@@ -1,0 +1,9 @@
+{
+  "deviceId": "fixture-device",
+  "type": "message.created",
+  "payload": {
+    "role": "user",
+    "text": "Hallo Pico fixture",
+    "memory": "not allowed"
+  }
+}

@@ -8,6 +8,7 @@ import {
   avatarModes,
   avatarStates,
   avatarStatusColors,
+  deviceSeenStatuses,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
   picoHomeEventTypes,
@@ -140,6 +141,7 @@ describe('Pico Home Core app', () => {
     const response = await app.inject({ method: 'GET', url: '/api/system/version' });
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({
       service: 'pico-home-core',
       version: '0.1.7',
@@ -160,6 +162,7 @@ describe('Pico Home Core app', () => {
     const response = await app.inject({ method: 'GET', url: '/api/system/status' });
 
     expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({
       service: 'pico-home-core',
       version: '0.1.7',
@@ -357,11 +360,54 @@ describe('Pico Home Core app', () => {
       payload: {
         deviceId: 'desktop-dev',
         type: 'message.created',
-        payload: { role: 'user', text: 'Hallo Pico', padding: 'x'.repeat(24_000) },
+        payload: { role: 'user', text: 'x'.repeat(7_900) },
       },
     });
 
     expect(response.statusCode).toBe(201);
+
+    await app.close();
+  });
+
+  it('rejects unexpected Foundation payload fields', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const message = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'message.created',
+        payload: { role: 'user', text: 'Hallo Pico', memory: 'secret' },
+      },
+    });
+    expect(message.statusCode).toBe(400);
+    expect(message.headers['cache-control']).toBe('no-store');
+    expect(message.json()).toEqual({ error: 'message.created payload has unexpected field: memory.' });
+
+    const avatar = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'avatar.state_changed',
+        payload: { mode: 'everyday', state: 'thinking', intensity: 'normal', statusColor: 'violet', privateNote: 'hidden' },
+      },
+    });
+    expect(avatar.statusCode).toBe(400);
+    expect(avatar.json()).toEqual({ error: 'avatar.state_changed payload has unexpected field: privateNote.' });
+
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'device.registered',
+        payload: { label: 'dev laptop' },
+      },
+    });
+    expect(registered.statusCode).toBe(400);
+    expect(registered.json()).toEqual({ error: 'device.registered payload has unexpected field: label.' });
 
     await app.close();
   });
@@ -406,6 +452,42 @@ describe('Pico Home Core app', () => {
 
   it('accepts foundation payload values exported by the protocol package', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const registered = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'device.registered',
+        payload: {},
+      },
+    });
+    expect(registered.statusCode).toBe(201);
+
+    const session = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'session.created',
+        payload: {},
+      },
+    });
+    expect(session.statusCode).toBe(201);
+
+    for (const status of deviceSeenStatuses) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'device.seen',
+          payload: { status },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+    }
 
     for (const role of messageCreatedRoles) {
       const response = await app.inject({
@@ -725,6 +807,7 @@ describe('Pico Home Core app', () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
     const created = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', sessionId: 'session-1', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } } });
     expect(created.statusCode).toBe(201);
+    expect(created.headers['cache-control']).toBe('no-store');
     const createdBody = created.json();
     expect(createdBody.appendResult).toBe('inserted');
     expect(createdBody.event.deviceId).toBe('desktop-dev');
@@ -734,6 +817,7 @@ describe('Pico Home Core app', () => {
 
     const listed = await app.inject({ method: 'GET', url: '/api/events' });
     expect(listed.statusCode).toBe(200);
+    expect(listed.headers['cache-control']).toBe('no-store');
     const listedBody = listed.json();
     expect(listedBody.events).toHaveLength(1);
     expect(listedBody.events[0].payload.text).toBe('Hallo Pico');

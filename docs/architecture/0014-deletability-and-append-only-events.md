@@ -57,7 +57,7 @@ For sensitive actions, audit should prefer action type, actor, policy decision, 
 
 ## Current foundation implication
 
-The current foundation event API may still store small development payloads, for example test messages.
+The current foundation event API may still store small development payloads, for example test messages. Writable Foundation event payloads are exact runtime schemas; unknown fields are rejected to avoid hiding sensitive product data inside append-only events.
 
 That does not make the event log suitable for real personal memory. Before memory, presence history, location context or tool execution become real features, Pico must add payload references, privacy domains and deletion semantics.
 

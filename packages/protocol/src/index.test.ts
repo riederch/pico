@@ -22,6 +22,7 @@ import {
   avatarModes,
   avatarStates,
   avatarStatusColors,
+  deviceSeenStatuses,
   foundationEventTypes,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
@@ -32,6 +33,7 @@ import {
   protocolCapabilities,
   realtimeMessageType,
   realtimeMessageTypes,
+  validateFoundationEventPayload,
 } from './index.js';
 
 const repoRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -67,11 +69,59 @@ describe('Pico protocol types', () => {
   });
 
   it('exports runtime payload value lists for foundation payload validation', () => {
+    expect(deviceSeenStatuses).toEqual(['online', 'offline']);
     expect(messageCreatedRoles).toEqual(['user', 'assistant', 'system', 'tool']);
     expect(avatarModes).toEqual(['everyday', 'technical', 'wwg', 'firefighter', 'security', 'organization', 'smart_home']);
     expect(avatarStates).toEqual(['idle', 'listening', 'thinking', 'working', 'unsure', 'warning', 'confirmation_required', 'blocked', 'success', 'sleeping']);
     expect(avatarIntensities).toEqual(['low', 'normal', 'high']);
     expect(avatarStatusColors).toEqual(['neutral', 'blue', 'green', 'yellow', 'red', 'violet']);
+  });
+
+  it('validates strict writable Foundation event payloads', () => {
+    expect(validateFoundationEventPayload('device.registered', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('device.seen', { status: 'online' })).toEqual({ ok: true, payload: { status: 'online' } });
+    expect(validateFoundationEventPayload('session.created', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('message.created', { role: 'user', text: 'Hallo Pico' })).toEqual({
+      ok: true,
+      payload: { role: 'user', text: 'Hallo Pico' },
+    });
+    expect(validateFoundationEventPayload('avatar.state_changed', {
+      mode: 'everyday',
+      state: 'thinking',
+      intensity: 'normal',
+      statusColor: 'violet',
+      message: 'Thinking',
+    })).toEqual({
+      ok: true,
+      payload: {
+        mode: 'everyday',
+        state: 'thinking',
+        intensity: 'normal',
+        statusColor: 'violet',
+        message: 'Thinking',
+      },
+    });
+  });
+
+  it('rejects unexpected Foundation event payload fields', () => {
+    expect(validateFoundationEventPayload('device.registered', { label: 'dev laptop' })).toEqual({
+      ok: false,
+      error: 'device.registered payload has unexpected field: label.',
+    });
+    expect(validateFoundationEventPayload('message.created', { role: 'user', text: 'Hallo Pico', memory: 'secret' })).toEqual({
+      ok: false,
+      error: 'message.created payload has unexpected field: memory.',
+    });
+    expect(validateFoundationEventPayload('avatar.state_changed', {
+      mode: 'everyday',
+      state: 'thinking',
+      intensity: 'normal',
+      statusColor: 'violet',
+      privateNote: 'hidden',
+    })).toEqual({
+      ok: false,
+      error: 'avatar.state_changed payload has unexpected field: privateNote.',
+    });
   });
 
   it('exports reserved payload posture values for privacy and deletion planning', () => {
@@ -157,11 +207,15 @@ describe('Pico protocol types', () => {
     expect(stringArrayField(suite, 'surfaces')).toEqual(['foundation-events', 'foundation-realtime']);
     expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
     expect(fixturePaths).toEqual([
+      'foundation-events/v0.1.7/parse-positive/device-registered-marker',
+      'foundation-events/v0.1.7/parse-positive/device-seen-online',
+      'foundation-events/v0.1.7/parse-positive/session-created-marker',
       'foundation-events/v0.1.7/parse-positive/message-created-minimal',
       'foundation-events/v0.1.7/parse-positive/avatar-state-changed-thinking',
       'foundation-events/v0.1.7/parse-negative/action-requested-reserved',
       'foundation-events/v0.1.7/parse-negative/message-created-invalid-role',
       'foundation-events/v0.1.7/parse-negative/message-created-empty-text',
+      'foundation-events/v0.1.7/parse-negative/message-created-unexpected-field',
       'foundation-events/v0.1.7/parse-negative/avatar-state-invalid-status-color',
       'foundation-realtime/v0.1.7/parse-positive/core-connected',
       'foundation-realtime/v0.1.7/parse-positive/event-created-message',
@@ -402,40 +456,23 @@ function expectCurrentFoundationEventFixture(
     expect(numberField(http, 'status')).toBe(201);
     expect(foundationEventTypes).toContain(inputType);
 
-    const payload = recordField(input, 'payload');
-    if (inputType === 'message.created') {
-      expect(messageCreatedRoles).toContain(stringField(payload, 'role'));
-      expect(stringField(payload, 'text')).toBeTruthy();
-    } else if (inputType === 'avatar.state_changed') {
-      expect(avatarModes).toContain(stringField(payload, 'mode'));
-      expect(avatarStates).toContain(stringField(payload, 'state'));
-      expect(avatarIntensities).toContain(stringField(payload, 'intensity'));
-      expect(avatarStatusColors).toContain(stringField(payload, 'statusColor'));
-    } else {
-      throw new Error(`Unexpected positive Foundation event fixture type: ${inputType}`);
-    }
+    const validation = validateFoundationEventPayload(
+      inputType as typeof foundationEventTypes[number],
+      recordField(input, 'payload'),
+    );
+    expect(validation.ok).toBe(true);
   } else if (family === 'parse-negative') {
     expect(stringField(expectBlock, 'parse')).toBe('reject');
     expect(numberField(http, 'status')).toBe(400);
     expect(picoEventTypes).toContain(inputType);
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
 
-    if (inputType === 'message.created') {
-      const payload = recordField(input, 'payload');
-      expect(foundationEventTypes).toContain(inputType);
-      expect(
-        !messageCreatedRoles.includes(stringField(payload, 'role') as typeof messageCreatedRoles[number])
-        || stringField(payload, 'text').trim() === '',
-      ).toBe(true);
-    } else if (inputType === 'avatar.state_changed') {
-      const payload = recordField(input, 'payload');
-      expect(foundationEventTypes).toContain(inputType);
-      expect(
-        !avatarModes.includes(stringField(payload, 'mode') as typeof avatarModes[number])
-        || !avatarStates.includes(stringField(payload, 'state') as typeof avatarStates[number])
-        || !avatarIntensities.includes(stringField(payload, 'intensity') as typeof avatarIntensities[number])
-        || !avatarStatusColors.includes(stringField(payload, 'statusColor') as typeof avatarStatusColors[number]),
-      ).toBe(true);
+    if (foundationEventTypes.includes(inputType as typeof foundationEventTypes[number])) {
+      const validation = validateFoundationEventPayload(
+        inputType as typeof foundationEventTypes[number],
+        recordField(input, 'payload'),
+      );
+      expect(validation.ok).toBe(false);
     } else {
       expect(foundationEventTypes).not.toContain(inputType);
     }
