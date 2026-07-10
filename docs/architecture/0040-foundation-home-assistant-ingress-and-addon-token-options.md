@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted and partially implemented for add-on ingress metadata and dashboard ingress-prefix URL handling.
+Accepted and partially implemented for add-on ingress metadata, dashboard ingress-prefix URL handling and the optional direct-access `pico_foundation_token` bridge.
 
 ## Context
 
@@ -23,7 +23,9 @@ The remaining ADR 0038 gap is packaging-specific. Before this ADR's first implem
 - the Docker image has no add-on entrypoint layer that reads `/data/options.json`.
 - the dashboard currently derives its default base URL from `location.origin`, which is not sufficient for an ingress-prefixed URL.
 
-The first implementation slice adds Home Assistant ingress metadata to `pico_core/config.yaml` and changes the dashboard URL helpers so Foundation HTTP and `WS /ws` URLs preserve an ingress path prefix. It keeps the direct host port mapping and `webui` as transitional diagnostics paths, and it does not expose `pico_foundation_token` because the add-on still has no runtime startup bridge from `/data/options.json` to `PICO_FOUNDATION_TOKEN`.
+The first implementation slices add Home Assistant ingress metadata to `pico_core/config.yaml`, change the dashboard URL helpers so Foundation HTTP and `WS /ws` URLs preserve an ingress path prefix, and add a Core add-on entrypoint that maps a non-empty `pico_foundation_token` option from `/data/options.json` to `PICO_FOUNDATION_TOKEN`.
+
+The current implementation keeps the direct host port mapping and `webui` as transitional diagnostics paths.
 
 The current Home Assistant app/add-on developer documentation describes ingress metadata such as `ingress`, `ingress_port`, `ingress_entry`, `ingress_stream`, `panel_icon`, `panel_title` and `panel_admin`. It also describes `ports` mappings where a `null` host port disables the mapping, and `options`/`schema` fields for add-on configuration. The Home Assistant security documentation says ingress requests can include authenticated Home Assistant user headers.
 
@@ -126,7 +128,7 @@ It maps to:
 PICO_FOUNDATION_TOKEN
 ```
 
-The option is for direct Foundation access. It should be optional and unset by default for the ingress-first add-on path.
+The option is for direct Foundation access. It is optional and unset by default for the ingress-first add-on path.
 
 Target schema direction:
 
@@ -135,7 +137,7 @@ schema:
   pico_foundation_token: "password?"
 ```
 
-The implementation must read the option from Home Assistant's `/data/options.json` path and export `PICO_FOUNDATION_TOKEN` only when the option is present and non-empty. The current Docker image does not have that entrypoint layer, so implementing the option requires either a small add-on-aware entrypoint or another deliberately scoped startup bridge.
+The implementation reads the option from Home Assistant's `/data/options.json` path and exports `PICO_FOUNDATION_TOKEN` only when the option is present and non-empty. If `PICO_FOUNDATION_TOKEN` is already explicitly configured in the process environment, the add-on option does not override it.
 
 The option must not be documented as:
 
@@ -182,6 +184,9 @@ The first narrow implementation milestone includes:
 - a dashboard base-URL change that preserves ingress path prefixes
 - WebSocket URL construction that preserves the same ingress prefix
 - tests for direct root and prefixed base URL endpoint construction
+- the optional `pico_foundation_token` schema
+- an add-on-aware startup bridge from `/data/options.json` to `PICO_FOUNDATION_TOKEN`
+- tests for the add-on option bridge
 
 The next narrow implementation milestone should include:
 
@@ -192,7 +197,6 @@ The next narrow implementation milestone should include:
 - watchdog `/health`
 - direct-port behavior while the port remains transitional
 - direct-port disablement or optional mapping after ingress validation
-- the optional `pico_foundation_token` schema only if the same milestone also wires it safely into `PICO_FOUNDATION_TOKEN`
 - clear docs for any changed direct port and token behavior
 
 It should not include:
@@ -210,6 +214,7 @@ It should not include:
 Current validation covers:
 
 - local unit tests for URL construction
+- local unit tests for the add-on option bridge
 - existing Core/Web/Protocol checks
 - `pnpm release:verify`
 
@@ -250,7 +255,6 @@ This ADR does not implement or define:
 ## Open questions
 
 - After real HA ingress validation, should the first port-closing change set `3100/tcp: null`, remove `webui`, or introduce an explicit optional direct-port setting?
-- Should `pico_foundation_token` be exposed in the same release as ingress, or only when direct port defaults are changed?
 - Should a future ingress-aware bridge trust Supervisor user headers for diagnostics or audit, and how should it prevent direct-port spoofing?
 - Does Home Assistant ingress proxy `WS /ws` reliably with the current Fastify WebSocket setup and `ingress_stream: true`?
 - Which Home Assistant install matrix is sufficient before declaring ingress complete?

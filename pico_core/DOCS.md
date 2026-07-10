@@ -29,7 +29,7 @@ The foundation add-on currently exposes port `3100` as a fixed port and also dec
 
 Port `3100` is a trusted local foundation interface for development and diagnostics. It is not the intended public remote-access surface for Pico Home.
 
-ADR 0040 makes Home Assistant ingress the preferred add-on browser path. The current metadata slice keeps the direct port mapping as a transitional diagnostics path for validation, but the target packaging direction is to stop treating `http://host:3100/` as the normal add-on browser entry and later disable or make optional the direct host-port mapping after real Home Assistant ingress validation.
+ADR 0040 makes Home Assistant ingress the preferred add-on browser path. The current metadata and option slice keeps the direct port mapping as a transitional diagnostics path for validation, but the target packaging direction is to stop treating `http://host:3100/` as the normal add-on browser entry and later disable or make optional the direct host-port mapping after real Home Assistant ingress validation.
 
 ## Home Assistant ingress
 
@@ -128,18 +128,25 @@ The current foundation event store is not a production memory, location history,
 
 ## Options
 
-The current foundation add-on does not expose user-configurable options yet.
+The current foundation add-on exposes one user-configurable option:
 
-The underlying Core process supports `PICO_FOUNDATION_TOKEN` as an environment variable for temporary direct Foundation HTTP API protection. The Home Assistant add-on metadata does not expose a user-configurable option for it yet.
+| Option | Purpose |
+| --- | --- |
+| `pico_foundation_token` | Optional temporary token mapped to `PICO_FOUNDATION_TOKEN` for direct Foundation access. |
 
-ADR 0040 defines `pico_foundation_token` as the intended optional add-on option for direct Foundation access. It should remain unset by default for the ingress-first browser path and must be wired through an add-on-aware startup bridge before the metadata option is exposed as working configuration.
+The add-on entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured.
+
+Leave `pico_foundation_token` unset for the default ingress-first dashboard path. Set it only when the transitional direct Foundation port needs token hardening.
+
+If `pico_foundation_token` is set, the current Core token guard protects `/api/...` requests regardless of whether the dashboard is opened through ingress or the direct port. Until a later ingress-aware session bridge exists, the dashboard may still need the same token entered in its Foundation token field to load diagnostic API data.
+
+`pico_foundation_token` is not Pico identity, Home membership, a Move-In Code, a Device Key, a production session credential, Pico Link authentication or Home Assistant service authorization.
 
 Planned future options may include:
 
 | Option | Purpose |
 | --- | --- |
 | `pico_port` | Runtime port selection, if the add-on entrypoint is changed to apply it safely. |
-| `pico_foundation_token` | Future optional add-on option mapped to temporary `PICO_FOUNDATION_TOKEN` for direct Foundation access. |
 | `relay_enabled` | Future opt-in outbound Pico Relay connection, if the Relay and Pico Link security model exists. |
 
 ## Update behavior
@@ -182,6 +189,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 
 - No Home Assistant entity integration yet.
 - Home Assistant ingress metadata exists, but real HA install validation is still pending.
+- Direct port `3100` is still mapped by default as a transitional diagnostics path.
 - No companion chat UI yet.
 - No production authentication model yet.
 - No authorization model yet.

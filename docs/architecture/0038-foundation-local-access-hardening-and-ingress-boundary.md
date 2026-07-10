@@ -13,7 +13,7 @@ That boundary is documented, but not yet fully enforced by runtime access contro
 - Pico Home Core defaults to `PICO_HOST=0.0.0.0`.
 - The default port is `3100`.
 - The Home Assistant add-on maps `3100/tcp`.
-- The add-on does not yet use Home Assistant ingress.
+- The add-on has Home Assistant ingress metadata, but real HA install validation is still pending.
 - The REST endpoints do not implement production authentication, authorization, CSRF protection or a session model.
 - `WS /ws` has a defensive browser `Origin` check, but no authentication.
 - `POST /api/events` accepts bounded Foundation event writes from trusted local clients.
@@ -170,6 +170,13 @@ ADR 0040 defines the Home Assistant ingress packaging milestone:
 - dashboard URL construction that preserves Home Assistant ingress path prefixes
 - optional add-on token option wiring requirements
 - tests or smoke checks that do not require a full production HA environment unless available
+
+Implemented ADR 0040 packaging work:
+
+- Home Assistant ingress metadata in `pico_core/config.yaml`
+- prefix-aware dashboard HTTP and WebSocket URL construction
+- optional `pico_foundation_token` add-on option wired to `PICO_FOUNDATION_TOKEN` by the add-on entrypoint
+- tests for URL construction and add-on option parsing
 
 Implemented `PICO_FOUNDATION_TOKEN` HTTP work:
 

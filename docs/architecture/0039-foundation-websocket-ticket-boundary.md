@@ -176,7 +176,7 @@ Home Assistant ingress remains the preferred protected browser path for the add-
 - target Home Assistant ingress metadata
 - path-prefix-aware dashboard endpoint construction
 - WebSocket-through-ingress validation
-- optional add-on token option wiring
+- add-on token option wiring
 - transitional direct-port behavior
 - watchdog and `/health` posture
 

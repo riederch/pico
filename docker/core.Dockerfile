@@ -31,6 +31,6 @@ VOLUME ["/data"]
 
 # Home Assistant mounts /data at runtime. Running as the image's non-root
 # node user makes that mounted directory read-only for SQLite on some add-on
-# installations. Keep the foundation add-on root-based until an entrypoint can
-# safely prepare /data ownership and drop privileges.
-CMD ["node", "apps/core/dist/index.js"]
+# installations. Keep the foundation add-on root-based until startup can safely
+# prepare /data ownership and drop privileges.
+CMD ["node", "apps/core/dist/addon-entrypoint.js"]

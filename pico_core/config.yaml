@@ -16,6 +16,10 @@ ingress_entry: /
 ingress_stream: true
 panel_title: Pico Core
 panel_admin: true
+options:
+  pico_foundation_token: null
+schema:
+  pico_foundation_token: password?
 ports:
   3100/tcp: 3100
 ports_description:
