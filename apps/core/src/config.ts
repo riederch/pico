@@ -1,9 +1,11 @@
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface CoreConfig {
   host: string;
   port: number;
   databasePath: string;
+  backupDirectory?: string;
   deviceId: string;
   webRootPath?: string;
   wsAllowedOrigins?: string[];
@@ -17,10 +19,13 @@ export function defaultWebRootPath(): string {
 }
 
 export function loadConfig(env: Environment = process.env): CoreConfig {
+  const databasePath = readNonEmptyString(env, 'PICO_DATABASE_PATH', 'apps/core/data/pico.sqlite');
+
   return {
     host: readNonEmptyString(env, 'PICO_HOST', '0.0.0.0'),
     port: readPort(env.PICO_PORT),
-    databasePath: readNonEmptyString(env, 'PICO_DATABASE_PATH', 'apps/core/data/pico.sqlite'),
+    databasePath,
+    backupDirectory: readNonEmptyString(env, 'PICO_BACKUP_DIRECTORY', join(dirname(databasePath), 'backups')),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),

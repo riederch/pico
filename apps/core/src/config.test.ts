@@ -9,6 +9,7 @@ describe('Core config', () => {
       host: '0.0.0.0',
       port: 3100,
       databasePath: 'apps/core/data/pico.sqlite',
+      backupDirectory: 'apps/core/data/backups',
       deviceId: 'pico-core',
       webRootPath: expect.stringContaining('/apps/web'),
       wsAllowedOrigins: [],
@@ -21,6 +22,7 @@ describe('Core config', () => {
       PICO_HOST: '127.0.0.1',
       PICO_PORT: '4100',
       PICO_DATABASE_PATH: '/tmp/pico.sqlite',
+      PICO_BACKUP_DIRECTORY: '/tmp/pico-backups',
       PICO_DEVICE_ID: 'test-core',
       PICO_WEB_ROOT: '/tmp/pico-web',
       PICO_WS_ALLOWED_ORIGINS: 'https://dev.example.test, http://localhost:5173/',
@@ -31,6 +33,7 @@ describe('Core config', () => {
       host: '127.0.0.1',
       port: 4100,
       databasePath: '/tmp/pico.sqlite',
+      backupDirectory: '/tmp/pico-backups',
       deviceId: 'test-core',
       webRootPath: '/tmp/pico-web',
       wsAllowedOrigins: ['https://dev.example.test', 'http://localhost:5173'],
@@ -45,7 +48,7 @@ describe('Core config', () => {
   });
 
   it('rejects blank string settings', () => {
-    for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
+    for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_BACKUP_DIRECTORY', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
       expect(() => loadConfig({ [name]: '   ' })).toThrow(`${name} must be a non-empty string.`);
     }
   });

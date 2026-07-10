@@ -33,6 +33,7 @@ export interface MigrationPlanItem {
 export interface MigrationOptions {
   requireBackupBeforeMigration?: boolean;
   backupConfirmed?: boolean;
+  migrationDefinitions?: readonly MigrationDefinition[];
 }
 
 export interface BackupAwareMigrationOptions {
@@ -40,6 +41,7 @@ export interface BackupAwareMigrationOptions {
   backupDirectory: string;
   requireBackupBeforeMigration?: boolean;
   createBackup?: (databasePath: string, backupDirectory: string) => Promise<SqliteBackupResult>;
+  migrationDefinitions?: readonly MigrationDefinition[];
 }
 
 export interface MigrationRunResult {
@@ -47,13 +49,13 @@ export interface MigrationRunResult {
   backup?: SqliteBackupResult;
 }
 
-interface Migration {
+export interface MigrationDefinition {
   id: string;
   requiresBackup: boolean;
   up(db: Database.Database): void;
 }
 
-const migrations: Migration[] = [
+const migrations: readonly MigrationDefinition[] = [
   {
     id: '0001_event_store',
     requiresBackup: false,
@@ -161,13 +163,14 @@ const migrations: Migration[] = [
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {
   const startedAt = new Date().toISOString();
+  const migrationDefinitions = options.migrationDefinitions ?? migrations;
 
   ensureMigrationTable(db);
 
   const appliedMigrationIds = listAppliedMigrationIds(db);
-  assertKnownAppliedMigrations(appliedMigrationIds);
+  assertKnownAppliedMigrations(appliedMigrationIds, migrationDefinitions);
 
-  const pendingMigrations = listPendingMigrations(appliedMigrationIds);
+  const pendingMigrations = listPendingMigrations(appliedMigrationIds, migrationDefinitions);
   assertBackupContract(pendingMigrations, options);
 
   const appliedPendingMigrationIds = pendingMigrations.map((migration) => migration.id);
@@ -196,12 +199,14 @@ export function runMigrations(db: Database.Database, options: MigrationOptions =
 }
 
 export async function runMigrationsWithBackup(db: Database.Database, options: BackupAwareMigrationOptions): Promise<MigrationRunResult> {
+  const migrationDefinitions = options.migrationDefinitions ?? migrations;
+
   ensureMigrationTable(db);
 
   const appliedMigrationIds = listAppliedMigrationIds(db);
-  assertKnownAppliedMigrations(appliedMigrationIds);
+  assertKnownAppliedMigrations(appliedMigrationIds, migrationDefinitions);
 
-  const pendingMigrations = listPendingMigrations(appliedMigrationIds);
+  const pendingMigrations = listPendingMigrations(appliedMigrationIds, migrationDefinitions);
   const backupRequired = pendingMigrations.some((migration) => migration.requiresBackup);
   let backup: SqliteBackupResult | undefined;
 
@@ -213,6 +218,7 @@ export async function runMigrationsWithBackup(db: Database.Database, options: Ba
   const result = runMigrations(db, {
     requireBackupBeforeMigration: options.requireBackupBeforeMigration,
     backupConfirmed: backupRequired ? backup !== undefined : false,
+    migrationDefinitions,
   });
 
   return {
@@ -250,11 +256,12 @@ export function listMigrationAuditRecords(db: Database.Database): MigrationAudit
     .map((row) => mapMigrationAuditRecord(row as MigrationAuditRow));
 }
 
-export function describeMigrationState(db: Database.Database): MigrationState {
+export function describeMigrationState(db: Database.Database, options: { migrationDefinitions?: readonly MigrationDefinition[] } = {}): MigrationState {
+  const migrationDefinitions = options.migrationDefinitions ?? migrations;
   const appliedMigrationIds = tableExists(db, 'schema_migration') ? listAppliedMigrationIds(db) : [];
-  const knownMigrationIds = new Set(migrations.map((migration) => migration.id));
+  const knownMigrationIds = new Set(migrationDefinitions.map((migration) => migration.id));
   const applied = new Set(appliedMigrationIds);
-  const pendingMigrations = migrations
+  const pendingMigrations = migrationDefinitions
     .filter((migration) => !applied.has(migration.id))
     .map((migration) => ({
       id: migration.id,
@@ -276,14 +283,14 @@ function listAppliedMigrationIds(db: Database.Database): string[] {
     .map((row) => (row as { id: string }).id);
 }
 
-function listPendingMigrations(appliedMigrationIds: string[]): Migration[] {
+function listPendingMigrations(appliedMigrationIds: string[], migrationDefinitions: readonly MigrationDefinition[]): MigrationDefinition[] {
   const applied = new Set(appliedMigrationIds);
 
-  return migrations.filter((migration) => !applied.has(migration.id));
+  return migrationDefinitions.filter((migration) => !applied.has(migration.id));
 }
 
-function assertKnownAppliedMigrations(appliedMigrationIds: string[]): void {
-  const knownMigrationIds = new Set(migrations.map((migration) => migration.id));
+function assertKnownAppliedMigrations(appliedMigrationIds: string[], migrationDefinitions: readonly MigrationDefinition[]): void {
+  const knownMigrationIds = new Set(migrationDefinitions.map((migration) => migration.id));
   const unknownMigrationIds = appliedMigrationIds.filter((migrationId) => !knownMigrationIds.has(migrationId));
 
   if (unknownMigrationIds.length > 0) {
@@ -295,7 +302,7 @@ function assertKnownAppliedMigrations(appliedMigrationIds: string[]): void {
 
 function applyPendingMigrations(
   db: Database.Database,
-  pendingMigrations: Migration[],
+  pendingMigrations: readonly MigrationDefinition[],
   auditRecord: { startedAt: string; migrationIds: string[] },
 ): void {
   const applyMigrationRun = db.transaction(() => {
@@ -397,7 +404,7 @@ function toMigrationAuditStatus(value: string): MigrationAuditStatus {
   return value === 'failed' ? 'failed' : 'applied';
 }
 
-function assertBackupContract(pendingMigrations: Migration[], options: MigrationOptions): void {
+function assertBackupContract(pendingMigrations: readonly MigrationDefinition[], options: MigrationOptions): void {
   if (!options.requireBackupBeforeMigration) {
     return;
   }

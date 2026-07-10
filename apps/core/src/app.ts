@@ -94,7 +94,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   await app.register(websocket);
   registerWebDashboard(app, config.webRootPath ?? defaultWebRootPath());
 
-  const store = new EventStore(config.databasePath);
+  const store = await EventStore.open(config.databasePath, {
+    backupDirectory: config.backupDirectory,
+  });
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
   const sockets = new Set<RealtimeSocket>();

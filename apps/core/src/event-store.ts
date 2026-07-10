@@ -1,8 +1,15 @@
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import type { PicoEvent, PicoEventAppendResult } from '@pico/protocol';
-import { listAppliedMigrations, runMigrations, type AppliedMigration } from './migrations.js';
+import {
+  listAppliedMigrations,
+  runMigrations,
+  runMigrationsWithBackup,
+  type AppliedMigration,
+  type MigrationDefinition,
+} from './migrations.js';
+import type { SqliteBackupResult } from './sqlite-backup.js';
 
 export type AppendResult = PicoEventAppendResult;
 
@@ -34,15 +41,53 @@ export type PicoHomeClaimState =
     updatedAt: string;
   };
 
+export interface EventStoreOpenOptions {
+  backupDirectory?: string;
+  requireBackupBeforeMigration?: boolean;
+  createBackup?: (databasePath: string, backupDirectory: string) => Promise<SqliteBackupResult>;
+  migrationDefinitions?: readonly MigrationDefinition[];
+}
+
+interface EventStoreConstructorOptions {
+  runMigrations?: boolean;
+  migrationDefinitions?: readonly MigrationDefinition[];
+}
+
 export class EventStore {
   private readonly db: Database.Database;
   private closed = false;
 
-  public constructor(databasePath: string) {
+  public static async open(databasePath: string, options: EventStoreOpenOptions = {}): Promise<EventStore> {
+    const store = new EventStore(databasePath, {
+      runMigrations: false,
+    });
+
+    try {
+      await runMigrationsWithBackup(store.db, {
+        databasePath,
+        backupDirectory: options.backupDirectory ?? defaultBackupDirectory(databasePath),
+        requireBackupBeforeMigration: options.requireBackupBeforeMigration ?? true,
+        createBackup: options.createBackup,
+        migrationDefinitions: options.migrationDefinitions,
+      });
+    } catch (error) {
+      store.close();
+      throw error;
+    }
+
+    return store;
+  }
+
+  public constructor(databasePath: string, options: EventStoreConstructorOptions = {}) {
     mkdirSync(dirname(databasePath), { recursive: true });
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
-    runMigrations(this.db);
+
+    if (options.runMigrations !== false) {
+      runMigrations(this.db, {
+        migrationDefinitions: options.migrationDefinitions,
+      });
+    }
   }
 
   public append(event: PicoEvent): AppendResult {
@@ -223,6 +268,10 @@ export class EventStore {
       signature: row.signature ?? undefined,
     };
   }
+}
+
+function defaultBackupDirectory(databasePath: string): string {
+  return join(dirname(databasePath), 'backups');
 }
 
 interface EventRow {

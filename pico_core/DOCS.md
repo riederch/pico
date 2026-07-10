@@ -167,7 +167,7 @@ ghcr.io/riederch/pico/core:0.1.7
 
 The Git release tag, root `package.json` version, package versions, `pico_core/config.yaml` version, changelog entry and published semver container tag must stay aligned. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
 
-The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. The add-on runtime does not yet run an automatic backup or rollback workflow during startup.
+The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. During startup, Pico Core runs migrations through the backup-aware path: if a pending migration requires backup, Core creates a backup first and fails startup if backup creation fails. The backup directory defaults to `/data/backups` in the add-on because the database path defaults to `/data/pico.sqlite`. The add-on runtime does not yet run an automatic rollback workflow during startup.
 
 Schema updates are recorded in an internal `schema_migration_audit` table when migrations are applied or fail after the audit table is available. This is diagnostic update metadata only; it is not the future policy/tool audit trail.
 
@@ -197,7 +197,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 - No tool executor yet.
 - No protected personal data domains yet.
 - No production memory model yet.
-- No automatic backup-before-migration runtime flow yet.
+- No automatic rollback flow for failed or reverted database updates yet.
 - No Pico Link transport facade yet.
 - No Pico Relay support yet.
 - No Meshtastic or other low-bandwidth transport adapter yet.

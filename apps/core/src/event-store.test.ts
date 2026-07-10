@@ -1,10 +1,11 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { PicoEvent } from '@pico/protocol';
 import { EventStore } from './event-store.js';
+import type { MigrationDefinition } from './migrations.js';
 
 const tempDirs: string[] = [];
 
@@ -21,6 +22,114 @@ afterEach(() => {
 });
 
 describe('EventStore', () => {
+  it('opens through the backup-aware migration path', async () => {
+    const databasePath = createDatabasePath();
+    const backupDirectory = join(dirname(databasePath), 'backups');
+    const migrationDefinitions = backupAwareTestMigrations();
+    const source = new Database(databasePath);
+    source.exec(`
+      CREATE TABLE schema_migration (
+        id TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+      CREATE TABLE sample (
+        id TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      INSERT INTO schema_migration (id, applied_at)
+      VALUES ('0001_base', '2026-07-10T00:00:00.000Z');
+      INSERT INTO sample (id, value)
+      VALUES ('row-1', 'before migration');
+    `);
+    source.close();
+    const backupCalls: string[] = [];
+
+    const store = await EventStore.open(databasePath, {
+      backupDirectory,
+      migrationDefinitions,
+      createBackup: async (backupDatabasePath, requestedBackupDirectory) => {
+        backupCalls.push(`${backupDatabasePath}:${requestedBackupDirectory}`);
+        const beforeMigration = new Database(backupDatabasePath, { readonly: true, fileMustExist: true });
+
+        try {
+          expect(beforeMigration.prepare('SELECT value FROM sample WHERE id = ?').get('row-1')).toEqual({
+            value: 'before migration',
+          });
+          expect(beforeMigration.prepare('PRAGMA table_info(sample)').all().map((row) => (row as { name: string }).name)).toEqual([
+            'id',
+            'value',
+          ]);
+        } finally {
+          beforeMigration.close();
+        }
+
+        return {
+          sourcePath: backupDatabasePath,
+          backupPath: join(requestedBackupDirectory, 'pico.sqlite.test-backup.bak'),
+          createdAt: '2026-07-10T00:01:00.000Z',
+        };
+      },
+    });
+
+    store.close();
+
+    expect(backupCalls).toEqual([`${databasePath}:${backupDirectory}`]);
+
+    const migrated = new Database(databasePath, { readonly: true, fileMustExist: true });
+    try {
+      expect(migrated.prepare('PRAGMA table_info(sample)').all().map((row) => (row as { name: string }).name)).toEqual([
+        'id',
+        'value',
+        'migrated_at',
+      ]);
+      expect(migrated.prepare('SELECT id FROM schema_migration ORDER BY id').all()).toEqual([
+        { id: '0001_base' },
+        { id: '0002_requires_backup' },
+      ]);
+    } finally {
+      migrated.close();
+    }
+  });
+
+  it('refuses backup-requiring startup migrations when backup creation fails', async () => {
+    const databasePath = createDatabasePath();
+    const migrationDefinitions = backupAwareTestMigrations();
+    const source = new Database(databasePath);
+    source.exec(`
+      CREATE TABLE schema_migration (
+        id TEXT PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      );
+      CREATE TABLE sample (
+        id TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+      INSERT INTO schema_migration (id, applied_at)
+      VALUES ('0001_base', '2026-07-10T00:00:00.000Z');
+    `);
+    source.close();
+
+    await expect(EventStore.open(databasePath, {
+      migrationDefinitions,
+      createBackup: async () => {
+        throw new Error('backup failed');
+      },
+    })).rejects.toThrow('backup failed');
+
+    const unchanged = new Database(databasePath, { readonly: true, fileMustExist: true });
+    try {
+      expect(unchanged.prepare('PRAGMA table_info(sample)').all().map((row) => (row as { name: string }).name)).toEqual([
+        'id',
+        'value',
+      ]);
+      expect(unchanged.prepare('SELECT id FROM schema_migration ORDER BY id').all()).toEqual([
+        { id: '0001_base' },
+      ]);
+    } finally {
+      unchanged.close();
+    }
+  });
+
   it('treats an identical event id and envelope as an idempotent duplicate', () => {
     const store = new EventStore(createDatabasePath());
     const event = createEvent();
@@ -264,4 +373,28 @@ function createEvent(overrides: Partial<PicoEvent> = {}): PicoEvent {
     },
     ...overrides,
   };
+}
+
+function backupAwareTestMigrations(): readonly MigrationDefinition[] {
+  return [
+    {
+      id: '0001_base',
+      requiresBackup: false,
+      up(db) {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS sample (
+            id TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          );
+        `);
+      },
+    },
+    {
+      id: '0002_requires_backup',
+      requiresBackup: true,
+      up(db) {
+        db.exec('ALTER TABLE sample ADD COLUMN migrated_at TEXT NULL;');
+      },
+    },
+  ];
 }

@@ -146,6 +146,7 @@ The repository currently contains:
 - GHCR image target
 - Home Assistant add-on metadata pointing to the Pico Core image
 - SQLite backup and restore helpers with restore verification tests
+- backup-aware startup migrations that create a SQLite backup before any backup-requiring pending migration
 - internal schema migration audit records for applied and failed migration attempts
 
 This is enough to enter the foundation phase, but not enough for fully unattended production-grade auto-update.

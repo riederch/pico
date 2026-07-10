@@ -19,7 +19,9 @@ The migration runner accepts:
 }
 ```
 
-The default foundation runtime currently calls the migration runner without requiring backup confirmation because the initial schema migration only creates empty foundation tables.
+The default foundation runtime opens the event store through the backup-aware migration path. If any pending migration is marked `requiresBackup: true`, Core first creates a SQLite backup and only then confirms the migration run. If backup creation fails, startup fails closed and the pending migration is not applied.
+
+The backup directory is configured with `PICO_BACKUP_DIRECTORY`. If unset, Core uses a `backups` directory next to `PICO_DATABASE_PATH`.
 
 The core package also provides SQLite backup and restore helpers:
 
@@ -46,7 +48,7 @@ Applied and failed schema update attempts are recorded in `schema_migration_audi
 
 Pending migrations and their schema migration audit record are written in one SQLite transaction. Pico must not leave `schema_migration` claiming that a migration succeeded when the matching migration audit record could not be written.
 
-Future production runtimes should call the runner with:
+The startup path calls the backup-aware runner with:
 
 ```ts
 {
@@ -54,7 +56,7 @@ Future production runtimes should call the runner with:
 }
 ```
 
-For a backup-requiring migration, the runtime must only set `backupConfirmed: true` after a backup step has completed successfully.
+For a backup-requiring migration, the runtime only sets `backupConfirmed: true` after the backup step has completed successfully.
 
 ## Migration classification
 
@@ -111,6 +113,6 @@ Current migration classifications:
 
 Pico can create and restore SQLite backup files through explicit helper calls, and the restore path is covered by tests.
 
-The default runtime does not yet perform automatic backup creation, restore verification, or rollback during startup.
+The default runtime now performs automatic backup creation before backup-requiring startup migrations. The current `0.1.7` migrations are additive and do not require a backup, so normal fresh startup does not create a backup file.
 
-The current contract only prevents future backup-requiring migrations from silently running in runtimes that enforce backup confirmation. Automatic backup orchestration and production rollback behaviour must be added before Pico stores production personal data.
+The runtime does not perform automatic restore or rollback during startup. Production rollback behaviour must be added before Pico stores production personal data.
