@@ -1,0 +1,44 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.home-host-key.v0_1_7.parse-positive.host-public-key-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-host-key",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft Home Host Key accepts public host infrastructure placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "home": {
+      "hostKeyVerified": false,
+      "homeContinuityVerified": false,
+      "membershipAuthorityVerified": false,
+      "residentSigningAuthority": false,
+      "residentDomainDecryption": false,
+      "domainContentKeyExposed": false,
+      "moveInCodeUsed": false,
+      "relayAuthority": false,
+      "runtimeAuthorization": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0056 positive fixture. It proves only bounded Home Host Key placeholder shape acceptance and does not verify Home authority."
+}

@@ -194,6 +194,8 @@ Host Key rotation or replacement must define:
 
 Home reset is local host state reset. It must not claim to delete resident Pico identities, resident private keys or resident-owned backups.
 
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Pico Home Host Key placeholder boundary for fixture work. It does not implement host-key serialization, Home continuity verification, membership issuer verification, Setup Mode, Move-In Code validation, resident signing authority, resident domain decryption or runtime Home authorization.
+
 ## Home Membership Credential lifecycle
 
 Home Membership Credentials grant scoped use of a Pico Home.

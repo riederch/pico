@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.home-host-key.v0_1_7.parse-negative.domain-decryption-authority-claim",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-host-key",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Home Host Key rejects resident domain decryption authority claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "host_domain_decryption_claim"
+    ],
+    "home": {
+      "hostKeyVerified": false,
+      "homeContinuityVerified": false,
+      "membershipAuthorityVerified": false,
+      "residentSigningAuthority": false,
+      "residentDomainDecryption": true,
+      "domainContentKeyExposed": true,
+      "moveInCodeUsed": false,
+      "relayAuthority": false,
+      "runtimeAuthorization": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0056 negative fixture. Hosting ciphertext cannot grant resident Private Space or Domain Content Key access."
+}

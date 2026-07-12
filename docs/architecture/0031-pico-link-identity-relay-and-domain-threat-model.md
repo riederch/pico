@@ -197,6 +197,8 @@ Before Home Membership Credentials are implemented, define:
 
 Membership grants use of host infrastructure. It does not grant resident plaintext access unless a protected domain explicitly grants that access.
 
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Pico Home Host Key placeholder boundary for fixture work. It does not implement host-key continuity, membership issuer verification, Move-In Code validation, resident signing authority, resident domain decryption or runtime Home authorization.
+
 ## Domain key requirements
 
 Before Domain Content Keys are implemented, define:

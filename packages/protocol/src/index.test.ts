@@ -323,6 +323,10 @@ describe('Pico protocol types', () => {
       'packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder',
       'packet-envelope/v0.1.7/parse-negative/plaintext-message-leak',
       'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
+      'home-host-key/v0.1.7/parse-positive/host-public-key-placeholder',
+      'home-host-key/v0.1.7/parse-negative/resident-signing-authority-claim',
+      'home-host-key/v0.1.7/parse-negative/domain-decryption-authority-claim',
+      'home-host-key/v0.1.7/parse-negative/move-in-code-as-host-key',
       'home-membership/v0.1.7/parse-positive/invited-member-placeholder',
       'home-membership/v0.1.7/parse-negative/move-in-code-as-credential',
       'identity-key/v0.1.7/parse-positive/identity-public-key-placeholder',
@@ -921,6 +925,91 @@ function expectDraftFixtureBoundary(
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['compatibility_claim']);
     expect(stringArrayField(input, 'disclaimers')).not.toContain('not L4 conformance');
     expect(stringArrayField(expectBlock, 'requiredDisclaimers')).toContain('not L4 conformance');
+  } else if (draftSurface === 'home-host-key') {
+    expect(stringField(input, 'schema')).toBe('pico.home.host-key.draft');
+    const isMoveInCodeCase = fixtureCase === 'move-in-code-as-host-key';
+    expect(stringField(input, 'hostKeyRecordId')).toContain(isMoveInCodeCase ? 'movein_code_' : 'homehostkey_placeholder_');
+    const home = recordField(input, 'home');
+    expect(stringField(home, 'homeIdHint')).toContain('home_placeholder_');
+    expect(stringField(home, 'hostKeyRef')).toContain(isMoveInCodeCase ? 'movein_code_' : 'homehostkey_placeholder_');
+    expect(['empty-placeholder', 'setup-mode-placeholder', 'claimed-placeholder', 'migrating-placeholder', 'reset-placeholder', 'retired-placeholder', 'unknown-placeholder'])
+      .toContain(stringField(home, 'setupState'));
+    expect(stringField(home, 'proofStatus')).toBe('unverified-placeholder');
+    const host = recordField(input, 'host');
+    expect(stringField(host, 'hostPicoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(host, 'hostDeviceIdHint')).toContain('device_placeholder_');
+    expect(['home_host_pico', 'host_admin_device', 'service_placeholder', 'migration_placeholder']).toContain(stringField(host, 'hostRole'));
+    expect(stringField(host, 'proofStatus')).toBe('unverified-placeholder');
+    const publicKey = recordField(input, 'publicKey');
+    expect(stringField(publicKey, 'keyRef')).toContain(isMoveInCodeCase ? 'movein_code_' : 'homehostkey_placeholder_');
+    expect(['absent', 'placeholder-ref-only', 'public-placeholder']).toContain(stringField(publicKey, 'materialStatus'));
+    expect(stringField(publicKey, 'format')).toBe('unspecified-placeholder');
+    expect(stringField(publicKey, 'algorithm')).toBe('unspecified-placeholder');
+    expect(stringField(publicKey, 'fingerprintStatus')).toBe('absent');
+    const lifecycle = recordField(input, 'lifecycle');
+    expect(['introduced-placeholder', 'active-placeholder', 'rotating-placeholder', 'retired-placeholder', 'revoked-placeholder', 'compromised-placeholder', 'unknown-placeholder'])
+      .toContain(stringField(lifecycle, 'status'));
+    expect(['not-claimed', 'same-home-not-verified', 'new-home-placeholder', 'manual-review-required'])
+      .toContain(stringField(lifecycle, 'resetContinuity'));
+    const continuity = recordField(input, 'continuity');
+    expect(booleanField(continuity, 'sameHomeClaim')).toBe(false);
+    expect(booleanField(continuity, 'memberAcceptanceRequired')).toBe(true);
+    expect(stringField(continuity, 'membershipCredentialBinding')).toBe('not-verified');
+    expect(booleanField(continuity, 'currentClaim')).toBe(false);
+    const authority = recordField(input, 'authority');
+    expect(booleanField(authority, 'hostInfrastructure')).toBe(true);
+    expect(booleanField(authority, 'membershipIssuanceVerified')).toBe(false);
+    const relay = recordField(input, 'relay');
+    expect(stringField(relay, 'relayEndpointRef')).toContain('relay_endpoint_placeholder_');
+    expect(stringField(relay, 'routingIdentityRef')).toContain('route_placeholder_');
+    expect(booleanField(relay, 'relayAuthority')).toBe(false);
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    const expectHome = recordField(expectBlock, 'home');
+    expect(booleanField(expectHome, 'hostKeyVerified')).toBe(false);
+    expect(booleanField(expectHome, 'homeContinuityVerified')).toBe(false);
+    expect(booleanField(expectHome, 'membershipAuthorityVerified')).toBe(false);
+    expect(booleanField(expectHome, 'relayAuthority')).toBe(false);
+
+    if (fixtureCase === 'resident-signing-authority-claim') {
+      expect(booleanField(authority, 'residentSigningAuthority')).toBe(true);
+      expect(recordField(input, 'residentAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['resident_identity_authority_claim']);
+      expect(booleanField(expectHome, 'residentSigningAuthority')).toBe(true);
+    } else {
+      expect(booleanField(authority, 'residentSigningAuthority')).toBe(false);
+      expect(input.residentAuthorityClaim).toBeUndefined();
+      expect(booleanField(expectHome, 'residentSigningAuthority')).toBe(false);
+    }
+
+    if (fixtureCase === 'domain-decryption-authority-claim') {
+      expect(booleanField(authority, 'residentDomainDecryption')).toBe(true);
+      const domainAccessClaim = recordField(input, 'domainAccessClaim');
+      expect(stringField(domainAccessClaim, 'domainContentKeyRef')).toContain('domainkey_placeholder_');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['host_domain_decryption_claim']);
+      expect(booleanField(expectHome, 'residentDomainDecryption')).toBe(true);
+      expect(booleanField(expectHome, 'domainContentKeyExposed')).toBe(true);
+    } else {
+      expect(booleanField(authority, 'residentDomainDecryption')).toBe(false);
+      expect(input.domainAccessClaim).toBeUndefined();
+      expect(booleanField(expectHome, 'residentDomainDecryption')).toBe(false);
+      expect(booleanField(expectHome, 'domainContentKeyExposed')).toBe(false);
+    }
+
+    if (isMoveInCodeCase) {
+      expect(booleanField(authority, 'moveInCodeUsed')).toBe(true);
+      expect(stringField(input, 'moveInCode')).toContain('MOVE_IN_CODE_PLACEHOLDER');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['move_in_code_host_key_boundary']);
+      expect(booleanField(expectHome, 'moveInCodeUsed')).toBe(true);
+    } else {
+      expect(booleanField(authority, 'moveInCodeUsed')).toBe(false);
+      expect(input.moveInCode).toBeUndefined();
+      expect(booleanField(expectHome, 'moveInCodeUsed')).toBe(false);
+    }
+
+    expect(booleanField(expectHome, 'runtimeAuthorization')).toBe(fixtureCase !== 'host-public-key-placeholder');
   } else if (draftSurface === 'home-membership') {
     expect(stringField(input, 'schema')).toBe('pico.home.membership.credential.draft');
     expect(stringField(input, 'credentialId')).toContain(fixtureCase === 'move-in-code-as-credential' ? 'movein_code_' : 'homecred_placeholder_');

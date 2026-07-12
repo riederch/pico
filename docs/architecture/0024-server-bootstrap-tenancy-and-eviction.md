@@ -30,6 +30,8 @@ The Gastgeber Pico may invite additional resident Picos and may later evict resi
 
 Host administration controls future use of this host. It does not grant ownership over resident Pico identities, private encryption keys, private domains, portable history, personal memories or backups.
 
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Home Host Key placeholder boundary for future fixture work. It does not implement host-key serialization, Home continuity verification, membership issuer verification, Setup Mode, bootstrap token validation, resident signing authority, resident domain decryption or runtime host authorization.
+
 ## Core design rule
 
 > The Gastgeber Pico manages the house, not the people. It may invite and evict residents from this host, but it must not decrypt, impersonate, rewrite or own resident Picos.

@@ -234,6 +234,8 @@ It is not:
 
 After a successful claim, the Move-In Code must be invalidated and the claimed host should rely on explicit host identity, membership, authentication, authorization and audit models.
 
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Pico Home Host Key placeholder boundary for fixture work. It does not define host-key serialization, Home continuity verification, membership issuer verification, Setup Mode, Move-In Code validation, runtime Home authorization or relay registration.
+
 ## Algorithm and primitive boundary
 
 This ADR intentionally does not choose:

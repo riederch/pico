@@ -18,6 +18,8 @@ The current Home Assistant add-on is the first packaging and runtime path for Pi
 
 A dedicated Pico Home should be understandable to non-developers: flash an image, boot the device, get a Move-In Code, and move the first Pico into the Empty Pico Home.
 
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Home Host Key placeholder boundary for future fixture work. It does not implement Setup Mode, Move-In Code validation, host-key serialization, Home continuity verification or runtime host authorization.
+
 ## Decision
 
 Pico will treat a flashable Pico Home Image as a future official installation path next to the Home Assistant add-on, standalone container, NAS or mini-server, and local service deployments.

@@ -20,6 +20,8 @@ ADR 0034 defines canonicalization and signature-input boundaries before signed c
 
 ADR 0042 allows Pico Home Link draft fixture work only after placeholder authority boundaries are explicit.
 
+ADR 0056 defines the parallel Home Host Key placeholder boundary for host infrastructure continuity and host-key references.
+
 The project needs a safe draft credential placeholder that can support future fixture planning without becoming a real Membership API, Move-In Code, authorization token or domain-decryption right.
 
 ## Decision
@@ -27,6 +29,8 @@ The project needs a safe draft credential placeholder that can support future fi
 Future draft Pico Home Link fixtures may use a Home Membership Credential placeholder shape.
 
 This placeholder shape is not a credential implementation. It does not verify issuer authority, subject authority, Home continuity, revocation, signatures, canonicalization or replay protection.
+
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the fixture-level meaning of Home Host Key references, but it does not satisfy the future Home continuity or membership issuer verification requirements.
 
 ## Draft membership credential placeholder shape
 

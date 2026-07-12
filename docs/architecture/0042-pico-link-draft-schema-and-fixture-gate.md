@@ -76,7 +76,9 @@ ADR `0054-pico-link-draft-key-envelope-rotation-placeholder.md` defines the firs
 
 ADR `0055-pico-link-draft-identity-key-placeholder.md` defines the first draft-only identity-key placeholder boundary for future public-key fixture work. Identity-key placeholders may name synthetic public key references, but must not contain private key material, claim verified identity authority, choose final algorithms or elevate relay/transport identities into Pico identities.
 
-`pico-home-link` draft fixtures may cover membership-credential placeholder shape only after the issuer, subject, audience, expiry and revocation fields are described at a concept level. They must not make a credential accepted by runtime code before verification semantics exist.
+`pico-home-link` draft fixtures may cover Home Host Key and membership-credential placeholder shape only after the host, issuer, subject, audience, expiry and revocation fields are described at a concept level. They must not make a host key or credential accepted by runtime code before verification semantics exist.
+
+ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` defines the first draft-only Home Host Key placeholder shape for future Pico Home Link host-key fixture work. Home Host Key placeholders may describe host infrastructure continuity intent, but must not sign as resident Picos, decrypt resident domains, replace Move-In Codes, claim verified membership issuer authority, elevate relay identities or claim compatibility.
 
 ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work.
 

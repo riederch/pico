@@ -1,0 +1,63 @@
+{
+  "schema": "pico.home.host-key.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "hostKeyRecordId": "homehostkey_placeholder_domain_decryption_claim",
+  "home": {
+    "homeIdHint": "home_placeholder_household",
+    "hostKeyRef": "homehostkey_placeholder_claimed_home",
+    "setupState": "claimed-placeholder",
+    "proofStatus": "unverified-placeholder"
+  },
+  "host": {
+    "hostPicoIdHint": "pico_placeholder_home_host",
+    "hostDeviceIdHint": "device_placeholder_home_host",
+    "hostRole": "home_host_pico",
+    "proofStatus": "unverified-placeholder"
+  },
+  "publicKey": {
+    "keyRef": "homehostkey_placeholder_claimed_home",
+    "materialStatus": "public-placeholder",
+    "format": "unspecified-placeholder",
+    "algorithm": "unspecified-placeholder",
+    "fingerprintStatus": "absent"
+  },
+  "lifecycle": {
+    "status": "active-placeholder",
+    "createdAt": "2026-07-12T12:00:00.000Z",
+    "rotatedFromRef": null,
+    "rotationRef": null,
+    "revocationRef": null,
+    "resetContinuity": "not-claimed"
+  },
+  "continuity": {
+    "sameHomeClaim": false,
+    "memberAcceptanceRequired": true,
+    "membershipCredentialBinding": "not-verified",
+    "currentClaim": false
+  },
+  "authority": {
+    "hostInfrastructure": true,
+    "residentSigningAuthority": false,
+    "residentDomainDecryption": true,
+    "membershipIssuanceVerified": false,
+    "moveInCodeUsed": false
+  },
+  "relay": {
+    "relayEndpointRef": "relay_endpoint_placeholder_home",
+    "routingIdentityRef": "route_placeholder_home",
+    "relayAuthority": false
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_home_host_key",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "domainAccessClaim": {
+    "domainIdHint": "domain_placeholder_resident_private",
+    "domainContentKeyRef": "domainkey_placeholder_resident_private",
+    "decryptResidentPrivateSpace": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

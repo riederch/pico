@@ -1,0 +1,59 @@
+{
+  "schema": "pico.home.host-key.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "hostKeyRecordId": "movein_code_placeholder_as_host_key",
+  "home": {
+    "homeIdHint": "home_placeholder_empty",
+    "hostKeyRef": "movein_code_placeholder_as_host_key",
+    "setupState": "setup-mode-placeholder",
+    "proofStatus": "unverified-placeholder"
+  },
+  "host": {
+    "hostPicoIdHint": "pico_placeholder_home_host",
+    "hostDeviceIdHint": "device_placeholder_home_host",
+    "hostRole": "home_host_pico",
+    "proofStatus": "unverified-placeholder"
+  },
+  "publicKey": {
+    "keyRef": "movein_code_placeholder_public_key_misuse",
+    "materialStatus": "placeholder-ref-only",
+    "format": "unspecified-placeholder",
+    "algorithm": "unspecified-placeholder",
+    "fingerprintStatus": "absent"
+  },
+  "lifecycle": {
+    "status": "introduced-placeholder",
+    "createdAt": "2026-07-12T12:00:00.000Z",
+    "rotatedFromRef": null,
+    "rotationRef": null,
+    "revocationRef": null,
+    "resetContinuity": "not-claimed"
+  },
+  "continuity": {
+    "sameHomeClaim": false,
+    "memberAcceptanceRequired": true,
+    "membershipCredentialBinding": "not-verified",
+    "currentClaim": false
+  },
+  "authority": {
+    "hostInfrastructure": true,
+    "residentSigningAuthority": false,
+    "residentDomainDecryption": false,
+    "membershipIssuanceVerified": false,
+    "moveInCodeUsed": true
+  },
+  "relay": {
+    "relayEndpointRef": "relay_endpoint_placeholder_home",
+    "routingIdentityRef": "route_placeholder_home",
+    "relayAuthority": false
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_home_host_key",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "moveInCode": "MOVE_IN_CODE_PLACEHOLDER_FOR_REJECTION",
+  "signatureStatus": "absent",
+  "extensions": {}
+}
