@@ -38,6 +38,10 @@
     "revocation-record/v0.1.7/parse-negative/stale-record-current-claim",
     "revocation-record/v0.1.7/parse-negative/registry-authority-escalation",
     "revocation-record/v0.1.7/parse-negative/domain-key-material-in-record",
+    "key-envelope-rotation/v0.1.7/parse-positive/domain-rotation-plan-placeholder",
+    "key-envelope-rotation/v0.1.7/parse-negative/plaintext-domain-key-in-plan",
+    "key-envelope-rotation/v0.1.7/parse-negative/completed-rotation-without-records",
+    "key-envelope-rotation/v0.1.7/parse-negative/historical-plaintext-erasure-claim",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],

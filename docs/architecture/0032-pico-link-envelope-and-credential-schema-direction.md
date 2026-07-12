@@ -281,6 +281,8 @@ Required semantics:
 - stale backups must not resurrect revoked authority without detection.
 - `wrappedKey.algorithmSuite` must refer to reviewed primitives once chosen.
 
+ADR `0054-pico-link-draft-key-envelope-rotation-placeholder.md` narrows the first draft-only key-envelope rotation placeholder boundary for fixture work. It does not define Domain Content Key format, key wrapping algorithms, runtime decryption, key-envelope removal, completed rotation or historical erasure.
+
 ## Home membership credential
 
 A Home membership credential proves scoped use of a Pico Home.

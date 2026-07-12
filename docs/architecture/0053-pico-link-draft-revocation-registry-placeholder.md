@@ -22,6 +22,8 @@ ADR 0051 defines a draft Device Credential placeholder shape.
 
 ADR 0052 defines a draft lost-device revocation placeholder shape and refers to a `revocationRef`, but does not define a revocation registry or lifecycle-record placeholder.
 
+ADR 0054 defines the parallel key-envelope rotation placeholder boundary that may later consume revocation records when evaluating domain-reader changes.
+
 The next Pico Link identity gap is a safe placeholder for revocation records: a way to describe that a device, credential or lifecycle subject has a newer visible state without accidentally claiming global consensus, verified freshness, runtime enforcement, identity authority, recovery authority or domain-key rotation.
 
 ## Decision
@@ -362,5 +364,9 @@ This ADR refines:
 - `0042-pico-link-draft-schema-and-fixture-gate.md`
 - `0051-pico-link-draft-device-credential-placeholder.md`
 - `0052-pico-link-draft-lost-device-revocation-placeholder.md`
+
+It is parallel to, but separate from:
+
+- `0054-pico-link-draft-key-envelope-rotation-placeholder.md`
 
 It remains below future identity-key, device-key, credential-verification, canonicalization, signature, revocation-registry, backup-restore, domain-key-rotation, runtime-enforcement and conformance specifications.

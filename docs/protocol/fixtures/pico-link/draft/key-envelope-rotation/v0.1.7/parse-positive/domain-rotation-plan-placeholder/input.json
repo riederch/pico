@@ -1,0 +1,62 @@
+{
+  "schema": "pico.domain.key-envelope-rotation.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "rotationId": "domrot_placeholder_lost_device",
+  "issuer": {
+    "picoIdHint": "pico_placeholder_owner",
+    "identityKeyRef": "picoidkey_placeholder_owner",
+    "issuerDeviceIdHint": "device_placeholder_owner_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "domain": {
+    "domainIdHint": "private_domain_placeholder",
+    "domainKind": "private_space",
+    "domainKeyRefBefore": "domainkey_placeholder_before",
+    "domainKeyRefAfter": "domainkey_placeholder_after",
+    "keyMaterialStatus": "absent"
+  },
+  "trigger": {
+    "category": "lost_device",
+    "revocationRef": "revocation_placeholder_lost_phone",
+    "revocationRecordRef": "revrecord_placeholder_device_lost"
+  },
+  "readerSetChange": {
+    "removedReaderRefs": [
+      "device_placeholder_phone"
+    ],
+    "retainedReaderRefs": [
+      "device_placeholder_laptop_vault"
+    ],
+    "addedReaderRefs": [],
+    "membershipVerified": false
+  },
+  "rotationPlan": {
+    "status": "planned-placeholder",
+    "futureSecrecyTarget": true,
+    "historicalPlaintextErased": false,
+    "retroactiveSecrecyClaim": false
+  },
+  "keyEnvelopePlan": {
+    "removeEnvelopeRefs": [
+      "keyenv_placeholder_old_phone"
+    ],
+    "createEnvelopeRefs": [
+      "keyenv_placeholder_new_laptop_vault"
+    ],
+    "wrappedKeyMaterialStatus": "absent",
+    "runtimeEnforced": false
+  },
+  "freshness": {
+    "revocationRecordVerified": false,
+    "rotationRecordVerified": false,
+    "currentClaim": false
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_domain_rotation_plan",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

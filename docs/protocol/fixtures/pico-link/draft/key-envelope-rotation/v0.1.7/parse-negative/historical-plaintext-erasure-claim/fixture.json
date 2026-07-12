@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.key-envelope-rotation.v0_1_7.parse-negative.historical-plaintext-erasure-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "key-envelope-rotation",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft key-envelope rotation rejects historical plaintext erasure claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "historical_erasure_claim"
+    ],
+    "domain": {
+      "issuerVerified": false,
+      "membershipVerified": false,
+      "domainAccessGranted": false,
+      "domainKeyMaterialPresent": false,
+      "keyEnvelopeMaterialPresent": false,
+      "rotationCompleted": false,
+      "runtimeEnforced": false,
+      "historicalPlaintextErased": true,
+      "retroactiveSecrecyClaim": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0054 negative fixture. Domain-key rotation cannot claim historical plaintext erasure or retroactive secrecy."
+}

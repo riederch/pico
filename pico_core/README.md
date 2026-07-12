@@ -193,6 +193,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0051-pico-link-draft-device-credential-placeholder.md`](../docs/architecture/0051-pico-link-draft-device-credential-placeholder.md) - draft-only Pico Link device credential placeholder boundary
 - [`../docs/architecture/0052-pico-link-draft-lost-device-revocation-placeholder.md`](../docs/architecture/0052-pico-link-draft-lost-device-revocation-placeholder.md) - draft-only Pico Link lost-device revocation placeholder boundary
 - [`../docs/architecture/0053-pico-link-draft-revocation-registry-placeholder.md`](../docs/architecture/0053-pico-link-draft-revocation-registry-placeholder.md) - draft-only Pico Link revocation registry placeholder boundary
+- [`../docs/architecture/0054-pico-link-draft-key-envelope-rotation-placeholder.md`](../docs/architecture/0054-pico-link-draft-key-envelope-rotation-placeholder.md) - draft-only Pico Link key-envelope rotation placeholder boundary
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

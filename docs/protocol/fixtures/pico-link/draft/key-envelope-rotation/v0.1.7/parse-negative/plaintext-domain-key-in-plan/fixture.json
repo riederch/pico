@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.key-envelope-rotation.v0_1_7.parse-negative.plaintext-domain-key-in-plan",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "key-envelope-rotation",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft key-envelope rotation rejects plaintext domain key material",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "domain_key_material_boundary"
+    ],
+    "domain": {
+      "issuerVerified": false,
+      "membershipVerified": false,
+      "domainAccessGranted": false,
+      "domainKeyMaterialPresent": true,
+      "keyEnvelopeMaterialPresent": true,
+      "rotationCompleted": false,
+      "runtimeEnforced": false,
+      "historicalPlaintextErased": false,
+      "retroactiveSecrecyClaim": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0054 negative fixture. Rotation plans must not contain raw or wrapped Domain Content Key material."
+}

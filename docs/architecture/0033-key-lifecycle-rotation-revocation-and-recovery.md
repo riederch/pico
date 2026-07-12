@@ -258,6 +258,8 @@ Rotation does not automatically remove historical plaintext already accessible t
 
 Deletion semantics must remain aligned with ADR 0014. Append-only records may document that deletion or rotation happened, but sensitive deleteable content should live behind references, retention policy, privacy domains and encryption boundaries.
 
+ADR `0054-pico-link-draft-key-envelope-rotation-placeholder.md` narrows the first draft-only key-envelope rotation placeholder boundary for fixture work. It does not implement Domain Content Keys, key wrapping, key-envelope removal, completed rotation, runtime decryption or historical erasure.
+
 ## Transport Session Key lifecycle
 
 Transport Session Keys are session-level transport material.

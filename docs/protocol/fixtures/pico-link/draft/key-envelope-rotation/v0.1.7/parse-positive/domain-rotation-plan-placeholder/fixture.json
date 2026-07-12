@@ -1,0 +1,44 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.key-envelope-rotation.v0_1_7.parse-positive.domain-rotation-plan-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "key-envelope-rotation",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft key-envelope rotation accepts domain rotation plan placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "domain": {
+      "issuerVerified": false,
+      "membershipVerified": false,
+      "domainAccessGranted": false,
+      "domainKeyMaterialPresent": false,
+      "keyEnvelopeMaterialPresent": false,
+      "rotationCompleted": false,
+      "runtimeEnforced": false,
+      "historicalPlaintextErased": false,
+      "retroactiveSecrecyClaim": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0054 positive fixture. It proves only key-envelope rotation plan placeholder shape and does not rotate keys or grant domain access."
+}

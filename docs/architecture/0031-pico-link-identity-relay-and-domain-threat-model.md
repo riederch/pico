@@ -211,6 +211,8 @@ Before Domain Content Keys are implemented, define:
 
 Append-only events must not become undeletable sensitive memory by accident. ADR 0014 still controls deletion and payload-reference direction.
 
+ADR `0054-pico-link-draft-key-envelope-rotation-placeholder.md` narrows the first draft-only key-envelope rotation placeholder boundary for fixture work. It does not implement Domain Content Keys, key wrapping, domain membership, runtime decryption, key-envelope removal, completed rotation, stale-backup safety or historical erasure.
+
 ## Walking-skeleton demo gate
 
 A walking-skeleton tech demo may be built only after the following exist as drafts:

@@ -336,6 +336,10 @@ describe('Pico protocol types', () => {
       'revocation-record/v0.1.7/parse-negative/stale-record-current-claim',
       'revocation-record/v0.1.7/parse-negative/registry-authority-escalation',
       'revocation-record/v0.1.7/parse-negative/domain-key-material-in-record',
+      'key-envelope-rotation/v0.1.7/parse-positive/domain-rotation-plan-placeholder',
+      'key-envelope-rotation/v0.1.7/parse-negative/plaintext-domain-key-in-plan',
+      'key-envelope-rotation/v0.1.7/parse-negative/completed-rotation-without-records',
+      'key-envelope-rotation/v0.1.7/parse-negative/historical-plaintext-erasure-claim',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
@@ -1146,6 +1150,88 @@ function expectDraftFixtureBoundary(
       expect(input.domainKeyMaterial).toBeUndefined();
       expect(booleanField(expectLifecycle, 'domainKeyRotationCompleted')).toBe(false);
       expect(booleanField(expectLifecycle, 'domainContentKeyExposed')).toBe(false);
+    }
+  } else if (draftSurface === 'key-envelope-rotation') {
+    expect(stringField(input, 'schema')).toBe('pico.domain.key-envelope-rotation.draft');
+    expect(stringField(input, 'rotationId')).toContain('domrot_placeholder_');
+    const issuer = recordField(input, 'issuer');
+    expect(stringField(issuer, 'proofStatus')).toBe('unverified-placeholder');
+    expect(stringField(issuer, 'picoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(issuer, 'identityKeyRef')).toContain('picoidkey_placeholder_');
+    const domain = recordField(input, 'domain');
+    expect(stringField(domain, 'domainIdHint')).toContain('domain_placeholder');
+    expect(['private_space', 'shared_space', 'household_space', 'project_space', 'service_placeholder']).toContain(stringField(domain, 'domainKind'));
+    expect(stringField(domain, 'domainKeyRefBefore')).toContain('domainkey_placeholder_');
+    expect(stringField(domain, 'domainKeyRefAfter')).toContain('domainkey_placeholder_');
+    const trigger = recordField(input, 'trigger');
+    expect(['lost_device', 'reader_removed', 'suspected_compromise', 'policy_rotation', 'algorithm_retirement', 'domain_sensitivity_change']).toContain(stringField(trigger, 'category'));
+    expect(stringField(trigger, 'revocationRef')).toContain('revocation_placeholder_');
+    expect(stringField(trigger, 'revocationRecordRef')).toContain('revrecord_placeholder_');
+    const readerSetChange = recordField(input, 'readerSetChange');
+    expect(stringArrayField(readerSetChange, 'removedReaderRefs').length).toBeGreaterThan(0);
+    expect(booleanField(readerSetChange, 'membershipVerified')).toBe(false);
+    const rotationPlan = recordField(input, 'rotationPlan');
+    expect(booleanField(rotationPlan, 'futureSecrecyTarget')).toBe(true);
+    const keyEnvelopePlan = recordField(input, 'keyEnvelopePlan');
+    expect(stringArrayField(keyEnvelopePlan, 'removeEnvelopeRefs').length).toBeGreaterThan(0);
+    expect(stringArrayField(keyEnvelopePlan, 'createEnvelopeRefs').length).toBeGreaterThan(0);
+    const freshness = recordField(input, 'freshness');
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    const expectDomain = recordField(expectBlock, 'domain');
+    expect(booleanField(expectDomain, 'issuerVerified')).toBe(false);
+    expect(booleanField(expectDomain, 'membershipVerified')).toBe(false);
+    expect(booleanField(expectDomain, 'domainAccessGranted')).toBe(false);
+
+    if (fixtureCase === 'plaintext-domain-key-in-plan') {
+      expect(stringField(domain, 'keyMaterialStatus')).toBe('present');
+      expect(stringField(keyEnvelopePlan, 'wrappedKeyMaterialStatus')).toBe('present');
+      expect(recordField(input, 'domainKeyMaterial')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['domain_key_material_boundary']);
+      expect(booleanField(expectDomain, 'domainKeyMaterialPresent')).toBe(true);
+      expect(booleanField(expectDomain, 'keyEnvelopeMaterialPresent')).toBe(true);
+    } else {
+      expect(['absent', 'placeholder-ref-only']).toContain(stringField(domain, 'keyMaterialStatus'));
+      expect(['absent', 'placeholder-ref-only']).toContain(stringField(keyEnvelopePlan, 'wrappedKeyMaterialStatus'));
+      expect(input.domainKeyMaterial).toBeUndefined();
+      expect(booleanField(expectDomain, 'domainKeyMaterialPresent')).toBe(false);
+      expect(booleanField(expectDomain, 'keyEnvelopeMaterialPresent')).toBe(false);
+    }
+
+    if (fixtureCase === 'completed-rotation-without-records') {
+      expect(stringField(rotationPlan, 'status')).toBe('complete');
+      expect(booleanField(keyEnvelopePlan, 'runtimeEnforced')).toBe(true);
+      expect(booleanField(keyEnvelopePlan, 'removalVerified')).toBe(true);
+      expect(booleanField(freshness, 'revocationRecordVerified')).toBe(true);
+      expect(booleanField(freshness, 'rotationRecordVerified')).toBe(true);
+      expect(booleanField(freshness, 'currentClaim')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['domain_rotation_completion_claim']);
+      expect(booleanField(expectDomain, 'rotationCompleted')).toBe(true);
+      expect(booleanField(expectDomain, 'runtimeEnforced')).toBe(true);
+    } else {
+      expect(['planned-placeholder', 'required-placeholder', 'not-required-placeholder', 'evaluate-placeholder']).toContain(stringField(rotationPlan, 'status'));
+      expect(booleanField(keyEnvelopePlan, 'runtimeEnforced')).toBe(false);
+      expect(keyEnvelopePlan.removalVerified).toBeUndefined();
+      expect(booleanField(freshness, 'revocationRecordVerified')).toBe(false);
+      expect(booleanField(freshness, 'rotationRecordVerified')).toBe(false);
+      expect(booleanField(freshness, 'currentClaim')).toBe(false);
+      expect(booleanField(expectDomain, 'rotationCompleted')).toBe(false);
+      expect(booleanField(expectDomain, 'runtimeEnforced')).toBe(false);
+    }
+
+    if (fixtureCase === 'historical-plaintext-erasure-claim') {
+      expect(booleanField(rotationPlan, 'historicalPlaintextErased')).toBe(true);
+      expect(booleanField(rotationPlan, 'retroactiveSecrecyClaim')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['historical_erasure_claim']);
+      expect(booleanField(expectDomain, 'historicalPlaintextErased')).toBe(true);
+      expect(booleanField(expectDomain, 'retroactiveSecrecyClaim')).toBe(true);
+    } else {
+      expect(booleanField(rotationPlan, 'historicalPlaintextErased')).toBe(false);
+      expect(booleanField(rotationPlan, 'retroactiveSecrecyClaim')).toBe(false);
+      expect(booleanField(expectDomain, 'historicalPlaintextErased')).toBe(false);
+      expect(booleanField(expectDomain, 'retroactiveSecrecyClaim')).toBe(false);
     }
   } else if (draftSurface === 'canonicalization') {
     expect(stringField(input, 'schema')).toBe('pico.canonicalization.case.draft');

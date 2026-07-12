@@ -512,6 +512,7 @@ The project concept is persisted as architecture notes:
 | `0051-pico-link-draft-device-credential-placeholder.md` | draft-only Pico Link device credential placeholder boundary |
 | `0052-pico-link-draft-lost-device-revocation-placeholder.md` | draft-only Pico Link lost-device revocation placeholder boundary |
 | `0053-pico-link-draft-revocation-registry-placeholder.md` | draft-only Pico Link revocation registry placeholder boundary |
+| `0054-pico-link-draft-key-envelope-rotation-placeholder.md` | draft-only Pico Link key-envelope rotation placeholder boundary |
 
 Protocol documents:
 
@@ -572,6 +573,7 @@ The demo must not become the path for production remote access. If it starts for
 - Pico Link Device Credentials may delegate scoped device operation, but they do not become Pico identity ownership, Home membership, domain access or bearer tokens
 - Pico Link lost-device revocation stops future device authority, but it does not replace identity, prove stale-backup safety, rotate domain keys or rewrite history
 - Pico Link revocation registry records make lifecycle status discoverable, but they do not become identity authority, recovery authority, domain-key authority or runtime enforcement
+- Pico Link key-envelope rotation plans may describe future domain-reader changes, but they do not expose Domain Content Keys, prove completed rotation, erase history or grant domain membership
 - The current Foundation API remains local/trusted until auth, membership, policy and Pico Link boundaries exist
 - A Home Host Pico may manage residency on a Pico Home, not resident private data
 - Picos can communicate across Homes; relationships belong to Picos, not Homes
@@ -611,6 +613,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0051 as the only current Device Credential placeholder boundary if future Pico Link identity draft fixtures are added
 - Use ADR 0052 as the only current lost-device revocation placeholder boundary if future Pico Link identity lifecycle draft fixtures are added
 - Use ADR 0053 as the only current revocation registry placeholder boundary if future Pico Link lifecycle status draft fixtures are added
+- Use ADR 0054 as the only current key-envelope rotation placeholder boundary if future protected-domain rotation draft fixtures are added
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
