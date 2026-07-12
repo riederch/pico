@@ -359,6 +359,8 @@ Required semantics:
 - compatibility remains experimental until conformance tests exist.
 - commercial permission is separate from compatibility.
 
+ADR `0046-draft-compatibility-claim-placeholder.md` narrows the draft-only compatibility-claim placeholder boundary until conformance runner, official recognition, security and commercial-permission processes exist.
+
 ## Extension rules
 
 Extensions must:

@@ -129,6 +129,8 @@ No compatibility claim without conformance tests.
 
 The planned fixture layout and current Foundation event/realtime fixture seed are documented in [`conformance-fixtures.md`](conformance-fixtures.md). Until runner semantics and conformance policy exist, compatibility statements should be marked experimental.
 
+Draft compatibility-claim placeholder wording is constrained by [`../architecture/0046-draft-compatibility-claim-placeholder.md`](../architecture/0046-draft-compatibility-claim-placeholder.md). Those placeholders can only reject unsafe wording or missing disclaimers; they do not certify an implementation.
+
 ## L5 - Official compatibility
 
 L5 requires explicit recognition by the designated Pico rights holder.

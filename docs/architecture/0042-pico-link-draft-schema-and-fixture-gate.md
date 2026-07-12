@@ -74,6 +74,8 @@ ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines tha
 
 `compatibility-claims` draft fixtures may reject unsafe claim wording or missing disclaimer shape, but must not certify an implementation.
 
+ADR `0046-draft-compatibility-claim-placeholder.md` defines the first draft-only compatibility-claim placeholder shape for such future fixture work.
+
 ## Required draft labels
 
 Every draft fixture or suite outside the Foundation seed must state:
