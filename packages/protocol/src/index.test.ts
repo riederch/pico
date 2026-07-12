@@ -266,6 +266,8 @@ describe('Pico protocol types', () => {
       expect(stringArrayField(suite, 'surfaces')).toContain(surface);
       expect(fixtureVersion).toBe(`v${currentVersion}`);
       expect(stringField(fixture, 'protocolVersion')).toBe(currentVersion);
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toBeTruthy();
       expect(stringField(source, 'encoding')).toBe('json');
       expect(stringField(source, 'file')).toBe('input.json');
 
@@ -477,6 +479,8 @@ function expectCurrentFoundationEventFixture(
 
   if (family === 'parse-positive') {
     expect(stringField(expectBlock, 'parse')).toBe('accept');
+    expect(booleanField(expectBlock, 'preserveSemantics')).toBe(true);
+    expect(stringArrayField(expectBlock, 'errors')).toEqual([]);
     expect(numberField(http, 'status')).toBe(201);
     expect(foundationEventTypes).toContain(inputType);
 
@@ -487,6 +491,7 @@ function expectCurrentFoundationEventFixture(
     expect(validation.ok).toBe(true);
   } else if (family === 'parse-negative') {
     expect(stringField(expectBlock, 'parse')).toBe('reject');
+    expect(booleanField(expectBlock, 'preserveSemantics')).toBe(false);
     expect(numberField(http, 'status')).toBe(400);
     expect(picoEventTypes).toContain(inputType);
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
@@ -523,6 +528,8 @@ function expectCurrentFoundationRealtimeFixture(
 
   if (family === 'parse-positive') {
     expect(stringField(expectBlock, 'parse')).toBe('accept');
+    expect(booleanField(expectBlock, 'preserveSemantics')).toBe(true);
+    expect(stringArrayField(expectBlock, 'errors')).toEqual([]);
     expect(realtimeMessageTypes).toContain(inputType);
 
     if (inputType === realtimeMessageType.coreConnected) {
@@ -541,6 +548,7 @@ function expectCurrentFoundationRealtimeFixture(
     }
   } else if (family === 'parse-negative') {
     expect(stringField(expectBlock, 'parse')).toBe('reject');
+    expect(booleanField(expectBlock, 'preserveSemantics')).toBe(false);
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
 
     if (inputType === realtimeMessageType.coreConnected) {
