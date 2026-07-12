@@ -1,0 +1,40 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-home-link.home-membership.v0_1_7.parse-negative.move-in-code-as-credential",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-membership",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Home Membership Credential rejects Move-In Code reuse as credential material",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "move_in_code_boundary"
+    ],
+    "authority": {
+      "credentialVerified": false,
+      "domainAccessGranted": false,
+      "moveInCodeUsed": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0045 negative fixture. A Move-In Code is not a Home Membership Credential, signing key, bearer token or domain secret."
+}

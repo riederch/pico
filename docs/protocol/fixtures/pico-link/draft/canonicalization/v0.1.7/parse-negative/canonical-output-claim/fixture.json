@@ -1,0 +1,40 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "canonicalization.v0_1_7.parse-negative.canonical-output-claim",
+  "stage": "fixture_data",
+  "surface": "canonicalization",
+  "draftSurface": "canonicalization",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft canonicalization fixture rejects canonical output before canonical bytes exist",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "canonical_output_claim"
+    ],
+    "canonicalization": {
+      "canonicalBytesPublished": true,
+      "hashVectorPublished": false,
+      "signatureVectorPublished": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0047 negative fixture. It rejects canonical output claims before canonicalization, hash vectors or signature vectors exist."
+}

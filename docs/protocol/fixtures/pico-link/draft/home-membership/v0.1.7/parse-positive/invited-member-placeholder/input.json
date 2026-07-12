@@ -1,0 +1,39 @@
+{
+  "schema": "pico.home.membership.credential.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "credentialId": "homecred_placeholder_invited_member",
+  "issuer": {
+    "homeIdHint": "home_placeholder_household",
+    "homeHostKeyRef": "homehostkey_placeholder_household",
+    "issuerPicoIdHint": "pico_placeholder_host",
+    "proofStatus": "unverified-placeholder"
+  },
+  "subject": {
+    "subjectKind": "pico",
+    "picoIdHint": "pico_placeholder_member",
+    "deviceIdHint": null
+  },
+  "audience": {
+    "homeIdHint": "home_placeholder_household",
+    "homeHostKeyRef": "homehostkey_placeholder_household"
+  },
+  "membership": {
+    "role": "home_member",
+    "scopes": [
+      "host.use",
+      "packet.receive"
+    ],
+    "status": "invited"
+  },
+  "validity": {
+    "notBefore": "2026-07-12T12:00:00.000Z",
+    "expiresAt": "2026-07-13T12:00:00.000Z"
+  },
+  "revocation": {
+    "status": "not_revoked",
+    "revocationRef": null
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

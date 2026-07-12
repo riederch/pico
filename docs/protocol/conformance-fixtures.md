@@ -309,7 +309,7 @@ The current draft Pico Link suite lives separately from the Foundation seed:
 docs/protocol/fixtures/pico-link/draft/suite.json
 ```
 
-It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
+It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture, one positive and one negative Home Membership Credential placeholder fixture, one negative canonicalization placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
 
 Future Pico Link fixtures may cover:
 

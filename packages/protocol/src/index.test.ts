@@ -307,7 +307,7 @@ describe('Pico protocol types', () => {
     expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
     expect(stringField(suite, 'stage')).toBe('fixture_data');
     expect(stringField(suite, 'protocolVersion')).toBe(currentVersion);
-    expect(stringArrayField(suite, 'surfaces')).toEqual(['pico-link', 'compatibility-claims']);
+    expect(stringArrayField(suite, 'surfaces')).toEqual(['pico-link', 'pico-home-link', 'canonicalization', 'compatibility-claims']);
     expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
     const runner = recordField(suite, 'runner');
     expect(booleanField(runner, 'required')).toBe(false);
@@ -322,6 +322,9 @@ describe('Pico protocol types', () => {
       'packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder',
       'packet-envelope/v0.1.7/parse-negative/plaintext-message-leak',
       'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
+      'home-membership/v0.1.7/parse-positive/invited-member-placeholder',
+      'home-membership/v0.1.7/parse-negative/move-in-code-as-credential',
+      'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures/pico-link/draft').sort());
@@ -778,6 +781,50 @@ function expectDraftFixtureBoundary(
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['compatibility_claim']);
     expect(stringArrayField(input, 'disclaimers')).not.toContain('not L4 conformance');
     expect(stringArrayField(expectBlock, 'requiredDisclaimers')).toContain('not L4 conformance');
+  } else if (draftSurface === 'home-membership') {
+    expect(stringField(input, 'schema')).toBe('pico.home.membership.credential.draft');
+    expect(stringField(input, 'credentialId')).toContain(fixtureCase === 'move-in-code-as-credential' ? 'movein_code_' : 'homecred_placeholder_');
+    const issuer = recordField(input, 'issuer');
+    expect(stringField(issuer, 'proofStatus')).toBe('unverified-placeholder');
+    const subject = recordField(input, 'subject');
+    expect(['pico', 'device']).toContain(stringField(subject, 'subjectKind'));
+    const membership = recordField(input, 'membership');
+    expect(['home_host', 'home_member', 'trusted_device', 'service_placeholder']).toContain(stringField(membership, 'role'));
+    for (const scope of stringArrayField(membership, 'scopes')) {
+      expect(['host.use', 'packet.receive', 'storage.queue', 'sync.exchange']).toContain(scope);
+      expect(scope).not.toContain('domain');
+    }
+    expect(['invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued']).toContain(stringField(membership, 'status'));
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    const authority = recordField(expectBlock, 'authority');
+    expect(booleanField(authority, 'credentialVerified')).toBe(false);
+    expect(booleanField(authority, 'domainAccessGranted')).toBe(false);
+
+    if (fixtureCase === 'move-in-code-as-credential') {
+      expect(input.moveInCode).toBeTruthy();
+      expect(booleanField(authority, 'moveInCodeUsed')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['move_in_code_boundary']);
+    } else {
+      expect(input.moveInCode).toBeUndefined();
+      expect(booleanField(authority, 'moveInCodeUsed')).toBe(false);
+    }
+  } else if (draftSurface === 'canonicalization') {
+    expect(stringField(input, 'schema')).toBe('pico.canonicalization.case.draft');
+    expect(['pico-link-packet', 'pico-link-protected-payload', 'pico-home-membership-credential', 'compatibility-claim', 'foundation-event', 'foundation-realtime'])
+      .toContain(stringField(input, 'targetSurface'));
+    const expectation = recordField(input, 'expectation');
+    expect(['reject', 'parse-only']).toContain(stringField(expectation, 'status'));
+    const canonicalOutput = recordField(input, 'canonicalOutput');
+    const cryptoVector = recordField(input, 'cryptoVector');
+    expect(stringField(cryptoVector, 'hash')).toBe('absent');
+    expect(stringField(cryptoVector, 'signature')).toBe('absent');
+    expect(stringArrayField(expectBlock, 'errors')).toEqual(['canonical_output_claim']);
+    expect(stringField(canonicalOutput, 'status')).toBe('present');
+    expect(stringField(canonicalOutput, 'bytes')).toBeTruthy();
+    const canonicalization = recordField(expectBlock, 'canonicalization');
+    expect(booleanField(canonicalization, 'canonicalBytesPublished')).toBe(true);
+    expect(booleanField(canonicalization, 'hashVectorPublished')).toBe(false);
+    expect(booleanField(canonicalization, 'signatureVectorPublished')).toBe(false);
   } else {
     throw new Error(`Unexpected draft surface: ${draftSurface}`);
   }

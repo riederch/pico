@@ -7,6 +7,8 @@
   "protocolVersion": "0.1.7",
   "surfaces": [
     "pico-link",
+    "pico-home-link",
+    "canonicalization",
     "compatibility-claims"
   ],
   "families": [
@@ -23,6 +25,9 @@
     "packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder",
     "packet-envelope/v0.1.7/parse-negative/plaintext-message-leak",
     "protected-payload/v0.1.7/parse-positive/opaque-placeholder",
+    "home-membership/v0.1.7/parse-positive/invited-member-placeholder",
+    "home-membership/v0.1.7/parse-negative/move-in-code-as-credential",
+    "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],
   "notes": "Draft Pico Link fixture data only. This is not a runner, not a published conformance suite, not a Pico Link implementation, not cryptographic verification and not an L4 compatibility basis."

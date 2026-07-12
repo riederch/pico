@@ -46,6 +46,9 @@ pico-link/draft/suite.json
 pico-link/draft/packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder/
 pico-link/draft/packet-envelope/v0.1.7/parse-negative/plaintext-message-leak/
 pico-link/draft/protected-payload/v0.1.7/parse-positive/opaque-placeholder/
+pico-link/draft/home-membership/v0.1.7/parse-positive/invited-member-placeholder/
+pico-link/draft/home-membership/v0.1.7/parse-negative/move-in-code-as-credential/
+pico-link/draft/canonicalization/v0.1.7/parse-negative/canonical-output-claim/
 pico-link/draft/compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner/
 ```
 
