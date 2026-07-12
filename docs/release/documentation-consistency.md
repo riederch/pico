@@ -163,6 +163,7 @@ In particular:
 - model-delegation draft fixture staging language must remain consistent with `0050`
 - Pico Link device credential placeholder language must remain consistent with `0051`
 - Pico Link lost-device revocation placeholder language must remain consistent with `0052`
+- Pico Link revocation registry placeholder language must remain consistent with `0053`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

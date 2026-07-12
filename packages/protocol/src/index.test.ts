@@ -332,6 +332,10 @@ describe('Pico protocol types', () => {
       'lost-device/v0.1.7/parse-negative/stale-backup-reactivation',
       'lost-device/v0.1.7/parse-negative/identity-replacement-claim',
       'lost-device/v0.1.7/parse-negative/domain-rotation-proof-claim',
+      'revocation-record/v0.1.7/parse-positive/device-revocation-record-placeholder',
+      'revocation-record/v0.1.7/parse-negative/stale-record-current-claim',
+      'revocation-record/v0.1.7/parse-negative/registry-authority-escalation',
+      'revocation-record/v0.1.7/parse-negative/domain-key-material-in-record',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
@@ -1059,6 +1063,89 @@ function expectDraftFixtureBoundary(
       expect(domainImpact.domainContentKeyRef).toBeUndefined();
       expect(booleanField(lifecycle, 'domainKeyRotationCompleted')).toBe(false);
       expect(booleanField(lifecycle, 'domainContentKeyExposed')).toBe(false);
+    }
+  } else if (draftSurface === 'revocation-record') {
+    expect(stringField(input, 'schema')).toBe('pico.lifecycle.revocation-record.draft');
+    expect(stringField(input, 'recordId')).toContain('revrecord_placeholder_');
+    const registry = recordField(input, 'registry');
+    expect(stringField(registry, 'registryId')).toContain('revreg_placeholder_');
+    expect(['pico-local-placeholder', 'home-local-placeholder', 'relay-cache-placeholder', 'test-suite-placeholder']).toContain(stringField(registry, 'scope'));
+    const issuer = recordField(input, 'issuer');
+    expect(stringField(issuer, 'proofStatus')).toBe('unverified-placeholder');
+    expect(stringField(issuer, 'picoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(issuer, 'identityKeyRef')).toContain('picoidkey_placeholder_');
+    const subject = recordField(input, 'subject');
+    expect(['device', 'device_credential', 'home_membership', 'domain_reader', 'relay_routing_identity']).toContain(stringField(subject, 'subjectKind'));
+    if (stringField(subject, 'subjectKind') === 'domain_reader') {
+      expect(stringField(subject, 'domainIdHint')).toContain('domain_placeholder');
+    } else {
+      expect(stringField(subject, 'deviceIdHint')).toContain('device_placeholder_');
+      expect(stringField(subject, 'deviceKeyRef')).toContain('devicekey_placeholder_');
+    }
+    expect(stringField(subject, 'credentialIdRef')).toContain('devcred_placeholder_');
+    const lifecycle = recordField(input, 'lifecycle');
+    expect(['device_revocation', 'device_lost', 'credential_revocation', 'membership_revocation', 'reader_removed', 'routing_identity_retired']).toContain(stringField(lifecycle, 'recordKind'));
+    expect(['pending_activation', 'active', 'retiring', 'retired', 'revoked', 'lost', 'compromised', 'superseded', 'expired', 'unknown']).toContain(stringField(lifecycle, 'previousStatus'));
+    expect(['pending_activation', 'active', 'retiring', 'retired', 'revoked', 'lost', 'compromised', 'superseded', 'expired', 'unknown']).toContain(stringField(lifecycle, 'newStatus'));
+    expect(numberField(lifecycle, 'sequenceHint')).toBeGreaterThan(0);
+    for (const scope of stringArrayField(input, 'affectedScopes')) {
+      expect(['packet.sign', 'packet.receive', 'history.sign', 'manifest.sign', 'sync.exchange', 'key_envelope.receive', 'surface.session', 'host.use', 'storage.queue']).toContain(scope);
+    }
+    const freshness = recordField(input, 'freshness');
+    const propagation = recordField(input, 'propagation');
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    const expectLifecycle = recordField(expectBlock, 'lifecycle');
+    expect(booleanField(expectLifecycle, 'recordVerified')).toBe(false);
+    expect(booleanField(expectLifecycle, 'freshnessVerified')).toBe(false);
+
+    if (fixtureCase === 'stale-record-current-claim') {
+      expect(stringField(freshness, 'status')).toBe('claimed-current');
+      expect(booleanField(freshness, 'currentClaim')).toBe(true);
+      expect(booleanField(freshness, 'staleSnapshotAccepted')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['freshness_current_claim']);
+      expect(booleanField(expectLifecycle, 'freshnessCurrentClaim')).toBe(true);
+      expect(booleanField(expectLifecycle, 'staleRecordAccepted')).toBe(true);
+    } else {
+      expect(['bounded-placeholder', 'stale-placeholder', 'unknown-placeholder', 'not-evaluated']).toContain(stringField(freshness, 'status'));
+      expect(booleanField(freshness, 'currentClaim')).toBe(false);
+      expect(freshness.staleSnapshotAccepted).toBeUndefined();
+      expect(booleanField(expectLifecycle, 'freshnessCurrentClaim')).toBe(false);
+      expect(booleanField(expectLifecycle, 'staleRecordAccepted')).toBe(false);
+    }
+
+    if (fixtureCase === 'registry-authority-escalation') {
+      expect(stringField(registry, 'authorityStatus')).toBe('authoritative-root-claim');
+      expect(booleanField(propagation, 'runtimeEnforced')).toBe(true);
+      expect(recordField(input, 'registryAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['registry_authority_boundary']);
+      expect(booleanField(expectLifecycle, 'registryAuthoritative')).toBe(true);
+      expect(booleanField(expectLifecycle, 'runtimeEnforced')).toBe(true);
+      expect(booleanField(expectLifecycle, 'registryAuthorityEscalated')).toBe(true);
+      expect(booleanField(expectLifecycle, 'recoveryAuthorityGranted')).toBe(true);
+    } else {
+      expect(stringField(registry, 'authorityStatus')).toBe('unverified-placeholder');
+      expect(booleanField(propagation, 'runtimeEnforced')).toBe(false);
+      expect(input.registryAuthorityClaim).toBeUndefined();
+      expect(booleanField(expectLifecycle, 'registryAuthoritative')).toBe(false);
+      expect(booleanField(expectLifecycle, 'runtimeEnforced')).toBe(false);
+      expect(booleanField(expectLifecycle, 'registryAuthorityEscalated')).toBe(false);
+      expect(booleanField(expectLifecycle, 'recoveryAuthorityGranted')).toBe(false);
+    }
+
+    if (fixtureCase === 'domain-key-material-in-record') {
+      expect(stringField(propagation, 'keyEnvelopeRemoval')).toBe('claimed_complete');
+      expect(recordField(input, 'domainKeyMaterial')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['domain_key_material_boundary']);
+      expect(booleanField(expectLifecycle, 'domainKeyRotationCompleted')).toBe(true);
+      expect(booleanField(expectLifecycle, 'domainContentKeyExposed')).toBe(true);
+    } else {
+      expect(stringField(propagation, 'keyEnvelopeRemoval')).toBe('not_claimed');
+      expect(input.domainKeyMaterial).toBeUndefined();
+      expect(booleanField(expectLifecycle, 'domainKeyRotationCompleted')).toBe(false);
+      expect(booleanField(expectLifecycle, 'domainContentKeyExposed')).toBe(false);
     }
   } else if (draftSurface === 'canonicalization') {
     expect(stringField(input, 'schema')).toBe('pico.canonicalization.case.draft');

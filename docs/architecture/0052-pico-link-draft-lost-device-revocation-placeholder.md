@@ -20,6 +20,8 @@ ADR 0042 permits draft Pico Link fixture work only below runtime, cryptography, 
 
 ADR 0051 defines a draft Device Credential placeholder shape, but does not define a lost-device revocation placeholder.
 
+ADR 0053 defines the parallel revocation registry record placeholder boundary that may later make `revocationRef` discoverable in fixture data.
+
 The next Pico Link identity gap is a safe placeholder for lost-device fixture work: a way to describe that a device should lose future authority without accidentally claiming real revocation enforcement, identity replacement, completed domain-key rotation, historical rewrite or recovery authority.
 
 ## Decision
@@ -339,5 +341,9 @@ This ADR refines:
 - `0033-key-lifecycle-rotation-revocation-and-recovery.md`
 - `0042-pico-link-draft-schema-and-fixture-gate.md`
 - `0051-pico-link-draft-device-credential-placeholder.md`
+
+It is parallel to, but separate from:
+
+- `0053-pico-link-draft-revocation-registry-placeholder.md`
 
 It remains below future identity-key, device-key, credential-verification, canonicalization, signature, revocation-registry, backup-restore, domain-key-rotation, runtime-enforcement and conformance specifications.

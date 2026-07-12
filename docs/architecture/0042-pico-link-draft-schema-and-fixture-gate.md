@@ -70,6 +70,8 @@ ADR `0051-pico-link-draft-device-credential-placeholder.md` defines the first dr
 
 ADR `0052-pico-link-draft-lost-device-revocation-placeholder.md` defines the first draft-only lost-device revocation placeholder boundary for future Pico Link identity fixture work. Lost-device placeholders may describe future device-authority blocking intent, but must not claim identity replacement, stale-backup restore safety, completed domain-key rotation, runtime enforcement or compatibility.
 
+ADR `0053-pico-link-draft-revocation-registry-placeholder.md` defines the first draft-only revocation registry record placeholder boundary for future Pico Link identity lifecycle fixture work. Revocation-record placeholders may describe bounded lifecycle status visibility, but must not claim global currentness, identity authority, recovery authority, domain-key authority, runtime enforcement or compatibility.
+
 `pico-home-link` draft fixtures may cover membership-credential placeholder shape only after the issuer, subject, audience, expiry and revocation fields are described at a concept level. They must not make a credential accepted by runtime code before verification semantics exist.
 
 ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work.

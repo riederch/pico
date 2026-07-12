@@ -1,0 +1,47 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.revocation-record.v0_1_7.parse-negative.registry-authority-escalation",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "revocation-record",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft revocation record rejects registry authority escalation",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "registry_authority_boundary"
+    ],
+    "lifecycle": {
+      "recordVerified": false,
+      "registryAuthoritative": true,
+      "freshnessVerified": false,
+      "runtimeEnforced": true,
+      "registryAuthorityEscalated": true,
+      "freshnessCurrentClaim": false,
+      "staleRecordAccepted": false,
+      "domainKeyRotationCompleted": false,
+      "domainContentKeyExposed": false,
+      "recoveryAuthorityGranted": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0053 negative fixture. A revocation registry record cannot become identity, recovery or runtime authorization authority."
+}

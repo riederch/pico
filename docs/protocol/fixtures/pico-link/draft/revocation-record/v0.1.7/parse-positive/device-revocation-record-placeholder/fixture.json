@@ -1,0 +1,45 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.revocation-record.v0_1_7.parse-positive.device-revocation-record-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "revocation-record",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft revocation record accepts bounded device lifecycle placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "lifecycle": {
+      "recordVerified": false,
+      "registryAuthoritative": false,
+      "freshnessVerified": false,
+      "runtimeEnforced": false,
+      "registryAuthorityEscalated": false,
+      "freshnessCurrentClaim": false,
+      "staleRecordAccepted": false,
+      "domainKeyRotationCompleted": false,
+      "domainContentKeyExposed": false,
+      "recoveryAuthorityGranted": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0053 positive fixture. It proves only bounded revocation-record placeholder shape acceptance and does not verify freshness or enforce runtime revocation."
+}

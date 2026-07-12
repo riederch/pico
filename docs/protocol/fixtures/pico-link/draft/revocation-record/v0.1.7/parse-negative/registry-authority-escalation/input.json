@@ -1,0 +1,61 @@
+{
+  "schema": "pico.lifecycle.revocation-record.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "recordId": "revrecord_placeholder_registry_authority_escalation",
+  "registry": {
+    "registryId": "revreg_placeholder_owner",
+    "scope": "pico-local-placeholder",
+    "authorityStatus": "authoritative-root-claim"
+  },
+  "issuer": {
+    "picoIdHint": "pico_placeholder_owner",
+    "identityKeyRef": "picoidkey_placeholder_owner",
+    "issuerDeviceIdHint": "device_placeholder_owner_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "subject": {
+    "subjectKind": "device",
+    "deviceIdHint": "device_placeholder_phone",
+    "deviceKeyRef": "devicekey_placeholder_phone",
+    "credentialIdRef": "devcred_placeholder_phone"
+  },
+  "lifecycle": {
+    "recordKind": "device_revocation",
+    "previousStatus": "active",
+    "newStatus": "revoked",
+    "reasonCategory": "suspected_compromise",
+    "effectiveAt": "2026-07-12T12:00:00.000Z",
+    "sequenceHint": 4
+  },
+  "affectedScopes": [
+    "packet.sign",
+    "packet.receive",
+    "sync.exchange"
+  ],
+  "freshness": {
+    "observedAt": "2026-07-12T12:01:00.000Z",
+    "notBefore": "2026-07-12T12:00:00.000Z",
+    "expiresAt": "2026-07-12T12:15:00.000Z",
+    "status": "bounded-placeholder",
+    "currentClaim": false
+  },
+  "propagation": {
+    "status": "observed_placeholder",
+    "runtimeEnforced": true,
+    "keyEnvelopeRemoval": "not_claimed",
+    "staleBackupHandling": "not_claimed"
+  },
+  "registryAuthorityClaim": {
+    "identityRootControl": true,
+    "recoveryAuthority": true,
+    "runtimeAuthorization": true
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_registry_authority_escalation",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

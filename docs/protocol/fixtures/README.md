@@ -55,6 +55,10 @@ pico-link/draft/lost-device/v0.1.7/parse-positive/revoke-device-placeholder/
 pico-link/draft/lost-device/v0.1.7/parse-negative/stale-backup-reactivation/
 pico-link/draft/lost-device/v0.1.7/parse-negative/identity-replacement-claim/
 pico-link/draft/lost-device/v0.1.7/parse-negative/domain-rotation-proof-claim/
+pico-link/draft/revocation-record/v0.1.7/parse-positive/device-revocation-record-placeholder/
+pico-link/draft/revocation-record/v0.1.7/parse-negative/stale-record-current-claim/
+pico-link/draft/revocation-record/v0.1.7/parse-negative/registry-authority-escalation/
+pico-link/draft/revocation-record/v0.1.7/parse-negative/domain-key-material-in-record/
 pico-link/draft/canonicalization/v0.1.7/parse-negative/canonical-output-claim/
 pico-link/draft/compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner/
 ```

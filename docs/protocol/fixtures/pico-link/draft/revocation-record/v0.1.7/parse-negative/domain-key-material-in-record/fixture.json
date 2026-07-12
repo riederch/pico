@@ -1,0 +1,47 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.revocation-record.v0_1_7.parse-negative.domain-key-material-in-record",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "revocation-record",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft revocation record rejects domain key material",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "domain_key_material_boundary"
+    ],
+    "lifecycle": {
+      "recordVerified": false,
+      "registryAuthoritative": false,
+      "freshnessVerified": false,
+      "runtimeEnforced": false,
+      "registryAuthorityEscalated": false,
+      "freshnessCurrentClaim": false,
+      "staleRecordAccepted": false,
+      "domainKeyRotationCompleted": true,
+      "domainContentKeyExposed": true,
+      "recoveryAuthorityGranted": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0053 negative fixture. A revocation record cannot contain Domain Content Key material or prove completed domain-key rotation."
+}

@@ -1,0 +1,47 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.revocation-record.v0_1_7.parse-negative.stale-record-current-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "revocation-record",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft revocation record rejects stale snapshot as current",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "freshness_current_claim"
+    ],
+    "lifecycle": {
+      "recordVerified": false,
+      "registryAuthoritative": false,
+      "freshnessVerified": false,
+      "runtimeEnforced": false,
+      "registryAuthorityEscalated": false,
+      "freshnessCurrentClaim": true,
+      "staleRecordAccepted": true,
+      "domainKeyRotationCompleted": false,
+      "domainContentKeyExposed": false,
+      "recoveryAuthorityGranted": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0053 negative fixture. A stale placeholder snapshot cannot claim global current revocation state."
+}

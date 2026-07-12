@@ -34,6 +34,10 @@
     "lost-device/v0.1.7/parse-negative/stale-backup-reactivation",
     "lost-device/v0.1.7/parse-negative/identity-replacement-claim",
     "lost-device/v0.1.7/parse-negative/domain-rotation-proof-claim",
+    "revocation-record/v0.1.7/parse-positive/device-revocation-record-placeholder",
+    "revocation-record/v0.1.7/parse-negative/stale-record-current-claim",
+    "revocation-record/v0.1.7/parse-negative/registry-authority-escalation",
+    "revocation-record/v0.1.7/parse-negative/domain-key-material-in-record",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],
