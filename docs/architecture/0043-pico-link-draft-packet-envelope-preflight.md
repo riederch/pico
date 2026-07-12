@@ -133,6 +133,8 @@ If an extension needs protected meaning, it belongs inside the protected payload
 
 The draft packet envelope does not define protected-payload contents.
 
+ADR `0044-pico-link-draft-protected-payload-placeholder.md` defines the first draft-only protected-payload placeholder boundary. Packet-envelope fixtures must still treat that layer as opaque.
+
 Protected payload work still requires later decisions for:
 
 - encryption mode

@@ -502,6 +502,7 @@ The project concept is persisted as architecture notes:
 | `0041-foundation-access-modes-and-direct-port-gate.md` | explicit Foundation access modes and direct-port gate |
 | `0042-pico-link-draft-schema-and-fixture-gate.md` | draft-only Pico Link schema and fixture staging gate |
 | `0043-pico-link-draft-packet-envelope-preflight.md` | draft-only Pico Link packet-envelope preflight shape |
+| `0044-pico-link-draft-protected-payload-placeholder.md` | draft-only Pico Link protected-payload placeholder boundary |
 
 Protocol documents:
 
@@ -585,6 +586,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
 - Use ADR 0042 to keep any draft Pico Link fixture data separate from Foundation fixtures and clearly below runtime, crypto or compatibility claims
 - Use ADR 0043 as the only current packet-envelope draft shape if future Pico Link draft fixtures are added
+- Use ADR 0044 as the only current protected-payload placeholder boundary if future Pico Link draft fixtures are added
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

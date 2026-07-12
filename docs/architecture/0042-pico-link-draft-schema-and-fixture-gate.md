@@ -139,6 +139,8 @@ They must not include:
 
 Any `algorithmSuite`, `signature`, `keyEnvelope` or `ciphertext` field in draft fixtures must be labelled placeholder or absent until later ADRs select reviewed primitives and verification semantics.
 
+ADR `0044-pico-link-draft-protected-payload-placeholder.md` defines the first constrained draft-only protected-payload placeholder shape. It is not cryptography and must not be treated as encryption, signing, key wrapping or verified authority.
+
 ## Version and extension discipline
 
 Draft schemas should still practice extension discipline:

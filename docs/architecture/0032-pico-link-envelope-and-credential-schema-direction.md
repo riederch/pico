@@ -165,6 +165,8 @@ Required semantics:
 - `keyEnvelopeRefs` identify how authorised readers obtain content keys.
 - verifiers must not trust `sender` until signatures and key binding are defined.
 
+ADR `0044-pico-link-draft-protected-payload-placeholder.md` narrows the draft-only placeholder boundary for this family until real encryption, key wrapping, canonicalization and verification semantics exist.
+
 ## Signed event segment
 
 A signed event segment binds event or message records to an author, scope and ordering context.
