@@ -1,0 +1,48 @@
+{
+  "schema": "pico.identity.device-credential.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "credentialId": "devcred_placeholder_vault_device",
+  "issuer": {
+    "picoIdHint": "pico_placeholder_owner",
+    "identityKeyRef": "picoidkey_placeholder_owner",
+    "issuerDeviceIdHint": "device_placeholder_owner_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "subject": {
+    "deviceKind": "pico-vault",
+    "deviceIdHint": "device_placeholder_laptop_vault",
+    "deviceKeyRef": "devicekey_placeholder_laptop_vault",
+    "labelHint": "Synthetic laptop vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "audience": {
+    "picoIdHint": "pico_placeholder_owner",
+    "protocol": "pico-link"
+  },
+  "delegation": {
+    "scopes": [
+      "packet.sign",
+      "packet.receive",
+      "history.sign",
+      "manifest.sign",
+      "sync.exchange"
+    ],
+    "status": "pending_activation"
+  },
+  "constraints": {
+    "homeRefs": [],
+    "domainRefs": [],
+    "streamRefs": []
+  },
+  "validity": {
+    "notBefore": "2026-07-12T12:00:00.000Z",
+    "expiresAt": "2026-07-13T12:00:00.000Z"
+  },
+  "revocation": {
+    "status": "not_revoked",
+    "revocationRef": null
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

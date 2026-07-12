@@ -325,6 +325,9 @@ describe('Pico protocol types', () => {
       'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
       'home-membership/v0.1.7/parse-positive/invited-member-placeholder',
       'home-membership/v0.1.7/parse-negative/move-in-code-as-credential',
+      'device-credential/v0.1.7/parse-positive/vault-device-placeholder',
+      'device-credential/v0.1.7/parse-negative/bearer-token-as-device-credential',
+      'device-credential/v0.1.7/parse-negative/domain-key-access-claim',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
@@ -928,6 +931,52 @@ function expectDraftFixtureBoundary(
     } else {
       expect(input.moveInCode).toBeUndefined();
       expect(booleanField(authority, 'moveInCodeUsed')).toBe(false);
+    }
+  } else if (draftSurface === 'device-credential') {
+    expect(stringField(input, 'schema')).toBe('pico.identity.device-credential.draft');
+    expect(stringField(input, 'credentialId')).toContain(fixtureCase === 'bearer-token-as-device-credential' ? 'bearer_token_' : 'devcred_placeholder_');
+    const issuer = recordField(input, 'issuer');
+    expect(stringField(issuer, 'proofStatus')).toBe('unverified-placeholder');
+    expect(stringField(issuer, 'picoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(issuer, 'identityKeyRef')).toContain('picoidkey_placeholder_');
+    const subject = recordField(input, 'subject');
+    expect(['pico-vault', 'trusted-device', 'pico-surface', 'browser-session', 'service-placeholder']).toContain(stringField(subject, 'deviceKind'));
+    expect(stringField(subject, 'proofStatus')).toBe('unverified-placeholder');
+    expect(stringField(subject, 'deviceIdHint')).toContain('device_placeholder_');
+    expect(stringField(subject, 'deviceKeyRef')).toContain('devicekey_placeholder_');
+    const audience = recordField(input, 'audience');
+    expect(stringField(audience, 'protocol')).toBe('pico-link');
+    const delegation = recordField(input, 'delegation');
+    expect(['pending_activation', 'active', 'retired', 'revoked', 'expired', 'lost', 'compromised', 'superseded']).toContain(stringField(delegation, 'status'));
+    const scopes = stringArrayField(delegation, 'scopes');
+    const authority = recordField(expectBlock, 'authority');
+    expect(booleanField(authority, 'credentialVerified')).toBe(false);
+    expect(booleanField(authority, 'identityRootControl')).toBe(false);
+    expect(booleanField(authority, 'homeMembershipGranted')).toBe(false);
+    expect(booleanField(authority, 'actionAuthorityGranted')).toBe(false);
+    expect(booleanField(authority, 'recoveryAuthorityGranted')).toBe(false);
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+
+    if (fixtureCase === 'domain-key-access-claim') {
+      expect(scopes).toContain('domain.key.read');
+      expect(recordField(input, 'domainAccessClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['domain_access_claim']);
+      expect(booleanField(authority, 'domainAccessGranted')).toBe(true);
+    } else {
+      for (const scope of scopes) {
+        expect(['packet.sign', 'packet.receive', 'history.sign', 'manifest.sign', 'sync.exchange', 'key_envelope.receive', 'surface.session']).toContain(scope);
+      }
+      expect(input.domainAccessClaim).toBeUndefined();
+      expect(booleanField(authority, 'domainAccessGranted')).toBe(false);
+    }
+
+    if (fixtureCase === 'bearer-token-as-device-credential') {
+      expect(stringField(input, 'bearerToken')).toContain('token_placeholder');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['bearer_token_boundary']);
+      expect(booleanField(authority, 'bearerTokenUsed')).toBe(true);
+    } else {
+      expect(input.bearerToken).toBeUndefined();
+      expect(booleanField(authority, 'bearerTokenUsed')).toBe(false);
     }
   } else if (draftSurface === 'canonicalization') {
     expect(stringField(input, 'schema')).toBe('pico.canonicalization.case.draft');

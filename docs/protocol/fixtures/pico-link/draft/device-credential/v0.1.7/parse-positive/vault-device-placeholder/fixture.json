@@ -1,0 +1,42 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.device-credential.v0_1_7.parse-positive.vault-device-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "device-credential",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft Device Credential accepts scoped Pico Vault device placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "authority": {
+      "credentialVerified": false,
+      "identityRootControl": false,
+      "homeMembershipGranted": false,
+      "domainAccessGranted": false,
+      "actionAuthorityGranted": false,
+      "recoveryAuthorityGranted": false,
+      "bearerTokenUsed": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0051 positive fixture. It proves only scoped Device Credential placeholder shape acceptance and does not verify device delegation."
+}

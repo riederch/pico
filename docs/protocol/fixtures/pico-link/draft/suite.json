@@ -27,6 +27,9 @@
     "protected-payload/v0.1.7/parse-positive/opaque-placeholder",
     "home-membership/v0.1.7/parse-positive/invited-member-placeholder",
     "home-membership/v0.1.7/parse-negative/move-in-code-as-credential",
+    "device-credential/v0.1.7/parse-positive/vault-device-placeholder",
+    "device-credential/v0.1.7/parse-negative/bearer-token-as-device-credential",
+    "device-credential/v0.1.7/parse-negative/domain-key-access-claim",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],

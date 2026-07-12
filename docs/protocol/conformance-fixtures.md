@@ -42,8 +42,9 @@ This document follows:
 - `../architecture/0048-model-capability-delegation-and-remote-inference-boundary.md`
 - `../architecture/0049-model-provider-registry-and-job-envelope.md`
 - `../architecture/0050-model-delegation-draft-fixture-gate.md`
+- `../architecture/0051-pico-link-draft-device-credential-placeholder.md`
 
-ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. This document turns those boundaries into a planned repository layout.
+ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. This document turns those boundaries into a planned repository layout.
 
 ## Current boundary
 
@@ -110,6 +111,7 @@ docs/protocol/fixtures/
     draft/
       packet-envelope/
       protected-payload/
+      device-credential/
       privacy-negative/
   pico-home-link/
     draft/
@@ -314,7 +316,7 @@ Foundation fixtures must state that they are experimental and do not imply L2 Pi
 
 ## Pico Link and Pico Home Link fixture scope
 
-Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape. ADR 0046 narrows the first allowed compatibility-claim placeholder shape. ADR 0047 narrows the first allowed canonicalization rejection placeholder shape.
+Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape. ADR 0046 narrows the first allowed compatibility-claim placeholder shape. ADR 0047 narrows the first allowed canonicalization rejection placeholder shape. ADR 0051 narrows the first allowed Device Credential placeholder shape.
 
 The current draft Pico Link suite lives separately from the Foundation seed:
 
@@ -322,13 +324,16 @@ The current draft Pico Link suite lives separately from the Foundation seed:
 docs/protocol/fixtures/pico-link/draft/suite.json
 ```
 
-It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture, one positive and one negative Home Membership Credential placeholder fixture, one negative canonicalization placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
+It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture, one positive and one negative Home Membership Credential placeholder fixture, one positive and two negative Device Credential placeholder fixtures, one negative canonicalization placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
 
 Future Pico Link fixtures may cover:
 
 - packet envelope routing metadata
 - relay-visible metadata boundaries
 - opaque protected payload handling
+- draft Device Credential placeholder scope
+- bearer-token-as-device-credential rejection
+- device-credential domain-access claim rejection
 - duplicate packet handling
 - downgrade and extension behaviour
 - privacy-negative plaintext checks
@@ -436,7 +441,7 @@ It includes:
 - eleven negative Foundation event append fixtures for a reserved event type, invalid payload values and unexpected fields
 - six positive current Foundation WebSocket message fixtures
 - five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
-- seven draft Pico Link fixtures in a separate draft suite
+- ten draft Pico Link fixtures in a separate draft suite
 - five draft Model Delegation fixtures in a separate draft suite
 - protocol tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics and draft-suite non-claim boundaries
 

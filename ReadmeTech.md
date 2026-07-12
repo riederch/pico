@@ -509,6 +509,7 @@ The project concept is persisted as architecture notes:
 | `0048-model-capability-delegation-and-remote-inference-boundary.md` | delegated model capability and remote inference authority boundary |
 | `0049-model-provider-registry-and-job-envelope.md` | model provider registry and scoped job-envelope direction |
 | `0050-model-delegation-draft-fixture-gate.md` | draft-only model delegation fixture staging gate |
+| `0051-pico-link-draft-device-credential-placeholder.md` | draft-only Pico Link device credential placeholder boundary |
 
 Protocol documents:
 
@@ -566,6 +567,7 @@ The demo must not become the path for production remote access. If it starts for
 - Pico Link remains transport-neutral; Relay, LAN, VPN/direct, Meshtastic and future radio transports belong behind adapters
 - Meshtastic and future radio transports are optional low-bandwidth adapters, not Pico identity or authority layers
 - Pico identity, device, Home, transport and domain keys are separate roles
+- Pico Link Device Credentials may delegate scoped device operation, but they do not become Pico identity ownership, Home membership, domain access or bearer tokens
 - The current Foundation API remains local/trusted until auth, membership, policy and Pico Link boundaries exist
 - A Home Host Pico may manage residency on a Pico Home, not resident private data
 - Picos can communicate across Homes; relationships belong to Picos, not Homes
@@ -602,6 +604,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0048 before implementing delegated model execution or remote inference; model providers are capabilities, not memory owners, policy authorities or action executors
 - Use ADR 0049 before adding a model provider registry, job queue or remote-inference envelope; registry entries advertise capability, while job envelopes scope one policy-approved task
 - Use ADR 0050 before adding model-delegation draft fixtures; fixture data must stay separate from Foundation and Pico Link suites and must not claim runtime, provider trust, model quality or compatibility
+- Use ADR 0051 as the only current Device Credential placeholder boundary if future Pico Link identity draft fixtures are added
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

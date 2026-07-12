@@ -1,0 +1,45 @@
+{
+  "schema": "pico.identity.device-credential.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "credentialId": "bearer_token_placeholder_as_device_credential",
+  "issuer": {
+    "picoIdHint": "pico_placeholder_owner",
+    "identityKeyRef": "picoidkey_placeholder_owner",
+    "issuerDeviceIdHint": "device_placeholder_owner_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "subject": {
+    "deviceKind": "trusted-device",
+    "deviceIdHint": "device_placeholder_phone",
+    "deviceKeyRef": "devicekey_placeholder_phone",
+    "labelHint": "Synthetic phone",
+    "proofStatus": "unverified-placeholder"
+  },
+  "audience": {
+    "picoIdHint": "pico_placeholder_owner",
+    "protocol": "pico-link"
+  },
+  "delegation": {
+    "scopes": [
+      "packet.sign"
+    ],
+    "status": "pending_activation"
+  },
+  "constraints": {
+    "homeRefs": [],
+    "domainRefs": [],
+    "streamRefs": []
+  },
+  "validity": {
+    "notBefore": "2026-07-12T12:00:00.000Z",
+    "expiresAt": "2026-07-12T12:10:00.000Z"
+  },
+  "revocation": {
+    "status": "not_revoked",
+    "revocationRef": null
+  },
+  "bearerToken": "foundation_token_placeholder_for_rejection",
+  "signatureStatus": "absent",
+  "extensions": {}
+}
