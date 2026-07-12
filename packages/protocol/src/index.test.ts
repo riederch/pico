@@ -484,6 +484,7 @@ function expectCurrentFoundationEventFixture(
     expect(numberField(http, 'status')).toBe(400);
     expect(picoEventTypes).toContain(inputType);
     expect(stringArrayField(expectBlock, 'errors')).toEqual(['schema_error']);
+    const expectedError = stringField(recordField(http, 'body'), 'error');
 
     if (foundationEventTypes.includes(inputType as typeof foundationEventTypes[number])) {
       const validation = validateFoundationEventPayload(
@@ -491,8 +492,12 @@ function expectCurrentFoundationEventFixture(
         recordField(input, 'payload'),
       );
       expect(validation.ok).toBe(false);
+      if (!validation.ok) {
+        expect(expectedError).toBe(validation.error);
+      }
     } else {
       expect(foundationEventTypes).not.toContain(inputType);
+      expect(expectedError).toBe('This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.');
     }
   } else {
     throw new Error(`Unexpected fixture family: ${family}`);
