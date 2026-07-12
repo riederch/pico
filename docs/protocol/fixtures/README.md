@@ -16,10 +16,13 @@ foundation-events/v0.1.7/parse-positive/avatar-state-changed-thinking/
 foundation-events/v0.1.7/parse-negative/action-requested-reserved/
 foundation-events/v0.1.7/parse-negative/device-registered-unexpected-field/
 foundation-events/v0.1.7/parse-negative/device-seen-invalid-status/
+foundation-events/v0.1.7/parse-negative/device-seen-unexpected-field/
 foundation-events/v0.1.7/parse-negative/message-created-invalid-role/
 foundation-events/v0.1.7/parse-negative/message-created-empty-text/
 foundation-events/v0.1.7/parse-negative/message-created-unexpected-field/
 foundation-events/v0.1.7/parse-negative/avatar-state-invalid-status-color/
+foundation-events/v0.1.7/parse-negative/avatar-state-empty-message/
+foundation-events/v0.1.7/parse-negative/avatar-state-unexpected-field/
 foundation-events/v0.1.7/parse-negative/session-created-unexpected-field/
 foundation-realtime/v0.1.7/parse-positive/core-connected/
 foundation-realtime/v0.1.7/parse-positive/event-created-message/

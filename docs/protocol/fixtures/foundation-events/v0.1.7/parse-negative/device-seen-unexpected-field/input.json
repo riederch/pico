@@ -1,0 +1,8 @@
+{
+  "deviceId": "fixture-device",
+  "type": "device.seen",
+  "payload": {
+    "status": "online",
+    "location": "not allowed"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-negative.avatar-state-unexpected-field",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-negative",
+  "case": "avatar.state_changed append body rejected when payload contains an unexpected field",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "schema_error"
+    ],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 400,
+      "body": {
+        "error": "avatar.state_changed payload has unexpected field: privateNote."
+      }
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1",
+    "pico.avatar_state.v1"
+  ],
+  "notes": "Experimental Foundation fixture. Avatar state events must not hide personal memory, credentials, health, location or relationship data in extra fields."
+}

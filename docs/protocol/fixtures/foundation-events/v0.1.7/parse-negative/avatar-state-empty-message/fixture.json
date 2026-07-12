@@ -1,0 +1,34 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-negative.avatar-state-empty-message",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-negative",
+  "case": "avatar.state_changed append body rejected when optional message is empty",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "schema_error"
+    ],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 400,
+      "body": {
+        "error": "avatar.state_changed message must be a non-empty string when provided."
+      }
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1",
+    "pico.avatar_state.v1"
+  ],
+  "notes": "Experimental Foundation fixture. Avatar messages are diagnostic display hints, not memory, private notes or durable companion state."
+}
