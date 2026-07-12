@@ -1,6 +1,6 @@
 # Pico Conformance Fixture Layout
 
-This document defines the planned layout for future Pico conformance fixtures and the current experimental Foundation event and realtime fixture seed.
+This document defines the planned layout for future Pico conformance fixtures, the current experimental Foundation event and realtime fixture seed, and the current draft-only protocol fixture seeds.
 
 It is a planning document for the foundation phase. It does not publish an executable conformance suite, certify compatibility, define final cryptographic vectors or make current Foundation APIs production-ready.
 
@@ -49,7 +49,9 @@ ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines
 
 The current repository contains a small experimental Foundation event and realtime fixture seed under `docs/protocol/fixtures/`.
 
-The current repository does not contain a Pico Link or Pico Home Link conformance runner.
+It also contains separate draft-only Pico Link and Model Delegation fixture seeds. Those draft suites are fixture data only and are not runtime validation, security evidence or compatibility certification.
+
+The current repository does not contain a Pico Link, Pico Home Link or Model Delegation conformance runner.
 
 The current repository does not contain:
 
@@ -57,9 +59,9 @@ The current repository does not contain:
 - cryptographic test keys
 - canonical byte fixtures
 - lifecycle-aware verification fixtures
-- Pico Link packet fixtures
-- Pico Home Link membership fixtures
-- model-delegation fixtures
+- published Pico Link conformance packet fixtures
+- published Pico Home Link conformance membership fixtures
+- production model-delegation conformance fixtures
 - L4 compatibility certification
 
 Current Foundation HTTP and WebSocket behaviour remains experimental foundation plumbing. The seed fixtures do not change that.
@@ -127,7 +129,7 @@ docs/protocol/fixtures/
       privacy-negative/
 ```
 
-This layout is implemented only for the current Foundation event and realtime seed. Other directories remain conceptual until fixture files are added.
+This layout is implemented for the current Foundation event and realtime seed, the current draft Pico Link seed and the current draft Model Delegation seed. Other directories remain conceptual until fixture files are added.
 
 ## Fixture stages
 
@@ -344,6 +346,33 @@ Future Pico Home Link fixtures may cover:
 
 No current implementation may claim these surfaces as conformance-tested.
 
+## Model Delegation fixture scope
+
+Model Delegation fixtures remain draft-only until model provider registry, job envelope, policy, consent, privacy-domain and audit semantics exist. ADR 0050 allows draft-only, non-normative machine-readable fixtures for provider registry entries, job envelopes, context references and result envelopes, but those fixtures must remain separate from the Foundation seed and Pico Link draft suite. They must not imply runtime execution, model quality, provider authentication, provider trust, privacy enforcement, retention enforcement, tool execution or compatibility.
+
+The current draft Model Delegation suite lives separately from the Foundation and Pico Link seeds:
+
+```text
+docs/protocol/fixtures/model-delegation/draft/suite.json
+```
+
+It currently contains one positive provider-registry placeholder fixture, one negative provider-registry authority fixture, one negative job-envelope privacy fixture, one negative context-reference privacy fixture and one negative result-envelope authority fixture. These are fixture data only, not a runner, not a model runtime, not provider trust proof and not a compatibility basis.
+
+Future Model Delegation fixtures may cover:
+
+- provider registry entry shape
+- provider trust-state rejection boundaries
+- supported job type and input class checks
+- retention-mode checks
+- tool-use-mode checks
+- model job envelope shape
+- context reference scoping
+- forbidden input class rejection
+- consent and policy reference presence
+- result envelope shape
+- provenance mismatch rejection
+- action-execution claim rejection
+
 ## Canonicalization and signature fixture scope
 
 Canonicalization fixtures must wait for a selected canonicalization spec.
@@ -397,7 +426,7 @@ Changing expected semantics for an existing fixture should create a new fixture 
 
 ## Current implementation status
 
-The current repository has this planning document and a small Foundation event and realtime fixture seed.
+The current repository has this planning document, a small Foundation event and realtime fixture seed, a small draft Pico Link seed and a small draft Model Delegation seed.
 
 It includes:
 
@@ -407,7 +436,9 @@ It includes:
 - eleven negative Foundation event append fixtures for a reserved event type, invalid payload values and unexpected fields
 - six positive current Foundation WebSocket message fixtures
 - five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
-- protocol tests that validate seed fixture metadata, source files, capability names and current Foundation event/realtime semantics
+- seven draft Pico Link fixtures in a separate draft suite
+- five draft Model Delegation fixtures in a separate draft suite
+- protocol tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics and draft-suite non-claim boundaries
 
 It does not include:
 
@@ -436,11 +467,11 @@ This document does not implement or define:
 
 Before expanding machine-readable fixtures:
 
-1. Keep the first fixture scope limited to current Foundation event and realtime compatibility.
+1. Keep each fixture strand in its own suite.
 2. Add only tiny positive and negative fixture sets.
-3. Add or update tests that validate fixture metadata shape.
+3. Add or update tests that validate fixture metadata shape and non-claim boundaries.
 4. Decide when a runner is worth the maintenance cost.
-5. Keep all claims experimental until a runner and conformance policy exist.
+5. Keep all claims experimental or draft-only until a runner and conformance policy exist.
 
 ## Design rule
 

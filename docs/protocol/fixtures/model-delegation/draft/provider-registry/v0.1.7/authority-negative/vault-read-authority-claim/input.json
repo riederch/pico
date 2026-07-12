@@ -1,0 +1,63 @@
+{
+  "schema": "pico.model.provider.registry.entry.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "providerId": "model_provider_unsafe_vault_reader_placeholder",
+  "providerDisplayName": "Synthetic Unsafe Vault Reader",
+  "providerNodeKind": "pico-vault",
+  "providerOwnerSubject": "subject_placeholder_peer",
+  "homeId": "home_placeholder_peer",
+  "deviceId": "device_placeholder_peer_vault",
+  "relationshipId": "relationship_placeholder_peer",
+  "executionLocation": "peer-home",
+  "locality": "peer-home",
+  "transportRequirements": [
+    "pico-link"
+  ],
+  "model": {
+    "family": "placeholder-local",
+    "nameOrClass": "synthetic-peer-model",
+    "runtime": "development-stub",
+    "capabilityVersion": "draft-0"
+  },
+  "supportedJobTypes": [
+    "model.summarize",
+    "model.plan"
+  ],
+  "supportedInputClasses": [
+    "private_memory_excerpt"
+  ],
+  "supportedOutputSchemas": [
+    "plain_text",
+    "action_proposal"
+  ],
+  "limits": {
+    "maxContextBytes": 4096,
+    "maxContextItems": 8
+  },
+  "retentionModes": [
+    "provider_default"
+  ],
+  "auditModes": [
+    "provider_default"
+  ],
+  "toolUseModes": [
+    "none"
+  ],
+  "trustState": "discovered",
+  "availabilityState": "available",
+  "latencyClass": "remote",
+  "costClass": "unknown",
+  "revocationState": "active",
+  "claims": {
+    "trustGrantByDiscovery": true,
+    "vaultReadAccess": true,
+    "privacyGrantEnforcement": false,
+    "runtimeExecution": false
+  },
+  "authorityClaims": [
+    "vault.read",
+    "private-domain.read"
+  ],
+  "extensions": {}
+}

@@ -243,6 +243,7 @@ describe('Pico protocol types', () => {
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures')
       .filter((fixturePath) => !fixturePath.startsWith('pico-link/draft/'))
+      .filter((fixturePath) => !fixturePath.startsWith('model-delegation/draft/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
@@ -370,6 +371,98 @@ describe('Pico protocol types', () => {
       }
 
       expectDraftFixtureBoundary(draftSurface, fixtureCase, input, expectBlock);
+    }
+  });
+
+  it('keeps draft Model Delegation fixtures staged below runtime, trust and model-quality claims', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const foundationSuite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
+    const picoLinkSuite = readRepoJsonObject('docs/protocol/fixtures/pico-link/draft/suite.json');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/model-delegation/draft/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+
+    expect(stringArrayField(foundationSuite, 'fixtures').some((fixturePath) => fixturePath.startsWith('model-delegation/draft/'))).toBe(false);
+    expect(stringArrayField(picoLinkSuite, 'fixtures').some((fixturePath) => fixturePath.startsWith('model-delegation/'))).toBe(false);
+    expect(stringField(suite, 'schema')).toBe('pico.model-delegation.draft.fixture.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.model-delegation.draft.v0_1_7');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'protocolVersion')).toBe(currentVersion);
+    expect(stringArrayField(suite, 'surfaces')).toEqual([
+      'model-provider-registry',
+      'model-job-envelope',
+      'model-context-ref',
+      'model-result-envelope',
+    ]);
+    expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'authority-negative', 'privacy-negative']);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('draft-only');
+    expect(stringField(suite, 'disclaimer')).toContain('No runtime execution');
+    expect(stringField(suite, 'disclaimer')).toContain('no model-quality guarantee');
+    expect(stringField(suite, 'disclaimer')).toContain('no provider trust proof');
+    expect(stringField(suite, 'disclaimer')).toContain('no privacy enforcement');
+    expect(stringField(suite, 'disclaimer')).toContain('no L4 compatibility basis');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+    expect(stringField(suite, 'notes')).toContain('not a runner');
+    expect(stringField(suite, 'notes')).toContain('not a provider registry');
+    expect(stringField(suite, 'notes')).toContain('not model-quality evidence');
+    expect(fixturePaths).toEqual([
+      'provider-registry/v0.1.7/parse-positive/local-summarizer-placeholder',
+      'provider-registry/v0.1.7/authority-negative/vault-read-authority-claim',
+      'job-envelope/v0.1.7/privacy-negative/forbidden-input-class',
+      'context-ref/v0.1.7/privacy-negative/provider-expandable-context',
+      'result-envelope/v0.1.7/authority-negative/action-execution-claim',
+    ]);
+    expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures/model-delegation/draft').sort());
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current draft Model Delegation fixtures')).toEqual([
+      'model-delegation/draft/suite.json',
+      ...fixturePaths.map((fixturePath) => `model-delegation/draft/${fixturePath}/`),
+    ]);
+
+    for (const fixturePath of fixturePaths) {
+      const [draftSurface, fixtureVersion, fixtureFamily, fixtureCase] = fixturePathParts(fixturePath);
+      const fixture = readRepoJsonObject(`docs/protocol/fixtures/model-delegation/draft/${fixturePath}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const expectBlock = recordField(fixture, 'expect');
+      const runnerBlock = recordField(fixture, 'runner');
+      const claims = recordField(fixture, 'claims');
+      const input = readRepoJsonObject(`docs/protocol/fixtures/model-delegation/draft/${fixturePath}/${stringField(source, 'file')}`);
+
+      expect(stringField(fixture, 'schema')).toBe('pico.model-delegation.fixture.draft');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(`model-delegation.${draftSurface}.${fixtureVersion.replaceAll('.', '_')}.${fixtureFamily}.${fixtureCase}`);
+      expect(stringField(fixture, 'fixtureStage')).toBe('draft');
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'surface')).toBe(modelDelegationSurfaceForPath(draftSurface));
+      expect(stringArrayField(suite, 'surfaces')).toContain(stringField(fixture, 'surface'));
+      expect(fixtureVersion).toBe(`v${currentVersion}`);
+      expect(stringField(fixture, 'protocolVersion')).toBe(currentVersion);
+      expect(stringField(fixture, 'compatibilityLevel')).toBe('draft-only');
+      expect(stringField(fixture, 'family')).toBe(fixtureFamily);
+      expect(stringArrayField(suite, 'families')).toContain(fixtureFamily);
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toContain('Draft-only');
+      expect(stringField(source, 'encoding')).toBe('json');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(booleanField(runnerBlock, 'required')).toBe(false);
+      expect(stringField(runnerBlock, 'status')).toBe('none');
+      expectModelDelegationClaimsRemainNonAuthoritative(claims);
+      expectRequiredModelDelegationDisclaimers(fixture);
+
+      if (fixtureFamily === 'parse-positive') {
+        expect(stringField(expectBlock, 'status')).toBe('accept');
+        expect(stringArrayField(expectBlock, 'errors')).toEqual([]);
+      } else if (fixtureFamily.endsWith('-negative')) {
+        expect(stringField(expectBlock, 'status')).toBe('reject');
+        expect(stringArrayField(expectBlock, 'errors').length).toBeGreaterThan(0);
+      } else {
+        throw new Error(`Unexpected model-delegation draft fixture family: ${fixtureFamily}`);
+      }
+
+      expectModelDelegationDraftFixtureBoundary(draftSurface, fixtureCase, input, expectBlock);
     }
   });
 
@@ -705,6 +798,30 @@ function expectDraftClaimsRemainFalse(claims: Record<string, unknown>): void {
   expect(booleanField(claims, 'commercialPermission')).toBe(false);
 }
 
+function expectModelDelegationClaimsRemainNonAuthoritative(claims: Record<string, unknown>): void {
+  expect(booleanField(claims, 'runtimeExecution')).toBe(false);
+  expect(booleanField(claims, 'modelQuality')).toBe(false);
+  expect(booleanField(claims, 'providerAuthentication')).toBe(false);
+  expect(booleanField(claims, 'privacyGrantEnforcement')).toBe(false);
+  expect(booleanField(claims, 'retentionEnforcement')).toBe(false);
+  expect(booleanField(claims, 'toolExecution')).toBe(false);
+  expect(booleanField(claims, 'productionSecurity')).toBe(false);
+  expect(booleanField(claims, 'l4Compatibility')).toBe(false);
+  expect(booleanField(claims, 'commercialPermission')).toBe(false);
+  expect(stringField(claims, 'compatibility')).toBe('draft-only');
+}
+
+function expectRequiredModelDelegationDisclaimers(fixture: Record<string, unknown>): void {
+  expect(stringArrayField(fixture, 'disclaimers')).toEqual([
+    'draft-only',
+    'not production security',
+    'not model quality',
+    'not runtime execution',
+    'not L4 conformance',
+    'not commercial permission',
+  ]);
+}
+
 function expectDraftFixtureBoundary(
   draftSurface: string,
   fixtureCase: string,
@@ -832,6 +949,150 @@ function expectDraftFixtureBoundary(
   } else {
     throw new Error(`Unexpected draft surface: ${draftSurface}`);
   }
+}
+
+function expectModelDelegationDraftFixtureBoundary(
+  draftSurface: string,
+  fixtureCase: string,
+  input: Record<string, unknown>,
+  expectBlock: Record<string, unknown>,
+): void {
+  expect(stringField(input, 'fixtureStage')).toBe('draft');
+
+  if (draftSurface === 'provider-registry') {
+    expect(stringField(input, 'schema')).toBe('pico.model.provider.registry.entry.draft');
+    expect([
+      'same-device',
+      'pico-home',
+      'pico-vault',
+      'pico-surface',
+      'peer-pico',
+      'cloud-connector',
+      'development-stub',
+    ]).toContain(stringField(input, 'providerNodeKind'));
+    expect([
+      'same-process',
+      'same-device',
+      'same-home',
+      'local-network',
+      'peer-home',
+      'cloud-mediated',
+      'unknown',
+    ]).toContain(stringField(input, 'locality'));
+    expect([
+      'discovered',
+      'configured',
+      'trusted-for-non-sensitive',
+      'trusted-for-scoped-private',
+      'trusted-for-shared-space',
+      'disabled',
+      'revoked',
+      'quarantined',
+    ]).toContain(stringField(input, 'trustState'));
+    for (const jobType of stringArrayField(input, 'supportedJobTypes')) {
+      expect(['model.summarize', 'model.extract', 'model.draft', 'model.compare', 'model.reason', 'model.plan']).toContain(jobType);
+    }
+    for (const toolUseMode of stringArrayField(input, 'toolUseModes')) {
+      expect(['none', 'propose_only', 'separate_policy_required', 'not_supported']).toContain(toolUseMode);
+    }
+    const claims = recordField(input, 'claims');
+
+    if (fixtureCase === 'vault-read-authority-claim') {
+      expect(booleanField(claims, 'trustGrantByDiscovery')).toBe(true);
+      expect(booleanField(claims, 'vaultReadAccess')).toBe(true);
+      expect(stringArrayField(input, 'authorityClaims')).toContain('vault.read');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['provider_vault_read_claim']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'trustGrant')).toBe(true);
+      expect(booleanField(authority, 'vaultReadAccess')).toBe(true);
+    } else {
+      expect(booleanField(claims, 'trustGrantByDiscovery')).toBe(false);
+      expect(booleanField(claims, 'vaultReadAccess')).toBe(false);
+      expect(stringField(input, 'trustState')).toBe('trusted-for-non-sensitive');
+      for (const inputClass of stringArrayField(input, 'supportedInputClasses')) {
+        expect(forbiddenModelDelegationInputClasses()).not.toContain(inputClass);
+      }
+    }
+  } else if (draftSurface === 'job-envelope') {
+    expect(stringField(input, 'schema')).toBe('pico.model.job.envelope.draft');
+    expect(['model.summarize', 'model.extract', 'model.draft', 'model.compare', 'model.reason', 'model.plan']).toContain(stringField(input, 'jobType'));
+    expect(stringField(input, 'toolUseMode')).toBe('none');
+    expect(['no_store', 'ephemeral_until_response', 'audit_metadata_only', 'bounded_result_retention'])
+      .toContain(stringField(input, 'retentionRequirement'));
+    const inputClasses = stringArrayField(input, 'inputClasses');
+
+    if (fixtureCase === 'forbidden-input-class') {
+      expect(inputClasses).toContain('domain_content_key');
+      expect(stringField(recordField(input, 'inlineContext'), 'syntheticSecretMarker')).toContain('domain_content_key_placeholder');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['forbidden_input_class']);
+      const privacy = recordField(expectBlock, 'privacy');
+      expect(stringArrayField(privacy, 'forbiddenInputClasses')).toEqual(['domain_content_key']);
+      expect(booleanField(privacy, 'secretMaterial')).toBe(true);
+    }
+  } else if (draftSurface === 'context-ref') {
+    expect(stringField(input, 'schema')).toBe('pico.model.context.ref.draft');
+    expect(stringField(input, 'contextRefId')).toContain('context_ref_');
+    expect(stringField(input, 'inputClass')).toBe('private_memory_excerpt');
+    expect(booleanField(input, 'redactionApplied')).toBe(true);
+    expect(booleanField(input, 'allowedForProvider')).toBe(true);
+
+    if (fixtureCase === 'provider-expandable-context') {
+      expect(booleanField(input, 'providerExpansionAllowed')).toBe(true);
+      expect(stringField(input, 'expansionScope')).toBe('vault:*');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['context_ref_expansion']);
+      const privacy = recordField(expectBlock, 'privacy');
+      expect(booleanField(privacy, 'providerExpansionAllowed')).toBe(true);
+      expect(booleanField(privacy, 'contextRefScoped')).toBe(false);
+    }
+  } else if (draftSurface === 'result-envelope') {
+    expect(stringField(input, 'schema')).toBe('pico.model.result.envelope.draft');
+    expect(stringField(input, 'status')).toBe('completed');
+    expect(stringField(input, 'resultSchemaRef')).toBe('action_proposal');
+    const result = recordField(input, 'result');
+
+    if (fixtureCase === 'action-execution-claim') {
+      expect(booleanField(result, 'actionExecuted')).toBe(true);
+      expect(booleanField(result, 'toolExecuted')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['action_execution_claim']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'actionExecuted')).toBe(true);
+      expect(booleanField(authority, 'toolExecuted')).toBe(true);
+      expect(booleanField(authority, 'resultIsActionApproval')).toBe(false);
+    }
+  } else {
+    throw new Error(`Unexpected model-delegation draft surface: ${draftSurface}`);
+  }
+}
+
+function modelDelegationSurfaceForPath(pathSurface: string): string {
+  if (pathSurface === 'provider-registry') {
+    return 'model-provider-registry';
+  }
+
+  if (pathSurface === 'job-envelope') {
+    return 'model-job-envelope';
+  }
+
+  if (pathSurface === 'context-ref') {
+    return 'model-context-ref';
+  }
+
+  if (pathSurface === 'result-envelope') {
+    return 'model-result-envelope';
+  }
+
+  throw new Error(`Unexpected model-delegation fixture path surface: ${pathSurface}`);
+}
+
+function forbiddenModelDelegationInputClasses(): string[] {
+  return [
+    'credential_material',
+    'key_material',
+    'recovery_material',
+    'domain_content_key',
+    'payment_secret',
+    'raw_vault_dump',
+  ];
 }
 
 function collectFixtureDirectories(directoryPath: string, relativePath: string, fixtureDirectories: string[]): void {

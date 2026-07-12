@@ -1,0 +1,33 @@
+{
+  "schema": "pico.model.result.envelope.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "jobId": "model_job_action_execution_claim_placeholder",
+  "providerId": "model_provider_local_summarizer_placeholder",
+  "providerNodeKind": "same-device",
+  "modelFamily": "placeholder-local",
+  "modelNameOrClass": "synthetic-planner",
+  "capabilityVersion": "draft-0",
+  "startedAt": "2026-07-12T12:00:00.000Z",
+  "completedAt": "2026-07-12T12:00:03.000Z",
+  "status": "completed",
+  "resultSchemaRef": "action_proposal",
+  "result": {
+    "proposal": "Synthetic proposal: turn on example light.",
+    "actionExecuted": true,
+    "toolExecuted": true,
+    "actionResultId": "action_result_placeholder_for_rejection"
+  },
+  "limitations": [
+    "Synthetic fixture result; not a real model output."
+  ],
+  "evidenceRefs": [],
+  "inputSummary": "Synthetic prompt only.",
+  "inputClassSummary": [
+    "user_supplied_prompt"
+  ],
+  "retentionApplied": "audit_metadata_only",
+  "providerAuditRef": "provider_audit_placeholder",
+  "errors": [],
+  "extensions": {}
+}

@@ -1,0 +1,66 @@
+{
+  "schema": "pico.model.provider.registry.entry.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "providerId": "model_provider_local_summarizer_placeholder",
+  "providerDisplayName": "Synthetic Local Summarizer",
+  "providerNodeKind": "same-device",
+  "providerOwnerSubject": "subject_placeholder_owner",
+  "homeId": null,
+  "deviceId": "device_placeholder_local",
+  "relationshipId": null,
+  "executionLocation": "local",
+  "locality": "same-device",
+  "transportRequirements": [],
+  "model": {
+    "family": "placeholder-local",
+    "nameOrClass": "synthetic-summarizer",
+    "runtime": "development-stub",
+    "capabilityVersion": "draft-0"
+  },
+  "supportedJobTypes": [
+    "model.summarize",
+    "model.extract",
+    "model.draft"
+  ],
+  "supportedInputClasses": [
+    "public_reference",
+    "user_supplied_prompt",
+    "conversation_summary",
+    "foundation_diagnostic"
+  ],
+  "supportedOutputSchemas": [
+    "plain_text",
+    "summary_markdown",
+    "extracted_fields",
+    "draft_message"
+  ],
+  "limits": {
+    "maxContextBytes": 2048,
+    "maxContextItems": 4
+  },
+  "retentionModes": [
+    "no_store",
+    "ephemeral_until_response",
+    "audit_metadata_only"
+  ],
+  "auditModes": [
+    "audit_metadata_only"
+  ],
+  "toolUseModes": [
+    "none",
+    "propose_only"
+  ],
+  "trustState": "trusted-for-non-sensitive",
+  "availabilityState": "available",
+  "latencyClass": "local",
+  "costClass": "none",
+  "revocationState": "active",
+  "claims": {
+    "trustGrantByDiscovery": false,
+    "vaultReadAccess": false,
+    "privacyGrantEnforcement": false,
+    "runtimeExecution": false
+  },
+  "extensions": {}
+}

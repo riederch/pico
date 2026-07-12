@@ -1,0 +1,50 @@
+{
+  "schema": "pico.model-delegation.fixture.draft",
+  "schemaVersion": 1,
+  "fixtureId": "model-delegation.provider-registry.v0_1_7.parse-positive.local-summarizer-placeholder",
+  "fixtureStage": "draft",
+  "stage": "fixture_data",
+  "surface": "model-provider-registry",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft model provider registry entry accepts a local non-sensitive summarizer placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "status": "accept",
+    "errors": [],
+    "authority": {
+      "trustGrant": false,
+      "vaultReadAccess": false,
+      "toolExecution": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "runtimeExecution": false,
+    "modelQuality": false,
+    "providerAuthentication": false,
+    "privacyGrantEnforcement": false,
+    "retentionEnforcement": false,
+    "toolExecution": false,
+    "productionSecurity": false,
+    "l4Compatibility": false,
+    "commercialPermission": false,
+    "compatibility": "draft-only"
+  },
+  "disclaimers": [
+    "draft-only",
+    "not production security",
+    "not model quality",
+    "not runtime execution",
+    "not L4 conformance",
+    "not commercial permission"
+  ],
+  "notes": "Draft-only ADR 0050 positive fixture. It proves only placeholder shape acceptance for a non-sensitive local provider entry."
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "pico.model-delegation.draft.fixture.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.model-delegation.draft.v0_1_7",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "protocolVersion": "0.1.7",
+  "surfaces": [
+    "model-provider-registry",
+    "model-job-envelope",
+    "model-context-ref",
+    "model-result-envelope"
+  ],
+  "families": [
+    "parse-positive",
+    "authority-negative",
+    "privacy-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "draft-only",
+  "disclaimer": "Draft-only model-delegation fixture data. No runtime execution, no model-quality guarantee, no provider trust proof, no privacy enforcement, no L4 compatibility basis and no commercial permission.",
+  "fixtures": [
+    "provider-registry/v0.1.7/parse-positive/local-summarizer-placeholder",
+    "provider-registry/v0.1.7/authority-negative/vault-read-authority-claim",
+    "job-envelope/v0.1.7/privacy-negative/forbidden-input-class",
+    "context-ref/v0.1.7/privacy-negative/provider-expandable-context",
+    "result-envelope/v0.1.7/authority-negative/action-execution-claim"
+  ],
+  "notes": "Draft model-delegation fixture data only. This is not a runner, not a provider registry, not a model runtime, not provider authentication, not privacy-domain enforcement, not model-quality evidence and not a compatibility basis."
+}

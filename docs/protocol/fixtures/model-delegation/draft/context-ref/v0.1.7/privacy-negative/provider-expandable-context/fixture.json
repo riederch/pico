@@ -1,0 +1,52 @@
+{
+  "schema": "pico.model-delegation.fixture.draft",
+  "schemaVersion": 1,
+  "fixtureId": "model-delegation.context-ref.v0_1_7.privacy-negative.provider-expandable-context",
+  "fixtureStage": "draft",
+  "stage": "fixture_data",
+  "surface": "model-context-ref",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "privacy-negative",
+  "case": "draft model context reference rejects provider-expandable scope",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "status": "reject",
+    "errors": [
+      "context_ref_expansion"
+    ],
+    "privacy": {
+      "providerExpansionAllowed": true,
+      "contextRefScoped": false,
+      "expires": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "runtimeExecution": false,
+    "modelQuality": false,
+    "providerAuthentication": false,
+    "privacyGrantEnforcement": false,
+    "retentionEnforcement": false,
+    "toolExecution": false,
+    "productionSecurity": false,
+    "l4Compatibility": false,
+    "commercialPermission": false,
+    "compatibility": "draft-only"
+  },
+  "disclaimers": [
+    "draft-only",
+    "not production security",
+    "not model quality",
+    "not runtime execution",
+    "not L4 conformance",
+    "not commercial permission"
+  ],
+  "notes": "Draft-only ADR 0050 negative fixture. A context reference cannot let the provider expand scope into broader Vault access."
+}

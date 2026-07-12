@@ -1,0 +1,38 @@
+{
+  "schema": "pico.model.job.envelope.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "jobId": "model_job_forbidden_input_class_placeholder",
+  "jobVersion": 1,
+  "createdAt": "2026-07-12T12:00:00.000Z",
+  "expiresAt": "2026-07-12T12:05:00.000Z",
+  "requesterSubject": "subject_placeholder_requester",
+  "requesterDevice": "device_placeholder_requester",
+  "subjectPico": "pico_placeholder_subject",
+  "providerId": "model_provider_local_summarizer_placeholder",
+  "jobType": "model.summarize",
+  "purpose": "Summarize a synthetic private note for fixture testing.",
+  "purposeCategory": "assistive_summary",
+  "policyDecisionRef": "policy_decision_placeholder_allow_non_secret_summary",
+  "consentRef": "consent_placeholder_forbidden_secret_context",
+  "privacyDomainRefs": [
+    "private_domain_placeholder"
+  ],
+  "inputClasses": [
+    "user_supplied_prompt",
+    "domain_content_key"
+  ],
+  "contextRefs": [],
+  "inlineContext": {
+    "prompt": "Summarize this synthetic note.",
+    "syntheticSecretMarker": "domain_content_key_placeholder_for_rejection"
+  },
+  "redactionSummary": "Synthetic fixture intentionally includes a forbidden input class marker.",
+  "retentionRequirement": "no_store",
+  "toolUseMode": "none",
+  "outputSchemaRef": "summary_markdown",
+  "resultHandling": "return_to_requester_only",
+  "auditRequirement": "audit_metadata_only",
+  "replayNonce": "nonce_model_job_forbidden_input_placeholder",
+  "extensions": {}
+}

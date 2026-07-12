@@ -1,0 +1,18 @@
+{
+  "schema": "pico.model.context.ref.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "contextRefId": "context_ref_expandable_placeholder",
+  "sourceDomain": "private_domain_placeholder",
+  "sourceKind": "private_memory_excerpt",
+  "inputClass": "private_memory_excerpt",
+  "summary": "Synthetic private note excerpt for rejection testing.",
+  "freshness": "2026-07-12T12:00:00.000Z",
+  "maxBytes": 512,
+  "redactionApplied": true,
+  "allowedForProvider": true,
+  "expiresAt": "2026-07-12T12:05:00.000Z",
+  "providerExpansionAllowed": true,
+  "expansionScope": "vault:*",
+  "extensions": {}
+}
