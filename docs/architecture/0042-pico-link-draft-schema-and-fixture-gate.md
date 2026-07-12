@@ -72,6 +72,8 @@ ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines tha
 
 `canonicalization` draft fixtures may describe parse and rejection cases before canonical bytes are selected, but must not publish authoritative signature or hash vectors.
 
+ADR `0047-draft-canonicalization-rejection-placeholder.md` defines the first draft-only canonicalization rejection placeholder shape for such future fixture work.
+
 `compatibility-claims` draft fixtures may reject unsafe claim wording or missing disclaimer shape, but must not certify an implementation.
 
 ADR `0046-draft-compatibility-claim-placeholder.md` defines the first draft-only compatibility-claim placeholder shape for such future fixture work.

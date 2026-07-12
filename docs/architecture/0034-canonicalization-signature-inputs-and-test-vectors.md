@@ -160,6 +160,8 @@ Future canonicalization specs must decide normalization and rejection rules for 
 
 Until these rules exist, examples remain non-normative and must not be used as compatibility fixtures.
 
+ADR `0047-draft-canonicalization-rejection-placeholder.md` narrows the draft-only parse/rejection placeholder boundary until canonical bytes, hash vectors, signature vectors and verifier behaviour exist.
+
 ## JSON and binary boundary
 
 Pico may eventually choose JSON canonicalization, CBOR-style deterministic encoding, another reviewed deterministic encoding or a layered model.

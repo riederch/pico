@@ -505,6 +505,7 @@ The project concept is persisted as architecture notes:
 | `0044-pico-link-draft-protected-payload-placeholder.md` | draft-only Pico Link protected-payload placeholder boundary |
 | `0045-pico-home-link-draft-membership-credential-placeholder.md` | draft-only Pico Home Link membership-credential placeholder boundary |
 | `0046-draft-compatibility-claim-placeholder.md` | draft-only compatibility-claim placeholder boundary |
+| `0047-draft-canonicalization-rejection-placeholder.md` | draft-only canonicalization rejection placeholder boundary |
 
 Protocol documents:
 
@@ -591,6 +592,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0044 as the only current protected-payload placeholder boundary if future Pico Link draft fixtures are added
 - Use ADR 0045 as the only current membership-credential placeholder boundary if future Pico Home Link draft fixtures are added
 - Use ADR 0046 as the only current compatibility-claim placeholder boundary if future claim-wording draft fixtures are added
+- Use ADR 0047 as the only current canonicalization rejection placeholder boundary if future parse/rejection draft fixtures are added
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
