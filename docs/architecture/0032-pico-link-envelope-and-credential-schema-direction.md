@@ -127,6 +127,8 @@ Required semantics:
 
 The packet envelope must not include plaintext message content, domain keys, device private material, Home membership secrets or user-readable private context.
 
+ADR `0043-pico-link-draft-packet-envelope-preflight.md` narrows the first allowed draft fixture shape for this family. It is still draft-only and does not define the final wire format.
+
 ## Protected payload envelope
 
 A protected payload envelope carries encrypted or otherwise protected Pico content above transport.

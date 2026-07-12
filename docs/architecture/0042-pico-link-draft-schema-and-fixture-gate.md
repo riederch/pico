@@ -105,6 +105,8 @@ This separation prevents a Foundation L1 seed from becoming an implied Pico Link
 
 The first allowed Pico Link draft fixture family is a packet-envelope preflight.
 
+ADR `0043-pico-link-draft-packet-envelope-preflight.md` defines the first constrained draft-only packet-envelope preflight shape for that family. It is fixture scaffolding, not the final wire format.
+
 It may assert that relay-visible fields do not include:
 
 - message text

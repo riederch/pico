@@ -153,6 +153,7 @@ In particular:
 - Foundation WebSocket ticket and direct-access realtime hardening language must remain consistent with `0039`
 - Home Assistant ingress metadata, add-on token option and packaging-default language must remain consistent with `0040`
 - Pico Link draft schema and fixture staging language must remain consistent with `0042`
+- Pico Link draft packet-envelope preflight language must remain consistent with `0043`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
