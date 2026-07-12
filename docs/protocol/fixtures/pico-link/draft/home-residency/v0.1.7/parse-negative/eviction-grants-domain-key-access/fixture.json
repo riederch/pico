@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.home-residency.v0_1_7.parse-negative.eviction-grants-domain-key-access",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-residency",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Home Residency rejects eviction as resident domain key access",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "eviction_domain_key_access_claim"
+    ],
+    "residency": {
+      "recordVerified": false,
+      "membershipVerified": false,
+      "runtimeEnforced": false,
+      "futureHostAccessDenied": true,
+      "identityDestroyed": false,
+      "globalDeletionClaim": false,
+      "residentDomainAccessGranted": true,
+      "domainContentKeyExposed": true,
+      "historyRewritten": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0057 negative fixture. Eviction cannot grant resident Private Space or Domain Content Key access to the host."
+}

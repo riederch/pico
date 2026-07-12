@@ -82,6 +82,8 @@ ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` defines the first d
 
 ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work.
 
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` defines the first draft-only residency and eviction placeholder shape for future Pico Home Link lifecycle fixture work. Residency placeholders may describe future Home access status, but must not destroy Pico identity, delete resident-owned backups, grant domain-key access, rewrite history, enforce runtime eviction or claim compatibility.
+
 `canonicalization` draft fixtures may describe parse and rejection cases before canonical bytes are selected, but must not publish authoritative signature or hash vectors.
 
 ADR `0047-draft-canonicalization-rejection-placeholder.md` defines the first draft-only canonicalization rejection placeholder shape for such future fixture work.

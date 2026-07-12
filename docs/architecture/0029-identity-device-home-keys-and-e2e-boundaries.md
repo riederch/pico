@@ -127,6 +127,8 @@ Membership credentials may grant future use of a Pico Home for routing, storage,
 
 Eviction revokes future use of one host. It is not identity destruction and not global key deletion.
 
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` narrows the first draft-only residency and eviction placeholder boundary for fixture work. It does not implement membership verification, runtime host access denial, host-local cleanup, shared-domain rotation, resident deletion or global identity effects.
+
 ## Domain Content Keys
 
 Data readability belongs to explicit protected domains.

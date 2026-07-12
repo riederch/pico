@@ -329,6 +329,10 @@ describe('Pico protocol types', () => {
       'home-host-key/v0.1.7/parse-negative/move-in-code-as-host-key',
       'home-membership/v0.1.7/parse-positive/invited-member-placeholder',
       'home-membership/v0.1.7/parse-negative/move-in-code-as-credential',
+      'home-residency/v0.1.7/parse-positive/resident-status-placeholder',
+      'home-residency/v0.1.7/parse-negative/eviction-as-identity-destruction',
+      'home-residency/v0.1.7/parse-negative/host-cleanup-as-global-deletion',
+      'home-residency/v0.1.7/parse-negative/eviction-grants-domain-key-access',
       'identity-key/v0.1.7/parse-positive/identity-public-key-placeholder',
       'identity-key/v0.1.7/parse-negative/private-key-material-in-record',
       'identity-key/v0.1.7/parse-negative/verified-root-authority-claim',
@@ -1036,6 +1040,96 @@ function expectDraftFixtureBoundary(
     } else {
       expect(input.moveInCode).toBeUndefined();
       expect(booleanField(authority, 'moveInCodeUsed')).toBe(false);
+    }
+  } else if (draftSurface === 'home-residency') {
+    expect(stringField(input, 'schema')).toBe('pico.home.residency-record.draft');
+    expect(stringField(input, 'residencyRecordId')).toContain('residency_placeholder_');
+    const home = recordField(input, 'home');
+    expect(stringField(home, 'homeIdHint')).toContain('home_placeholder_');
+    expect(stringField(home, 'homeHostKeyRef')).toContain('homehostkey_placeholder_');
+    expect(stringField(home, 'proofStatus')).toBe('unverified-placeholder');
+    const actor = recordField(input, 'actor');
+    expect(stringField(actor, 'hostPicoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(actor, 'hostDeviceIdHint')).toContain('device_placeholder_');
+    expect(stringField(actor, 'proofStatus')).toBe('unverified-placeholder');
+    const resident = recordField(input, 'resident');
+    expect(stringField(resident, 'residentPicoIdHint')).toContain('pico_placeholder_');
+    expect(stringArrayField(resident, 'residentDeviceRefs').length).toBeGreaterThan(0);
+    expect(stringField(resident, 'membershipCredentialRef')).toContain('homecred_placeholder_');
+    expect(stringField(resident, 'proofStatus')).toBe('unverified-placeholder');
+    const transition = recordField(input, 'transition');
+    expect(['invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued', 'unknown'])
+      .toContain(stringField(transition, 'previousStatus'));
+    expect(['invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued', 'unknown'])
+      .toContain(stringField(transition, 'newStatus'));
+    expect(['host_policy_placeholder', 'member_left_placeholder', 'invite_expired_placeholder', 'host_reset_placeholder', 'membership_reissued_placeholder', 'security_review_placeholder', 'unknown_placeholder'])
+      .toContain(stringField(transition, 'reason'));
+    const access = recordField(input, 'access');
+    expect(booleanField(access, 'futureHostAccess')).toBe(false);
+    expect(booleanField(access, 'futureSyncToHome')).toBe(false);
+    const domainImpact = recordField(input, 'domainImpact');
+    const cleanup = recordField(input, 'cleanup');
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    const expectResidency = recordField(expectBlock, 'residency');
+    expect(booleanField(expectResidency, 'recordVerified')).toBe(false);
+    expect(booleanField(expectResidency, 'membershipVerified')).toBe(false);
+    expect(booleanField(expectResidency, 'runtimeEnforced')).toBe(false);
+    expect(booleanField(expectResidency, 'futureHostAccessDenied')).toBe(true);
+
+    if (fixtureCase === 'eviction-as-identity-destruction') {
+      expect(booleanField(transition, 'globalIdentityDestroyed')).toBe(true);
+      expect(booleanField(transition, 'relationshipRevokedGlobally')).toBe(true);
+      expect(booleanField(transition, 'historyRewritten')).toBe(true);
+      expect(booleanField(access, 'residentDevicesDisabledGlobally')).toBe(true);
+      expect(recordField(input, 'identityDestructionClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['eviction_identity_destruction_claim']);
+      expect(booleanField(expectResidency, 'identityDestroyed')).toBe(true);
+      expect(booleanField(expectResidency, 'historyRewritten')).toBe(true);
+    } else {
+      expect(booleanField(transition, 'globalIdentityDestroyed')).toBe(false);
+      expect(booleanField(transition, 'relationshipRevokedGlobally')).toBe(false);
+      expect(booleanField(transition, 'historyRewritten')).toBe(false);
+      expect(booleanField(access, 'residentDevicesDisabledGlobally')).toBe(false);
+      expect(input.identityDestructionClaim).toBeUndefined();
+      expect(booleanField(expectResidency, 'identityDestroyed')).toBe(false);
+      expect(booleanField(expectResidency, 'historyRewritten')).toBe(false);
+    }
+
+    if (fixtureCase === 'host-cleanup-as-global-deletion') {
+      expect(stringField(cleanup, 'hostLocalCiphertextCleanup')).toBe('claimed-global-delete');
+      expect(booleanField(cleanup, 'residentBackupsDeleted')).toBe(true);
+      expect(booleanField(cleanup, 'auditErased')).toBe(true);
+      expect(recordField(input, 'globalDeletionClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['host_cleanup_global_deletion_claim']);
+      expect(booleanField(expectResidency, 'globalDeletionClaim')).toBe(true);
+    } else {
+      expect(['not-requested', 'planned-placeholder', 'completed-placeholder-unverified', 'not-claimed'])
+        .toContain(stringField(cleanup, 'hostLocalCiphertextCleanup'));
+      expect(booleanField(cleanup, 'residentBackupsDeleted')).toBe(false);
+      expect(booleanField(cleanup, 'auditErased')).toBe(false);
+      expect(input.globalDeletionClaim).toBeUndefined();
+      expect(booleanField(expectResidency, 'globalDeletionClaim')).toBe(false);
+    }
+
+    if (fixtureCase === 'eviction-grants-domain-key-access') {
+      expect(booleanField(access, 'residentDomainAccessGranted')).toBe(true);
+      expect(stringField(domainImpact, 'sharedDomainKeyRotation')).toBe('claimed-complete');
+      expect(stringField(domainImpact, 'domainKeyMaterialStatus')).toBe('present');
+      expect(recordField(input, 'domainKeyMaterial')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['eviction_domain_key_access_claim']);
+      expect(booleanField(expectResidency, 'residentDomainAccessGranted')).toBe(true);
+      expect(booleanField(expectResidency, 'domainContentKeyExposed')).toBe(true);
+    } else {
+      expect(booleanField(access, 'residentDomainAccessGranted')).toBe(false);
+      expect(['not-required-placeholder', 'evaluate-placeholder', 'required-placeholder', 'not-claimed'])
+        .toContain(stringField(domainImpact, 'sharedDomainKeyRotation'));
+      expect(['absent', 'placeholder-ref-only']).toContain(stringField(domainImpact, 'domainKeyMaterialStatus'));
+      expect(input.domainKeyMaterial).toBeUndefined();
+      expect(booleanField(expectResidency, 'residentDomainAccessGranted')).toBe(false);
+      expect(booleanField(expectResidency, 'domainContentKeyExposed')).toBe(false);
     }
   } else if (draftSurface === 'identity-key') {
     expect(stringField(input, 'schema')).toBe('pico.identity.key-record.draft');

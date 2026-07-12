@@ -234,6 +234,8 @@ Eviction means future exclusion from one host. It must not become:
 
 After eviction, shared or household domain keys may need rotation according to domain policy.
 
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` narrows the first draft-only residency and eviction placeholder boundary for fixture work. It does not implement membership verification, Home Host Key verification, runtime eviction enforcement, host-local cleanup, shared-domain key rotation or global deletion.
+
 ## Domain Content Key lifecycle
 
 Domain Content Keys decide who can read protected content.

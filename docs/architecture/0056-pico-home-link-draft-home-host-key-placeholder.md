@@ -307,6 +307,12 @@ ADR 0056 narrows what the host-key side may mean at fixture level:
 
 Membership Credential verifier behaviour remains future work.
 
+## Relationship to residency and eviction
+
+ADR 0057 residency and eviction placeholders may refer to `homeHostKeyRef` values.
+
+Those references remain unverified placeholders. A Home Host Key placeholder does not prove eviction authority, runtime access denial, host-local cleanup, shared-domain rotation or global deletion.
+
 ## Relationship to future verification
 
 Before Home Host Key records carry security meaning, later ADRs must define:

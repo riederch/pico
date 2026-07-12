@@ -48,8 +48,9 @@ This document follows:
 - `../architecture/0054-pico-link-draft-key-envelope-rotation-placeholder.md`
 - `../architecture/0055-pico-link-draft-identity-key-placeholder.md`
 - `../architecture/0056-pico-home-link-draft-home-host-key-placeholder.md`
+- `../architecture/0057-pico-home-link-draft-residency-eviction-placeholder.md`
 
-ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. ADR 0052 defines the first constrained Pico Link lost-device revocation placeholder boundary. ADR 0053 defines the first constrained Pico Link revocation registry placeholder boundary. ADR 0054 defines the first constrained Pico Link key-envelope rotation placeholder boundary. ADR 0055 defines the first constrained Pico Link identity-key placeholder boundary. ADR 0056 defines the first constrained Pico Home Link Home Host Key placeholder boundary. This document turns those boundaries into a planned repository layout.
+ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. ADR 0052 defines the first constrained Pico Link lost-device revocation placeholder boundary. ADR 0053 defines the first constrained Pico Link revocation registry placeholder boundary. ADR 0054 defines the first constrained Pico Link key-envelope rotation placeholder boundary. ADR 0055 defines the first constrained Pico Link identity-key placeholder boundary. ADR 0056 defines the first constrained Pico Home Link Home Host Key placeholder boundary. ADR 0057 defines the first constrained Pico Home Link residency and eviction placeholder boundary. This document turns those boundaries into a planned repository layout.
 
 ## Current boundary
 
@@ -119,6 +120,7 @@ docs/protocol/fixtures/
       home-host-key/
       identity-key/
       device-credential/
+      home-residency/
       lost-device/
       revocation-record/
       key-envelope-rotation/
@@ -326,7 +328,7 @@ Foundation fixtures must state that they are experimental and do not imply L2 Pi
 
 ## Pico Link and Pico Home Link fixture scope
 
-Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape. ADR 0046 narrows the first allowed compatibility-claim placeholder shape. ADR 0047 narrows the first allowed canonicalization rejection placeholder shape. ADR 0051 narrows the first allowed Device Credential placeholder shape. ADR 0052 narrows the first allowed lost-device revocation placeholder shape. ADR 0053 narrows the first allowed revocation registry record placeholder shape. ADR 0054 narrows the first allowed key-envelope rotation placeholder shape. ADR 0055 narrows the first allowed identity-key placeholder shape. ADR 0056 narrows the first allowed Home Host Key placeholder shape.
+Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape. ADR 0046 narrows the first allowed compatibility-claim placeholder shape. ADR 0047 narrows the first allowed canonicalization rejection placeholder shape. ADR 0051 narrows the first allowed Device Credential placeholder shape. ADR 0052 narrows the first allowed lost-device revocation placeholder shape. ADR 0053 narrows the first allowed revocation registry record placeholder shape. ADR 0054 narrows the first allowed key-envelope rotation placeholder shape. ADR 0055 narrows the first allowed identity-key placeholder shape. ADR 0056 narrows the first allowed Home Host Key placeholder shape. ADR 0057 narrows the first allowed residency and eviction placeholder shape.
 
 The current draft Pico Link suite lives separately from the Foundation seed:
 
@@ -334,7 +336,7 @@ The current draft Pico Link suite lives separately from the Foundation seed:
 docs/protocol/fixtures/pico-link/draft/suite.json
 ```
 
-It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture, one positive and three negative Home Host Key placeholder fixtures, one positive and one negative Home Membership Credential placeholder fixture, one positive and three negative Identity Key placeholder fixtures, one positive and two negative Device Credential placeholder fixtures, one positive and three negative lost-device revocation placeholder fixtures, one positive and three negative revocation-record placeholder fixtures, one positive and three negative key-envelope rotation placeholder fixtures, one negative canonicalization placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
+It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture, one positive and three negative Home Host Key placeholder fixtures, one positive and one negative Home Membership Credential placeholder fixture, one positive and three negative Home Residency placeholder fixtures, one positive and three negative Identity Key placeholder fixtures, one positive and two negative Device Credential placeholder fixtures, one positive and three negative lost-device revocation placeholder fixtures, one positive and three negative revocation-record placeholder fixtures, one positive and three negative key-envelope rotation placeholder fixtures, one negative canonicalization placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
 
 Future Pico Link fixtures may cover:
 
@@ -345,6 +347,10 @@ Future Pico Link fixtures may cover:
 - resident-signing-by-host-key rejection
 - resident-domain-decryption-by-host-key rejection
 - move-in-code-as-host-key rejection
+- draft Home Residency placeholder scope
+- eviction-as-identity-destruction rejection
+- host-cleanup-as-global-deletion rejection
+- eviction-grants-domain-key-access rejection
 - draft identity-key placeholder scope
 - private-key-material-in-key-record rejection
 - verified-root-authority-by-key-record rejection
@@ -471,7 +477,7 @@ It includes:
 - eleven negative Foundation event append fixtures for a reserved event type, invalid payload values and unexpected fields
 - six positive current Foundation WebSocket message fixtures
 - five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
-- thirty draft Pico Link fixtures in a separate draft suite
+- thirty-four draft Pico Link fixtures in a separate draft suite
 - five draft Model Delegation fixtures in a separate draft suite
 - protocol tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics and draft-suite non-claim boundaries
 

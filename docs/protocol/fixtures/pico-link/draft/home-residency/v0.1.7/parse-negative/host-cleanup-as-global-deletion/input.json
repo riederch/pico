@@ -1,0 +1,59 @@
+{
+  "schema": "pico.home.residency-record.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "residencyRecordId": "residency_placeholder_global_deletion_claim",
+  "home": {
+    "homeIdHint": "home_placeholder_household",
+    "homeHostKeyRef": "homehostkey_placeholder_claimed_home",
+    "proofStatus": "unverified-placeholder"
+  },
+  "actor": {
+    "hostPicoIdHint": "pico_placeholder_home_host",
+    "hostDeviceIdHint": "device_placeholder_home_host",
+    "proofStatus": "unverified-placeholder"
+  },
+  "resident": {
+    "residentPicoIdHint": "pico_placeholder_member",
+    "residentDeviceRefs": [
+      "device_placeholder_member_vault"
+    ],
+    "membershipCredentialRef": "homecred_placeholder_member",
+    "proofStatus": "unverified-placeholder"
+  },
+  "transition": {
+    "previousStatus": "active",
+    "newStatus": "evicted",
+    "reason": "host_policy_placeholder",
+    "globalIdentityDestroyed": false,
+    "relationshipRevokedGlobally": false,
+    "historyRewritten": false
+  },
+  "access": {
+    "futureHostAccess": false,
+    "futureSyncToHome": false,
+    "residentDomainAccessGranted": false,
+    "residentDevicesDisabledGlobally": false
+  },
+  "domainImpact": {
+    "sharedDomainKeyRotation": "evaluate-placeholder",
+    "domainKeyMaterialStatus": "absent"
+  },
+  "cleanup": {
+    "hostLocalCiphertextCleanup": "claimed-global-delete",
+    "residentBackupsDeleted": true,
+    "auditErased": true
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_eviction",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "globalDeletionClaim": {
+    "residentBackupsDeleted": true,
+    "residentExportsDeleted": true,
+    "evictionAuditErased": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

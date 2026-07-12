@@ -199,6 +199,8 @@ Membership grants use of host infrastructure. It does not grant resident plainte
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Pico Home Host Key placeholder boundary for fixture work. It does not implement host-key continuity, membership issuer verification, Move-In Code validation, resident signing authority, resident domain decryption or runtime Home authorization.
 
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` narrows the first draft-only residency and eviction placeholder boundary for fixture work. It does not implement membership verification, runtime eviction enforcement, host-local cleanup, shared-domain rotation, resident deletion or global identity effects.
+
 ## Domain key requirements
 
 Before Domain Content Keys are implemented, define:

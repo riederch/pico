@@ -22,6 +22,8 @@ ADR 0042 allows Pico Home Link draft fixture work only after placeholder authori
 
 ADR 0056 defines the parallel Home Host Key placeholder boundary for host infrastructure continuity and host-key references.
 
+ADR 0057 defines the parallel residency and eviction placeholder boundary for membership lifecycle status records.
+
 The project needs a safe draft credential placeholder that can support future fixture planning without becoming a real Membership API, Move-In Code, authorization token or domain-decryption right.
 
 ## Decision
@@ -31,6 +33,8 @@ Future draft Pico Home Link fixtures may use a Home Membership Credential placeh
 This placeholder shape is not a credential implementation. It does not verify issuer authority, subject authority, Home continuity, revocation, signatures, canonicalization or replay protection.
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the fixture-level meaning of Home Host Key references, but it does not satisfy the future Home continuity or membership issuer verification requirements.
+
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` narrows the fixture-level meaning of residency and eviction status, but it does not satisfy future runtime membership enforcement or deletion semantics.
 
 ## Draft membership credential placeholder shape
 

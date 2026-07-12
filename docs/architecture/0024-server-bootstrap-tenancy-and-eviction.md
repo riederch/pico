@@ -174,6 +174,8 @@ silently erase audit of eviction
 
 If host-local cleanup deletes ciphertext blobs for an evicted resident, this must be represented as host storage cleanup. It must not claim that the resident's own Pico, own devices or own backups were deleted.
 
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` narrows the first draft-only residency and eviction placeholder boundary for fixture work. It does not implement membership verification, Home Host Key verification, host-local cleanup policy, shared-domain rotation, runtime eviction enforcement or global deletion semantics.
+
 ## Home Assistant implication
 
 The Home Assistant add-on is one possible Core Host runtime. It must not be described as owning all Pico identities or all private data just because it hosts the current Pico Core process.

@@ -287,6 +287,8 @@ ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the first draft-o
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Pico Home Host Key placeholder boundary for fixture work. It does not define host-key serialization, Home continuity verification, membership issuer verification, Setup Mode, Move-In Code validation, runtime Home authorization or relay registration.
 
+ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` narrows the first draft-only residency and eviction placeholder boundary for fixture work. It does not define final residency schema, membership verification, runtime enforcement, host-local cleanup, shared-domain rotation or deletion semantics.
+
 ## Home membership credential
 
 A Home membership credential proves scoped use of a Pico Home.

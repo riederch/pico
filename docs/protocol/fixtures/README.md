@@ -52,6 +52,10 @@ pico-link/draft/home-host-key/v0.1.7/parse-negative/domain-decryption-authority-
 pico-link/draft/home-host-key/v0.1.7/parse-negative/move-in-code-as-host-key/
 pico-link/draft/home-membership/v0.1.7/parse-positive/invited-member-placeholder/
 pico-link/draft/home-membership/v0.1.7/parse-negative/move-in-code-as-credential/
+pico-link/draft/home-residency/v0.1.7/parse-positive/resident-status-placeholder/
+pico-link/draft/home-residency/v0.1.7/parse-negative/eviction-as-identity-destruction/
+pico-link/draft/home-residency/v0.1.7/parse-negative/host-cleanup-as-global-deletion/
+pico-link/draft/home-residency/v0.1.7/parse-negative/eviction-grants-domain-key-access/
 pico-link/draft/identity-key/v0.1.7/parse-positive/identity-public-key-placeholder/
 pico-link/draft/identity-key/v0.1.7/parse-negative/private-key-material-in-record/
 pico-link/draft/identity-key/v0.1.7/parse-negative/verified-root-authority-claim/
