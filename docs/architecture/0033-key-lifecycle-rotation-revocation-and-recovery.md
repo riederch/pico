@@ -194,6 +194,8 @@ Home reset is local host state reset. It must not claim to delete resident Pico 
 
 Home Membership Credentials grant scoped use of a Pico Home.
 
+ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` narrows the draft-only placeholder boundary for future fixture work. It does not implement credential verification or authorization.
+
 They should include:
 
 - credential identifier

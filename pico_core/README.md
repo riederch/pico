@@ -184,6 +184,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0042-pico-link-draft-schema-and-fixture-gate.md`](../docs/architecture/0042-pico-link-draft-schema-and-fixture-gate.md) - draft-only Pico Link schema and fixture staging gate
 - [`../docs/architecture/0043-pico-link-draft-packet-envelope-preflight.md`](../docs/architecture/0043-pico-link-draft-packet-envelope-preflight.md) - draft-only Pico Link packet-envelope preflight shape
 - [`../docs/architecture/0044-pico-link-draft-protected-payload-placeholder.md`](../docs/architecture/0044-pico-link-draft-protected-payload-placeholder.md) - draft-only Pico Link protected-payload placeholder boundary
+- [`../docs/architecture/0045-pico-home-link-draft-membership-credential-placeholder.md`](../docs/architecture/0045-pico-home-link-draft-membership-credential-placeholder.md) - draft-only Pico Home Link membership-credential placeholder boundary
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

@@ -155,6 +155,7 @@ In particular:
 - Pico Link draft schema and fixture staging language must remain consistent with `0042`
 - Pico Link draft packet-envelope preflight language must remain consistent with `0043`
 - Pico Link draft protected-payload placeholder language must remain consistent with `0044`
+- Pico Home Link draft membership-credential placeholder language must remain consistent with `0045`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

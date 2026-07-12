@@ -322,6 +322,8 @@ Required semantics:
 - Move-In Code must not become this credential or any long-term key.
 - Home reset and recovery need explicit rules before implementation.
 
+ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` narrows the draft-only placeholder boundary for this family until issuer verification, canonicalization, signature inputs, revocation and Home reset semantics exist.
+
 ## Capability and compatibility advertisement
 
 Future compatibility claims need machine-readable capability advertisement.

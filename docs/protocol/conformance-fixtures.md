@@ -36,8 +36,9 @@ This document follows:
 - `../architecture/0042-pico-link-draft-schema-and-fixture-gate.md`
 - `../architecture/0043-pico-link-draft-packet-envelope-preflight.md`
 - `../architecture/0044-pico-link-draft-protected-payload-placeholder.md`
+- `../architecture/0045-pico-home-link-draft-membership-credential-placeholder.md`
 
-ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. This document turns those boundaries into a planned repository layout.
+ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. This document turns those boundaries into a planned repository layout.
 
 ## Current boundary
 
@@ -298,7 +299,7 @@ Foundation fixtures must state that they are experimental and do not imply L2 Pi
 
 ## Pico Link and Pico Home Link fixture scope
 
-Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows future draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such future draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape.
+Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows future draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such future draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape.
 
 Future Pico Link fixtures may cover:
 
