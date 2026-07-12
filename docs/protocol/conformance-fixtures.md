@@ -380,7 +380,7 @@ It includes:
 - `docs/protocol/fixtures/suite.json`
 - five positive Foundation event append fixtures for strict writable payload schemas
 - eleven negative Foundation event append fixtures for a reserved event type, invalid payload values and unexpected fields
-- three positive current Foundation WebSocket message fixtures
+- six positive current Foundation WebSocket message fixtures
 - five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
 - protocol tests that validate seed fixture metadata, source files, capability names and current Foundation event/realtime semantics
 

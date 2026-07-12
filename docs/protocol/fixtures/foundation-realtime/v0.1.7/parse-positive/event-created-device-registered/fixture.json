@@ -1,0 +1,28 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-realtime.v0_1_7.parse-positive.event-created-device-registered",
+  "stage": "fixture_data",
+  "surface": "foundation-realtime",
+  "protocolVersion": "0.1.7",
+  "family": "parse-positive",
+  "case": "pico.event.created WebSocket message carrying a device.registered marker event",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "websocket": {
+      "path": "/ws",
+      "messageType": "pico.event.created"
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.websocket.v1",
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation realtime fixture. device.registered is a strict diagnostics marker, not verified device identity or membership."
+}

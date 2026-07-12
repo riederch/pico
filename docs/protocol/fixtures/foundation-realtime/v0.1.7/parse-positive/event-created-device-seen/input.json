@@ -1,0 +1,14 @@
+{
+  "type": "pico.event.created",
+  "event": {
+    "eventId": "evt-fixture-realtime-device-seen-1",
+    "deviceId": "fixture-device",
+    "lamport": 6,
+    "wallTime": "2026-07-08T00:00:05.000Z",
+    "type": "device.seen",
+    "stream": "device:fixture",
+    "payload": {
+      "status": "online"
+    }
+  }
+}

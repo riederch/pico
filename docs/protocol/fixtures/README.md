@@ -27,6 +27,9 @@ foundation-events/v0.1.7/parse-negative/session-created-unexpected-field/
 foundation-realtime/v0.1.7/parse-positive/core-connected/
 foundation-realtime/v0.1.7/parse-positive/event-created-message/
 foundation-realtime/v0.1.7/parse-positive/event-created-avatar-state/
+foundation-realtime/v0.1.7/parse-positive/event-created-device-registered/
+foundation-realtime/v0.1.7/parse-positive/event-created-device-seen/
+foundation-realtime/v0.1.7/parse-positive/event-created-session-created/
 foundation-realtime/v0.1.7/parse-negative/core-connected-missing-device-id/
 foundation-realtime/v0.1.7/parse-negative/event-created-missing-event/
 foundation-realtime/v0.1.7/parse-negative/event-created-reserved-event-type/

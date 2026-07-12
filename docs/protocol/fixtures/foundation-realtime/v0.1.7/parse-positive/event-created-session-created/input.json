@@ -1,0 +1,13 @@
+{
+  "type": "pico.event.created",
+  "event": {
+    "eventId": "evt-fixture-realtime-session-created-1",
+    "deviceId": "fixture-device",
+    "sessionId": "session:fixture",
+    "lamport": 7,
+    "wallTime": "2026-07-08T00:00:06.000Z",
+    "type": "session.created",
+    "stream": "session:fixture",
+    "payload": {}
+  }
+}
