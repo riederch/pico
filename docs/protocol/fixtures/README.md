@@ -14,6 +14,7 @@ foundation-events/v0.1.7/parse-positive/session-created-marker/
 foundation-events/v0.1.7/parse-positive/message-created-minimal/
 foundation-events/v0.1.7/parse-positive/avatar-state-changed-thinking/
 foundation-events/v0.1.7/parse-negative/action-requested-reserved/
+foundation-events/v0.1.7/parse-negative/device-registered-unexpected-field/
 foundation-events/v0.1.7/parse-negative/device-seen-invalid-status/
 foundation-events/v0.1.7/parse-negative/message-created-invalid-role/
 foundation-events/v0.1.7/parse-negative/message-created-empty-text/

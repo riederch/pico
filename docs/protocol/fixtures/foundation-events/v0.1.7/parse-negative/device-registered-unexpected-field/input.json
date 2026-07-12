@@ -1,0 +1,7 @@
+{
+  "deviceId": "fixture-device",
+  "type": "device.registered",
+  "payload": {
+    "label": "not allowed"
+  }
+}
