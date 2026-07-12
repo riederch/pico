@@ -22,7 +22,8 @@
   },
   "capabilitiesRequired": [
     "pico.core.websocket.v1",
-    "pico.core.events.v1"
+    "pico.core.events.v1",
+    "pico.avatar_state.v1"
   ],
   "notes": "Experimental Foundation realtime fixture. The embedded event uses current Foundation event semantics only. The signature field is opaque, unverified metadata and grants no authorship, integrity or identity guarantee until key lifecycle, canonicalization and verification are defined."
 }

@@ -266,6 +266,7 @@ describe('Pico protocol types', () => {
       for (const capability of capabilitiesRequired) {
         expect(Object.keys(protocolCapabilities)).toContain(capability);
       }
+      expectFixtureCapabilitiesForInput(input, surface, capabilitiesRequired);
 
       const family = stringField(fixture, 'family');
       expect(family).toBe(fixtureFamily);
@@ -557,6 +558,30 @@ function expectCurrentFoundationRealtimeFixture(
   } else {
     throw new Error(`Unexpected fixture family: ${family}`);
   }
+}
+
+function expectFixtureCapabilitiesForInput(
+  input: Record<string, unknown>,
+  surface: string,
+  capabilitiesRequired: string[],
+): void {
+  const eventType = fixtureEventType(input, surface);
+
+  if (eventType === 'avatar.state_changed') {
+    expect(capabilitiesRequired).toContain('pico.avatar_state.v1');
+  }
+}
+
+function fixtureEventType(input: Record<string, unknown>, surface: string): string | undefined {
+  if (surface === 'foundation-events') {
+    return stringField(input, 'type');
+  }
+
+  if (surface === 'foundation-realtime' && input.type === realtimeMessageType.eventCreated && input.event !== undefined) {
+    return stringField(recordField(input, 'event'), 'type');
+  }
+
+  return undefined;
 }
 
 function readRepoFile(path: string): string {
