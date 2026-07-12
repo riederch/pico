@@ -1,0 +1,56 @@
+{
+  "schema": "pico.identity.key-record.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "keyRecordId": "keyrec_placeholder_verified_root_claim",
+  "keyRole": "pico_identity",
+  "owner": {
+    "picoIdHint": "pico_placeholder_owner",
+    "deviceIdHint": null,
+    "homeIdHint": null,
+    "proofStatus": "verified-claim"
+  },
+  "publicKey": {
+    "keyRef": "picoidkey_placeholder_owner",
+    "materialStatus": "public-placeholder",
+    "format": "final-format-claim",
+    "algorithm": "final-algorithm-claim",
+    "fingerprintStatus": "verified-claim"
+  },
+  "lifecycle": {
+    "status": "active-placeholder",
+    "createdAt": "2026-07-12T12:00:00.000Z",
+    "expiresAt": null,
+    "rotationRef": null,
+    "revocationRef": null
+  },
+  "usage": {
+    "allowedPurposes": [
+      "device.delegation",
+      "credential.verify",
+      "history.verify",
+      "manifest.verify",
+      "rotation.verify"
+    ],
+    "privateMaterialExported": false,
+    "signingAuthorityGranted": true
+  },
+  "binding": {
+    "deviceCredentialRef": null,
+    "homeMembershipRef": null,
+    "domainRefs": [],
+    "transportBinding": "none"
+  },
+  "verification": {
+    "possessionProofStatus": "verified",
+    "issuerVerified": true,
+    "canonicalizationStatus": "verified",
+    "trustPathStatus": "trusted-root-claim"
+  },
+  "identityAuthorityClaim": {
+    "identityRootControl": true,
+    "runtimeAuthorization": true
+  },
+  "signatureStatus": "verified-claim",
+  "extensions": {}
+}

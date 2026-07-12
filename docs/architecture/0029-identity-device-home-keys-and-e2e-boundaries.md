@@ -163,6 +163,8 @@ This applies to all transports, including:
 
 Meshtastic channel keys, node IDs or radio-specific identities must remain transport-specific. They must not become Pico identity, Home identity or authority.
 
+ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the first draft-only identity-key placeholder boundary for fixture work. It does not define key serialization, algorithms, fingerprints, possession proofs, trust paths, lifecycle verification or runtime identity authority.
+
 ## Signatures
 
 Pico should use signatures for integrity and authorship boundaries once the threat model and protocol formats are defined.

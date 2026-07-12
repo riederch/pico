@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.identity-key.v0_1_7.parse-positive.identity-public-key-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "identity-key",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft Identity Key accepts public placeholder reference only",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "identity": {
+      "keyRecordVerified": false,
+      "issuerVerified": false,
+      "possessionVerified": false,
+      "identityRootControl": false,
+      "deviceKeyPossession": false,
+      "homeMembershipGranted": false,
+      "domainAccessGranted": false,
+      "recoveryAuthorityGranted": false,
+      "runtimeAuthorization": false,
+      "privateKeyMaterialPresent": false,
+      "relayIdentityElevated": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0055 positive fixture. It proves only bounded public key placeholder shape acceptance and does not verify identity authority."
+}

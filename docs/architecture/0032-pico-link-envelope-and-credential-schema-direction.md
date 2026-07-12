@@ -283,6 +283,8 @@ Required semantics:
 
 ADR `0054-pico-link-draft-key-envelope-rotation-placeholder.md` narrows the first draft-only key-envelope rotation placeholder boundary for fixture work. It does not define Domain Content Key format, key wrapping algorithms, runtime decryption, key-envelope removal, completed rotation or historical erasure.
 
+ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the first draft-only identity-key placeholder boundary for fixture work. It does not define final key record format, key serialization, algorithms, fingerprints, possession proofs, trust paths or runtime identity verification.
+
 ## Home membership credential
 
 A Home membership credential proves scoped use of a Pico Home.

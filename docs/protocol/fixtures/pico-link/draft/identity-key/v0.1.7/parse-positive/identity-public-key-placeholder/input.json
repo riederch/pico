@@ -1,0 +1,52 @@
+{
+  "schema": "pico.identity.key-record.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "keyRecordId": "keyrec_placeholder_identity_owner",
+  "keyRole": "pico_identity",
+  "owner": {
+    "picoIdHint": "pico_placeholder_owner",
+    "deviceIdHint": null,
+    "homeIdHint": null,
+    "proofStatus": "unverified-placeholder"
+  },
+  "publicKey": {
+    "keyRef": "picoidkey_placeholder_owner",
+    "materialStatus": "placeholder-ref-only",
+    "format": "unspecified-placeholder",
+    "algorithm": "unspecified-placeholder",
+    "fingerprintStatus": "absent"
+  },
+  "lifecycle": {
+    "status": "introduced-placeholder",
+    "createdAt": "2026-07-12T12:00:00.000Z",
+    "expiresAt": null,
+    "rotationRef": null,
+    "revocationRef": null
+  },
+  "usage": {
+    "allowedPurposes": [
+      "device.delegation",
+      "credential.verify",
+      "history.verify",
+      "manifest.verify",
+      "rotation.verify"
+    ],
+    "privateMaterialExported": false,
+    "signingAuthorityGranted": false
+  },
+  "binding": {
+    "deviceCredentialRef": null,
+    "homeMembershipRef": null,
+    "domainRefs": [],
+    "transportBinding": "none"
+  },
+  "verification": {
+    "possessionProofStatus": "absent",
+    "issuerVerified": false,
+    "canonicalizationStatus": "absent",
+    "trustPathStatus": "unverified-placeholder"
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

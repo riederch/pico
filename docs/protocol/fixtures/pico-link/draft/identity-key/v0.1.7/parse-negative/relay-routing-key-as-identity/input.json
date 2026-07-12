@@ -1,0 +1,53 @@
+{
+  "schema": "pico.identity.key-record.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "keyRecordId": "keyrec_placeholder_relay_identity_escalation",
+  "keyRole": "relay_routing_placeholder",
+  "owner": {
+    "picoIdHint": "pico_placeholder_owner",
+    "deviceIdHint": null,
+    "homeIdHint": null,
+    "proofStatus": "unverified-placeholder"
+  },
+  "publicKey": {
+    "keyRef": "relayroutekey_placeholder_provider_account",
+    "materialStatus": "public-placeholder",
+    "format": "unspecified-placeholder",
+    "algorithm": "unspecified-placeholder",
+    "fingerprintStatus": "absent"
+  },
+  "lifecycle": {
+    "status": "active-placeholder",
+    "createdAt": "2026-07-12T12:00:00.000Z",
+    "expiresAt": "2026-07-12T13:00:00.000Z",
+    "rotationRef": null,
+    "revocationRef": null
+  },
+  "usage": {
+    "allowedPurposes": [
+      "pico.identity.root"
+    ],
+    "privateMaterialExported": false,
+    "signingAuthorityGranted": true
+  },
+  "binding": {
+    "deviceCredentialRef": null,
+    "homeMembershipRef": null,
+    "domainRefs": [],
+    "transportBinding": "relay-account-as-pico-identity"
+  },
+  "verification": {
+    "possessionProofStatus": "absent",
+    "issuerVerified": false,
+    "canonicalizationStatus": "absent",
+    "trustPathStatus": "unverified-placeholder"
+  },
+  "relayIdentityClaim": {
+    "relayAccountId": "relay_account_placeholder",
+    "usedAsPicoIdentity": true,
+    "runtimeAuthorization": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

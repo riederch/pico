@@ -123,6 +123,8 @@ It must not rely on:
 - transport node ID
 - email or cloud account control alone
 
+ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the first draft-only identity-key placeholder boundary for fixture work. It does not implement Pico Identity Keys, public key serialization, key fingerprints, possession proofs, trust paths, continuity records or runtime identity verification.
+
 ## Device Key lifecycle
 
 Device Keys are delegated operational keys for trusted Pico Vaults, full clients or trusted installations.
@@ -161,7 +163,7 @@ Lost-device handling must support:
 - preventing stale backups from silently reactivating the device
 - user-visible audit of what was revoked and what remains readable historically
 
-ADR `0051-pico-link-draft-device-credential-placeholder.md` narrows the first draft-only Device Credential placeholder boundary for fixture work. ADR `0052-pico-link-draft-lost-device-revocation-placeholder.md` narrows the first draft-only lost-device revocation placeholder boundary. ADR `0053-pico-link-draft-revocation-registry-placeholder.md` narrows the first draft-only revocation registry record placeholder boundary. These placeholders do not implement Device Keys, revocation propagation, stale-backup enforcement, domain-key rotation or runtime authorization.
+ADR `0051-pico-link-draft-device-credential-placeholder.md` narrows the first draft-only Device Credential placeholder boundary for fixture work. ADR `0052-pico-link-draft-lost-device-revocation-placeholder.md` narrows the first draft-only lost-device revocation placeholder boundary. ADR `0053-pico-link-draft-revocation-registry-placeholder.md` narrows the first draft-only revocation registry record placeholder boundary. ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the first draft-only identity-key placeholder boundary. These placeholders do not implement Device Keys, key serialization, revocation propagation, stale-backup enforcement, domain-key rotation or runtime authorization.
 
 ## Pico Home Host Key lifecycle
 

@@ -196,6 +196,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0052-pico-link-draft-lost-device-revocation-placeholder.md`](docs/architecture/0052-pico-link-draft-lost-device-revocation-placeholder.md) - draft-only Pico Link lost-device revocation placeholder boundary
 - [`docs/architecture/0053-pico-link-draft-revocation-registry-placeholder.md`](docs/architecture/0053-pico-link-draft-revocation-registry-placeholder.md) - draft-only Pico Link revocation registry placeholder boundary
 - [`docs/architecture/0054-pico-link-draft-key-envelope-rotation-placeholder.md`](docs/architecture/0054-pico-link-draft-key-envelope-rotation-placeholder.md) - draft-only Pico Link key-envelope rotation placeholder boundary
+- [`docs/architecture/0055-pico-link-draft-identity-key-placeholder.md`](docs/architecture/0055-pico-link-draft-identity-key-placeholder.md) - draft-only Pico Link identity-key placeholder boundary
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

@@ -48,6 +48,10 @@ pico-link/draft/packet-envelope/v0.1.7/parse-negative/plaintext-message-leak/
 pico-link/draft/protected-payload/v0.1.7/parse-positive/opaque-placeholder/
 pico-link/draft/home-membership/v0.1.7/parse-positive/invited-member-placeholder/
 pico-link/draft/home-membership/v0.1.7/parse-negative/move-in-code-as-credential/
+pico-link/draft/identity-key/v0.1.7/parse-positive/identity-public-key-placeholder/
+pico-link/draft/identity-key/v0.1.7/parse-negative/private-key-material-in-record/
+pico-link/draft/identity-key/v0.1.7/parse-negative/verified-root-authority-claim/
+pico-link/draft/identity-key/v0.1.7/parse-negative/relay-routing-key-as-identity/
 pico-link/draft/device-credential/v0.1.7/parse-positive/vault-device-placeholder/
 pico-link/draft/device-credential/v0.1.7/parse-negative/bearer-token-as-device-credential/
 pico-link/draft/device-credential/v0.1.7/parse-negative/domain-key-access-claim/

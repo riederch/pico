@@ -165,6 +165,7 @@ In particular:
 - Pico Link lost-device revocation placeholder language must remain consistent with `0052`
 - Pico Link revocation registry placeholder language must remain consistent with `0053`
 - Pico Link key-envelope rotation placeholder language must remain consistent with `0054`
+- Pico Link identity-key placeholder language must remain consistent with `0055`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

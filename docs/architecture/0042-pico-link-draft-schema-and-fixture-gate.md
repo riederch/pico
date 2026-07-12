@@ -74,6 +74,8 @@ ADR `0053-pico-link-draft-revocation-registry-placeholder.md` defines the first 
 
 ADR `0054-pico-link-draft-key-envelope-rotation-placeholder.md` defines the first draft-only key-envelope rotation placeholder boundary for future protected-domain fixture work. Key-envelope-rotation placeholders may describe future reader-set and envelope-reference changes, but must not expose Domain Content Keys, claim completed rotation, grant domain membership, prove historical erasure, enforce runtime decryption or claim compatibility.
 
+ADR `0055-pico-link-draft-identity-key-placeholder.md` defines the first draft-only identity-key placeholder boundary for future public-key fixture work. Identity-key placeholders may name synthetic public key references, but must not contain private key material, claim verified identity authority, choose final algorithms or elevate relay/transport identities into Pico identities.
+
 `pico-home-link` draft fixtures may cover membership-credential placeholder shape only after the issuer, subject, audience, expiry and revocation fields are described at a concept level. They must not make a credential accepted by runtime code before verification semantics exist.
 
 ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work.

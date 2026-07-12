@@ -325,6 +325,10 @@ describe('Pico protocol types', () => {
       'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
       'home-membership/v0.1.7/parse-positive/invited-member-placeholder',
       'home-membership/v0.1.7/parse-negative/move-in-code-as-credential',
+      'identity-key/v0.1.7/parse-positive/identity-public-key-placeholder',
+      'identity-key/v0.1.7/parse-negative/private-key-material-in-record',
+      'identity-key/v0.1.7/parse-negative/verified-root-authority-claim',
+      'identity-key/v0.1.7/parse-negative/relay-routing-key-as-identity',
       'device-credential/v0.1.7/parse-positive/vault-device-placeholder',
       'device-credential/v0.1.7/parse-negative/bearer-token-as-device-credential',
       'device-credential/v0.1.7/parse-negative/domain-key-access-claim',
@@ -943,6 +947,100 @@ function expectDraftFixtureBoundary(
     } else {
       expect(input.moveInCode).toBeUndefined();
       expect(booleanField(authority, 'moveInCodeUsed')).toBe(false);
+    }
+  } else if (draftSurface === 'identity-key') {
+    expect(stringField(input, 'schema')).toBe('pico.identity.key-record.draft');
+    expect(stringField(input, 'keyRecordId')).toContain('keyrec_placeholder_');
+    const keyRole = stringField(input, 'keyRole');
+    expect(['pico_identity', 'device', 'home_host', 'relay_routing_placeholder', 'transport_session_placeholder']).toContain(keyRole);
+    const owner = recordField(input, 'owner');
+    expect(stringField(owner, 'picoIdHint')).toContain('pico_placeholder_');
+    const publicKey = recordField(input, 'publicKey');
+    expect(stringField(publicKey, 'keyRef')).toContain(fixtureCase === 'relay-routing-key-as-identity' ? 'relayroutekey_placeholder_' : 'picoidkey_placeholder_');
+    const lifecycle = recordField(input, 'lifecycle');
+    expect(['introduced-placeholder', 'active-placeholder', 'rotating-placeholder', 'retired-placeholder', 'revoked-placeholder', 'unknown-placeholder'])
+      .toContain(stringField(lifecycle, 'status'));
+    expect(stringField(lifecycle, 'createdAt')).toBeTruthy();
+    const usage = recordField(input, 'usage');
+    const binding = recordField(input, 'binding');
+    expect(stringArrayField(binding, 'domainRefs')).toEqual([]);
+    const verification = recordField(input, 'verification');
+    const identity = recordField(expectBlock, 'identity');
+    expect(booleanField(identity, 'deviceKeyPossession')).toBe(false);
+    expect(booleanField(identity, 'homeMembershipGranted')).toBe(false);
+    expect(booleanField(identity, 'domainAccessGranted')).toBe(false);
+    expect(booleanField(identity, 'recoveryAuthorityGranted')).toBe(false);
+
+    if (fixtureCase === 'private-key-material-in-record') {
+      expect(stringField(publicKey, 'materialStatus')).toBe('private-material-present');
+      expect(booleanField(usage, 'privateMaterialExported')).toBe(true);
+      expect(recordField(input, 'privateKeyMaterial')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['private_key_material_boundary']);
+      expect(booleanField(identity, 'privateKeyMaterialPresent')).toBe(true);
+    } else {
+      expect(['absent', 'placeholder-ref-only', 'public-placeholder']).toContain(stringField(publicKey, 'materialStatus'));
+      expect(booleanField(usage, 'privateMaterialExported')).toBe(false);
+      expect(input.privateKeyMaterial).toBeUndefined();
+      expect(booleanField(identity, 'privateKeyMaterialPresent')).toBe(false);
+    }
+
+    if (fixtureCase === 'verified-root-authority-claim') {
+      expect(stringField(owner, 'proofStatus')).toBe('verified-claim');
+      expect(stringField(publicKey, 'format')).toBe('final-format-claim');
+      expect(stringField(publicKey, 'algorithm')).toBe('final-algorithm-claim');
+      expect(stringField(publicKey, 'fingerprintStatus')).toBe('verified-claim');
+      expect(booleanField(usage, 'signingAuthorityGranted')).toBe(true);
+      expect(stringField(verification, 'possessionProofStatus')).toBe('verified');
+      expect(booleanField(verification, 'issuerVerified')).toBe(true);
+      expect(stringField(verification, 'canonicalizationStatus')).toBe('verified');
+      expect(stringField(verification, 'trustPathStatus')).toBe('trusted-root-claim');
+      expect(recordField(input, 'identityAuthorityClaim')).toBeTruthy();
+      expect(stringField(input, 'signatureStatus')).toBe('verified-claim');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['identity_authority_claim']);
+      expect(booleanField(identity, 'keyRecordVerified')).toBe(true);
+      expect(booleanField(identity, 'issuerVerified')).toBe(true);
+      expect(booleanField(identity, 'possessionVerified')).toBe(true);
+      expect(booleanField(identity, 'identityRootControl')).toBe(true);
+      expect(booleanField(identity, 'runtimeAuthorization')).toBe(true);
+    } else {
+      expect(stringField(owner, 'proofStatus')).toBe('unverified-placeholder');
+      expect(stringField(publicKey, 'format')).toBe('unspecified-placeholder');
+      expect(stringField(publicKey, 'algorithm')).toBe('unspecified-placeholder');
+      expect(stringField(publicKey, 'fingerprintStatus')).toBe('absent');
+      expect(stringField(verification, 'possessionProofStatus')).toBe('absent');
+      expect(booleanField(verification, 'issuerVerified')).toBe(false);
+      expect(stringField(verification, 'canonicalizationStatus')).toBe('absent');
+      expect(stringField(verification, 'trustPathStatus')).toBe('unverified-placeholder');
+      expect(input.identityAuthorityClaim).toBeUndefined();
+      expect(stringField(input, 'signatureStatus')).toBe('absent');
+      expect(booleanField(identity, 'keyRecordVerified')).toBe(false);
+      expect(booleanField(identity, 'issuerVerified')).toBe(false);
+      expect(booleanField(identity, 'possessionVerified')).toBe(false);
+    }
+
+    if (fixtureCase === 'relay-routing-key-as-identity') {
+      expect(keyRole).toBe('relay_routing_placeholder');
+      expect(stringArrayField(usage, 'allowedPurposes')).toContain('pico.identity.root');
+      expect(booleanField(usage, 'signingAuthorityGranted')).toBe(true);
+      expect(stringField(binding, 'transportBinding')).toBe('relay-account-as-pico-identity');
+      expect(recordField(input, 'relayIdentityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['relay_identity_boundary']);
+      expect(booleanField(identity, 'relayIdentityElevated')).toBe(true);
+      expect(booleanField(identity, 'identityRootControl')).toBe(true);
+      expect(booleanField(identity, 'runtimeAuthorization')).toBe(true);
+    } else {
+      for (const purpose of stringArrayField(usage, 'allowedPurposes')) {
+        expect(['device.delegation', 'credential.verify', 'history.verify', 'manifest.verify', 'membership.verify', 'rotation.verify', 'recovery.verify-placeholder', 'host.identity-placeholder'])
+          .toContain(purpose);
+      }
+      expect(stringField(binding, 'transportBinding')).toBe('none');
+      expect(input.relayIdentityClaim).toBeUndefined();
+      expect(booleanField(identity, 'relayIdentityElevated')).toBe(false);
+      if (fixtureCase !== 'verified-root-authority-claim') {
+        expect(booleanField(usage, 'signingAuthorityGranted')).toBe(false);
+        expect(booleanField(identity, 'identityRootControl')).toBe(false);
+        expect(booleanField(identity, 'runtimeAuthorization')).toBe(false);
+      }
     }
   } else if (draftSurface === 'device-credential') {
     expect(stringField(input, 'schema')).toBe('pico.identity.device-credential.draft');

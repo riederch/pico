@@ -1,0 +1,48 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.identity-key.v0_1_7.parse-negative.relay-routing-key-as-identity",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "identity-key",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Identity Key rejects relay routing identity as Pico identity",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "relay_identity_boundary"
+    ],
+    "identity": {
+      "keyRecordVerified": false,
+      "issuerVerified": false,
+      "possessionVerified": false,
+      "identityRootControl": true,
+      "deviceKeyPossession": false,
+      "homeMembershipGranted": false,
+      "domainAccessGranted": false,
+      "recoveryAuthorityGranted": false,
+      "runtimeAuthorization": true,
+      "privateKeyMaterialPresent": false,
+      "relayIdentityElevated": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0055 negative fixture. Relay routing identities and transport keys cannot become Pico identity roots or runtime authorization."
+}

@@ -20,6 +20,8 @@ ADR 0042 permits draft Pico Link fixture work only below runtime, cryptography, 
 
 ADR 0052 defines the parallel lost-device revocation placeholder boundary for future fixture work.
 
+ADR 0055 defines the parallel identity-key placeholder boundary for public Pico Identity Key and Device Key references.
+
 The next Pico Link identity gap is a safe placeholder for Device Credential fixture work: a way to describe that one trusted device may later operate for one Pico without accidentally making the placeholder a Pico Identity Key, bearer token, Home Membership Credential, Domain Content Key or verified signature.
 
 ## Decision
@@ -253,6 +255,8 @@ Before Device Credentials carry security meaning, later ADRs must define:
 - relationship to Home Membership Credentials
 - relationship to Key Envelopes and Domain Content Keys
 - verifier behaviour
+
+ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the fixture-level meaning of those public key references, but it does not satisfy the future verification requirements above.
 
 Until then, device-credential fixtures may only prove placeholder boundaries and rejection of unsafe claims.
 

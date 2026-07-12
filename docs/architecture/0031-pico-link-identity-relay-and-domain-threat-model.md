@@ -176,6 +176,8 @@ Before Device Keys are implemented, define:
 - how stale backups avoid resurrecting revoked authority
 - how surfaces differ from full Pico Vaults
 
+ADR `0055-pico-link-draft-identity-key-placeholder.md` narrows the first draft-only identity-key placeholder boundary for fixture work. It does not implement Pico Identity Keys, Device Keys, key serialization, key possession proofs, trust paths or runtime identity verification.
+
 Revocation must not require destroying the Pico identity unless the identity root itself is compromised.
 
 ADR `0051-pico-link-draft-device-credential-placeholder.md` narrows the first draft-only Device Credential placeholder boundary for fixture work. ADR `0052-pico-link-draft-lost-device-revocation-placeholder.md` narrows the first draft-only lost-device revocation placeholder boundary. ADR `0053-pico-link-draft-revocation-registry-placeholder.md` narrows the first draft-only revocation registry record placeholder boundary. These ADRs do not implement Device Keys, revocation verification, stale-backup enforcement, identity replacement or domain-key rotation.

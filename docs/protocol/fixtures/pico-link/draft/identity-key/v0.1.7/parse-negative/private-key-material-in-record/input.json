@@ -1,0 +1,52 @@
+{
+  "schema": "pico.identity.key-record.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "keyRecordId": "keyrec_placeholder_private_material_leak",
+  "keyRole": "pico_identity",
+  "owner": {
+    "picoIdHint": "pico_placeholder_owner",
+    "deviceIdHint": null,
+    "homeIdHint": null,
+    "proofStatus": "unverified-placeholder"
+  },
+  "publicKey": {
+    "keyRef": "picoidkey_placeholder_owner",
+    "materialStatus": "private-material-present",
+    "format": "unspecified-placeholder",
+    "algorithm": "unspecified-placeholder",
+    "fingerprintStatus": "absent"
+  },
+  "lifecycle": {
+    "status": "introduced-placeholder",
+    "createdAt": "2026-07-12T12:00:00.000Z",
+    "expiresAt": null,
+    "rotationRef": null,
+    "revocationRef": null
+  },
+  "usage": {
+    "allowedPurposes": [
+      "device.delegation"
+    ],
+    "privateMaterialExported": true,
+    "signingAuthorityGranted": false
+  },
+  "binding": {
+    "deviceCredentialRef": null,
+    "homeMembershipRef": null,
+    "domainRefs": [],
+    "transportBinding": "none"
+  },
+  "verification": {
+    "possessionProofStatus": "absent",
+    "issuerVerified": false,
+    "canonicalizationStatus": "absent",
+    "trustPathStatus": "unverified-placeholder"
+  },
+  "privateKeyMaterial": {
+    "kind": "fixture-secret-placeholder-for-rejection",
+    "secretKey": "PRIVATE_KEY_MATERIAL_MUST_NOT_APPEAR"
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}
