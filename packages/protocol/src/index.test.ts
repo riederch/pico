@@ -237,6 +237,7 @@ describe('Pico protocol types', () => {
       'suite.json',
       ...fixturePaths.map((fixturePath) => `${fixturePath}/`),
     ]);
+    expectCurrentFixtureCounts(readRepoFile('docs/protocol/conformance-fixtures.md'), fixturePaths);
 
     for (const fixturePath of fixturePaths) {
       const [fixtureSurface, fixtureVersion, fixtureFamily, fixtureCase] = fixturePathParts(fixturePath);
@@ -595,6 +596,38 @@ function fixturePathParts(path: string): [surface: string, version: string, fami
   }
 
   return parts as [string, string, string, string];
+}
+
+function expectCurrentFixtureCounts(markdown: string, fixturePaths: string[]): void {
+  const count = (surface: string, family: string): number => fixturePaths.filter((fixturePath) => {
+    const [fixtureSurface, , fixtureFamily] = fixturePathParts(fixturePath);
+    return fixtureSurface === surface && fixtureFamily === family;
+  }).length;
+
+  expect(markdown).toContain(`- ${fixtureCountWord(count('foundation-events', 'parse-positive'))} positive Foundation event append fixtures`);
+  expect(markdown).toContain(`- ${fixtureCountWord(count('foundation-events', 'parse-negative'))} negative Foundation event append fixtures`);
+  expect(markdown).toContain(`- ${fixtureCountWord(count('foundation-realtime', 'parse-positive'))} positive current Foundation WebSocket message fixtures`);
+  expect(markdown).toContain(`- ${fixtureCountWord(count('foundation-realtime', 'parse-negative'))} negative Foundation WebSocket message fixtures`);
+}
+
+function fixtureCountWord(count: number): string {
+  const words = [
+    'zero',
+    'one',
+    'two',
+    'three',
+    'four',
+    'five',
+    'six',
+    'seven',
+    'eight',
+    'nine',
+    'ten',
+    'eleven',
+    'twelve',
+  ];
+
+  return words[count] ?? String(count);
 }
 
 function readRepoJsonObject(path: string): Record<string, unknown> {
