@@ -206,6 +206,12 @@ describe('Pico protocol types', () => {
     expect(stringField(suite, 'protocolVersion')).toBe(currentVersion);
     expect(stringArrayField(suite, 'surfaces')).toEqual(['foundation-events', 'foundation-realtime']);
     expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('experimental-l1-seed');
+    expect(stringField(suite, 'disclaimer')).toBe('Fixtures are technical examples and grant no commercial permission.');
+    expect(stringField(suite, 'notes')).toContain('not a published conformance suite or L4 compatibility basis');
     expect(fixturePaths).toEqual([
       'foundation-events/v0.1.7/parse-positive/device-registered-marker',
       'foundation-events/v0.1.7/parse-positive/device-seen-online',
@@ -685,6 +691,15 @@ function numberField(source: Record<string, unknown>, field: string): number {
   const value = source[field];
   if (typeof value !== 'number') {
     throw new Error(`${field} must be a number.`);
+  }
+
+  return value;
+}
+
+function booleanField(source: Record<string, unknown>, field: string): boolean {
+  const value = source[field];
+  if (typeof value !== 'boolean') {
+    throw new Error(`${field} must be a boolean.`);
   }
 
   return value;
