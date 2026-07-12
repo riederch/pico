@@ -226,6 +226,10 @@ describe('Pico protocol types', () => {
       'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories().sort());
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current fixtures')).toEqual([
+      'suite.json',
+      ...fixturePaths.map((fixturePath) => `${fixturePath}/`),
+    ]);
 
     for (const fixturePath of fixturePaths) {
       const [fixtureSurface, fixtureVersion, fixtureFamily, fixtureCase] = fixturePathParts(fixturePath);
