@@ -1,0 +1,7 @@
+{
+  "deviceId": "fixture-device",
+  "type": "device.seen",
+  "payload": {
+    "status": "away"
+  }
+}

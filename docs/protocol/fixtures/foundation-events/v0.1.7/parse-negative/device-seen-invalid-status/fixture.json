@@ -1,0 +1,33 @@
+{
+  "schema": "pico.conformance.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "foundation-events.v0_1_7.parse-negative.device-seen-invalid-status",
+  "stage": "fixture_data",
+  "surface": "foundation-events",
+  "protocolVersion": "0.1.7",
+  "family": "parse-negative",
+  "case": "device.seen append body rejected when status is outside current Foundation values",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "schema_error"
+    ],
+    "http": {
+      "method": "POST",
+      "path": "/api/events",
+      "status": 400,
+      "body": {
+        "error": "device.seen payload requires status."
+      }
+    }
+  },
+  "capabilitiesRequired": [
+    "pico.core.events.v1"
+  ],
+  "notes": "Experimental Foundation fixture. device.seen status remains diagnostics metadata and is not verified presence, Home membership or authorization."
+}
