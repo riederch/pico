@@ -68,6 +68,8 @@ compatibility-claims
 
 ADR `0051-pico-link-draft-device-credential-placeholder.md` defines the first draft-only Device Credential placeholder boundary for future Pico Link identity fixture work. Device Credential placeholders may describe scoped device-operation intent, but must not claim Pico identity ownership, Home membership, domain access, bearer-token authority, runtime verification or compatibility.
 
+ADR `0052-pico-link-draft-lost-device-revocation-placeholder.md` defines the first draft-only lost-device revocation placeholder boundary for future Pico Link identity fixture work. Lost-device placeholders may describe future device-authority blocking intent, but must not claim identity replacement, stale-backup restore safety, completed domain-key rotation, runtime enforcement or compatibility.
+
 `pico-home-link` draft fixtures may cover membership-credential placeholder shape only after the issuer, subject, audience, expiry and revocation fields are described at a concept level. They must not make a credential accepted by runtime code before verification semantics exist.
 
 ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work.

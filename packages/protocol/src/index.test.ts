@@ -328,6 +328,10 @@ describe('Pico protocol types', () => {
       'device-credential/v0.1.7/parse-positive/vault-device-placeholder',
       'device-credential/v0.1.7/parse-negative/bearer-token-as-device-credential',
       'device-credential/v0.1.7/parse-negative/domain-key-access-claim',
+      'lost-device/v0.1.7/parse-positive/revoke-device-placeholder',
+      'lost-device/v0.1.7/parse-negative/stale-backup-reactivation',
+      'lost-device/v0.1.7/parse-negative/identity-replacement-claim',
+      'lost-device/v0.1.7/parse-negative/domain-rotation-proof-claim',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
@@ -977,6 +981,84 @@ function expectDraftFixtureBoundary(
     } else {
       expect(input.bearerToken).toBeUndefined();
       expect(booleanField(authority, 'bearerTokenUsed')).toBe(false);
+    }
+  } else if (draftSurface === 'lost-device') {
+    expect(stringField(input, 'schema')).toBe('pico.identity.lost-device-revocation.draft');
+    expect(stringField(input, 'revocationId')).toContain('devrevoke_placeholder_');
+    const actor = recordField(input, 'actor');
+    expect(stringField(actor, 'proofStatus')).toBe('unverified-placeholder');
+    expect(stringField(actor, 'picoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(actor, 'identityKeyRef')).toContain('picoidkey_placeholder_');
+    const subject = recordField(input, 'subject');
+    expect(['pico-vault', 'trusted-device', 'pico-surface', 'browser-session', 'service-placeholder']).toContain(stringField(subject, 'deviceKind'));
+    expect(stringField(subject, 'deviceIdHint')).toContain('device_placeholder_');
+    expect(stringField(subject, 'deviceKeyRef')).toContain('devicekey_placeholder_');
+    expect(stringField(subject, 'credentialIdRef')).toContain('devcred_placeholder_');
+    expect(['active', 'pending_activation', 'retiring', 'unknown']).toContain(stringField(subject, 'stateBefore'));
+    expect(['lost', 'revoked', 'compromised', 'superseded']).toContain(stringField(subject, 'stateAfter'));
+    const reason = recordField(input, 'reason');
+    expect(['lost_device', 'suspected_compromise', 'user_reported_missing', 'device_retired_by_owner']).toContain(stringField(reason, 'category'));
+    expect(booleanField(reason, 'userVisible')).toBe(true);
+    const revocation = recordField(input, 'revocation');
+    expect(stringField(revocation, 'status')).toBe('revoked');
+    expect(stringField(revocation, 'revocationRef')).toContain('revocation_placeholder_');
+    for (const scope of stringArrayField(revocation, 'appliesToScopes')) {
+      expect(['packet.sign', 'packet.receive', 'history.sign', 'manifest.sign', 'sync.exchange', 'key_envelope.receive', 'surface.session']).toContain(scope);
+    }
+    const domainImpact = recordField(input, 'domainImpact');
+    expect(['evaluate', 'not_required_placeholder']).toContain(stringField(domainImpact, 'domainKeyRotationRequired'));
+    const backupPolicy = recordField(input, 'backupPolicy');
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    const lifecycle = recordField(expectBlock, 'lifecycle');
+    expect(booleanField(lifecycle, 'credentialVerified')).toBe(false);
+    expect(booleanField(lifecycle, 'runtimeEnforced')).toBe(false);
+
+    if (fixtureCase === 'stale-backup-reactivation') {
+      expect(booleanField(revocation, 'futureAuthorityBlocked')).toBe(false);
+      expect(stringField(backupPolicy, 'staleBackupReactivation')).toBe('accept');
+      expect(booleanField(backupPolicy, 'freshnessRequired')).toBe(false);
+      expect(recordField(input, 'restoreAttempt')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['stale_backup_reactivation']);
+      expect(booleanField(lifecycle, 'futureDeviceAuthorityBlocked')).toBe(false);
+      expect(booleanField(lifecycle, 'staleBackupAccepted')).toBe(true);
+    } else {
+      expect(booleanField(revocation, 'futureAuthorityBlocked')).toBe(true);
+      expect(stringField(backupPolicy, 'staleBackupReactivation')).toBe('reject');
+      expect(booleanField(backupPolicy, 'freshnessRequired')).toBe(true);
+      expect(input.restoreAttempt).toBeUndefined();
+      expect(booleanField(lifecycle, 'futureDeviceAuthorityBlocked')).toBe(true);
+      expect(booleanField(lifecycle, 'staleBackupAccepted')).toBe(false);
+    }
+
+    if (fixtureCase === 'identity-replacement-claim') {
+      expect(booleanField(revocation, 'historicalRecordsRetained')).toBe(false);
+      expect(recordField(input, 'identityReplacementClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['identity_replacement_boundary']);
+      expect(booleanField(lifecycle, 'identityRootReplaced')).toBe(true);
+      expect(booleanField(lifecycle, 'recoveryAuthorityGranted')).toBe(true);
+      expect(booleanField(lifecycle, 'historicalTrustRewritten')).toBe(true);
+    } else {
+      expect(booleanField(revocation, 'historicalRecordsRetained')).toBe(true);
+      expect(input.identityReplacementClaim).toBeUndefined();
+      expect(booleanField(lifecycle, 'identityRootReplaced')).toBe(false);
+      expect(booleanField(lifecycle, 'recoveryAuthorityGranted')).toBe(false);
+      expect(booleanField(lifecycle, 'historicalTrustRewritten')).toBe(false);
+    }
+
+    if (fixtureCase === 'domain-rotation-proof-claim') {
+      expect(stringField(domainImpact, 'domainKeyRotationStatus')).toBe('complete');
+      expect(stringField(domainImpact, 'domainContentKeyRef')).toContain('domainkey_placeholder');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['domain_rotation_claim']);
+      expect(booleanField(lifecycle, 'domainKeyRotationCompleted')).toBe(true);
+      expect(booleanField(lifecycle, 'domainContentKeyExposed')).toBe(true);
+    } else {
+      expect(['not_claimed', 'evaluate', 'required_placeholder', 'not_required_placeholder']).toContain(stringField(domainImpact, 'domainKeyRotationStatus'));
+      expect(domainImpact.domainContentKeyRef).toBeUndefined();
+      expect(booleanField(lifecycle, 'domainKeyRotationCompleted')).toBe(false);
+      expect(booleanField(lifecycle, 'domainContentKeyExposed')).toBe(false);
     }
   } else if (draftSurface === 'canonicalization') {
     expect(stringField(input, 'schema')).toBe('pico.canonicalization.case.draft');

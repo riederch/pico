@@ -1,0 +1,44 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.lost-device.v0_1_7.parse-positive.revoke-device-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "lost-device",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft lost-device revocation accepts future-authority blocking placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "lifecycle": {
+      "credentialVerified": false,
+      "runtimeEnforced": false,
+      "futureDeviceAuthorityBlocked": true,
+      "domainKeyRotationCompleted": false,
+      "identityRootReplaced": false,
+      "recoveryAuthorityGranted": false,
+      "historicalTrustRewritten": false,
+      "staleBackupAccepted": false,
+      "domainContentKeyExposed": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0052 positive fixture. It proves only lost-device revocation placeholder shape acceptance and does not enforce runtime revocation."
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.lost-device.v0_1_7.parse-negative.stale-backup-reactivation",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "lost-device",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft lost-device revocation rejects stale backup reactivation",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "stale_backup_reactivation"
+    ],
+    "lifecycle": {
+      "credentialVerified": false,
+      "runtimeEnforced": false,
+      "futureDeviceAuthorityBlocked": false,
+      "domainKeyRotationCompleted": false,
+      "identityRootReplaced": false,
+      "recoveryAuthorityGranted": false,
+      "historicalTrustRewritten": false,
+      "staleBackupAccepted": true,
+      "domainContentKeyExposed": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0052 negative fixture. A stale backup must not reactivate a lost or revoked device."
+}

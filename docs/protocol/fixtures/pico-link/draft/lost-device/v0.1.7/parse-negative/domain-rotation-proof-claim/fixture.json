@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.lost-device.v0_1_7.parse-negative.domain-rotation-proof-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "lost-device",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft lost-device revocation rejects domain key rotation proof claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "domain_rotation_claim"
+    ],
+    "lifecycle": {
+      "credentialVerified": false,
+      "runtimeEnforced": false,
+      "futureDeviceAuthorityBlocked": true,
+      "domainKeyRotationCompleted": true,
+      "identityRootReplaced": false,
+      "recoveryAuthorityGranted": false,
+      "historicalTrustRewritten": false,
+      "staleBackupAccepted": false,
+      "domainContentKeyExposed": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0052 negative fixture. Lost-device revocation cannot prove completed Domain Content Key rotation or expose domain key material."
+}

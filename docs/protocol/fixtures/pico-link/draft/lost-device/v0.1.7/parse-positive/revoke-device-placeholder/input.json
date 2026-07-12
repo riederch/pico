@@ -1,0 +1,58 @@
+{
+  "schema": "pico.identity.lost-device-revocation.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "revocationId": "devrevoke_placeholder_lost_phone",
+  "actor": {
+    "picoIdHint": "pico_placeholder_owner",
+    "identityKeyRef": "picoidkey_placeholder_owner",
+    "actorDeviceIdHint": "device_placeholder_owner_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "subject": {
+    "deviceKind": "trusted-device",
+    "deviceIdHint": "device_placeholder_phone",
+    "deviceKeyRef": "devicekey_placeholder_phone",
+    "credentialIdRef": "devcred_placeholder_phone",
+    "stateBefore": "active",
+    "stateAfter": "lost",
+    "lastSeenAt": "2026-07-12T10:00:00.000Z"
+  },
+  "reason": {
+    "category": "lost_device",
+    "userVisible": true,
+    "descriptionHint": "Synthetic lost phone"
+  },
+  "revocation": {
+    "status": "revoked",
+    "revocationRef": "revocation_placeholder_lost_phone",
+    "effectiveAt": "2026-07-12T12:00:00.000Z",
+    "appliesToScopes": [
+      "packet.sign",
+      "packet.receive",
+      "history.sign",
+      "manifest.sign",
+      "sync.exchange",
+      "key_envelope.receive",
+      "surface.session"
+    ],
+    "futureAuthorityBlocked": true,
+    "historicalRecordsRetained": true
+  },
+  "domainImpact": {
+    "domainRefs": [],
+    "domainKeyRotationRequired": "evaluate",
+    "domainKeyRotationStatus": "not_claimed"
+  },
+  "backupPolicy": {
+    "staleBackupReactivation": "reject",
+    "freshnessRequired": true
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_lost_phone",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

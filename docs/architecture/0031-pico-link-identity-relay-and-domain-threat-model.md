@@ -178,6 +178,8 @@ Before Device Keys are implemented, define:
 
 Revocation must not require destroying the Pico identity unless the identity root itself is compromised.
 
+ADR `0051-pico-link-draft-device-credential-placeholder.md` narrows the first draft-only Device Credential placeholder boundary for fixture work. ADR `0052-pico-link-draft-lost-device-revocation-placeholder.md` narrows the first draft-only lost-device revocation placeholder boundary. Neither ADR implements Device Keys, revocation verification, stale-backup enforcement, identity replacement or domain-key rotation.
+
 ## Home membership requirements
 
 Before Home Membership Credentials are implemented, define:

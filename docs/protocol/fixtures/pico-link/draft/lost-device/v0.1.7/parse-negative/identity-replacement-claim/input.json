@@ -1,0 +1,62 @@
+{
+  "schema": "pico.identity.lost-device-revocation.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "revocationId": "devrevoke_placeholder_identity_replacement_claim",
+  "actor": {
+    "picoIdHint": "pico_placeholder_owner",
+    "identityKeyRef": "picoidkey_placeholder_owner",
+    "actorDeviceIdHint": "device_placeholder_owner_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "subject": {
+    "deviceKind": "pico-vault",
+    "deviceIdHint": "device_placeholder_laptop_vault",
+    "deviceKeyRef": "devicekey_placeholder_laptop_vault",
+    "credentialIdRef": "devcred_placeholder_laptop_vault",
+    "stateBefore": "active",
+    "stateAfter": "lost",
+    "lastSeenAt": "2026-07-12T10:00:00.000Z"
+  },
+  "reason": {
+    "category": "suspected_compromise",
+    "userVisible": true,
+    "descriptionHint": "Synthetic compromised vault with unsafe identity claim"
+  },
+  "revocation": {
+    "status": "revoked",
+    "revocationRef": "revocation_placeholder_identity_replacement_claim",
+    "effectiveAt": "2026-07-12T12:00:00.000Z",
+    "appliesToScopes": [
+      "packet.sign",
+      "packet.receive",
+      "history.sign",
+      "manifest.sign",
+      "sync.exchange"
+    ],
+    "futureAuthorityBlocked": true,
+    "historicalRecordsRetained": false
+  },
+  "domainImpact": {
+    "domainRefs": [],
+    "domainKeyRotationRequired": "evaluate",
+    "domainKeyRotationStatus": "not_claimed"
+  },
+  "backupPolicy": {
+    "staleBackupReactivation": "reject",
+    "freshnessRequired": true
+  },
+  "identityReplacementClaim": {
+    "identityRootReplaced": true,
+    "newIdentityKeyRef": "picoidkey_placeholder_new_root",
+    "recoveryAuthority": "granted_by_lost_device_flow",
+    "historicalTrustRewritten": true
+  },
+  "audit": {
+    "auditRef": "audit_placeholder_identity_replacement_claim",
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

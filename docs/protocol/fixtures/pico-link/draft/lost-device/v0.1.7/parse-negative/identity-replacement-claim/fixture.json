@@ -1,0 +1,46 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.lost-device.v0_1_7.parse-negative.identity-replacement-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "lost-device",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft lost-device revocation rejects identity replacement claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "identity_replacement_boundary"
+    ],
+    "lifecycle": {
+      "credentialVerified": false,
+      "runtimeEnforced": false,
+      "futureDeviceAuthorityBlocked": true,
+      "domainKeyRotationCompleted": false,
+      "identityRootReplaced": true,
+      "recoveryAuthorityGranted": true,
+      "historicalTrustRewritten": true,
+      "staleBackupAccepted": false,
+      "domainContentKeyExposed": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0052 negative fixture. Lost-device handling cannot replace Pico identity, grant recovery authority or rewrite history."
+}

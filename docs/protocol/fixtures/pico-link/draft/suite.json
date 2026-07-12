@@ -30,6 +30,10 @@
     "device-credential/v0.1.7/parse-positive/vault-device-placeholder",
     "device-credential/v0.1.7/parse-negative/bearer-token-as-device-credential",
     "device-credential/v0.1.7/parse-negative/domain-key-access-claim",
+    "lost-device/v0.1.7/parse-positive/revoke-device-placeholder",
+    "lost-device/v0.1.7/parse-negative/stale-backup-reactivation",
+    "lost-device/v0.1.7/parse-negative/identity-replacement-claim",
+    "lost-device/v0.1.7/parse-negative/domain-rotation-proof-claim",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],
