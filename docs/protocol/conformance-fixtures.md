@@ -33,8 +33,9 @@ This document follows:
 - `../architecture/0032-pico-link-envelope-and-credential-schema-direction.md`
 - `../architecture/0033-key-lifecycle-rotation-revocation-and-recovery.md`
 - `../architecture/0034-canonicalization-signature-inputs-and-test-vectors.md`
+- `../architecture/0042-pico-link-draft-schema-and-fixture-gate.md`
 
-ADR 0034 defines the canonicalization and test-vector boundary. This document turns that boundary into a planned repository layout.
+ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. This document turns those boundaries into a planned repository layout.
 
 ## Current boundary
 
@@ -295,7 +296,7 @@ Foundation fixtures must state that they are experimental and do not imply L2 Pi
 
 ## Pico Link and Pico Home Link fixture scope
 
-Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist.
+Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows future draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility.
 
 Future Pico Link fixtures may cover:
 

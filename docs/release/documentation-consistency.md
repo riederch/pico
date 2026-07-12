@@ -152,6 +152,7 @@ In particular:
 - Foundation access hardening, Home Assistant ingress and temporary direct-access token language must remain consistent with `0038`
 - Foundation WebSocket ticket and direct-access realtime hardening language must remain consistent with `0039`
 - Home Assistant ingress metadata, add-on token option and packaging-default language must remain consistent with `0040`
+- Pico Link draft schema and fixture staging language must remain consistent with `0042`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

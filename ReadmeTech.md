@@ -500,6 +500,7 @@ The project concept is persisted as architecture notes:
 | `0039-foundation-websocket-ticket-boundary.md` | direct-access Foundation WebSocket ticket boundary |
 | `0040-foundation-home-assistant-ingress-and-addon-token-options.md` | concrete Home Assistant ingress metadata, add-on token option and packaging-default direction |
 | `0041-foundation-access-modes-and-direct-port-gate.md` | explicit Foundation access modes and direct-port gate |
+| `0042-pico-link-draft-schema-and-fixture-gate.md` | draft-only Pico Link schema and fixture staging gate |
 
 Protocol documents:
 
@@ -581,6 +582,7 @@ The demo must not become the path for production remote access. If it starts for
 - Validate the ADR 0040 Home Assistant ingress slice on a real HA installation, including dashboard load, `/api/system/status`, `WS /ws` and watchdog `/health`
 - Decide whether a future explicit add-on debug port option is needed after HA ingress validation
 - Use ADR 0031, ADR 0032, ADR 0033 and ADR 0034 to refine identity/device/home key wire schemas, rotation semantics, canonicalization and conformance tests before real Pico Link communication
+- Use ADR 0042 to keep any draft Pico Link fixture data separate from Foundation fixtures and clearly below runtime, crypto or compatibility claims
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
