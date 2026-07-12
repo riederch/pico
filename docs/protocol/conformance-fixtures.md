@@ -39,8 +39,11 @@ This document follows:
 - `../architecture/0045-pico-home-link-draft-membership-credential-placeholder.md`
 - `../architecture/0046-draft-compatibility-claim-placeholder.md`
 - `../architecture/0047-draft-canonicalization-rejection-placeholder.md`
+- `../architecture/0048-model-capability-delegation-and-remote-inference-boundary.md`
+- `../architecture/0049-model-provider-registry-and-job-envelope.md`
+- `../architecture/0050-model-delegation-draft-fixture-gate.md`
 
-ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. This document turns those boundaries into a planned repository layout.
+ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. This document turns those boundaries into a planned repository layout.
 
 ## Current boundary
 
@@ -56,6 +59,7 @@ The current repository does not contain:
 - lifecycle-aware verification fixtures
 - Pico Link packet fixtures
 - Pico Home Link membership fixtures
+- model-delegation fixtures
 - L4 compatibility certification
 
 Current Foundation HTTP and WebSocket behaviour remains experimental foundation plumbing. The seed fixtures do not change that.
@@ -115,6 +119,12 @@ docs/protocol/fixtures/
     draft/
       positive/
       negative/
+  model-delegation/
+    draft/
+      provider-registry/
+      job-envelope/
+      result-envelope/
+      privacy-negative/
 ```
 
 This layout is implemented only for the current Foundation event and realtime seed. Other directories remain conceptual until fixture files are added.
@@ -165,6 +175,7 @@ pico-link
 pico-home-link
 canonicalization
 compatibility-claims
+model-delegation
 privacy
 lifecycle
 ```
