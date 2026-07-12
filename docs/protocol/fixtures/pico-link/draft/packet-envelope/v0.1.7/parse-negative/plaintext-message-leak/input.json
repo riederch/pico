@@ -1,0 +1,24 @@
+{
+  "schema": "pico.link.packet.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "packetId": "pkt_draft_plaintext_leak",
+  "routing": {
+    "destinationRouteId": "route_destination_placeholder",
+    "senderRouteId": "route_sender_placeholder",
+    "replyRouteId": "route_reply_placeholder"
+  },
+  "delivery": {
+    "trafficClass": "message",
+    "priority": "normal",
+    "ttl": 3,
+    "expiresAt": "2026-07-12T12:00:00.000Z"
+  },
+  "payload": {
+    "contentType": "application/vnd.pico.link.protected-placeholder+json",
+    "placeholder": true,
+    "protectedPayloadRef": "payload_placeholder_plaintext_leak"
+  },
+  "messageText": "This plaintext must not be relay-visible.",
+  "extensions": {}
+}

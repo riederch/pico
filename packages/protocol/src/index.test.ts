@@ -241,8 +241,10 @@ describe('Pico protocol types', () => {
       'foundation-realtime/v0.1.7/parse-negative/event-created-invalid-payload',
       'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
     ]);
-    expect([...fixturePaths].sort()).toEqual(listFixtureDirectories().sort());
-    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current fixtures')).toEqual([
+    expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures')
+      .filter((fixturePath) => !fixturePath.startsWith('pico-link/draft/'))
+      .sort());
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
       ...fixturePaths.map((fixturePath) => `${fixturePath}/`),
     ]);
@@ -289,6 +291,78 @@ describe('Pico protocol types', () => {
       } else {
         throw new Error(`Unexpected fixture surface: ${surface}`);
       }
+    }
+  });
+
+  it('keeps draft Pico Link fixtures staged below runtime and compatibility claims', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const foundationSuite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/pico-link/draft/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+
+    expect(stringArrayField(foundationSuite, 'fixtures').some((fixturePath) => fixturePath.startsWith('pico-link/draft/'))).toBe(false);
+    expect(stringField(suite, 'schema')).toBe('pico.draft.fixture.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.pico-link.draft.v0_1_7');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'protocolVersion')).toBe(currentVersion);
+    expect(stringArrayField(suite, 'surfaces')).toEqual(['pico-link', 'compatibility-claims']);
+    expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'parse-negative']);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('draft-only');
+    expect(stringField(suite, 'disclaimer')).toContain('No production security guarantee');
+    expect(stringField(suite, 'disclaimer')).toContain('no L4 compatibility basis');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+    expect(stringField(suite, 'notes')).toContain('not a runner');
+    expect(stringField(suite, 'notes')).toContain('not a published conformance suite');
+    expect(fixturePaths).toEqual([
+      'packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder',
+      'packet-envelope/v0.1.7/parse-negative/plaintext-message-leak',
+      'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
+      'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
+    ]);
+    expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures/pico-link/draft').sort());
+
+    for (const fixturePath of fixturePaths) {
+      const [draftSurface, fixtureVersion, fixtureFamily, fixtureCase] = fixturePathParts(fixturePath);
+      const fixture = readRepoJsonObject(`docs/protocol/fixtures/pico-link/draft/${fixturePath}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const expectBlock = recordField(fixture, 'expect');
+      const runnerBlock = recordField(fixture, 'runner');
+      const claims = recordField(fixture, 'claims');
+      const input = readRepoJsonObject(`docs/protocol/fixtures/pico-link/draft/${fixturePath}/${stringField(source, 'file')}`);
+
+      expect(stringField(fixture, 'schema')).toBe('pico.draft.fixture');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'compatibilityLevel')).toBe('draft-only');
+      expect(stringField(fixture, 'draftSurface')).toBe(draftSurface);
+      expect(fixtureVersion).toBe(`v${currentVersion}`);
+      expect(stringField(fixture, 'protocolVersion')).toBe(currentVersion);
+      expect(stringField(fixture, 'family')).toBe(fixtureFamily);
+      expect(stringArrayField(suite, 'families')).toContain(fixtureFamily);
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toContain('Draft-only');
+      expect(stringField(source, 'encoding')).toBe('json');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(booleanField(runnerBlock, 'required')).toBe(false);
+      expect(stringField(runnerBlock, 'status')).toBe('none');
+      expectDraftClaimsRemainFalse(claims);
+
+      if (fixtureFamily === 'parse-positive') {
+        expect(stringField(expectBlock, 'parse')).toBe('accept');
+        expect(stringArrayField(expectBlock, 'errors')).toEqual([]);
+      } else if (fixtureFamily === 'parse-negative') {
+        expect(stringField(expectBlock, 'parse')).toBe('reject');
+        expect(booleanField(expectBlock, 'preserveSemantics')).toBe(false);
+      } else {
+        throw new Error(`Unexpected draft fixture family: ${fixtureFamily}`);
+      }
+
+      expectDraftFixtureBoundary(draftSurface, fixtureCase, input, expectBlock);
     }
   });
 
@@ -607,13 +681,106 @@ function readRepoFile(path: string): string {
   return readFileSync(resolve(repoRootPath, path), 'utf8');
 }
 
-function listFixtureDirectories(): string[] {
-  const fixturesRootPath = resolve(repoRootPath, 'docs/protocol/fixtures');
+function listFixtureDirectories(rootPath: string): string[] {
+  const fixturesRootPath = resolve(repoRootPath, rootPath);
   const fixtureDirectories: string[] = [];
 
   collectFixtureDirectories(fixturesRootPath, '', fixtureDirectories);
 
   return fixtureDirectories;
+}
+
+function expectDraftClaimsRemainFalse(claims: Record<string, unknown>): void {
+  expect(booleanField(claims, 'productionSecurity')).toBe(false);
+  expect(booleanField(claims, 'cryptographyVerified')).toBe(false);
+  expect(booleanField(claims, 'homeMembershipVerified')).toBe(false);
+  expect(booleanField(claims, 'l4Compatibility')).toBe(false);
+  expect(booleanField(claims, 'commercialPermission')).toBe(false);
+}
+
+function expectDraftFixtureBoundary(
+  draftSurface: string,
+  fixtureCase: string,
+  input: Record<string, unknown>,
+  expectBlock: Record<string, unknown>,
+): void {
+  expect(stringField(input, 'fixtureStage')).toBe('draft');
+
+  if (draftSurface === 'packet-envelope') {
+    expect(stringField(input, 'schema')).toBe('pico.link.packet.draft');
+    expect(Object.keys(input).sort()).toEqual([
+      'delivery',
+      'extensions',
+      'fixtureStage',
+      'packetId',
+      'payload',
+      'routing',
+      'schema',
+      'schemaVersion',
+      ...(fixtureCase === 'plaintext-message-leak' ? ['messageText'] : []),
+    ].sort());
+    expect(stringField(input, 'packetId')).toContain('pkt_draft_');
+    const routing = recordField(input, 'routing');
+    expect(Object.keys(routing).sort()).toEqual(['destinationRouteId', 'replyRouteId', 'senderRouteId']);
+    for (const routingValue of Object.values(routing)) {
+      expect(typeof routingValue).toBe('string');
+      expect(String(routingValue)).toContain('route_');
+      expect(String(routingValue)).not.toContain('pico_');
+    }
+    const delivery = recordField(input, 'delivery');
+    expect(['message', 'presence', 'wake_hint', 'system_probe']).toContain(stringField(delivery, 'trafficClass'));
+    expect(['low', 'normal']).toContain(stringField(delivery, 'priority'));
+    expect(numberField(delivery, 'ttl')).toBeGreaterThan(0);
+    expect(stringField(delivery, 'expiresAt')).toBeTruthy();
+    const payload = recordField(input, 'payload');
+    expect(stringField(payload, 'contentType')).toBe('application/vnd.pico.link.protected-placeholder+json');
+    expect(booleanField(payload, 'placeholder')).toBe(true);
+    expect(stringField(payload, 'protectedPayloadRef')).toContain('payload_placeholder_');
+    expect(payload.ciphertext).toBeUndefined();
+    expect(payload.signature).toBeUndefined();
+    expect(payload.keyEnvelope).toBeUndefined();
+    expect(payload.algorithmSuite).toBeUndefined();
+    expect(payload.plaintext).toBeUndefined();
+
+    if (fixtureCase === 'plaintext-message-leak') {
+      expect(stringField(input, 'messageText')).toContain('plaintext');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['protected_plaintext_leak']);
+    } else {
+      expect(input.messageText).toBeUndefined();
+    }
+  } else if (draftSurface === 'protected-payload') {
+    expect(stringField(input, 'schema')).toBe('pico.payload.protected.draft');
+    const protection = recordField(input, 'protection');
+    expect(stringField(protection, 'mode')).toBe('placeholder');
+    expect(stringField(protection, 'algorithmSuite')).toBe('placeholder-only');
+    expect(stringArrayField(protection, 'keyEnvelopeRefs')).toEqual([]);
+    const claimedSender = recordField(input, 'claimedSender');
+    expect(stringField(claimedSender, 'proofStatus')).toBe('unverified-placeholder');
+    const body = recordField(input, 'body');
+    expect(stringField(body, 'kind')).toBe('opaque-placeholder');
+    expect(booleanField(body, 'placeholder')).toBe(true);
+    expect(stringField(body, 'protectedContentRef')).toContain('content_placeholder_');
+    expect(input.ciphertext).toBeUndefined();
+    expect(input.signature).toBeUndefined();
+    expect(input.keyEnvelope).toBeUndefined();
+    expect(input.plaintext).toBeUndefined();
+  } else if (draftSurface === 'compatibility-claims') {
+    expect(stringField(input, 'schema')).toBe('pico.compatibility.claim.draft');
+    const conformance = recordField(input, 'conformance');
+    expect(stringField(conformance, 'runner')).toBe('none');
+    expect(stringField(conformance, 'result')).toBe('not_tested');
+    const security = recordField(input, 'security');
+    expect(booleanField(security, 'productionSecurity')).toBe(false);
+    expect(booleanField(security, 'cryptographyVerified')).toBe(false);
+    expect(booleanField(security, 'homeMembershipVerified')).toBe(false);
+    const permission = recordField(input, 'permission');
+    expect(stringField(permission, 'commercialPermission')).toBe('not-granted-by-compatibility');
+    expect(stringArrayField(expectBlock, 'errors')).toEqual(['compatibility_claim']);
+    expect(stringArrayField(input, 'disclaimers')).not.toContain('not L4 conformance');
+    expect(stringArrayField(expectBlock, 'requiredDisclaimers')).toContain('not L4 conformance');
+  } else {
+    throw new Error(`Unexpected draft surface: ${draftSurface}`);
+  }
 }
 
 function collectFixtureDirectories(directoryPath: string, relativePath: string, fixtureDirectories: string[]): void {

@@ -4,7 +4,7 @@ This directory contains experimental fixture data for future Pico protocol confo
 
 The current fixture set is a seed set for Foundation event and realtime compatibility only. It does not publish an executable conformance suite, certify L4 compatibility, define Pico Link or Pico Home Link compatibility, or make current Foundation APIs production-ready.
 
-## Current fixtures
+## Current Foundation fixtures
 
 ```text
 suite.json
@@ -37,6 +37,18 @@ foundation-realtime/v0.1.7/parse-negative/event-created-invalid-payload/
 foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime/
 ```
 
+## Current draft Pico Link fixtures
+
+These fixtures are in a separate draft suite and are not part of the Foundation seed suite.
+
+```text
+pico-link/draft/suite.json
+pico-link/draft/packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder/
+pico-link/draft/packet-envelope/v0.1.7/parse-negative/plaintext-message-leak/
+pico-link/draft/protected-payload/v0.1.7/parse-positive/opaque-placeholder/
+pico-link/draft/compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner/
+```
+
 Each fixture directory contains:
 
 - `fixture.json` - fixture metadata and expected result
@@ -45,3 +57,5 @@ Each fixture directory contains:
 ## Boundary
 
 These fixtures are synthetic Foundation-stage examples. They are not cryptographic vectors and do not include private keys, signatures, canonical bytes, recovery material or production credentials.
+
+Draft Pico Link fixtures are non-normative fixture data only. They are not a runner, not a Pico Link implementation, not cryptographic verification, not Home membership authority, not an L4 compatibility basis and not commercial permission.

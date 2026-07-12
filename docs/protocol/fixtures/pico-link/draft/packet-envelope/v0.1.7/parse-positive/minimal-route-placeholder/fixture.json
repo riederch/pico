@@ -1,0 +1,37 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.packet-envelope.v0_1_7.parse-positive.minimal-route-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "packet-envelope",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "minimal draft packet envelope with route placeholders and opaque payload reference",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": false,
+    "errors": [],
+    "privacy": {
+      "relayVisiblePlaintext": false,
+      "routingIdentityIsPicoIdentity": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0043 packet-envelope fixture. This is not a Pico Link implementation, not cryptography and not compatibility certification."
+}

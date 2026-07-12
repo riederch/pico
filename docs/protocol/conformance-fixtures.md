@@ -301,7 +301,15 @@ Foundation fixtures must state that they are experimental and do not imply L2 Pi
 
 ## Pico Link and Pico Home Link fixture scope
 
-Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows future draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such future draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape. ADR 0046 narrows the first allowed compatibility-claim placeholder shape. ADR 0047 narrows the first allowed canonicalization rejection placeholder shape.
+Pico Link and Pico Home Link fixtures remain draft-only until protocol schemas exist. ADR 0042 allows draft-only, non-normative machine-readable fixtures for packet-envelope shape, relay-visible privacy checks and placeholder protected-payload structure, but those fixtures must remain separate from the current Foundation seed suite and must not imply runtime support, cryptographic verification, relay interoperability, Home membership authority or L4 compatibility. ADR 0043 narrows the first allowed packet-envelope preflight shape for such draft fixtures. ADR 0044 narrows the first allowed protected-payload placeholder shape. ADR 0045 narrows the first allowed Home Membership Credential placeholder shape. ADR 0046 narrows the first allowed compatibility-claim placeholder shape. ADR 0047 narrows the first allowed canonicalization rejection placeholder shape.
+
+The current draft Pico Link suite lives separately from the Foundation seed:
+
+```text
+docs/protocol/fixtures/pico-link/draft/suite.json
+```
+
+It currently contains one positive and one negative packet-envelope preflight fixture, one positive protected-payload placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
 
 Future Pico Link fixtures may cover:
 

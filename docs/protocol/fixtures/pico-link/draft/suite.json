@@ -1,0 +1,29 @@
+{
+  "schema": "pico.draft.fixture.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.pico-link.draft.v0_1_7",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "protocolVersion": "0.1.7",
+  "surfaces": [
+    "pico-link",
+    "compatibility-claims"
+  ],
+  "families": [
+    "parse-positive",
+    "parse-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "draft-only",
+  "disclaimer": "Draft-only fixture data. No production security guarantee, no L4 compatibility basis and no commercial permission.",
+  "fixtures": [
+    "packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder",
+    "packet-envelope/v0.1.7/parse-negative/plaintext-message-leak",
+    "protected-payload/v0.1.7/parse-positive/opaque-placeholder",
+    "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
+  ],
+  "notes": "Draft Pico Link fixture data only. This is not a runner, not a published conformance suite, not a Pico Link implementation, not cryptographic verification and not an L4 compatibility basis."
+}

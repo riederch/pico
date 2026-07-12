@@ -1,0 +1,38 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.protected-payload.v0_1_7.parse-positive.opaque-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "protected-payload",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft protected payload placeholder with no crypto or authority claims",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": false,
+    "errors": [],
+    "privacy": {
+      "bodyIsOpaquePlaceholder": true,
+      "senderProofVerified": false,
+      "audienceAuthorityVerified": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0044 protected-payload placeholder fixture. It is not encryption, signing, key wrapping or verified authority."
+}

@@ -1,0 +1,42 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "compatibility-claims.v0_1_7.parse-negative.l4-claim-without-runner",
+  "stage": "fixture_data",
+  "surface": "compatibility-claims",
+  "draftSurface": "compatibility-claims",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft compatibility claim rejects L4 wording without runner, suite and disclaimer",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "compatibility_claim"
+    ],
+    "requiredDisclaimers": [
+      "draft-only",
+      "not production security",
+      "not L4 conformance",
+      "not official",
+      "not commercial permission"
+    ]
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0046 negative fixture. It rejects unsafe claim wording and does not certify compatibility."
+}

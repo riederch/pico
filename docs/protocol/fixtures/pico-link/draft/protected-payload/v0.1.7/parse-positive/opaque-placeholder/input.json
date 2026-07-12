@@ -1,0 +1,25 @@
+{
+  "schema": "pico.payload.protected.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "protection": {
+    "mode": "placeholder",
+    "algorithmSuite": "placeholder-only",
+    "keyEnvelopeRefs": []
+  },
+  "claimedSender": {
+    "picoIdHint": "pico_placeholder_sender",
+    "deviceIdHint": "device_placeholder_sender",
+    "proofStatus": "unverified-placeholder"
+  },
+  "claimedAudience": {
+    "domainRef": "domain_placeholder_private",
+    "readerSet": "placeholder"
+  },
+  "body": {
+    "kind": "opaque-placeholder",
+    "placeholder": true,
+    "protectedContentRef": "content_placeholder_opaque"
+  },
+  "extensions": {}
+}
