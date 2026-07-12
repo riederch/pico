@@ -228,6 +228,8 @@ describe('Pico protocol types', () => {
       'foundation-realtime/v0.1.7/parse-positive/event-created-avatar-state',
       'foundation-realtime/v0.1.7/parse-negative/core-connected-missing-device-id',
       'foundation-realtime/v0.1.7/parse-negative/event-created-missing-event',
+      'foundation-realtime/v0.1.7/parse-negative/event-created-reserved-event-type',
+      'foundation-realtime/v0.1.7/parse-negative/event-created-invalid-payload',
       'foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime',
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories().sort());
@@ -513,10 +515,11 @@ function expectCurrentFoundationRealtimeFixture(
       const event = recordField(input, 'event');
       const eventType = stringField(event, 'type');
       expect(foundationEventTypes).toContain(eventType);
-
-      if (eventType === 'message.created') {
-        expect(messageCreatedRoles).toContain(stringField(recordField(event, 'payload'), 'role'));
-      }
+      const validation = validateFoundationEventPayload(
+        eventType as typeof foundationEventTypes[number],
+        recordField(event, 'payload'),
+      );
+      expect(validation.ok).toBe(true);
     } else {
       throw new Error(`Unexpected realtime fixture message type: ${inputType}`);
     }
@@ -527,7 +530,23 @@ function expectCurrentFoundationRealtimeFixture(
     if (inputType === realtimeMessageType.coreConnected) {
       expect(input.deviceId).toBeUndefined();
     } else if (inputType === realtimeMessageType.eventCreated) {
-      expect(input.event).toBeUndefined();
+      if (input.event === undefined) {
+        return;
+      }
+
+      const event = recordField(input, 'event');
+      const eventType = stringField(event, 'type');
+
+      if (foundationEventTypes.includes(eventType as typeof foundationEventTypes[number])) {
+        const validation = validateFoundationEventPayload(
+          eventType as typeof foundationEventTypes[number],
+          recordField(event, 'payload'),
+        );
+        expect(validation.ok).toBe(false);
+      } else {
+        expect(picoEventTypes).toContain(eventType);
+        expect(foundationEventTypes).not.toContain(eventType);
+      }
     } else {
       expect(realtimeMessageTypes).not.toContain(inputType);
     }

@@ -1,0 +1,16 @@
+{
+  "type": "pico.event.created",
+  "event": {
+    "eventId": "evt-fixture-realtime-invalid-payload-1",
+    "deviceId": "fixture-device",
+    "sessionId": "session:fixture",
+    "lamport": 4,
+    "wallTime": "2026-07-08T00:00:03.000Z",
+    "type": "message.created",
+    "stream": "session:fixture",
+    "payload": {
+      "role": "operator",
+      "text": "Unsupported realtime role fixture"
+    }
+  }
+}

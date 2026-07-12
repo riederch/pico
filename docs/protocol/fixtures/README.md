@@ -29,6 +29,8 @@ foundation-realtime/v0.1.7/parse-positive/event-created-message/
 foundation-realtime/v0.1.7/parse-positive/event-created-avatar-state/
 foundation-realtime/v0.1.7/parse-negative/core-connected-missing-device-id/
 foundation-realtime/v0.1.7/parse-negative/event-created-missing-event/
+foundation-realtime/v0.1.7/parse-negative/event-created-reserved-event-type/
+foundation-realtime/v0.1.7/parse-negative/event-created-invalid-payload/
 foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime/
 ```
 

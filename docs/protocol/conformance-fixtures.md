@@ -381,7 +381,7 @@ It includes:
 - five positive Foundation event append fixtures for strict writable payload schemas
 - eleven negative Foundation event append fixtures for a reserved event type, invalid payload values and unexpected fields
 - three positive current Foundation WebSocket message fixtures
-- three negative Foundation WebSocket message fixtures for missing required fields and a Pico Link-like non-message
+- five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
 - protocol tests that validate seed fixture metadata, source files, capability names and current Foundation event/realtime semantics
 
 It does not include:
