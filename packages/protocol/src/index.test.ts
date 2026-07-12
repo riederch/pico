@@ -328,6 +328,10 @@ describe('Pico protocol types', () => {
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures/pico-link/draft').sort());
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current draft Pico Link fixtures')).toEqual([
+      'pico-link/draft/suite.json',
+      ...fixturePaths.map((fixturePath) => `pico-link/draft/${fixturePath}/`),
+    ]);
 
     for (const fixturePath of fixturePaths) {
       const [draftSurface, fixtureVersion, fixtureFamily, fixtureCase] = fixturePathParts(fixturePath);
