@@ -188,6 +188,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0046-draft-compatibility-claim-placeholder.md`](../docs/architecture/0046-draft-compatibility-claim-placeholder.md) - draft-only compatibility-claim placeholder boundary
 - [`../docs/architecture/0047-draft-canonicalization-rejection-placeholder.md`](../docs/architecture/0047-draft-canonicalization-rejection-placeholder.md) - draft-only canonicalization rejection placeholder boundary
 - [`../docs/architecture/0048-model-capability-delegation-and-remote-inference-boundary.md`](../docs/architecture/0048-model-capability-delegation-and-remote-inference-boundary.md) - delegated model capability and remote inference authority boundary
+- [`../docs/architecture/0049-model-provider-registry-and-job-envelope.md`](../docs/architecture/0049-model-provider-registry-and-job-envelope.md) - model provider registry and scoped job-envelope direction
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

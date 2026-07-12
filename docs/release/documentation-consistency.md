@@ -159,6 +159,7 @@ In particular:
 - draft compatibility-claim placeholder language must remain consistent with `0046`
 - draft canonicalization rejection placeholder language must remain consistent with `0047`
 - delegated model capability and remote inference authority language must remain consistent with `0048`
+- model provider registry and job-envelope language must remain consistent with `0049`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
