@@ -506,6 +506,7 @@ The project concept is persisted as architecture notes:
 | `0045-pico-home-link-draft-membership-credential-placeholder.md` | draft-only Pico Home Link membership-credential placeholder boundary |
 | `0046-draft-compatibility-claim-placeholder.md` | draft-only compatibility-claim placeholder boundary |
 | `0047-draft-canonicalization-rejection-placeholder.md` | draft-only canonicalization rejection placeholder boundary |
+| `0048-model-capability-delegation-and-remote-inference-boundary.md` | delegated model capability and remote inference authority boundary |
 
 Protocol documents:
 
@@ -570,6 +571,7 @@ The demo must not become the path for production remote access. If it starts for
 - Compatibility does not grant commercial hosting permission
 - Capabilities are evaluated above connector protocols; MCP is not an authority layer
 - Proactive delegation must remain bounded by user-owned preferences, policy decisions, confirmation and Action History
+- Stronger Pico Homes or Pico Vaults may provide model capability, but they do not become memory owners, policy authorities or action executors
 - Context Signals are contextual evidence, not global human scores
 - Remote Pico self-presentation must never be transformed into trust
 - Presence, activity and location sharing must be scoped, visible, revocable, purpose-bound and minimally precise
@@ -593,6 +595,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0045 as the only current membership-credential placeholder boundary if future Pico Home Link draft fixtures are added
 - Use ADR 0046 as the only current compatibility-claim placeholder boundary if future claim-wording draft fixtures are added
 - Use ADR 0047 as the only current canonicalization rejection placeholder boundary if future parse/rejection draft fixtures are added
+- Use ADR 0048 before implementing delegated model execution or remote inference; model providers are capabilities, not memory owners, policy authorities or action executors
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

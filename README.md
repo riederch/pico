@@ -189,6 +189,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0045-pico-home-link-draft-membership-credential-placeholder.md`](docs/architecture/0045-pico-home-link-draft-membership-credential-placeholder.md) - draft-only Pico Home Link membership-credential placeholder boundary
 - [`docs/architecture/0046-draft-compatibility-claim-placeholder.md`](docs/architecture/0046-draft-compatibility-claim-placeholder.md) - draft-only compatibility-claim placeholder boundary
 - [`docs/architecture/0047-draft-canonicalization-rejection-placeholder.md`](docs/architecture/0047-draft-canonicalization-rejection-placeholder.md) - draft-only canonicalization rejection placeholder boundary
+- [`docs/architecture/0048-model-capability-delegation-and-remote-inference-boundary.md`](docs/architecture/0048-model-capability-delegation-and-remote-inference-boundary.md) - delegated model capability and remote inference authority boundary
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

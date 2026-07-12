@@ -158,6 +158,7 @@ In particular:
 - Pico Home Link draft membership-credential placeholder language must remain consistent with `0045`
 - draft compatibility-claim placeholder language must remain consistent with `0046`
 - draft canonicalization rejection placeholder language must remain consistent with `0047`
+- delegated model capability and remote inference authority language must remain consistent with `0048`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
