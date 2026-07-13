@@ -1,0 +1,51 @@
+{
+  "schema": "pico.model-delegation.fixture.draft",
+  "schemaVersion": 1,
+  "fixtureId": "model-delegation.provider-registry.v0_1_7.authority-negative.revoked-provider-usable",
+  "fixtureStage": "draft",
+  "stage": "fixture_data",
+  "surface": "model-provider-registry",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "authority-negative",
+  "case": "draft model provider registry rejects a revoked provider that still advertises usability",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "status": "reject",
+    "errors": [
+      "revoked_provider_usable"
+    ],
+    "authority": {
+      "revoked": true,
+      "usableAfterRevocation": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "runtimeExecution": false,
+    "modelQuality": false,
+    "providerAuthentication": false,
+    "privacyGrantEnforcement": false,
+    "retentionEnforcement": false,
+    "toolExecution": false,
+    "productionSecurity": false,
+    "l4Compatibility": false,
+    "commercialPermission": false,
+    "compatibility": "draft-only"
+  },
+  "disclaimers": [
+    "draft-only",
+    "not production security",
+    "not model quality",
+    "not runtime execution",
+    "not L4 conformance",
+    "not commercial permission"
+  ],
+  "notes": "Draft-only ADR 0061 negative fixture. A revoked provider cannot remain usable for new jobs, even if it still advertises availability."
+}

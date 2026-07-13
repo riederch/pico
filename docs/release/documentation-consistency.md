@@ -171,6 +171,7 @@ In particular:
 - Model Delegation job-envelope scoping placeholder language must remain consistent with `0058`
 - Model Delegation result-envelope provenance placeholder language must remain consistent with `0059`
 - Model Delegation context-reference scoping placeholder language must remain consistent with `0060`
+- Model Delegation provider-registry advertisement placeholder language must remain consistent with `0061`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

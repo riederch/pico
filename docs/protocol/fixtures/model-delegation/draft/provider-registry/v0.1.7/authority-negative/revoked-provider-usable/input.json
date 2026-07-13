@@ -1,0 +1,60 @@
+{
+  "schema": "pico.model.provider.registry.entry.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "providerId": "model_provider_revoked_still_advertised_placeholder",
+  "providerDisplayName": "Synthetic Revoked Provider",
+  "providerNodeKind": "peer-pico",
+  "providerOwnerSubject": "subject_placeholder_peer",
+  "homeId": "home_placeholder_peer",
+  "deviceId": "device_placeholder_peer",
+  "relationshipId": "relationship_placeholder_peer",
+  "executionLocation": "peer-home",
+  "locality": "peer-home",
+  "transportRequirements": [
+    "pico-link"
+  ],
+  "model": {
+    "family": "placeholder-local",
+    "nameOrClass": "synthetic-peer-model",
+    "runtime": "development-stub",
+    "capabilityVersion": "draft-0"
+  },
+  "supportedJobTypes": [
+    "model.summarize"
+  ],
+  "supportedInputClasses": [
+    "public_reference",
+    "user_supplied_prompt"
+  ],
+  "supportedOutputSchemas": [
+    "plain_text"
+  ],
+  "limits": {
+    "maxContextBytes": 2048,
+    "maxContextItems": 4
+  },
+  "retentionModes": [
+    "no_store"
+  ],
+  "auditModes": [
+    "audit_metadata_only"
+  ],
+  "toolUseModes": [
+    "none"
+  ],
+  "toolExecutionEnabledByDefault": false,
+  "trustState": "revoked",
+  "availabilityState": "available",
+  "advertisedAvailable": true,
+  "latencyClass": "remote",
+  "costClass": "unknown",
+  "revocationState": "revoked",
+  "claims": {
+    "trustGrantByDiscovery": false,
+    "vaultReadAccess": false,
+    "privacyGrantEnforcement": false,
+    "runtimeExecution": false
+  },
+  "extensions": {}
+}

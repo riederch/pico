@@ -350,6 +350,7 @@ It is refined by:
 - `0058-model-delegation-draft-job-envelope-scoping-placeholder.md`, which narrows the job-envelope surface to a single scoped, policy- and consent-bound job placeholder
 - `0059-model-delegation-draft-result-envelope-provenance-placeholder.md`, which narrows the result-envelope surface to a provenance-bound, non-executing output placeholder
 - `0060-model-delegation-draft-context-reference-scoping-placeholder.md`, which narrows the context-reference surface to a bounded, redacted, expiring, materialized single-job packet placeholder
+- `0061-model-delegation-draft-provider-registry-advertisement-placeholder.md`, which narrows the provider-registry surface to a capability advertisement placeholder that is never a trust grant
 
 It is similar in staging intent to:
 

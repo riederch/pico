@@ -1,0 +1,63 @@
+{
+  "schema": "pico.model.provider.registry.entry.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "providerId": "model_provider_unconfigured_discovered_placeholder",
+  "providerDisplayName": "Synthetic Discovered Peer Provider",
+  "providerNodeKind": "peer-pico",
+  "providerOwnerSubject": "subject_placeholder_peer",
+  "homeId": "home_placeholder_peer",
+  "deviceId": "device_placeholder_peer",
+  "relationshipId": "relationship_placeholder_peer",
+  "executionLocation": "peer-home",
+  "locality": "peer-home",
+  "transportRequirements": [
+    "pico-link"
+  ],
+  "model": {
+    "family": "placeholder-local",
+    "nameOrClass": "synthetic-peer-model",
+    "runtime": "development-stub",
+    "capabilityVersion": "draft-0"
+  },
+  "supportedJobTypes": [
+    "model.summarize",
+    "model.reason"
+  ],
+  "supportedInputClasses": [
+    "public_reference",
+    "user_supplied_prompt"
+  ],
+  "supportedOutputSchemas": [
+    "plain_text",
+    "summary_markdown"
+  ],
+  "limits": {
+    "maxContextBytes": 2048,
+    "maxContextItems": 4
+  },
+  "retentionModes": [
+    "no_store",
+    "ephemeral_until_response"
+  ],
+  "auditModes": [
+    "audit_metadata_only"
+  ],
+  "toolUseModes": [
+    "none"
+  ],
+  "toolExecutionEnabledByDefault": false,
+  "trustState": "discovered",
+  "availabilityState": "available",
+  "advertisedAvailable": true,
+  "latencyClass": "remote",
+  "costClass": "unknown",
+  "revocationState": "active",
+  "claims": {
+    "trustGrantByDiscovery": true,
+    "vaultReadAccess": false,
+    "privacyGrantEnforcement": false,
+    "runtimeExecution": false
+  },
+  "extensions": {}
+}

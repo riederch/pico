@@ -45,6 +45,7 @@ This document follows:
 - `../architecture/0058-model-delegation-draft-job-envelope-scoping-placeholder.md`
 - `../architecture/0059-model-delegation-draft-result-envelope-provenance-placeholder.md`
 - `../architecture/0060-model-delegation-draft-context-reference-scoping-placeholder.md`
+- `../architecture/0061-model-delegation-draft-provider-registry-advertisement-placeholder.md`
 - `../architecture/0051-pico-link-draft-device-credential-placeholder.md`
 - `../architecture/0052-pico-link-draft-lost-device-revocation-placeholder.md`
 - `../architecture/0053-pico-link-draft-revocation-registry-placeholder.md`
@@ -53,7 +54,7 @@ This document follows:
 - `../architecture/0056-pico-home-link-draft-home-host-key-placeholder.md`
 - `../architecture/0057-pico-home-link-draft-residency-eviction-placeholder.md`
 
-ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. ADR 0052 defines the first constrained Pico Link lost-device revocation placeholder boundary. ADR 0053 defines the first constrained Pico Link revocation registry placeholder boundary. ADR 0054 defines the first constrained Pico Link key-envelope rotation placeholder boundary. ADR 0055 defines the first constrained Pico Link identity-key placeholder boundary. ADR 0056 defines the first constrained Pico Home Link Home Host Key placeholder boundary. ADR 0057 defines the first constrained Pico Home Link residency and eviction placeholder boundary. ADR 0058 defines the first constrained Model Delegation job-envelope scoping placeholder boundary. ADR 0059 defines the first constrained Model Delegation result-envelope provenance placeholder boundary. ADR 0060 defines the first constrained Model Delegation context-reference scoping placeholder boundary. This document turns those boundaries into a planned repository layout.
+ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. ADR 0052 defines the first constrained Pico Link lost-device revocation placeholder boundary. ADR 0053 defines the first constrained Pico Link revocation registry placeholder boundary. ADR 0054 defines the first constrained Pico Link key-envelope rotation placeholder boundary. ADR 0055 defines the first constrained Pico Link identity-key placeholder boundary. ADR 0056 defines the first constrained Pico Home Link Home Host Key placeholder boundary. ADR 0057 defines the first constrained Pico Home Link residency and eviction placeholder boundary. ADR 0058 defines the first constrained Model Delegation job-envelope scoping placeholder boundary. ADR 0059 defines the first constrained Model Delegation result-envelope provenance placeholder boundary. ADR 0060 defines the first constrained Model Delegation context-reference scoping placeholder boundary. ADR 0061 defines the first constrained Model Delegation provider-registry advertisement placeholder boundary. This document turns those boundaries into a planned repository layout.
 
 ## Current boundary
 
@@ -400,13 +401,15 @@ The current draft Model Delegation suite lives separately from the Foundation an
 docs/protocol/fixtures/model-delegation/draft/suite.json
 ```
 
-It currently contains one positive provider-registry placeholder fixture, one negative provider-registry authority fixture, one positive job-envelope scoping fixture, three negative job-envelope fixtures (forbidden input class, durable access claim and unsafe provider retention plus missing policy/consent), one positive context-reference scoping fixture, three negative context-reference fixtures (provider expansion, live provider read-through and unscoped plus secret material), one positive result-envelope provenance fixture and three negative result-envelope fixtures (action execution, model correctness and job/provider provenance mismatch). These are fixture data only, not a runner, not a model runtime, not provider trust proof and not a compatibility basis.
+It currently contains one positive provider-registry placeholder fixture, four negative provider-registry authority fixtures (Vault read, trust by discovery, revoked-provider usability and tool execution by advertisement), one positive job-envelope scoping fixture, three negative job-envelope fixtures (forbidden input class, durable access claim and unsafe provider retention plus missing policy/consent), one positive context-reference scoping fixture, three negative context-reference fixtures (provider expansion, live provider read-through and unscoped plus secret material), one positive result-envelope provenance fixture and three negative result-envelope fixtures (action execution, model correctness and job/provider provenance mismatch). These are fixture data only, not a runner, not a model runtime, not provider trust proof and not a compatibility basis.
 
 ADR 0058 narrows the job-envelope surface: a draft job envelope authorizes exactly one scoped, policy- and consent-bound job and is never durable access, never a policy or consent substitute and never a provider retention license.
 
 ADR 0059 narrows the result-envelope surface: a draft result envelope reports a provider's output for exactly the requested job and provider and is never execution proof, never action approval and never a model-correctness certificate.
 
 ADR 0060 narrows the context-reference surface: a draft context reference is a bounded, redacted, expiring, materialized single-job packet and is never a provider read capability, never durable, never unscoped and never a secret carrier.
+
+ADR 0061 narrows the provider-registry surface: a draft provider registry entry advertises a possible model capability and is never a trust grant, never Vault access, never usable after revocation and never default tool execution. This rounds out draft placeholder coverage for all four Model Delegation surfaces.
 
 Future Model Delegation fixtures may cover:
 
@@ -487,7 +490,7 @@ It includes:
 - six positive current Foundation WebSocket message fixtures
 - five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
 - thirty-four draft Pico Link fixtures in a separate draft suite
-- seventeen draft Model Delegation fixtures in a separate draft suite
+- twenty draft Model Delegation fixtures in a separate draft suite
 - protocol tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics and draft-suite non-claim boundaries
 
 It does not include:

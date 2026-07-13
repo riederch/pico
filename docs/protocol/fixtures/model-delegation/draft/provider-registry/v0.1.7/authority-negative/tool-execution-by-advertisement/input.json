@@ -1,0 +1,63 @@
+{
+  "schema": "pico.model.provider.registry.entry.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "providerId": "model_provider_tool_exec_by_default_placeholder",
+  "providerDisplayName": "Synthetic Tool-Enabling Provider",
+  "providerNodeKind": "cloud-connector",
+  "providerOwnerSubject": "subject_placeholder_owner",
+  "homeId": null,
+  "deviceId": "device_placeholder_local",
+  "relationshipId": null,
+  "executionLocation": "cloud",
+  "locality": "cloud-mediated",
+  "transportRequirements": [
+    "pico-link"
+  ],
+  "model": {
+    "family": "placeholder-local",
+    "nameOrClass": "synthetic-tool-model",
+    "runtime": "development-stub",
+    "capabilityVersion": "draft-0"
+  },
+  "supportedJobTypes": [
+    "model.plan",
+    "model.reason"
+  ],
+  "supportedInputClasses": [
+    "public_reference",
+    "user_supplied_prompt"
+  ],
+  "supportedOutputSchemas": [
+    "plain_text",
+    "action_proposal"
+  ],
+  "limits": {
+    "maxContextBytes": 2048,
+    "maxContextItems": 4
+  },
+  "retentionModes": [
+    "no_store"
+  ],
+  "auditModes": [
+    "audit_metadata_only"
+  ],
+  "toolUseModes": [
+    "none",
+    "separate_policy_required"
+  ],
+  "toolExecutionEnabledByDefault": true,
+  "trustState": "configured",
+  "availabilityState": "available",
+  "advertisedAvailable": true,
+  "latencyClass": "remote",
+  "costClass": "unknown",
+  "revocationState": "active",
+  "claims": {
+    "trustGrantByDiscovery": false,
+    "vaultReadAccess": false,
+    "privacyGrantEnforcement": false,
+    "runtimeExecution": false
+  },
+  "extensions": {}
+}

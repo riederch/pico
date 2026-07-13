@@ -439,6 +439,9 @@ describe('Pico protocol types', () => {
     expect(fixturePaths).toEqual([
       'provider-registry/v0.1.7/parse-positive/local-summarizer-placeholder',
       'provider-registry/v0.1.7/authority-negative/vault-read-authority-claim',
+      'provider-registry/v0.1.7/authority-negative/trust-grant-by-discovery',
+      'provider-registry/v0.1.7/authority-negative/revoked-provider-usable',
+      'provider-registry/v0.1.7/authority-negative/tool-execution-by-advertisement',
       'job-envelope/v0.1.7/parse-positive/scoped-summarize-placeholder',
       'job-envelope/v0.1.7/privacy-negative/forbidden-input-class',
       'job-envelope/v0.1.7/authority-negative/durable-access-claim',
@@ -1594,7 +1597,14 @@ function expectModelDelegationDraftFixtureBoundary(
     }
     const claims = recordField(input, 'claims');
 
-    if (fixtureCase === 'vault-read-authority-claim') {
+    if (fixtureCase === 'local-summarizer-placeholder') {
+      expect(booleanField(claims, 'trustGrantByDiscovery')).toBe(false);
+      expect(booleanField(claims, 'vaultReadAccess')).toBe(false);
+      expect(stringField(input, 'trustState')).toBe('trusted-for-non-sensitive');
+      for (const inputClass of stringArrayField(input, 'supportedInputClasses')) {
+        expect(forbiddenModelDelegationInputClasses()).not.toContain(inputClass);
+      }
+    } else if (fixtureCase === 'vault-read-authority-claim') {
       expect(booleanField(claims, 'trustGrantByDiscovery')).toBe(true);
       expect(booleanField(claims, 'vaultReadAccess')).toBe(true);
       expect(stringArrayField(input, 'authorityClaims')).toContain('vault.read');
@@ -1602,13 +1612,28 @@ function expectModelDelegationDraftFixtureBoundary(
       const authority = recordField(expectBlock, 'authority');
       expect(booleanField(authority, 'trustGrant')).toBe(true);
       expect(booleanField(authority, 'vaultReadAccess')).toBe(true);
-    } else {
-      expect(booleanField(claims, 'trustGrantByDiscovery')).toBe(false);
+    } else if (fixtureCase === 'trust-grant-by-discovery') {
+      expect(stringField(input, 'trustState')).toBe('discovered');
+      expect(booleanField(claims, 'trustGrantByDiscovery')).toBe(true);
       expect(booleanField(claims, 'vaultReadAccess')).toBe(false);
-      expect(stringField(input, 'trustState')).toBe('trusted-for-non-sensitive');
-      for (const inputClass of stringArrayField(input, 'supportedInputClasses')) {
-        expect(forbiddenModelDelegationInputClasses()).not.toContain(inputClass);
-      }
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['registry_trust_grant_claim']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'trustGrant')).toBe(true);
+      expect(booleanField(authority, 'trustedByDiscovery')).toBe(true);
+    } else if (fixtureCase === 'revoked-provider-usable') {
+      expect(stringField(input, 'trustState')).toBe('revoked');
+      expect(stringField(input, 'revocationState')).toBe('revoked');
+      expect(booleanField(input, 'advertisedAvailable')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['revoked_provider_usable']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'revoked')).toBe(true);
+      expect(booleanField(authority, 'usableAfterRevocation')).toBe(false);
+    } else if (fixtureCase === 'tool-execution-by-advertisement') {
+      expect(stringArrayField(input, 'toolUseModes')).toContain('separate_policy_required');
+      expect(booleanField(input, 'toolExecutionEnabledByDefault')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['provider_tool_execution']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'toolExecutionByAdvertisement')).toBe(true);
     }
   } else if (draftSurface === 'job-envelope') {
     expect(stringField(input, 'schema')).toBe('pico.model.job.envelope.draft');
