@@ -444,7 +444,11 @@ describe('Pico protocol types', () => {
       'job-envelope/v0.1.7/authority-negative/durable-access-claim',
       'job-envelope/v0.1.7/authority-negative/missing-policy-consent',
       'job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention',
+      'context-ref/v0.1.7/parse-positive/bounded-excerpt-placeholder',
       'context-ref/v0.1.7/privacy-negative/provider-expandable-context',
+      'context-ref/v0.1.7/authority-negative/provider-read-through-context-ref',
+      'context-ref/v0.1.7/privacy-negative/unscoped-context-ref',
+      'context-ref/v0.1.7/privacy-negative/secret-material-in-context-ref',
       'result-envelope/v0.1.7/parse-positive/proposal-provenance-placeholder',
       'result-envelope/v0.1.7/authority-negative/action-execution-claim',
       'result-envelope/v0.1.7/authority-negative/model-correctness-claim',
@@ -1675,13 +1679,41 @@ function expectModelDelegationDraftFixtureBoundary(
     expect(booleanField(input, 'redactionApplied')).toBe(true);
     expect(booleanField(input, 'allowedForProvider')).toBe(true);
 
-    if (fixtureCase === 'provider-expandable-context') {
+    if (fixtureCase === 'bounded-excerpt-placeholder') {
+      expect(stringField(input, 'sourceAccessMode')).toBe('materialized_excerpt');
+      expect(booleanField(input, 'providerExpansionAllowed')).toBe(false);
+      expect(booleanField(input, 'reusableAcrossJobs')).toBe(false);
+      expect(stringField(input, 'expiresAt')).toBeTruthy();
+      const privacy = recordField(expectBlock, 'privacy');
+      expect(booleanField(privacy, 'providerExpansionAllowed')).toBe(false);
+      expect(booleanField(privacy, 'contextRefScoped')).toBe(true);
+      expect(booleanField(privacy, 'expires')).toBe(true);
+    } else if (fixtureCase === 'provider-expandable-context') {
       expect(booleanField(input, 'providerExpansionAllowed')).toBe(true);
       expect(stringField(input, 'expansionScope')).toBe('vault:*');
       expect(stringArrayField(expectBlock, 'errors')).toEqual(['context_ref_expansion']);
       const privacy = recordField(expectBlock, 'privacy');
       expect(booleanField(privacy, 'providerExpansionAllowed')).toBe(true);
       expect(booleanField(privacy, 'contextRefScoped')).toBe(false);
+    } else if (fixtureCase === 'provider-read-through-context-ref') {
+      expect(stringField(input, 'sourceAccessMode')).toBe('live_read_through');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['context_ref_live_source_read']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'providerLiveSourceRead')).toBe(true);
+      expect(booleanField(authority, 'materializedExcerpt')).toBe(false);
+    } else if (fixtureCase === 'unscoped-context-ref') {
+      expect(stringField(input, 'expiresAt')).toBe('');
+      expect(stringField(input, 'expansionScope')).toBe('unbounded');
+      expect(booleanField(input, 'reusableAcrossJobs')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['context_ref_unscoped']);
+      const privacy = recordField(expectBlock, 'privacy');
+      expect(booleanField(privacy, 'contextRefScoped')).toBe(false);
+      expect(booleanField(privacy, 'expires')).toBe(false);
+    } else if (fixtureCase === 'secret-material-in-context-ref') {
+      expect(stringField(recordField(input, 'content'), 'syntheticSecretMarker')).toContain('domain_content_key_placeholder');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['secret_material']);
+      const privacy = recordField(expectBlock, 'privacy');
+      expect(booleanField(privacy, 'secretMaterial')).toBe(true);
     }
   } else if (draftSurface === 'result-envelope') {
     expect(stringField(input, 'schema')).toBe('pico.model.result.envelope.draft');

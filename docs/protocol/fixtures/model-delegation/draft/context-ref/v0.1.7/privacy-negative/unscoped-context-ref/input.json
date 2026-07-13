@@ -1,0 +1,20 @@
+{
+  "schema": "pico.model.context.ref.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "contextRefId": "context_ref_unscoped_placeholder",
+  "sourceDomain": "private_domain_placeholder",
+  "sourceKind": "private_memory_excerpt",
+  "inputClass": "private_memory_excerpt",
+  "summary": "Synthetic reference that wrongly omits scope and expiry and is reusable.",
+  "freshness": "2026-07-12T12:00:00.000Z",
+  "maxBytes": 512,
+  "redactionApplied": true,
+  "allowedForProvider": true,
+  "expiresAt": "",
+  "sourceAccessMode": "materialized_excerpt",
+  "providerExpansionAllowed": false,
+  "expansionScope": "unbounded",
+  "reusableAcrossJobs": true,
+  "extensions": {}
+}

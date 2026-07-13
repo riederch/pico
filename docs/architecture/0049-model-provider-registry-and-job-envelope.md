@@ -531,6 +531,7 @@ It is staged and refined by:
 - `0050-model-delegation-draft-fixture-gate.md`, which gates draft-only fixture data for these surfaces
 - `0058-model-delegation-draft-job-envelope-scoping-placeholder.md`, which narrows the job-envelope surface to a single scoped, policy- and consent-bound job placeholder
 - `0059-model-delegation-draft-result-envelope-provenance-placeholder.md`, which narrows the result-envelope surface to a provenance-bound, non-executing output placeholder
+- `0060-model-delegation-draft-context-reference-scoping-placeholder.md`, which narrows the context-reference surface to a bounded, redacted, expiring, materialized single-job packet placeholder
 
 It extends and constrains:
 

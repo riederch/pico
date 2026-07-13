@@ -1,0 +1,20 @@
+{
+  "schema": "pico.model.context.ref.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "contextRefId": "context_ref_bounded_excerpt_placeholder",
+  "sourceDomain": "private_domain_placeholder",
+  "sourceKind": "private_memory_excerpt",
+  "inputClass": "private_memory_excerpt",
+  "summary": "Synthetic bounded private note excerpt prepared for one job.",
+  "freshness": "2026-07-12T12:00:00.000Z",
+  "maxBytes": 512,
+  "redactionApplied": true,
+  "allowedForProvider": true,
+  "expiresAt": "2026-07-12T12:05:00.000Z",
+  "sourceAccessMode": "materialized_excerpt",
+  "providerExpansionAllowed": false,
+  "expansionScope": "none",
+  "reusableAcrossJobs": false,
+  "extensions": {}
+}

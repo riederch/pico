@@ -92,7 +92,11 @@ model-delegation/draft/job-envelope/v0.1.7/privacy-negative/forbidden-input-clas
 model-delegation/draft/job-envelope/v0.1.7/authority-negative/durable-access-claim/
 model-delegation/draft/job-envelope/v0.1.7/authority-negative/missing-policy-consent/
 model-delegation/draft/job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention/
+model-delegation/draft/context-ref/v0.1.7/parse-positive/bounded-excerpt-placeholder/
 model-delegation/draft/context-ref/v0.1.7/privacy-negative/provider-expandable-context/
+model-delegation/draft/context-ref/v0.1.7/authority-negative/provider-read-through-context-ref/
+model-delegation/draft/context-ref/v0.1.7/privacy-negative/unscoped-context-ref/
+model-delegation/draft/context-ref/v0.1.7/privacy-negative/secret-material-in-context-ref/
 model-delegation/draft/result-envelope/v0.1.7/parse-positive/proposal-provenance-placeholder/
 model-delegation/draft/result-envelope/v0.1.7/authority-negative/action-execution-claim/
 model-delegation/draft/result-envelope/v0.1.7/authority-negative/model-correctness-claim/

@@ -518,6 +518,7 @@ The project concept is persisted as architecture notes:
 | `0057-pico-home-link-draft-residency-eviction-placeholder.md` | draft-only Pico Home Link residency and eviction placeholder boundary |
 | `0058-model-delegation-draft-job-envelope-scoping-placeholder.md` | draft-only Model Delegation job-envelope scoping placeholder boundary |
 | `0059-model-delegation-draft-result-envelope-provenance-placeholder.md` | draft-only Model Delegation result-envelope provenance placeholder boundary |
+| `0060-model-delegation-draft-context-reference-scoping-placeholder.md` | draft-only Model Delegation context-reference scoping placeholder boundary |
 
 Protocol documents:
 
@@ -627,6 +628,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0057 as the only current residency/eviction placeholder boundary if future Pico Home Link residency lifecycle draft fixtures are added
 - Use ADR 0058 as the only current job-envelope scoping placeholder boundary if future Model Delegation job-envelope draft fixtures are added; job envelopes stay single-job, policy- and consent-bound and are never durable access or a provider retention license
 - Use ADR 0059 as the only current result-envelope provenance placeholder boundary if future Model Delegation result-envelope draft fixtures are added; results stay bound to their requested job and provider and are never execution proof, action approval or a model-correctness certificate
+- Use ADR 0060 as the only current context-reference scoping placeholder boundary if future Model Delegation context-reference draft fixtures are added; references stay bounded, redacted, expiring, materialized single-job packets and are never a provider read capability, durable, unscoped or a secret carrier
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
