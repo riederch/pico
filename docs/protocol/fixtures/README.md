@@ -93,7 +93,11 @@ model-delegation/draft/job-envelope/v0.1.7/authority-negative/durable-access-cla
 model-delegation/draft/job-envelope/v0.1.7/authority-negative/missing-policy-consent/
 model-delegation/draft/job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention/
 model-delegation/draft/context-ref/v0.1.7/privacy-negative/provider-expandable-context/
+model-delegation/draft/result-envelope/v0.1.7/parse-positive/proposal-provenance-placeholder/
 model-delegation/draft/result-envelope/v0.1.7/authority-negative/action-execution-claim/
+model-delegation/draft/result-envelope/v0.1.7/authority-negative/model-correctness-claim/
+model-delegation/draft/result-envelope/v0.1.7/provenance-negative/result-job-mismatch/
+model-delegation/draft/result-envelope/v0.1.7/provenance-negative/result-provider-mismatch/
 ```
 
 Each fixture directory contains:

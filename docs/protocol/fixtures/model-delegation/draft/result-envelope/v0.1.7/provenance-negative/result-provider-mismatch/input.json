@@ -1,0 +1,38 @@
+{
+  "schema": "pico.model.result.envelope.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "jobId": "model_job_scoped_summarize_placeholder",
+  "requestedJobId": "model_job_scoped_summarize_placeholder",
+  "providerId": "model_provider_other_unrelated_placeholder",
+  "requestedProviderId": "model_provider_local_summarizer_placeholder",
+  "providerNodeKind": "peer-pico",
+  "modelFamily": "placeholder-local",
+  "modelNameOrClass": "synthetic-peer-model",
+  "capabilityVersion": "draft-0",
+  "startedAt": "2026-07-12T12:00:00.000Z",
+  "completedAt": "2026-07-12T12:00:02.000Z",
+  "status": "completed",
+  "resultSchemaRef": "action_proposal",
+  "result": {
+    "proposal": "Synthetic proposal attributed to the wrong provider.",
+    "actionExecuted": false,
+    "toolExecuted": false
+  },
+  "qualityClaims": {
+    "modelCorrectnessVerified": false,
+    "safetyCertified": false
+  },
+  "limitations": [
+    "Synthetic fixture result; not a real model output."
+  ],
+  "evidenceRefs": [],
+  "inputSummary": "Synthetic prompt only.",
+  "inputClassSummary": [
+    "user_supplied_prompt"
+  ],
+  "retentionApplied": "audit_metadata_only",
+  "providerAuditRef": "provider_audit_placeholder",
+  "errors": [],
+  "extensions": {}
+}

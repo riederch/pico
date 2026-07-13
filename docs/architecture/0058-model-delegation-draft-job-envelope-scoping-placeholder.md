@@ -290,6 +290,10 @@ This ADR refines:
 - `0049-model-provider-registry-and-job-envelope.md`
 - `0050-model-delegation-draft-fixture-gate.md`
 
+It is refined by:
+
+- `0059-model-delegation-draft-result-envelope-provenance-placeholder.md`, which narrows the result-envelope surface to a provenance-bound, non-executing output placeholder
+
 It is similar in staging intent to:
 
 - `0043-pico-link-draft-packet-envelope-preflight.md`

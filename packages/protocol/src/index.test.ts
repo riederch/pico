@@ -422,7 +422,7 @@ describe('Pico protocol types', () => {
       'model-context-ref',
       'model-result-envelope',
     ]);
-    expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'authority-negative', 'privacy-negative']);
+    expect(stringArrayField(suite, 'families')).toEqual(['parse-positive', 'authority-negative', 'privacy-negative', 'provenance-negative']);
     const runner = recordField(suite, 'runner');
     expect(booleanField(runner, 'required')).toBe(false);
     expect(stringField(runner, 'status')).toBe('none');
@@ -445,7 +445,11 @@ describe('Pico protocol types', () => {
       'job-envelope/v0.1.7/authority-negative/missing-policy-consent',
       'job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention',
       'context-ref/v0.1.7/privacy-negative/provider-expandable-context',
+      'result-envelope/v0.1.7/parse-positive/proposal-provenance-placeholder',
       'result-envelope/v0.1.7/authority-negative/action-execution-claim',
+      'result-envelope/v0.1.7/authority-negative/model-correctness-claim',
+      'result-envelope/v0.1.7/provenance-negative/result-job-mismatch',
+      'result-envelope/v0.1.7/provenance-negative/result-provider-mismatch',
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures/model-delegation/draft').sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current draft Model Delegation fixtures')).toEqual([
@@ -1693,6 +1697,38 @@ function expectModelDelegationDraftFixtureBoundary(
       expect(booleanField(authority, 'actionExecuted')).toBe(true);
       expect(booleanField(authority, 'toolExecuted')).toBe(true);
       expect(booleanField(authority, 'resultIsActionApproval')).toBe(false);
+    } else if (fixtureCase === 'proposal-provenance-placeholder') {
+      expect(booleanField(result, 'actionExecuted')).toBe(false);
+      expect(booleanField(result, 'toolExecuted')).toBe(false);
+      expect(stringField(input, 'jobId')).toBe(stringField(input, 'requestedJobId'));
+      expect(stringField(input, 'providerId')).toBe(stringField(input, 'requestedProviderId'));
+      expect(booleanField(recordField(input, 'qualityClaims'), 'modelCorrectnessVerified')).toBe(false);
+      const provenance = recordField(expectBlock, 'provenance');
+      expect(booleanField(provenance, 'jobMatches')).toBe(true);
+      expect(booleanField(provenance, 'providerMatches')).toBe(true);
+      expect(booleanField(provenance, 'actionExecuted')).toBe(false);
+    } else if (fixtureCase === 'model-correctness-claim') {
+      expect(stringField(input, 'jobId')).toBe(stringField(input, 'requestedJobId'));
+      expect(stringField(input, 'providerId')).toBe(stringField(input, 'requestedProviderId'));
+      expect(booleanField(recordField(input, 'qualityClaims'), 'modelCorrectnessVerified')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['model_quality_claim']);
+      const quality = recordField(expectBlock, 'quality');
+      expect(booleanField(quality, 'modelCorrectnessVerified')).toBe(true);
+      expect(booleanField(quality, 'safetyCertified')).toBe(true);
+    } else if (fixtureCase === 'result-job-mismatch') {
+      expect(stringField(input, 'jobId')).not.toBe(stringField(input, 'requestedJobId'));
+      expect(stringField(input, 'providerId')).toBe(stringField(input, 'requestedProviderId'));
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['result_job_mismatch']);
+      const provenance = recordField(expectBlock, 'provenance');
+      expect(booleanField(provenance, 'jobMatches')).toBe(false);
+      expect(booleanField(provenance, 'providerMatches')).toBe(true);
+    } else if (fixtureCase === 'result-provider-mismatch') {
+      expect(stringField(input, 'jobId')).toBe(stringField(input, 'requestedJobId'));
+      expect(stringField(input, 'providerId')).not.toBe(stringField(input, 'requestedProviderId'));
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['result_provider_mismatch']);
+      const provenance = recordField(expectBlock, 'provenance');
+      expect(booleanField(provenance, 'jobMatches')).toBe(true);
+      expect(booleanField(provenance, 'providerMatches')).toBe(false);
     }
   } else {
     throw new Error(`Unexpected model-delegation draft surface: ${draftSurface}`);

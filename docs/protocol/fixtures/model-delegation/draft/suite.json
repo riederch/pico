@@ -14,7 +14,8 @@
   "families": [
     "parse-positive",
     "authority-negative",
-    "privacy-negative"
+    "privacy-negative",
+    "provenance-negative"
   ],
   "runner": {
     "required": false,
@@ -31,7 +32,11 @@
     "job-envelope/v0.1.7/authority-negative/missing-policy-consent",
     "job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention",
     "context-ref/v0.1.7/privacy-negative/provider-expandable-context",
-    "result-envelope/v0.1.7/authority-negative/action-execution-claim"
+    "result-envelope/v0.1.7/parse-positive/proposal-provenance-placeholder",
+    "result-envelope/v0.1.7/authority-negative/action-execution-claim",
+    "result-envelope/v0.1.7/authority-negative/model-correctness-claim",
+    "result-envelope/v0.1.7/provenance-negative/result-job-mismatch",
+    "result-envelope/v0.1.7/provenance-negative/result-provider-mismatch"
   ],
   "notes": "Draft model-delegation fixture data only. This is not a runner, not a provider registry, not a model runtime, not provider authentication, not privacy-domain enforcement, not model-quality evidence and not a compatibility basis."
 }

@@ -348,6 +348,7 @@ This ADR refines:
 It is refined by:
 
 - `0058-model-delegation-draft-job-envelope-scoping-placeholder.md`, which narrows the job-envelope surface to a single scoped, policy- and consent-bound job placeholder
+- `0059-model-delegation-draft-result-envelope-provenance-placeholder.md`, which narrows the result-envelope surface to a provenance-bound, non-executing output placeholder
 
 It is similar in staging intent to:
 

@@ -169,6 +169,7 @@ In particular:
 - Pico Home Link Home Host Key placeholder language must remain consistent with `0056`
 - Pico Home Link residency and eviction placeholder language must remain consistent with `0057`
 - Model Delegation job-envelope scoping placeholder language must remain consistent with `0058`
+- Model Delegation result-envelope provenance placeholder language must remain consistent with `0059`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
