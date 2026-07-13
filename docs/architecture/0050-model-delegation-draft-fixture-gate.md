@@ -345,6 +345,10 @@ This ADR refines:
 - `0048-model-capability-delegation-and-remote-inference-boundary.md`
 - `0049-model-provider-registry-and-job-envelope.md`
 
+It is refined by:
+
+- `0058-model-delegation-draft-job-envelope-scoping-placeholder.md`, which narrows the job-envelope surface to a single scoped, policy- and consent-bound job placeholder
+
 It is similar in staging intent to:
 
 - `0042-pico-link-draft-schema-and-fixture-gate.md`

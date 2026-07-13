@@ -439,7 +439,11 @@ describe('Pico protocol types', () => {
     expect(fixturePaths).toEqual([
       'provider-registry/v0.1.7/parse-positive/local-summarizer-placeholder',
       'provider-registry/v0.1.7/authority-negative/vault-read-authority-claim',
+      'job-envelope/v0.1.7/parse-positive/scoped-summarize-placeholder',
       'job-envelope/v0.1.7/privacy-negative/forbidden-input-class',
+      'job-envelope/v0.1.7/authority-negative/durable-access-claim',
+      'job-envelope/v0.1.7/authority-negative/missing-policy-consent',
+      'job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention',
       'context-ref/v0.1.7/privacy-negative/provider-expandable-context',
       'result-envelope/v0.1.7/authority-negative/action-execution-claim',
     ]);
@@ -1602,17 +1606,63 @@ function expectModelDelegationDraftFixtureBoundary(
     expect(stringField(input, 'schema')).toBe('pico.model.job.envelope.draft');
     expect(['model.summarize', 'model.extract', 'model.draft', 'model.compare', 'model.reason', 'model.plan']).toContain(stringField(input, 'jobType'));
     expect(stringField(input, 'toolUseMode')).toBe('none');
-    expect(['no_store', 'ephemeral_until_response', 'audit_metadata_only', 'bounded_result_retention'])
-      .toContain(stringField(input, 'retentionRequirement'));
     const inputClasses = stringArrayField(input, 'inputClasses');
 
-    if (fixtureCase === 'forbidden-input-class') {
+    if (fixtureCase === 'unsafe-provider-retention') {
+      expect(stringField(input, 'retentionRequirement')).toBe('provider_default');
+    } else {
+      expect(['no_store', 'ephemeral_until_response', 'audit_metadata_only', 'bounded_result_retention'])
+        .toContain(stringField(input, 'retentionRequirement'));
+    }
+
+    if (fixtureCase !== 'forbidden-input-class') {
+      for (const inputClass of inputClasses) {
+        expect(forbiddenModelDelegationInputClasses()).not.toContain(inputClass);
+      }
+    }
+
+    if (fixtureCase === 'scoped-summarize-placeholder') {
+      expect(stringField(input, 'policyDecisionRef')).toBeTruthy();
+      expect(stringField(input, 'consentRef')).toBeTruthy();
+      expect(booleanField(input, 'singleJob')).toBe(true);
+      expect(booleanField(input, 'durableAccessClaim')).toBe(false);
+      expect(stringField(input, 'accessScope')).toBe('single_job');
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'durableAccess')).toBe(false);
+      expect(booleanField(authority, 'singleJobOnly')).toBe(true);
+      expect(booleanField(authority, 'policyBound')).toBe(true);
+      expect(booleanField(authority, 'consentBound')).toBe(true);
+    } else if (fixtureCase === 'forbidden-input-class') {
       expect(inputClasses).toContain('domain_content_key');
       expect(stringField(recordField(input, 'inlineContext'), 'syntheticSecretMarker')).toContain('domain_content_key_placeholder');
       expect(stringArrayField(expectBlock, 'errors')).toEqual(['forbidden_input_class']);
       const privacy = recordField(expectBlock, 'privacy');
       expect(stringArrayField(privacy, 'forbiddenInputClasses')).toEqual(['domain_content_key']);
       expect(booleanField(privacy, 'secretMaterial')).toBe(true);
+    } else if (fixtureCase === 'durable-access-claim') {
+      expect(booleanField(input, 'singleJob')).toBe(false);
+      expect(booleanField(input, 'durableAccessClaim')).toBe(true);
+      expect(stringField(input, 'accessScope')).toBe('durable_standing');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['durable_access_claim']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'durableAccess')).toBe(true);
+      expect(booleanField(authority, 'singleJobOnly')).toBe(false);
+    } else if (fixtureCase === 'missing-policy-consent') {
+      expect(inputClasses).toContain('private_memory_excerpt');
+      expect(stringField(input, 'policyDecisionRef')).toBe('');
+      expect(stringField(input, 'consentRef')).toBe('');
+      expect(booleanField(input, 'requiredConfirmation')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['missing_policy_decision', 'missing_consent']);
+      const authority = recordField(expectBlock, 'authority');
+      expect(booleanField(authority, 'policyBound')).toBe(false);
+      expect(booleanField(authority, 'consentBound')).toBe(false);
+    } else if (fixtureCase === 'unsafe-provider-retention') {
+      expect(inputClasses).toContain('private_memory_excerpt');
+      expect(stringField(input, 'providerRetentionRequest')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['unsafe_retention_mode']);
+      const privacy = recordField(expectBlock, 'privacy');
+      expect(stringField(privacy, 'retentionMode')).toBe('provider_default');
+      expect(booleanField(privacy, 'unsafeRetention')).toBe(true);
     }
   } else if (draftSurface === 'context-ref') {
     expect(stringField(input, 'schema')).toBe('pico.model.context.ref.draft');

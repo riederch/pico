@@ -199,6 +199,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0055-pico-link-draft-identity-key-placeholder.md`](docs/architecture/0055-pico-link-draft-identity-key-placeholder.md) - draft-only Pico Link identity-key placeholder boundary
 - [`docs/architecture/0056-pico-home-link-draft-home-host-key-placeholder.md`](docs/architecture/0056-pico-home-link-draft-home-host-key-placeholder.md) - draft-only Pico Home Link Home Host Key placeholder boundary
 - [`docs/architecture/0057-pico-home-link-draft-residency-eviction-placeholder.md`](docs/architecture/0057-pico-home-link-draft-residency-eviction-placeholder.md) - draft-only Pico Home Link residency and eviction placeholder boundary
+- [`docs/architecture/0058-model-delegation-draft-job-envelope-scoping-placeholder.md`](docs/architecture/0058-model-delegation-draft-job-envelope-scoping-placeholder.md) - draft-only Model Delegation job-envelope scoping placeholder boundary
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

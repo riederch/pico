@@ -25,7 +25,11 @@
   "fixtures": [
     "provider-registry/v0.1.7/parse-positive/local-summarizer-placeholder",
     "provider-registry/v0.1.7/authority-negative/vault-read-authority-claim",
+    "job-envelope/v0.1.7/parse-positive/scoped-summarize-placeholder",
     "job-envelope/v0.1.7/privacy-negative/forbidden-input-class",
+    "job-envelope/v0.1.7/authority-negative/durable-access-claim",
+    "job-envelope/v0.1.7/authority-negative/missing-policy-consent",
+    "job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention",
     "context-ref/v0.1.7/privacy-negative/provider-expandable-context",
     "result-envelope/v0.1.7/authority-negative/action-execution-claim"
   ],

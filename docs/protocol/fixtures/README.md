@@ -87,7 +87,11 @@ These fixtures are in a separate draft suite and are not part of the Foundation 
 model-delegation/draft/suite.json
 model-delegation/draft/provider-registry/v0.1.7/parse-positive/local-summarizer-placeholder/
 model-delegation/draft/provider-registry/v0.1.7/authority-negative/vault-read-authority-claim/
+model-delegation/draft/job-envelope/v0.1.7/parse-positive/scoped-summarize-placeholder/
 model-delegation/draft/job-envelope/v0.1.7/privacy-negative/forbidden-input-class/
+model-delegation/draft/job-envelope/v0.1.7/authority-negative/durable-access-claim/
+model-delegation/draft/job-envelope/v0.1.7/authority-negative/missing-policy-consent/
+model-delegation/draft/job-envelope/v0.1.7/privacy-negative/unsafe-provider-retention/
 model-delegation/draft/context-ref/v0.1.7/privacy-negative/provider-expandable-context/
 model-delegation/draft/result-envelope/v0.1.7/authority-negative/action-execution-claim/
 ```

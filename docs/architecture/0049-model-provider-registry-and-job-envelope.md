@@ -526,6 +526,11 @@ This ADR refines:
 
 - `0048-model-capability-delegation-and-remote-inference-boundary.md`
 
+It is staged and refined by:
+
+- `0050-model-delegation-draft-fixture-gate.md`, which gates draft-only fixture data for these surfaces
+- `0058-model-delegation-draft-job-envelope-scoping-placeholder.md`, which narrows the job-envelope surface to a single scoped, policy- and consent-bound job placeholder
+
 It extends and constrains:
 
 - `0010-tool-policy-and-executor-model.md`

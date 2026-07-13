@@ -1,0 +1,41 @@
+{
+  "schema": "pico.model.job.envelope.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "jobId": "model_job_missing_policy_consent_placeholder",
+  "jobVersion": 1,
+  "createdAt": "2026-07-12T12:00:00.000Z",
+  "expiresAt": "2026-07-12T12:05:00.000Z",
+  "requesterSubject": "subject_placeholder_requester",
+  "requesterDevice": "device_placeholder_requester",
+  "subjectPico": "pico_placeholder_subject",
+  "providerId": "model_provider_local_summarizer_placeholder",
+  "jobType": "model.plan",
+  "purpose": "Synthetic sensitive planning job that omits policy and consent references.",
+  "purposeCategory": "planning",
+  "policyDecisionRef": "",
+  "consentRef": "",
+  "requiredConfirmation": true,
+  "privacyDomainRefs": [
+    "private_domain_placeholder"
+  ],
+  "inputClasses": [
+    "user_supplied_prompt",
+    "private_memory_excerpt"
+  ],
+  "contextRefs": [],
+  "inlineContext": {
+    "prompt": "Plan around this synthetic private note."
+  },
+  "redactionSummary": "Synthetic fixture intentionally omits policy and consent references.",
+  "retentionRequirement": "no_store",
+  "toolUseMode": "none",
+  "outputSchemaRef": "plain_text",
+  "resultHandling": "return_to_requester_only",
+  "auditRequirement": "audit_metadata_only",
+  "replayNonce": "nonce_model_job_missing_policy_consent_placeholder",
+  "singleJob": true,
+  "durableAccessClaim": false,
+  "accessScope": "single_job",
+  "extensions": {}
+}
