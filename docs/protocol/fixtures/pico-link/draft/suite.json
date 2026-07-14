@@ -72,7 +72,9 @@
     "replica-manifest/v0.1.7/parse-negative/plaintext-in-manifest",
     "replica-manifest/v0.1.7/parse-negative/verified-completeness-claim",
     "replica-manifest/v0.1.7/parse-negative/verified-signature-claim",
+    "canonicalization/v0.1.7/parse-positive/parse-only-placeholder",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
+    "compatibility-claims/v0.1.7/parse-positive/draft-only-claim-placeholder",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],
   "notes": "Draft Pico Link fixture data only. This is not a runner, not a published conformance suite, not a Pico Link implementation, not cryptographic verification and not an L4 compatibility basis."

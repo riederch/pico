@@ -1,0 +1,43 @@
+{
+  "schema": "pico.compatibility.claim.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "claimId": "compat_placeholder_draft_only",
+  "implementation": {
+    "name": "Example Draft Implementation",
+    "version": "0.0.0-draft",
+    "publisher": "example-placeholder"
+  },
+  "protocol": {
+    "version": "0.1.7",
+    "surfaces": {
+      "foundationEvents": "experimental-l1-seed",
+      "foundationRealtime": "experimental-l1-seed",
+      "picoLink": "draft-only",
+      "picoHomeLink": "draft-only"
+    }
+  },
+  "conformance": {
+    "level": "draft-only",
+    "suite": null,
+    "runner": "none",
+    "result": "not_tested"
+  },
+  "security": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false
+  },
+  "permission": {
+    "officialStatus": "not-official",
+    "commercialPermission": "not-granted-by-compatibility"
+  },
+  "disclaimers": [
+    "draft-only",
+    "not production security",
+    "not L4 conformance",
+    "not official",
+    "not commercial permission"
+  ],
+  "extensions": {}
+}

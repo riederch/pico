@@ -345,7 +345,7 @@ The current draft Pico Link suite lives separately from the Foundation seed:
 docs/protocol/fixtures/pico-link/draft/suite.json
 ```
 
-It currently contains one positive and four negative packet-envelope preflight fixtures, one positive and four negative protected-payload placeholder fixtures, one positive and three negative Home Host Key placeholder fixtures, one positive and four negative Home Membership Credential placeholder fixtures, one positive and three negative Home Residency placeholder fixtures, one positive and three negative Identity Key placeholder fixtures, one positive and two negative Device Credential placeholder fixtures, one positive and three negative lost-device revocation placeholder fixtures, one positive and three negative revocation-record placeholder fixtures, one positive and three negative key-envelope rotation placeholder fixtures, one positive and three negative signed-event-segment placeholder fixtures, one positive and three negative replica-manifest placeholder fixtures, one negative canonicalization placeholder fixture and one negative compatibility-claim fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
+It currently contains one positive and four negative packet-envelope preflight fixtures, one positive and four negative protected-payload placeholder fixtures, one positive and three negative Home Host Key placeholder fixtures, one positive and four negative Home Membership Credential placeholder fixtures, one positive and three negative Home Residency placeholder fixtures, one positive and three negative Identity Key placeholder fixtures, one positive and two negative Device Credential placeholder fixtures, one positive and three negative lost-device revocation placeholder fixtures, one positive and three negative revocation-record placeholder fixtures, one positive and three negative key-envelope rotation placeholder fixtures, one positive and three negative signed-event-segment placeholder fixtures, one positive and three negative replica-manifest placeholder fixtures, one positive and one negative canonicalization placeholder fixture and one positive and one negative compatibility-claim fixture. Every current draft surface now has at least one positive fixture. These are fixture data only, not a runner, not runtime validation and not a compatibility basis.
 
 Future Pico Link fixtures may cover:
 
@@ -515,7 +515,7 @@ It includes:
 - eleven negative Foundation event append fixtures for a reserved event type, invalid payload values and unexpected fields
 - six positive current Foundation WebSocket message fixtures
 - five negative Foundation WebSocket message fixtures for missing required fields, non-Foundation event envelopes, invalid event payloads and a Pico Link-like non-message
-- fifty-two draft Pico Link fixtures in a separate draft suite
+- fifty-four draft Pico Link fixtures in a separate draft suite
 - twenty draft Model Delegation fixtures in a separate draft suite
 - protocol tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics and draft-suite non-claim boundaries
 

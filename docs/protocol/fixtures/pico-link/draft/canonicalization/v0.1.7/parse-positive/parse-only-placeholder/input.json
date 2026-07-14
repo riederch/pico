@@ -1,0 +1,25 @@
+{
+  "schema": "pico.canonicalization.case.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "caseId": "canon_placeholder_parse_only",
+  "targetSurface": "pico-link-packet",
+  "input": {
+    "format": "json-text",
+    "rawRef": "input.json",
+    "parsedObjectRef": null
+  },
+  "expectation": {
+    "status": "parse-only",
+    "reason": "no_canonical_form_yet"
+  },
+  "canonicalOutput": {
+    "status": "absent",
+    "bytes": null
+  },
+  "cryptoVector": {
+    "hash": "absent",
+    "signature": "absent"
+  },
+  "extensions": {}
+}

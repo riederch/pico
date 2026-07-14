@@ -370,7 +370,9 @@ describe('Pico protocol types', () => {
       'replica-manifest/v0.1.7/parse-negative/plaintext-in-manifest',
       'replica-manifest/v0.1.7/parse-negative/verified-completeness-claim',
       'replica-manifest/v0.1.7/parse-negative/verified-signature-claim',
+      'canonicalization/v0.1.7/parse-positive/parse-only-placeholder',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
+      'compatibility-claims/v0.1.7/parse-positive/draft-only-claim-placeholder',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures/pico-link/draft').sort());
@@ -1013,9 +1015,17 @@ function expectDraftFixtureBoundary(
     expect(booleanField(security, 'homeMembershipVerified')).toBe(false);
     const permission = recordField(input, 'permission');
     expect(stringField(permission, 'commercialPermission')).toBe('not-granted-by-compatibility');
-    expect(stringArrayField(expectBlock, 'errors')).toEqual(['compatibility_claim']);
-    expect(stringArrayField(input, 'disclaimers')).not.toContain('not L4 conformance');
-    expect(stringArrayField(expectBlock, 'requiredDisclaimers')).toContain('not L4 conformance');
+
+    if (fixtureCase === 'l4-claim-without-runner') {
+      expect(stringField(conformance, 'level')).toBe('L4');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['compatibility_claim']);
+      expect(stringArrayField(input, 'disclaimers')).not.toContain('not L4 conformance');
+      expect(stringArrayField(expectBlock, 'requiredDisclaimers')).toContain('not L4 conformance');
+    } else if (fixtureCase === 'draft-only-claim-placeholder') {
+      expect(stringField(conformance, 'level')).not.toBe('L4');
+      expect(stringArrayField(input, 'disclaimers')).toContain('draft-only');
+      expect(stringArrayField(input, 'disclaimers')).toContain('not L4 conformance');
+    }
   } else if (draftSurface === 'home-host-key') {
     expect(stringField(input, 'schema')).toBe('pico.home.host-key.draft');
     const isMoveInCodeCase = fixtureCase === 'move-in-code-as-host-key';
@@ -1640,13 +1650,20 @@ function expectDraftFixtureBoundary(
     const cryptoVector = recordField(input, 'cryptoVector');
     expect(stringField(cryptoVector, 'hash')).toBe('absent');
     expect(stringField(cryptoVector, 'signature')).toBe('absent');
-    expect(stringArrayField(expectBlock, 'errors')).toEqual(['canonical_output_claim']);
-    expect(stringField(canonicalOutput, 'status')).toBe('present');
-    expect(stringField(canonicalOutput, 'bytes')).toBeTruthy();
     const canonicalization = recordField(expectBlock, 'canonicalization');
-    expect(booleanField(canonicalization, 'canonicalBytesPublished')).toBe(true);
     expect(booleanField(canonicalization, 'hashVectorPublished')).toBe(false);
     expect(booleanField(canonicalization, 'signatureVectorPublished')).toBe(false);
+
+    if (fixtureCase === 'canonical-output-claim') {
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['canonical_output_claim']);
+      expect(stringField(canonicalOutput, 'status')).toBe('present');
+      expect(stringField(canonicalOutput, 'bytes')).toBeTruthy();
+      expect(booleanField(canonicalization, 'canonicalBytesPublished')).toBe(true);
+    } else if (fixtureCase === 'parse-only-placeholder') {
+      expect(stringField(expectation, 'status')).toBe('parse-only');
+      expect(stringField(canonicalOutput, 'status')).toBe('absent');
+      expect(booleanField(canonicalization, 'canonicalBytesPublished')).toBe(false);
+    }
   } else if (draftSurface === 'signed-event-segment') {
     expect(stringField(input, 'schema')).toBe('pico.history.segment.draft');
     expect(stringField(input, 'segmentRecordId')).toContain('segment_placeholder_');
