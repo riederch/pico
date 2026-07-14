@@ -204,6 +204,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0062-pico-link-draft-signed-event-segment-placeholder.md`](../docs/architecture/0062-pico-link-draft-signed-event-segment-placeholder.md) - draft-only Pico Link signed event segment placeholder boundary
 - [`../docs/architecture/0063-pico-link-draft-protected-payload-rejection-placeholder.md`](../docs/architecture/0063-pico-link-draft-protected-payload-rejection-placeholder.md) - draft-only Pico Link protected-payload rejection boundary
 - [`../docs/architecture/0064-pico-link-draft-replica-manifest-placeholder.md`](../docs/architecture/0064-pico-link-draft-replica-manifest-placeholder.md) - draft-only Pico Link replica manifest placeholder boundary
+- [`../docs/architecture/0065-pico-link-draft-packet-envelope-rejection-placeholder.md`](../docs/architecture/0065-pico-link-draft-packet-envelope-rejection-placeholder.md) - draft-only Pico Link packet-envelope rejection boundary
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

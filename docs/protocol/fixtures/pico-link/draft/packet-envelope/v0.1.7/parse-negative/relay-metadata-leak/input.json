@@ -1,0 +1,25 @@
+{
+  "schema": "pico.link.packet.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "packetId": "pkt_draft_relay_metadata_leak",
+  "routing": {
+    "destinationRouteId": "route_destination_placeholder",
+    "senderRouteId": "route_sender_placeholder",
+    "replyRouteId": "route_reply_placeholder"
+  },
+  "delivery": {
+    "trafficClass": "message",
+    "priority": "normal",
+    "ttl": 3,
+    "expiresAt": "2026-07-12T12:00:00.000Z",
+    "leakedRelationshipHint": "relationship_placeholder_alice_bob",
+    "leakedDomainHint": "domain_placeholder_private"
+  },
+  "payload": {
+    "contentType": "application/vnd.pico.link.protected-placeholder+json",
+    "placeholder": true,
+    "protectedPayloadRef": "payload_placeholder_relay_metadata_leak"
+  },
+  "extensions": {}
+}

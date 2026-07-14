@@ -322,6 +322,9 @@ describe('Pico protocol types', () => {
     expect(fixturePaths).toEqual([
       'packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder',
       'packet-envelope/v0.1.7/parse-negative/plaintext-message-leak',
+      'packet-envelope/v0.1.7/parse-negative/pico-id-in-routing',
+      'packet-envelope/v0.1.7/parse-negative/payload-crypto-claim',
+      'packet-envelope/v0.1.7/parse-negative/relay-metadata-leak',
       'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
       'protected-payload/v0.1.7/parse-negative/plaintext-in-protected-body',
       'protected-payload/v0.1.7/parse-negative/real-encryption-claim',
@@ -902,8 +905,10 @@ function expectDraftFixtureBoundary(
     expect(Object.keys(routing).sort()).toEqual(['destinationRouteId', 'replyRouteId', 'senderRouteId']);
     for (const routingValue of Object.values(routing)) {
       expect(typeof routingValue).toBe('string');
-      expect(String(routingValue)).toContain('route_');
-      expect(String(routingValue)).not.toContain('pico_');
+      if (fixtureCase !== 'pico-id-in-routing') {
+        expect(String(routingValue)).toContain('route_');
+        expect(String(routingValue)).not.toContain('pico_');
+      }
     }
     const delivery = recordField(input, 'delivery');
     expect(['message', 'presence', 'wake_hint', 'system_probe']).toContain(stringField(delivery, 'trafficClass'));
@@ -914,17 +919,39 @@ function expectDraftFixtureBoundary(
     expect(stringField(payload, 'contentType')).toBe('application/vnd.pico.link.protected-placeholder+json');
     expect(booleanField(payload, 'placeholder')).toBe(true);
     expect(stringField(payload, 'protectedPayloadRef')).toContain('payload_placeholder_');
-    expect(payload.ciphertext).toBeUndefined();
-    expect(payload.signature).toBeUndefined();
-    expect(payload.keyEnvelope).toBeUndefined();
-    expect(payload.algorithmSuite).toBeUndefined();
-    expect(payload.plaintext).toBeUndefined();
+    if (fixtureCase !== 'payload-crypto-claim') {
+      expect(payload.ciphertext).toBeUndefined();
+      expect(payload.signature).toBeUndefined();
+      expect(payload.keyEnvelope).toBeUndefined();
+      expect(payload.algorithmSuite).toBeUndefined();
+      expect(payload.plaintext).toBeUndefined();
+    }
+    const expectPrivacy = recordField(expectBlock, 'privacy');
 
     if (fixtureCase === 'plaintext-message-leak') {
       expect(stringField(input, 'messageText')).toContain('plaintext');
       expect(stringArrayField(expectBlock, 'errors')).toEqual(['protected_plaintext_leak']);
+      expect(booleanField(expectPrivacy, 'relayVisiblePlaintext')).toBe(true);
+    } else if (fixtureCase === 'pico-id-in-routing') {
+      expect(input.messageText).toBeUndefined();
+      expect(stringField(routing, 'senderRouteId')).toContain('pico_');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['packet_routing_pico_identity']);
+      expect(booleanField(expectPrivacy, 'routingIdentityIsPicoIdentity')).toBe(true);
+    } else if (fixtureCase === 'payload-crypto-claim') {
+      expect(input.messageText).toBeUndefined();
+      expect(stringField(payload, 'algorithmSuite')).toBeTruthy();
+      expect(stringField(payload, 'ciphertext')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['packet_payload_crypto_claim']);
+      expect(booleanField(expectPrivacy, 'payloadCryptoClaimed')).toBe(true);
+    } else if (fixtureCase === 'relay-metadata-leak') {
+      expect(input.messageText).toBeUndefined();
+      expect(stringField(delivery, 'leakedRelationshipHint')).toContain('relationship_');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['packet_relay_metadata_leak']);
+      expect(booleanField(expectPrivacy, 'relayMetadataLeaked')).toBe(true);
     } else {
       expect(input.messageText).toBeUndefined();
+      expect(booleanField(expectPrivacy, 'relayVisiblePlaintext')).toBe(false);
+      expect(booleanField(expectPrivacy, 'routingIdentityIsPicoIdentity')).toBe(false);
     }
   } else if (draftSurface === 'protected-payload') {
     expect(stringField(input, 'schema')).toBe('pico.payload.protected.draft');

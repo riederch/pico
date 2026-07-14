@@ -1,0 +1,39 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.packet-envelope.v0_1_7.parse-negative.pico-id-in-routing",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "packet-envelope",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft packet envelope rejects a Pico identity used as a routing ID",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "packet_routing_pico_identity"
+    ],
+    "privacy": {
+      "relayVisiblePlaintext": false,
+      "routingIdentityIsPicoIdentity": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0065 negative fixture. Routing IDs stay relay routing identifiers and cannot be Pico identities."
+}

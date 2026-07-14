@@ -24,6 +24,9 @@
   "fixtures": [
     "packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder",
     "packet-envelope/v0.1.7/parse-negative/plaintext-message-leak",
+    "packet-envelope/v0.1.7/parse-negative/pico-id-in-routing",
+    "packet-envelope/v0.1.7/parse-negative/payload-crypto-claim",
+    "packet-envelope/v0.1.7/parse-negative/relay-metadata-leak",
     "protected-payload/v0.1.7/parse-positive/opaque-placeholder",
     "protected-payload/v0.1.7/parse-negative/plaintext-in-protected-body",
     "protected-payload/v0.1.7/parse-negative/real-encryption-claim",

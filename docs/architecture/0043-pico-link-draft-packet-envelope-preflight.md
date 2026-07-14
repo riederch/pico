@@ -203,4 +203,8 @@ This ADR refines:
 - `0034-canonicalization-signature-inputs-and-test-vectors.md`
 - `0042-pico-link-draft-schema-and-fixture-gate.md`
 
+It is deepened by:
+
+- `0065-pico-link-draft-packet-envelope-rejection-placeholder.md`, which adds the first packet-envelope rejection boundaries for Pico identity in routing, payload crypto claims and relay-visible relationship/domain metadata leaks
+
 It remains below the future normative Pico Link wire format, cryptography, canonicalization, relay, Home membership and conformance specifications.

@@ -45,6 +45,9 @@ These fixtures are in a separate draft suite and are not part of the Foundation 
 pico-link/draft/suite.json
 pico-link/draft/packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder/
 pico-link/draft/packet-envelope/v0.1.7/parse-negative/plaintext-message-leak/
+pico-link/draft/packet-envelope/v0.1.7/parse-negative/pico-id-in-routing/
+pico-link/draft/packet-envelope/v0.1.7/parse-negative/payload-crypto-claim/
+pico-link/draft/packet-envelope/v0.1.7/parse-negative/relay-metadata-leak/
 pico-link/draft/protected-payload/v0.1.7/parse-positive/opaque-placeholder/
 pico-link/draft/protected-payload/v0.1.7/parse-negative/plaintext-in-protected-body/
 pico-link/draft/protected-payload/v0.1.7/parse-negative/real-encryption-claim/

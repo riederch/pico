@@ -175,6 +175,7 @@ In particular:
 - Pico Link signed event segment placeholder language must remain consistent with `0062`
 - Pico Link protected-payload rejection placeholder language must remain consistent with `0063`
 - Pico Link replica manifest placeholder language must remain consistent with `0064`
+- Pico Link packet-envelope rejection placeholder language must remain consistent with `0065`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

@@ -1,0 +1,40 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.packet-envelope.v0_1_7.parse-negative.payload-crypto-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "packet-envelope",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft packet envelope rejects crypto material in the relay-visible payload block",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "packet_payload_crypto_claim"
+    ],
+    "privacy": {
+      "relayVisiblePlaintext": false,
+      "routingIdentityIsPicoIdentity": false,
+      "payloadCryptoClaimed": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0065 negative fixture. The packet payload block stays an opaque reference and cannot carry ciphertext, signatures or algorithm suites."
+}

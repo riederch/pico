@@ -129,7 +129,7 @@ This separation prevents a Foundation L1 seed from becoming an implied Pico Link
 
 The first allowed Pico Link draft fixture family is a packet-envelope preflight.
 
-ADR `0043-pico-link-draft-packet-envelope-preflight.md` defines the first constrained draft-only packet-envelope preflight shape for that family. It is fixture scaffolding, not the final wire format.
+ADR `0043-pico-link-draft-packet-envelope-preflight.md` defines the first constrained draft-only packet-envelope preflight shape for that family. It is fixture scaffolding, not the final wire format. ADR `0065-pico-link-draft-packet-envelope-rejection-placeholder.md` adds the first packet-envelope rejection boundaries beyond the plaintext leak: routing IDs stay free of Pico identity, the payload block stays an opaque reference and relay-visible fields must not leak relationship or domain metadata.
 
 It may assert that relay-visible fields do not include:
 

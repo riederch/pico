@@ -1,0 +1,26 @@
+{
+  "schema": "pico.link.packet.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "packetId": "pkt_draft_payload_crypto_claim",
+  "routing": {
+    "destinationRouteId": "route_destination_placeholder",
+    "senderRouteId": "route_sender_placeholder",
+    "replyRouteId": "route_reply_placeholder"
+  },
+  "delivery": {
+    "trafficClass": "message",
+    "priority": "normal",
+    "ttl": 3,
+    "expiresAt": "2026-07-12T12:00:00.000Z"
+  },
+  "payload": {
+    "contentType": "application/vnd.pico.link.protected-placeholder+json",
+    "placeholder": true,
+    "protectedPayloadRef": "payload_placeholder_payload_crypto_claim",
+    "algorithmSuite": "xchacha20poly1305-final",
+    "ciphertext": "synthetic_ciphertext_placeholder_for_rejection",
+    "signature": "synthetic_signature_placeholder_for_rejection"
+  },
+  "extensions": {}
+}
