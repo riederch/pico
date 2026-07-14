@@ -294,10 +294,11 @@ export function validateFoundationEventPayload(
   };
 }
 
-// Reserved privacy/deletability protocol direction. These names prepare later
-// additive payload-posture documentation, but the current Foundation PicoEvent
-// shape does not expose a payloadPosture field and does not implement memory,
-// tombstone, retention or privacy-domain storage semantics.
+// Reserved privacy/deletability protocol direction (ADR 0014 / ADR 0067). These
+// names prepare later additive payload-posture documentation, but the current
+// Foundation PicoEvent shape does not expose a payloadPosture field and does not
+// implement memory, tombstone, retention or privacy-domain storage semantics. An
+// absent posture is treated as inline_operational once the field is added.
 export const payloadPostures = [
   'inline_operational',
   'inline_test',

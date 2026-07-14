@@ -177,6 +177,7 @@ In particular:
 - Pico Link replica manifest placeholder language must remain consistent with `0064`
 - Pico Link packet-envelope rejection placeholder language must remain consistent with `0065`
 - Pico Home Link Home Membership rejection placeholder language must remain consistent with `0066`
+- Foundation payload-posture, reference-target and tombstone language must remain consistent with `0014` and `0067`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

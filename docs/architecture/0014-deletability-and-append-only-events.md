@@ -65,6 +65,10 @@ The current implementation does not yet expose a `payloadPosture` field, referen
 
 A future payload-posture schema field can be added as an additive protocol and storage preparation step, but it must not be confused with the full memory, deletion, tombstone or privacy-domain implementation.
 
+## Realization
+
+ADR `0067-foundation-payload-posture-reference-targets-and-tombstones.md` operationalizes this constraint into a concrete additive Foundation contract: an optional `payloadPosture` envelope field defaulting to `inline_operational`, a writable-posture policy for `POST /api/events`, reference-target and tombstone direction, and additive-compatibility rules. The `payloadPostures` vocabulary is already reserved in `@pico/protocol`.
+
 ## Design rule
 
 Never make immutable replicated events the primary storage location for sensitive deleteable personal memory.

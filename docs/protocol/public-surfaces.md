@@ -217,7 +217,7 @@ violet
 
 ### Reserved payload posture direction
 
-These names are reserved privacy and deletability direction for later additive protocol work:
+These names are reserved privacy and deletability direction for later additive protocol work (ADR 0014, operationalized by ADR 0067). They are exported as `payloadPostures` in `@pico/protocol`:
 
 ```text
 inline_operational
@@ -227,7 +227,7 @@ summary_only
 redacted
 ```
 
-The current Foundation `PicoEvent` shape does not expose a `payloadPosture` field. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
+The current Foundation `PicoEvent` shape does not expose a `payloadPosture` field; ADR 0067 defines it as an additive optional envelope field that defaults to `inline_operational` when absent. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
 
 ### Reserved context-signal direction
 

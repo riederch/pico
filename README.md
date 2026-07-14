@@ -208,6 +208,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0064-pico-link-draft-replica-manifest-placeholder.md`](docs/architecture/0064-pico-link-draft-replica-manifest-placeholder.md) - draft-only Pico Link replica manifest placeholder boundary
 - [`docs/architecture/0065-pico-link-draft-packet-envelope-rejection-placeholder.md`](docs/architecture/0065-pico-link-draft-packet-envelope-rejection-placeholder.md) - draft-only Pico Link packet-envelope rejection boundary
 - [`docs/architecture/0066-pico-home-link-draft-home-membership-rejection-placeholder.md`](docs/architecture/0066-pico-home-link-draft-home-membership-rejection-placeholder.md) - draft-only Pico Home Link Home Membership rejection boundary
+- [`docs/architecture/0067-foundation-payload-posture-reference-targets-and-tombstones.md`](docs/architecture/0067-foundation-payload-posture-reference-targets-and-tombstones.md) - additive Foundation payload-posture, reference-target and tombstone realization of ADR 0014
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
