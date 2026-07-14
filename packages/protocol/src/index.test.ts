@@ -360,6 +360,10 @@ describe('Pico protocol types', () => {
       'signed-event-segment/v0.1.7/parse-negative/verified-signature-claim',
       'signed-event-segment/v0.1.7/parse-negative/host-resident-authorship-forgery',
       'signed-event-segment/v0.1.7/parse-negative/history-rewrite-claim',
+      'replica-manifest/v0.1.7/parse-positive/replica-manifest-placeholder',
+      'replica-manifest/v0.1.7/parse-negative/plaintext-in-manifest',
+      'replica-manifest/v0.1.7/parse-negative/verified-completeness-claim',
+      'replica-manifest/v0.1.7/parse-negative/verified-signature-claim',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
@@ -1639,6 +1643,49 @@ function expectDraftFixtureBoundary(
       expect(stringArrayField(expectBlock, 'errors')).toEqual(['segment_history_rewrite_claim']);
       expect(booleanField(expectSegment, 'historyRewritten')).toBe(true);
     }
+  } else if (draftSurface === 'replica-manifest') {
+    expect(stringField(input, 'schema')).toBe('pico.replica.manifest.draft');
+    expect(stringField(input, 'replicaRecordId')).toContain('replica_placeholder_');
+    const owner = recordField(input, 'owner');
+    expect(stringField(owner, 'picoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(owner, 'deviceIdHint')).toContain('device_placeholder_');
+    const domains = recordArrayField(input, 'domains');
+    expect(domains.length).toBeGreaterThan(0);
+    const firstDomain = domains[0];
+    expect(stringField(firstDomain, 'domainIdHint')).toContain('domain_placeholder_');
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    const expectManifest = recordField(expectBlock, 'manifest');
+    expect(booleanField(expectManifest, 'manifestVerified')).toBe(false);
+
+    if (fixtureCase === 'replica-manifest-placeholder') {
+      expect(stringField(input, 'signatureStatus')).toBe('absent');
+      expect(stringField(firstDomain, 'checkpointStatus')).toBe('absent');
+      expect(stringField(firstDomain, 'payloadPosture')).toBe('metadata-only');
+      expect(input.signatureAuthorityClaim).toBeUndefined();
+      expect(input.completenessAuthorityClaim).toBeUndefined();
+      expect(booleanField(expectManifest, 'signatureVerified')).toBe(false);
+      expect(booleanField(expectManifest, 'completenessVerified')).toBe(false);
+      expect(booleanField(expectManifest, 'plaintextLeaked')).toBe(false);
+    } else if (fixtureCase === 'plaintext-in-manifest') {
+      expect(stringField(firstDomain, 'payloadPosture')).toBe('plaintext-leak');
+      expect(stringField(firstDomain, 'plaintext')).toContain('plaintext');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['manifest_plaintext_leak']);
+      expect(booleanField(expectManifest, 'plaintextLeaked')).toBe(true);
+    } else if (fixtureCase === 'verified-completeness-claim') {
+      expect(stringField(recordField(input, 'coverage'), 'completenessStatus')).toBe('verified-complete');
+      expect(recordField(input, 'completenessAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['manifest_verified_completeness_claim']);
+      expect(booleanField(expectManifest, 'completenessVerified')).toBe(true);
+    } else if (fixtureCase === 'verified-signature-claim') {
+      expect(stringField(input, 'signatureStatus')).toBe('verified-claim');
+      expect(stringField(firstDomain, 'checkpointStatus')).toBe('verified');
+      expect(recordField(input, 'signatureAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['manifest_signature_verified_claim']);
+      expect(booleanField(expectManifest, 'signatureVerified')).toBe(true);
+      expect(booleanField(expectManifest, 'checkpointVerified')).toBe(true);
+    }
   } else {
     throw new Error(`Unexpected draft surface: ${draftSurface}`);
   }
@@ -2020,6 +2067,15 @@ function stringArrayField(source: Record<string, unknown>, field: string): strin
   }
 
   return value;
+}
+
+function recordArrayField(source: Record<string, unknown>, field: string): Record<string, unknown>[] {
+  const value = source[field];
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'object' || item === null || Array.isArray(item))) {
+    throw new Error(`${field} must be an object array.`);
+  }
+
+  return value as Record<string, unknown>[];
 }
 
 function asRecord(value: unknown, label: string): Record<string, unknown> {

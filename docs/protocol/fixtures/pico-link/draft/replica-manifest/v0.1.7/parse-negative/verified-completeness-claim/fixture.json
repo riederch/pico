@@ -1,0 +1,42 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.replica-manifest.v0_1_7.parse-negative.verified-completeness-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "replica-manifest",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft replica manifest rejects a verified completeness and consistency claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "manifest_verified_completeness_claim"
+    ],
+    "manifest": {
+      "manifestVerified": false,
+      "signatureVerified": false,
+      "checkpointVerified": false,
+      "completenessVerified": true,
+      "plaintextLeaked": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0064 negative fixture. A replica manifest may help detect omission but cannot prove verified completeness or consistency."
+}

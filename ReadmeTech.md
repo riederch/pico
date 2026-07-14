@@ -522,6 +522,7 @@ The project concept is persisted as architecture notes:
 | `0061-model-delegation-draft-provider-registry-advertisement-placeholder.md` | draft-only Model Delegation provider-registry advertisement placeholder boundary |
 | `0062-pico-link-draft-signed-event-segment-placeholder.md` | draft-only Pico Link signed event segment placeholder boundary |
 | `0063-pico-link-draft-protected-payload-rejection-placeholder.md` | draft-only Pico Link protected-payload rejection boundary |
+| `0064-pico-link-draft-replica-manifest-placeholder.md` | draft-only Pico Link replica manifest placeholder boundary |
 
 Protocol documents:
 
@@ -635,6 +636,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0061 as the only current provider-registry advertisement placeholder boundary if future Model Delegation provider-registry draft fixtures are added; entries advertise capability only and are never a trust grant, Vault access, usable after revocation or default tool execution
 - Use ADR 0062 as the only current signed event segment placeholder boundary if future Pico Link signed-event-segment draft fixtures are added; segments bind an event range to an author, scope and chain and are never a verified signature, resident authorship on a host or a rewrite of prior signed history
 - Use ADR 0063 as the current protected-payload rejection boundary if future Pico Link protected-payload draft fixtures are added; the body stays opaque and the payload rejects plaintext leaks, real-crypto claims, embedded key material and verified sender/audience authority claims
+- Use ADR 0064 as the only current replica manifest placeholder boundary if future Pico Link replica-manifest draft fixtures are added; manifests summarize known state for sync/audit and never expose plaintext, prove completeness/consistency or carry a verified signature
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

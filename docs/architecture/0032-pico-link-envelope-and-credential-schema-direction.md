@@ -242,6 +242,8 @@ Required semantics:
 - manifests should help detect host omission, replay or stale restore.
 - manifest signatures need canonicalization and device delegation rules before they are security-relevant.
 
+ADR `0064-pico-link-draft-replica-manifest-placeholder.md` defines the first draft-only replica manifest placeholder boundary for fixture work, keeping the manifest metadata-only and rejecting plaintext leaks, verified-completeness claims and verified-signature claims.
+
 ## Key envelope
 
 A key envelope grants an authorised reader access to a protected domain key or content key.

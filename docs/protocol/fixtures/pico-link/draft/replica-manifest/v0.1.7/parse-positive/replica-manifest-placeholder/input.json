@@ -1,0 +1,39 @@
+{
+  "schema": "pico.replica.manifest.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "replicaRecordId": "replica_placeholder_0001",
+  "owner": {
+    "picoIdHint": "pico_placeholder_resident",
+    "deviceIdHint": "device_placeholder_resident_vault",
+    "proofStatus": "unverified-placeholder"
+  },
+  "domains": [
+    {
+      "domainIdHint": "domain_placeholder_private",
+      "headSegmentIdHint": "segment_placeholder_0001",
+      "checkpointRef": "checkpoint_placeholder_private_0001",
+      "checkpointStatus": "absent",
+      "payloadPosture": "metadata-only"
+    },
+    {
+      "domainIdHint": "domain_placeholder_shared",
+      "headSegmentIdHint": "segment_placeholder_shared_0007",
+      "checkpointRef": "checkpoint_placeholder_shared_0007",
+      "checkpointStatus": "absent",
+      "payloadPosture": "metadata-only"
+    }
+  ],
+  "coverage": {
+    "completenessStatus": "unverified-placeholder",
+    "omissionDetectionIntent": true,
+    "staleRestoreDetectionIntent": true
+  },
+  "createdAt": "2026-07-13T12:00:00.000Z",
+  "audit": {
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

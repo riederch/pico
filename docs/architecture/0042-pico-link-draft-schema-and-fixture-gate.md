@@ -78,6 +78,8 @@ ADR `0055-pico-link-draft-identity-key-placeholder.md` defines the first draft-o
 
 ADR `0062-pico-link-draft-signed-event-segment-placeholder.md` defines the first draft-only signed event segment placeholder boundary for future event-authorship fixture work. Segment placeholders may bind an event range to an author, scope and chaining hint, but must not claim a verified signature, event hash or canonicalization, let a host author resident history or rewrite prior signed history.
 
+ADR `0064-pico-link-draft-replica-manifest-placeholder.md` defines the first draft-only replica manifest placeholder boundary for future sync/audit fixture work. Manifest placeholders may summarize known state per domain with head-segment and checkpoint references, but must not expose private plaintext, claim verified completeness or consistency, or claim a verified signature.
+
 `pico-home-link` draft fixtures may cover Home Host Key and membership-credential placeholder shape only after the host, issuer, subject, audience, expiry and revocation fields are described at a concept level. They must not make a host key or credential accepted by runtime code before verification semantics exist.
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` defines the first draft-only Home Host Key placeholder shape for future Pico Home Link host-key fixture work. Home Host Key placeholders may describe host infrastructure continuity intent, but must not sign as resident Picos, decrypt resident domains, replace Move-In Codes, claim verified membership issuer authority, elevate relay identities or claim compatibility.

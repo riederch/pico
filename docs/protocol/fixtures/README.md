@@ -83,6 +83,10 @@ pico-link/draft/signed-event-segment/v0.1.7/parse-positive/signed-segment-placeh
 pico-link/draft/signed-event-segment/v0.1.7/parse-negative/verified-signature-claim/
 pico-link/draft/signed-event-segment/v0.1.7/parse-negative/host-resident-authorship-forgery/
 pico-link/draft/signed-event-segment/v0.1.7/parse-negative/history-rewrite-claim/
+pico-link/draft/replica-manifest/v0.1.7/parse-positive/replica-manifest-placeholder/
+pico-link/draft/replica-manifest/v0.1.7/parse-negative/plaintext-in-manifest/
+pico-link/draft/replica-manifest/v0.1.7/parse-negative/verified-completeness-claim/
+pico-link/draft/replica-manifest/v0.1.7/parse-negative/verified-signature-claim/
 pico-link/draft/canonicalization/v0.1.7/parse-negative/canonical-output-claim/
 pico-link/draft/compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner/
 ```

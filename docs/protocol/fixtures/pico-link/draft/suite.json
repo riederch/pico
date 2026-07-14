@@ -62,6 +62,10 @@
     "signed-event-segment/v0.1.7/parse-negative/verified-signature-claim",
     "signed-event-segment/v0.1.7/parse-negative/host-resident-authorship-forgery",
     "signed-event-segment/v0.1.7/parse-negative/history-rewrite-claim",
+    "replica-manifest/v0.1.7/parse-positive/replica-manifest-placeholder",
+    "replica-manifest/v0.1.7/parse-negative/plaintext-in-manifest",
+    "replica-manifest/v0.1.7/parse-negative/verified-completeness-claim",
+    "replica-manifest/v0.1.7/parse-negative/verified-signature-claim",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],

@@ -1,0 +1,42 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.replica-manifest.v0_1_7.parse-negative.verified-signature-claim",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "replica-manifest",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft replica manifest rejects a verified signature and checkpoint claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "manifest_signature_verified_claim"
+    ],
+    "manifest": {
+      "manifestVerified": false,
+      "signatureVerified": true,
+      "checkpointVerified": true,
+      "completenessVerified": false,
+      "plaintextLeaked": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0064 negative fixture. A replica manifest cannot claim a verified signature or verified checkpoint before canonicalization and delegation exist."
+}
