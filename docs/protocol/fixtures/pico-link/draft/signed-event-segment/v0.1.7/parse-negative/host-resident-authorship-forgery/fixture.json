@@ -1,0 +1,44 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.signed-event-segment.v0_1_7.parse-negative.host-resident-authorship-forgery",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "signed-event-segment",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft signed event segment rejects a host forging resident authorship",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "resident_authorship_forgery"
+    ],
+    "segment": {
+      "segmentVerified": false,
+      "signatureVerified": false,
+      "canonicalizationVerified": false,
+      "authorDelegationVerified": false,
+      "residentAuthorshipForged": true,
+      "historyRewritten": false,
+      "runtimeAuthorization": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0062 negative fixture. A host may store segments but cannot author or sign as a resident Pico."
+}

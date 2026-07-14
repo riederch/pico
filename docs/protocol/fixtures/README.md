@@ -75,6 +75,10 @@ pico-link/draft/key-envelope-rotation/v0.1.7/parse-positive/domain-rotation-plan
 pico-link/draft/key-envelope-rotation/v0.1.7/parse-negative/plaintext-domain-key-in-plan/
 pico-link/draft/key-envelope-rotation/v0.1.7/parse-negative/completed-rotation-without-records/
 pico-link/draft/key-envelope-rotation/v0.1.7/parse-negative/historical-plaintext-erasure-claim/
+pico-link/draft/signed-event-segment/v0.1.7/parse-positive/signed-segment-placeholder/
+pico-link/draft/signed-event-segment/v0.1.7/parse-negative/verified-signature-claim/
+pico-link/draft/signed-event-segment/v0.1.7/parse-negative/host-resident-authorship-forgery/
+pico-link/draft/signed-event-segment/v0.1.7/parse-negative/history-rewrite-claim/
 pico-link/draft/canonicalization/v0.1.7/parse-negative/canonical-output-claim/
 pico-link/draft/compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner/
 ```

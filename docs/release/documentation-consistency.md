@@ -172,6 +172,7 @@ In particular:
 - Model Delegation result-envelope provenance placeholder language must remain consistent with `0059`
 - Model Delegation context-reference scoping placeholder language must remain consistent with `0060`
 - Model Delegation provider-registry advertisement placeholder language must remain consistent with `0061`
+- Pico Link signed event segment placeholder language must remain consistent with `0062`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

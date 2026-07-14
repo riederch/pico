@@ -1,0 +1,45 @@
+{
+  "schema": "pico.history.segment.draft",
+  "schemaVersion": 1,
+  "fixtureStage": "draft",
+  "segmentRecordId": "segment_placeholder_host_forgery",
+  "author": {
+    "picoIdHint": "pico_placeholder_resident",
+    "deviceIdHint": "device_placeholder_home_host",
+    "delegationStatus": "host-claims-resident-signing",
+    "proofStatus": "unverified-placeholder"
+  },
+  "scope": {
+    "domainIdHint": "domain_placeholder_private",
+    "streamHint": "stream_placeholder_notes",
+    "payloadPosture": "metadata-only"
+  },
+  "range": {
+    "firstSequence": 1,
+    "lastSequence": 25,
+    "previousSegmentIdHint": "segment_placeholder_prev_genesis",
+    "chainingStatus": "unverified-placeholder",
+    "rewritesPreviousHistory": false
+  },
+  "integrity": {
+    "eventsHashRef": "hash_placeholder_segment_forgery",
+    "eventsHashStatus": "absent",
+    "canonicalizationStatus": "absent"
+  },
+  "authorship": {
+    "hostStored": true,
+    "authorDelegated": false,
+    "residentSigningAuthority": true
+  },
+  "residentAuthorshipClaim": {
+    "hostPicoIdHint": "pico_placeholder_home_host",
+    "signsAsResident": true,
+    "runtimeAuthorization": true
+  },
+  "audit": {
+    "payloadPosture": "metadata-only",
+    "userVisible": true
+  },
+  "signatureStatus": "absent",
+  "extensions": {}
+}

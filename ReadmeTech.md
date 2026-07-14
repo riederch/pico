@@ -520,6 +520,7 @@ The project concept is persisted as architecture notes:
 | `0059-model-delegation-draft-result-envelope-provenance-placeholder.md` | draft-only Model Delegation result-envelope provenance placeholder boundary |
 | `0060-model-delegation-draft-context-reference-scoping-placeholder.md` | draft-only Model Delegation context-reference scoping placeholder boundary |
 | `0061-model-delegation-draft-provider-registry-advertisement-placeholder.md` | draft-only Model Delegation provider-registry advertisement placeholder boundary |
+| `0062-pico-link-draft-signed-event-segment-placeholder.md` | draft-only Pico Link signed event segment placeholder boundary |
 
 Protocol documents:
 
@@ -631,6 +632,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0059 as the only current result-envelope provenance placeholder boundary if future Model Delegation result-envelope draft fixtures are added; results stay bound to their requested job and provider and are never execution proof, action approval or a model-correctness certificate
 - Use ADR 0060 as the only current context-reference scoping placeholder boundary if future Model Delegation context-reference draft fixtures are added; references stay bounded, redacted, expiring, materialized single-job packets and are never a provider read capability, durable, unscoped or a secret carrier
 - Use ADR 0061 as the only current provider-registry advertisement placeholder boundary if future Model Delegation provider-registry draft fixtures are added; entries advertise capability only and are never a trust grant, Vault access, usable after revocation or default tool execution
+- Use ADR 0062 as the only current signed event segment placeholder boundary if future Pico Link signed-event-segment draft fixtures are added; segments bind an event range to an author, scope and chain and are never a verified signature, resident authorship on a host or a rewrite of prior signed history
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

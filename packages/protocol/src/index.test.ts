@@ -352,6 +352,10 @@ describe('Pico protocol types', () => {
       'key-envelope-rotation/v0.1.7/parse-negative/plaintext-domain-key-in-plan',
       'key-envelope-rotation/v0.1.7/parse-negative/completed-rotation-without-records',
       'key-envelope-rotation/v0.1.7/parse-negative/historical-plaintext-erasure-claim',
+      'signed-event-segment/v0.1.7/parse-positive/signed-segment-placeholder',
+      'signed-event-segment/v0.1.7/parse-negative/verified-signature-claim',
+      'signed-event-segment/v0.1.7/parse-negative/host-resident-authorship-forgery',
+      'signed-event-segment/v0.1.7/parse-negative/history-rewrite-claim',
       'canonicalization/v0.1.7/parse-negative/canonical-output-claim',
       'compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner',
     ]);
@@ -1546,6 +1550,61 @@ function expectDraftFixtureBoundary(
     expect(booleanField(canonicalization, 'canonicalBytesPublished')).toBe(true);
     expect(booleanField(canonicalization, 'hashVectorPublished')).toBe(false);
     expect(booleanField(canonicalization, 'signatureVectorPublished')).toBe(false);
+  } else if (draftSurface === 'signed-event-segment') {
+    expect(stringField(input, 'schema')).toBe('pico.history.segment.draft');
+    expect(stringField(input, 'segmentRecordId')).toContain('segment_placeholder_');
+    const author = recordField(input, 'author');
+    expect(stringField(author, 'picoIdHint')).toContain('pico_placeholder_');
+    expect(stringField(author, 'deviceIdHint')).toContain('device_placeholder_');
+    const scope = recordField(input, 'scope');
+    expect(stringField(scope, 'payloadPosture')).toBe('metadata-only');
+    const range = recordField(input, 'range');
+    expect(numberField(range, 'firstSequence')).toBeGreaterThan(0);
+    expect(numberField(range, 'lastSequence')).toBeGreaterThanOrEqual(numberField(range, 'firstSequence'));
+    const integrity = recordField(input, 'integrity');
+    const authorship = recordField(input, 'authorship');
+    expect(booleanField(authorship, 'hostStored')).toBe(true);
+    const audit = recordField(input, 'audit');
+    expect(stringField(audit, 'payloadPosture')).toBe('metadata-only');
+    expect(booleanField(audit, 'userVisible')).toBe(true);
+    const expectSegment = recordField(expectBlock, 'segment');
+    expect(booleanField(expectSegment, 'segmentVerified')).toBe(false);
+    expect(booleanField(expectSegment, 'authorDelegationVerified')).toBe(false);
+
+    if (fixtureCase === 'signed-segment-placeholder') {
+      expect(stringField(input, 'signatureStatus')).toBe('absent');
+      expect(stringField(integrity, 'eventsHashStatus')).toBe('absent');
+      expect(stringField(integrity, 'canonicalizationStatus')).toBe('absent');
+      expect(booleanField(authorship, 'residentSigningAuthority')).toBe(false);
+      expect(booleanField(range, 'rewritesPreviousHistory')).toBe(false);
+      expect(input.signatureAuthorityClaim).toBeUndefined();
+      expect(input.residentAuthorshipClaim).toBeUndefined();
+      expect(input.historyRewriteClaim).toBeUndefined();
+      expect(booleanField(expectSegment, 'signatureVerified')).toBe(false);
+      expect(booleanField(expectSegment, 'residentAuthorshipForged')).toBe(false);
+      expect(booleanField(expectSegment, 'historyRewritten')).toBe(false);
+    } else if (fixtureCase === 'verified-signature-claim') {
+      expect(stringField(input, 'signatureStatus')).toBe('verified-claim');
+      expect(stringField(integrity, 'eventsHashStatus')).toBe('verified-claim');
+      expect(stringField(integrity, 'canonicalizationStatus')).toBe('verified');
+      expect(recordField(input, 'signatureAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['segment_signature_verified_claim']);
+      expect(booleanField(expectSegment, 'signatureVerified')).toBe(true);
+      expect(booleanField(expectSegment, 'canonicalizationVerified')).toBe(true);
+    } else if (fixtureCase === 'host-resident-authorship-forgery') {
+      expect(stringField(input, 'signatureStatus')).toBe('absent');
+      expect(booleanField(authorship, 'residentSigningAuthority')).toBe(true);
+      expect(recordField(input, 'residentAuthorshipClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['resident_authorship_forgery']);
+      expect(booleanField(expectSegment, 'residentAuthorshipForged')).toBe(true);
+      expect(booleanField(expectSegment, 'runtimeAuthorization')).toBe(true);
+    } else if (fixtureCase === 'history-rewrite-claim') {
+      expect(stringField(input, 'signatureStatus')).toBe('absent');
+      expect(booleanField(range, 'rewritesPreviousHistory')).toBe(true);
+      expect(recordField(input, 'historyRewriteClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['segment_history_rewrite_claim']);
+      expect(booleanField(expectSegment, 'historyRewritten')).toBe(true);
+    }
   } else {
     throw new Error(`Unexpected draft surface: ${draftSurface}`);
   }

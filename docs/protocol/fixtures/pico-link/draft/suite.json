@@ -54,6 +54,10 @@
     "key-envelope-rotation/v0.1.7/parse-negative/plaintext-domain-key-in-plan",
     "key-envelope-rotation/v0.1.7/parse-negative/completed-rotation-without-records",
     "key-envelope-rotation/v0.1.7/parse-negative/historical-plaintext-erasure-claim",
+    "signed-event-segment/v0.1.7/parse-positive/signed-segment-placeholder",
+    "signed-event-segment/v0.1.7/parse-negative/verified-signature-claim",
+    "signed-event-segment/v0.1.7/parse-negative/host-resident-authorship-forgery",
+    "signed-event-segment/v0.1.7/parse-negative/history-rewrite-claim",
     "canonicalization/v0.1.7/parse-negative/canonical-output-claim",
     "compatibility-claims/v0.1.7/parse-negative/l4-claim-without-runner"
   ],

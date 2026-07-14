@@ -205,6 +205,8 @@ Required semantics:
 - payload posture and references must respect ADR 0014.
 - a host may store segments, but cannot create valid resident segments without resident signing authority.
 
+ADR `0062-pico-link-draft-signed-event-segment-placeholder.md` defines the first draft-only signed event segment placeholder boundary for fixture work, keeping signatures, event hashes, canonicalization and delegation as unverified placeholders.
+
 ## Replica manifest
 
 A replica manifest lets peers compare state without trusting one host's event listing.

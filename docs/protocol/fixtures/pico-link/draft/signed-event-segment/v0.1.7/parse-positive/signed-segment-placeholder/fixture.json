@@ -1,0 +1,42 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.signed-event-segment.v0_1_7.parse-positive.signed-segment-placeholder",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "signed-event-segment",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-positive",
+  "case": "draft signed event segment accepts an unverified authorship-binding placeholder",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "accept",
+    "preserveSemantics": true,
+    "errors": [],
+    "segment": {
+      "segmentVerified": false,
+      "signatureVerified": false,
+      "canonicalizationVerified": false,
+      "authorDelegationVerified": false,
+      "residentAuthorshipForged": false,
+      "historyRewritten": false,
+      "runtimeAuthorization": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0062 positive fixture. It proves only bounded signed event segment placeholder shape acceptance and does not verify signatures, delegation or append-only history."
+}
