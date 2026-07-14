@@ -1,0 +1,41 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.home-membership.v0_1_7.parse-negative.verified-issuer-claim",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-membership",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Home Membership Credential rejects a verified issuer and signature claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "membership_verified_issuer_claim"
+    ],
+    "authority": {
+      "credentialVerified": true,
+      "domainAccessGranted": false,
+      "moveInCodeUsed": false,
+      "issuerVerified": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0066 negative fixture. A membership credential cannot claim a verified issuer, signature or membership authority."
+}

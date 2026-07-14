@@ -84,7 +84,7 @@ ADR `0064-pico-link-draft-replica-manifest-placeholder.md` defines the first dra
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` defines the first draft-only Home Host Key placeholder shape for future Pico Home Link host-key fixture work. Home Host Key placeholders may describe host infrastructure continuity intent, but must not sign as resident Picos, decrypt resident domains, replace Move-In Codes, claim verified membership issuer authority, elevate relay identities or claim compatibility.
 
-ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work.
+ADR `0045-pico-home-link-draft-membership-credential-placeholder.md` defines that first draft-only placeholder shape for future Pico Home Link membership fixture work. ADR `0066-pico-home-link-draft-home-membership-rejection-placeholder.md` adds the first Home Membership rejection boundaries beyond the Move-In Code boundary: membership grants host use and rejects Domain Content Key access, expired-as-active claims and verified-issuer claims.
 
 ADR `0057-pico-home-link-draft-residency-eviction-placeholder.md` defines the first draft-only residency and eviction placeholder shape for future Pico Home Link lifecycle fixture work. Residency placeholders may describe future Home access status, but must not destroy Pico identity, delete resident-owned backups, grant domain-key access, rewrite history, enforce runtime eviction or claim compatibility.
 

@@ -336,6 +336,9 @@ describe('Pico protocol types', () => {
       'home-host-key/v0.1.7/parse-negative/move-in-code-as-host-key',
       'home-membership/v0.1.7/parse-positive/invited-member-placeholder',
       'home-membership/v0.1.7/parse-negative/move-in-code-as-credential',
+      'home-membership/v0.1.7/parse-negative/membership-grants-domain-access',
+      'home-membership/v0.1.7/parse-negative/expired-credential-as-active',
+      'home-membership/v0.1.7/parse-negative/verified-issuer-claim',
       'home-residency/v0.1.7/parse-positive/resident-status-placeholder',
       'home-residency/v0.1.7/parse-negative/eviction-as-identity-destruction',
       'home-residency/v0.1.7/parse-negative/host-cleanup-as-global-deletion',
@@ -1102,25 +1105,54 @@ function expectDraftFixtureBoundary(
     expect(stringField(input, 'schema')).toBe('pico.home.membership.credential.draft');
     expect(stringField(input, 'credentialId')).toContain(fixtureCase === 'move-in-code-as-credential' ? 'movein_code_' : 'homecred_placeholder_');
     const issuer = recordField(input, 'issuer');
-    expect(stringField(issuer, 'proofStatus')).toBe('unverified-placeholder');
+    if (fixtureCase !== 'verified-issuer-claim') {
+      expect(stringField(issuer, 'proofStatus')).toBe('unverified-placeholder');
+    }
     const subject = recordField(input, 'subject');
     expect(['pico', 'device']).toContain(stringField(subject, 'subjectKind'));
     const membership = recordField(input, 'membership');
     expect(['home_host', 'home_member', 'trusted_device', 'service_placeholder']).toContain(stringField(membership, 'role'));
-    for (const scope of stringArrayField(membership, 'scopes')) {
-      expect(['host.use', 'packet.receive', 'storage.queue', 'sync.exchange']).toContain(scope);
-      expect(scope).not.toContain('domain');
+    if (fixtureCase !== 'membership-grants-domain-access') {
+      for (const scope of stringArrayField(membership, 'scopes')) {
+        expect(['host.use', 'packet.receive', 'storage.queue', 'sync.exchange']).toContain(scope);
+        expect(scope).not.toContain('domain');
+      }
     }
     expect(['invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued']).toContain(stringField(membership, 'status'));
-    expect(stringField(input, 'signatureStatus')).toBe('absent');
+    if (fixtureCase !== 'verified-issuer-claim') {
+      expect(stringField(input, 'signatureStatus')).toBe('absent');
+    }
     const authority = recordField(expectBlock, 'authority');
-    expect(booleanField(authority, 'credentialVerified')).toBe(false);
-    expect(booleanField(authority, 'domainAccessGranted')).toBe(false);
+    if (fixtureCase !== 'verified-issuer-claim') {
+      expect(booleanField(authority, 'credentialVerified')).toBe(false);
+    }
+    if (fixtureCase !== 'membership-grants-domain-access') {
+      expect(booleanField(authority, 'domainAccessGranted')).toBe(false);
+    }
 
     if (fixtureCase === 'move-in-code-as-credential') {
       expect(input.moveInCode).toBeTruthy();
       expect(booleanField(authority, 'moveInCodeUsed')).toBe(true);
       expect(stringArrayField(expectBlock, 'errors')).toEqual(['move_in_code_boundary']);
+    } else if (fixtureCase === 'membership-grants-domain-access') {
+      expect(input.moveInCode).toBeUndefined();
+      expect(stringArrayField(membership, 'scopes')).toContain('domain.read');
+      expect(recordField(input, 'domainAccessClaim')).toBeTruthy();
+      expect(booleanField(authority, 'domainAccessGranted')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['membership_domain_access_claim']);
+    } else if (fixtureCase === 'expired-credential-as-active') {
+      expect(input.moveInCode).toBeUndefined();
+      expect(stringField(membership, 'status')).toBe('active');
+      expect(booleanField(membership, 'activeDespiteExpiry')).toBe(true);
+      expect(booleanField(authority, 'expiredActiveClaim')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['membership_expired_active_claim']);
+    } else if (fixtureCase === 'verified-issuer-claim') {
+      expect(input.moveInCode).toBeUndefined();
+      expect(stringField(issuer, 'proofStatus')).toBe('verified-claim');
+      expect(stringField(input, 'signatureStatus')).toBe('verified-claim');
+      expect(recordField(input, 'issuerAuthorityClaim')).toBeTruthy();
+      expect(booleanField(authority, 'credentialVerified')).toBe(true);
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['membership_verified_issuer_claim']);
     } else {
       expect(input.moveInCode).toBeUndefined();
       expect(booleanField(authority, 'moveInCodeUsed')).toBe(false);

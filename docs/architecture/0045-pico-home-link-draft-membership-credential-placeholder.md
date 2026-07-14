@@ -277,4 +277,8 @@ This ADR refines:
 - `0034-canonicalization-signature-inputs-and-test-vectors.md`
 - `0042-pico-link-draft-schema-and-fixture-gate.md`
 
+It is deepened by:
+
+- `0066-pico-home-link-draft-home-membership-rejection-placeholder.md`, which adds the first Home Membership rejection boundaries for domain-access claims, expired-as-active claims and verified-issuer claims
+
 It remains below future normative Pico Home Link membership, Home claim, issuer-verification, canonicalization, signature, revocation, domain-key and conformance specifications.

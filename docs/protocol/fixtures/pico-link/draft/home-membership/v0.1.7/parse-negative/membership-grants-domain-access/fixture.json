@@ -1,0 +1,40 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.home-membership.v0_1_7.parse-negative.membership-grants-domain-access",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-membership",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Home Membership Credential rejects a domain content key access claim",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "membership_domain_access_claim"
+    ],
+    "authority": {
+      "credentialVerified": false,
+      "domainAccessGranted": true,
+      "moveInCodeUsed": false
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0066 negative fixture. Membership grants host use and cannot grant Domain Content Key access or resident-domain plaintext."
+}

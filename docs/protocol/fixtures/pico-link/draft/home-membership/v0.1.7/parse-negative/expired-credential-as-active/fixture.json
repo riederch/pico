@@ -1,0 +1,41 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.home-membership.v0_1_7.parse-negative.expired-credential-as-active",
+  "stage": "fixture_data",
+  "surface": "pico-home-link",
+  "draftSurface": "home-membership",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft Home Membership Credential rejects an expired credential claiming active membership",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "membership_expired_active_claim"
+    ],
+    "authority": {
+      "credentialVerified": false,
+      "domainAccessGranted": false,
+      "moveInCodeUsed": false,
+      "expiredActiveClaim": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0066 negative fixture. An expired credential cannot claim active membership or continued host use."
+}
