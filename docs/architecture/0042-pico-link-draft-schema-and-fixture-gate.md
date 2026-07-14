@@ -161,7 +161,7 @@ They must not include:
 
 Any `algorithmSuite`, `signature`, `keyEnvelope` or `ciphertext` field in draft fixtures must be labelled placeholder or absent until later ADRs select reviewed primitives and verification semantics.
 
-ADR `0044-pico-link-draft-protected-payload-placeholder.md` defines the first constrained draft-only protected-payload placeholder shape. It is not cryptography and must not be treated as encryption, signing, key wrapping or verified authority.
+ADR `0044-pico-link-draft-protected-payload-placeholder.md` defines the first constrained draft-only protected-payload placeholder shape. It is not cryptography and must not be treated as encryption, signing, key wrapping or verified authority. ADR `0063-pico-link-draft-protected-payload-rejection-placeholder.md` adds the first protected-payload rejection boundaries: the body stays opaque and plaintext leaks, real-crypto claims, embedded key material and verified sender/audience authority claims are rejected.
 
 ## Version and extension discipline
 

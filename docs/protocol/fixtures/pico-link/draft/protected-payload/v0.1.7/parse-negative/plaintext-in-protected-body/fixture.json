@@ -1,0 +1,39 @@
+{
+  "schema": "pico.draft.fixture",
+  "schemaVersion": 1,
+  "fixtureId": "pico-link.protected-payload.v0_1_7.parse-negative.plaintext-in-protected-body",
+  "stage": "fixture_data",
+  "surface": "pico-link",
+  "draftSurface": "protected-payload",
+  "protocolVersion": "0.1.7",
+  "compatibilityLevel": "draft-only",
+  "family": "parse-negative",
+  "case": "draft protected payload rejects a body that carries plaintext",
+  "source": {
+    "encoding": "json",
+    "file": "input.json"
+  },
+  "expect": {
+    "parse": "reject",
+    "preserveSemantics": false,
+    "errors": [
+      "protected_plaintext_leak"
+    ],
+    "privacy": {
+      "bodyIsOpaquePlaceholder": false,
+      "plaintextLeaked": true
+    }
+  },
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "claims": {
+    "productionSecurity": false,
+    "cryptographyVerified": false,
+    "homeMembershipVerified": false,
+    "l4Compatibility": false,
+    "commercialPermission": false
+  },
+  "notes": "Draft-only ADR 0063 negative fixture. A protected payload body must stay opaque and cannot carry plaintext."
+}

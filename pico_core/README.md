@@ -202,6 +202,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0060-model-delegation-draft-context-reference-scoping-placeholder.md`](../docs/architecture/0060-model-delegation-draft-context-reference-scoping-placeholder.md) - draft-only Model Delegation context-reference scoping placeholder boundary
 - [`../docs/architecture/0061-model-delegation-draft-provider-registry-advertisement-placeholder.md`](../docs/architecture/0061-model-delegation-draft-provider-registry-advertisement-placeholder.md) - draft-only Model Delegation provider-registry advertisement placeholder boundary
 - [`../docs/architecture/0062-pico-link-draft-signed-event-segment-placeholder.md`](../docs/architecture/0062-pico-link-draft-signed-event-segment-placeholder.md) - draft-only Pico Link signed event segment placeholder boundary
+- [`../docs/architecture/0063-pico-link-draft-protected-payload-rejection-placeholder.md`](../docs/architecture/0063-pico-link-draft-protected-payload-rejection-placeholder.md) - draft-only Pico Link protected-payload rejection boundary
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

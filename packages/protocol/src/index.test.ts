@@ -323,6 +323,10 @@ describe('Pico protocol types', () => {
       'packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder',
       'packet-envelope/v0.1.7/parse-negative/plaintext-message-leak',
       'protected-payload/v0.1.7/parse-positive/opaque-placeholder',
+      'protected-payload/v0.1.7/parse-negative/plaintext-in-protected-body',
+      'protected-payload/v0.1.7/parse-negative/real-encryption-claim',
+      'protected-payload/v0.1.7/parse-negative/embedded-key-material',
+      'protected-payload/v0.1.7/parse-negative/verified-sender-authority-claim',
       'home-host-key/v0.1.7/parse-positive/host-public-key-placeholder',
       'home-host-key/v0.1.7/parse-negative/resident-signing-authority-claim',
       'home-host-key/v0.1.7/parse-negative/domain-decryption-authority-claim',
@@ -920,20 +924,50 @@ function expectDraftFixtureBoundary(
     }
   } else if (draftSurface === 'protected-payload') {
     expect(stringField(input, 'schema')).toBe('pico.payload.protected.draft');
-    const protection = recordField(input, 'protection');
-    expect(stringField(protection, 'mode')).toBe('placeholder');
-    expect(stringField(protection, 'algorithmSuite')).toBe('placeholder-only');
-    expect(stringArrayField(protection, 'keyEnvelopeRefs')).toEqual([]);
-    const claimedSender = recordField(input, 'claimedSender');
-    expect(stringField(claimedSender, 'proofStatus')).toBe('unverified-placeholder');
-    const body = recordField(input, 'body');
-    expect(stringField(body, 'kind')).toBe('opaque-placeholder');
-    expect(booleanField(body, 'placeholder')).toBe(true);
-    expect(stringField(body, 'protectedContentRef')).toContain('content_placeholder_');
-    expect(input.ciphertext).toBeUndefined();
-    expect(input.signature).toBeUndefined();
-    expect(input.keyEnvelope).toBeUndefined();
     expect(input.plaintext).toBeUndefined();
+    const protection = recordField(input, 'protection');
+    const claimedSender = recordField(input, 'claimedSender');
+    const body = recordField(input, 'body');
+    const expectPrivacy = recordField(expectBlock, 'privacy');
+
+    if (fixtureCase === 'opaque-placeholder') {
+      expect(stringField(protection, 'mode')).toBe('placeholder');
+      expect(stringField(protection, 'algorithmSuite')).toBe('placeholder-only');
+      expect(stringArrayField(protection, 'keyEnvelopeRefs')).toEqual([]);
+      expect(stringField(claimedSender, 'proofStatus')).toBe('unverified-placeholder');
+      expect(stringField(body, 'kind')).toBe('opaque-placeholder');
+      expect(booleanField(body, 'placeholder')).toBe(true);
+      expect(stringField(body, 'protectedContentRef')).toContain('content_placeholder_');
+      expect(input.ciphertext).toBeUndefined();
+      expect(input.signature).toBeUndefined();
+      expect(input.keyEnvelope).toBeUndefined();
+      expect(booleanField(expectPrivacy, 'bodyIsOpaquePlaceholder')).toBe(true);
+      expect(booleanField(expectPrivacy, 'senderProofVerified')).toBe(false);
+      expect(booleanField(expectPrivacy, 'audienceAuthorityVerified')).toBe(false);
+    } else if (fixtureCase === 'plaintext-in-protected-body') {
+      expect(stringField(body, 'kind')).toBe('plaintext-leak');
+      expect(booleanField(body, 'placeholder')).toBe(false);
+      expect(stringField(body, 'plaintext')).toContain('plaintext');
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['protected_plaintext_leak']);
+      expect(booleanField(expectPrivacy, 'bodyIsOpaquePlaceholder')).toBe(false);
+      expect(booleanField(expectPrivacy, 'plaintextLeaked')).toBe(true);
+    } else if (fixtureCase === 'real-encryption-claim') {
+      expect(stringField(protection, 'mode')).not.toBe('placeholder');
+      expect(stringField(protection, 'algorithmSuite')).not.toBe('placeholder-only');
+      expect(recordField(input, 'cryptoAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['protected_real_crypto_claim']);
+      expect(booleanField(expectPrivacy, 'realCryptoClaimed')).toBe(true);
+    } else if (fixtureCase === 'embedded-key-material') {
+      expect(recordField(input, 'keyEnvelope')).toBeTruthy();
+      expect(stringField(input, 'ciphertext')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['protected_key_material']);
+      expect(booleanField(expectPrivacy, 'keyMaterialEmbedded')).toBe(true);
+    } else if (fixtureCase === 'verified-sender-authority-claim') {
+      expect(stringField(claimedSender, 'proofStatus')).toBe('verified');
+      expect(recordField(input, 'senderAuthorityClaim')).toBeTruthy();
+      expect(stringArrayField(expectBlock, 'errors')).toEqual(['protected_sender_authority_claim']);
+      expect(booleanField(expectPrivacy, 'senderProofVerified')).toBe(true);
+    }
   } else if (draftSurface === 'compatibility-claims') {
     expect(stringField(input, 'schema')).toBe('pico.compatibility.claim.draft');
     const conformance = recordField(input, 'conformance');

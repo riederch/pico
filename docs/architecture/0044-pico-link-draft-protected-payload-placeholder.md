@@ -201,4 +201,8 @@ This ADR refines:
 - `0042-pico-link-draft-schema-and-fixture-gate.md`
 - `0043-pico-link-draft-packet-envelope-preflight.md`
 
+It is deepened by:
+
+- `0063-pico-link-draft-protected-payload-rejection-placeholder.md`, which adds the first protected-payload rejection boundaries for plaintext leaks, real-crypto claims, embedded key material and verified sender/audience authority claims
+
 It remains below future normative Pico Link cryptography, canonicalization, key-envelope, device-delegation, domain-membership, relay and conformance specifications.

@@ -46,6 +46,10 @@ pico-link/draft/suite.json
 pico-link/draft/packet-envelope/v0.1.7/parse-positive/minimal-route-placeholder/
 pico-link/draft/packet-envelope/v0.1.7/parse-negative/plaintext-message-leak/
 pico-link/draft/protected-payload/v0.1.7/parse-positive/opaque-placeholder/
+pico-link/draft/protected-payload/v0.1.7/parse-negative/plaintext-in-protected-body/
+pico-link/draft/protected-payload/v0.1.7/parse-negative/real-encryption-claim/
+pico-link/draft/protected-payload/v0.1.7/parse-negative/embedded-key-material/
+pico-link/draft/protected-payload/v0.1.7/parse-negative/verified-sender-authority-claim/
 pico-link/draft/home-host-key/v0.1.7/parse-positive/host-public-key-placeholder/
 pico-link/draft/home-host-key/v0.1.7/parse-negative/resident-signing-authority-claim/
 pico-link/draft/home-host-key/v0.1.7/parse-negative/domain-decryption-authority-claim/
