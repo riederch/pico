@@ -227,7 +227,7 @@ summary_only
 redacted
 ```
 
-The current Foundation `PicoEvent` shape does not expose a `payloadPosture` field; ADR 0067 defines it as an additive optional envelope field that defaults to `inline_operational` when absent. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
+The Foundation `PicoEvent` shape now carries an optional additive `payloadPosture` envelope field (ADR 0067); an absent value is treated as `inline_operational` and existing events stay unchanged. Only `inline_operational` and `inline_test` are writable through `POST /api/events`; `reference_only`, `summary_only` and `redacted` are reserved for future memory-referencing events and are rejected with a 400. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
 
 ### Reserved context-signal direction
 

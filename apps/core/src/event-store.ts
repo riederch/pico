@@ -1,7 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
-import type { PicoEvent, PicoEventAppendResult } from '@pico/protocol';
+import type { PayloadPosture, PicoEvent, PicoEventAppendResult } from '@pico/protocol';
+import { payloadPostures } from '@pico/protocol';
 import {
   listAppliedMigrations,
   runMigrations,
@@ -114,8 +115,9 @@ export class EventStore {
         stream,
         payload_json,
         signature,
+        payload_posture,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     statement.run(
@@ -128,6 +130,7 @@ export class EventStore {
       event.stream,
       payloadJson,
       event.signature ?? null,
+      event.payloadPosture ?? null,
       new Date().toISOString(),
     );
 
@@ -266,6 +269,7 @@ export class EventStore {
       stream: row.stream,
       payload: JSON.parse(row.payload_json) as unknown,
       signature: row.signature ?? undefined,
+      ...(row.payload_posture ? { payloadPosture: row.payload_posture as PayloadPosture } : {}),
     };
   }
 }
@@ -284,6 +288,7 @@ interface EventRow {
   stream: string;
   payload_json: string;
   signature: string | null;
+  payload_posture: string | null;
 }
 
 interface PicoHomeClaimStateRow {
@@ -315,7 +320,8 @@ function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string)
     && row.type === event.type
     && row.stream === event.stream
     && serializeStoredPayload(row.payload_json) === payloadJson
-    && row.signature === (event.signature ?? null);
+    && row.signature === (event.signature ?? null)
+    && row.payload_posture === (event.payloadPosture ?? null);
 }
 
 function assertStoredEvent(event: PicoEvent): void {
@@ -333,6 +339,10 @@ function assertStoredEvent(event: PicoEvent): void {
 
   if (event.signature !== undefined) {
     assertNonEmptyString(event.signature, 'signature');
+  }
+
+  if (event.payloadPosture !== undefined && !payloadPostures.includes(event.payloadPosture)) {
+    throw new Error('Event payloadPosture must be a known posture.');
   }
 }
 

@@ -25,6 +25,26 @@ describe('EventFactory', () => {
     expect(clock.current()).toBe(1);
   });
 
+  it('carries an explicit payload posture and omits it when absent', () => {
+    const factory = new EventFactory(new LamportClock());
+
+    const withPosture = factory.create({
+      deviceId: 'device-1',
+      type: 'device.seen',
+      payload: { status: 'online' },
+      payloadPosture: 'inline_operational',
+    });
+    expect(withPosture.payloadPosture).toBe('inline_operational');
+
+    const withoutPosture = factory.create({
+      deviceId: 'device-1',
+      type: 'device.seen',
+      payload: { status: 'online' },
+    });
+    expect(withoutPosture.payloadPosture).toBeUndefined();
+    expect('payloadPosture' in withoutPosture).toBe(false);
+  });
+
   it('creates events with a session stream when a session is provided', () => {
     const factory = new EventFactory(new LamportClock());
 

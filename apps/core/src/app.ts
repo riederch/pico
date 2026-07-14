@@ -5,11 +5,14 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   validateFoundationEventPayload,
   foundationEventTypes,
+  payloadPostures,
   picoEventTypes,
   protocolCapabilities,
   realtimeMessageType,
+  writablePayloadPostures,
   type FoundationEventPayload,
   type FoundationEventType,
+  type PayloadPosture,
   type PicoCoreConnectedMessage,
   type PicoEvent,
   type PicoEventCreatedMessage,
@@ -49,6 +52,7 @@ interface IncomingEventBody {
   stream?: unknown;
   lamport?: unknown;
   payload?: unknown;
+  payloadPosture?: unknown;
 }
 
 interface ValidatedIncomingEventBody {
@@ -58,6 +62,7 @@ interface ValidatedIncomingEventBody {
   stream?: string;
   lamport?: number;
   payload: FoundationEventPayload;
+  payloadPosture?: PayloadPosture;
 }
 
 interface RealtimeSocket {
@@ -264,6 +269,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       stream: validation.body.stream,
       payload: validation.body.payload,
       remoteLamport: validation.body.lamport,
+      payloadPosture: validation.body.payloadPosture,
     });
 
     const appendResult = store.append(event);
@@ -608,6 +614,16 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
     return { ok: false, error: payloadResult.error };
   }
 
+  if (body.payloadPosture !== undefined) {
+    if (typeof body.payloadPosture !== 'string' || !payloadPostures.includes(body.payloadPosture as PayloadPosture)) {
+      return { ok: false, error: 'payloadPosture must be a known posture.' };
+    }
+
+    if (!writablePayloadPostures.includes(body.payloadPosture as (typeof writablePayloadPostures)[number])) {
+      return { ok: false, error: 'This payloadPosture is reserved for future memory-referencing events and is not writable yet.' };
+    }
+  }
+
   return {
     ok: true,
     body: {
@@ -617,6 +633,7 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
       stream: body.stream as string | undefined,
       lamport: body.lamport,
       payload: payloadResult.payload,
+      payloadPosture: body.payloadPosture as PayloadPosture | undefined,
     },
   };
 }

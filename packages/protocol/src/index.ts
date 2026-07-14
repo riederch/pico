@@ -309,6 +309,17 @@ export const payloadPostures = [
 
 export type PayloadPosture = typeof payloadPostures[number];
 
+// Payload postures writable through the current `POST /api/events` surface
+// (ADR 0067). Reference, summary and redacted postures are reserved for future
+// memory-referencing events and are not writable until reference targets and a
+// deleteable memory store exist.
+export const writablePayloadPostures = [
+  'inline_operational',
+  'inline_test',
+] as const;
+
+export type WritablePayloadPosture = typeof writablePayloadPostures[number];
+
 // Reserved action/policy/audit protocol direction. The current Foundation API
 // exports these shapes for documentation and compatibility planning only; it
 // must not accept them on the generic event write path until dedicated product
@@ -339,6 +350,9 @@ export interface PicoEvent<TPayload = unknown> {
   stream: string;
   payload: TPayload;
   signature?: string;
+  // Additive, optional (ADR 0014 / ADR 0067). Absent is treated as
+  // `inline_operational`; existing events stay valid without change.
+  payloadPosture?: PayloadPosture;
 }
 
 export interface PicoHealthResponse {

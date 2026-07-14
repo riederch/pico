@@ -27,6 +27,7 @@ import {
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
   payloadPostures,
+  writablePayloadPostures,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -126,6 +127,13 @@ describe('Pico protocol types', () => {
 
   it('exports reserved payload posture values for privacy and deletion planning', () => {
     expect(payloadPostures).toEqual(['inline_operational', 'inline_test', 'reference_only', 'summary_only', 'redacted']);
+  });
+
+  it('exports the writable payload posture subset for the current event write path', () => {
+    expect(writablePayloadPostures).toEqual(['inline_operational', 'inline_test']);
+    for (const posture of writablePayloadPostures) {
+      expect(payloadPostures).toContain(posture);
+    }
   });
 
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {

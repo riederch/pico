@@ -159,6 +159,16 @@ const migrations: readonly MigrationDefinition[] = [
         .run(1, 'unclaimed', null, null, now, now);
     },
   },
+  {
+    id: '0005_event_payload_posture',
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_event
+        ADD COLUMN payload_posture TEXT NULL;
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

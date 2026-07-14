@@ -181,6 +181,7 @@ describe('Pico Home Core app', () => {
           { id: '0002_schema_migration_audit', appliedAt: expect.any(String) },
           { id: '0003_schema_migration_audit_errors', appliedAt: expect.any(String) },
           { id: '0004_pico_home_claim_state', appliedAt: expect.any(String) },
+          { id: '0005_event_payload_posture', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -347,6 +348,49 @@ describe('Pico Home Core app', () => {
     const blankMessageText = await app.inject({ method: 'POST', url: '/api/events', payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: '   ' } } });
     expect(blankMessageText.statusCode).toBe(400);
     expect(blankMessageText.json()).toEqual({ error: 'message.created payload requires role and text.' });
+
+    await app.close();
+  });
+
+  it('accepts writable payload postures and rejects reserved or unknown ones', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' }, payloadPosture: 'inline_operational' },
+    });
+    expect(accepted.statusCode).toBe(201);
+    expect(accepted.json().event.payloadPosture).toBe('inline_operational');
+
+    const reserved = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' }, payloadPosture: 'reference_only' },
+    });
+    expect(reserved.statusCode).toBe(400);
+    expect(reserved.json()).toEqual({ error: 'This payloadPosture is reserved for future memory-referencing events and is not writable yet.' });
+
+    const unknown = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' }, payloadPosture: 'not_a_posture' },
+    });
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json()).toEqual({ error: 'payloadPosture must be a known posture.' });
+
+    const withoutPosture = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'Hallo Pico' } },
+    });
+    expect(withoutPosture.statusCode).toBe(201);
+    expect('payloadPosture' in withoutPosture.json().event).toBe(false);
+
+    const listed = await app.inject({ method: 'GET', url: '/api/events' });
+    const postures = listed.json().events.map((event: { payloadPosture?: string }) => event.payloadPosture);
+    expect(postures).toContain('inline_operational');
+    expect(postures).toContain(undefined);
 
     await app.close();
   });

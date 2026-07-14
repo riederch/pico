@@ -184,6 +184,46 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('round-trips an explicit payload posture and omits it when absent', () => {
+    const store = new EventStore(createDatabasePath());
+
+    const withPosture = createEvent({ eventId: 'event-posture', payloadPosture: 'inline_operational' });
+    const withoutPosture = createEvent({ eventId: 'event-plain', lamport: 2 });
+
+    expect(store.append(withPosture)).toBe('inserted');
+    expect(store.append(withoutPosture)).toBe('inserted');
+
+    const listed = store.list();
+    const stored = listed.find((event) => event.eventId === 'event-posture');
+    const plain = listed.find((event) => event.eventId === 'event-plain');
+
+    expect(stored?.payloadPosture).toBe('inline_operational');
+    expect(plain?.payloadPosture).toBeUndefined();
+    expect(plain !== undefined && 'payloadPosture' in plain).toBe(false);
+
+    store.close();
+  });
+
+  it('treats a changed payload posture on the same event id as a duplicate conflict', () => {
+    const store = new EventStore(createDatabasePath());
+    const event = createEvent({ payloadPosture: 'inline_operational' });
+
+    expect(store.append(event)).toBe('inserted');
+    expect(store.append(event)).toBe('duplicate_same_payload');
+    expect(store.append({ ...event, payloadPosture: 'inline_test' })).toBe('duplicate_conflict');
+
+    store.close();
+  });
+
+  it('rejects an unknown payload posture at the store boundary', () => {
+    const store = new EventStore(createDatabasePath());
+    const event = createEvent();
+
+    expect(() => store.append({ ...event, payloadPosture: 'not_a_posture' as never })).toThrow('payloadPosture must be a known posture.');
+
+    store.close();
+  });
+
   it('lists events in stable Lamport order and applies the requested limit', () => {
     const store = new EventStore(createDatabasePath());
 
