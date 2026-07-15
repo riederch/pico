@@ -320,6 +320,40 @@ export const writablePayloadPostures = [
 
 export type WritablePayloadPosture = typeof writablePayloadPostures[number];
 
+// Reserved deleteable memory direction (ADR 0014 / ADR 0068). Additive planning
+// vocabulary for a future memory store. The current Foundation implementation
+// has no memory store, reference target, tombstone or deletion runtime; content
+// stays out of append-only events (ADR 0067 payload posture).
+export const memoryItemDeletionStates = [
+  'active',
+  'deleted',
+  'tombstoned',
+] as const;
+
+export type MemoryItemDeletionState = typeof memoryItemDeletionStates[number];
+
+export const referenceTargetResolutionStates = [
+  'resolvable',
+  'deleted',
+  'unknown',
+] as const;
+
+export type ReferenceTargetResolutionState = typeof referenceTargetResolutionStates[number];
+
+// Reserved planning type for a future `reference_only` payload posture target
+// (ADR 0068). A reference target names where a deleteable memory item lives; it
+// is not the content, not a decryption grant and is not accepted on any current
+// write path.
+export interface MemoryItemReference {
+  referenceId: string;
+  memoryItemId: string;
+  store: string;
+  privacyDomain: string;
+  contentType: string;
+  summary?: string;
+  resolutionState: ReferenceTargetResolutionState;
+}
+
 // Reserved action/policy/audit protocol direction. The current Foundation API
 // exports these shapes for documentation and compatibility planning only; it
 // must not accept them on the generic event write path until dedicated product

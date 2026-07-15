@@ -229,6 +229,26 @@ redacted
 
 The Foundation `PicoEvent` shape now carries an optional additive `payloadPosture` envelope field (ADR 0067); an absent value is treated as `inline_operational` and existing events stay unchanged. Only `inline_operational` and `inline_test` are writable through `POST /api/events`; `reference_only`, `summary_only` and `redacted` are reserved for future memory-referencing events and are rejected with a 400. These names do not implement memory storage, tombstones, retention policy, privacy domains, crypto-shredding or deleteable memory. Inline Foundation payloads remain development/foundation data only.
 
+### Reserved memory item deletion states
+
+Reserved deleteable-memory direction (ADR 0014, defined by ADR 0068), exported as `memoryItemDeletionStates` in `@pico/protocol`. There is no memory store, deletion or tombstone runtime:
+
+```text
+active
+deleted
+tombstoned
+```
+
+### Reserved reference target resolution states
+
+Reserved reference-target direction (ADR 0068), exported as `referenceTargetResolutionStates` in `@pico/protocol`. A reference target names where a deleteable memory item lives; it is not the content and is not accepted on any current write path:
+
+```text
+resolvable
+deleted
+unknown
+```
+
 ### Reserved context-signal direction
 
 `ContextSignalLevel` and its deprecated alias `TrustedLevel` are TypeScript planning types only. They are not fields in the current Foundation event payload schema and do not create an authorization, membership or host-administration boundary.

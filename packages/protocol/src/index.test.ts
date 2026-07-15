@@ -28,6 +28,8 @@ import {
   messageCreatedRoles,
   payloadPostures,
   writablePayloadPostures,
+  memoryItemDeletionStates,
+  referenceTargetResolutionStates,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -136,6 +138,11 @@ describe('Pico protocol types', () => {
     }
   });
 
+  it('exports reserved deleteable memory and reference target vocabulary', () => {
+    expect(memoryItemDeletionStates).toEqual(['active', 'deleted', 'tombstoned']);
+    expect(referenceTargetResolutionStates).toEqual(['resolvable', 'deleted', 'unknown']);
+  });
+
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {
     expect(realtimeMessageType).toEqual({
       coreConnected: 'pico.core.connected',
@@ -159,6 +166,8 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '### Product action event types')).toEqual([...actionEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Legacy tool/policy event types')).toEqual([...legacyToolPolicyEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Pico Home event direction')).toEqual([...picoHomeEventTypes]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory item deletion states')).toEqual([...memoryItemDeletionStates]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Reserved reference target resolution states')).toEqual([...referenceTargetResolutionStates]);
   });
 
   it('keeps public protocol capability docs aligned with runtime capability names', () => {
