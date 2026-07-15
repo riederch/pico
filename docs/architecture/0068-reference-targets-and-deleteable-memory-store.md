@@ -165,7 +165,7 @@ These remain future work behind their own ADRs and milestones.
 Additive steps, in order:
 
 1. Reserve a reference-target shape and memory-item vocabulary in `@pico/protocol` as additive planning types, bound to documentation with a test. (Done: `memoryItemDeletionStates`, `referenceTargetResolutionStates` and the reserved `MemoryItemReference` type are exported and doc-bound; no writable behavior.)
-2. Add a memory-store table and a scoped create/read/update/delete path behind an access boundary. (Pending; stores sensitive content, so it must stay development/foundation data until deletion and encryption exist.)
+2. Add a memory-store table and a scoped create/read/update/delete path behind an access boundary. (Done as a storage skeleton: migration `0006_memory_item_store` adds the `memory_item` table; `MemoryStore` provides domain-scoped create, read, list and delete, where delete removes the content and sets `deletionState` to `deleted`. It is not wired to any HTTP write path and stores development/foundation data only until deletion and encryption are complete.)
 3. Add a Foundation tombstone event type and make `reference_only` writable with a valid reference target.
 4. Add retention-policy and deletion enforcement.
 5. Add privacy-domain encryption and key envelopes behind the ADR 0029/0032/0033 crypto work.

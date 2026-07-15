@@ -169,6 +169,30 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0006_memory_item_store',
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_item (
+          memory_item_id TEXT PRIMARY KEY,
+          privacy_domain TEXT NOT NULL,
+          owner TEXT NOT NULL,
+          controller TEXT NOT NULL,
+          content_type TEXT NOT NULL,
+          content TEXT NULL,
+          retention_policy_ref TEXT NULL,
+          deletion_state TEXT NOT NULL CHECK (deletion_state IN ('active', 'deleted', 'tombstoned')),
+          source_ref TEXT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_memory_item_domain
+        ON memory_item (privacy_domain, deletion_state);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

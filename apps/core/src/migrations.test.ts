@@ -46,6 +46,10 @@ describe('database migrations', () => {
           id: '0005_event_payload_posture',
           requiresBackup: false,
         },
+        {
+          id: '0006_memory_item_store',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -93,6 +97,10 @@ describe('database migrations', () => {
       },
       {
         id: '0005_event_payload_posture',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0006_memory_item_store',
         appliedAt: expect.any(String),
       },
     ]);
@@ -171,12 +179,13 @@ describe('database migrations', () => {
         '0003_schema_migration_audit_errors',
         '0004_pico_home_claim_state',
         '0005_event_payload_posture',
+        '0006_memory_item_store',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -186,7 +195,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
 
     db.close();
   });
@@ -225,7 +234,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
 
     db.close();
   });
@@ -241,6 +250,7 @@ describe('database migrations', () => {
       '0003_schema_migration_audit_errors',
       '0004_pico_home_claim_state',
       '0005_event_payload_posture',
+      '0006_memory_item_store',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -254,6 +264,7 @@ describe('database migrations', () => {
           '0003_schema_migration_audit_errors',
           '0004_pico_home_claim_state',
           '0005_event_payload_posture',
+          '0006_memory_item_store',
         ],
       },
     ]);
@@ -323,6 +334,7 @@ describe('database migrations', () => {
       '0002_schema_migration_audit',
       '0004_pico_home_claim_state',
       '0005_event_payload_posture',
+      '0006_memory_item_store',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {

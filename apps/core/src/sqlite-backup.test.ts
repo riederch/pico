@@ -234,6 +234,10 @@ describe('restoreSqliteBackup', () => {
         id: '0005_event_payload_posture',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0006_memory_item_store',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

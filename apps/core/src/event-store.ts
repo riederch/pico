@@ -10,6 +10,7 @@ import {
   type AppliedMigration,
   type MigrationDefinition,
 } from './migrations.js';
+import { MemoryStore } from './memory-store.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 
 export type AppendResult = PicoEventAppendResult;
@@ -210,6 +211,13 @@ export class EventStore {
     }
 
     return mapPicoHomeClaimState(row);
+  }
+
+  // Deleteable memory store skeleton (ADR 0068), sharing this store's database
+  // connection. It is not wired to any HTTP write path yet.
+  public memory(): MemoryStore {
+    this.ensureOpen();
+    return new MemoryStore(this.db);
   }
 
   public close(): void {

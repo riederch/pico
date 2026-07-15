@@ -182,6 +182,7 @@ describe('Pico Home Core app', () => {
           { id: '0003_schema_migration_audit_errors', appliedAt: expect.any(String) },
           { id: '0004_pico_home_claim_state', appliedAt: expect.any(String) },
           { id: '0005_event_payload_posture', appliedAt: expect.any(String) },
+          { id: '0006_memory_item_store', appliedAt: expect.any(String) },
         ],
       },
     });

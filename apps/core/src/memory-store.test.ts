@@ -1,0 +1,108 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { EventStore } from './event-store.js';
+import type { MemoryStore, MemoryItemInput } from './memory-store.js';
+
+const tempDirs: string[] = [];
+const stores: EventStore[] = [];
+
+function createDatabasePath(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-memory-store-test-'));
+  tempDirs.push(dir);
+  return join(dir, 'pico.sqlite');
+}
+
+function openMemory(): MemoryStore {
+  const store = new EventStore(createDatabasePath());
+  stores.push(store);
+  return store.memory();
+}
+
+function createInput(overrides: Partial<MemoryItemInput> = {}): MemoryItemInput {
+  return {
+    memoryItemId: 'mem-1',
+    privacyDomain: 'domain-private',
+    owner: 'pico-owner',
+    controller: 'pico-owner',
+    contentType: 'text/markdown',
+    content: 'A private note.',
+    ...overrides,
+  };
+}
+
+afterEach(() => {
+  for (const store of stores.splice(0)) {
+    store.close();
+  }
+
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe('MemoryStore', () => {
+  it('creates and reads back an active memory item scoped by privacy domain', () => {
+    const memory = openMemory();
+
+    const created = memory.create(createInput({ retentionPolicyRef: 'retain-30d', sourceRef: 'event-1' }));
+    expect(created).toEqual({
+      memoryItemId: 'mem-1',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'text/markdown',
+      content: 'A private note.',
+      retentionPolicyRef: 'retain-30d',
+      deletionState: 'active',
+      sourceRef: 'event-1',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+
+    expect(memory.getInDomain('mem-1', 'domain-private')?.content).toBe('A private note.');
+    expect(memory.getInDomain('mem-1', 'other-domain')).toBeUndefined();
+    expect(memory.listInDomain('domain-private').map((item) => item.memoryItemId)).toEqual(['mem-1']);
+    expect(memory.listInDomain('other-domain')).toEqual([]);
+  });
+
+  it('omits optional fields when they are not provided', () => {
+    const memory = openMemory();
+
+    const created = memory.create(createInput());
+    expect('retentionPolicyRef' in created).toBe(false);
+    expect('sourceRef' in created).toBe(false);
+  });
+
+  it('deletes content but keeps the item as deleted and excludes it from the active list', () => {
+    const memory = openMemory();
+    memory.create(createInput());
+
+    expect(memory.deleteInDomain('mem-1', 'domain-private')).toBe('deleted');
+
+    const deleted = memory.getInDomain('mem-1', 'domain-private');
+    expect(deleted?.deletionState).toBe('deleted');
+    expect(deleted !== undefined && 'content' in deleted).toBe(false);
+    expect(memory.listInDomain('domain-private')).toEqual([]);
+  });
+
+  it('reports delete results for missing, cross-domain and already-deleted items', () => {
+    const memory = openMemory();
+    memory.create(createInput());
+
+    expect(memory.deleteInDomain('mem-unknown', 'domain-private')).toBe('not_found');
+    expect(memory.deleteInDomain('mem-1', 'other-domain')).toBe('not_found');
+    expect(memory.deleteInDomain('mem-1', 'domain-private')).toBe('deleted');
+    expect(memory.deleteInDomain('mem-1', 'domain-private')).toBe('already_deleted');
+  });
+
+  it('rejects a duplicate memory item id and blank required fields', () => {
+    const memory = openMemory();
+    memory.create(createInput());
+
+    expect(() => memory.create(createInput())).toThrow('Memory item id already exists.');
+    expect(() => memory.create(createInput({ memoryItemId: 'mem-2', content: '   ' }))).toThrow('Memory item content must be a non-empty string.');
+    expect(() => memory.create(createInput({ memoryItemId: 'mem-3', privacyDomain: '' }))).toThrow('Memory item privacyDomain must be a non-empty string.');
+  });
+});
