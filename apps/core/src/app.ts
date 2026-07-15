@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -12,6 +12,7 @@ import {
   writablePayloadPostures,
   type FoundationEventPayload,
   type FoundationEventType,
+  type MemoryRecordedPayload,
   type MemoryTombstonePayload,
   type PayloadPosture,
   type PicoCoreConnectedMessage,
@@ -64,6 +65,19 @@ interface ValidatedIncomingEventBody {
   lamport?: number;
   payload: FoundationEventPayload;
   payloadPosture?: PayloadPosture;
+}
+
+interface MemoryRecordedRequest {
+  deviceId: string;
+  sessionId?: string;
+  stream?: string;
+  lamport?: number;
+  privacyDomain: string;
+  contentType: string;
+  content: string;
+  summary?: string;
+  owner?: string;
+  controller?: string;
 }
 
 interface RealtimeSocket {
@@ -257,6 +271,54 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.post('/api/events', async (request, reply) => {
     const body = request.body as IncomingEventBody | undefined;
+
+    // memory.recorded is content-splitting and server-derived (ADR 0069): the
+    // request carries content, the server stores it and records a reference-only
+    // event that never holds the content. It cannot use the generic event path.
+    if (isRecord(body) && body.type === 'memory.recorded') {
+      const memoryRequest = validateMemoryRecordedRequest(body);
+      if (!memoryRequest.ok) {
+        return sendNoStore(reply.code(400), { error: memoryRequest.error });
+      }
+
+      const request_ = memoryRequest.request;
+      const memoryItemId = `mem_${randomUUID()}`;
+      const owner = request_.owner ?? request_.deviceId;
+      store.memory().create({
+        memoryItemId,
+        privacyDomain: request_.privacyDomain,
+        owner,
+        controller: request_.controller ?? owner,
+        contentType: request_.contentType,
+        content: request_.content,
+      });
+
+      const recordedPayload: MemoryRecordedPayload = {
+        memoryItemId,
+        privacyDomain: request_.privacyDomain,
+        contentType: request_.contentType,
+        ...(request_.summary === undefined ? {} : { summary: request_.summary }),
+      };
+
+      const recordedEvent = factory.create({
+        deviceId: request_.deviceId,
+        sessionId: request_.sessionId,
+        type: 'memory.recorded',
+        stream: request_.stream,
+        payload: recordedPayload,
+        remoteLamport: request_.lamport,
+        payloadPosture: 'reference_only',
+      });
+
+      const recordedAppend = store.append(recordedEvent);
+      if (recordedAppend === 'inserted') {
+        broadcast(recordedEvent);
+      }
+
+      const recordedResponse: PicoEventCreateResponse = { event: recordedEvent, appendResult: recordedAppend };
+      return sendNoStore(reply.code(201), recordedResponse);
+    }
+
     const validation = validateIncomingEvent(body);
 
     if (!validation.ok) {
@@ -642,6 +704,71 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
       lamport: body.lamport,
       payload: payloadResult.payload,
       payloadPosture: body.payloadPosture as PayloadPosture | undefined,
+    },
+  };
+}
+
+function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: true; request: MemoryRecordedRequest } | { ok: false; error: string } {
+  if (!isNonEmptyString(body.deviceId, 128)) {
+    return { ok: false, error: 'deviceId is required.' };
+  }
+
+  if (body.sessionId !== undefined && !isNonEmptyString(body.sessionId, 128)) {
+    return { ok: false, error: 'sessionId must be a non-empty string when provided.' };
+  }
+
+  if (body.stream !== undefined && !isNonEmptyString(body.stream, 256)) {
+    return { ok: false, error: 'stream must be a non-empty string when provided.' };
+  }
+
+  if (body.lamport !== undefined && (typeof body.lamport !== 'number' || !Number.isInteger(body.lamport) || body.lamport < 0 || body.lamport > MAX_INCOMING_LAMPORT)) {
+    return { ok: false, error: 'lamport is outside the accepted range.' };
+  }
+
+  const payload = body.payload;
+  if (!isRecord(payload)) {
+    return { ok: false, error: 'memory.recorded payload must be an object.' };
+  }
+
+  for (const key of Object.keys(payload)) {
+    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller'].includes(key)) {
+      return { ok: false, error: `memory.recorded payload has unexpected field: ${key}.` };
+    }
+  }
+
+  if (!isNonEmptyString(payload.privacyDomain, 256) || !isNonEmptyString(payload.contentType, 256) || typeof payload.content !== 'string' || payload.content.trim().length === 0) {
+    return { ok: false, error: 'memory.recorded payload requires privacyDomain, contentType and content.' };
+  }
+
+  if (Buffer.byteLength(payload.content, 'utf8') > MAX_PAYLOAD_BYTES) {
+    return { ok: false, error: 'memory.recorded content is too large.' };
+  }
+
+  if (payload.summary !== undefined && !isNonEmptyString(payload.summary, 1_000)) {
+    return { ok: false, error: 'memory.recorded summary must be a non-empty string when provided.' };
+  }
+
+  if (payload.owner !== undefined && !isNonEmptyString(payload.owner, 256)) {
+    return { ok: false, error: 'memory.recorded owner must be a non-empty string when provided.' };
+  }
+
+  if (payload.controller !== undefined && !isNonEmptyString(payload.controller, 256)) {
+    return { ok: false, error: 'memory.recorded controller must be a non-empty string when provided.' };
+  }
+
+  return {
+    ok: true,
+    request: {
+      deviceId: body.deviceId,
+      sessionId: body.sessionId as string | undefined,
+      stream: body.stream as string | undefined,
+      lamport: body.lamport as number | undefined,
+      privacyDomain: payload.privacyDomain,
+      contentType: payload.contentType,
+      content: payload.content,
+      summary: payload.summary as string | undefined,
+      owner: payload.owner as string | undefined,
+      controller: payload.controller as string | undefined,
     },
   };
 }

@@ -397,6 +397,49 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  it('splits memory.recorded content into the store and records a reference-only event', async () => {
+    const databasePath = createDatabasePath();
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
+
+    const recorded = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: { privacyDomain: 'domain-private', contentType: 'text/markdown', content: 'A private note.', summary: 'a note' },
+      },
+    });
+    expect(recorded.statusCode).toBe(201);
+
+    const event = recorded.json().event;
+    expect(event.type).toBe('memory.recorded');
+    expect(event.payloadPosture).toBe('reference_only');
+    expect(event.payload).toEqual({
+      memoryItemId: expect.stringMatching(/^mem_/),
+      privacyDomain: 'domain-private',
+      contentType: 'text/markdown',
+      summary: 'a note',
+    });
+    expect('content' in event.payload).toBe(false);
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.recorded', payload: { privacyDomain: 'domain-private', contentType: 'text/markdown' } },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toEqual({ error: 'memory.recorded payload requires privacyDomain, contentType and content.' });
+
+    await app.close();
+
+    const verify = new EventStore(databasePath);
+    const stored = verify.memory().getInDomain(event.payload.memoryItemId, 'domain-private');
+    expect(stored?.content).toBe('A private note.');
+    expect(stored?.deletionState).toBe('active');
+    verify.close();
+  });
+
   it('accepts a memory.tombstone event and rejects an invalid tombstone payload', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 

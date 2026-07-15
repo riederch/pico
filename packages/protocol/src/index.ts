@@ -4,6 +4,7 @@ export const foundationEventTypes = [
   'session.created',
   'message.created',
   'avatar.state_changed',
+  'memory.recorded',
   'memory.tombstone',
 ] as const;
 
@@ -196,6 +197,17 @@ export interface AvatarStateChangedPayload {
   message?: string;
 }
 
+// Stored reference to a recorded memory item (ADR 0068 / ADR 0069). This is the
+// derived, content-free payload a `memory.recorded` event carries after the
+// server stores the content in the deleteable memory store. The request that
+// creates it carries the content; the stored event never does.
+export interface MemoryRecordedPayload {
+  memoryItemId: string;
+  privacyDomain: string;
+  contentType: string;
+  summary?: string;
+}
+
 // Append-only deletion marker for a deleteable memory item (ADR 0014 / ADR 0068).
 // It references the deleted item and carries no sensitive content.
 export interface MemoryTombstonePayload {
@@ -210,6 +222,7 @@ export type FoundationEventPayload =
   | SessionCreatedPayload
   | MessageCreatedPayload
   | AvatarStateChangedPayload
+  | MemoryRecordedPayload
   | MemoryTombstonePayload;
 
 export type FoundationPayloadValidationResult =
@@ -272,6 +285,31 @@ export function validateFoundationEventPayload(
     }
 
     return { ok: true, payload: { role: payload.role, text: payload.text } };
+  }
+
+  if (type === 'memory.recorded') {
+    const extraKey = firstUnexpectedKey(payload, ['memoryItemId', 'privacyDomain', 'contentType', 'summary']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `memory.recorded payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isNonEmptyString(payload.memoryItemId, 256) || !isNonEmptyString(payload.privacyDomain, 256) || !isNonEmptyString(payload.contentType, 256)) {
+      return { ok: false, error: 'memory.recorded payload requires memoryItemId, privacyDomain and contentType.' };
+    }
+
+    if (payload.summary !== undefined && !isNonEmptyString(payload.summary, 1_000)) {
+      return { ok: false, error: 'memory.recorded summary must be a non-empty string when provided.' };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        memoryItemId: payload.memoryItemId,
+        privacyDomain: payload.privacyDomain,
+        contentType: payload.contentType,
+        ...(payload.summary === undefined ? {} : { summary: payload.summary }),
+      },
+    };
   }
 
   if (type === 'memory.tombstone') {

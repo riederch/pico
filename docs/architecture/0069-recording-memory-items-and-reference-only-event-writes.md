@@ -106,13 +106,13 @@ Memory-store content stays development/foundation data until encryption and rete
 
 ## Implementation implications
 
-Additive runtime steps (deferred; each independently reviewable):
+Additive runtime steps (each independently reviewable):
 
-1. Add the `memory.recorded` Foundation event type and a request/stored payload split in the protocol and `POST /api/events`.
-2. On write, create the memory item via `MemoryStore.create`, then record the derived reference-only event.
-3. Add `reference_only` to the writable postures, gated to `memory.recorded`.
-4. Add read-time reference resolution against the store.
-5. Add memory read/list, retention and privacy-domain encryption behind their own ADRs.
+1. Add the `memory.recorded` Foundation event type and a request/stored payload split in the protocol and `POST /api/events`. (Done: `memory.recorded` with a stored reference payload `{ memoryItemId, privacyDomain, contentType, summary? }`; the request payload carries content and is validated separately.)
+2. On write, create the memory item via `MemoryStore.create`, then record the derived reference-only event. (Done: the server generates a `memoryItemId`, stores the content, and appends a `reference_only` `memory.recorded` event carrying only the reference; the response returns the derived event.)
+3. Add `reference_only` to the writable postures, gated to `memory.recorded`. (Done: the server sets `reference_only` on the derived event; the generic event path still rejects a client-supplied `reference_only`.)
+4. Add read-time reference resolution against the store. (Pending.)
+5. Add memory read/list, retention and privacy-domain encryption behind their own ADRs. (Pending.)
 
 ## Relationship to other ADRs
 

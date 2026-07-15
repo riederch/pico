@@ -58,6 +58,7 @@ device.seen
 session.created
 message.created
 avatar.state_changed
+memory.recorded
 memory.tombstone
 ```
 
