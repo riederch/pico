@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { MemoryItemDeletionState } from '@pico/protocol';
+import type { MemoryItemDeletionState, ReferenceTargetResolutionState } from '@pico/protocol';
 
 /**
  * Deleteable memory store skeleton (ADR 0068).
@@ -160,6 +160,21 @@ export class MemoryStore {
       .run(new Date().toISOString(), memoryItemId, privacyDomain);
 
     return 'tombstoned';
+  }
+
+  /**
+   * Read-time resolution of a reference target against the store (ADR 0068 /
+   * ADR 0069): `resolvable` while the item is active, `deleted` after it is
+   * deleted or tombstoned, `unknown` if it is not in this domain.
+   */
+  public resolutionState(memoryItemId: string, privacyDomain: string): ReferenceTargetResolutionState {
+    const item = this.getInDomain(memoryItemId, privacyDomain);
+
+    if (item === undefined) {
+      return 'unknown';
+    }
+
+    return item.deletionState === 'active' ? 'resolvable' : 'deleted';
   }
 }
 

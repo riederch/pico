@@ -129,7 +129,7 @@ memory.recorded
 memory.tombstone
 ```
 
-`memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller? }`); the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response.
+`memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller? }`); the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.
 
 `memory.tombstone` is the append-only deletion marker for a deleteable memory item (ADR 0014 / ADR 0068). Its payload is `{ memoryItemId, privacyDomain, reason? }` and carries no sensitive content. Writing one transitions a matching `deleted` memory item to `tombstoned` on a best-effort basis; the event log stays the source of truth.
 

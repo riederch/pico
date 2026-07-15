@@ -111,6 +111,21 @@ describe('MemoryStore', () => {
     expect(memory.tombstone('mem-1', 'domain-private')).toBe('not_deleted');
   });
 
+  it('resolves a reference target against the store state', () => {
+    const memory = openMemory();
+    memory.create(createInput());
+
+    expect(memory.resolutionState('mem-1', 'domain-private')).toBe('resolvable');
+    expect(memory.resolutionState('mem-1', 'other-domain')).toBe('unknown');
+    expect(memory.resolutionState('mem-unknown', 'domain-private')).toBe('unknown');
+
+    memory.deleteInDomain('mem-1', 'domain-private');
+    expect(memory.resolutionState('mem-1', 'domain-private')).toBe('deleted');
+
+    memory.tombstone('mem-1', 'domain-private');
+    expect(memory.resolutionState('mem-1', 'domain-private')).toBe('deleted');
+  });
+
   it('rejects a duplicate memory item id and blank required fields', () => {
     const memory = openMemory();
     memory.create(createInput());

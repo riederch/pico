@@ -111,7 +111,7 @@ Additive runtime steps (each independently reviewable):
 1. Add the `memory.recorded` Foundation event type and a request/stored payload split in the protocol and `POST /api/events`. (Done: `memory.recorded` with a stored reference payload `{ memoryItemId, privacyDomain, contentType, summary? }`; the request payload carries content and is validated separately.)
 2. On write, create the memory item via `MemoryStore.create`, then record the derived reference-only event. (Done: the server generates a `memoryItemId`, stores the content, and appends a `reference_only` `memory.recorded` event carrying only the reference; the response returns the derived event.)
 3. Add `reference_only` to the writable postures, gated to `memory.recorded`. (Done: the server sets `reference_only` on the derived event; the generic event path still rejects a client-supplied `reference_only`.)
-4. Add read-time reference resolution against the store. (Pending.)
+4. Add read-time reference resolution against the store. (Done: `GET /api/events` and `/api/events/tail` enrich `memory.recorded` events with a `resolutionState` (`resolvable` while active, `deleted` after delete/tombstone, `unknown` otherwise) computed from the store; the stored event is unchanged.)
 5. Add memory read/list, retention and privacy-domain encryption behind their own ADRs. (Pending.)
 
 ## Relationship to other ADRs

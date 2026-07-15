@@ -29,6 +29,7 @@ import {
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore, type EventCursor } from './event-store.js';
+import type { MemoryStore } from './memory-store.js';
 import { registerWebDashboard } from './static-web.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
@@ -243,7 +244,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     });
 
     const response: PicoEventListResponse = {
-      events: page.events,
+      events: resolveReferenceEvents(page.events, store.memory()),
       nextCursor: page.nextCursor === null ? null : encodeEventCursor(page.nextCursor),
       hasMore: page.hasMore,
     };
@@ -261,7 +262,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     const page = store.listTail(limitResult.limit);
     const response: PicoEventListResponse = {
-      events: page.events,
+      events: resolveReferenceEvents(page.events, store.memory()),
       nextCursor: null,
       hasMore: page.hasMore,
     };
@@ -706,6 +707,21 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
       payloadPosture: body.payloadPosture as PayloadPosture | undefined,
     },
   };
+}
+
+// Read-time reference resolution (ADR 0069): enrich reference_only
+// memory.recorded events with the current resolutionState of their reference
+// target. This is a read projection; the stored event is unchanged.
+function resolveReferenceEvents(events: PicoEvent[], memory: MemoryStore): PicoEvent[] {
+  return events.map((event) => {
+    if (event.type !== 'memory.recorded') {
+      return event;
+    }
+
+    const payload = event.payload as MemoryRecordedPayload;
+    const resolutionState = memory.resolutionState(payload.memoryItemId, payload.privacyDomain);
+    return { ...event, payload: { ...payload, resolutionState } };
+  });
 }
 
 function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: true; request: MemoryRecordedRequest } | { ok: false; error: string } {

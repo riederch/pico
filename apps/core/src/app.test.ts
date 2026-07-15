@@ -440,6 +440,33 @@ describe('Pico Home Core app', () => {
     verify.close();
   });
 
+  it('adds read-time resolution state to listed memory.recorded events', async () => {
+    const databasePath = createDatabasePath();
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
+
+    const recorded = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.recorded', payload: { privacyDomain: 'domain-private', contentType: 'text/plain', content: 'a note' } },
+    });
+    const memoryItemId = recorded.json().event.payload.memoryItemId;
+
+    const listed = await app.inject({ method: 'GET', url: '/api/events' });
+    const active = listed.json().events.find((event: { type: string }) => event.type === 'memory.recorded');
+    expect(active.payload.resolutionState).toBe('resolvable');
+    expect('content' in active.payload).toBe(false);
+
+    const mutate = new EventStore(databasePath);
+    mutate.memory().deleteInDomain(memoryItemId, 'domain-private');
+    mutate.close();
+
+    const relisted = await app.inject({ method: 'GET', url: '/api/events' });
+    const resolved = relisted.json().events.find((event: { type: string }) => event.type === 'memory.recorded');
+    expect(resolved.payload.resolutionState).toBe('deleted');
+
+    await app.close();
+  });
+
   it('accepts a memory.tombstone event and rejects an invalid tombstone payload', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 
