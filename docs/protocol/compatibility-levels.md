@@ -58,6 +58,7 @@ device.seen
 session.created
 message.created
 avatar.state_changed
+memory.tombstone
 ```
 
 L1 does not imply sync compatibility, Pico Link compatibility, Pico Home hosting compatibility or commercial permission.

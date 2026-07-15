@@ -125,7 +125,10 @@ device.seen
 session.created
 message.created
 avatar.state_changed
+memory.tombstone
 ```
+
+`memory.tombstone` is the append-only deletion marker for a deleteable memory item (ADR 0014 / ADR 0068). Its payload is `{ memoryItemId, privacyDomain, reason? }` and carries no sensitive content. Writing one transitions a matching `deleted` memory item to `tombstoned` on a best-effort basis; the event log stays the source of truth.
 
 ### Current foundation payload schemas
 

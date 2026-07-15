@@ -40,6 +40,8 @@ export interface MemoryItem {
 
 export type MemoryDeleteResult = 'deleted' | 'not_found' | 'already_deleted';
 
+export type MemoryTombstoneResult = 'tombstoned' | 'not_found' | 'not_deleted';
+
 export class MemoryStore {
   public constructor(private readonly db: Database.Database) {}
 
@@ -130,6 +132,34 @@ export class MemoryStore {
       .run(new Date().toISOString(), memoryItemId, privacyDomain);
 
     return 'deleted';
+  }
+
+  /**
+   * Marks a deleted item as tombstoned in response to a memory.tombstone event.
+   * The event log is the source of truth; this store projection is best-effort,
+   * so a tombstone for a missing or not-yet-deleted item is reported, not thrown.
+   */
+  public tombstone(memoryItemId: string, privacyDomain: string): MemoryTombstoneResult {
+    const existing = this.getInDomain(memoryItemId, privacyDomain);
+
+    if (existing === undefined) {
+      return 'not_found';
+    }
+
+    if (existing.deletionState !== 'deleted') {
+      return 'not_deleted';
+    }
+
+    this.db
+      .prepare(`
+        UPDATE memory_item
+        SET deletion_state = 'tombstoned',
+            updated_at = ?
+        WHERE memory_item_id = ? AND privacy_domain = ?
+      `)
+      .run(new Date().toISOString(), memoryItemId, privacyDomain);
+
+    return 'tombstoned';
   }
 }
 

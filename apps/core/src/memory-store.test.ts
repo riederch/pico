@@ -97,6 +97,20 @@ describe('MemoryStore', () => {
     expect(memory.deleteInDomain('mem-1', 'domain-private')).toBe('already_deleted');
   });
 
+  it('tombstones a deleted item and reports missing or not-yet-deleted items', () => {
+    const memory = openMemory();
+    memory.create(createInput());
+
+    expect(memory.tombstone('mem-1', 'domain-private')).toBe('not_deleted');
+    expect(memory.tombstone('mem-unknown', 'domain-private')).toBe('not_found');
+    expect(memory.tombstone('mem-1', 'other-domain')).toBe('not_found');
+
+    expect(memory.deleteInDomain('mem-1', 'domain-private')).toBe('deleted');
+    expect(memory.tombstone('mem-1', 'domain-private')).toBe('tombstoned');
+    expect(memory.getInDomain('mem-1', 'domain-private')?.deletionState).toBe('tombstoned');
+    expect(memory.tombstone('mem-1', 'domain-private')).toBe('not_deleted');
+  });
+
   it('rejects a duplicate memory item id and blank required fields', () => {
     const memory = openMemory();
     memory.create(createInput());

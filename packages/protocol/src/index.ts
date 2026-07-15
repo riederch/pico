@@ -4,6 +4,7 @@ export const foundationEventTypes = [
   'session.created',
   'message.created',
   'avatar.state_changed',
+  'memory.tombstone',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -195,12 +196,21 @@ export interface AvatarStateChangedPayload {
   message?: string;
 }
 
+// Append-only deletion marker for a deleteable memory item (ADR 0014 / ADR 0068).
+// It references the deleted item and carries no sensitive content.
+export interface MemoryTombstonePayload {
+  memoryItemId: string;
+  privacyDomain: string;
+  reason?: string;
+}
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
   | SessionCreatedPayload
   | MessageCreatedPayload
-  | AvatarStateChangedPayload;
+  | AvatarStateChangedPayload
+  | MemoryTombstonePayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -262,6 +272,30 @@ export function validateFoundationEventPayload(
     }
 
     return { ok: true, payload: { role: payload.role, text: payload.text } };
+  }
+
+  if (type === 'memory.tombstone') {
+    const extraKey = firstUnexpectedKey(payload, ['memoryItemId', 'privacyDomain', 'reason']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `memory.tombstone payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isNonEmptyString(payload.memoryItemId, 256) || !isNonEmptyString(payload.privacyDomain, 256)) {
+      return { ok: false, error: 'memory.tombstone payload requires memoryItemId and privacyDomain.' };
+    }
+
+    if (payload.reason !== undefined && !isNonEmptyString(payload.reason, 1_000)) {
+      return { ok: false, error: 'memory.tombstone reason must be a non-empty string when provided.' };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        memoryItemId: payload.memoryItemId,
+        privacyDomain: payload.privacyDomain,
+        ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+      },
+    };
   }
 
   const extraKey = firstUnexpectedKey(payload, ['mode', 'state', 'intensity', 'statusColor', 'message']);

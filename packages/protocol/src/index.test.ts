@@ -49,6 +49,7 @@ describe('Pico protocol types', () => {
       'session.created',
       'message.created',
       'avatar.state_changed',
+      'memory.tombstone',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');
@@ -103,6 +104,22 @@ describe('Pico protocol types', () => {
         statusColor: 'violet',
         message: 'Thinking',
       },
+    });
+    expect(validateFoundationEventPayload('memory.tombstone', { memoryItemId: 'mem-1', privacyDomain: 'domain-private' })).toEqual({
+      ok: true,
+      payload: { memoryItemId: 'mem-1', privacyDomain: 'domain-private' },
+    });
+    expect(validateFoundationEventPayload('memory.tombstone', { memoryItemId: 'mem-1', privacyDomain: 'domain-private', reason: 'user request' })).toEqual({
+      ok: true,
+      payload: { memoryItemId: 'mem-1', privacyDomain: 'domain-private', reason: 'user request' },
+    });
+    expect(validateFoundationEventPayload('memory.tombstone', { memoryItemId: 'mem-1' })).toEqual({
+      ok: false,
+      error: 'memory.tombstone payload requires memoryItemId and privacyDomain.',
+    });
+    expect(validateFoundationEventPayload('memory.tombstone', { memoryItemId: 'mem-1', privacyDomain: 'domain-private', content: 'secret' })).toEqual({
+      ok: false,
+      error: 'memory.tombstone payload has unexpected field: content.',
     });
   });
 

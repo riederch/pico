@@ -16,6 +16,7 @@ import {
   realtimeMessageType,
 } from '@pico/protocol';
 import { buildApp } from './app.js';
+import { EventStore } from './event-store.js';
 
 const tempDirs: string[] = [];
 const RESERVED_EVENT_ERROR = 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.';
@@ -394,6 +395,50 @@ describe('Pico Home Core app', () => {
     expect(postures).toContain(undefined);
 
     await app.close();
+  });
+
+  it('accepts a memory.tombstone event and rejects an invalid tombstone payload', async () => {
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.tombstone', payload: { memoryItemId: 'mem-1', privacyDomain: 'domain-private', reason: 'user request' } },
+    });
+    expect(accepted.statusCode).toBe(201);
+    expect(accepted.json().event.type).toBe('memory.tombstone');
+
+    const invalid = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.tombstone', payload: { memoryItemId: 'mem-1' } },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(invalid.json()).toEqual({ error: 'memory.tombstone payload requires memoryItemId and privacyDomain.' });
+
+    await app.close();
+  });
+
+  it('projects a memory.tombstone event onto the deleted memory item', async () => {
+    const databasePath = createDatabasePath();
+
+    const seed = new EventStore(databasePath);
+    seed.memory().create({ memoryItemId: 'mem-1', privacyDomain: 'domain-private', owner: 'pico-owner', controller: 'pico-owner', contentType: 'text/plain', content: 'a note' });
+    seed.memory().deleteInDomain('mem-1', 'domain-private');
+    seed.close();
+
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
+    const posted = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.tombstone', payload: { memoryItemId: 'mem-1', privacyDomain: 'domain-private' } },
+    });
+    expect(posted.statusCode).toBe(201);
+    await app.close();
+
+    const verify = new EventStore(databasePath);
+    expect(verify.memory().getInDomain('mem-1', 'domain-private')?.deletionState).toBe('tombstoned');
+    verify.close();
   });
 
   it('accepts legitimate event bodies below the request body limit', async () => {

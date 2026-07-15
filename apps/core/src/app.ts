@@ -12,6 +12,7 @@ import {
   writablePayloadPostures,
   type FoundationEventPayload,
   type FoundationEventType,
+  type MemoryTombstonePayload,
   type PayloadPosture,
   type PicoCoreConnectedMessage,
   type PicoEvent,
@@ -280,6 +281,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     if (appendResult === 'inserted') {
       broadcast(event);
+
+      if (event.type === 'memory.tombstone') {
+        // Best-effort projection: the event log is the source of truth, so a
+        // tombstone for a missing or not-yet-deleted item still records.
+        const tombstone = event.payload as MemoryTombstonePayload;
+        store.memory().tombstone(tombstone.memoryItemId, tombstone.privacyDomain);
+      }
     }
 
     const response: PicoEventCreateResponse = { event, appendResult };
