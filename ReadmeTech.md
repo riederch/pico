@@ -527,6 +527,7 @@ The project concept is persisted as architecture notes:
 | `0066-pico-home-link-draft-home-membership-rejection-placeholder.md` | draft-only Pico Home Link Home Membership rejection boundary |
 | `0067-foundation-payload-posture-reference-targets-and-tombstones.md` | additive Foundation payload-posture, reference-target and tombstone realization of ADR 0014 |
 | `0068-reference-targets-and-deleteable-memory-store.md` | reference target, deleteable memory store and deletion/tombstone concept |
+| `0069-recording-memory-items-and-reference-only-event-writes.md` | memory.recorded event and reference-only write model (content-splitting) |
 
 Protocol documents:
 
@@ -644,7 +645,8 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0065 as the current packet-envelope rejection boundary if future Pico Link packet-envelope draft fixtures are added; the relay-visible envelope rejects Pico identity in routing, crypto claims in the payload block, relationship/domain metadata leaks and plaintext leaks
 - Use ADR 0066 as the current Home Membership rejection boundary if future Pico Home Link membership draft fixtures are added; membership grants host use and rejects domain-access, expired-as-active, verified-issuer and Move-In Code substitution claims
 - Use ADR 0067 for the additive Foundation payload-posture path (realizing ADR 0014): the optional `payloadPosture` envelope field is implemented, persisted (migration `0005`) and writable-gated on `POST /api/events`; reference targets and a tombstone event type remain behind the deleteable memory store
-- Use ADR 0068 for the reference-target and deleteable memory store direction: the memory item, reference target and store/deletion/tombstone semantics are defined; the next additive steps are a reserved reference-target vocabulary, then a memory-store table/API, then a tombstone event type that makes `reference_only` writable, then retention/deletion and privacy-domain encryption
+- Use ADR 0068 for the reference-target and deleteable memory store direction: the reference-target vocabulary, memory-store skeleton and `memory.tombstone` event are implemented; retention/deletion enforcement and privacy-domain encryption remain
+- Use ADR 0069 for making `reference_only` writable: memory-referencing uses a dedicated `memory.recorded` event (payload = reference target) and a content-splitting write flow (POST content is stored in the deleteable store; the server derives a reference-only event carrying only the reference); the runtime is the next additive step
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim
