@@ -138,6 +138,10 @@ This ADR realizes:
 
 - `0014-deletability-and-append-only-events.md`
 
+It is extended by:
+
+- `0068-reference-targets-and-deleteable-memory-store.md`, which defines the reference target the `reference_only` posture points at, the deleteable memory store and deletion/tombstone semantics
+
 It stays consistent with and below:
 
 - `0011-privacy-security-and-audit-model.md`

@@ -67,7 +67,9 @@ A future payload-posture schema field can be added as an additive protocol and s
 
 ## Realization
 
-ADR `0067-foundation-payload-posture-reference-targets-and-tombstones.md` operationalizes this constraint into a concrete additive Foundation contract: an optional `payloadPosture` envelope field defaulting to `inline_operational`, a writable-posture policy for `POST /api/events`, reference-target and tombstone direction, and additive-compatibility rules. The `payloadPostures` vocabulary is already reserved in `@pico/protocol`.
+ADR `0067-foundation-payload-posture-reference-targets-and-tombstones.md` operationalizes this constraint into a concrete additive Foundation contract: an optional `payloadPosture` envelope field defaulting to `inline_operational`, a writable-posture policy for `POST /api/events`, reference-target and tombstone direction, and additive-compatibility rules. The `payloadPostures` vocabulary is already reserved in `@pico/protocol`, and the `payloadPosture` field is implemented.
+
+ADR `0068-reference-targets-and-deleteable-memory-store.md` defines the next layer: the memory item, the reference target a `reference_only` event points at, the deleteable memory store separate from the append-only log, and deletion/tombstone semantics.
 
 ## Design rule
 
