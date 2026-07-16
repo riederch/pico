@@ -77,6 +77,10 @@ export class EventStore {
       throw error;
     }
 
+    // Enforce recorded deletions on boot so a restore that resurrected deleted
+    // memory items as active is re-tombstoned (ADR 0070 recovery direction).
+    store.reconcileMemoryTombstones();
+
     return store;
   }
 
@@ -218,6 +222,56 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db);
+  }
+
+  /**
+   * Re-applies append-only memory.tombstone events onto the memory store
+   * (ADR 0070 recovery direction). This enforces recorded deletions after a
+   * restore that resurrected deleted items as active. Idempotent; returns the
+   * number of items that were newly enforced to the tombstoned state.
+   */
+  public reconcileMemoryTombstones(): { enforced: number } {
+    this.ensureOpen();
+
+    // Resilient to non-standard migration sets: without both tables there is
+    // nothing to reconcile.
+    const tables = this.db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('pico_event', 'memory_item')")
+      .all() as { name: string }[];
+    if (tables.length < 2) {
+      return { enforced: 0 };
+    }
+
+    const rows = this.db
+      .prepare("SELECT payload_json FROM pico_event WHERE type = 'memory.tombstone'")
+      .all() as { payload_json: string }[];
+
+    const memory = new MemoryStore(this.db);
+    let enforced = 0;
+
+    for (const row of rows) {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(row.payload_json);
+      } catch {
+        continue;
+      }
+
+      if (payload === null || typeof payload !== 'object') {
+        continue;
+      }
+
+      const { memoryItemId, privacyDomain } = payload as { memoryItemId?: unknown; privacyDomain?: unknown };
+      if (typeof memoryItemId !== 'string' || typeof privacyDomain !== 'string') {
+        continue;
+      }
+
+      if (memory.enforceTombstone(memoryItemId, privacyDomain) === 'tombstoned') {
+        enforced += 1;
+      }
+    }
+
+    return { enforced };
   }
 
   public close(): void {

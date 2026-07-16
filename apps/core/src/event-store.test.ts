@@ -396,6 +396,63 @@ describe('EventStore', () => {
     expect(() => store.maxLamport()).toThrow('EventStore is closed.');
     expect(() => store.picoHomeClaimState()).toThrow('EventStore is closed.');
   });
+
+  it('reconciles memory tombstones onto the store, idempotently', () => {
+    const store = new EventStore(createDatabasePath());
+
+    // A resurrected active item plus an append-only tombstone referencing it.
+    store.memory().create({
+      memoryItemId: 'mem-1',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'text/plain',
+      content: 'a note',
+    });
+    store.append(createEvent({
+      eventId: 'tomb-1',
+      type: 'memory.tombstone',
+      payload: { memoryItemId: 'mem-1', privacyDomain: 'domain-private' },
+    }));
+
+    // Appending the event does not touch the store; the item is still active.
+    expect(store.memory().getInDomain('mem-1', 'domain-private')?.deletionState).toBe('active');
+
+    expect(store.reconcileMemoryTombstones()).toEqual({ enforced: 1 });
+    const reconciled = store.memory().getInDomain('mem-1', 'domain-private');
+    expect(reconciled?.deletionState).toBe('tombstoned');
+    expect(reconciled !== undefined && 'content' in reconciled).toBe(false);
+
+    expect(store.reconcileMemoryTombstones()).toEqual({ enforced: 0 });
+
+    store.close();
+  });
+
+  it('enforces recorded deletions on open', async () => {
+    const databasePath = createDatabasePath();
+
+    const seed = new EventStore(databasePath);
+    seed.memory().create({
+      memoryItemId: 'mem-1',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'text/plain',
+      content: 'a note',
+    });
+    seed.append(createEvent({
+      eventId: 'tomb-1',
+      type: 'memory.tombstone',
+      payload: { memoryItemId: 'mem-1', privacyDomain: 'domain-private' },
+    }));
+    seed.close();
+
+    const reopened = await EventStore.open(databasePath);
+    const item = reopened.memory().getInDomain('mem-1', 'domain-private');
+    expect(item?.deletionState).toBe('tombstoned');
+    expect(item !== undefined && 'content' in item).toBe(false);
+    reopened.close();
+  });
 });
 
 function createEvent(overrides: Partial<PicoEvent> = {}): PicoEvent {

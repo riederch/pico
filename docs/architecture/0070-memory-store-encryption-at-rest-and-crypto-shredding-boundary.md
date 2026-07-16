@@ -69,7 +69,7 @@ The backup flow copies the SQLite database. Today that means:
 Mitigations, in order of availability:
 
 - **Now:** the store holds foundation data only; deletion is documented as live-store removal, not total erasure.
-- **Recoverable now (direction):** because `memory.tombstone` events live in the append-only log, replaying tombstone projections after a restore can re-delete resurrected items. This replay direction is future work, not implemented.
+- **Recoverable now (implemented):** because `memory.tombstone` events live in the append-only log, the store re-applies them on open (`EventStore.reconcileMemoryTombstones`, run by `EventStore.open`). A restore that resurrected a deleted item as `active` is re-tombstoned (content removed, state `tombstoned`) on the next boot. This is idempotent and enforces recorded deletions; it does not recover content in stale backups (that needs crypto-shredding).
 - **Target:** with domain encryption, backups hold ciphertext, and crypto-shredding makes residual ciphertext unreadable - subject to the ADR 0033 key-handling limits above.
 
 ## What this ADR deliberately does not choose
@@ -98,8 +98,8 @@ This ADR does not define or implement:
 
 - encryption, decryption or key management runtime
 - a content read/list HTTP API
-- retention policy enforcement
-- tombstone-replay after restore
+- retention policy enforcement (a retention engine)
+- content recovery from stale backups (crypto-shredding, not implemented)
 - access control, authentication or membership
 - search over encrypted content
 - production-memory or compliance claims

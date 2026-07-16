@@ -112,6 +112,22 @@ describe('MemoryStore', () => {
     expect(memory.tombstone('mem-1', 'domain-private')).toBe('not_deleted');
   });
 
+  it('enforces the tombstoned state on an item regardless of its current state', () => {
+    const memory = openMemory();
+    memory.create(createInput());
+
+    // Active item (resurrected by a restore) -> forced straight to tombstoned, content gone.
+    expect(memory.enforceTombstone('mem-1', 'domain-private')).toBe('tombstoned');
+    const enforced = memory.getInDomain('mem-1', 'domain-private');
+    expect(enforced?.deletionState).toBe('tombstoned');
+    expect(enforced !== undefined && 'content' in enforced).toBe(false);
+
+    // Idempotent + scoped.
+    expect(memory.enforceTombstone('mem-1', 'domain-private')).toBe('already_tombstoned');
+    expect(memory.enforceTombstone('mem-unknown', 'domain-private')).toBe('not_found');
+    expect(memory.enforceTombstone('mem-1', 'other-domain')).toBe('not_found');
+  });
+
   it('resolves a reference target against the store state', () => {
     const memory = openMemory();
     memory.create(createInput());

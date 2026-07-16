@@ -44,6 +44,8 @@ export type MemoryDeleteResult = 'deleted' | 'not_found' | 'already_deleted';
 
 export type MemoryTombstoneResult = 'tombstoned' | 'not_found' | 'not_deleted';
 
+export type MemoryEnforceTombstoneResult = 'tombstoned' | 'not_found' | 'already_tombstoned';
+
 export class MemoryStore {
   public constructor(private readonly db: Database.Database) {}
 
@@ -156,6 +158,37 @@ export class MemoryStore {
       .prepare(`
         UPDATE memory_item
         SET deletion_state = 'tombstoned',
+            updated_at = ?
+        WHERE memory_item_id = ? AND privacy_domain = ?
+      `)
+      .run(new Date().toISOString(), memoryItemId, privacyDomain);
+
+    return 'tombstoned';
+  }
+
+  /**
+   * Enforces the terminal tombstoned state for an item that has an append-only
+   * tombstone (ADR 0070 recovery direction). Unlike {@link tombstone}, this
+   * forces content removal and the tombstoned state regardless of the current
+   * state, so a restore that resurrected a deleted item as active is corrected.
+   * Idempotent: an already-tombstoned or missing item is a reported no-op.
+   */
+  public enforceTombstone(memoryItemId: string, privacyDomain: string): MemoryEnforceTombstoneResult {
+    const existing = this.getInDomain(memoryItemId, privacyDomain);
+
+    if (existing === undefined) {
+      return 'not_found';
+    }
+
+    if (existing.deletionState === 'tombstoned') {
+      return 'already_tombstoned';
+    }
+
+    this.db
+      .prepare(`
+        UPDATE memory_item
+        SET content = NULL,
+            deletion_state = 'tombstoned',
             updated_at = ?
         WHERE memory_item_id = ? AND privacy_domain = ?
       `)
