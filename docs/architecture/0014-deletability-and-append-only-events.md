@@ -71,6 +71,8 @@ ADR `0067-foundation-payload-posture-reference-targets-and-tombstones.md` operat
 
 ADR `0068-reference-targets-and-deleteable-memory-store.md` defines the next layer: the memory item, the reference target a `reference_only` event points at, the deleteable memory store separate from the append-only log, and deletion/tombstone semantics.
 
+ADR `0074-memory-retention-policy-and-expiry-deletion-boundary.md` designs the retention-policy element of this ADR's boundary rule for the memory store: named, editable policies referenced by items, a fail-safe keep default, and expiry that deletes through the tombstoned deletion path.
+
 ## Design rule
 
 Never make immutable replicated events the primary storage location for sensitive deleteable personal memory.

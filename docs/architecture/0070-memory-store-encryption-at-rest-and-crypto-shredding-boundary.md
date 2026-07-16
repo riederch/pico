@@ -112,7 +112,7 @@ Additive steps, in order (all deferred):
 2. Add `content_posture` (default `plaintext_foundation`) and nullable `key_envelope_ref` columns to `memory_item` as an additive migration. (Done: migration `0007_memory_item_content_posture`; `MemoryStore` maps `contentPosture`/`keyEnvelopeRef`. All items are `plaintext_foundation` at rest; the column is metadata, not enforcement.)
 3. Define the concrete threat model, primitives, key storage, canonicalization and test vectors behind ADR 0016/0029/0032/0033/0034; select primitives in a dedicated, maximally reviewed step. (Threat model and primitive suite decided: ADR `0071-memory-content-encryption-threat-model-and-primitive-direction.md` answers the ADR 0016 questions for this surface and fixes `pico.suite.mem.v1`; key storage, canonical AD vectors and everything runtime stay pending behind its security-relevance gate.)
 4. Implement domain encryption at rest and the crypto-shredding deletion upgrade.
-5. Only then design a protected content read API and retention enforcement.
+5. Only then design a protected content read API and retention enforcement. (Refined by ADR `0074-memory-retention-policy-and-expiry-deletion-boundary.md`: the retention model is designed there, and deletion-only retention enforcement may land as an additive step independent of encryption because it exposes nothing — rule 3 concerns reads. The protected content read API and crypto-shred-strength retention claims stay behind this ordering.)
 
 ## Relationship to other ADRs
 

@@ -184,6 +184,7 @@ In particular:
 - memory encryption threat-model and primitive-suite language must remain consistent with `0016`, `0032`, `0034`, `0070` and `0071`
 - memory key-storage, backup-separation and key-recovery language must remain consistent with `0033`, `0071` and `0072`
 - memory-content associated-data canonicalization, byte-layout and test-vector language must remain consistent with `0034`, `0047`, `0071` and `0073`
+- memory retention-policy and expiry-deletion language must remain consistent with `0014`, `0021`, `0033`, `0037`, `0068`, `0070` and `0074`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

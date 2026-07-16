@@ -215,6 +215,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0071-memory-content-encryption-threat-model-and-primitive-direction.md`](docs/architecture/0071-memory-content-encryption-threat-model-and-primitive-direction.md) - memory encryption threat model and decided primitive suite (implementation gated)
 - [`docs/architecture/0072-memory-domain-key-storage-and-backup-separation.md`](docs/architecture/0072-memory-domain-key-storage-and-backup-separation.md) - key storage for memory domain keys: keys and data never share a backup artifact
 - [`docs/architecture/0073-memory-content-ad-canonicalization-and-test-vectors.md`](docs/architecture/0073-memory-content-ad-canonicalization-and-test-vectors.md) - canonical associated-data byte layout and test vectors for the memory-content encryption suite (ADR 0071 gate point 1)
+- [`docs/architecture/0074-memory-retention-policy-and-expiry-deletion-boundary.md`](docs/architecture/0074-memory-retention-policy-and-expiry-deletion-boundary.md) - memory retention model: named editable policies, fail-safe keep default, expiry deletes through the tombstoned deletion path
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
