@@ -93,7 +93,7 @@ Two families, each led by a fixed ASCII **domain-separation (DS) label** that is
 
 `domainId` in the DEK-wrap family and `privacyDomain` in the content family carry the **same domain identifier value**; the field names differ only because the DEK-wrap family follows the ADR 0032 key-envelope vocabulary while the content family follows the memory-store column vocabulary.
 
-The suite value appears both inside the DS label and as element 1. This redundancy is deliberate: the DS label is a compile-time constant that guards against building the wrong family, while element 1 carries the R3 downgrade binding from data (the row/envelope), so a stored-suite mismatch fails authentication (see the `content-suite-v2` vector).
+The DS label and the suite element play different roles and are deliberately both present: the DS label is a compile-time constant that separates the two AD families and versions this byte construction, while element 1 carries the R3 downgrade binding from data (the row/envelope), so a stored-suite mismatch fails authentication (see the `content-suite-v2` vector). The label's version (`.v1`) and the suite's version are independent — they coincide numerically today, but a future `pico.suite.mem.v2` under the unchanged construction would keep the `pico.mem.ad.content.v1` label, and vice versa.
 
 ### Field classification (ADR 0034 model)
 
@@ -111,6 +111,8 @@ The AD builder enforces, per element value, before emitting any bytes:
 
 A violation is a canonicalization failure: the builder produces **no** AD and the operation is rejected. Rejection reasons map to the ADR 0034 conceptual category `canonicalization_error` (with `field_too_long` also expressible as `integer_out_of_range`). These are conceptual categories, not final API error codes.
 
+Implementation note for the later encrypt-on-write step: the memory store today accepts identifier and content-type values outside this charset (for example a media type with parameters, `text/plain; charset=utf-8`). Items destined for `domain_encrypted` must have `memoryItemId`, `privacyDomain` and `contentType` validated against this charset **at write time**, so a violation surfaces as a write rejection instead of leaving a stored item un-encryptable at encrypt time.
+
 Because the field set is closed and the values are constrained to ASCII tokens, the ADR 0034 normalization checklist collapses to: no field ordering choice (order is fixed), no duplicate fields (fixed tuple), no null-vs-absent ambiguity (every field required and non-empty), no integer/decimal values, no Unicode normalization (ASCII), no timestamps and no binary values in the AD.
 
 ## Test vectors
@@ -127,7 +129,8 @@ Each future on-disk fixture (planned layout `docs/protocol/fixtures/memory-conte
 - `construction`: the DS label (e.g. `pico.mem.ad.content.v1`)
 - `input`: the ordered field values (object with the family's named fields)
 - for positives: `canonicalAdHex` and `canonicalAdLen`
-- for negatives: `expect: reject`, `errorCategory: canonicalization_error` and `reason` (`empty_field` | `invalid_field_charset` | `field_too_long`)
+- for reject negatives: `expect: reject`, `errorCategory: canonicalization_error` and `reason` (`empty_field` | `invalid_field_charset` | `field_too_long`)
+- for bind-difference negatives: `canonicalAdHex`/`canonicalAdLen` plus `mustDifferFrom: <fixtureId>` — the input canonicalizes successfully; the negative expectation is that its AD differs byte-wise from the referenced fixture's AD, which is what makes the cross-domain or cross-suite authentication fail. The executable authentication-failure form of these vectors is a gate-point-3 round-trip fixture, not a canonicalization fixture.
 - `notes`: human-readable intent
 - `adr`: `0073`
 
