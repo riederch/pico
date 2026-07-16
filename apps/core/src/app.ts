@@ -35,6 +35,7 @@ import type { MemoryStore } from './memory-store.js';
 import { registerWebDashboard } from './static-web.js';
 import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
+import { RetentionSweeper } from './retention-sweep.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
 const SERVICE_VERSION = '0.1.7';
@@ -46,6 +47,7 @@ const MAX_PAYLOAD_BYTES = 32 * 1024;
 const REQUEST_BODY_LIMIT_BYTES = MAX_PAYLOAD_BYTES + (8 * 1024);
 const MAX_INCOMING_LAMPORT = 1_000_000_000;
 const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
+const RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 const REALTIME_TICKET_TTL_MS = 30_000;
 const MAX_OUTSTANDING_REALTIME_TICKETS = 128;
 
@@ -163,8 +165,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   websocketKeepalive.unref();
 
+  // Retention sweep (ADR 0074): deletion-only, fail-safe, runs on boot and
+  // periodically. A no-op until items reference a delete_after_max_age policy.
+  const retentionSweeper = new RetentionSweeper(
+    store.memory(),
+    store.retentionPolicies(),
+    ({ memoryItemId, privacyDomain, reason }) => {
+      const tombstone = factory.create({
+        deviceId: config.deviceId,
+        type: 'memory.tombstone',
+        payload: { memoryItemId, privacyDomain, reason },
+      });
+      if (store.append(tombstone) === 'inserted') {
+        broadcast(tombstone);
+      }
+    },
+  );
+
+  function runRetentionSweep(): void {
+    try {
+      retentionSweeper.sweep();
+    } catch (error) {
+      app.log.error({ err: error }, 'retention sweep failed');
+    }
+  }
+
+  runRetentionSweep();
+  const retentionSweep = setInterval(runRetentionSweep, RETENTION_SWEEP_INTERVAL_MS);
+  retentionSweep.unref();
+
   app.addHook('onClose', async () => {
     clearInterval(websocketKeepalive);
+    clearInterval(retentionSweep);
     sockets.clear();
     store.close();
   });

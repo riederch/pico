@@ -233,6 +233,26 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0009_memory_retention_policy',
+    requiresBackup: false,
+    up(db) {
+      // Named, editable retention policies (ADR 0074) referenced by a memory
+      // item's retention_policy_ref. mode keep_until_deleted has no max age;
+      // delete_after_max_age carries a positive whole-day maximum age. A missing
+      // or unresolvable policy never deletes (fail-safe keep, enforced in code).
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_retention_policy (
+          retention_policy_id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          mode TEXT NOT NULL CHECK (mode IN ('keep_until_deleted', 'delete_after_max_age')),
+          max_age_days INTEGER NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

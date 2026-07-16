@@ -190,6 +190,7 @@ describe('Pico Home Core app', () => {
           { id: '0006_memory_item_store', appliedAt: expect.any(String) },
           { id: '0007_memory_item_content_posture', appliedAt: expect.any(String) },
           { id: '0008_memory_key_envelope', appliedAt: expect.any(String) },
+          { id: '0009_memory_retention_policy', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -488,6 +489,41 @@ describe('Pico Home Core app', () => {
     const crypto = new MemoryContentCrypto(sodium, new KeyStore(keyStorePath));
     const verify = new EventStore(databasePath, { memoryCrypto: crypto });
     expect(verify.memory().getInDomain(memoryItemId, 'domain-private')?.content).toBe('A private secret.');
+    verify.close();
+  });
+
+  it('runs the retention sweep on boot and expires an aged item through a tombstone', async () => {
+    const databasePath = createDatabasePath();
+
+    // Pre-seed a policy and an aged item that references it.
+    const seed = new EventStore(databasePath);
+    seed.retentionPolicies().create({ retentionPolicyId: 'ret-1', displayName: '1 day', mode: 'delete_after_max_age', maxAgeDays: 1 });
+    seed.memory().create({
+      memoryItemId: 'mem-old',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'text/plain',
+      content: 'stale note',
+      retentionPolicyRef: 'ret-1',
+    });
+    seed.close();
+    const aged = new Database(databasePath);
+    aged.prepare("UPDATE memory_item SET created_at = ? WHERE memory_item_id = 'mem-old'")
+      .run(new Date(Date.now() - 10 * 86_400_000).toISOString());
+    aged.close();
+
+    // Booting the app runs the retention sweep.
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
+    await app.close();
+
+    const verify = new EventStore(databasePath);
+    const item = verify.memory().getInDomain('mem-old', 'domain-private');
+    expect(item?.deletionState).toBe('tombstoned');
+    expect(item?.content).toBeUndefined();
+    const tombstones = verify.list().filter((event) => event.type === 'memory.tombstone');
+    expect(tombstones).toHaveLength(1);
+    expect((tombstones[0].payload as { reason?: string }).reason).toBe('retention:ret-1');
     verify.close();
   });
 

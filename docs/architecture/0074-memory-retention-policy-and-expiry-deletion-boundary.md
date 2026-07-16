@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the concept-level retention model and expiry-deletion boundary for the memory store. Retention is the fourth of ADR 0014's named boundaries ("references, privacy domains, retention policy and encryption boundaries") and the last without its own design. This ADR defines what a retention policy is, how expiry deletes, what retention may claim and what it must never become. It is concept and contract only: no retention engine, no policy storage, no API and no protocol vocabulary ship with it.
+Accepted as the retention model and expiry-deletion boundary for the memory store, now implemented for the single-host foundation. Retention is the fourth of ADR 0014's named boundaries ("references, privacy domains, retention policy and encryption boundaries") and the last without its own design. This ADR defines what a retention policy is, how expiry deletes, what retention may claim and what it must never become. Implementation steps 1–3 have shipped (mode vocabulary, policy storage, the deletion-only sweep); a policy CRUD/HTTP surface, domain-default binding and the encryption-era claims upgrade remain deferred (see below).
 
 ## Context
 
@@ -126,13 +126,15 @@ This ADR does not define or implement:
 
 ## Implementation implications
 
-Additive steps, in order, all deferred:
+Additive steps, in order:
 
-1. Reserve the retention-mode vocabulary (`keep_until_deleted`, `delete_after_max_age`) in `@pico/protocol`, doc-bound like `payloadPostures` and `memoryContentPostures`.
-2. Add retention-policy storage with validation and wire `retentionPolicyRef` at item creation; resolution = item ref → system default (domain defaults wait for a domain registry). Policies are inspectable, editable and revocable from the start (ADR 0037).
-3. Implement the retention sweep under the enforcement contract above: deletion-only, idempotent, batch-bounded, fail-safe, tombstones with policy references; runs on open and periodically. May land before encryption (see "Ordering").
-4. Add domain-default policy binding once a privacy-domain registry exists.
-5. After encryption and crypto-shredding ship: revisit retention claims (backup unreadability of expired content) and consider domain-wide expiry as a KEK-shred trigger — a domain whose items are all expired and deleted becomes a shred candidate, never an automatic shred.
+1. Reserve the retention-mode vocabulary (`keep_until_deleted`, `delete_after_max_age`) in `@pico/protocol`, doc-bound like `payloadPostures` and `memoryContentPostures`. **Done: `memoryRetentionModes`.**
+2. Add retention-policy storage with validation and wire `retentionPolicyRef` at item creation; resolution = item ref → system default (domain defaults wait for a domain registry). Policies are inspectable, editable and revocable from the start (ADR 0037). **Done: `memory_retention_policy` table (migration `0009`), `RetentionPolicyStore` CRUD + validation (day-granular `maxAgeDays`); `MemoryStore.create` accepts `retentionPolicyRef`.**
+3. Implement the retention sweep under the enforcement contract above: deletion-only, idempotent, batch-bounded, fail-safe, tombstones with policy references; runs on open and periodically. May land before encryption (see "Ordering"). **Done: `RetentionSweeper` expires aged `delete_after_max_age` items by appending a `memory.tombstone` event (reason `retention:<id>`) and enforcing the tombstone; runs on boot and hourly in `buildApp`. It reads no content and decrypts nothing.**
+4. Add domain-default policy binding once a privacy-domain registry exists. **Deferred.**
+5. After encryption and crypto-shredding ship: revisit retention claims (backup unreadability of expired content) and consider domain-wide expiry as a KEK-shred trigger — a domain whose items are all expired and deleted becomes a shred candidate, never an automatic shred. **Deferred.**
+
+Not yet built (deliberate ADR 0074 non-goals): a policy CRUD or write-time-`retentionPolicyRef` HTTP surface — policies and references are set programmatically for now — and any notification/review flow on expiry.
 
 ## Relationship to other ADRs
 

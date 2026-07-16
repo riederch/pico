@@ -56,6 +56,13 @@ export interface MemoryItem {
   updatedAt: string;
 }
 
+export interface RetentionCandidate {
+  memoryItemId: string;
+  privacyDomain: string;
+  retentionPolicyRef: string;
+  createdAt: string;
+}
+
 export type MemoryDeleteResult = 'deleted' | 'not_found' | 'already_deleted';
 
 export type MemoryTombstoneResult = 'tombstoned' | 'not_found' | 'not_deleted';
@@ -147,6 +154,29 @@ export class MemoryStore {
       .get(memoryItemId, privacyDomain) as MemoryItemRow | undefined;
 
     return row === undefined ? undefined : this.resolveContent(mapRow(row));
+  }
+
+  /**
+   * Minimal projection of active items that reference a retention policy, for
+   * the retention sweep (ADR 0074). Deliberately selects no content and never
+   * decrypts: retention is deletion-only and must expose nothing.
+   */
+  public listRetentionCandidates(): RetentionCandidate[] {
+    const rows = this.db
+      .prepare(`
+        SELECT memory_item_id, privacy_domain, retention_policy_ref, created_at
+        FROM memory_item
+        WHERE deletion_state = 'active' AND retention_policy_ref IS NOT NULL
+        ORDER BY created_at, memory_item_id
+      `)
+      .all() as { memory_item_id: string; privacy_domain: string; retention_policy_ref: string; created_at: string }[];
+
+    return rows.map((row) => ({
+      memoryItemId: row.memory_item_id,
+      privacyDomain: row.privacy_domain,
+      retentionPolicyRef: row.retention_policy_ref,
+      createdAt: row.created_at,
+    }));
   }
 
   public listInDomain(privacyDomain: string): MemoryItem[] {

@@ -11,6 +11,7 @@ import {
   type MigrationDefinition,
 } from './migrations.js';
 import { MemoryStore } from './memory-store.js';
+import { RetentionPolicyStore } from './retention-policy-store.js';
 import type { MemoryContentCrypto } from './memory-content-crypto.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 
@@ -230,6 +231,12 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db, this.memoryCrypto);
+  }
+
+  // Named retention policies (ADR 0074), sharing this store's connection.
+  public retentionPolicies(): RetentionPolicyStore {
+    this.ensureOpen();
+    return new RetentionPolicyStore(this.db);
   }
 
   /**

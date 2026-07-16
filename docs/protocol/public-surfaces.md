@@ -264,6 +264,15 @@ plaintext_foundation
 domain_encrypted
 ```
 
+### Reserved memory retention modes
+
+Reserved memory retention direction (ADR 0074), exported as `memoryRetentionModes` in `@pico/protocol`. How a memory item's retention is governed, referenced by the item's retention policy. `keep_until_deleted` is the system default (no automatic expiry; content lives until a user or controller deletes it); `delete_after_max_age` expires content once the item is older than the policy's maximum age, deleting through the tombstoned deletion path. A missing or unresolvable policy never deletes (fail-safe keep). No compliance or legal-hold semantics:
+
+```text
+keep_until_deleted
+delete_after_max_age
+```
+
 ### Reserved context-signal direction
 
 `ContextSignalLevel` and its deprecated alias `TrustedLevel` are TypeScript planning types only. They are not fields in the current Foundation event payload schema and do not create an authorization, membership or host-administration boundary.

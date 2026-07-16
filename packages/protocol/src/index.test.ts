@@ -31,6 +31,7 @@ import {
   memoryItemDeletionStates,
   referenceTargetResolutionStates,
   memoryContentPostures,
+  memoryRetentionModes,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -173,6 +174,7 @@ describe('Pico protocol types', () => {
     expect(memoryItemDeletionStates).toEqual(['active', 'deleted', 'tombstoned']);
     expect(referenceTargetResolutionStates).toEqual(['resolvable', 'deleted', 'unknown']);
     expect(memoryContentPostures).toEqual(['plaintext_foundation', 'domain_encrypted']);
+    expect(memoryRetentionModes).toEqual(['keep_until_deleted', 'delete_after_max_age']);
   });
 
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {
@@ -201,6 +203,7 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory item deletion states')).toEqual([...memoryItemDeletionStates]);
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved reference target resolution states')).toEqual([...referenceTargetResolutionStates]);
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory content postures')).toEqual([...memoryContentPostures]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory retention modes')).toEqual([...memoryRetentionModes]);
   });
 
   it('keeps public protocol capability docs aligned with runtime capability names', () => {

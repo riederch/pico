@@ -439,6 +439,19 @@ export const memoryContentPostures = [
 
 export type MemoryContentPosture = typeof memoryContentPostures[number];
 
+// how a memory item's retention is governed (ADR 0074), referenced by a memory
+// item's retention policy. `keep_until_deleted` is the system default: no
+// automatic expiry, content lives until a user or controller deletes it.
+// `delete_after_max_age` expires content once the item is older than the
+// policy's maximum age; expiry deletes through the tombstoned deletion path. A
+// missing or unresolvable policy never deletes (fail-safe keep).
+export const memoryRetentionModes = [
+  'keep_until_deleted',
+  'delete_after_max_age',
+] as const;
+
+export type MemoryRetentionMode = typeof memoryRetentionModes[number];
+
 // Reserved action/policy/audit protocol direction. The current Foundation API
 // exports these shapes for documentation and compatibility planning only; it
 // must not accept them on the generic event write path until dedicated product
