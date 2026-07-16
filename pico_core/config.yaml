@@ -25,3 +25,10 @@ ports:
 ports_description:
   3100/tcp: Pico Core internal ingress, API and WebSocket endpoint
 watchdog: "http://[HOST]:[PORT:3100]/health"
+# Memory Domain Content Keys live under /data/keys and must never share a
+# backup artifact with the database (ADR 0072 R6). Excluding them from add-on
+# backups is what makes future crypto-shredding real. Keys are not recoverable
+# from a data backup by design; recovery is a deliberate, separate key export.
+backup_exclude:
+  - keys/**
+  - keys

@@ -187,6 +187,14 @@ Do not restore over a running Pico Core database. The tested restore helper repl
 
 If the add-on fails after selecting an older version and reports an unsupported migration, keep the add-on stopped and restore the database backup created for that older version. The older Core is expected to refuse databases that contain migrations from a newer Core.
 
+## Memory keys and backup separation
+
+Pico Core reserves a key store at `/data/keys` for future memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per key version, ADR 0072). No memory content is encrypted yet, so the key store is normally empty; the store is still development/foundation data.
+
+The design rule, in force now, is that **keys and data must never share a backup artifact**. The add-on configuration excludes `/data/keys` from add-on backups (`backup_exclude`), and the SQLite backup helper copies database files only. At startup Pico Core refuses to run if `PICO_KEY_STORE_PATH` is set inside the SQLite backup directory or equal to the database directory.
+
+Once memory-content encryption ships, this separation is what makes deletion real: destroying a domain's keys makes its content unreadable, including in old backups that never contained the keys. The consequence is deliberate: **restoring a database backup without a separate copy of the keys leaves encrypted memory permanently unreadable.** Recovery will be an explicit, passphrase-protected key export you create and store separately from data backups, never an automatic part of a data restore. If you keep your own backups, back up `/data/keys` separately from `/data/pico.sqlite` and its backups.
+
 ## Current limitations
 
 - No Home Assistant entity integration yet.

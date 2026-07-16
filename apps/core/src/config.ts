@@ -6,6 +6,7 @@ export interface CoreConfig {
   port: number;
   databasePath: string;
   backupDirectory?: string;
+  keyStorePath?: string;
   deviceId: string;
   webRootPath?: string;
   wsAllowedOrigins?: string[];
@@ -43,6 +44,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     port: readPort(env.PICO_PORT),
     databasePath,
     backupDirectory: readNonEmptyString(env, 'PICO_BACKUP_DIRECTORY', join(dirname(databasePath), 'backups')),
+    keyStorePath: readNonEmptyString(env, 'PICO_KEY_STORE_PATH', join(dirname(databasePath), 'keys')),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),

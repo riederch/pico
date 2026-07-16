@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { dirname, join } from 'node:path';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -31,6 +32,7 @@ import { EventFactory } from './event-factory.js';
 import { EventStore, type EventCursor } from './event-store.js';
 import type { MemoryStore } from './memory-store.js';
 import { registerWebDashboard } from './static-web.js';
+import { assertKeyStoreSeparation } from './key-store.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
 const SERVICE_VERSION = '0.1.7';
@@ -96,6 +98,14 @@ interface RealtimeTicketRecord {
 }
 
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
+  // Fail loudly on a key/backup-separation misconfiguration before opening any
+  // resource (ADR 0072 R6). Nothing uses keys yet; this guards future encryption.
+  assertKeyStoreSeparation({
+    keyStorePath: config.keyStorePath ?? join(dirname(config.databasePath), 'keys'),
+    databasePath: config.databasePath,
+    backupDirectory: config.backupDirectory ?? join(dirname(config.databasePath), 'backups'),
+  });
+
   const app = Fastify({
     logger: {
       serializers: {

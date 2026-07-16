@@ -68,8 +68,8 @@ This ADR does not define or implement:
 
 Additive steps, all still behind the remaining ADR 0071 gate point (canonical AD test vectors):
 
-1. Key-store module: create/load/delete KEK version files with the mandated permissions, `PICO_KEY_STORE_PATH` config wiring, and the startup sanity guard against R6-violating paths.
-2. Add-on packaging: exclude the key-store directory from Supervisor backups in the add-on configuration, and document the separation rule and restore semantics in `pico_core/DOCS.md` (release-blocking for any encrypting release).
+1. Key-store module: create/load/delete KEK version files with the mandated permissions, `PICO_KEY_STORE_PATH` config wiring, and the startup sanity guard against R6-violating paths. (Done: `apps/core/src/key-store.ts` provides `KeyStore` (create/load/list/shred, 0700/0600, strict domain-id validation) and `assertKeyStoreSeparation`, run at `buildApp` startup; `PICO_KEY_STORE_PATH` defaults to `<data-dir>/keys`. Nothing populates the store in production - no encryption yet.)
+2. Add-on packaging: exclude the key-store directory from Supervisor backups in the add-on configuration, and document the separation rule and restore semantics in `pico_core/DOCS.md` (release-blocking for any encrypting release). (Done: `pico_core/config.yaml` `backup_exclude` covers `/data/keys`; `pico_core/DOCS.md` documents the separation rule and the unreadable-without-keys restore consequence.)
 3. Domain shred operation over the key store, with its audit trail.
 4. Passphrase-protected key export (age-style, memory-hard KDF) as a deliberate owner action — its own reviewed step.
 
