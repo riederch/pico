@@ -128,13 +128,14 @@ The current foundation event store is not a production memory, location history,
 
 ## Options
 
-The current foundation add-on exposes one user-configurable option:
+The current foundation add-on exposes these user-configurable options:
 
 | Option | Purpose |
 | --- | --- |
 | `pico_foundation_token` | Optional temporary token mapped to `PICO_FOUNDATION_TOKEN` for direct Foundation access. |
+| `memory_encryption` | Off by default. When `true`, maps to `PICO_MEMORY_ENCRYPTION` so recorded memory content is encrypted at rest under per-domain keys (ADR 0071). |
 
-The add-on entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured.
+The add-on entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. If `memory_encryption` is `true`, it sets `PICO_MEMORY_ENCRYPTION` unless that variable was already configured.
 
 The add-on entrypoint also sets `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` when Home Assistant's options file exists and no explicit access mode was already configured.
 
@@ -189,7 +190,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 
 ## Memory keys and backup separation
 
-Pico Core reserves a key store at `/data/keys` for future memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per key version, ADR 0072). No memory content is encrypted yet, so the key store is normally empty; the store is still development/foundation data.
+Pico Core keeps a key store at `/data/keys` for memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per KEK version, ADR 0072). With `memory_encryption` off (the default) no memory content is encrypted and the key store stays empty. With `memory_encryption` on, recorded memory content is encrypted at rest under a per-domain key (ADR 0071/0073), and that domain's key files appear here.
 
 The design rule, in force now, is that **keys and data must never share a backup artifact**. The add-on configuration excludes `/data/keys` from add-on backups (`backup_exclude`), and the SQLite backup helper copies database files only. At startup Pico Core refuses to run if `PICO_KEY_STORE_PATH` is set inside the SQLite backup directory or equal to the database directory.
 

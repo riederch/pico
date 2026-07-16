@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { MemoryContentPosture, MemoryItemDeletionState, ReferenceTargetResolutionState } from '@pico/protocol';
+import type { KeyEnvelopeRecord, MemoryContentCrypto } from './memory-content-crypto.js';
 
 /**
  * Deleteable memory store skeleton (ADR 0068).
@@ -20,9 +21,18 @@ export interface MemoryItemInput {
   controller: string;
   contentType: string;
   content: string;
+  /**
+   * How the content is stored. `plaintext_foundation` (default) stores the
+   * content as-is; `domain_encrypted` encrypts it under the domain key and
+   * requires a crypto provider (ADR 0070/0071). Omitted means foundation data.
+   */
+  contentPosture?: MemoryContentPosture;
   retentionPolicyRef?: string;
   sourceRef?: string;
 }
+
+/** Why an encrypted item's content could not be returned in plaintext. */
+export type MemoryContentUnavailableReason = 'key_shredded' | 'crypto_unavailable';
 
 export interface MemoryItem {
   memoryItemId: string;
@@ -31,6 +41,12 @@ export interface MemoryItem {
   controller: string;
   contentType: string;
   content?: string;
+  /**
+   * Set when {@link contentPosture} is `domain_encrypted` but the plaintext
+   * cannot be produced: the domain was crypto-shredded (`key_shredded`) or no
+   * crypto provider is attached (`crypto_unavailable`). `content` is omitted.
+   */
+  contentUnavailable?: MemoryContentUnavailableReason;
   retentionPolicyRef?: string;
   deletionState: MemoryItemDeletionState;
   contentPosture: MemoryContentPosture;
@@ -47,44 +63,75 @@ export type MemoryTombstoneResult = 'tombstoned' | 'not_found' | 'not_deleted';
 export type MemoryEnforceTombstoneResult = 'tombstoned' | 'not_found' | 'already_tombstoned';
 
 export class MemoryStore {
-  public constructor(private readonly db: Database.Database) {}
+  public constructor(
+    private readonly db: Database.Database,
+    private readonly crypto?: MemoryContentCrypto,
+  ) {}
 
   public create(input: MemoryItemInput): MemoryItem {
     assertMemoryItemInput(input);
 
-    const now = new Date().toISOString();
-    const result = this.db
-      .prepare(`
-        INSERT OR IGNORE INTO memory_item (
-          memory_item_id,
-          privacy_domain,
-          owner,
-          controller,
-          content_type,
-          content,
-          retention_policy_ref,
-          deletion_state,
-          source_ref,
-          created_at,
-          updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)
-      `)
-      .run(
-        input.memoryItemId,
-        input.privacyDomain,
-        input.owner,
-        input.controller,
-        input.contentType,
-        input.content,
-        input.retentionPolicyRef ?? null,
-        input.sourceRef ?? null,
-        now,
-        now,
-      );
-
-    if (result.changes === 0) {
-      throw new Error('Memory item id already exists.');
+    const posture: MemoryContentPosture = input.contentPosture ?? 'plaintext_foundation';
+    if (posture === 'domain_encrypted' && this.crypto === undefined) {
+      throw new Error('Cannot store domain_encrypted content without a crypto provider.');
     }
+
+    const now = new Date().toISOString();
+    const insert = this.db.transaction((): void => {
+      let storedContent = input.content;
+      let keyEnvelopeRef: string | null = null;
+
+      if (posture === 'domain_encrypted') {
+        const encrypted = this.crypto!.encryptForWrite({
+          memoryItemId: input.memoryItemId,
+          privacyDomain: input.privacyDomain,
+          contentType: input.contentType,
+          plaintext: input.content,
+        });
+        storedContent = encrypted.storedContent;
+        keyEnvelopeRef = encrypted.keyEnvelopeId;
+        this.insertKeyEnvelope(encrypted.envelope);
+      }
+
+      const result = this.db
+        .prepare(`
+          INSERT OR IGNORE INTO memory_item (
+            memory_item_id,
+            privacy_domain,
+            owner,
+            controller,
+            content_type,
+            content,
+            retention_policy_ref,
+            deletion_state,
+            content_posture,
+            key_envelope_ref,
+            source_ref,
+            created_at,
+            updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+        `)
+        .run(
+          input.memoryItemId,
+          input.privacyDomain,
+          input.owner,
+          input.controller,
+          input.contentType,
+          storedContent,
+          input.retentionPolicyRef ?? null,
+          posture,
+          keyEnvelopeRef,
+          input.sourceRef ?? null,
+          now,
+          now,
+        );
+
+      if (result.changes === 0) {
+        throw new Error('Memory item id already exists.');
+      }
+    });
+
+    insert();
 
     const created = this.getInDomain(input.memoryItemId, input.privacyDomain);
     if (created === undefined) {
@@ -99,7 +146,7 @@ export class MemoryStore {
       .prepare('SELECT * FROM memory_item WHERE memory_item_id = ? AND privacy_domain = ?')
       .get(memoryItemId, privacyDomain) as MemoryItemRow | undefined;
 
-    return row === undefined ? undefined : mapRow(row);
+    return row === undefined ? undefined : this.resolveContent(mapRow(row));
   }
 
   public listInDomain(privacyDomain: string): MemoryItem[] {
@@ -111,7 +158,57 @@ export class MemoryStore {
       `)
       .all(privacyDomain) as MemoryItemRow[];
 
-    return rows.map(mapRow);
+    return rows.map((row) => this.resolveContent(mapRow(row)));
+  }
+
+  /**
+   * Replaces the stored ciphertext of a `domain_encrypted` item with its
+   * decrypted plaintext, or marks it unavailable when the domain was
+   * crypto-shredded or no crypto provider is attached. Plaintext-foundation
+   * items pass through unchanged.
+   */
+  private resolveContent(item: MemoryItem): MemoryItem {
+    if (item.contentPosture !== 'domain_encrypted' || item.content === undefined) {
+      return item;
+    }
+
+    const { content: storedContent, ...withoutContent } = item;
+
+    if (this.crypto === undefined || item.keyEnvelopeRef === undefined) {
+      return { ...withoutContent, contentUnavailable: 'crypto_unavailable' };
+    }
+
+    const envelope = this.loadKeyEnvelope(item.keyEnvelopeRef);
+    if (envelope === undefined) {
+      return { ...withoutContent, contentUnavailable: 'key_shredded' };
+    }
+
+    const result = this.crypto.decryptForRead({
+      memoryItemId: item.memoryItemId,
+      privacyDomain: item.privacyDomain,
+      contentType: item.contentType,
+      storedContent,
+      envelope,
+    });
+
+    if (result.status === 'key_unavailable') {
+      return { ...withoutContent, contentUnavailable: 'key_shredded' };
+    }
+
+    return { ...withoutContent, content: result.plaintext };
+  }
+
+  /**
+   * Crypto-shreds a domain (ADR 0072): destroys its KEK versions so every
+   * `domain_encrypted` item in the domain becomes unreadable, including backup
+   * copies, subject to the ADR 0033 key-handling limits. Ciphertext rows stay.
+   */
+  public cryptoShredDomain(privacyDomain: string): { removed: number } {
+    if (this.crypto === undefined) {
+      throw new Error('Cannot crypto-shred without a crypto provider.');
+    }
+
+    return this.crypto.shredDomain(privacyDomain);
   }
 
   public deleteInDomain(memoryItemId: string, privacyDomain: string): MemoryDeleteResult {
@@ -134,6 +231,7 @@ export class MemoryStore {
         WHERE memory_item_id = ? AND privacy_domain = ?
       `)
       .run(new Date().toISOString(), memoryItemId, privacyDomain);
+    this.deleteKeyEnvelope(existing.keyEnvelopeRef);
 
     return 'deleted';
   }
@@ -193,8 +291,64 @@ export class MemoryStore {
         WHERE memory_item_id = ? AND privacy_domain = ?
       `)
       .run(new Date().toISOString(), memoryItemId, privacyDomain);
+    this.deleteKeyEnvelope(existing.keyEnvelopeRef);
 
     return 'tombstoned';
+  }
+
+  private insertKeyEnvelope(envelope: KeyEnvelopeRecord): void {
+    this.db
+      .prepare(`
+        INSERT INTO memory_key_envelope (
+          key_envelope_id,
+          memory_item_id,
+          domain_id,
+          suite,
+          kek_version,
+          wrap_nonce,
+          wrapped_dek,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        envelope.keyEnvelopeId,
+        envelope.memoryItemId,
+        envelope.domainId,
+        envelope.suite,
+        envelope.kekVersion,
+        envelope.wrapNonce,
+        envelope.wrappedDek,
+        envelope.createdAt,
+      );
+  }
+
+  private loadKeyEnvelope(keyEnvelopeId: string): KeyEnvelopeRecord | undefined {
+    const row = this.db
+      .prepare('SELECT * FROM memory_key_envelope WHERE key_envelope_id = ?')
+      .get(keyEnvelopeId) as KeyEnvelopeRow | undefined;
+
+    if (row === undefined) {
+      return undefined;
+    }
+
+    return {
+      keyEnvelopeId: row.key_envelope_id,
+      memoryItemId: row.memory_item_id,
+      domainId: row.domain_id,
+      suite: row.suite,
+      kekVersion: row.kek_version,
+      wrapNonce: row.wrap_nonce,
+      wrappedDek: row.wrapped_dek,
+      createdAt: row.created_at,
+    };
+  }
+
+  private deleteKeyEnvelope(keyEnvelopeId: string | undefined): void {
+    if (keyEnvelopeId === undefined) {
+      return;
+    }
+
+    this.db.prepare('DELETE FROM memory_key_envelope WHERE key_envelope_id = ?').run(keyEnvelopeId);
   }
 
   /**
@@ -211,6 +365,17 @@ export class MemoryStore {
 
     return item.deletionState === 'active' ? 'resolvable' : 'deleted';
   }
+}
+
+interface KeyEnvelopeRow {
+  key_envelope_id: string;
+  memory_item_id: string;
+  domain_id: string;
+  suite: string;
+  kek_version: number;
+  wrap_nonce: string;
+  wrapped_dek: string;
+  created_at: string;
 }
 
 interface MemoryItemRow {

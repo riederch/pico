@@ -207,6 +207,32 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0008_memory_key_envelope',
+    requiresBackup: false,
+    up(db) {
+      // Per-item DEK wrapped by the per-domain KEK (ADR 0071 R2, ADR 0032 key
+      // envelope). Holds ciphertext of the DEK plus the wrap nonce, suite and
+      // KEK version. Never holds a KEK: unwrapping needs the KEK from the
+      // separate key store (ADR 0072 R6), so this table stays in the database
+      // and its backups without weakening crypto-shredding.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_key_envelope (
+          key_envelope_id TEXT PRIMARY KEY,
+          memory_item_id TEXT NOT NULL,
+          domain_id TEXT NOT NULL,
+          suite TEXT NOT NULL,
+          kek_version INTEGER NOT NULL,
+          wrap_nonce TEXT NOT NULL,
+          wrapped_dek TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_memory_key_envelope_domain
+        ON memory_key_envelope (domain_id);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

@@ -11,6 +11,7 @@ import {
   type MigrationDefinition,
 } from './migrations.js';
 import { MemoryStore } from './memory-store.js';
+import type { MemoryContentCrypto } from './memory-content-crypto.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 
 export type AppendResult = PicoEventAppendResult;
@@ -48,20 +49,25 @@ export interface EventStoreOpenOptions {
   requireBackupBeforeMigration?: boolean;
   createBackup?: (databasePath: string, backupDirectory: string) => Promise<SqliteBackupResult>;
   migrationDefinitions?: readonly MigrationDefinition[];
+  /** Optional provider that lets {@link EventStore.memory} encrypt/decrypt domain_encrypted items (ADR 0071). */
+  memoryCrypto?: MemoryContentCrypto;
 }
 
 interface EventStoreConstructorOptions {
   runMigrations?: boolean;
   migrationDefinitions?: readonly MigrationDefinition[];
+  memoryCrypto?: MemoryContentCrypto;
 }
 
 export class EventStore {
   private readonly db: Database.Database;
+  private readonly memoryCrypto?: MemoryContentCrypto;
   private closed = false;
 
   public static async open(databasePath: string, options: EventStoreOpenOptions = {}): Promise<EventStore> {
     const store = new EventStore(databasePath, {
       runMigrations: false,
+      memoryCrypto: options.memoryCrypto,
     });
 
     try {
@@ -88,6 +94,7 @@ export class EventStore {
     mkdirSync(dirname(databasePath), { recursive: true });
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
+    this.memoryCrypto = options.memoryCrypto;
 
     if (options.runMigrations !== false) {
       runMigrations(this.db, {
@@ -217,11 +224,12 @@ export class EventStore {
     return mapPicoHomeClaimState(row);
   }
 
-  // Deleteable memory store skeleton (ADR 0068), sharing this store's database
-  // connection. It is not wired to any HTTP write path yet.
+  // Deleteable memory store (ADR 0068), sharing this store's database
+  // connection. When a crypto provider is attached (ADR 0071), it can store and
+  // read domain_encrypted items.
   public memory(): MemoryStore {
     this.ensureOpen();
-    return new MemoryStore(this.db);
+    return new MemoryStore(this.db, this.memoryCrypto);
   }
 
   /**

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the documented threat model and cryptographic direction for memory-store content at rest. It answers the ADR 0016 threat-model questions for this surface and decides the primitive suite in the dedicated, maximally reviewed step ADR 0070 required. It implements no cryptography: the decided suite becomes security-relevant only after the key-storage design (ADR 0033 realization) and canonicalization test vectors (ADR 0034) exist.
+Accepted as the documented threat model and cryptographic direction for memory-store content at rest. It answers the ADR 0016 threat-model questions for this surface and decides the primitive suite in the dedicated, maximally reviewed step ADR 0070 required. The security-relevance gate below is now met (AD vectors ADR 0073, key storage ADR 0072, round-trip/shred fixtures), and the suite is **implemented** as an off-by-default encrypt-on-write runtime (`PICO_MEMORY_ENCRYPTION`); the single-host scope stands and multi-device/sharing/passphrase work remains future.
 
 ## Context
 
@@ -97,13 +97,13 @@ Reasoning, per the ADR 0016 rule:
 
 ## Security-relevance gate
 
-The suite is decided, not yet security-relevant. Before any implementation may claim protection:
+The gate is now **met**; the three prerequisites before implementation could claim protection were:
 
-1. the canonical AD byte layout is specified with published test vectors (ADR 0034), including negative vectors for swapped IDs, domains and suites — **done** in ADR `0073-memory-content-ad-canonicalization-and-test-vectors.md` (length-prefixed binary AD, `pico.mem.ad.content.v1` / `pico.mem.ad.dek-wrap.v1`, authoritative accept/reject vectors);
-2. the key-storage design exists and satisfies R6 (ADR 0033 realization — designed by ADR `0072-memory-domain-key-storage-and-backup-separation.md`; its implementation steps remain open);
-3. encrypt/decrypt round-trip and shred behaviour are covered by fixtures before the `domain_encrypted` posture becomes writable.
+1. the canonical AD byte layout specified with published test vectors (ADR 0034), including negative vectors for swapped IDs, domains and suites — **done** in ADR `0073-memory-content-ad-canonicalization-and-test-vectors.md` (length-prefixed binary AD, `pico.mem.ad.content.v1` / `pico.mem.ad.dek-wrap.v1`, authoritative accept/reject vectors);
+2. the key-storage design exists and satisfies R6 (ADR 0033 realization — ADR `0072-memory-domain-key-storage-and-backup-separation.md`, with its `KeyStore` module and R6 startup guard implemented);
+3. encrypt/decrypt round-trip and shred behaviour covered by fixtures before the `domain_encrypted` posture becomes writable — **done** (`memory-content-crypto.test.ts`: round-trip, ciphertext-at-rest, AD-binding tamper, DEK isolation, random nonce, crypto-shred → unreadable).
 
-Until then the memory store stays plaintext-at-rest foundation data under the ADR 0070 rules, and nothing may advertise encryption.
+The `domain_encrypted` posture is therefore writable, gated behind the off-by-default `PICO_MEMORY_ENCRYPTION`. With encryption off the store stays plaintext-at-rest foundation data under the ADR 0070 rules.
 
 ## Non-goals
 
@@ -121,11 +121,11 @@ This ADR does not define or implement:
 
 Ordered additive steps, all deferred:
 
-1. Specify the canonical AD layout and seed an ADR 0034-style test-vector fixture family for `pico.suite.mem.v1` (accept + reject vectors). No runtime. **Layout and authoritative vectors: ADR 0073.** Seeding the on-disk fixture files from those vectors is a follow-up `high` step.
-2. Design key storage satisfying R6 for the Foundation/Home Assistant context (ADR 0033 realization). Concept step.
-3. Implement encrypt-on-write/decrypt-in-process behind the `domain_encrypted` content posture, gated on steps 1–2; the posture becomes writable only here.
-4. Implement the domain crypto-shred operation with its audit trail (ADR 0037-compatible: decisions and references, no content).
-5. Only after all of that: revisit the content read API under the ADR 0070 ordering.
+1. Specify the canonical AD layout and seed an ADR 0034-style test-vector fixture family for `pico.suite.mem.v1` (accept + reject vectors). **Done: ADR 0073 and the `docs/protocol/fixtures/memory-content-ad/` suite.**
+2. Design key storage satisfying R6 for the Foundation/Home Assistant context (ADR 0033 realization). **Done: ADR 0072, `KeyStore` module + R6 guard.**
+3. Implement encrypt-on-write/decrypt-in-process behind the `domain_encrypted` content posture, gated on steps 1–2; the posture becomes writable only here. **Done: `MemoryContentCrypto` (libsodium-wrappers-sumo, XChaCha20-Poly1305 content AEAD + DEK wrap under the per-domain KEK), per-item DEK/key-envelope table (migration `0008`), `MemoryStore` encrypt-on-write/decrypt-on-read, off-by-default `PICO_MEMORY_ENCRYPTION`.**
+4. Implement the domain crypto-shred operation with its audit trail (ADR 0037-compatible: decisions and references, no content). **Partly done: `MemoryStore.cryptoShredDomain` destroys the domain KEK versions so items become unreadable; a durable audit-event record for a shred is a follow-up.**
+5. Only after all of that: revisit the content read API under the ADR 0070 ordering. **Still deferred.**
 
 ## Relationship to other ADRs
 

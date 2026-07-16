@@ -1,6 +1,8 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import Database from 'better-sqlite3';
+import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   actionEventTypes,
@@ -17,6 +19,8 @@ import {
 } from '@pico/protocol';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
+import { KeyStore } from './key-store.js';
+import { MemoryContentCrypto } from './memory-content-crypto.js';
 
 const tempDirs: string[] = [];
 const RESERVED_EVENT_ERROR = 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.';
@@ -185,6 +189,7 @@ describe('Pico Home Core app', () => {
           { id: '0005_event_payload_posture', appliedAt: expect.any(String) },
           { id: '0006_memory_item_store', appliedAt: expect.any(String) },
           { id: '0007_memory_item_content_posture', appliedAt: expect.any(String) },
+          { id: '0008_memory_key_envelope', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -438,6 +443,51 @@ describe('Pico Home Core app', () => {
     const stored = verify.memory().getInDomain(event.payload.memoryItemId, 'domain-private');
     expect(stored?.content).toBe('A private note.');
     expect(stored?.deletionState).toBe('active');
+    verify.close();
+  });
+
+  it('encrypts recorded memory content at rest when memory encryption is enabled', async () => {
+    await sodium.ready;
+    const databasePath = createDatabasePath();
+    const keyStorePath = join(dirname(databasePath), 'keys');
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core', memoryEncryption: true });
+
+    const recorded = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: { privacyDomain: 'domain-private', contentType: 'text/plain', content: 'A private secret.', summary: 'a note' },
+      },
+    });
+    expect(recorded.statusCode).toBe(201);
+    const memoryItemId = recorded.json().event.payload.memoryItemId;
+    // The reference-only event still never carries the content.
+    expect('content' in recorded.json().event.payload).toBe(false);
+
+    // A privacy domain that is not a valid key-store domain id is rejected at write time.
+    const badDomain = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.recorded', payload: { privacyDomain: 'domain.private', contentType: 'text/plain', content: 'x' } },
+    });
+    expect(badDomain.statusCode).toBe(400);
+    expect(badDomain.json()).toEqual({ error: 'privacyDomain must match [a-zA-Z0-9_-]{1,128} when memory encryption is enabled.' });
+
+    await app.close();
+
+    // At rest the content is ciphertext, not the plaintext.
+    const raw = new Database(databasePath, { readonly: true });
+    const row = raw.prepare('SELECT content, content_posture FROM memory_item WHERE memory_item_id = ?').get(memoryItemId) as { content: string; content_posture: string };
+    raw.close();
+    expect(row.content_posture).toBe('domain_encrypted');
+    expect(row.content).not.toContain('A private secret.');
+
+    // A crypto-enabled store reading the same key store recovers the plaintext.
+    const crypto = new MemoryContentCrypto(sodium, new KeyStore(keyStorePath));
+    const verify = new EventStore(databasePath, { memoryCrypto: crypto });
+    expect(verify.memory().getInDomain(memoryItemId, 'domain-private')?.content).toBe('A private secret.');
     verify.close();
   });
 

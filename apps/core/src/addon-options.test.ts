@@ -63,6 +63,22 @@ describe('Home Assistant add-on options', () => {
     }
   });
 
+  it('maps memory_encryption to PICO_MEMORY_ENCRYPTION and leaves it unset otherwise', () => {
+    const enabled: Record<string, string | undefined> = {};
+    applyHomeAssistantAddonOptions(enabled, writeOptions({ memory_encryption: true }));
+    expect(enabled.PICO_MEMORY_ENCRYPTION).toBe('true');
+
+    for (const options of [{}, { memory_encryption: false }, { memory_encryption: null }]) {
+      const env: Record<string, string | undefined> = {};
+      applyHomeAssistantAddonOptions(env, writeOptions(options));
+      expect(env.PICO_MEMORY_ENCRYPTION).toBeUndefined();
+    }
+
+    const explicit: Record<string, string | undefined> = { PICO_MEMORY_ENCRYPTION: 'false' };
+    applyHomeAssistantAddonOptions(explicit, writeOptions({ memory_encryption: true }));
+    expect(explicit.PICO_MEMORY_ENCRYPTION).toBe('false');
+  });
+
   it('rejects invalid option files', () => {
     expect(() => applyHomeAssistantAddonOptions({}, writeRawOptions('not json')))
       .toThrow('Could not read Home Assistant add-on options');
@@ -72,6 +88,9 @@ describe('Home Assistant add-on options', () => {
 
     expect(() => applyHomeAssistantAddonOptions({}, writeOptions({ pico_foundation_token: 123 })))
       .toThrow('Home Assistant add-on option pico_foundation_token must be a string when provided.');
+
+    expect(() => applyHomeAssistantAddonOptions({}, writeOptions({ memory_encryption: 'yes' })))
+      .toThrow('Home Assistant add-on option memory_encryption must be a boolean when provided.');
   });
 });
 

@@ -7,6 +7,8 @@ export interface CoreConfig {
   databasePath: string;
   backupDirectory?: string;
   keyStorePath?: string;
+  /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
+  memoryEncryption?: boolean;
   deviceId: string;
   webRootPath?: string;
   wsAllowedOrigins?: string[];
@@ -45,6 +47,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     databasePath,
     backupDirectory: readNonEmptyString(env, 'PICO_BACKUP_DIRECTORY', join(dirname(databasePath), 'backups')),
     keyStorePath: readNonEmptyString(env, 'PICO_KEY_STORE_PATH', join(dirname(databasePath), 'keys')),
+    memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION'),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),
@@ -77,6 +80,22 @@ function readNonEmptyString(env: Environment, name: string, defaultValue: string
   }
 
   return value;
+}
+
+function readBooleanFlag(value: string | undefined, name: string): boolean {
+  if (value === undefined || value.trim() === '') {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  if (normalized === 'false' || normalized === '0') {
+    return false;
+  }
+
+  throw new Error(`${name} must be one of: true, false, 1, 0.`);
 }
 
 function readOptionalNonEmptyString(value: string | undefined, name: string): string | undefined {

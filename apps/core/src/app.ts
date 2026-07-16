@@ -27,12 +27,14 @@ import {
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
 } from '@pico/protocol';
+import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore, type EventCursor } from './event-store.js';
 import type { MemoryStore } from './memory-store.js';
 import { registerWebDashboard } from './static-web.js';
-import { assertKeyStoreSeparation } from './key-store.js';
+import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
+import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
 const SERVICE_VERSION = '0.1.7';
@@ -99,12 +101,22 @@ interface RealtimeTicketRecord {
 
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Fail loudly on a key/backup-separation misconfiguration before opening any
-  // resource (ADR 0072 R6). Nothing uses keys yet; this guards future encryption.
+  // resource (ADR 0072 R6).
+  const keyStorePath = config.keyStorePath ?? join(dirname(config.databasePath), 'keys');
   assertKeyStoreSeparation({
-    keyStorePath: config.keyStorePath ?? join(dirname(config.databasePath), 'keys'),
+    keyStorePath,
     databasePath: config.databasePath,
     backupDirectory: config.backupDirectory ?? join(dirname(config.databasePath), 'backups'),
   });
+
+  // Memory-content encryption is off by default: content stays plaintext
+  // foundation data (ADR 0070). When enabled, the domain_encrypted posture
+  // becomes usable (ADR 0071 suite, ADR 0073 AD, ADR 0072 key store).
+  let memoryCrypto: MemoryContentCrypto | undefined;
+  if (config.memoryEncryption === true) {
+    await sodium.ready;
+    memoryCrypto = new MemoryContentCrypto(sodium, new KeyStore(keyStorePath));
+  }
 
   const app = Fastify({
     logger: {
@@ -127,6 +139,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   const store = await EventStore.open(config.databasePath, {
     backupDirectory: config.backupDirectory,
+    memoryCrypto,
   });
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
@@ -293,6 +306,16 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       }
 
       const request_ = memoryRequest.request;
+
+      // A domain_encrypted item's privacy domain becomes a per-domain KEK file
+      // name, so it must satisfy the stricter key-store domain charset (ADR
+      // 0072) on top of the AD charset. Reject at write time (ADR 0073).
+      if (memoryCrypto !== undefined && !/^[a-zA-Z0-9_-]{1,128}$/.test(request_.privacyDomain)) {
+        return sendNoStore(reply.code(400), {
+          error: 'privacyDomain must match [a-zA-Z0-9_-]{1,128} when memory encryption is enabled.',
+        });
+      }
+
       const memoryItemId = `mem_${randomUUID()}`;
       const owner = request_.owner ?? request_.deviceId;
       store.memory().create({
@@ -302,6 +325,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         controller: request_.controller ?? owner,
         contentType: request_.contentType,
         content: request_.content,
+        ...(memoryCrypto === undefined ? {} : { contentPosture: 'domain_encrypted' as const }),
       });
 
       const recordedPayload: MemoryRecordedPayload = {

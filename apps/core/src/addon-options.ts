@@ -6,6 +6,7 @@ type Environment = Record<string, string | undefined>;
 
 interface HomeAssistantAddonOptions {
   pico_foundation_token?: unknown;
+  memory_encryption?: unknown;
 }
 
 export function applyHomeAssistantAddonOptions(env: Environment = process.env, optionsPath = DEFAULT_OPTIONS_PATH): void {
@@ -22,6 +23,12 @@ export function applyHomeAssistantAddonOptions(env: Environment = process.env, o
 
   if (token !== undefined && token.trim() !== '' && env.PICO_FOUNDATION_TOKEN === undefined) {
     env.PICO_FOUNDATION_TOKEN = token;
+  }
+
+  const memoryEncryption = readOptionalBooleanOption(options, 'memory_encryption');
+
+  if (memoryEncryption === true && env.PICO_MEMORY_ENCRYPTION === undefined) {
+    env.PICO_MEMORY_ENCRYPTION = 'true';
   }
 }
 
@@ -50,6 +57,20 @@ function readOptionalStringOption(options: HomeAssistantAddonOptions, name: keyo
 
   if (typeof value !== 'string') {
     throw new Error(`Home Assistant add-on option ${String(name)} must be a string when provided.`);
+  }
+
+  return value;
+}
+
+function readOptionalBooleanOption(options: HomeAssistantAddonOptions, name: keyof HomeAssistantAddonOptions): boolean | undefined {
+  const value = options[name];
+
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new Error(`Home Assistant add-on option ${String(name)} must be a boolean when provided.`);
   }
 
   return value;

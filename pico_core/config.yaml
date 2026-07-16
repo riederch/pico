@@ -18,8 +18,10 @@ panel_title: Pico Core
 panel_admin: true
 options:
   pico_foundation_token: null
+  memory_encryption: false
 schema:
   pico_foundation_token: password?
+  memory_encryption: bool?
 ports:
   3100/tcp: null
 ports_description:
