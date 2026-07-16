@@ -58,6 +58,7 @@ This document follows:
 - `../architecture/0064-pico-link-draft-replica-manifest-placeholder.md`
 - `../architecture/0065-pico-link-draft-packet-envelope-rejection-placeholder.md`
 - `../architecture/0066-pico-home-link-draft-home-membership-rejection-placeholder.md`
+- `../architecture/0073-memory-content-ad-canonicalization-and-test-vectors.md`
 
 ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. ADR 0052 defines the first constrained Pico Link lost-device revocation placeholder boundary. ADR 0053 defines the first constrained Pico Link revocation registry placeholder boundary. ADR 0054 defines the first constrained Pico Link key-envelope rotation placeholder boundary. ADR 0055 defines the first constrained Pico Link identity-key placeholder boundary. ADR 0056 defines the first constrained Pico Home Link Home Host Key placeholder boundary. ADR 0057 defines the first constrained Pico Home Link residency and eviction placeholder boundary. ADR 0058 defines the first constrained Model Delegation job-envelope scoping placeholder boundary. ADR 0059 defines the first constrained Model Delegation result-envelope provenance placeholder boundary. ADR 0060 defines the first constrained Model Delegation context-reference scoping placeholder boundary. ADR 0061 defines the first constrained Model Delegation provider-registry advertisement placeholder boundary. ADR 0062 defines the first constrained Pico Link signed event segment placeholder boundary. ADR 0063 deepens the Pico Link protected-payload placeholder with its first rejection boundaries. ADR 0064 defines the first constrained Pico Link replica manifest placeholder boundary. ADR 0065 deepens the Pico Link packet-envelope placeholder with its first relay-visible rejection boundaries beyond the plaintext leak. ADR 0066 deepens the Pico Home Link Home Membership placeholder with its first rejection boundaries beyond the Move-In Code boundary. This document turns those boundaries into a planned repository layout.
 
@@ -122,6 +123,10 @@ docs/protocol/fixtures/
     draft/
       positive/
       negative/
+  memory-content-ad/
+    pico.suite.mem.v1/
+      canonicalization-positive/
+      canonicalization-negative/
   pico-link/
     draft/
       packet-envelope/
@@ -153,6 +158,8 @@ docs/protocol/fixtures/
 ```
 
 This layout is implemented for the current Foundation event and realtime seed, the current draft Pico Link seed and the current draft Model Delegation seed. Other directories remain conceptual until fixture files are added.
+
+The `memory-content-ad/pico.suite.mem.v1/` family is specified but not yet seeded: ADR `0073-memory-content-ad-canonicalization-and-test-vectors.md` publishes the authoritative canonical associated-data byte layout and its accept/reject vectors (this is the first surface for which real canonical bytes are selected, per ADR 0034 and unlocking ADR 0047 for that scope only). Turning those vectors into on-disk fixture files here is a follow-up step; unlike the draft placeholders, these carry real canonical bytes and belong at `fixture_data` for the `canonicalization-positive` / `canonicalization-negative` families once seeded.
 
 ## Fixture stages
 

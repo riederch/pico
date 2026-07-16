@@ -162,6 +162,8 @@ Until these rules exist, examples remain non-normative and must not be used as c
 
 ADR `0047-draft-canonicalization-rejection-placeholder.md` narrows the draft-only parse/rejection placeholder boundary until canonical bytes, hash vectors, signature vectors and verifier behaviour exist.
 
+ADR `0073-memory-content-ad-canonicalization-and-test-vectors.md` is the first ADR to select canonical bytes under this framework: it defines the length-prefixed binary associated-data layout and authoritative accept/reject vectors for the `pico.suite.mem.v1` memory-content AEAD (the "protected-payload associated data" scope above), for that one internal at-rest surface only. It does not choose a wire canonicalization for any Pico Link or Pico Home Link object; those remain open here.
+
 ## JSON and binary boundary
 
 Pico may eventually choose JSON canonicalization, CBOR-style deterministic encoding, another reviewed deterministic encoding or a layered model.
