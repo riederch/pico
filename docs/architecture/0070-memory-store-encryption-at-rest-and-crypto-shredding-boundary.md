@@ -82,7 +82,7 @@ Consistent with ADR 0016, this ADR selects no cryptography:
 - no rotation, recovery or multi-device key distribution mechanics (ADR 0033)
 - no canonicalization or test vectors (ADR 0034)
 
-Selecting the concrete primitives is a separate, later decision that requires the ADR 0016 prerequisites and deserves the most careful review available; it must not be an incidental byproduct of an implementation step.
+Selecting the concrete primitives is a separate decision that requires the ADR 0016 prerequisites and deserves the most careful review available; it must not be an incidental byproduct of an implementation step. That dedicated step has since been taken: ADR `0071-memory-content-encryption-threat-model-and-primitive-direction.md` documents the threat model and decides the suite, with implementation still gated.
 
 ## Relationship to a future memory read API
 
@@ -110,7 +110,7 @@ Additive steps, in order (all deferred):
 
 1. Reserve the content-posture vocabulary (`plaintext_foundation`, `domain_encrypted`) in `@pico/protocol`, doc-bound like `payloadPostures`. (Done: `memoryContentPostures` is exported and doc-bound; no encryption behavior.)
 2. Add `content_posture` (default `plaintext_foundation`) and nullable `key_envelope_ref` columns to `memory_item` as an additive migration. (Done: migration `0007_memory_item_content_posture`; `MemoryStore` maps `contentPosture`/`keyEnvelopeRef`. All items are `plaintext_foundation` at rest; the column is metadata, not enforcement.)
-3. Define the concrete threat model, primitives, key storage, canonicalization and test vectors behind ADR 0016/0029/0032/0033/0034; select primitives in a dedicated, maximally reviewed step.
+3. Define the concrete threat model, primitives, key storage, canonicalization and test vectors behind ADR 0016/0029/0032/0033/0034; select primitives in a dedicated, maximally reviewed step. (Threat model and primitive suite decided: ADR `0071-memory-content-encryption-threat-model-and-primitive-direction.md` answers the ADR 0016 questions for this surface and fixes `pico.suite.mem.v1`; key storage, canonical AD vectors and everything runtime stay pending behind its security-relevance gate.)
 4. Implement domain encryption at rest and the crypto-shredding deletion upgrade.
 5. Only then design a protected content read API and retention enforcement.
 

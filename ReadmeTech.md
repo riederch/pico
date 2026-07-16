@@ -529,6 +529,7 @@ The project concept is persisted as architecture notes:
 | `0068-reference-targets-and-deleteable-memory-store.md` | reference target, deleteable memory store and deletion/tombstone concept |
 | `0069-recording-memory-items-and-reference-only-event-writes.md` | memory.recorded event and reference-only write model (content-splitting) |
 | `0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md` | memory encryption-at-rest target, crypto-shredding deletion and protection-before-exposure ordering |
+| `0071-memory-content-encryption-threat-model-and-primitive-direction.md` | memory encryption threat model and decided primitive suite (implementation gated) |
 
 Protocol documents:
 
@@ -648,7 +649,8 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0067 for the additive Foundation payload-posture path (realizing ADR 0014): the optional `payloadPosture` envelope field is implemented, persisted (migration `0005`) and writable-gated on `POST /api/events`; reference targets and a tombstone event type remain behind the deleteable memory store
 - Use ADR 0068 for the reference-target and deleteable memory store direction: the reference-target vocabulary, memory-store skeleton and `memory.tombstone` event are implemented; retention/deletion enforcement and privacy-domain encryption remain
 - Use ADR 0069 for making `reference_only` writable: memory-referencing uses a dedicated `memory.recorded` event (payload = reference target) and a content-splitting write flow; the write path, server-derived reference-only events and read-time `resolutionState` are implemented
-- Use ADR 0070 for the memory protection order: content is plaintext-at-rest foundation data today (deletion is live-store removal; backups may retain plaintext), the target is per-domain encryption with crypto-shredding deletion, and no content-exposing HTTP surface ships before protection; primitives stay unchosen behind the ADR 0016 prerequisites
+- Use ADR 0070 for the memory protection order: content is plaintext-at-rest foundation data today (deletion is live-store removal plus tombstone reconciliation on open; backups may retain plaintext), the target is per-domain encryption with crypto-shredding deletion, and no content-exposing HTTP surface ships before protection
+- Use ADR 0071 for the memory encryption decision: the ADR 0016 threat-model questions are answered for memory content at rest and the primitive suite `pico.suite.mem.v1` (libsodium XChaCha20-Poly1305, per-item DEKs under per-domain KEKs, canonical AD binding) is decided; implementation stays gated behind canonical AD test vectors (ADR 0034) and the key-storage design (ADR 0033), so nothing advertises encryption yet
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

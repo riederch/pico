@@ -210,6 +210,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0068-reference-targets-and-deleteable-memory-store.md`](../docs/architecture/0068-reference-targets-and-deleteable-memory-store.md) - reference target, deleteable memory store and deletion/tombstone concept
 - [`../docs/architecture/0069-recording-memory-items-and-reference-only-event-writes.md`](../docs/architecture/0069-recording-memory-items-and-reference-only-event-writes.md) - memory.recorded event and reference-only write model (content-splitting)
 - [`../docs/architecture/0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md`](../docs/architecture/0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md) - memory encryption-at-rest target, crypto-shredding deletion and protection-before-exposure ordering
+- [`../docs/architecture/0071-memory-content-encryption-threat-model-and-primitive-direction.md`](../docs/architecture/0071-memory-content-encryption-threat-model-and-primitive-direction.md) - memory encryption threat model and decided primitive suite (implementation gated)
 - [`../docs/release/versioning.md`](../docs/release/versioning.md) - release/versioning checklist
 - [`../docs/release/documentation-consistency.md`](../docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`../docs/protocol/public-surfaces.md`](../docs/protocol/public-surfaces.md) - public compatibility surfaces

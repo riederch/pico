@@ -60,6 +60,8 @@ ADR `0034-canonicalization-signature-inputs-and-test-vectors.md` defines canonic
 
 ADR `0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md` defines the memory-store-specific protection boundary: plaintext-at-rest content stays foundation data, per-domain encryption with crypto-shredding is the target, and no content-exposing surface ships before protection.
 
+ADR `0071-memory-content-encryption-threat-model-and-primitive-direction.md` answers the threat-model questions above for memory-store content at rest and decides the primitive suite (`pico.suite.mem.v1`, libsodium XChaCha20-Poly1305) in the required dedicated step; implementation stays gated behind the ADR 0033 key-storage design and ADR 0034 test vectors.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.
