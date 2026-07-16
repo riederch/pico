@@ -193,6 +193,20 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0007_memory_item_content_posture',
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE memory_item
+        ADD COLUMN content_posture TEXT NOT NULL DEFAULT 'plaintext_foundation'
+        CHECK (content_posture IN ('plaintext_foundation', 'domain_encrypted'));
+
+        ALTER TABLE memory_item
+        ADD COLUMN key_envelope_ref TEXT NULL;
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

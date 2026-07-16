@@ -255,6 +255,15 @@ deleted
 unknown
 ```
 
+### Reserved memory content postures
+
+Reserved memory-content protection direction (ADR 0070), exported as `memoryContentPostures` in `@pico/protocol`. Storage metadata for how a memory item's content is protected at rest, not an access decision. `plaintext_foundation` is the current state (content stored as plaintext, foundation/development data only); `domain_encrypted` is the target state (encrypted under a privacy-domain content key with a key-envelope reference). No encryption, key management or crypto-shredding exists yet:
+
+```text
+plaintext_foundation
+domain_encrypted
+```
+
 ### Reserved context-signal direction
 
 `ContextSignalLevel` and its deprecated alias `TrustedLevel` are TypeScript planning types only. They are not fields in the current Foundation event payload schema and do not create an authorization, membership or host-administration boundary.

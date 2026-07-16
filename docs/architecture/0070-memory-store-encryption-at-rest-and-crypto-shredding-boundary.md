@@ -108,8 +108,8 @@ This ADR does not define or implement:
 
 Additive steps, in order (all deferred):
 
-1. Reserve the content-posture vocabulary (`plaintext_foundation`, `domain_encrypted`) in `@pico/protocol`, doc-bound like `payloadPostures`.
-2. Add nullable `content_posture` (default `plaintext_foundation`) and `key_envelope_ref` columns to `memory_item` as an additive migration.
+1. Reserve the content-posture vocabulary (`plaintext_foundation`, `domain_encrypted`) in `@pico/protocol`, doc-bound like `payloadPostures`. (Done: `memoryContentPostures` is exported and doc-bound; no encryption behavior.)
+2. Add `content_posture` (default `plaintext_foundation`) and nullable `key_envelope_ref` columns to `memory_item` as an additive migration. (Done: migration `0007_memory_item_content_posture`; `MemoryStore` maps `contentPosture`/`keyEnvelopeRef`. All items are `plaintext_foundation` at rest; the column is metadata, not enforcement.)
 3. Define the concrete threat model, primitives, key storage, canonicalization and test vectors behind ADR 0016/0029/0032/0033/0034; select primitives in a dedicated, maximally reviewed step.
 4. Implement domain encryption at rest and the crypto-shredding deletion upgrade.
 5. Only then design a protected content read API and retention enforcement.

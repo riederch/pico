@@ -426,6 +426,19 @@ export interface MemoryItemReference {
   resolutionState: ReferenceTargetResolutionState;
 }
 
+// Reserved memory-content protection direction (ADR 0070). Storage metadata for
+// how a memory item's content is protected at rest, not an access decision:
+// `plaintext_foundation` is the current state (content stored as plaintext,
+// development/foundation data only); `domain_encrypted` is the target state
+// (content encrypted under a privacy-domain content key with a key-envelope
+// reference). No encryption, key management or crypto-shredding exists yet.
+export const memoryContentPostures = [
+  'plaintext_foundation',
+  'domain_encrypted',
+] as const;
+
+export type MemoryContentPosture = typeof memoryContentPostures[number];
+
 // Reserved action/policy/audit protocol direction. The current Foundation API
 // exports these shapes for documentation and compatibility planning only; it
 // must not accept them on the generic event write path until dedicated product

@@ -56,6 +56,7 @@ describe('MemoryStore', () => {
       content: 'A private note.',
       retentionPolicyRef: 'retain-30d',
       deletionState: 'active',
+      contentPosture: 'plaintext_foundation',
       sourceRef: 'event-1',
       createdAt: expect.any(String),
       updatedAt: expect.any(String),

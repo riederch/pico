@@ -184,6 +184,7 @@ describe('Pico Home Core app', () => {
           { id: '0004_pico_home_claim_state', appliedAt: expect.any(String) },
           { id: '0005_event_payload_posture', appliedAt: expect.any(String) },
           { id: '0006_memory_item_store', appliedAt: expect.any(String) },
+          { id: '0007_memory_item_content_posture', appliedAt: expect.any(String) },
         ],
       },
     });

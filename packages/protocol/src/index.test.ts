@@ -30,6 +30,7 @@ import {
   writablePayloadPostures,
   memoryItemDeletionStates,
   referenceTargetResolutionStates,
+  memoryContentPostures,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -171,6 +172,7 @@ describe('Pico protocol types', () => {
   it('exports reserved deleteable memory and reference target vocabulary', () => {
     expect(memoryItemDeletionStates).toEqual(['active', 'deleted', 'tombstoned']);
     expect(referenceTargetResolutionStates).toEqual(['resolvable', 'deleted', 'unknown']);
+    expect(memoryContentPostures).toEqual(['plaintext_foundation', 'domain_encrypted']);
   });
 
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {
@@ -198,6 +200,7 @@ describe('Pico protocol types', () => {
     expect(textFenceAfterHeading(publicSurfaces, '### Pico Home event direction')).toEqual([...picoHomeEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory item deletion states')).toEqual([...memoryItemDeletionStates]);
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved reference target resolution states')).toEqual([...referenceTargetResolutionStates]);
+    expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory content postures')).toEqual([...memoryContentPostures]);
   });
 
   it('keeps public protocol capability docs aligned with runtime capability names', () => {

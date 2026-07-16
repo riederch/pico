@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { MemoryItemDeletionState, ReferenceTargetResolutionState } from '@pico/protocol';
+import type { MemoryContentPosture, MemoryItemDeletionState, ReferenceTargetResolutionState } from '@pico/protocol';
 
 /**
  * Deleteable memory store skeleton (ADR 0068).
@@ -33,6 +33,8 @@ export interface MemoryItem {
   content?: string;
   retentionPolicyRef?: string;
   deletionState: MemoryItemDeletionState;
+  contentPosture: MemoryContentPosture;
+  keyEnvelopeRef?: string;
   sourceRef?: string;
   createdAt: string;
   updatedAt: string;
@@ -187,6 +189,8 @@ interface MemoryItemRow {
   content: string | null;
   retention_policy_ref: string | null;
   deletion_state: string;
+  content_posture: string;
+  key_envelope_ref: string | null;
   source_ref: string | null;
   created_at: string;
   updated_at: string;
@@ -202,6 +206,8 @@ function mapRow(row: MemoryItemRow): MemoryItem {
     ...(row.content === null ? {} : { content: row.content }),
     ...(row.retention_policy_ref === null ? {} : { retentionPolicyRef: row.retention_policy_ref }),
     deletionState: row.deletion_state as MemoryItemDeletionState,
+    contentPosture: row.content_posture as MemoryContentPosture,
+    ...(row.key_envelope_ref === null ? {} : { keyEnvelopeRef: row.key_envelope_ref }),
     ...(row.source_ref === null ? {} : { sourceRef: row.source_ref }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,

@@ -238,6 +238,10 @@ describe('restoreSqliteBackup', () => {
         id: '0006_memory_item_store',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0007_memory_item_content_posture',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();
