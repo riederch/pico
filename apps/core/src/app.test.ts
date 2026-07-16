@@ -827,6 +827,15 @@ describe('Pico Home Core app', () => {
       expect(response.json()).toEqual({ error: RESERVED_EVENT_ERROR });
     }
 
+    // The server-synthesized crypto-shred audit event cannot be forged by a client.
+    const shredForge = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'memory.domain_shredded', payload: { privacyDomain: 'domain-private', removedKeyVersions: 1 } },
+    });
+    expect(shredForge.statusCode).toBe(400);
+    expect(shredForge.json()).toEqual({ error: RESERVED_EVENT_ERROR });
+
     await app.close();
   });
 

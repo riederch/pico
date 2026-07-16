@@ -6,9 +6,20 @@ export const foundationEventTypes = [
   'avatar.state_changed',
   'memory.recorded',
   'memory.tombstone',
+  'memory.domain_shredded',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
+
+// Foundation event types the server synthesizes itself and never accepts on the
+// client write path (a client must not forge them). `memory.domain_shredded` is
+// the crypto-shred audit record (ADR 0071 step 4): it is appended by the shred
+// operation, not by `POST /api/events`.
+export const serverSynthesizedFoundationEventTypes = [
+  'memory.domain_shredded',
+] as const satisfies readonly FoundationEventType[];
+
+export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
 
 export type DeviceRegisteredPayload = Record<string, never>;
 
@@ -216,6 +227,17 @@ export interface MemoryTombstonePayload {
   reason?: string;
 }
 
+// Append-only crypto-shred audit record for a privacy domain (ADR 0071 step 4,
+// ADR 0037 audit style: a decision and references, never content or key
+// material). It records which domain was shredded, how many KEK versions were
+// destroyed and an optional reason. The actor and time live on the event
+// envelope (deviceId, wallTime).
+export interface MemoryDomainShreddedPayload {
+  privacyDomain: string;
+  removedKeyVersions: number;
+  reason?: string;
+}
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -223,7 +245,8 @@ export type FoundationEventPayload =
   | MessageCreatedPayload
   | AvatarStateChangedPayload
   | MemoryRecordedPayload
-  | MemoryTombstonePayload;
+  | MemoryTombstonePayload
+  | MemoryDomainShreddedPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -331,6 +354,34 @@ export function validateFoundationEventPayload(
       payload: {
         memoryItemId: payload.memoryItemId,
         privacyDomain: payload.privacyDomain,
+        ...(payload.reason === undefined ? {} : { reason: payload.reason }),
+      },
+    };
+  }
+
+  if (type === 'memory.domain_shredded') {
+    const extraKey = firstUnexpectedKey(payload, ['privacyDomain', 'removedKeyVersions', 'reason']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `memory.domain_shredded payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isNonEmptyString(payload.privacyDomain, 256)) {
+      return { ok: false, error: 'memory.domain_shredded payload requires privacyDomain.' };
+    }
+
+    if (typeof payload.removedKeyVersions !== 'number' || !Number.isInteger(payload.removedKeyVersions) || payload.removedKeyVersions < 0) {
+      return { ok: false, error: 'memory.domain_shredded removedKeyVersions must be a non-negative integer.' };
+    }
+
+    if (payload.reason !== undefined && !isNonEmptyString(payload.reason, 1_000)) {
+      return { ok: false, error: 'memory.domain_shredded reason must be a non-empty string when provided.' };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        privacyDomain: payload.privacyDomain,
+        removedKeyVersions: payload.removedKeyVersions,
         ...(payload.reason === undefined ? {} : { reason: payload.reason }),
       },
     };

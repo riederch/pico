@@ -24,6 +24,7 @@ import {
   avatarStatusColors,
   deviceSeenStatuses,
   foundationEventTypes,
+  serverSynthesizedFoundationEventTypes,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
   payloadPostures,
@@ -53,7 +54,9 @@ describe('Pico protocol types', () => {
       'avatar.state_changed',
       'memory.recorded',
       'memory.tombstone',
+      'memory.domain_shredded',
     ]);
+    expect(serverSynthesizedFoundationEventTypes).toEqual(['memory.domain_shredded']);
 
     expect(actionEventTypes).toContain('action.requested');
     expect(actionEventTypes).toContain('pico_rules.decision_created');
@@ -135,6 +138,22 @@ describe('Pico protocol types', () => {
     expect(validateFoundationEventPayload('memory.tombstone', { memoryItemId: 'mem-1', privacyDomain: 'domain-private', content: 'secret' })).toEqual({
       ok: false,
       error: 'memory.tombstone payload has unexpected field: content.',
+    });
+    expect(validateFoundationEventPayload('memory.domain_shredded', { privacyDomain: 'domain-private', removedKeyVersions: 2 })).toEqual({
+      ok: true,
+      payload: { privacyDomain: 'domain-private', removedKeyVersions: 2 },
+    });
+    expect(validateFoundationEventPayload('memory.domain_shredded', { privacyDomain: 'domain-private', removedKeyVersions: 1, reason: 'device loss' })).toEqual({
+      ok: true,
+      payload: { privacyDomain: 'domain-private', removedKeyVersions: 1, reason: 'device loss' },
+    });
+    expect(validateFoundationEventPayload('memory.domain_shredded', { privacyDomain: 'domain-private', removedKeyVersions: -1 })).toEqual({
+      ok: false,
+      error: 'memory.domain_shredded removedKeyVersions must be a non-negative integer.',
+    });
+    expect(validateFoundationEventPayload('memory.domain_shredded', { privacyDomain: 'domain-private', removedKeyVersions: 1, content: 'secret' })).toEqual({
+      ok: false,
+      error: 'memory.domain_shredded payload has unexpected field: content.',
     });
   });
 

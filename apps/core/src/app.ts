@@ -6,6 +6,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   validateFoundationEventPayload,
   foundationEventTypes,
+  serverSynthesizedFoundationEventTypes,
   payloadPostures,
   picoEventTypes,
   protocolCapabilities,
@@ -51,7 +52,10 @@ const RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 const REALTIME_TICKET_TTL_MS = 30_000;
 const MAX_OUTSTANDING_REALTIME_TICKETS = 128;
 
-const writableEventTypes = new Set<FoundationEventType>(foundationEventTypes);
+const serverOnlyEventTypes = new Set<FoundationEventType>(serverSynthesizedFoundationEventTypes);
+const writableEventTypes = new Set<FoundationEventType>(
+  foundationEventTypes.filter((type) => !serverOnlyEventTypes.has(type)),
+);
 const knownEventTypes = new Set<PicoEventType>(picoEventTypes);
 
 interface IncomingEventBody {
