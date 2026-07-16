@@ -182,6 +182,7 @@ In particular:
 - memory.recorded and reference-only write language must remain consistent with `0068` and `0069`
 - memory encryption-at-rest and crypto-shredding language must remain consistent with `0016`, `0033` and `0070`
 - memory encryption threat-model and primitive-suite language must remain consistent with `0016`, `0032`, `0034`, `0070` and `0071`
+- memory key-storage, backup-separation and key-recovery language must remain consistent with `0033`, `0071` and `0072`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

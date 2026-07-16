@@ -213,6 +213,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0069-recording-memory-items-and-reference-only-event-writes.md`](docs/architecture/0069-recording-memory-items-and-reference-only-event-writes.md) - memory.recorded event and reference-only write model (content-splitting)
 - [`docs/architecture/0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md`](docs/architecture/0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md) - memory encryption-at-rest target, crypto-shredding deletion and protection-before-exposure ordering
 - [`docs/architecture/0071-memory-content-encryption-threat-model-and-primitive-direction.md`](docs/architecture/0071-memory-content-encryption-threat-model-and-primitive-direction.md) - memory encryption threat model and decided primitive suite (implementation gated)
+- [`docs/architecture/0072-memory-domain-key-storage-and-backup-separation.md`](docs/architecture/0072-memory-domain-key-storage-and-backup-separation.md) - key storage for memory domain keys: keys and data never share a backup artifact
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

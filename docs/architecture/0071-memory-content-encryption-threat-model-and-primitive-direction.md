@@ -100,7 +100,7 @@ Reasoning, per the ADR 0016 rule:
 The suite is decided, not yet security-relevant. Before any implementation may claim protection:
 
 1. the canonical AD byte layout is specified with published test vectors (ADR 0034), including negative vectors for swapped IDs, domains and suites;
-2. the key-storage design exists and satisfies R6 (ADR 0033 realization);
+2. the key-storage design exists and satisfies R6 (ADR 0033 realization — designed by ADR `0072-memory-domain-key-storage-and-backup-separation.md`; its implementation steps remain open);
 3. encrypt/decrypt round-trip and shred behaviour are covered by fixtures before the `domain_encrypted` posture becomes writable.
 
 Until then the memory store stays plaintext-at-rest foundation data under the ADR 0070 rules, and nothing may advertise encryption.
