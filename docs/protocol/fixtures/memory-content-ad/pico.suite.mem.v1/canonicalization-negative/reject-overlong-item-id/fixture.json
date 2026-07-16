@@ -1,0 +1,23 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-negative.reject-overlong-item-id",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-negative",
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "case": "a memoryItemId longer than 1024 bytes is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "reason": "field_too_long",
+    "errorCategory": "canonicalization_error"
+  },
+  "adr": "0073",
+  "notes": "The per-field length cap keeps the construction bounded. ADR 0073 vector; not runtime, not a compatibility claim."
+}

@@ -294,6 +294,7 @@ describe('Pico protocol types', () => {
     expect([...fixturePaths].sort()).toEqual(listFixtureDirectories('docs/protocol/fixtures')
       .filter((fixturePath) => !fixturePath.startsWith('pico-link/draft/'))
       .filter((fixturePath) => !fixturePath.startsWith('model-delegation/draft/'))
+      .filter((fixturePath) => !fixturePath.startsWith('memory-content-ad/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
@@ -341,6 +342,108 @@ describe('Pico protocol types', () => {
         expectCurrentFoundationRealtimeFixture(input, inputType, expectBlock, family);
       } else {
         throw new Error(`Unexpected fixture surface: ${surface}`);
+      }
+    }
+  });
+
+  it('keeps memory-content AD vectors byte-exact and aligned with ADR 0073', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/memory-content-ad/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0073-memory-content-ad-canonicalization-and-test-vectors.md',
+    ).replace(/\s+/g, '');
+
+    expect(stringField(suite, 'schema')).toBe('pico.mem-ad.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.memory-content-ad.pico_suite_mem_v1');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'suite')).toBe('pico.suite.mem.v1');
+    expect(stringField(suite, 'surface')).toBe('memory-content-ad');
+    expect(stringArrayField(suite, 'families')).toEqual(['canonicalization-positive', 'canonicalization-negative']);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('authoritative-ad-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+
+    expect([...fixturePaths].sort()).toEqual(
+      listFixtureDirectories('docs/protocol/fixtures/memory-content-ad').sort(),
+    );
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current memory-content AD fixtures')).toEqual([
+      'memory-content-ad/suite.json',
+      ...fixturePaths.map((fixturePath) => `memory-content-ad/${fixturePath}/`),
+    ]);
+
+    const acceptedHexByCase = new Map<string, string>();
+    const relationships: { caseName: string; mustDifferFrom?: string; pairsWith?: string }[] = [];
+
+    for (const fixturePath of fixturePaths) {
+      const parts = fixturePath.split('/');
+      expect(parts.length).toBe(3);
+      const [suiteSegment, family, caseName] = parts;
+      expect(suiteSegment).toBe('pico.suite.mem.v1');
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      const base = `docs/protocol/fixtures/memory-content-ad/${fixturePath}`;
+      const fixture = readRepoJsonObject(`${base}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const input = readRepoJsonObject(`${base}/input.json`);
+      const expectBlock = recordField(fixture, 'expect');
+
+      expect(stringField(fixture, 'schema')).toBe('pico.mem-ad.vector');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(`memory-content-ad.pico_suite_mem_v1.${family}.${caseName}`);
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'suite')).toBe('pico.suite.mem.v1');
+      expect(stringField(fixture, 'surface')).toBe('memory-content-ad');
+      expect(stringField(fixture, 'family')).toBe(family);
+      expect(stringField(fixture, 'adr')).toBe('0073');
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toBeTruthy();
+      expect(stringField(source, 'encoding')).toBe('fields');
+      expect(stringField(source, 'file')).toBe('input.json');
+
+      const adFamily = stringField(fixture, 'adFamily');
+      expect(['content', 'dek-wrap']).toContain(adFamily);
+      const construction = adFamily === 'content' ? 'pico.mem.ad.content.v1' : 'pico.mem.ad.dek-wrap.v1';
+      expect(stringField(fixture, 'construction')).toBe(construction);
+      expect(stringField(input, 'adFamily')).toBe(adFamily);
+      expect(stringField(input, 'construction')).toBe(construction);
+      const fields = recordField(input, 'fields');
+
+      const build = stringField(expectBlock, 'build');
+      if (build === 'accept') {
+        const recomputed = buildMemoryContentAd(adFamily, fields);
+        const hex = recomputed.toString('hex');
+        expect(hex).toBe(stringField(expectBlock, 'canonicalAdHex'));
+        expect(recomputed.length).toBe(numberField(expectBlock, 'canonicalAdLen'));
+        // Tie the fixture to the independently reviewed ADR: its bytes must be published there.
+        expect(adrNoWhitespace).toContain(hex);
+        acceptedHexByCase.set(caseName, hex);
+        relationships.push({
+          caseName,
+          mustDifferFrom: optionalStringField(expectBlock, 'mustDifferFrom'),
+          pairsWith: optionalStringField(expectBlock, 'pairsWith'),
+        });
+      } else {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'errorCategory')).toBe('canonicalization_error');
+        const reason = stringField(expectBlock, 'reason');
+        expect(['empty_field', 'invalid_field_charset', 'field_too_long']).toContain(reason);
+        expect(() => buildMemoryContentAd(adFamily, fields)).toThrow(reason);
+      }
+    }
+
+    // Bind-difference and injectivity: referenced cases exist and produce different bytes.
+    for (const { caseName, mustDifferFrom, pairsWith } of relationships) {
+      for (const other of [mustDifferFrom, pairsWith]) {
+        if (other === undefined) {
+          continue;
+        }
+        expect(acceptedHexByCase.has(other)).toBe(true);
+        expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(other));
       }
     }
   });
@@ -2166,6 +2269,59 @@ function stringField(source: Record<string, unknown>, field: string): string {
   }
 
   return value;
+}
+
+function optionalStringField(source: Record<string, unknown>, field: string): string | undefined {
+  const value = source[field];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new Error(`${field} must be a string when present.`);
+  }
+
+  return value;
+}
+
+/**
+ * Independent re-implementation of the ADR 0073 canonical associated-data
+ * construction, written from the ADR prose (not shared with any runtime): each
+ * element is U32BE(len) || bytes, the domain-separation label is element 0, the
+ * field order is fixed per family, and field values are restricted to the ASCII
+ * token charset with a 1..1024-byte length. It rebuilds each fixture's bytes so
+ * the published hex cannot silently drift from the construction it claims.
+ */
+function buildMemoryContentAd(adFamily: string, fields: Record<string, unknown>): Buffer {
+  const order = adFamily === 'content'
+    ? ['suite', 'memoryItemId', 'privacyDomain', 'contentType']
+    : ['suite', 'keyEnvelopeId', 'domainId', 'memoryItemId'];
+  const label = adFamily === 'content' ? 'pico.mem.ad.content.v1' : 'pico.mem.ad.dek-wrap.v1';
+  const charset = /^[A-Za-z0-9._:/+-]+$/;
+
+  const element = (value: string): Buffer => {
+    const bytes = Buffer.from(value, 'utf8');
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(bytes.length, 0);
+    return Buffer.concat([length, bytes]);
+  };
+
+  const parts = [element(label)];
+  for (const name of order) {
+    const value = stringField(fields, name);
+    const bytes = Buffer.from(value, 'utf8');
+    if (bytes.length === 0) {
+      throw new Error('empty_field');
+    }
+    if (bytes.length > 1024) {
+      throw new Error('field_too_long');
+    }
+    if (!charset.test(value)) {
+      throw new Error('invalid_field_charset');
+    }
+    parts.push(element(value));
+  }
+
+  return Buffer.concat(parts);
 }
 
 function numberField(source: Record<string, unknown>, field: string): number {

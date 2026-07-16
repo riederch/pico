@@ -1,0 +1,10 @@
+{
+  "adFamily": "dek-wrap",
+  "construction": "pico.mem.ad.dek-wrap.v1",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "keyEnvelopeId": "kenv_01hzx8m9q4rt5v",
+    "domainId": "domain-private",
+    "memoryItemId": "mem_01hzx8m9q4rt5v"
+  }
+}

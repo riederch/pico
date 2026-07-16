@@ -1,0 +1,23 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-positive.dek-wrap-typical",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-positive",
+  "adFamily": "dek-wrap",
+  "construction": "pico.mem.ad.dek-wrap.v1",
+  "case": "DEK-wrap AD for the same item",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "canonicalAdHex": "000000177069636f2e6d656d2e61642e64656b2d777261702e7631000000117069636f2e73756974652e6d656d2e7631000000136b656e765f3031687a78386d397134727435760000000e646f6d61696e2d70726976617465000000126d656d5f3031687a78386d39713472743576",
+    "canonicalAdLen": 111
+  },
+  "adr": "0073",
+  "notes": "The DEK-wrap family binds the key-envelope id, domain and item under its own construction label. ADR 0073 vector; not runtime, not a compatibility claim."
+}

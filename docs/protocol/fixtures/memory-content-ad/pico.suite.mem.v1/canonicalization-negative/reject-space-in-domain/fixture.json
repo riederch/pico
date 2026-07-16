@@ -1,0 +1,23 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-negative.reject-space-in-domain",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-negative",
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "case": "a space in privacyDomain is outside the AD token charset",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "reason": "invalid_field_charset",
+    "errorCategory": "canonicalization_error"
+  },
+  "adr": "0073",
+  "notes": "AD field values are restricted to [A-Za-z0-9._:/+-]; a space is rejected. ADR 0073 vector; not runtime, not a compatibility claim."
+}

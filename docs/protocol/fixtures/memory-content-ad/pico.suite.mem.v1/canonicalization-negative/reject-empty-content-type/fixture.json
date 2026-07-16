@@ -1,0 +1,23 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-negative.reject-empty-content-type",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-negative",
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "case": "empty contentType is rejected before any AD is produced",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "reason": "empty_field",
+    "errorCategory": "canonicalization_error"
+  },
+  "adr": "0073",
+  "notes": "Every AD field must be non-empty. ADR 0073 vector; not runtime, not a compatibility claim."
+}

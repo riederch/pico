@@ -1,0 +1,24 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-negative.content-suite-v2",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-negative",
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "case": "same as content-typical but a downgraded suite value",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "canonicalAdHex": "000000167069636f2e6d656d2e61642e636f6e74656e742e7631000000117069636f2e73756974652e6d656d2e7632000000126d656d5f3031687a78386d397134727435760000000e646f6d61696e2d707269766174650000000a746578742f706c61696e",
+    "canonicalAdLen": 101,
+    "mustDifferFrom": "content-typical"
+  },
+  "adr": "0073",
+  "notes": "Canonicalizes successfully; the negative is byte-inequality vs content-typical, so a suite downgrade fails authentication (ADR 0071 R3). ADR 0073 vector; not runtime, not a compatibility claim."
+}

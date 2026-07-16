@@ -1,0 +1,33 @@
+{
+  "schema": "pico.mem-ad.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.memory-content-ad.pico_suite_mem_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-ad-vectors",
+  "disclaimer": "Authoritative associated-data byte vectors for ADR 0073. Not a runner, not a runtime, not an L4 compatibility basis and no commercial permission.",
+  "fixtures": [
+    "pico.suite.mem.v1/canonicalization-positive/content-typical",
+    "pico.suite.mem.v1/canonicalization-positive/content-markdown",
+    "pico.suite.mem.v1/canonicalization-positive/dek-wrap-typical",
+    "pico.suite.mem.v1/canonicalization-positive/content-inject-a",
+    "pico.suite.mem.v1/canonicalization-positive/content-inject-b",
+    "pico.suite.mem.v1/canonicalization-negative/content-domain-swap",
+    "pico.suite.mem.v1/canonicalization-negative/content-suite-v2",
+    "pico.suite.mem.v1/canonicalization-negative/reject-empty-content-type",
+    "pico.suite.mem.v1/canonicalization-negative/reject-space-in-domain",
+    "pico.suite.mem.v1/canonicalization-negative/reject-nonascii-item-id",
+    "pico.suite.mem.v1/canonicalization-negative/reject-overlong-item-id"
+  ],
+  "notes": "Authoritative canonical AD vectors for pico.suite.mem.v1 (ADR 0073). These carry real canonical bytes, unlike the draft-only placeholders. They are not a published conformance suite."
+}

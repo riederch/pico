@@ -37,6 +37,25 @@ foundation-realtime/v0.1.7/parse-negative/event-created-invalid-payload/
 foundation-realtime/v0.1.7/parse-negative/pico-link-packet-not-foundation-realtime/
 ```
 
+## Current memory-content AD fixtures
+
+These fixtures carry the authoritative canonical associated-data byte vectors for the `pico.suite.mem.v1` memory-content AEAD (ADR 0073). Unlike the draft placeholders they contain real canonical bytes; they are in their own suite and are not part of the Foundation seed suite.
+
+```text
+memory-content-ad/suite.json
+memory-content-ad/pico.suite.mem.v1/canonicalization-positive/content-typical/
+memory-content-ad/pico.suite.mem.v1/canonicalization-positive/content-markdown/
+memory-content-ad/pico.suite.mem.v1/canonicalization-positive/dek-wrap-typical/
+memory-content-ad/pico.suite.mem.v1/canonicalization-positive/content-inject-a/
+memory-content-ad/pico.suite.mem.v1/canonicalization-positive/content-inject-b/
+memory-content-ad/pico.suite.mem.v1/canonicalization-negative/content-domain-swap/
+memory-content-ad/pico.suite.mem.v1/canonicalization-negative/content-suite-v2/
+memory-content-ad/pico.suite.mem.v1/canonicalization-negative/reject-empty-content-type/
+memory-content-ad/pico.suite.mem.v1/canonicalization-negative/reject-space-in-domain/
+memory-content-ad/pico.suite.mem.v1/canonicalization-negative/reject-nonascii-item-id/
+memory-content-ad/pico.suite.mem.v1/canonicalization-negative/reject-overlong-item-id/
+```
+
 ## Current draft Pico Link fixtures
 
 These fixtures are in a separate draft suite and are not part of the Foundation seed suite.

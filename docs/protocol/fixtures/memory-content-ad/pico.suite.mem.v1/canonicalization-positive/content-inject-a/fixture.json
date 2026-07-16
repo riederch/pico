@@ -1,0 +1,24 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-positive.content-inject-a",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-positive",
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "case": "injectivity pair member A (fields ab | c | t)",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "canonicalAdHex": "000000167069636f2e6d656d2e61642e636f6e74656e742e7631000000117069636f2e73756974652e6d656d2e763100000002616200000001630000000174",
+    "canonicalAdLen": 63,
+    "pairsWith": "content-inject-b"
+  },
+  "adr": "0073",
+  "notes": "With content-inject-b, both are length 63 but differ, proving length prefixing prevents delimiter collisions. ADR 0073 vector; not runtime, not a compatibility claim."
+}

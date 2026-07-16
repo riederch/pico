@@ -1,0 +1,10 @@
+{
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "memoryItemId": "mem_x",
+    "privacyDomain": "domain private",
+    "contentType": "text/plain"
+  }
+}

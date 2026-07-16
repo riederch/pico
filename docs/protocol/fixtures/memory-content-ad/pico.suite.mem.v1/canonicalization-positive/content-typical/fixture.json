@@ -1,0 +1,23 @@
+{
+  "schema": "pico.mem-ad.vector",
+  "schemaVersion": 1,
+  "fixtureId": "memory-content-ad.pico_suite_mem_v1.canonicalization-positive.content-typical",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "memory-content-ad",
+  "family": "canonicalization-positive",
+  "adFamily": "content",
+  "construction": "pico.mem.ad.content.v1",
+  "case": "content AD for a typical private text note",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "canonicalAdHex": "000000167069636f2e6d656d2e61642e636f6e74656e742e7631000000117069636f2e73756974652e6d656d2e7631000000126d656d5f3031687a78386d397134727435760000000e646f6d61696e2d707269766174650000000a746578742f706c61696e",
+    "canonicalAdLen": 101
+  },
+  "adr": "0073",
+  "notes": "Baseline content AD. Referenced by the bind-difference negatives. ADR 0073 vector; not runtime, not a compatibility claim."
+}
