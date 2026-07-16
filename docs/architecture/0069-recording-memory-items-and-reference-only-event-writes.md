@@ -121,6 +121,10 @@ This ADR refines:
 - `0068-reference-targets-and-deleteable-memory-store.md`
 - `0067-foundation-payload-posture-reference-targets-and-tombstones.md`
 
+It is refined by:
+
+- `0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md`, which bounds how recorded content is protected at rest and orders protection before any content-exposing read API
+
 It stays consistent with and below:
 
 - `0011-privacy-security-and-audit-model.md`

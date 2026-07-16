@@ -180,6 +180,7 @@ In particular:
 - Foundation payload-posture, reference-target and tombstone language must remain consistent with `0014` and `0067`
 - Reference-target and deleteable memory store language must remain consistent with `0014`, `0067` and `0068`
 - memory.recorded and reference-only write language must remain consistent with `0068` and `0069`
+- memory encryption-at-rest and crypto-shredding language must remain consistent with `0016`, `0033` and `0070`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist

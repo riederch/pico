@@ -182,6 +182,7 @@ This ADR realizes and extends:
 It is refined by:
 
 - `0069-recording-memory-items-and-reference-only-event-writes.md`, which decides how `reference_only` becomes writable via a dedicated `memory.recorded` event and a content-splitting write flow
+- `0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md`, which bounds the plaintext-at-rest current state, targets per-domain encryption with crypto-shredding deletion and orders protection before content exposure
 
 It stays consistent with and below:
 

@@ -58,6 +58,8 @@ ADR `0033-key-lifecycle-rotation-revocation-and-recovery.md` defines lifecycle, 
 
 ADR `0034-canonicalization-signature-inputs-and-test-vectors.md` defines canonicalization, signature-input and test-vector boundaries before future signatures or hashes become security-relevant.
 
+ADR `0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md` defines the memory-store-specific protection boundary: plaintext-at-rest content stays foundation data, per-domain encryption with crypto-shredding is the target, and no content-exposing surface ships before protection.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.
