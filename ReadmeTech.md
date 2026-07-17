@@ -64,7 +64,7 @@ Implemented or prepared:
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state, action terminology and compatibility aliases
 - WebSocket endpoint for event streaming
-- foundation diagnostics dashboard
+- foundation diagnostics dashboard with an operator login and a small administration area (retention policies, crypto-shred)
 - CI release gates
 - Docker image build
 - multi-arch GHCR publishing path

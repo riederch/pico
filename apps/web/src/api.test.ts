@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PICO_HOME_URL, buildEndpointUrl, defaultPicoHomeUrl, loginOperator, mintRealtimeTicket, normalizePicoHomeUrl } from './api.js';
+import {
+  DEFAULT_PICO_HOME_URL,
+  buildEndpointUrl,
+  createRetentionPolicy,
+  defaultPicoHomeUrl,
+  listRetentionPolicies,
+  loginOperator,
+  mintRealtimeTicket,
+  normalizePicoHomeUrl,
+  shredPrivacyDomain,
+} from './api.js';
 
 describe('foundation URL helpers', () => {
   it('defaults to the same origin for a direct root dashboard', () => {
@@ -86,6 +96,101 @@ describe('foundation credentials', () => {
     const [, init] = fetchMock.mock.calls[0];
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer dev-token');
+  });
+});
+
+describe('foundation administration', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('lists retention policies under the operator session', async () => {
+    const policy = {
+      retentionPolicyId: 'short-lived',
+      displayName: 'Short lived notes',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 30,
+      createdAt: '2026-07-17T10:00:00.000Z',
+      updatedAt: '2026-07-17T10:00:00.000Z',
+    };
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(200, { retentionPolicies: [policy] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(listRetentionPolicies('http://localhost:3100', { operatorSession: 'session-value' })).resolves.toEqual([policy]);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url.toString()).toBe('http://localhost:3100/api/memory/retention-policies');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer session-value');
+  });
+
+  it('creates a retention policy from the given shape', async () => {
+    const created = {
+      retentionPolicyId: 'short-lived',
+      displayName: 'Short lived notes',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 30,
+      createdAt: '2026-07-17T10:00:00.000Z',
+      updatedAt: '2026-07-17T10:00:00.000Z',
+    };
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(201, created));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await createRetentionPolicy('http://localhost:3100', { operatorSession: 'session-value' }, {
+      retentionPolicyId: 'short-lived',
+      displayName: 'Short lived notes',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 30,
+    });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({
+      retentionPolicyId: 'short-lived',
+      displayName: 'Short lived notes',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 30,
+    });
+  });
+
+  it('sends the shred confirmation exactly as typed and never derives it from the domain', async () => {
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(200, { privacyDomain: 'domain-private', removedKeyVersions: 1 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    // A mismatched confirmation must travel as-is so the server can reject it.
+    // Deriving it here would confirm nothing.
+    await shredPrivacyDomain('http://localhost:3100', { operatorSession: 'session-value' }, {
+      privacyDomain: 'domain-private',
+      confirm: 'domain-work',
+    }).catch(() => undefined);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url.toString()).toBe('http://localhost:3100/api/memory/domains/domain-private/shred');
+    expect(JSON.parse(String(init.body))).toEqual({ confirm: 'domain-work' });
+  });
+
+  it('reports the shred result and omits an empty reason', async () => {
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(200, { privacyDomain: 'domain-private', removedKeyVersions: 2 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(shredPrivacyDomain('http://localhost:3100', { operatorSession: 'session-value' }, {
+      privacyDomain: 'domain-private',
+      confirm: 'domain-private',
+      reason: '  ',
+    })).resolves.toEqual({ removedKeyVersions: 2 });
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init.body))).toEqual({ confirm: 'domain-private' });
+  });
+
+  it("surfaces the server's own refusal rather than a bare status code", async () => {
+    vi.stubGlobal('fetch', vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(409, {
+      error: 'Crypto-shred requires memory encryption. Content is plaintext at rest, so destroying keys would protect nothing.',
+    })));
+
+    await expect(shredPrivacyDomain('http://localhost:3100', { operatorSession: 'session-value' }, {
+      privacyDomain: 'domain-private',
+      confirm: 'domain-private',
+    })).rejects.toThrow('requires memory encryption');
   });
 });
 

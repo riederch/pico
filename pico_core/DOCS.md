@@ -57,13 +57,16 @@ The dashboard preserves Home Assistant ingress path prefixes when it calls Found
 | `/api/events` | Development event list and limited event creation |
 | `/api/events/tail` | Latest foundation events for diagnostics dashboard use |
 | `/api/realtime/tickets` | Short-lived realtime ticket minting when token mode is enabled |
+| `/api/auth/*` | Foundation operator bootstrap, login, logout and administration |
+| `/api/memory/retention-policies` | Retention policy administration (operator session required) |
+| `/api/memory/domains/:privacyDomain/shred` | Irreversible crypto-shred of a privacy domain (operator session and confirmation required) |
 | `/ws` | Realtime event stream |
 
 `/api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.
 
 The generic event API currently accepts only foundation-safe event types. Policy, confirmation, executor and audit event types are reserved for later dedicated write paths.
 
-The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console, user-management interface, relay protocol or public remote-access endpoint.
+The dashboard is a development and diagnostics surface only. It is not a chat client, companion UI, Home Assistant control panel, policy console, user-management interface, relay protocol or public remote-access endpoint. It does show a small administration area once an operator logs in, covering retention policies and the crypto-shred; that is instance administration, not a companion or product UI.
 
 If `PICO_FOUNDATION_TOKEN` is configured in the Core process environment, direct HTTP calls to the `/api/...` endpoints require `Authorization: Bearer <token>`. `/health` and the dashboard shell remain open. Direct `WS /ws` access then requires either a non-browser `Authorization: Bearer <token>` upgrade header or a short-lived single-use ticket minted through `/api/realtime/tickets`.
 
@@ -89,6 +92,11 @@ Afterwards, log in with the passphrase in the dashboard. Notes on how this behav
 - **Once an operator exists, the Foundation API needs a credential** — the operator session or, where configured, the token. Before bootstrap, the previous trusted-local behaviour is unchanged. `/health` stays open for the Home Assistant watchdog.
 - **The token cannot administer.** It still reads diagnostics, but administration needs the operator session.
 - **Changing the passphrase requires the current one**, and it logs every session out.
+
+After logging in, the dashboard shows an administration area with two things:
+
+- **Retention policies.** Create, edit and revoke the named policies that decide when memory items expire (see the retention model in the architecture docs). No policy means keep. Editing a policy applies to every item referencing it at the next sweep; revoking one deletes nothing, because items that referenced it fall back to being kept.
+- **Crypto-shred a privacy domain.** This destroys the domain's keys, which makes every memory item in it unreadable, including copies in existing backups. It is irreversible: there is no undo and no recovery. You must type the domain name a second time to confirm, and the dashboard never fills that in for you. It only works when memory encryption is enabled; without it the content is plaintext at rest, so destroying keys would protect nothing and the add-on refuses.
 
 If the passphrase is lost, reset the operator locally: create an empty file named `operator-reset` next to the database (`/data/operator-reset` in the add-on), then restart. The add-on clears the operator, records the reset in the event log and prints a fresh bootstrap code. The reset never touches your keys, memory content or event history. Anyone with file access to the host can do this — operator login protects the network surface, not the host itself.
 

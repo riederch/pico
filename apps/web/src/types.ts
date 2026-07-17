@@ -1,4 +1,5 @@
 import type {
+  MemoryRetentionMode,
   PicoAppliedMigration,
   PicoEvent as ProtocolPicoEvent,
   PicoEventListResponse,
@@ -6,6 +7,8 @@ import type {
   PicoHomeClaimStateName as ProtocolPicoHomeClaimStateName,
   PicoRealtimeMessage as ProtocolPicoRealtimeMessage,
   PicoRealtimeTicketResponse,
+  PicoRetentionPolicyListResponse,
+  PicoRetentionPolicyResponse,
   PicoSystemStatusResponse,
 } from '@pico/protocol';
 
@@ -17,6 +20,16 @@ export type PicoHomeClaimStateName = ProtocolPicoHomeClaimStateName;
 export type SystemStatus = PicoSystemStatusResponse;
 export type EventListResponse = PicoEventListResponse;
 export type RealtimeTicketResponse = PicoRealtimeTicketResponse;
+export type RetentionPolicy = PicoRetentionPolicyResponse;
+export type RetentionPolicyListResponse = PicoRetentionPolicyListResponse;
+export type RetentionMode = MemoryRetentionMode;
+
+export interface RetentionPolicyInput {
+  retentionPolicyId: string;
+  displayName: string;
+  mode: RetentionMode;
+  maxAgeDays?: number;
+}
 
 export interface EventHistoryStatus {
   loadedCount: number;

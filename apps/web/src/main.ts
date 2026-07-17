@@ -1,7 +1,18 @@
 import { realtimeMessageType } from '@pico/protocol';
-import { defaultPicoHomeUrl, loadDashboardSnapshot, loginOperator, mintRealtimeTicket, normalizePicoHomeUrl } from './api.js';
+import {
+  createRetentionPolicy,
+  defaultPicoHomeUrl,
+  deleteRetentionPolicy,
+  listRetentionPolicies,
+  loadDashboardSnapshot,
+  loginOperator,
+  mintRealtimeTicket,
+  normalizePicoHomeUrl,
+  shredPrivacyDomain,
+  updateRetentionPolicy,
+} from './api.js';
 import { createDashboardView } from './render.js';
-import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from './types.js';
+import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage, RetentionPolicy } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
 
 const MAX_VISIBLE_EVENTS = 500;
@@ -39,6 +50,7 @@ export function startDashboard(document: Document): void {
   // persisted and never rendered, so a reload asks for the passphrase again
   // (ADR 0076). It is deliberately not part of DashboardState.
   let operatorSession: string | undefined;
+  let retentionPolicies: RetentionPolicy[] = [];
 
   function foundationAccess(): { foundationToken: string; operatorSession?: string } {
     return {
@@ -50,8 +62,42 @@ export function startDashboard(document: Document): void {
   view.setBaseUrl(state.baseUrl);
   view.render(state);
 
+  // Administration is only reachable with an operator session, so the section
+  // stays hidden until there is one, and disappears when it goes.
+  let editedPolicyId: string | null = null;
+
   view.onOperatorLoginRequested(() => {
     void logInOperator();
+  });
+
+  view.onRetentionPolicySubmitted(() => {
+    void saveRetentionPolicy();
+  });
+
+  view.onRetentionPolicyEditRequested((retentionPolicyId) => {
+    const policy = retentionPolicies.find((candidate) => candidate.retentionPolicyId === retentionPolicyId);
+
+    if (policy === undefined) {
+      return;
+    }
+
+    editedPolicyId = retentionPolicyId;
+    view.fillRetentionPolicyForm(policy);
+    view.setRetentionPolicyStatus(`Editing ${retentionPolicyId}. Saving applies to every item referencing it at the next sweep.`);
+  });
+
+  view.onRetentionPolicyEditCancelled(() => {
+    editedPolicyId = null;
+    view.fillRetentionPolicyForm(null);
+    view.setRetentionPolicyStatus('');
+  });
+
+  view.onRetentionPolicyRevokeRequested((retentionPolicyId) => {
+    void revokeRetentionPolicy(retentionPolicyId);
+  });
+
+  view.onShredRequested(() => {
+    void shredDomain();
   });
 
   view.onConnectRequested(() => {
@@ -141,12 +187,129 @@ export function startDashboard(document: Document): void {
       operatorSession = await loginOperator(view.getBaseUrl(), passphrase);
     } catch (error) {
       operatorSession = undefined;
+      view.setAdminVisible(false);
       view.setOperatorStatus(formatUnknownError(error), 'error');
       return;
     }
 
     view.setOperatorStatus('Logged in as the Foundation operator. A reload asks again.', 'active');
+    view.setAdminVisible(true);
+    view.fillRetentionPolicyForm(null);
+    await refreshRetentionPolicies();
     void connect(view.getBaseUrl());
+  }
+
+  async function refreshRetentionPolicies(): Promise<void> {
+    if (operatorSession === undefined) {
+      return;
+    }
+
+    try {
+      retentionPolicies = await listRetentionPolicies(state.baseUrl, foundationAccess());
+      view.renderRetentionPolicies(retentionPolicies);
+    } catch (error) {
+      view.setRetentionPolicyStatus(formatUnknownError(error), 'error');
+    }
+  }
+
+  async function saveRetentionPolicy(): Promise<void> {
+    const form = view.readRetentionPolicyForm();
+
+    if (form.retentionPolicyId === '' || form.displayName === '') {
+      view.setRetentionPolicyStatus('A policy needs an ID and a display name.', 'error');
+      return;
+    }
+
+    const maxAgeDays = form.mode === 'delete_after_max_age' ? form.maxAgeDays : null;
+
+    if (form.mode === 'delete_after_max_age' && (maxAgeDays === null || !Number.isInteger(maxAgeDays) || maxAgeDays < 1)) {
+      view.setRetentionPolicyStatus('An expiring policy needs a whole number of days, at least 1.', 'error');
+      return;
+    }
+
+    view.setRetentionPolicyStatus('Saving...');
+
+    try {
+      if (editedPolicyId === null) {
+        await createRetentionPolicy(state.baseUrl, foundationAccess(), {
+          retentionPolicyId: form.retentionPolicyId,
+          displayName: form.displayName,
+          mode: form.mode,
+          ...(maxAgeDays === null ? {} : { maxAgeDays }),
+        });
+      } else {
+        await updateRetentionPolicy(state.baseUrl, foundationAccess(), editedPolicyId, {
+          displayName: form.displayName,
+          mode: form.mode,
+          ...(maxAgeDays === null ? {} : { maxAgeDays }),
+        });
+      }
+    } catch (error) {
+      view.setRetentionPolicyStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    const savedId = editedPolicyId ?? form.retentionPolicyId;
+    editedPolicyId = null;
+    view.fillRetentionPolicyForm(null);
+    view.setRetentionPolicyStatus(`Saved ${savedId}.`, 'active');
+    await refreshRetentionPolicies();
+  }
+
+  async function revokeRetentionPolicy(retentionPolicyId: string): Promise<void> {
+    view.setRetentionPolicyStatus(`Revoking ${retentionPolicyId}...`);
+
+    try {
+      await deleteRetentionPolicy(state.baseUrl, foundationAccess(), retentionPolicyId);
+    } catch (error) {
+      view.setRetentionPolicyStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    if (editedPolicyId === retentionPolicyId) {
+      editedPolicyId = null;
+      view.fillRetentionPolicyForm(null);
+    }
+
+    // Revoking deletes no memory: items referencing it fall back to keep.
+    view.setRetentionPolicyStatus(`Revoked ${retentionPolicyId}. Items that referenced it are kept, not deleted.`, 'active');
+    await refreshRetentionPolicies();
+  }
+
+  async function shredDomain(): Promise<void> {
+    const form = view.readShredForm();
+
+    if (form.privacyDomain === '') {
+      view.setShredStatus('Name the privacy domain to shred.', 'error');
+      return;
+    }
+
+    if (form.confirm !== form.privacyDomain) {
+      view.setShredStatus('The confirmation must repeat the domain exactly.', 'error');
+      return;
+    }
+
+    view.setShredStatus(`Shredding ${form.privacyDomain}...`);
+
+    let removedKeyVersions: number;
+
+    try {
+      ({ removedKeyVersions } = await shredPrivacyDomain(state.baseUrl, foundationAccess(), {
+        privacyDomain: form.privacyDomain,
+        confirm: form.confirm,
+        ...(form.reason === '' ? {} : { reason: form.reason }),
+      }));
+    } catch (error) {
+      view.setShredStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    view.clearShredForm();
+    view.setShredStatus(
+      `Shredded ${form.privacyDomain}: ${removedKeyVersions} key version(s) destroyed. Its content is unreadable for good, including in backups.`,
+      'active',
+    );
+    await refreshCurrentSnapshot();
   }
 
   async function refreshCurrentSnapshot(): Promise<void> {

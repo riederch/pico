@@ -1,4 +1,5 @@
-import type { ConnectionStatus, DashboardState, EventFilters, PicoEvent, SystemStatus } from './types.js';
+import { memoryRetentionModes } from '@pico/protocol';
+import type { ConnectionStatus, DashboardState, EventFilters, PicoEvent, RetentionMode, RetentionPolicy, SystemStatus } from './types.js';
 
 export interface DashboardView {
   getBaseUrl(): string;
@@ -8,6 +9,20 @@ export interface DashboardView {
   takeOperatorPassphrase(): string;
   setOperatorStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
   onOperatorLoginRequested(handler: () => void): void;
+  /** Shows the administration section. It is useless without an operator session. */
+  setAdminVisible(visible: boolean): void;
+  renderRetentionPolicies(policies: RetentionPolicy[]): void;
+  readRetentionPolicyForm(): RetentionPolicyFormValue;
+  fillRetentionPolicyForm(policy: RetentionPolicy | null): void;
+  setRetentionPolicyStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onRetentionPolicySubmitted(handler: () => void): void;
+  onRetentionPolicyEditRequested(handler: (retentionPolicyId: string) => void): void;
+  onRetentionPolicyRevokeRequested(handler: (retentionPolicyId: string) => void): void;
+  onRetentionPolicyEditCancelled(handler: () => void): void;
+  readShredForm(): ShredFormValue;
+  clearShredForm(): void;
+  setShredStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onShredRequested(handler: () => void): void;
   onConnectRequested(handler: () => void): void;
   onRefreshRequested(handler: () => void): void;
   onEventFiltersChanged(handler: (filters: EventFilters) => void): void;
@@ -40,6 +55,36 @@ interface DashboardElements {
   eventsEmpty: HTMLElement;
   eventDetail: HTMLElement;
   rawStatus: HTMLPreElement;
+  adminSection: HTMLElement;
+  retentionPolicyForm: HTMLFormElement;
+  retentionPolicyIdInput: HTMLInputElement;
+  retentionPolicyNameInput: HTMLInputElement;
+  retentionPolicyModeSelect: HTMLSelectElement;
+  retentionPolicyMaxAgeInput: HTMLInputElement;
+  retentionPolicySubmitButton: HTMLButtonElement;
+  retentionPolicyCancelButton: HTMLButtonElement;
+  retentionPolicyStatus: HTMLElement;
+  retentionPolicyCount: HTMLElement;
+  retentionPoliciesBody: HTMLTableSectionElement;
+  retentionPoliciesEmpty: HTMLElement;
+  shredForm: HTMLFormElement;
+  shredDomainInput: HTMLInputElement;
+  shredConfirmInput: HTMLInputElement;
+  shredReasonInput: HTMLInputElement;
+  shredStatus: HTMLElement;
+}
+
+export interface RetentionPolicyFormValue {
+  retentionPolicyId: string;
+  displayName: string;
+  mode: RetentionMode;
+  maxAgeDays: number | null;
+}
+
+export interface ShredFormValue {
+  privacyDomain: string;
+  confirm: string;
+  reason: string;
 }
 
 interface MetricRow {
@@ -73,6 +118,8 @@ export function createDashboardView(document: Document): DashboardView {
   let refreshRequested: (() => void) | null = null;
   let eventFiltersChanged: ((filters: EventFilters) => void) | null = null;
   let eventSelected: ((eventId: string) => void) | null = null;
+  let retentionPolicyEditRequested: ((retentionPolicyId: string) => void) | null = null;
+  let retentionPolicyRevokeRequested: ((retentionPolicyId: string) => void) | null = null;
 
   const elements: DashboardElements = {
     form: requireElement(document, 'connection-form', HTMLFormElement),
@@ -99,7 +146,42 @@ export function createDashboardView(document: Document): DashboardView {
     eventsEmpty: requireElement(document, 'events-empty', HTMLElement),
     eventDetail: requireElement(document, 'event-detail', HTMLElement),
     rawStatus: requireElement(document, 'raw-status', HTMLPreElement),
+    adminSection: requireElement(document, 'admin-section', HTMLElement),
+    retentionPolicyForm: requireElement(document, 'retention-policy-form', HTMLFormElement),
+    retentionPolicyIdInput: requireElement(document, 'policy-id', HTMLInputElement),
+    retentionPolicyNameInput: requireElement(document, 'policy-name', HTMLInputElement),
+    retentionPolicyModeSelect: requireElement(document, 'policy-mode', HTMLSelectElement),
+    retentionPolicyMaxAgeInput: requireElement(document, 'policy-max-age', HTMLInputElement),
+    retentionPolicySubmitButton: requireElement(document, 'policy-submit-button', HTMLButtonElement),
+    retentionPolicyCancelButton: requireElement(document, 'policy-cancel-button', HTMLButtonElement),
+    retentionPolicyStatus: requireElement(document, 'retention-policy-status', HTMLElement),
+    retentionPolicyCount: requireElement(document, 'retention-policy-count', HTMLElement),
+    retentionPoliciesBody: requireElement(document, 'retention-policies-body', HTMLTableSectionElement),
+    retentionPoliciesEmpty: requireElement(document, 'retention-policies-empty', HTMLElement),
+    shredForm: requireElement(document, 'shred-form', HTMLFormElement),
+    shredDomainInput: requireElement(document, 'shred-domain', HTMLInputElement),
+    shredConfirmInput: requireElement(document, 'shred-confirm', HTMLInputElement),
+    shredReasonInput: requireElement(document, 'shred-reason', HTMLInputElement),
+    shredStatus: requireElement(document, 'shred-status', HTMLElement),
   };
+
+  elements.retentionPolicyModeSelect.replaceChildren(
+    ...memoryRetentionModes.map((mode) => createOption(document, mode, mode)),
+  );
+
+  // Max age belongs to delete_after_max_age only, so the field follows the mode
+  // rather than letting the server reject an impossible combination later.
+  const syncMaxAgeField = (): void => {
+    const expiring = elements.retentionPolicyModeSelect.value === 'delete_after_max_age';
+    elements.retentionPolicyMaxAgeInput.disabled = !expiring;
+
+    if (!expiring) {
+      elements.retentionPolicyMaxAgeInput.value = '';
+    }
+  };
+
+  elements.retentionPolicyModeSelect.addEventListener('change', syncMaxAgeField);
+  syncMaxAgeField();
 
   elements.refreshButton.addEventListener('click', () => {
     refreshRequested?.();
@@ -140,6 +222,88 @@ export function createDashboardView(document: Document): DashboardView {
     },
     onOperatorLoginRequested(handler: () => void): void {
       elements.operatorLoginButton.addEventListener('click', () => {
+        handler();
+      });
+    },
+    setAdminVisible(visible: boolean): void {
+      elements.adminSection.hidden = !visible;
+    },
+    renderRetentionPolicies(policies: RetentionPolicy[]): void {
+      elements.retentionPolicyCount.textContent = policies.length === 1 ? '1 policy' : `${policies.length} policies`;
+      elements.retentionPoliciesEmpty.hidden = policies.length > 0;
+      elements.retentionPoliciesBody.replaceChildren(
+        ...policies.map((policy) => createRetentionPolicyRow(
+          elements.retentionPoliciesBody.ownerDocument,
+          policy,
+          (retentionPolicyId) => retentionPolicyEditRequested?.(retentionPolicyId),
+          (retentionPolicyId) => retentionPolicyRevokeRequested?.(retentionPolicyId),
+        )),
+      );
+    },
+    readRetentionPolicyForm(): RetentionPolicyFormValue {
+      const rawMaxAge = elements.retentionPolicyMaxAgeInput.value.trim();
+
+      return {
+        retentionPolicyId: elements.retentionPolicyIdInput.value.trim(),
+        displayName: elements.retentionPolicyNameInput.value.trim(),
+        mode: elements.retentionPolicyModeSelect.value as RetentionMode,
+        maxAgeDays: rawMaxAge === '' ? null : Number(rawMaxAge),
+      };
+    },
+    fillRetentionPolicyForm(policy: RetentionPolicy | null): void {
+      // A null policy resets the form to "create"; a policy switches it to
+      // editing that one, with its id locked so an edit cannot rename it.
+      elements.retentionPolicyIdInput.value = policy?.retentionPolicyId ?? '';
+      elements.retentionPolicyIdInput.readOnly = policy !== null;
+      elements.retentionPolicyNameInput.value = policy?.displayName ?? '';
+      elements.retentionPolicyModeSelect.value = policy?.mode ?? memoryRetentionModes[0];
+      elements.retentionPolicyModeSelect.dispatchEvent(new Event('change'));
+      elements.retentionPolicyMaxAgeInput.value = policy?.maxAgeDays === undefined ? '' : String(policy.maxAgeDays);
+      elements.retentionPolicySubmitButton.textContent = policy === null ? 'Create policy' : 'Save policy';
+      elements.retentionPolicyCancelButton.hidden = policy === null;
+    },
+    setRetentionPolicyStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.retentionPolicyStatus.textContent = message;
+      elements.retentionPolicyStatus.dataset.state = state;
+    },
+    onRetentionPolicySubmitted(handler: () => void): void {
+      elements.retentionPolicyForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
+    onRetentionPolicyEditRequested(handler: (retentionPolicyId: string) => void): void {
+      retentionPolicyEditRequested = handler;
+    },
+    onRetentionPolicyRevokeRequested(handler: (retentionPolicyId: string) => void): void {
+      retentionPolicyRevokeRequested = handler;
+    },
+    onRetentionPolicyEditCancelled(handler: () => void): void {
+      elements.retentionPolicyCancelButton.addEventListener('click', () => {
+        handler();
+      });
+    },
+    readShredForm(): ShredFormValue {
+      return {
+        privacyDomain: elements.shredDomainInput.value.trim(),
+        // Deliberately read as typed and never derived from the domain field:
+        // a confirmation the UI fills in would confirm nothing.
+        confirm: elements.shredConfirmInput.value.trim(),
+        reason: elements.shredReasonInput.value.trim(),
+      };
+    },
+    clearShredForm(): void {
+      elements.shredDomainInput.value = '';
+      elements.shredConfirmInput.value = '';
+      elements.shredReasonInput.value = '';
+    },
+    setShredStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.shredStatus.textContent = message;
+      elements.shredStatus.dataset.state = state;
+    },
+    onShredRequested(handler: () => void): void {
+      elements.shredForm.addEventListener('submit', (event) => {
+        event.preventDefault();
         handler();
       });
     },
@@ -247,6 +411,48 @@ function enabledCapabilityNames(status: SystemStatus): string {
     .sort();
 
   return enabled.length === 0 ? 'none' : enabled.join(', ');
+}
+
+function createRetentionPolicyRow(
+  document: Document,
+  policy: RetentionPolicy,
+  onEdit: (retentionPolicyId: string) => void,
+  onRevoke: (retentionPolicyId: string) => void,
+): HTMLTableRowElement {
+  const row = document.createElement('tr');
+
+  for (const value of [
+    policy.retentionPolicyId,
+    policy.displayName,
+    policy.mode,
+    policy.maxAgeDays === undefined ? '-' : `${policy.maxAgeDays} days`,
+  ]) {
+    const cell = document.createElement('td');
+    cell.textContent = value;
+    row.append(cell);
+  }
+
+  const actions = document.createElement('td');
+  const editButton = document.createElement('button');
+  editButton.type = 'button';
+  editButton.className = 'secondary-button row-button';
+  editButton.textContent = 'Edit';
+  editButton.addEventListener('click', () => {
+    onEdit(policy.retentionPolicyId);
+  });
+
+  const revokeButton = document.createElement('button');
+  revokeButton.type = 'button';
+  revokeButton.className = 'secondary-button row-button';
+  revokeButton.textContent = 'Revoke';
+  revokeButton.addEventListener('click', () => {
+    onRevoke(policy.retentionPolicyId);
+  });
+
+  actions.append(editButton, revokeButton);
+  row.append(actions);
+
+  return row;
 }
 
 function createOption(document: Document, value: string, label: string): HTMLOptionElement {

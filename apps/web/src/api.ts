@@ -1,5 +1,16 @@
-import { picoHomeClaimStates } from '@pico/protocol';
-import type { DashboardSnapshot, EventHistoryStatus, EventListResponse, HealthResponse, PicoEvent, RealtimeTicketResponse, SystemStatus } from './types.js';
+import { memoryRetentionModes, picoHomeClaimStates } from '@pico/protocol';
+import type {
+  DashboardSnapshot,
+  EventHistoryStatus,
+  EventListResponse,
+  HealthResponse,
+  PicoEvent,
+  RealtimeTicketResponse,
+  RetentionPolicy,
+  RetentionPolicyInput,
+  RetentionPolicyListResponse,
+  SystemStatus,
+} from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
 
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
@@ -114,6 +125,146 @@ export async function loginOperator(baseUrl: string, passphrase: string): Promis
   }
 
   return data.session;
+}
+
+export async function listRetentionPolicies(baseUrl: string, options: FoundationAccessOptions): Promise<RetentionPolicy[]> {
+  const response = await fetchJson(
+    buildEndpointUrl(baseUrl, '/api/memory/retention-policies'),
+    isRetentionPolicyListResponse,
+    'retention policies',
+    options,
+  );
+
+  return response.retentionPolicies;
+}
+
+export async function createRetentionPolicy(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: RetentionPolicyInput,
+): Promise<RetentionPolicy> {
+  return sendJson(buildEndpointUrl(baseUrl, '/api/memory/retention-policies'), 'POST', input, options, isRetentionPolicy, 'retention policy');
+}
+
+export async function updateRetentionPolicy(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  retentionPolicyId: string,
+  input: Omit<RetentionPolicyInput, 'retentionPolicyId'>,
+): Promise<RetentionPolicy> {
+  return sendJson(
+    buildEndpointUrl(baseUrl, `/api/memory/retention-policies/${encodeURIComponent(retentionPolicyId)}`),
+    'PUT',
+    input,
+    options,
+    isRetentionPolicy,
+    'retention policy',
+  );
+}
+
+export async function deleteRetentionPolicy(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  retentionPolicyId: string,
+): Promise<void> {
+  const url = buildEndpointUrl(baseUrl, `/api/memory/retention-policies/${encodeURIComponent(retentionPolicyId)}`);
+  const response = await fetch(url, { method: 'DELETE', headers: buildFoundationHeaders(options) });
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Revoking the retention policy'));
+  }
+}
+
+/**
+ * Destroys a privacy domain's keys. Irreversible: the content becomes
+ * unreadable, including in existing backups (ADR 0071).
+ *
+ * `confirm` must repeat the domain exactly. It is passed in by the caller and
+ * never derived from `privacyDomain` here — deriving it would defeat the point
+ * of confirming.
+ */
+export async function shredPrivacyDomain(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: { privacyDomain: string; confirm: string; reason?: string },
+): Promise<{ removedKeyVersions: number }> {
+  const url = buildEndpointUrl(baseUrl, `/api/memory/domains/${encodeURIComponent(input.privacyDomain)}/shred`);
+  const body: Record<string, unknown> = { confirm: input.confirm };
+
+  if (input.reason !== undefined && input.reason.trim() !== '') {
+    body.reason = input.reason.trim();
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Shredding the privacy domain'));
+  }
+
+  const data = (await response.json()) as unknown;
+
+  if (!isRecord(data) || typeof data.removedKeyVersions !== 'number') {
+    throw new Error('Shred response did not report how many key versions were destroyed.');
+  }
+
+  return { removedKeyVersions: data.removedKeyVersions };
+}
+
+async function sendJson<T>(
+  url: URL,
+  method: 'POST' | 'PUT',
+  body: unknown,
+  options: FoundationAccessOptions,
+  validate: (value: unknown) => value is T,
+  label: string,
+): Promise<T> {
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method,
+      headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    throw new Error(`Could not reach the ${label} endpoint at ${url.toString()}: ${formatUnknownError(error)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, `Saving the ${label}`));
+  }
+
+  const data = (await response.json()) as unknown;
+
+  if (!validate(data)) {
+    throw new Error(`${label} endpoint returned an unexpected shape.`);
+  }
+
+  return data;
+}
+
+/** Surfaces the server's own reason where it sent one; the API answers in plain sentences. */
+async function describeFailure(response: Response, action: string): Promise<string> {
+  let detail: string | undefined;
+
+  try {
+    const data = (await response.json()) as unknown;
+    if (isRecord(data) && typeof data.error === 'string') {
+      detail = data.error;
+    }
+  } catch {
+    detail = undefined;
+  }
+
+  if (response.status === 401) {
+    return detail ?? 'An operator session is required.';
+  }
+
+  return detail ?? `${action} failed with HTTP ${response.status}.`;
 }
 
 export async function mintRealtimeTicket(baseUrl: string, options: FoundationAccessOptions): Promise<string> {
@@ -269,6 +420,27 @@ function isEventListResponse(value: unknown): value is EventListResponse {
     && value.events.every(isPicoEvent)
     && (value.nextCursor === null || typeof value.nextCursor === 'string')
     && typeof value.hasMore === 'boolean'
+  );
+}
+
+function isRetentionPolicy(value: unknown): value is RetentionPolicy {
+  return (
+    isRecord(value)
+    && typeof value.retentionPolicyId === 'string'
+    && typeof value.displayName === 'string'
+    && typeof value.mode === 'string'
+    && (memoryRetentionModes as readonly string[]).includes(value.mode)
+    && (value.maxAgeDays === undefined || typeof value.maxAgeDays === 'number')
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+  );
+}
+
+function isRetentionPolicyListResponse(value: unknown): value is RetentionPolicyListResponse {
+  return (
+    isRecord(value)
+    && Array.isArray(value.retentionPolicies)
+    && value.retentionPolicies.every(isRetentionPolicy)
   );
 }
 

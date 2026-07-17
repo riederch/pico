@@ -19,6 +19,27 @@ describe('dashboard event table', () => {
     expect(html).toContain('type="password"');
   });
 
+  it('hides administration until an operator logs in', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    // The section is useless without an operator session, and the shell must
+    // not suggest otherwise before one exists.
+    expect(html).toContain('id="admin-section"');
+    expect(/<section id="admin-section"[^>]*\shidden/.test(html)).toBe(true);
+  });
+
+  it('makes the shred surface state that it is irreversible and asks for the domain twice', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    expect(html).toContain('id="shred-domain"');
+    expect(html).toContain('id="shred-confirm"');
+    expect(html).toContain('irreversible');
+    expect(html).toContain('no undo and no recovery');
+    // The confirmation field must be a separate empty input the user types, so
+    // the shell must not pre-fill it from the domain field.
+    expect(/<input id="shred-confirm"[^>]*value=/.test(html)).toBe(false);
+  });
+
   it('offers an operator login and never persists the session in the shell', () => {
     const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
 

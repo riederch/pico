@@ -45,6 +45,14 @@
       .status-pill[data-status="connected"] .status-dot { background: #3fb950; }
       .status-pill[data-status="checking"] .status-dot, .status-pill[data-status="connecting"] .status-dot, .status-pill[data-status="reconnecting"] .status-dot { background: #d29922; }
       .status-pill[data-status="error"] .status-dot { background: #f85149; }
+      .admin-grid { margin-top: 16px; }
+      .admin-note { margin-bottom: 14px; line-height: 1.4; }
+      .admin-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; margin-bottom: 12px; }
+      .admin-form-actions { display: flex; gap: 8px; align-items: end; }
+      .danger-card { border-color: #f85149; }
+      .danger-note { margin: 0 0 14px; border: 1px solid #f85149; border-radius: 6px; padding: 10px 12px; background: #2d1517; color: #ffd7d5; font-size: 13px; line-height: 1.4; }
+      .danger-button { border-color: #f85149; background: #f85149; color: #2d1517; }
+      .row-button { min-height: 34px; padding: 6px 12px; font-size: 13px; }
       .table-wrap { overflow: auto; border: 1px solid #30363d; border-radius: 8px; }
       .event-toolbar { display: grid; grid-template-columns: minmax(160px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; margin-bottom: 14px; }
       .event-notice { margin: -4px 0 14px; border: 1px solid #d29922; border-radius: 6px; padding: 10px 12px; background: #251a08; color: #f0c36a; font-size: 13px; line-height: 1.4; }
@@ -158,6 +166,46 @@
         <article class="card full">
           <div class="card-header"><h2>Raw system status</h2></div>
           <pre id="raw-status" class="raw-json">{}</pre>
+        </article>
+      </section>
+
+      <section id="admin-section" class="dashboard-grid admin-grid" aria-label="Foundation administration" hidden>
+        <article class="card full">
+          <div class="card-header">
+            <h2>Retention policies</h2>
+            <div class="card-actions"><span id="retention-policy-count" class="card-count">0 policies</span></div>
+          </div>
+          <p class="form-hint admin-note">A policy decides when memory items that reference it expire. No policy means keep, and an unresolvable one keeps too. Editing a policy applies to every item referencing it at the next sweep; revoking one deletes nothing.</p>
+          <form id="retention-policy-form" class="admin-form">
+            <div class="filter-field"><label for="policy-id">Policy ID</label><input id="policy-id" type="text" spellcheck="false" autocomplete="off" placeholder="short-lived" /></div>
+            <div class="filter-field"><label for="policy-name">Display name</label><input id="policy-name" type="text" autocomplete="off" placeholder="Short lived notes" /></div>
+            <div class="filter-field"><label for="policy-mode">Mode</label><select id="policy-mode"></select></div>
+            <div class="filter-field"><label for="policy-max-age">Max age (days)</label><input id="policy-max-age" type="number" min="1" step="1" autocomplete="off" /></div>
+            <div class="filter-field admin-form-actions">
+              <button id="policy-submit-button" type="submit">Create policy</button>
+              <button id="policy-cancel-button" class="secondary-button" type="button" hidden>Cancel</button>
+            </div>
+          </form>
+          <p id="retention-policy-status" class="form-hint" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Name</th><th>Mode</th><th>Max age</th><th>Actions</th></tr></thead>
+              <tbody id="retention-policies-body"></tbody>
+            </table>
+            <p id="retention-policies-empty" class="empty-state">No retention policies.</p>
+          </div>
+        </article>
+
+        <article class="card full danger-card">
+          <div class="card-header"><h2>Crypto-shred a privacy domain</h2></div>
+          <p class="danger-note">Destroying a domain's keys is irreversible. Every memory item in that domain becomes unreadable, including copies in existing backups. There is no undo and no recovery. Requires memory encryption to be enabled; without it the content is plaintext at rest and shredding would protect nothing.</p>
+          <form id="shred-form" class="admin-form">
+            <div class="filter-field"><label for="shred-domain">Privacy domain</label><input id="shred-domain" type="text" spellcheck="false" autocomplete="off" placeholder="domain-private" /></div>
+            <div class="filter-field"><label for="shred-confirm">Type the domain again to confirm</label><input id="shred-confirm" type="text" spellcheck="false" autocomplete="off" /></div>
+            <div class="filter-field"><label for="shred-reason">Reason (optional, recorded)</label><input id="shred-reason" type="text" autocomplete="off" placeholder="device loss" /></div>
+            <div class="filter-field admin-form-actions"><button id="shred-button" class="danger-button" type="submit">Shred domain</button></div>
+          </form>
+          <p id="shred-status" class="form-hint" role="status" aria-live="polite"></p>
         </article>
       </section>
     </main>
