@@ -89,7 +89,7 @@ Selecting the concrete primitives is a separate decision that requires the ADR 0
 The open product question "should memory content be readable over HTTP?" is answered by ordering, not by refusal:
 
 - reference **state** is already readable (ADR 0069 `resolutionState`) and stays the only exposure for now.
-- a content read/list API is acceptable only after (a) an access boundary stronger than the temporary Foundation token exists, or (b) domain encryption plus an explicit membership/access model exist - whichever design lands first, with (b) required for anything called production memory.
+- a content read/list API is acceptable only after (a) an access boundary stronger than the temporary Foundation token exists, or (b) domain encryption plus an explicit membership/access model exist - whichever design lands first, with (b) required for anything called production memory. ADR `0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md` now scopes that access boundary: its Gate C requires an authenticated principal with domain readership.
 - a dev-only exception must satisfy decision rule 3.
 
 ## Non-goals

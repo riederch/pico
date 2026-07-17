@@ -279,6 +279,8 @@ It is refined by:
 
 It answers the ADR 0030 ingress-vs-token direction at the concept level.
 
+ADR `0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md` scopes the production authentication, session and membership layer that is meant to succeed this temporary boundary, and fixes the token's authority ceiling: `foundation-diagnostic` only, never content reads and never administration.
+
 It remains constrained by the later Pico Link, identity, lifecycle and canonicalization ADRs, especially ADR 0031 through ADR 0034.
 
 It does not replace the future Setup Mode, Move-In, Home membership, Pico identity, Pico Link or Home Assistant tool policy decisions.

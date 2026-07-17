@@ -134,7 +134,7 @@ Additive steps, in order:
 4. Add domain-default policy binding once a privacy-domain registry exists. **Deferred.**
 5. After encryption and crypto-shredding ship: revisit retention claims (backup unreadability of expired content) and consider domain-wide expiry as a KEK-shred trigger — a domain whose items are all expired and deleted becomes a shred candidate, never an automatic shred. **Deferred.**
 
-Not yet built (deliberate ADR 0074 non-goals): a policy CRUD or write-time-`retentionPolicyRef` HTTP surface — policies and references are set programmatically for now — and any notification/review flow on expiry.
+Not yet built (deliberate ADR 0074 non-goals): a policy CRUD or write-time-`retentionPolicyRef` HTTP surface — policies and references are set programmatically for now — and any notification/review flow on expiry. The CRUD surface is additionally gated by ADR 0075 Gate A (`host-admin` class: operator session required).
 
 ## Relationship to other ADRs
 

@@ -62,6 +62,8 @@ ADR `0070-memory-store-encryption-at-rest-and-crypto-shredding-boundary.md` defi
 
 ADR `0071-memory-content-encryption-threat-model-and-primitive-direction.md` answers the threat-model questions above for memory-store content at rest and decides the primitive suite (`pico.suite.mem.v1`, libsodium XChaCha20-Poly1305) in the required dedicated step; implementation stays gated behind the ADR 0033 key-storage design and ADR 0034 test vectors.
 
+ADR `0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md` answers the threat-model questions for the local Foundation access surface (operator principal, sessions, access classes) and keeps credential handling on reviewed building blocks: KDF-based verification, CSPRNG session identifiers and deliberately no signed session tokens before ADR 0034 canonicalization exists.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.
