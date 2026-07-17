@@ -60,6 +60,8 @@ The dashboard preserves Home Assistant ingress path prefixes when it calls Found
 | `/api/auth/*` | Foundation operator bootstrap, login, logout and administration |
 | `/api/memory/retention-policies` | Retention policy administration (operator session required) |
 | `/api/memory/domains/:privacyDomain/shred` | Irreversible crypto-shred of a privacy domain (operator session and confirmation required) |
+| `/api/memory/domains/:privacyDomain/items` | Read a privacy domain's content, cursor-paged (authorized by domain readership, not the operator role) |
+| `/api/memory/domains/:privacyDomain/items/:memoryItemId` | Read one memory item's content |
 | `/ws` | Realtime event stream |
 
 `/api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.

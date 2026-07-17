@@ -88,6 +88,43 @@ describe('MemoryStore', () => {
     expect(memory.listInDomain('domain-private')).toEqual([]);
   });
 
+  it('pages active items by (createdAt, memoryItemId) with a cursor and hasMore', () => {
+    const memory = openMemory();
+    memory.create(createInput({ memoryItemId: 'mem-1' }));
+    memory.create(createInput({ memoryItemId: 'mem-2' }));
+    memory.create(createInput({ memoryItemId: 'mem-3' }));
+
+    const first = memory.listInDomainPage('domain-private', { limit: 2 });
+    expect(first.items.map((item) => item.memoryItemId)).toEqual(['mem-1', 'mem-2']);
+    expect(first.hasMore).toBe(true);
+    expect(first.nextCursor).not.toBeNull();
+
+    const second = memory.listInDomainPage('domain-private', { limit: 2, after: first.nextCursor });
+    expect(second.items.map((item) => item.memoryItemId)).toEqual(['mem-3']);
+    expect(second.hasMore).toBe(false);
+
+    const third = memory.listInDomainPage('domain-private', { limit: 2, after: second.nextCursor });
+    expect(third.items).toEqual([]);
+    expect(third.hasMore).toBe(false);
+  });
+
+  it('excludes deleted items from a page and stays scoped to the domain', () => {
+    const memory = openMemory();
+    memory.create(createInput({ memoryItemId: 'mem-1' }));
+    memory.create(createInput({ memoryItemId: 'mem-2' }));
+    memory.create(createInput({ memoryItemId: 'other', privacyDomain: 'other-domain' }));
+    memory.deleteInDomain('mem-1', 'domain-private');
+
+    const page = memory.listInDomainPage('domain-private');
+    expect(page.items.map((item) => item.memoryItemId)).toEqual(['mem-2']);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('rejects a non-positive page limit', () => {
+    const memory = openMemory();
+    expect(() => memory.listInDomainPage('domain-private', { limit: 0 })).toThrow(/positive integer/);
+  });
+
   it('reports delete results for missing, cross-domain and already-deleted items', () => {
     const memory = openMemory();
     memory.create(createInput());

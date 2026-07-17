@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the ADR 0075 **Gate C** design: the memory content read API and the domain readership evaluation seam (A7). It specifies the authorization model, the read surface and two implementation traps for the Gate C runtime. **Not yet implemented** — the content read API does not exist until that runtime lands; until then the memory store stays reachable only through its programmatic API and the reference-only `memory.recorded` event.
+Accepted as the ADR 0075 **Gate C** design and **now implemented**: the memory content read API and the domain readership evaluation seam (A7). Runtime: the `DomainReadership` seam (`apps/core/src/domain-readership.ts`, foundation-phase `SoleResidentReadership`) evaluated in the `onRequest` hook for the `domain-content` class, the read routes `GET /api/memory/domains/:privacyDomain/items[/:memoryItemId]` (cursor-paged via `MemoryStore.listInDomainPage`, reusing the store's content resolution unchanged), and the two implementation traps closed and test-bound. Both traps are proven: a test injects a readership that denies a domain and shows an operator session is refused there (the operator branch does not override readership), and the static token is refused at its `foundation-diagnostic` ceiling.
 
 ## Context
 

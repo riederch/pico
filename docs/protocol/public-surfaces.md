@@ -52,6 +52,8 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `GET /api/memory/retention-policies/:retentionPolicyId` | experimental foundation administration surface | Reads one retention policy. Requires an operator session. |
 | `PUT /api/memory/retention-policies/:retentionPolicyId` | experimental foundation administration surface | Edits a retention policy; the change applies to every item referencing it at the next sweep. Requires an operator session. |
 | `DELETE /api/memory/retention-policies/:retentionPolicyId` | experimental foundation administration surface | Revokes a retention policy. Items still referencing it fall back to fail-safe keep, so this deletes no memory. Requires an operator session. |
+| `GET /api/memory/domains/:privacyDomain/items` | experimental foundation content surface | Lists a privacy domain's active items with decrypted content, cursor-paged (`limit`, `after`). Authorized by **domain readership**, a distinct authority from the operator role (ADR 0077): an operator session alone does not read content, and the static token never reaches here. |
+| `GET /api/memory/domains/:privacyDomain/items/:memoryItemId` | experimental foundation content surface | Reads one active item's content, or `404` when it is absent, deleted or tombstoned. A crypto-shredded item reports `contentUnavailable` rather than fabricating content. Same readership authority. |
 | `WS /ws` | experimental event stream | Streams events and connection messages. |
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.

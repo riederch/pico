@@ -63,6 +63,21 @@ export interface RetentionCandidate {
   createdAt: string;
 }
 
+/**
+ * Keyset cursor for paging a domain's content (ADR 0077 C6). Ordered by
+ * `(createdAt, memoryItemId)`, mirroring the event list cursor shape.
+ */
+export interface MemoryContentCursor {
+  createdAt: string;
+  memoryItemId: string;
+}
+
+export interface MemoryItemPage {
+  items: MemoryItem[];
+  nextCursor: MemoryContentCursor | null;
+  hasMore: boolean;
+}
+
 export type MemoryDeleteResult = 'deleted' | 'not_found' | 'already_deleted';
 
 export type MemoryTombstoneResult = 'tombstoned' | 'not_found' | 'not_deleted';
@@ -189,6 +204,55 @@ export class MemoryStore {
       .all(privacyDomain) as MemoryItemRow[];
 
     return rows.map((row) => this.resolveContent(mapRow(row)));
+  }
+
+  /**
+   * A bounded, cursor-paged page of a domain's active items with resolved
+   * content (ADR 0077 Gate C read surface). Per-item decryption is CPU work, so
+   * the read API pages rather than scanning a whole domain (C6). Fetches one
+   * extra row to detect `hasMore` without a second query. Only active items are
+   * returned; deleted and tombstoned items are not content (C5).
+   */
+  public listInDomainPage(
+    privacyDomain: string,
+    options: { limit?: number; after?: MemoryContentCursor | null } = {},
+  ): MemoryItemPage {
+    const limit = options.limit ?? 100;
+
+    if (!Number.isInteger(limit) || limit < 1) {
+      throw new Error('Memory content page limit must be a positive integer.');
+    }
+
+    const after = options.after ?? null;
+    const rows = (after === null
+      ? this.db
+          .prepare(`
+            SELECT * FROM memory_item
+            WHERE privacy_domain = ? AND deletion_state = 'active'
+            ORDER BY created_at ASC, memory_item_id ASC
+            LIMIT ?
+          `)
+          .all(privacyDomain, limit + 1)
+      : this.db
+          .prepare(`
+            SELECT * FROM memory_item
+            WHERE privacy_domain = ? AND deletion_state = 'active'
+              AND (created_at > ? OR (created_at = ? AND memory_item_id > ?))
+            ORDER BY created_at ASC, memory_item_id ASC
+            LIMIT ?
+          `)
+          .all(privacyDomain, after.createdAt, after.createdAt, after.memoryItemId, limit + 1)
+    ) as MemoryItemRow[];
+
+    const pageRows = rows.slice(0, limit);
+    const items = pageRows.map((row) => this.resolveContent(mapRow(row)));
+    const last = pageRows.length === 0 ? undefined : pageRows[pageRows.length - 1];
+
+    return {
+      items,
+      nextCursor: last === undefined ? null : { createdAt: last.created_at, memoryItemId: last.memory_item_id },
+      hasMore: rows.length > limit,
+    };
   }
 
   /**

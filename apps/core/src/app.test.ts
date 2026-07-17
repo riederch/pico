@@ -1651,6 +1651,179 @@ describe('domain crypto-shred trigger', () => {
   });
 });
 
+describe('memory content read API (Gate C)', () => {
+  it("returns a domain's items with their content to an authenticated reader", async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    const id = await recordMemoryItem(app, session, { content: 'A private secret.' });
+
+    const list = await app.inject({ method: 'GET', url: '/api/memory/domains/domain-private/items', headers: auth });
+    expect(list.statusCode).toBe(200);
+    const body = list.json() as { items: { memoryItemId: string; content?: string }[]; hasMore: boolean; nextCursor: string | null };
+    expect(body.items.map((item) => item.memoryItemId)).toEqual([id]);
+    expect(body.items[0].content).toBe('A private secret.');
+    expect(body.hasMore).toBe(false);
+    expect(body.nextCursor).not.toBeNull();
+
+    const single = await app.inject({ method: 'GET', url: `/api/memory/domains/domain-private/items/${id}`, headers: auth });
+    expect(single.statusCode).toBe(200);
+    expect(single.json().content).toBe('A private secret.');
+
+    await app.close();
+  });
+
+  it('never exposes the unverified owner/controller on the read surface', async () => {
+    // owner/controller are attacker-controllable writer input (ADR 0077 C2), so
+    // they are never authorization inputs and are not presented as if they were.
+    const app = await bootstrappedApp();
+    const session = await login(app);
+    const id = await recordMemoryItem(app, session);
+
+    const single = await app.inject({
+      method: 'GET',
+      url: `/api/memory/domains/domain-private/items/${id}`,
+      headers: { authorization: `Bearer ${session}` },
+    });
+    const body = single.json() as Record<string, unknown>;
+    expect(body.owner).toBeUndefined();
+    expect(body.controller).toBeUndefined();
+    expect(body.keyEnvelopeRef).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('pages the domain with a bounded limit and an opaque cursor', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    const ids: string[] = [];
+    for (let index = 0; index < 3; index += 1) {
+      ids.push(await recordMemoryItem(app, session, { content: `secret ${index}` }));
+    }
+
+    const first = await app.inject({ method: 'GET', url: '/api/memory/domains/domain-private/items?limit=2', headers: auth });
+    const firstBody = first.json() as { items: { memoryItemId: string }[]; hasMore: boolean; nextCursor: string };
+    expect(firstBody.items).toHaveLength(2);
+    expect(firstBody.hasMore).toBe(true);
+
+    const second = await app.inject({
+      method: 'GET',
+      url: `/api/memory/domains/domain-private/items?limit=2&after=${encodeURIComponent(firstBody.nextCursor)}`,
+      headers: auth,
+    });
+    const secondBody = second.json() as { items: { memoryItemId: string }[]; hasMore: boolean };
+    expect(secondBody.items).toHaveLength(1);
+    expect(secondBody.hasMore).toBe(false);
+
+    // Every recorded item appears exactly once across the two pages.
+    const seen = [...firstBody.items, ...secondBody.items].map((item) => item.memoryItemId);
+    expect(new Set(seen).size).toBe(3);
+    expect([...seen].sort()).toEqual([...ids].sort());
+
+    await app.close();
+  });
+
+  it('rejects a malformed pagination cursor', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/memory/domains/domain-private/items?after=not-a-cursor',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(response.statusCode).toBe(400);
+
+    await app.close();
+  });
+
+  it('gates reads on domain readership, not the operator role', async () => {
+    // Readership is a distinct authority from the operator role (ADR 0077 C1):
+    // a policy that denies a domain must deny it here even for the operator
+    // session, without the operator branch overriding it. This is exactly what
+    // stops a second principal inheriting read-all by role.
+    const app = await buildAppWithCapturedLog({
+      readership: { mayRead: (_principal, privacyDomain) => privacyDomain === 'domain-readable' },
+    });
+    await bootstrap(app);
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    await recordMemoryItem(app, session, { privacyDomain: 'domain-readable', content: 'readable' });
+    await recordMemoryItem(app, session, { privacyDomain: 'domain-forbidden', content: 'forbidden' });
+
+    const readable = await app.inject({ method: 'GET', url: '/api/memory/domains/domain-readable/items', headers: auth });
+    expect(readable.statusCode).toBe(200);
+    expect((readable.json() as { items: unknown[] }).items).toHaveLength(1);
+
+    // The operator holds host-admin yet cannot read a domain it is not a reader
+    // of. The denial is non-enumerating (404), not a content response.
+    const forbiddenList = await app.inject({ method: 'GET', url: '/api/memory/domains/domain-forbidden/items', headers: auth });
+    expect(forbiddenList.statusCode).toBe(404);
+
+    const forbiddenItem = await app.inject({ method: 'GET', url: '/api/memory/domains/domain-forbidden/items/whatever', headers: auth });
+    expect(forbiddenItem.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('is closed to the principal-less static token and to anonymous callers', async () => {
+    const app = await buildAppWithCapturedLog({ foundationToken: 'dev-token' });
+    await bootstrap(app);
+
+    // The static token's ceiling is foundation-diagnostic (ADR 0075 A1): it can
+    // read a memory.recorded summary, never full content.
+    const withToken = await app.inject({
+      method: 'GET',
+      url: '/api/memory/domains/domain-private/items',
+      headers: { authorization: 'Bearer dev-token' },
+    });
+    expect(withToken.statusCode).toBe(401);
+
+    const anonymous = await app.inject({ method: 'GET', url: '/api/memory/domains/domain-private/items' });
+    expect(anonymous.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('returns 404 for an item that is not present in the domain', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/memory/domains/domain-private/items/mem_missing',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(response.statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('reports a crypto-shredded item as unavailable instead of fabricating content', async () => {
+    const app = await buildAppWithCapturedLog({ memoryEncryption: true });
+    await bootstrap(app);
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    const id = await recordMemoryItem(app, session, { content: 'A private secret.' });
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: auth,
+      payload: { confirm: 'domain-private' },
+    });
+
+    const single = await app.inject({ method: 'GET', url: `/api/memory/domains/domain-private/items/${id}`, headers: auth });
+    expect(single.statusCode).toBe(200);
+    const body = single.json() as { content?: string; contentUnavailable?: string };
+    expect(body.content).toBeUndefined();
+    expect(body.contentUnavailable).toBe('key_shredded');
+
+    await app.close();
+  });
+});
+
 describe('Foundation API access classes', () => {
   it('refuses to serve an unclassified Foundation API route', async () => {
     const app = await buildApp({
@@ -1776,7 +1949,11 @@ function readStoredContent(databasePath: string, memoryItemId: string): { conten
   }
 }
 
-async function recordMemoryItem(app: Awaited<ReturnType<typeof buildApp>>, session: string): Promise<string> {
+async function recordMemoryItem(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  session: string,
+  overrides: { privacyDomain?: string; content?: string; contentType?: string } = {},
+): Promise<string> {
   const response = await app.inject({
     method: 'POST',
     url: '/api/events',
@@ -1784,7 +1961,11 @@ async function recordMemoryItem(app: Awaited<ReturnType<typeof buildApp>>, sessi
     payload: {
       deviceId: 'desktop-dev',
       type: 'memory.recorded',
-      payload: { privacyDomain: 'domain-private', contentType: 'text/plain', content: 'A private secret.' },
+      payload: {
+        privacyDomain: overrides.privacyDomain ?? 'domain-private',
+        contentType: overrides.contentType ?? 'text/plain',
+        content: overrides.content ?? 'A private secret.',
+      },
     },
   });
 

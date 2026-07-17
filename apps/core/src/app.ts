@@ -26,6 +26,8 @@ import {
   type PicoEventListResponse,
   type PicoEventType,
   type PicoHealthResponse,
+  type PicoMemoryContentItem,
+  type PicoMemoryContentListResponse,
   type PicoRealtimeTicketResponse,
   type PicoRetentionPolicyListResponse,
   type PicoRetentionPolicyResponse,
@@ -36,7 +38,8 @@ import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore, type EventCursor } from './event-store.js';
-import type { MemoryStore } from './memory-store.js';
+import type { MemoryContentCursor, MemoryItem, MemoryStore } from './memory-store.js';
+import { SoleResidentReadership, type DomainReadership } from './domain-readership.js';
 import { registerWebDashboard } from './static-web.js';
 import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
@@ -177,6 +180,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const sessions = new SessionStore();
   const bootstrapCode = new OperatorBootstrapCode();
   const accessClasses = new AccessClassRegistry();
+  // Domain readership for the `domain-content` class (ADR 0077 A7 seam). A
+  // distinct authority from the operator role; the foundation-phase default
+  // resolves to the sole principal reading every domain (ADR 0077 C1).
+  const readership: DomainReadership = config.readership ?? new SoleResidentReadership();
 
   function appendServerEvent(type: FoundationEventType, payload: FoundationEventPayload): void {
     const event = factory.create({ deviceId: config.deviceId, type, payload });
@@ -353,8 +360,34 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return unauthorized(reply, 'Foundation credential is required.');
     }
 
-    // Every remaining class needs a principal, so the principal-less static
-    // token cannot reach them: its ceiling is foundation-diagnostic (ADR 0075).
+    if (accessClass === 'domain-content') {
+      // Readership is a DISTINCT authority from the operator role (ADR 0077 C1):
+      // this branch runs the readership evaluation and must NOT fall through to
+      // the operator check below, or being the operator would authorize a read.
+      // It needs an authenticated session principal — the principal-less static
+      // token is capped at foundation-diagnostic and cannot reach here — plus a
+      // positive readership evaluation for the target domain. Swapping the
+      // readership policy narrows what the operator reads without touching this
+      // authentication gate; that is the seam a second principal plugs into.
+      if (authority !== 'operator') {
+        return unauthorized(reply, 'Foundation operator session is required.');
+      }
+
+      const privacyDomain = (request.params as { privacyDomain?: string }).privacyDomain;
+      const sessionDigest = sessions.digestOf(readBearerCredential(request.headers.authorization)) ?? '';
+
+      if (privacyDomain === undefined || !readership.mayRead({ sessionDigest }, privacyDomain)) {
+        // Non-enumerating denial (ADR 0077 C4): does not reveal whether the
+        // domain exists or holds content.
+        return sendNoStore(reply.code(404), { error: 'Not found.' });
+      }
+
+      return;
+    }
+
+    // Every remaining class needs the operator role, so the principal-less
+    // static token cannot reach them: its ceiling is foundation-diagnostic
+    // (ADR 0075).
     if (authority !== 'operator') {
       return unauthorized(reply, 'Foundation operator session is required.');
     }
@@ -403,6 +436,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // class that needs an operator session *and* explicit confirmation of the
   // exact target (ADR 0075 Gate B / A8, ADR 0071 step 4).
   accessClasses.register('POST', '/api/memory/domains/:privacyDomain/shred', 'host-admin-destructive');
+  // The memory content read surface (ADR 0075 Gate C, ADR 0077). `domain-content`
+  // is authorized by domain readership, not the operator role: an operator
+  // session alone does not read content, and the static token never reaches here.
+  accessClasses.register('GET', '/api/memory/domains/:privacyDomain/items', 'domain-content');
+  accessClasses.register('GET', '/api/memory/domains/:privacyDomain/items/:memoryItemId', 'domain-content');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -710,6 +748,52 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, { privacyDomain, removedKeyVersions });
   });
 
+  // Memory content read API (ADR 0075 Gate C, ADR 0077). Readership for the
+  // target domain was already enforced in the onRequest hook (domain-content).
+  // Here we only page and resolve content: the store decrypts in-process and
+  // reports contentUnavailable for a crypto-shredded item (ADR 0071); the API
+  // adds no at-rest or transport confidentiality (ADR 0077 C7).
+  app.get('/api/memory/domains/:privacyDomain/items', async (request, reply) => {
+    const { privacyDomain } = request.params as { privacyDomain: string };
+    const query = request.query as { limit?: string; after?: string };
+
+    const limitResult = parseLimit(query.limit);
+    if (!limitResult.ok) {
+      return sendNoStore(reply.code(400), { error: limitResult.error });
+    }
+
+    const cursorResult = parseMemoryContentCursor(query.after);
+    if (!cursorResult.ok) {
+      return sendNoStore(reply.code(400), { error: cursorResult.error });
+    }
+
+    const page = store.memory().listInDomainPage(privacyDomain, {
+      limit: limitResult.limit,
+      after: cursorResult.cursor,
+    });
+
+    const response: PicoMemoryContentListResponse = {
+      items: page.items.map(toMemoryContentItem),
+      nextCursor: page.nextCursor === null ? null : encodeMemoryContentCursor(page.nextCursor),
+      hasMore: page.hasMore,
+    };
+
+    return sendNoStore(reply, response);
+  });
+
+  app.get('/api/memory/domains/:privacyDomain/items/:memoryItemId', async (request, reply) => {
+    const { privacyDomain, memoryItemId } = request.params as { privacyDomain: string; memoryItemId: string };
+    const item = store.memory().getInDomain(memoryItemId, privacyDomain);
+
+    // Deleted and tombstoned items are not content; a missing item and a
+    // non-readable one answer the same way (ADR 0077 C4/C5).
+    if (item === undefined || item.deletionState !== 'active') {
+      return sendNoStore(reply.code(404), { error: 'Not found.' });
+    }
+
+    return sendNoStore(reply, toMemoryContentItem(item));
+  });
+
   app.post('/api/realtime/tickets', async (request, reply) => {
     // Tickets exist to carry a credential through a browser WebSocket handshake.
     // With neither a token nor an operator, `WS /ws` needs no credential and a
@@ -963,6 +1047,55 @@ function parseEventCursor(rawCursor: string | undefined): { ok: true; cursor: Ev
 
 function encodeEventCursor(cursor: EventCursor): string {
   return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+/**
+ * Projects a stored memory item to the content read shape (ADR 0077). Carries
+ * the already-readable metadata and exactly one of content / contentUnavailable;
+ * the unverified stored owner/controller are omitted (C2), and so is the key
+ * envelope reference, which is key plumbing and not content.
+ */
+function toMemoryContentItem(item: MemoryItem): PicoMemoryContentItem {
+  return {
+    memoryItemId: item.memoryItemId,
+    privacyDomain: item.privacyDomain,
+    contentType: item.contentType,
+    contentPosture: item.contentPosture,
+    deletionState: item.deletionState,
+    ...(item.retentionPolicyRef === undefined ? {} : { retentionPolicyRef: item.retentionPolicyRef }),
+    ...(item.content === undefined ? {} : { content: item.content }),
+    ...(item.contentUnavailable === undefined ? {} : { contentUnavailable: item.contentUnavailable }),
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function parseMemoryContentCursor(rawCursor: string | undefined): { ok: true; cursor: MemoryContentCursor | null } | { ok: false; error: string } {
+  if (rawCursor === undefined) {
+    return { ok: true, cursor: null };
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(Buffer.from(rawCursor, 'base64url').toString('utf8')) as unknown;
+  } catch {
+    return { ok: false, error: 'after cursor is invalid.' };
+  }
+
+  if (!isMemoryContentCursor(parsed)) {
+    return { ok: false, error: 'after cursor is invalid.' };
+  }
+
+  return { ok: true, cursor: parsed };
+}
+
+function encodeMemoryContentCursor(cursor: MemoryContentCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function isMemoryContentCursor(value: unknown): value is MemoryContentCursor {
+  return isRecord(value) && typeof value.createdAt === 'string' && typeof value.memoryItemId === 'string';
 }
 
 function isWebSocketOriginAllowed(originHeader: string | string[] | undefined, hostHeader: string | string[] | undefined, allowedOrigins: readonly string[]): boolean {

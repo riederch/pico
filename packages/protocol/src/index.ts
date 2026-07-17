@@ -673,6 +673,33 @@ export interface PicoRetentionPolicyListResponse {
   retentionPolicies: PicoRetentionPolicyResponse[];
 }
 
+/**
+ * One memory item as returned by the content read API (ADR 0077, Gate C). It
+ * carries the metadata already readable at rest (ADR 0071) plus exactly one of
+ * `content` (a readable item) or `contentUnavailable` (a `domain_encrypted`
+ * item whose key was crypto-shredded or whose provider is absent). The stored
+ * `owner`/`controller` are deliberately omitted: they are unverified writer
+ * input today and are never authorization inputs (ADR 0077 C2).
+ */
+export interface PicoMemoryContentItem {
+  memoryItemId: string;
+  privacyDomain: string;
+  contentType: string;
+  contentPosture: MemoryContentPosture;
+  deletionState: MemoryItemDeletionState;
+  retentionPolicyRef?: string;
+  content?: string;
+  contentUnavailable?: 'key_shredded' | 'crypto_unavailable';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PicoMemoryContentListResponse {
+  items: PicoMemoryContentItem[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
 export type PicoEventAppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
 
 export interface PicoEventCreateResponse<TPayload = unknown> {

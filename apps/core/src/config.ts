@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { DomainReadership } from './domain-readership.js';
 
 export interface CoreConfig {
   host: string;
@@ -20,6 +21,13 @@ export interface CoreConfig {
    * read it the same way an operator does instead of through a back door.
    */
   logDestination?: NodeJS.WritableStream;
+  /**
+   * Domain readership evaluation for the `domain-content` class (ADR 0077).
+   * Defaults to the foundation-phase {@link SoleResidentReadership}. Injected in
+   * tests to prove the readership seam gates the read path independently of the
+   * operator role: an authenticated principal that is not a reader is denied.
+   */
+  readership?: DomainReadership;
 }
 
 type Environment = Record<string, string | undefined>;
