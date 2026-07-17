@@ -24,7 +24,7 @@ export const accessClasses = [
   'domain-content',
   // Operator role. The static token never reaches this.
   'host-admin',
-  // Operator role plus explicit confirmation. Gate B; unused.
+  // Operator role plus explicit confirmation of the exact target.
   'host-admin-destructive',
 ] as const;
 
@@ -90,6 +90,14 @@ export class AccessClassRegistry {
 export function isFoundationApiRoute(url: string): boolean {
   return url.startsWith(FOUNDATION_API_PREFIX);
 }
+
+/**
+ * The confirmation field an irreversible operation must carry (ADR 0075 A8).
+ * Its value must be the exact name of the thing being destroyed, so a
+ * mis-addressed request cannot destroy the wrong one: the target in the URL and
+ * the name in the body have to agree.
+ */
+export const DESTRUCTIVE_CONFIRM_FIELD = 'confirm';
 
 function routeKey(method: string, url: string): string {
   return `${method.toUpperCase()} ${url}`;

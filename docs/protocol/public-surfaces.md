@@ -46,6 +46,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `DELETE /api/auth/session` | experimental foundation operator surface | Logs the calling session out. |
 | `DELETE /api/auth/sessions` | experimental foundation administration surface | Revokes every session. Requires an operator session. |
 | `PUT /api/auth/credential` | experimental foundation administration surface | Replaces the operator passphrase; requires the current one and ends every session. |
+| `POST /api/memory/domains/:privacyDomain/shred` | experimental irreversible administration surface | Destroys a privacy domain's key versions so its content becomes unreadable (ADR 0071). Requires an operator session **and** a `confirm` field repeating the exact domain name; refuses with `409` when memory encryption is off, because there would be no keys to destroy. Appends a `memory.domain_shredded` audit event. |
 | `GET /api/memory/retention-policies` | experimental foundation administration surface | Lists named retention policies. Requires an operator session. |
 | `POST /api/memory/retention-policies` | experimental foundation administration surface | Creates a retention policy. Requires an operator session. |
 | `GET /api/memory/retention-policies/:retentionPolicyId` | experimental foundation administration surface | Reads one retention policy. Requires an operator session. |

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as an access-control threat model and scoping decision. **Gate A is now implemented** (ADR 0076 mechanics: operator principal, sessions, access-class enforcement, auth audit). Gates B and C remain closed, so the crypto-shred HTTP trigger, retention policy CRUD and the content read API do not exist yet.
+Accepted as an access-control threat model and scoping decision. **Gates A and B are implemented** (ADR 0076 mechanics: operator principal, sessions, access-class enforcement, auth audit; behind them retention policy CRUD and the crypto-shred trigger). **Gate C remains closed**, so the memory content read API does not exist: it still needs the readership seam (A7).
 
 ## Context
 
@@ -106,7 +106,7 @@ Every route carries exactly one class (A2). Authority comes from exactly two sou
 | `authenticated` | any authenticated principal, no role | `GET /api/auth/session`, `DELETE /api/auth/session` | — |
 | `domain-content` | authenticated principal with domain readership | — | memory content read API (ADR 0070 step 5) |
 | `host-admin` | operator session | `DELETE /api/auth/sessions`, `PUT /api/auth/credential`, `/api/memory/retention-policies` (list/create/read/edit/revoke) | — |
-| `host-admin-destructive` | operator session + explicit confirmation + durable audit | — | crypto-shred trigger (ADR 0071 step 4) |
+| `host-admin-destructive` | operator session + explicit confirmation + durable audit | `POST /api/memory/domains/:privacyDomain/shred` | — |
 
 Honest note on `POST /api/events`: the `memory.recorded` content-splitting write (ADR 0069) carries personal content *into* the host over the diagnostic class. A token holder can therefore write — and poison — memory it can never read back. That stays acceptable for the foundation phase and is recorded as a threat; once principals exist, content-writing events should become principal-attributed (the currently unverified `deviceId` gains a verifiable actor), as an additive reclassification.
 
@@ -121,7 +121,7 @@ The WebSocket surface stays diagnostic because broadcasts carry event envelopes 
 Nothing regresses before these gates: programmatic-only administration (retention, shred) and the absent read API remain the status quo.
 
 1. **Gate A — `host-admin` surfaces (first: retention policy CRUD).** Requires: operator bootstrap (A10), session runtime (A5/A6), fail-closed route classification (A2/A3), auth audit (A9) — implemented and tested. **Open, and used: retention policy CRUD (ADR 0074) is the first surface behind it.**
-2. **Gate B — `host-admin-destructive` over HTTP (crypto-shred trigger).** Requires Gate A plus explicit confirmation semantics (A8). The durable audit event already exists.
+2. **Gate B — `host-admin-destructive` over HTTP (crypto-shred trigger).** Requires Gate A plus explicit confirmation semantics (A8). The durable audit event already exists. **Open: `POST /api/memory/domains/:privacyDomain/shred` exists.** The confirmation is the exact domain name repeated in a `confirm` body field; the class enforces that a confirmation is present at all, and the route enforces that it names this domain. With encryption off the route refuses (`409`) instead of performing a shred that would destroy nothing.
 3. **Gate C — `domain-content` read API.** Requires Gate A plus an explicit readership evaluation seam (A7) even while it trivially resolves to the sole operator — the seam must exist in code from day one so a second principal never inherits read-all. The ADR 0070/0071 protection prerequisites are already met.
 
 Gate B and Gate C are independent of each other.

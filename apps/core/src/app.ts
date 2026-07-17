@@ -41,10 +41,11 @@ import { registerWebDashboard } from './static-web.js';
 import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
-import { AccessClassRegistry, isFoundationApiRoute, type AccessClass } from './access-classes.js';
+import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, type AccessClass } from './access-classes.js';
 import { OperatorOverloadedError, type OperatorStore } from './operator-store.js';
 import { SessionStore } from './session-store.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
+import { shredDomainWithAudit } from './domain-shred.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
 const SERVICE_VERSION = '0.1.7';
@@ -359,6 +360,27 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
   });
 
+  // Irreversible operations must carry an explicit confirmation (ADR 0075 A8).
+  // Enforced here rather than left to each handler, so a destructive route
+  // cannot be added without one; the handler still checks that the confirmed
+  // name matches the actual target. This runs after body parsing.
+  app.addHook('preHandler', async (request, reply) => {
+    const routeUrl = request.routeOptions?.url;
+
+    if (routeUrl === undefined || accessClasses.lookup(request.method, routeUrl) !== 'host-admin-destructive') {
+      return;
+    }
+
+    const body = request.body;
+    const confirm = isRecord(body) ? body[DESTRUCTIVE_CONFIRM_FIELD] : undefined;
+
+    if (!isNonEmptyString(confirm, 256)) {
+      return sendNoStore(reply.code(400), {
+        error: `This operation is irreversible and requires "${DESTRUCTIVE_CONFIRM_FIELD}" to name the exact target.`,
+      });
+    }
+  });
+
   // The access class of every Foundation API route (ADR 0075 table, ADR 0076
   // route shapes). `/api/auth/*` is deliberately not diagnostic: the login and
   // bootstrap surfaces must be reachable without the static token, or the token
@@ -377,6 +399,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('GET', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
   accessClasses.register('PUT', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
   accessClasses.register('DELETE', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
+  // Destroying a domain's keys is irreversible by design, so it is the one
+  // class that needs an operator session *and* explicit confirmation of the
+  // exact target (ADR 0075 Gate B / A8, ADR 0071 step 4).
+  accessClasses.register('POST', '/api/memory/domains/:privacyDomain/shred', 'host-admin-destructive');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -642,6 +668,46 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     return reply.code(204).send();
+  });
+
+  app.post('/api/memory/domains/:privacyDomain/shred', async (request, reply) => {
+    const { privacyDomain } = request.params as { privacyDomain: string };
+    const body = (request.body ?? {}) as { confirm?: unknown; reason?: unknown };
+
+    // The preHandler proved a confirmation exists; it must also name this
+    // domain, so a mis-addressed request cannot shred a different one.
+    if (body.confirm !== privacyDomain) {
+      return sendNoStore(reply.code(400), {
+        error: 'confirm must repeat the exact privacy domain being shredded.',
+      });
+    }
+
+    if (body.reason !== undefined && !isNonEmptyString(body.reason, 1_000)) {
+      return sendNoStore(reply.code(400), { error: 'reason must be a non-empty string when provided.' });
+    }
+
+    // Without encryption there are no keys to destroy, so a "shred" would
+    // remove nothing while sounding final. Refuse rather than lie (ADR 0070).
+    if (memoryCrypto === undefined) {
+      return sendNoStore(reply.code(409), {
+        error: 'Crypto-shred requires memory encryption. Content is plaintext at rest, so destroying keys would protect nothing.',
+      });
+    }
+
+    const { removedKeyVersions } = shredDomainWithAudit(
+      store.memory(),
+      (audit) => {
+        appendServerEvent('memory.domain_shredded', audit);
+      },
+      {
+        privacyDomain,
+        ...(body.reason === undefined ? {} : { reason: body.reason as string }),
+      },
+    );
+
+    request.log.warn({ privacyDomain, removedKeyVersions }, 'Privacy domain crypto-shredded.');
+
+    return sendNoStore(reply, { privacyDomain, removedKeyVersions });
   });
 
   app.post('/api/realtime/tickets', async (request, reply) => {

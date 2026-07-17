@@ -1537,6 +1537,120 @@ describe('retention policy administration', () => {
   });
 });
 
+describe('domain crypto-shred trigger', () => {
+  it('is closed without an operator session, including for the static token', async () => {
+    const app = await buildAppWithCapturedLog({ foundationToken: 'dev-token', memoryEncryption: true });
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+    });
+
+    const withToken = await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: { authorization: 'Bearer dev-token' },
+      payload: { confirm: 'domain-private' },
+    });
+    expect(withToken.statusCode).toBe(401);
+
+    const anonymous = await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      payload: { confirm: 'domain-private' },
+    });
+    expect(anonymous.statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('refuses to shred without a confirmation that names the exact domain', async () => {
+    const databasePath = createDatabasePath();
+    const app = await buildAppWithCapturedLog({ databasePath, memoryEncryption: true });
+    await bootstrap(app);
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    const memoryItemId = await recordMemoryItem(app, session);
+
+    const noConfirm = await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: auth,
+      payload: {},
+    });
+    expect(noConfirm.statusCode).toBe(400);
+    expect(noConfirm.json().error).toContain('irreversible');
+
+    // A confirmation naming a different domain must not shred this one: a
+    // mis-addressed request is exactly what confirmation exists to catch.
+    const wrongDomain = await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: auth,
+      payload: { confirm: 'domain-work' },
+    });
+    expect(wrongDomain.statusCode).toBe(400);
+    expect(wrongDomain.json()).toEqual({ error: 'confirm must repeat the exact privacy domain being shredded.' });
+
+    await app.close();
+
+    // Neither attempt destroyed anything: the content is still readable.
+    expect(readStoredContent(databasePath, memoryItemId).content).toBe('A private secret.');
+  });
+
+  it('shreds a confirmed domain, makes its content unreadable and audits it', async () => {
+    const databasePath = createDatabasePath();
+    const app = await buildAppWithCapturedLog({ databasePath, memoryEncryption: true });
+    await bootstrap(app);
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+    const memoryItemId = await recordMemoryItem(app, session);
+
+    const shredded = await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: auth,
+      payload: { confirm: 'domain-private', reason: 'device loss' },
+    });
+    expect(shredded.statusCode).toBe(200);
+    expect(shredded.json()).toEqual({ privacyDomain: 'domain-private', removedKeyVersions: 1 });
+
+    const events = await app.inject({ method: 'GET', url: '/api/events', headers: auth });
+    const audit = (events.json().events as { type: string; payload: Record<string, unknown> }[])
+      .filter((event) => event.type === 'memory.domain_shredded');
+    expect(audit).toHaveLength(1);
+    // The audit records the decision and its references, never content or keys.
+    expect(audit[0].payload).toEqual({ privacyDomain: 'domain-private', removedKeyVersions: 1, reason: 'device loss' });
+
+    await app.close();
+
+    // The item survives as a record, but its content is gone for good: even a
+    // reader holding the key store cannot recover it.
+    const item = readStoredContent(databasePath, memoryItemId);
+    expect(item.content).toBeUndefined();
+    expect(item.contentUnavailable).toBe('key_shredded');
+  });
+
+  it('refuses to shred when encryption is off instead of pretending it protected something', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/memory/domains/domain-private/shred',
+      headers: { authorization: `Bearer ${session}` },
+      payload: { confirm: 'domain-private' },
+    });
+
+    // Without encryption there are no keys to destroy: content is plaintext at
+    // rest, so a "shred" would sound final and change nothing.
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toContain('requires memory encryption');
+
+    await app.close();
+  });
+});
+
 describe('Foundation API access classes', () => {
   it('refuses to serve an unclassified Foundation API route', async () => {
     const app = await buildApp({
@@ -1643,6 +1757,54 @@ function readBootstrapCode(app: Awaited<ReturnType<typeof buildApp>>): string {
   }
 
   throw new Error('No operator bootstrap code was surfaced on the host log.');
+}
+
+/** Reads an item the way a key-holding reader would, after the app let go of the database. */
+function readStoredContent(databasePath: string, memoryItemId: string): { content?: string; contentUnavailable?: string } {
+  const crypto = new MemoryContentCrypto(sodium, new KeyStore(join(dirname(databasePath), 'keys')));
+  const store = new EventStore(databasePath, { memoryCrypto: crypto });
+
+  try {
+    const item = store.memory().getInDomain(memoryItemId, 'domain-private');
+
+    return {
+      ...(item?.content === undefined ? {} : { content: item.content }),
+      ...(item?.contentUnavailable === undefined ? {} : { contentUnavailable: item.contentUnavailable }),
+    };
+  } finally {
+    store.close();
+  }
+}
+
+async function recordMemoryItem(app: Awaited<ReturnType<typeof buildApp>>, session: string): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/events',
+    headers: { authorization: `Bearer ${session}` },
+    payload: {
+      deviceId: 'desktop-dev',
+      type: 'memory.recorded',
+      payload: { privacyDomain: 'domain-private', contentType: 'text/plain', content: 'A private secret.' },
+    },
+  });
+
+  if (response.statusCode !== 201) {
+    throw new Error(`Recording a memory item failed: ${response.body}`);
+  }
+
+  return response.json().event.payload.memoryItemId as string;
+}
+
+async function bootstrap(app: Awaited<ReturnType<typeof buildApp>>): Promise<void> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/bootstrap',
+    payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+  });
+
+  if (response.statusCode !== 201) {
+    throw new Error(`Operator bootstrap failed: ${response.body}`);
+  }
 }
 
 async function bootstrappedApp(): Promise<Awaited<ReturnType<typeof buildApp>>> {

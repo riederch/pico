@@ -11,9 +11,11 @@ import type { MemoryStore } from './memory-store.js';
  * first so the recorded version count is accurate; the audit event is written
  * immediately after into the append-only log.
  *
- * There is deliberately no HTTP trigger: crypto-shred is a privileged
- * operation that must wait for an authenticated admin surface. This is a
- * programmatic capability, like `MemoryStore.cryptoShredDomain` itself.
+ * The HTTP trigger lives behind ADR 0075 Gate B: `POST
+ * /api/memory/domains/:privacyDomain/shred` carries the
+ * `host-admin-destructive` class, so it needs an operator session *and* a
+ * confirmation naming the exact domain. This function stays free of HTTP
+ * concerns so the operation can also be driven programmatically.
  */
 
 export type AppendShredAudit = (input: {
