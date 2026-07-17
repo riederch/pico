@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as an access-control threat model and scoping decision. **Gates A and B are implemented** (ADR 0076 mechanics: operator principal, sessions, access-class enforcement, auth audit; behind them retention policy CRUD and the crypto-shred trigger). **Gate C remains closed**, so the memory content read API does not exist: it still needs the readership seam (A7).
+Accepted as an access-control threat model and scoping decision. **Gates A and B are implemented** (ADR 0076 mechanics: operator principal, sessions, access-class enforcement, auth audit; behind them retention policy CRUD and the crypto-shred trigger). **Gate C is now designed but not implemented**: ADR 0077 specifies the memory content read API and the domain readership seam (A7); the read surface does not exist until that runtime lands.
 
 ## Context
 
@@ -104,7 +104,7 @@ Every route carries exactly one class (A2). Authority comes from exactly two sou
 | `setup-bootstrap` | protected local channel, only while no principal exists | `POST /api/auth/bootstrap` | later the Move-In/claim endpoint (ADR 0027) |
 | `foundation-diagnostic` | access mode + static token where configured; operator session where one exists | `GET /api/system/version`, `GET /api/system/status`, `GET /api/events`, `GET /api/events/tail`, `POST /api/events`, `POST /api/realtime/tickets`, `WS /ws` | — |
 | `authenticated` | any authenticated principal, no role | `GET /api/auth/session`, `DELETE /api/auth/session` | — |
-| `domain-content` | authenticated principal with domain readership | — | memory content read API (ADR 0070 step 5) |
+| `domain-content` | authenticated principal with domain readership | — | memory content read API (ADR 0070 step 5; designed in ADR 0077) |
 | `host-admin` | operator session | `DELETE /api/auth/sessions`, `PUT /api/auth/credential`, `/api/memory/retention-policies` (list/create/read/edit/revoke) | — |
 | `host-admin-destructive` | operator session + explicit confirmation + durable audit | `POST /api/memory/domains/:privacyDomain/shred` | — |
 
@@ -122,7 +122,7 @@ Nothing regresses before these gates: programmatic-only administration (retentio
 
 1. **Gate A — `host-admin` surfaces (first: retention policy CRUD).** Requires: operator bootstrap (A10), session runtime (A5/A6), fail-closed route classification (A2/A3), auth audit (A9) — implemented and tested. **Open, and used: retention policy CRUD (ADR 0074) is the first surface behind it.**
 2. **Gate B — `host-admin-destructive` over HTTP (crypto-shred trigger).** Requires Gate A plus explicit confirmation semantics (A8). The durable audit event already exists. **Open: `POST /api/memory/domains/:privacyDomain/shred` exists.** The confirmation is the exact domain name repeated in a `confirm` body field; the class enforces that a confirmation is present at all, and the route enforces that it names this domain. With encryption off the route refuses (`409`) instead of performing a shred that would destroy nothing.
-3. **Gate C — `domain-content` read API.** Requires Gate A plus an explicit readership evaluation seam (A7) even while it trivially resolves to the sole operator — the seam must exist in code from day one so a second principal never inherits read-all. The ADR 0070/0071 protection prerequisites are already met.
+3. **Gate C — `domain-content` read API.** Requires Gate A plus an explicit readership evaluation seam (A7) even while it trivially resolves to the sole operator — the seam must exist in code from day one so a second principal never inherits read-all. The ADR 0070/0071 protection prerequisites are already met. **Designed in ADR 0077** (`mayReadDomain(principal, domain)` distinct from the operator role; read surface `GET /api/memory/domains/:privacyDomain/items[/:memoryItemId]`), not yet implemented.
 
 Gate B and Gate C are independent of each other.
 
@@ -133,7 +133,7 @@ This ADR does not define or implement:
 - login, bootstrap, session or credential mechanics (KDF parameters, cookie-vs-header transport, CSRF design, rate-limit numbers — the follow-up session ADR)
 - user accounts as a product concept, multi-operator administration or any membership credential machinery (ADR 0029/0045)
 - the Move-In/claim runtime (ADR 0024/0027) or Setup Mode UX
-- the content read API itself (own ADR behind Gate C)
+- the content read API runtime (designed in ADR 0077; this ADR only scopes the gate)
 - passkey/hardware-key selection, TLS, mDNS or browser trust for appliances
 - Pico Link authentication, remote access or relay trust changes
 - Home Assistant entity/service authorization (ADR 0019)
@@ -179,3 +179,4 @@ Negative:
 - Gates ADR `0070` step 5 (content read API), ADR `0071` step 4's missing HTTP trigger and ADR `0074`'s HTTP administration behind Gates A–C.
 - Follows ADR `0037`'s audit style and ADR `0074`'s fail-safe principle (A3).
 - Refined by ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`, which specifies the credential, session, bootstrap, reset and auth-audit mechanics this ADR deferred, and which the Gate A runtime implements.
+- Refined by ADR `0077-foundation-memory-content-read-api-and-domain-readership-seam.md`, which designs Gate C: the `domain-content` read surface and the domain readership evaluation seam A7 demanded (readership as an authority distinct from the operator role, never keyed on the unverified stored `owner`/`controller`).
