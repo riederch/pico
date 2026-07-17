@@ -55,7 +55,7 @@ Out of scope for at-rest encryption, by nature not by neglect:
 ### The ADR 0016 questions, answered for this surface
 
 1. **Who controls keys?** The owning Pico (the item's `owner`/`controller` identity). Operationally the Foundation process manages Domain Content Keys on the owner's behalf. The host-administration role grants no key authority (ADR 0029).
-2. **Which devices can read which domain?** Foundation phase: only the single Foundation host itself. Target: readers authorized per domain through key envelopes (ADR 0032) and membership (ADR 0045); nothing in this ADR widens the reader set.
+2. **Which devices can read which domain?** Foundation phase: only the single Foundation host itself. Target: readers authorized per domain through key envelopes (ADR 0032) and membership (ADR 0045); nothing in this ADR widens the reader set. The widening direction is now scoped by ADR 0078 (custody classes, KEK-per-reader wrapping, rotation-on-removal), behind its own gates.
 3. **What can a server see?** Ciphertext plus the storage metadata listed above. Never plaintext content. Hosting ciphertext and key envelopes is not permission to read them.
 4. **What can a relay see?** Nothing new; memory at rest never reaches a relay. If items ever sync, they travel as protected payload envelopes (ADR 0032) and relays see transport metadata only (ADR 0031).
 5. **What happens after device loss?** Honest current answer: while KEKs live with the host, losing the host risks all domains — one reason the store holds foundation data only. Target: KEKs live in separated key storage (ADR 0033 realization); device loss then triggers rotation and, where required, domain crypto-shredding.
@@ -153,7 +153,7 @@ Positive:
 
 Negative:
 
-- single-host scope means sharing and multi-device reads will need follow-up threat-model work before the reader set may widen
+- single-host scope means sharing and multi-device reads will need follow-up threat-model work before the reader set may widen — that follow-up now exists as ADR 0078, with the runtime still gated there
 - metadata (domains, types, sizes, summaries) remains readable at rest by design; padding remains open
 - honest limits must travel with the feature: at-rest encryption does not defend a compromised running process, and crypto-shredding is bounded by key-handling reality
 - the store remains foundation-only until the security-relevance gate is passed

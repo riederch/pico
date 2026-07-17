@@ -60,7 +60,7 @@ This ADR does not define or implement:
 - key rotation mechanics (the versioned filename layout merely leaves room for them; behaviour is ADR 0033 follow-up work)
 - the passphrase-protected export/recovery flow and its UX (direction fixed above; its own step)
 - identity, device, transport or Pico Link keys (ADR 0029/0033 scope)
-- multi-device key distribution or domain membership
+- multi-device key distribution or domain membership (direction now scoped by ADR 0078: custody classes on top of this store, with a fail-closed refusal to hold KEK files for reader-custody domains)
 - TPM/HSM/keystore integration (allowed later as an additive anchor)
 - any change to what backups contain today (the store is still plaintext-at-rest foundation data under ADR 0070/0071)
 

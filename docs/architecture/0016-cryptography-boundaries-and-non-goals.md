@@ -66,6 +66,8 @@ ADR `0075-foundation-local-authentication-session-and-membership-threat-model-an
 
 ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` makes that concrete without inventing a password scheme: Argon2id through libsodium `crypto_pwhash_str` (self-describing parameters, upgradeable via `needs_rehash`), interactive cost limits chosen for appliance-class hardware, bounded serialized verification so the memory-hard KDF cannot become a denial-of-service lever, and CSPRNG identifiers for sessions and the bootstrap code.
 
+ADR `0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md` answers the threat-model questions for distributing memory Domain Content Keys to readers beyond the single host: explicit per-domain custody classes (host-custody vs reader-custody), KEK-per-reader wrapping via libsodium sealed box (`pico.suite.share.v1` direction, in-payload canonical context binding — message format over a reviewed construction, no new primitive), rotation-on-removal with the ADR 0033 honesty limits, and three gates (reader keys, canonical bytes + vectors, membership runtime) before anything is security-relevant.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

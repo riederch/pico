@@ -179,5 +179,6 @@ Negative:
 - Respects **ADR 0069**: the read API is the full-content surface that `memory.recorded` deliberately is not; the reference-only event and its non-sensitive `summary` are unchanged.
 - Carries **ADR 0074** `retentionPolicyRef` through as read metadata; deletion authority and the sweep are unchanged.
 - Leaves **ADR 0029/0031/0032/0045** as the membership/key end state; this ADR defines only the readership evaluation seam they will implement, and forbids (C2) using today's unverified provenance as a stand-in for them.
+- The key-distribution side of the same seam is scoped by **ADR 0078**: membership rows (its Gate R3) are the declared successor of the foundation-phase readership policy on this API path *and* the issuance authority for reader-custody envelopes; for a reader-custody domain the host cannot decrypt, so `mayReadDomain` on the plaintext path is structurally false for everyone and content moves as envelopes instead.
 - Constrained by **ADR 0016**: this is authorization, not cryptography — no new primitives, no invented scheme.
 - Bounded by **ADR 0041** access modes and the ADR 0075/0076 no-TLS scope: the content surface's exposure is the access mode's exposure, stated as an honest limit and an open question.
