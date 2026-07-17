@@ -1,5 +1,5 @@
 import { memoryRetentionModes } from '@pico/protocol';
-import type { ConnectionStatus, DashboardState, EventFilters, PicoEvent, RetentionMode, RetentionPolicy, SystemStatus } from './types.js';
+import type { ConnectionStatus, DashboardState, EventFilters, MemoryContentItem, PicoEvent, RetentionMode, RetentionPolicy, SystemStatus } from './types.js';
 
 export interface DashboardView {
   getBaseUrl(): string;
@@ -11,6 +11,19 @@ export interface DashboardView {
   onOperatorLoginRequested(handler: () => void): void;
   /** Shows the administration section. It is useless without an operator session. */
   setAdminVisible(visible: boolean): void;
+  /**
+   * Shows the memory content reading section. Distinct from administration
+   * (ADR 0077 A7): it is reading, not host management, and both happen to need
+   * the same session in the single-operator phase.
+   */
+  setContentReadVisible(visible: boolean): void;
+  readContentDomain(): string;
+  onContentReadRequested(handler: () => void): void;
+  onContentLoadMoreRequested(handler: () => void): void;
+  /** Replaces the content table, or appends the next page when `append` is set. */
+  renderContentItems(items: MemoryContentItem[], options: { append: boolean; hasMore: boolean }): void;
+  clearContentItems(): void;
+  setContentReadStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
   renderRetentionPolicies(policies: RetentionPolicy[]): void;
   readRetentionPolicyForm(): RetentionPolicyFormValue;
   fillRetentionPolicyForm(policy: RetentionPolicy | null): void;
@@ -56,6 +69,14 @@ interface DashboardElements {
   eventDetail: HTMLElement;
   rawStatus: HTMLPreElement;
   adminSection: HTMLElement;
+  contentSection: HTMLElement;
+  contentReadForm: HTMLFormElement;
+  contentDomainInput: HTMLInputElement;
+  contentReadStatus: HTMLElement;
+  contentCount: HTMLElement;
+  contentItemsBody: HTMLTableSectionElement;
+  contentItemsEmpty: HTMLElement;
+  contentLoadMoreButton: HTMLButtonElement;
   retentionPolicyForm: HTMLFormElement;
   retentionPolicyIdInput: HTMLInputElement;
   retentionPolicyNameInput: HTMLInputElement;
@@ -120,6 +141,7 @@ export function createDashboardView(document: Document): DashboardView {
   let eventSelected: ((eventId: string) => void) | null = null;
   let retentionPolicyEditRequested: ((retentionPolicyId: string) => void) | null = null;
   let retentionPolicyRevokeRequested: ((retentionPolicyId: string) => void) | null = null;
+  let contentLoadMoreRequested: (() => void) | null = null;
 
   const elements: DashboardElements = {
     form: requireElement(document, 'connection-form', HTMLFormElement),
@@ -147,6 +169,14 @@ export function createDashboardView(document: Document): DashboardView {
     eventDetail: requireElement(document, 'event-detail', HTMLElement),
     rawStatus: requireElement(document, 'raw-status', HTMLPreElement),
     adminSection: requireElement(document, 'admin-section', HTMLElement),
+    contentSection: requireElement(document, 'content-section', HTMLElement),
+    contentReadForm: requireElement(document, 'content-read-form', HTMLFormElement),
+    contentDomainInput: requireElement(document, 'content-domain', HTMLInputElement),
+    contentReadStatus: requireElement(document, 'content-read-status', HTMLElement),
+    contentCount: requireElement(document, 'content-count', HTMLElement),
+    contentItemsBody: requireElement(document, 'content-items-body', HTMLTableSectionElement),
+    contentItemsEmpty: requireElement(document, 'content-items-empty', HTMLElement),
+    contentLoadMoreButton: requireElement(document, 'content-load-more-button', HTMLButtonElement),
     retentionPolicyForm: requireElement(document, 'retention-policy-form', HTMLFormElement),
     retentionPolicyIdInput: requireElement(document, 'policy-id', HTMLInputElement),
     retentionPolicyNameInput: requireElement(document, 'policy-name', HTMLInputElement),
@@ -185,6 +215,10 @@ export function createDashboardView(document: Document): DashboardView {
 
   elements.refreshButton.addEventListener('click', () => {
     refreshRequested?.();
+  });
+
+  elements.contentLoadMoreButton.addEventListener('click', () => {
+    contentLoadMoreRequested?.();
   });
 
   const notifyFilterChange = (): void => {
@@ -227,6 +261,47 @@ export function createDashboardView(document: Document): DashboardView {
     },
     setAdminVisible(visible: boolean): void {
       elements.adminSection.hidden = !visible;
+    },
+    setContentReadVisible(visible: boolean): void {
+      elements.contentSection.hidden = !visible;
+    },
+    readContentDomain(): string {
+      return elements.contentDomainInput.value.trim();
+    },
+    onContentReadRequested(handler: () => void): void {
+      elements.contentReadForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
+    onContentLoadMoreRequested(handler: () => void): void {
+      contentLoadMoreRequested = handler;
+    },
+    renderContentItems(items: MemoryContentItem[], options: { append: boolean; hasMore: boolean }): void {
+      const rows = items.map((item) => createContentItemRow(elements.contentItemsBody.ownerDocument, item));
+
+      if (options.append) {
+        elements.contentItemsBody.append(...rows);
+      } else {
+        elements.contentItemsBody.replaceChildren(...rows);
+      }
+
+      const total = elements.contentItemsBody.childElementCount;
+      elements.contentCount.textContent = total === 1 ? '1 item' : `${total} items`;
+      // The empty state only speaks after a read that returned nothing, never
+      // for an appended page that simply added no rows.
+      elements.contentItemsEmpty.hidden = options.append || total > 0;
+      elements.contentLoadMoreButton.hidden = !options.hasMore;
+    },
+    clearContentItems(): void {
+      elements.contentItemsBody.replaceChildren();
+      elements.contentItemsEmpty.hidden = true;
+      elements.contentLoadMoreButton.hidden = true;
+      elements.contentCount.textContent = 'No domain loaded';
+    },
+    setContentReadStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.contentReadStatus.textContent = message;
+      elements.contentReadStatus.dataset.state = state;
     },
     renderRetentionPolicies(policies: RetentionPolicy[]): void {
       elements.retentionPolicyCount.textContent = policies.length === 1 ? '1 policy' : `${policies.length} policies`;
@@ -452,6 +527,35 @@ function createRetentionPolicyRow(
   actions.append(editButton, revokeButton);
   row.append(actions);
 
+  return row;
+}
+
+function createContentItemRow(document: Document, item: MemoryContentItem): HTMLTableRowElement {
+  const row = document.createElement('tr');
+
+  const idCell = document.createElement('td');
+  idCell.className = 'monospace';
+  idCell.textContent = item.memoryItemId;
+
+  const typeCell = document.createElement('td');
+  typeCell.textContent = item.contentType;
+
+  const contentCell = document.createElement('td');
+  if (item.content !== undefined) {
+    // Always textContent, never innerHTML: memory content is arbitrary text and
+    // must not be interpreted as markup.
+    contentCell.textContent = item.content;
+  } else {
+    // A crypto-shredded or provider-absent item reports why, rather than showing
+    // an empty cell that would read as "no content" (ADR 0077 C5).
+    contentCell.className = 'muted';
+    contentCell.textContent = `unavailable (${item.contentUnavailable ?? 'unknown'})`;
+  }
+
+  const createdCell = document.createElement('td');
+  createdCell.textContent = formatDateTime(item.createdAt);
+
+  row.append(idCell, typeCell, contentCell, createdCell);
   return row;
 }
 

@@ -5,6 +5,8 @@ import type {
   PicoEventListResponse,
   PicoHealthResponse,
   PicoHomeClaimStateName as ProtocolPicoHomeClaimStateName,
+  PicoMemoryContentItem,
+  PicoMemoryContentListResponse,
   PicoRealtimeMessage as ProtocolPicoRealtimeMessage,
   PicoRealtimeTicketResponse,
   PicoRetentionPolicyListResponse,
@@ -23,6 +25,8 @@ export type RealtimeTicketResponse = PicoRealtimeTicketResponse;
 export type RetentionPolicy = PicoRetentionPolicyResponse;
 export type RetentionPolicyListResponse = PicoRetentionPolicyListResponse;
 export type RetentionMode = MemoryRetentionMode;
+export type MemoryContentItem = PicoMemoryContentItem;
+export type MemoryContentListResponse = PicoMemoryContentListResponse;
 
 export interface RetentionPolicyInput {
   retentionPolicyId: string;

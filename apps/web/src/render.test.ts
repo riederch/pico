@@ -40,6 +40,26 @@ describe('dashboard event table', () => {
     expect(/<input id="shred-confirm"[^>]*value=/.test(html)).toBe(false);
   });
 
+  it('offers a memory content reader, hidden until an operator logs in', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    expect(html).toContain('id="content-section"');
+    expect(/<section id="content-section"[^>]*\shidden/.test(html)).toBe(true);
+    expect(html).toContain('id="content-domain"');
+    expect(html).toContain('id="content-read-button"');
+    // The load-more control must not offer to page before a domain is read.
+    expect(/<button id="content-load-more-button"[^>]*\shidden/.test(html)).toBe(true);
+  });
+
+  it('frames content reading as readership, not administration (ADR 0077 A7)', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    // The shell must not sell reading content as a host-admin power, and must
+    // state the honest transport limit.
+    expect(html).toContain('different authority from host administration');
+    expect(html).toContain('cleartext');
+  });
+
   it('offers an operator login and never persists the session in the shell', () => {
     const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
 

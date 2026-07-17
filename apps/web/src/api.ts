@@ -4,6 +4,8 @@ import type {
   EventHistoryStatus,
   EventListResponse,
   HealthResponse,
+  MemoryContentItem,
+  MemoryContentListResponse,
   PicoEvent,
   RealtimeTicketResponse,
   RetentionPolicy,
@@ -212,6 +214,27 @@ export async function shredPrivacyDomain(
   }
 
   return { removedKeyVersions: data.removedKeyVersions };
+}
+
+/**
+ * Reads a privacy domain's content (ADR 0077 Gate C). Authorized by domain
+ * readership, not the operator role: in this single-operator instance the
+ * operator reads every domain, but that is readership, not administration.
+ * Cursor-paged; pass the previous page's `nextCursor` as `after`.
+ */
+export async function listDomainContent(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  privacyDomain: string,
+  after?: string,
+): Promise<MemoryContentListResponse> {
+  const url = buildEndpointUrl(baseUrl, `/api/memory/domains/${encodeURIComponent(privacyDomain)}/items`);
+
+  if (after !== undefined) {
+    url.searchParams.set('after', after);
+  }
+
+  return fetchJson(url, isMemoryContentListResponse, 'memory content', options);
 }
 
 async function sendJson<T>(
@@ -441,6 +464,32 @@ function isRetentionPolicyListResponse(value: unknown): value is RetentionPolicy
     isRecord(value)
     && Array.isArray(value.retentionPolicies)
     && value.retentionPolicies.every(isRetentionPolicy)
+  );
+}
+
+function isMemoryContentItem(value: unknown): value is MemoryContentItem {
+  return (
+    isRecord(value)
+    && typeof value.memoryItemId === 'string'
+    && typeof value.privacyDomain === 'string'
+    && typeof value.contentType === 'string'
+    && typeof value.contentPosture === 'string'
+    && typeof value.deletionState === 'string'
+    && (value.retentionPolicyRef === undefined || typeof value.retentionPolicyRef === 'string')
+    && (value.content === undefined || typeof value.content === 'string')
+    && (value.contentUnavailable === undefined || typeof value.contentUnavailable === 'string')
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+  );
+}
+
+function isMemoryContentListResponse(value: unknown): value is MemoryContentListResponse {
+  return (
+    isRecord(value)
+    && Array.isArray(value.items)
+    && value.items.every(isMemoryContentItem)
+    && (value.nextCursor === null || typeof value.nextCursor === 'string')
+    && typeof value.hasMore === 'boolean'
   );
 }
 

@@ -3,6 +3,7 @@ import {
   createRetentionPolicy,
   defaultPicoHomeUrl,
   deleteRetentionPolicy,
+  listDomainContent,
   listRetentionPolicies,
   loadDashboardSnapshot,
   loginOperator,
@@ -12,7 +13,7 @@ import {
   updateRetentionPolicy,
 } from './api.js';
 import { createDashboardView } from './render.js';
-import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage, RetentionPolicy } from './types.js';
+import type { DashboardState, EventFilters, MemoryContentListResponse, PicoEvent, RealtimeMessage, RetentionPolicy } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
 
 const MAX_VISIBLE_EVENTS = 500;
@@ -51,6 +52,11 @@ export function startDashboard(document: Document): void {
   // (ADR 0076). It is deliberately not part of DashboardState.
   let operatorSession: string | undefined;
   let retentionPolicies: RetentionPolicy[] = [];
+
+  // Which domain the content reader is paging through, and where it is. The
+  // cursor is opaque server state; the dashboard only carries it forward.
+  let contentDomain: string | undefined;
+  let contentCursor: string | null = null;
 
   function foundationAccess(): { foundationToken: string; operatorSession?: string } {
     return {
@@ -98,6 +104,14 @@ export function startDashboard(document: Document): void {
 
   view.onShredRequested(() => {
     void shredDomain();
+  });
+
+  view.onContentReadRequested(() => {
+    void readDomainContent();
+  });
+
+  view.onContentLoadMoreRequested(() => {
+    void loadMoreDomainContent();
   });
 
   view.onConnectRequested(() => {
@@ -188,15 +202,66 @@ export function startDashboard(document: Document): void {
     } catch (error) {
       operatorSession = undefined;
       view.setAdminVisible(false);
+      view.setContentReadVisible(false);
       view.setOperatorStatus(formatUnknownError(error), 'error');
       return;
     }
 
     view.setOperatorStatus('Logged in as the Foundation operator. A reload asks again.', 'active');
     view.setAdminVisible(true);
+    view.setContentReadVisible(true);
     view.fillRetentionPolicyForm(null);
     await refreshRetentionPolicies();
     void connect(view.getBaseUrl());
+  }
+
+  async function readDomainContent(): Promise<void> {
+    const domain = view.readContentDomain();
+
+    if (domain === '') {
+      view.setContentReadStatus('Name the privacy domain to read.', 'error');
+      return;
+    }
+
+    view.setContentReadStatus(`Reading ${domain}...`);
+
+    let page: MemoryContentListResponse;
+    try {
+      page = await listDomainContent(state.baseUrl, foundationAccess(), domain);
+    } catch (error) {
+      view.setContentReadStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    contentDomain = domain;
+    contentCursor = page.nextCursor;
+    view.renderContentItems(page.items, { append: false, hasMore: page.hasMore });
+    view.setContentReadStatus(
+      page.items.length === 0 ? `No content in ${domain}.` : `Read ${domain}.`,
+      'active',
+    );
+  }
+
+  async function loadMoreDomainContent(): Promise<void> {
+    // Guarded by the button being hidden without a next page, but a stale click
+    // must still be a no-op rather than re-reading from the start.
+    if (contentDomain === undefined || contentCursor === null) {
+      return;
+    }
+
+    view.setContentReadStatus(`Loading more of ${contentDomain}...`);
+
+    let page: MemoryContentListResponse;
+    try {
+      page = await listDomainContent(state.baseUrl, foundationAccess(), contentDomain, contentCursor);
+    } catch (error) {
+      view.setContentReadStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    contentCursor = page.nextCursor;
+    view.renderContentItems(page.items, { append: true, hasMore: page.hasMore });
+    view.setContentReadStatus(`Read ${contentDomain}.`, 'active');
   }
 
   async function refreshRetentionPolicies(): Promise<void> {

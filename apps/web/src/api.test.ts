@@ -4,6 +4,7 @@ import {
   buildEndpointUrl,
   createRetentionPolicy,
   defaultPicoHomeUrl,
+  listDomainContent,
   listRetentionPolicies,
   loginOperator,
   mintRealtimeTicket,
@@ -191,6 +192,57 @@ describe('foundation administration', () => {
       privacyDomain: 'domain-private',
       confirm: 'domain-private',
     })).rejects.toThrow('requires memory encryption');
+  });
+});
+
+describe('memory content read', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const sampleItem = {
+    memoryItemId: 'mem-1',
+    privacyDomain: 'domain-private',
+    contentType: 'text/plain',
+    contentPosture: 'plaintext_foundation',
+    deletionState: 'active',
+    content: 'A private secret.',
+    createdAt: '2026-07-17T10:00:00.000Z',
+    updatedAt: '2026-07-17T10:00:00.000Z',
+  };
+
+  it('reads a domain under the operator session and returns the page', async () => {
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(200, { items: [sampleItem], nextCursor: 'cursor-2', hasMore: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const page = await listDomainContent('http://localhost:3100', { operatorSession: 'session-value' }, 'domain-private');
+    expect(page.items).toEqual([sampleItem]);
+    expect(page.hasMore).toBe(true);
+    expect(page.nextCursor).toBe('cursor-2');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url.toString()).toBe('http://localhost:3100/api/memory/domains/domain-private/items');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer session-value');
+  });
+
+  it('carries the previous page cursor forward as after', async () => {
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(200, { items: [], nextCursor: null, hasMore: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listDomainContent('http://localhost:3100', { operatorSession: 'session-value' }, 'domain-private', 'cursor-2');
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url.searchParams.get('after')).toBe('cursor-2');
+  });
+
+  it('encodes the privacy domain into the path', async () => {
+    const fetchMock = vi.fn(async (_url: URL, _init: RequestInit) => jsonResponse(200, { items: [], nextCursor: null, hasMore: false }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await listDomainContent('http://localhost:3100', { operatorSession: 'session-value' }, 'domain a/b');
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url.toString()).toContain('/api/memory/domains/domain%20a%2Fb/items');
   });
 });
 

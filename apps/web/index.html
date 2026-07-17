@@ -169,6 +169,29 @@
         </article>
       </section>
 
+      <section id="content-section" class="dashboard-grid admin-grid" aria-label="Memory content" hidden>
+        <article class="card full">
+          <div class="card-header">
+            <h2>Read memory content</h2>
+            <div class="card-actions"><span id="content-count" class="card-count">No domain loaded</span></div>
+          </div>
+          <p class="form-hint admin-note">Reading a domain's content requires readership of that domain — a different authority from host administration (ADR 0077). Being the operator lets you administer the host, not read residents' content; in this single-operator instance the operator reads every domain only because they are all its own. Content is returned in cleartext over the local connection, so it is only as private as your access mode: keep it to loopback or ingress until TLS exists.</p>
+          <form id="content-read-form" class="admin-form">
+            <div class="filter-field"><label for="content-domain">Privacy domain</label><input id="content-domain" type="text" spellcheck="false" autocomplete="off" placeholder="domain-private" /></div>
+            <div class="filter-field admin-form-actions"><button id="content-read-button" type="submit">Read domain</button></div>
+          </form>
+          <p id="content-read-status" class="form-hint" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Item</th><th>Type</th><th>Content</th><th>Created</th></tr></thead>
+              <tbody id="content-items-body"></tbody>
+            </table>
+            <p id="content-items-empty" class="empty-state" hidden>No content in this domain.</p>
+          </div>
+          <div class="card-actions"><button id="content-load-more-button" class="secondary-button" type="button" hidden>Load more</button></div>
+        </article>
+      </section>
+
       <section id="admin-section" class="dashboard-grid admin-grid" aria-label="Foundation administration" hidden>
         <article class="card full">
           <div class="card-header">
