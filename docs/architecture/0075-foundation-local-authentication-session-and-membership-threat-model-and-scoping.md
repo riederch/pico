@@ -141,10 +141,12 @@ This ADR does not define or implement:
 
 ## Open questions
 
-- Cookie-based vs header-based session transport for the dashboard, and the resulting CSRF/same-site design (A6).
+ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` now answers the mechanism questions below: session transport is header-bound with no cookies (so no CSRF design is needed), sessions are in-memory only (so the restore-resurrection question dissolves), credentials use Argon2id via libsodium, and bootstrap/reset run through a per-process Operator Bootstrap Code and an explicit local reset. The remaining entries stay open.
+
+- ~~Cookie-based vs header-based session transport for the dashboard, and the resulting CSRF/same-site design (A6).~~ Decided in ADR 0076: header-bound, no cookies, no ambient credential.
 - How operator login composes with `ha-ingress` mode UX — HA session first, Pico operator login second — without teaching users to bypass ingress.
-- Operator credential recovery after loss: local reset semantics per platform (console, add-on option, appliance button) and their audit representation.
-- Whether session records should be excluded from `sqlite-backup` or invalidated on restore detection (credential-epoch direction).
+- Operator credential recovery after loss: ADR 0076 fixes the direction (explicit startup-time local reset, audited, never a remote endpoint); the per-platform surface (console, add-on option, appliance button) stays open.
+- ~~Whether session records should be excluded from `sqlite-backup` or invalidated on restore detection (credential-epoch direction).~~ Dissolved by ADR 0076: sessions are never persisted, so no backup can hold one. A restored backup can still resurrect a replaced credential — that residual limit stands.
 - Whether `foundation-diagnostic` later splits (system metadata vs event plumbing) once sessions exist.
 - When the static token enters deprecation once operator sessions cover its uses.
 
@@ -175,3 +177,4 @@ Negative:
 - Leaves ADR `0029`/`0031`/`0045` untouched as the identity/membership end state; A7 defines the seam where domain readership will plug in.
 - Gates ADR `0070` step 5 (content read API), ADR `0071` step 4's missing HTTP trigger and ADR `0074`'s HTTP administration behind Gates A–C.
 - Follows ADR `0037`'s audit style and ADR `0074`'s fail-safe principle (A3).
+- Refined by ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`, which specifies the credential, session, bootstrap, reset and auth-audit mechanics this ADR deferred, and which the Gate A runtime implements.

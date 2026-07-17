@@ -64,6 +64,8 @@ ADR `0071-memory-content-encryption-threat-model-and-primitive-direction.md` ans
 
 ADR `0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md` answers the threat-model questions for the local Foundation access surface (operator principal, sessions, access classes) and keeps credential handling on reviewed building blocks: KDF-based verification, CSPRNG session identifiers and deliberately no signed session tokens before ADR 0034 canonicalization exists.
 
+ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` makes that concrete without inventing a password scheme: Argon2id through libsodium `crypto_pwhash_str` (self-describing parameters, upgradeable via `needs_rehash`), interactive cost limits chosen for appliance-class hardware, bounded serialized verification so the memory-hard KDF cannot become a denial-of-service lever, and CSPRNG identifiers for sessions and the bootstrap code.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

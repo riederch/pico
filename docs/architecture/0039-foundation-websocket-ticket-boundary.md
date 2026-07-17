@@ -285,6 +285,8 @@ Its Home Assistant ingress packaging interaction is refined by:
 
 - `0040-foundation-home-assistant-ingress-and-addon-token-options.md`
 
+ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` re-scopes the ticket flow once operator sessions exist: tickets are then minted under a session instead of the static token, a session's revocation invalidates its outstanding tickets, and every ticket property here (high entropy, single use, short TTL, digest-only in-memory storage, cap, purge) stays unchanged. The no-credentials-in-URLs rule and the dashboard no-persistence rule remain in force; the short-lived ticket stays their single documented exception.
+
 It remains constrained by:
 
 - `0019-home-assistant-threat-model.md`

@@ -186,6 +186,7 @@ In particular:
 - memory-content associated-data canonicalization, byte-layout and test-vector language must remain consistent with `0034`, `0047`, `0071` and `0073`
 - memory retention-policy and expiry-deletion language must remain consistent with `0014`, `0021`, `0033`, `0037`, `0068`, `0070` and `0074`
 - foundation local authentication, session, membership-scoping and access-class language must remain consistent with `0016`, `0024`, `0027`, `0029`, `0030`, `0038`, `0039`, `0040`, `0041` and `0075`
+- operator credential, session-mechanics, bootstrap-code and auth-audit language must remain consistent with `0016`, `0027`, `0037`, `0039`, `0075` and `0076`
 - conformance fixture layout language must remain consistent with `docs/protocol/conformance-fixtures.md` and ADR `0034`
 
 ## Review checklist
