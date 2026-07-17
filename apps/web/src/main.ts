@@ -1,5 +1,5 @@
 import { realtimeMessageType } from '@pico/protocol';
-import { defaultPicoHomeUrl, loadDashboardSnapshot, mintRealtimeTicket, normalizePicoHomeUrl } from './api.js';
+import { defaultPicoHomeUrl, loadDashboardSnapshot, loginOperator, mintRealtimeTicket, normalizePicoHomeUrl } from './api.js';
 import { createDashboardView } from './render.js';
 import type { DashboardState, EventFilters, PicoEvent, RealtimeMessage } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
@@ -35,8 +35,24 @@ export function startDashboard(document: Document): void {
   let realtimeReconnectAttempt = 0;
   let connectionGeneration = 0;
 
+  // The operator session lives here and nowhere else: memory only, never
+  // persisted and never rendered, so a reload asks for the passphrase again
+  // (ADR 0076). It is deliberately not part of DashboardState.
+  let operatorSession: string | undefined;
+
+  function foundationAccess(): { foundationToken: string; operatorSession?: string } {
+    return {
+      foundationToken: state.foundationToken,
+      ...(operatorSession === undefined ? {} : { operatorSession }),
+    };
+  }
+
   view.setBaseUrl(state.baseUrl);
   view.render(state);
+
+  view.onOperatorLoginRequested(() => {
+    void logInOperator();
+  });
 
   view.onConnectRequested(() => {
     void connect(view.getBaseUrl());
@@ -111,6 +127,28 @@ export function startDashboard(document: Document): void {
     }
   }
 
+  async function logInOperator(): Promise<void> {
+    const passphrase = view.takeOperatorPassphrase();
+
+    if (passphrase.trim() === '') {
+      view.setOperatorStatus('Enter the operator passphrase to log in.', 'error');
+      return;
+    }
+
+    view.setOperatorStatus('Logging in...');
+
+    try {
+      operatorSession = await loginOperator(view.getBaseUrl(), passphrase);
+    } catch (error) {
+      operatorSession = undefined;
+      view.setOperatorStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    view.setOperatorStatus('Logged in as the Foundation operator. A reload asks again.', 'active');
+    void connect(view.getBaseUrl());
+  }
+
   async function refreshCurrentSnapshot(): Promise<void> {
     const generation = connectionGeneration;
     state.foundationToken = view.getFoundationToken();
@@ -133,7 +171,7 @@ export function startDashboard(document: Document): void {
     state.errorMessage = null;
     view.render(state);
 
-    const snapshot = await loadDashboardSnapshot(state.baseUrl, { foundationToken: state.foundationToken });
+    const snapshot = await loadDashboardSnapshot(state.baseUrl, foundationAccess());
 
     if (generation !== connectionGeneration) {
       return false;
@@ -154,9 +192,11 @@ export function startDashboard(document: Document): void {
     try {
       const foundationToken = view.getFoundationToken();
       state.foundationToken = foundationToken;
-      const realtimeTicket = foundationToken.trim() === ''
+      // A ticket carries the credential through the WebSocket handshake, which
+      // cannot take headers. Without any credential the endpoint needs none.
+      const realtimeTicket = foundationToken.trim() === '' && operatorSession === undefined
         ? undefined
-        : await mintRealtimeTicket(baseUrl, { foundationToken });
+        : await mintRealtimeTicket(baseUrl, foundationAccess());
 
       if (generation !== connectionGeneration) {
         return;

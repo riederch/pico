@@ -4,6 +4,10 @@ export interface DashboardView {
   getBaseUrl(): string;
   setBaseUrl(value: string): void;
   getFoundationToken(): string;
+  /** Reads and clears the passphrase field: it is used once and never kept. */
+  takeOperatorPassphrase(): string;
+  setOperatorStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onOperatorLoginRequested(handler: () => void): void;
   onConnectRequested(handler: () => void): void;
   onRefreshRequested(handler: () => void): void;
   onEventFiltersChanged(handler: (filters: EventFilters) => void): void;
@@ -15,6 +19,9 @@ interface DashboardElements {
   form: HTMLFormElement;
   coreUrlInput: HTMLInputElement;
   foundationTokenInput: HTMLInputElement;
+  operatorPassphraseInput: HTMLInputElement;
+  operatorLoginButton: HTMLButtonElement;
+  operatorStatus: HTMLElement;
   connectButton: HTMLButtonElement;
   refreshButton: HTMLButtonElement;
   errorBanner: HTMLElement;
@@ -71,6 +78,9 @@ export function createDashboardView(document: Document): DashboardView {
     form: requireElement(document, 'connection-form', HTMLFormElement),
     coreUrlInput: requireElement(document, 'core-url', HTMLInputElement),
     foundationTokenInput: requireElement(document, 'foundation-token', HTMLInputElement),
+    operatorPassphraseInput: requireElement(document, 'operator-passphrase', HTMLInputElement),
+    operatorLoginButton: requireElement(document, 'operator-login-button', HTMLButtonElement),
+    operatorStatus: requireElement(document, 'operator-status', HTMLElement),
     connectButton: requireElement(document, 'connect-button', HTMLButtonElement),
     refreshButton: requireElement(document, 'refresh-button', HTMLButtonElement),
     errorBanner: requireElement(document, 'error-banner', HTMLElement),
@@ -116,6 +126,22 @@ export function createDashboardView(document: Document): DashboardView {
     },
     getFoundationToken(): string {
       return elements.foundationTokenInput.value;
+    },
+    takeOperatorPassphrase(): string {
+      const passphrase = elements.operatorPassphraseInput.value;
+      // The passphrase is exchanged for a session and must not linger in the
+      // DOM afterwards.
+      elements.operatorPassphraseInput.value = '';
+      return passphrase;
+    },
+    setOperatorStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.operatorStatus.textContent = message;
+      elements.operatorStatus.dataset.state = state;
+    },
+    onOperatorLoginRequested(handler: () => void): void {
+      elements.operatorLoginButton.addEventListener('click', () => {
+        handler();
+      });
     },
     onConnectRequested(handler: () => void): void {
       elements.form.addEventListener('submit', (event) => {

@@ -7,7 +7,9 @@ describe('dashboard event table', () => {
   it('shows the foundation security warning in the static dashboard shell', () => {
     const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
 
-    expect(html).toContain('Foundation diagnostics only. Optional token protection is not production authentication. Do not expose port 3100.');
+    expect(html).toContain('Foundation diagnostics only.');
+    expect(html).toContain('not production authentication or remote access');
+    expect(html).toContain('Do not expose port 3100.');
   });
 
   it('keeps the static Foundation token field available for direct access hardening', () => {
@@ -15,6 +17,18 @@ describe('dashboard event table', () => {
 
     expect(html).toContain('id="foundation-token"');
     expect(html).toContain('type="password"');
+  });
+
+  it('offers an operator login and never persists the session in the shell', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    expect(html).toContain('id="operator-passphrase"');
+    expect(html).toContain('id="operator-login-button"');
+    // The session is memory-only (ADR 0076): the shell must not reach for any
+    // persistent browser store or carry a credential in the URL.
+    expect(html).not.toContain('localStorage');
+    expect(html).not.toContain('sessionStorage');
+    expect(html).not.toContain('document.cookie');
   });
 
   it('keeps static table headers aligned with rendered event cells', () => {

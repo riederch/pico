@@ -17,6 +17,9 @@
       .kicker { margin-bottom: 8px; color: #8b949e; font-size: 12px; font-weight: 700; text-transform: uppercase; }
       .connection-form { display: grid; gap: 8px; }
       .form-label { color: #8b949e; font-size: 13px; }
+      .form-hint { margin: 0; color: #8b949e; font-size: 12px; }
+      .form-hint[data-state="active"] { color: #3fb950; }
+      .form-hint[data-state="error"] { color: #f85149; }
       .control-row { display: flex; gap: 8px; }
       input, select { width: 100%; min-height: 44px; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; background: #161b22; color: #e6edf3; }
       button { cursor: pointer; min-height: 44px; border: 1px solid #54d2d9; border-radius: 6px; padding: 10px 16px; background: #54d2d9; color: #081014; font-weight: 700; }
@@ -92,10 +95,16 @@
           </div>
           <label class="form-label" for="foundation-token">Foundation token</label>
           <input id="foundation-token" type="password" spellcheck="false" autocomplete="off" />
+          <label class="form-label" for="operator-passphrase">Operator passphrase</label>
+          <div class="control-row">
+            <input id="operator-passphrase" type="password" spellcheck="false" autocomplete="current-password" />
+            <button id="operator-login-button" type="button">Log in</button>
+          </div>
+          <p id="operator-status" class="form-hint" role="status" aria-live="polite">Not logged in.</p>
         </form>
       </header>
 
-      <section class="security-banner" role="note">Foundation diagnostics only. Optional token protection is not production authentication. Do not expose port 3100.</section>
+      <section class="security-banner" role="note">Foundation diagnostics only. The operator login and the optional token are local Foundation boundaries, not production authentication or remote access. The session is kept in memory only, so a reload asks again. Do not expose port 3100.</section>
 
       <section id="error-banner" class="error-banner" role="status" aria-live="polite" hidden></section>
 

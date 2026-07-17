@@ -67,6 +67,31 @@ The dashboard is a development and diagnostics surface only. It is not a chat cl
 
 If `PICO_FOUNDATION_TOKEN` is configured in the Core process environment, direct HTTP calls to the `/api/...` endpoints require `Authorization: Bearer <token>`. `/health` and the dashboard shell remain open. Direct `WS /ws` access then requires either a non-browser `Authorization: Bearer <token>` upgrade header or a short-lived single-use ticket minted through `/api/realtime/tickets`.
 
+## Foundation operator login
+
+The add-on can have one Foundation Operator: the person who administers this instance. It is a local administration login, not a Pico identity, not Home membership, not a Move-In Code and not remote access.
+
+While no operator exists, every start writes a one-time **operator bootstrap code** to the add-on log:
+
+```text
+No Foundation operator exists. Bootstrap one by POSTing this code and a passphrase to /api/auth/bootstrap.
+```
+
+To set the operator up:
+
+1. Open the add-on log and copy the bootstrap code. Only someone who can read this log can bootstrap, which is why the code goes nowhere else.
+2. In the dashboard, enter a passphrase (at least 12 characters) and log in, or call `POST /api/auth/bootstrap` with `{ "bootstrapCode": "...", "passphrase": "..." }`.
+3. The code is now spent, and the log stops offering one. Restarting before step 2 replaces the code with a new one.
+
+Afterwards, log in with the passphrase in the dashboard. Notes on how this behaves, so nothing surprises you:
+
+- **The session lives in the browser tab's memory only.** Reloading the page, or restarting the add-on, means logging in again. Sessions are never stored, so they are never in a backup.
+- **Once an operator exists, the Foundation API needs a credential** — the operator session or, where configured, the token. Before bootstrap, the previous trusted-local behaviour is unchanged. `/health` stays open for the Home Assistant watchdog.
+- **The token cannot administer.** It still reads diagnostics, but administration needs the operator session.
+- **Changing the passphrase requires the current one**, and it logs every session out.
+
+If the passphrase is lost, reset the operator locally: create an empty file named `operator-reset` next to the database (`/data/operator-reset` in the add-on), then restart. The add-on clears the operator, records the reset in the event log and prints a fresh bootstrap code. The reset never touches your keys, memory content or event history. Anyone with file access to the host can do this — operator login protects the network surface, not the host itself.
+
 ## Remote access boundary
 
 The current add-on should be reachable only through trusted local access paths such as the Home Assistant environment, local network testing, or developer-controlled local tunnelling for diagnostics.

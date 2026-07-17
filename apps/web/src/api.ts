@@ -5,8 +5,19 @@ import { isPicoEvent, isRecord } from './types.js';
 export const DEFAULT_PICO_HOME_URL = 'http://localhost:3100';
 const EVENT_TAIL_LIMIT = 500;
 
+/**
+ * The bearer credential the dashboard sends. An operator session (ADR 0076)
+ * takes precedence over the temporary static token (ADR 0038); both travel in
+ * the `Authorization` header, never in a cookie, so the browser attaches no
+ * ambient authority and there is no CSRF surface to defend.
+ *
+ * The session lives in memory for the page's lifetime only: not in local
+ * storage, session storage, IndexedDB, cookies or the URL (ADR 0039 rule, kept
+ * by ADR 0076). A reload therefore requires a new login.
+ */
 export interface FoundationAccessOptions {
   foundationToken?: string;
+  operatorSession?: string;
 }
 
 interface BrowserLocation {
@@ -68,6 +79,41 @@ export async function loadDashboardSnapshot(baseUrl: string, options: Foundation
     events: events.events,
     eventHistory: events.history,
   };
+}
+
+/**
+ * Exchanges the operator passphrase for a session. The passphrase is used once,
+ * here, and never stored; only the returned session is kept, in memory.
+ */
+export async function loginOperator(baseUrl: string, passphrase: string): Promise<string> {
+  const url = buildEndpointUrl(baseUrl, '/api/auth/session');
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passphrase }),
+    });
+  } catch (error) {
+    throw new Error(`Could not reach the operator login endpoint at ${url.toString()}: ${formatUnknownError(error)}`);
+  }
+
+  if (response.status === 401) {
+    throw new Error('Operator passphrase is invalid.');
+  }
+
+  if (!response.ok) {
+    throw new Error(`Operator login returned HTTP ${response.status}.`);
+  }
+
+  const data = (await response.json()) as unknown;
+
+  if (!isRecord(data) || typeof data.session !== 'string' || data.session === '') {
+    throw new Error('Operator login did not return a session.');
+  }
+
+  return data.session;
 }
 
 export async function mintRealtimeTicket(baseUrl: string, options: FoundationAccessOptions): Promise<string> {
@@ -151,12 +197,26 @@ function buildFoundationHeaders(options: FoundationAccessOptions): HeadersInit {
     Accept: 'application/json',
   };
 
-  const token = options.foundationToken?.trim();
-  if (token !== undefined && token !== '') {
-    headers.Authorization = `Bearer ${token}`;
+  const credential = readBearerCredential(options);
+  if (credential !== undefined) {
+    headers.Authorization = `Bearer ${credential}`;
   }
 
   return headers;
+}
+
+function readBearerCredential(options: FoundationAccessOptions): string | undefined {
+  const session = options.operatorSession?.trim();
+  if (session !== undefined && session !== '') {
+    return session;
+  }
+
+  const token = options.foundationToken?.trim();
+  if (token !== undefined && token !== '') {
+    return token;
+  }
+
+  return undefined;
 }
 
 function isHealthResponse(value: unknown): value is HealthResponse {

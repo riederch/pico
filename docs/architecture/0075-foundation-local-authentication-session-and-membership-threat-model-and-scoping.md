@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as an access-control threat model and scoping decision. Nothing in this ADR is implemented; every runtime piece stays behind the ordering gates below.
+Accepted as an access-control threat model and scoping decision. **Gate A is now implemented** (ADR 0076 mechanics: operator principal, sessions, access-class enforcement, auth audit). Gates B and C remain closed, so the crypto-shred HTTP trigger, retention policy CRUD and the content read API do not exist yet.
 
 ## Context
 
@@ -100,11 +100,12 @@ Every route carries exactly one class (A2). Authority comes from exactly two sou
 
 | Class | Authority required | Current occupants | Planned occupants |
 |---|---|---|---|
-| `public` | none | `GET /health`; dashboard shell and static assets (needed to reach a login) | login surface |
-| `setup-bootstrap` | protected local channel, only while no principal exists | — | operator bootstrap; later the Move-In/claim endpoint (ADR 0027) |
-| `foundation-diagnostic` | access mode + static token where configured; later also operator session | `GET /api/system/version`, `GET /api/system/status`, `GET /api/events`, `GET /api/events/tail`, `POST /api/events`, `POST /api/realtime/tickets`, `WS /ws` | — |
+| `public` | none | `GET /health`; dashboard shell and static assets (needed to reach a login); `POST /api/auth/session` | — |
+| `setup-bootstrap` | protected local channel, only while no principal exists | `POST /api/auth/bootstrap` | later the Move-In/claim endpoint (ADR 0027) |
+| `foundation-diagnostic` | access mode + static token where configured; operator session where one exists | `GET /api/system/version`, `GET /api/system/status`, `GET /api/events`, `GET /api/events/tail`, `POST /api/events`, `POST /api/realtime/tickets`, `WS /ws` | — |
+| `authenticated` | any authenticated principal, no role | `GET /api/auth/session`, `DELETE /api/auth/session` | — |
 | `domain-content` | authenticated principal with domain readership | — | memory content read API (ADR 0070 step 5) |
-| `host-admin` | operator session | — | retention policy CRUD (ADR 0074) |
+| `host-admin` | operator session | `DELETE /api/auth/sessions`, `PUT /api/auth/credential` | retention policy CRUD (ADR 0074) |
 | `host-admin-destructive` | operator session + explicit confirmation + durable audit | — | crypto-shred trigger (ADR 0071 step 4) |
 
 Honest note on `POST /api/events`: the `memory.recorded` content-splitting write (ADR 0069) carries personal content *into* the host over the diagnostic class. A token holder can therefore write — and poison — memory it can never read back. That stays acceptable for the foundation phase and is recorded as a threat; once principals exist, content-writing events should become principal-attributed (the currently unverified `deviceId` gains a verifiable actor), as an additive reclassification.
@@ -119,7 +120,7 @@ The WebSocket surface stays diagnostic because broadcasts carry event envelopes 
 
 Nothing regresses before these gates: programmatic-only administration (retention, shred) and the absent read API remain the status quo.
 
-1. **Gate A — `host-admin` surfaces (first: retention policy CRUD).** Requires: operator bootstrap (A10), session runtime (A5/A6), fail-closed route classification (A2/A3), auth audit (A9) — implemented and tested.
+1. **Gate A — `host-admin` surfaces (first: retention policy CRUD).** Requires: operator bootstrap (A10), session runtime (A5/A6), fail-closed route classification (A2/A3), auth audit (A9) — implemented and tested. **Open: all four exist (ADR 0076 runtime).** The `host-admin` class itself is enforced; retention policy CRUD is the first surface that may now use it.
 2. **Gate B — `host-admin-destructive` over HTTP (crypto-shred trigger).** Requires Gate A plus explicit confirmation semantics (A8). The durable audit event already exists.
 3. **Gate C — `domain-content` read API.** Requires Gate A plus an explicit readership evaluation seam (A7) even while it trivially resolves to the sole operator — the seam must exist in code from day one so a second principal never inherits read-all. The ADR 0070/0071 protection prerequisites are already met.
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the mechanism design for ADR 0075 Gate A. Not implemented; this ADR specifies what the Gate A runtime must build.
+Accepted as the mechanism design for ADR 0075 Gate A, now implemented for the Foundation surface: operator credential, sessions, bootstrap, local reset, access-class enforcement, auth audit events and the dashboard login all exist. Gate A is therefore open; the surfaces behind Gates B and C stay closed.
 
 ## Context
 
@@ -153,19 +153,26 @@ Failure responses follow the existing posture: `401` with `WWW-Authenticate` for
 
 ## Implementation implications
 
-Gate A checklist, all deferred to the runtime step:
+Gate A checklist, now built:
 
-1. Operator credential store: verifier (Argon2id string), parameters, timestamps; bounded serialized verification.
-2. In-memory session store: digest-keyed, sliding idle + absolute expiry, per-session and global revocation, count cap, purge.
-3. Bootstrap: per-process code, local-channel emission, single use, operator-absent gating.
-4. Local reset path with append-only audit.
-5. Central route-to-class registry with fail-closed enforcement and `/api/auth/*` exemption from the static-token hook.
-6. Auth audit event types via the existing server-synthesized mechanism, with the protocol surface fences updated.
-7. Ticket minting under sessions; session revocation invalidates outstanding tickets.
-8. Dashboard: login form, memory-only session, ticket minting under the session, re-login on reload, no persistence.
-9. Tests: bootstrap once and only once; login/logout/expiry/revocation; wrong passphrase and absent operator indistinguishable; unclassified route rejected; `/api/auth/*` reachable without the static token; static token cannot reach `host-admin`; session cannot be read from logs or URLs.
+1. **Done** — `OperatorStore` (`apps/core/src/operator-store.ts`): Argon2id verifier at interactive limits in `foundation_operator` (migration `0010`), serialized verification with a bounded queue, passphrase change requiring the current one.
+2. **Done** — `SessionStore` (`apps/core/src/session-store.ts`): digest-keyed, sliding idle + absolute expiry, per-session and global revocation, count cap with oldest-first eviction, purge. Never persisted.
+3. **Done** — `OperatorBootstrapCode` (`apps/core/src/operator-bootstrap.ts`): per-process code on the host log, single use, gated on operator absence.
+4. **Done** — one-shot local reset marker (`<data>/operator-reset`), consumed at boot, audited.
+5. **Done** — `AccessClassRegistry` (`apps/core/src/access-classes.ts`) enforced from Fastify's `onRoute` hook, replacing the blanket static-token hook; `/api/auth/*` is reachable without the token and the token stops at `foundation-diagnostic`.
+6. **Done** — the four `auth.*` types via `serverSynthesizedFoundationEventTypes`, with the `public-surfaces.md` and `compatibility-levels.md` fences updated and test-bound.
+7. **Done** — tickets mint under a session and are purged when it is revoked.
+8. **Done** — dashboard operator login: memory-only session, preferred over the static token, re-login on reload, no persistent store touched.
+9. **Done** — Core 141 → 167, web 17 → 22, protocol 33 → 34.
 
-No implementation may describe the result as production authentication for remote access, Pico identity, Home membership or Pico Link.
+Two behaviours worth recording because they were decided during implementation:
+
+- **An operator raises the bar for diagnostics.** Once an operator exists, `foundation-diagnostic` requires a credential even when no static token is configured. Establishing an operator is an explicit act, and on the shared ingress origin an open diagnostic surface would keep leaking event metadata to every add-on page — which would make bootstrapping pointless for reads. Hosts with no token and no operator keep the unchanged trusted-local behaviour, so nothing that exists today breaks. For the same reason `WS /ws` requires a credential once an operator exists.
+- **Fastify's auto-generated HEAD routes are classified with their GET.** They serve the same resource; a HEAD route without a GET still fails closed. The registry found this on its first run, which is the point of enforcing at registration.
+
+Known residual, honest: the Argon2id verifier lives in the database, so a stolen database or backup permits offline guessing of the operator passphrase. Argon2id is the mitigation, not a proof; a weak passphrase falls. This does not widen content exposure — whoever holds the database already holds whatever the ADR 0071/0072 at-rest layer does not protect.
+
+No implementation describes the result as production authentication for remote access, Pico identity, Home membership or Pico Link.
 
 ## Non-goals
 

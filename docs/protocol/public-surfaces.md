@@ -38,17 +38,25 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability, Pico Home claim-state and database migration state. |
 | `GET /api/events` | experimental foundation API | Lists stored foundation events with additive cursor metadata. |
 | `GET /api/events/tail` | experimental diagnostic surface | Returns the latest foundation events for diagnostics dashboard use. Not a replica sync protocol and no durable sync cursors. |
-| `POST /api/realtime/tickets` | experimental foundation realtime guardrail | Mints short-lived single-use tickets for direct `WS /ws` browser upgrades when token mode is enabled. |
+| `POST /api/realtime/tickets` | experimental foundation realtime guardrail | Mints short-lived single-use tickets for direct `WS /ws` browser upgrades, under the static token or an operator session. |
 | `POST /api/events` | experimental foundation API | Accepts only currently writable foundation events. Not a full sync API. |
+| `POST /api/auth/bootstrap` | experimental foundation operator bootstrap | Establishes the first operator from the per-process bootstrap code printed on the host log. Available only while no operator exists. Not a Move-In Code or claim API. |
+| `POST /api/auth/session` | experimental foundation operator login | Exchanges the operator passphrase for an opaque session. Not a product login or Pico identity. |
+| `GET /api/auth/session` | experimental foundation operator surface | Reports whether the calling session is still live and when it expires. |
+| `DELETE /api/auth/session` | experimental foundation operator surface | Logs the calling session out. |
+| `DELETE /api/auth/sessions` | experimental foundation administration surface | Revokes every session. Requires an operator session. |
+| `PUT /api/auth/credential` | experimental foundation administration surface | Replaces the operator passphrase; requires the current one and ends every session. |
 | `WS /ws` | experimental event stream | Streams events and connection messages. |
 
 These endpoints are not yet a complete Pico Link or Pico Home Link specification.
 
 They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`; the direct-access WebSocket ticket boundary is documented in `../architecture/0039-foundation-websocket-ticket-boundary.md`; the Home Assistant ingress packaging direction is documented in `../architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`.
 
-The current Foundation API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN`, but this is not production authentication, authorization, membership, claim, production memory or Home Assistant control boundary. Current `deviceId` values are client-supplied metadata, not verified device identity.
+The current Foundation API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and with a local Foundation Operator login, but this is not production authentication, authorization, membership, claim, production memory or Home Assistant control boundary. Current `deviceId` values are client-supplied metadata, not verified device identity.
 
-When `PICO_FOUNDATION_TOKEN` is configured, `WS /ws` requires either a non-browser bearer upgrade header or a short-lived single-use realtime ticket minted through the token-protected Foundation API. The long-lived token must not be placed in a WebSocket URL.
+Every Foundation API route carries exactly one access class (`../architecture/0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md`), enforced at route registration so an unclassified route cannot be served. Authority comes from two sources: the **operator session** (`../architecture/0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`) and, later, domain readership. The principal-less `PICO_FOUNDATION_TOKEN` reaches diagnostics at most and never administration. Operator sessions are opaque, sent as `Authorization: Bearer <session>`, held in memory only and never persisted; they are not cookies, so the browser attaches no ambient credential.
+
+When `PICO_FOUNDATION_TOKEN` is configured, or once an operator exists, `WS /ws` requires either a non-browser bearer upgrade header (token or session) or a short-lived single-use realtime ticket. Neither the long-lived token nor a session may be placed in a WebSocket URL.
 
 ### Current `GET /api/events` shape
 
