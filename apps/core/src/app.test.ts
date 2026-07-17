@@ -1374,6 +1374,169 @@ describe('Pico Home Core app', () => {
   });
 });
 
+describe('retention policy administration', () => {
+  it('is closed without an operator session, including for the static token', async () => {
+    const app = await buildAppWithCapturedLog({ foundationToken: 'dev-token' });
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+    });
+
+    // Retention policies decide when memory is deleted, so the principal-less
+    // token must not reach them (ADR 0075 ceiling).
+    for (const [method, url] of [
+      ['GET', '/api/memory/retention-policies'],
+      ['POST', '/api/memory/retention-policies'],
+      ['GET', '/api/memory/retention-policies/keep'],
+      ['PUT', '/api/memory/retention-policies/keep'],
+      ['DELETE', '/api/memory/retention-policies/keep'],
+    ] as const) {
+      const withToken = await app.inject({ method, url, headers: { authorization: 'Bearer dev-token' }, payload: {} });
+      expect(withToken.statusCode).toBe(401);
+
+      const anonymous = await app.inject({ method, url, payload: {} });
+      expect(anonymous.statusCode).toBe(401);
+    }
+
+    await app.close();
+  });
+
+  it('creates, reads, edits and revokes policies through an operator session', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/memory/retention-policies',
+      headers: auth,
+      payload: { retentionPolicyId: 'short-lived', displayName: 'Short lived notes', mode: 'delete_after_max_age', maxAgeDays: 30 },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json()).toEqual({
+      retentionPolicyId: 'short-lived',
+      displayName: 'Short lived notes',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 30,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+
+    const listed = await app.inject({ method: 'GET', url: '/api/memory/retention-policies', headers: auth });
+    expect(listed.statusCode).toBe(200);
+    expect((listed.json() as { retentionPolicies: { retentionPolicyId: string }[] }).retentionPolicies).toHaveLength(1);
+
+    const read = await app.inject({ method: 'GET', url: '/api/memory/retention-policies/short-lived', headers: auth });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().maxAgeDays).toBe(30);
+
+    // Editing a policy is how retention changes: it applies to every item that
+    // references it at the next sweep (ADR 0074).
+    const edited = await app.inject({
+      method: 'PUT',
+      url: '/api/memory/retention-policies/short-lived',
+      headers: auth,
+      payload: { maxAgeDays: 7 },
+    });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json().maxAgeDays).toBe(7);
+    expect(edited.json().displayName).toBe('Short lived notes');
+
+    const revoked = await app.inject({ method: 'DELETE', url: '/api/memory/retention-policies/short-lived', headers: auth });
+    expect(revoked.statusCode).toBe(204);
+    expect((await app.inject({ method: 'GET', url: '/api/memory/retention-policies/short-lived', headers: auth })).statusCode).toBe(404);
+
+    await app.close();
+  });
+
+  it('refuses policy shapes that would make retention ambiguous', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+
+    const missingAge = await app.inject({
+      method: 'POST',
+      url: '/api/memory/retention-policies',
+      headers: auth,
+      payload: { retentionPolicyId: 'broken', displayName: 'Broken', mode: 'delete_after_max_age' },
+    });
+    expect(missingAge.statusCode).toBe(400);
+
+    const keepWithAge = await app.inject({
+      method: 'POST',
+      url: '/api/memory/retention-policies',
+      headers: auth,
+      payload: { retentionPolicyId: 'broken', displayName: 'Broken', mode: 'keep_until_deleted', maxAgeDays: 5 },
+    });
+    expect(keepWithAge.statusCode).toBe(400);
+
+    const zeroDays = await app.inject({
+      method: 'POST',
+      url: '/api/memory/retention-policies',
+      headers: auth,
+      payload: { retentionPolicyId: 'broken', displayName: 'Broken', mode: 'delete_after_max_age', maxAgeDays: 0 },
+    });
+    expect(zeroDays.statusCode).toBe(400);
+
+    const unknownMode = await app.inject({
+      method: 'POST',
+      url: '/api/memory/retention-policies',
+      headers: auth,
+      payload: { retentionPolicyId: 'broken', displayName: 'Broken', mode: 'delete_when_bored' },
+    });
+    expect(unknownMode.statusCode).toBe(400);
+
+    expect((await app.inject({ method: 'GET', url: '/api/memory/retention-policies', headers: auth })).json().retentionPolicies).toHaveLength(0);
+
+    await app.close();
+  });
+
+  it('records a memory item against a policy and rejects an unknown reference', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+    const auth = { authorization: `Bearer ${session}` };
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/memory/retention-policies',
+      headers: auth,
+      payload: { retentionPolicyId: 'thirty-days', displayName: 'Thirty days', mode: 'delete_after_max_age', maxAgeDays: 30 },
+    });
+
+    const recorded = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: auth,
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: { privacyDomain: 'domain-private', contentType: 'text/plain', content: 'Remember this for a month.', retentionPolicyRef: 'thirty-days' },
+      },
+    });
+    expect(recorded.statusCode).toBe(201);
+    // The policy reference stays out of the append-only event: the event still
+    // carries only the reference to the item (ADR 0069).
+    expect(recorded.json().event.payload.retentionPolicyRef).toBeUndefined();
+
+    // A typo would otherwise be kept forever by the fail-safe rule, silently.
+    const unknownRef = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: auth,
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: { privacyDomain: 'domain-private', contentType: 'text/plain', content: 'Typo.', retentionPolicyRef: 'thirdy-days' },
+      },
+    });
+    expect(unknownRef.statusCode).toBe(400);
+    expect(unknownRef.json()).toEqual({ error: 'retentionPolicyRef does not match a known retention policy.' });
+
+    await app.close();
+  });
+});
+
 describe('Foundation API access classes', () => {
   it('refuses to serve an unclassified Foundation API route', async () => {
     const app = await buildApp({

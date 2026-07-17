@@ -10,11 +10,13 @@ import {
   payloadPostures,
   picoEventTypes,
   protocolCapabilities,
+  memoryRetentionModes,
   realtimeMessageType,
   writablePayloadPostures,
   type FoundationEventPayload,
   type FoundationEventType,
   type MemoryRecordedPayload,
+  type MemoryRetentionMode,
   type MemoryTombstonePayload,
   type PayloadPosture,
   type PicoCoreConnectedMessage,
@@ -25,6 +27,8 @@ import {
   type PicoEventType,
   type PicoHealthResponse,
   type PicoRealtimeTicketResponse,
+  type PicoRetentionPolicyListResponse,
+  type PicoRetentionPolicyResponse,
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
 } from '@pico/protocol';
@@ -93,6 +97,7 @@ interface MemoryRecordedRequest {
   summary?: string;
   owner?: string;
   controller?: string;
+  retentionPolicyRef?: string;
 }
 
 interface RealtimeSocket {
@@ -364,6 +369,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('DELETE', '/api/auth/session', 'authenticated');
   accessClasses.register('DELETE', '/api/auth/sessions', 'host-admin');
   accessClasses.register('PUT', '/api/auth/credential', 'host-admin');
+  // Retention policies decide when memory is deleted, so administering them is
+  // a host-admin power (ADR 0074 behind ADR 0075 Gate A). They are policy
+  // objects, never content: an operator session grants no readership.
+  accessClasses.register('GET', '/api/memory/retention-policies', 'host-admin');
+  accessClasses.register('POST', '/api/memory/retention-policies', 'host-admin');
+  accessClasses.register('GET', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
+  accessClasses.register('PUT', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
+  accessClasses.register('DELETE', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -543,6 +556,94 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, { revokedSessions });
   });
 
+  app.get('/api/memory/retention-policies', async (_request, reply) => {
+    const response: PicoRetentionPolicyListResponse = {
+      retentionPolicies: store.retentionPolicies().list(),
+    };
+
+    return sendNoStore(reply, response);
+  });
+
+  app.post('/api/memory/retention-policies', async (request, reply) => {
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const input = validateRetentionPolicyBody(body, { requireFullShape: true });
+
+    if (!input.ok) {
+      return sendNoStore(reply.code(400), { error: input.error });
+    }
+
+    let policy: PicoRetentionPolicyResponse;
+
+    try {
+      policy = store.retentionPolicies().create({
+        retentionPolicyId: input.value.retentionPolicyId as string,
+        displayName: input.value.displayName as string,
+        mode: input.value.mode as MemoryRetentionMode,
+        ...(input.value.maxAgeDays === undefined ? {} : { maxAgeDays: input.value.maxAgeDays }),
+      });
+    } catch (error) {
+      return sendNoStore(reply.code(400), { error: (error as Error).message });
+    }
+
+    return reply.code(201).header('Cache-Control', 'no-store').send(policy);
+  });
+
+  app.get('/api/memory/retention-policies/:retentionPolicyId', async (request, reply) => {
+    const { retentionPolicyId } = request.params as { retentionPolicyId: string };
+    const policy = store.retentionPolicies().get(retentionPolicyId);
+
+    if (policy === undefined) {
+      return sendNoStore(reply.code(404), { error: 'Retention policy not found.' });
+    }
+
+    return sendNoStore(reply, policy);
+  });
+
+  app.put('/api/memory/retention-policies/:retentionPolicyId', async (request, reply) => {
+    const { retentionPolicyId } = request.params as { retentionPolicyId: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const input = validateRetentionPolicyBody(body, { requireFullShape: false });
+
+    if (!input.ok) {
+      return sendNoStore(reply.code(400), { error: input.error });
+    }
+
+    if (input.value.retentionPolicyId !== undefined && input.value.retentionPolicyId !== retentionPolicyId) {
+      return sendNoStore(reply.code(400), { error: 'retentionPolicyId cannot be changed.' });
+    }
+
+    if (store.retentionPolicies().get(retentionPolicyId) === undefined) {
+      return sendNoStore(reply.code(404), { error: 'Retention policy not found.' });
+    }
+
+    try {
+      // An edit takes effect at the next sweep for every item that references
+      // this policy (ADR 0074): policies are inspectable and revocable, so
+      // shortening one can expire existing items sooner.
+      const policy = store.retentionPolicies().update(retentionPolicyId, {
+        ...(input.value.displayName === undefined ? {} : { displayName: input.value.displayName as string }),
+        ...(input.value.mode === undefined ? {} : { mode: input.value.mode as MemoryRetentionMode }),
+        ...('maxAgeDays' in body ? { maxAgeDays: input.value.maxAgeDays } : {}),
+      });
+
+      return sendNoStore(reply, policy);
+    } catch (error) {
+      return sendNoStore(reply.code(400), { error: (error as Error).message });
+    }
+  });
+
+  app.delete('/api/memory/retention-policies/:retentionPolicyId', async (request, reply) => {
+    const { retentionPolicyId } = request.params as { retentionPolicyId: string };
+
+    // Revoking a policy never deletes memory: items that still reference it
+    // fall back to fail-safe keep (ADR 0074).
+    if (store.retentionPolicies().delete(retentionPolicyId) === 'not_found') {
+      return sendNoStore(reply.code(404), { error: 'Retention policy not found.' });
+    }
+
+    return reply.code(204).send();
+  });
+
   app.post('/api/realtime/tickets', async (request, reply) => {
     // Tickets exist to carry a credential through a browser WebSocket handshake.
     // With neither a token nor an operator, `WS /ws` needs no credential and a
@@ -632,6 +733,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         });
       }
 
+      // An unknown policy reference would be kept forever by the sweep's
+      // fail-safe rule (ADR 0074), which is safe but silent. Reject a typo here
+      // instead of letting the writer believe expiry was configured.
+      if (request_.retentionPolicyRef !== undefined && store.retentionPolicies().get(request_.retentionPolicyRef) === undefined) {
+        return sendNoStore(reply.code(400), { error: 'retentionPolicyRef does not match a known retention policy.' });
+      }
+
       const memoryItemId = `mem_${randomUUID()}`;
       const owner = request_.owner ?? request_.deviceId;
       store.memory().create({
@@ -641,6 +749,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         controller: request_.controller ?? owner,
         contentType: request_.contentType,
         content: request_.content,
+        ...(request_.retentionPolicyRef === undefined ? {} : { retentionPolicyRef: request_.retentionPolicyRef }),
         ...(memoryCrypto === undefined ? {} : { contentPosture: 'domain_encrypted' as const }),
       });
 
@@ -1125,6 +1234,66 @@ function resolveReferenceEvents(events: PicoEvent[], memory: MemoryStore): PicoE
   });
 }
 
+interface RetentionPolicyBody {
+  retentionPolicyId?: string;
+  displayName?: string;
+  mode?: string;
+  maxAgeDays?: number;
+}
+
+/**
+ * Validates the request shape only. The mode/maxAgeDays combination rules live
+ * in RetentionPolicyStore, so create and update cannot drift apart.
+ */
+function validateRetentionPolicyBody(
+  body: Record<string, unknown>,
+  options: { requireFullShape: boolean },
+): { ok: true; value: RetentionPolicyBody } | { ok: false; error: string } {
+  for (const key of Object.keys(body)) {
+    if (!['retentionPolicyId', 'displayName', 'mode', 'maxAgeDays'].includes(key)) {
+      return { ok: false, error: `retention policy has unexpected field: ${key}.` };
+    }
+  }
+
+  if (options.requireFullShape && !isNonEmptyString(body.retentionPolicyId, 256)) {
+    return { ok: false, error: 'retentionPolicyId is required.' };
+  }
+
+  if (body.retentionPolicyId !== undefined && !isNonEmptyString(body.retentionPolicyId, 256)) {
+    return { ok: false, error: 'retentionPolicyId must be a non-empty string when provided.' };
+  }
+
+  if (options.requireFullShape && !isNonEmptyString(body.displayName, 256)) {
+    return { ok: false, error: 'displayName is required.' };
+  }
+
+  if (body.displayName !== undefined && !isNonEmptyString(body.displayName, 256)) {
+    return { ok: false, error: 'displayName must be a non-empty string when provided.' };
+  }
+
+  if (options.requireFullShape && !isRetentionMode(body.mode)) {
+    return { ok: false, error: `mode must be one of: ${memoryRetentionModes.join(', ')}.` };
+  }
+
+  if (body.mode !== undefined && !isRetentionMode(body.mode)) {
+    return { ok: false, error: `mode must be one of: ${memoryRetentionModes.join(', ')}.` };
+  }
+
+  if (body.maxAgeDays !== undefined && (typeof body.maxAgeDays !== 'number' || !Number.isInteger(body.maxAgeDays) || body.maxAgeDays < 1)) {
+    return { ok: false, error: 'maxAgeDays must be a positive whole number of days when provided.' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      ...(body.retentionPolicyId === undefined ? {} : { retentionPolicyId: body.retentionPolicyId as string }),
+      ...(body.displayName === undefined ? {} : { displayName: body.displayName as string }),
+      ...(body.mode === undefined ? {} : { mode: body.mode as string }),
+      ...(body.maxAgeDays === undefined ? {} : { maxAgeDays: body.maxAgeDays as number }),
+    },
+  };
+}
+
 function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: true; request: MemoryRecordedRequest } | { ok: false; error: string } {
   if (!isNonEmptyString(body.deviceId, 128)) {
     return { ok: false, error: 'deviceId is required.' };
@@ -1148,7 +1317,7 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
   }
 
   for (const key of Object.keys(payload)) {
-    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller'].includes(key)) {
+    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller', 'retentionPolicyRef'].includes(key)) {
       return { ok: false, error: `memory.recorded payload has unexpected field: ${key}.` };
     }
   }
@@ -1173,6 +1342,10 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
     return { ok: false, error: 'memory.recorded controller must be a non-empty string when provided.' };
   }
 
+  if (payload.retentionPolicyRef !== undefined && !isNonEmptyString(payload.retentionPolicyRef, 256)) {
+    return { ok: false, error: 'memory.recorded retentionPolicyRef must be a non-empty string when provided.' };
+  }
+
   return {
     ok: true,
     request: {
@@ -1186,12 +1359,17 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
       summary: payload.summary as string | undefined,
       owner: payload.owner as string | undefined,
       controller: payload.controller as string | undefined,
+      retentionPolicyRef: payload.retentionPolicyRef as string | undefined,
     },
   };
 }
 
 function isKnownEventType(value: unknown): value is PicoEventType {
   return typeof value === 'string' && knownEventTypes.has(value as PicoEventType);
+}
+
+function isRetentionMode(value: unknown): value is MemoryRetentionMode {
+  return typeof value === 'string' && (memoryRetentionModes as readonly string[]).includes(value);
 }
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {

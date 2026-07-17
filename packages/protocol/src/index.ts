@@ -655,6 +655,24 @@ export interface PicoRealtimeTicketResponse {
   expiresAt: string;
 }
 
+/**
+ * A named retention policy (ADR 0074). Policies are administration objects, not
+ * content: they say when items expire, never what the items hold. `maxAgeDays`
+ * exists only for `delete_after_max_age`.
+ */
+export interface PicoRetentionPolicyResponse {
+  retentionPolicyId: string;
+  displayName: string;
+  mode: MemoryRetentionMode;
+  maxAgeDays?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PicoRetentionPolicyListResponse {
+  retentionPolicies: PicoRetentionPolicyResponse[];
+}
+
 export type PicoEventAppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
 
 export interface PicoEventCreateResponse<TPayload = unknown> {

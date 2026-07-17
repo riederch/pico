@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the retention model and expiry-deletion boundary for the memory store, now implemented for the single-host foundation. Retention is the fourth of ADR 0014's named boundaries ("references, privacy domains, retention policy and encryption boundaries") and the last without its own design. This ADR defines what a retention policy is, how expiry deletes, what retention may claim and what it must never become. Implementation steps 1–3 have shipped (mode vocabulary, policy storage, the deletion-only sweep); a policy CRUD/HTTP surface, domain-default binding and the encryption-era claims upgrade remain deferred (see below).
+Accepted as the retention model and expiry-deletion boundary for the memory store, now implemented for the single-host foundation. Retention is the fourth of ADR 0014's named boundaries ("references, privacy domains, retention policy and encryption boundaries") and the last without its own design. This ADR defines what a retention policy is, how expiry deletes, what retention may claim and what it must never become. Implementation steps 1–3 have shipped (mode vocabulary, policy storage, the deletion-only sweep), and the policy CRUD/HTTP surface now exists behind ADR 0075 Gate A (`host-admin`, operator session required). Domain-default binding and the encryption-era claims upgrade remain deferred (see below).
 
 ## Context
 
@@ -134,7 +134,9 @@ Additive steps, in order:
 4. Add domain-default policy binding once a privacy-domain registry exists. **Deferred.**
 5. After encryption and crypto-shredding ship: revisit retention claims (backup unreadability of expired content) and consider domain-wide expiry as a KEK-shred trigger — a domain whose items are all expired and deleted becomes a shred candidate, never an automatic shred. **Deferred.**
 
-Not yet built (deliberate ADR 0074 non-goals): a policy CRUD or write-time-`retentionPolicyRef` HTTP surface — policies and references are set programmatically for now — and any notification/review flow on expiry. The CRUD surface is additionally gated by ADR 0075 Gate A (`host-admin` class: operator session required).
+The policy CRUD and write-time-`retentionPolicyRef` HTTP surface now exists behind ADR 0075 Gate A: `/api/memory/retention-policies` (list, create, read, edit, revoke) carries the `host-admin` class, so it requires an operator session and the principal-less static token can never reach it. `POST /api/events` accepts `retentionPolicyRef` on a `memory.recorded` write and rejects an unknown reference, because the fail-safe rule would otherwise keep the item forever while the writer believed expiry was configured. Revoking a policy still deletes no memory: items referencing it fall back to fail-safe keep.
+
+Not yet built (deliberate ADR 0074 non-goals): any notification or review flow on expiry, and domain-default policy binding.
 
 ## Relationship to other ADRs
 
