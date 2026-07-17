@@ -61,6 +61,10 @@ avatar.state_changed
 memory.recorded
 memory.tombstone
 memory.domain_shredded
+auth.operator_bootstrapped
+auth.credential_changed
+auth.operator_reset
+auth.sessions_revoked
 ```
 
 L1 does not imply sync compatibility, Pico Link compatibility, Pico Home hosting compatibility or commercial permission.

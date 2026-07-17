@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { Writable } from 'node:stream';
 import Database from 'better-sqlite3';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -21,9 +22,12 @@ import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
+import { operatorResetMarkerPath } from './operator-bootstrap.js';
 
 const tempDirs: string[] = [];
 const RESERVED_EVENT_ERROR = 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.';
+const OPERATOR_PASSPHRASE = 'correct horse battery staple';
+const capturedLogLines = new WeakMap<object, string[]>();
 
 function createDatabasePath(): string {
   const dir = mkdtempSync(join(tmpdir(), 'pico-core-test-'));
@@ -191,6 +195,7 @@ describe('Pico Home Core app', () => {
           { id: '0007_memory_item_content_posture', appliedAt: expect.any(String) },
           { id: '0008_memory_key_envelope', appliedAt: expect.any(String) },
           { id: '0009_memory_retention_policy', appliedAt: expect.any(String) },
+          { id: '0010_foundation_operator', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -241,7 +246,7 @@ describe('Pico Home Core app', () => {
       const response = await app.inject(request);
       expect(response.statusCode).toBe(401);
       expect(response.headers['www-authenticate']).toBe('Bearer realm="Pico Foundation"');
-      expect(response.json()).toEqual({ error: 'Foundation token is required.' });
+      expect(response.json()).toEqual({ error: 'Foundation credential is required.' });
     }
 
     const oversizedPost = await app.inject({
@@ -256,7 +261,7 @@ describe('Pico Home Core app', () => {
     });
 
     expect(oversizedPost.statusCode).toBe(401);
-    expect(oversizedPost.json()).toEqual({ error: 'Foundation token is required.' });
+    expect(oversizedPost.json()).toEqual({ error: 'Foundation credential is required.' });
 
     await app.close();
   });
@@ -314,7 +319,7 @@ describe('Pico Home Core app', () => {
     const missingToken = await protectedApp.inject({ method: 'POST', url: '/api/realtime/tickets' });
     expect(missingToken.statusCode).toBe(401);
     expect(missingToken.headers['www-authenticate']).toBe('Bearer realm="Pico Foundation"');
-    expect(missingToken.json()).toEqual({ error: 'Foundation token is required.' });
+    expect(missingToken.json()).toEqual({ error: 'Foundation credential is required.' });
 
     const ticketResponse = await protectedApp.inject({
       method: 'POST',
@@ -1092,6 +1097,305 @@ describe('Pico Home Core app', () => {
     expect(response.json().event.lamport).toBe(2);
     await secondApp.close();
   });
+
+  it('bootstraps an operator once through the per-process code and audits it', async () => {
+    const app = await buildAppWithCapturedLog();
+    const bootstrapCode = readBootstrapCode(app);
+
+    // A wrong code never reaches the KDF.
+    const wrongCode = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: 'not-the-code', passphrase: OPERATOR_PASSPHRASE },
+    });
+    expect(wrongCode.statusCode).toBe(401);
+
+    const bootstrapped = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    });
+    expect(bootstrapped.statusCode).toBe(201);
+    expect(bootstrapped.json().session).toEqual(expect.any(String));
+
+    // Single use, and the route disappears once an operator exists.
+    const replay = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: 'a completely different one' },
+    });
+    expect(replay.statusCode).toBe(404);
+
+    const session = bootstrapped.json().session as string;
+    const events = await app.inject({
+      method: 'GET',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    const audit = (events.json().events as { type: string; payload: unknown }[])
+      .filter((event) => event.type === 'auth.operator_bootstrapped');
+    expect(audit).toHaveLength(1);
+    // The audit record carries no credential material at all.
+    expect(audit[0].payload).toEqual({});
+
+    await app.close();
+  });
+
+  it('logs in with the operator passphrase and rejects a wrong one the same way as an absent operator', async () => {
+    const app = await bootstrappedApp();
+
+    const wrong = await app.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: 'wrong passphrase!!' } });
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.json()).toEqual({ error: 'Foundation operator credentials are invalid.' });
+
+    const login = await app.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: OPERATOR_PASSPHRASE } });
+    expect(login.statusCode).toBe(201);
+
+    const session = login.json().session as string;
+    const probe = await app.inject({ method: 'GET', url: '/api/auth/session', headers: { authorization: `Bearer ${session}` } });
+    expect(probe.statusCode).toBe(200);
+    expect(probe.json().expiresAt).toEqual(expect.any(String));
+
+    // An unbootstrapped host answers a login exactly like a wrong passphrase.
+    const fresh = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+    const noOperator = await fresh.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: OPERATOR_PASSPHRASE } });
+    expect(noOperator.statusCode).toBe(401);
+    expect(noOperator.json()).toEqual(wrong.json());
+
+    await fresh.close();
+    await app.close();
+  });
+
+  it('revokes sessions individually and globally', async () => {
+    const app = await bootstrappedApp();
+    const first = await login(app);
+    const second = await login(app);
+
+    const loggedOut = await app.inject({ method: 'DELETE', url: '/api/auth/session', headers: { authorization: `Bearer ${first}` } });
+    expect(loggedOut.statusCode).toBe(204);
+    expect((await probeSession(app, first)).statusCode).toBe(401);
+    expect((await probeSession(app, second)).statusCode).toBe(200);
+
+    // Two remain: the session bootstrap issued, and `second`.
+    const revokedAll = await app.inject({ method: 'DELETE', url: '/api/auth/sessions', headers: { authorization: `Bearer ${second}` } });
+    expect(revokedAll.statusCode).toBe(200);
+    expect(revokedAll.json()).toEqual({ revokedSessions: 2 });
+    expect((await probeSession(app, second)).statusCode).toBe(401);
+
+    await app.close();
+  });
+
+  it('requires the current passphrase to change it and ends every session afterwards', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+
+    const wrongCurrent = await app.inject({
+      method: 'PUT',
+      url: '/api/auth/credential',
+      headers: { authorization: `Bearer ${session}` },
+      payload: { currentPassphrase: 'not the current one', passphrase: 'a replacement passphrase' },
+    });
+    expect(wrongCurrent.statusCode).toBe(401);
+    expect((await probeSession(app, session)).statusCode).toBe(200);
+
+    const changed = await app.inject({
+      method: 'PUT',
+      url: '/api/auth/credential',
+      headers: { authorization: `Bearer ${session}` },
+      payload: { currentPassphrase: OPERATOR_PASSPHRASE, passphrase: 'a replacement passphrase' },
+    });
+    expect(changed.statusCode).toBe(200);
+
+    // Replacing the credential ends every session, including the caller's.
+    expect((await probeSession(app, session)).statusCode).toBe(401);
+
+    const relogin = await app.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: 'a replacement passphrase' } });
+    expect(relogin.statusCode).toBe(201);
+
+    const events = await app.inject({
+      method: 'GET',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${relogin.json().session as string}` },
+    });
+    const types = (events.json().events as { type: string }[]).map((event) => event.type);
+    expect(types).toContain('auth.credential_changed');
+    expect(types).toContain('auth.sessions_revoked');
+
+    await app.close();
+  });
+
+  it('keeps the static token below administration: it may read diagnostics but never reach host-admin', async () => {
+    const app = await buildAppWithCapturedLog({ foundationToken: 'dev-token' });
+
+    const bootstrapCode = readBootstrapCode(app);
+    // The bootstrap and login surfaces must be reachable without the static
+    // token, or the token would gate the principal that outranks it.
+    const bootstrapped = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    });
+    expect(bootstrapped.statusCode).toBe(201);
+
+    // The token still reaches diagnostics.
+    const diagnostics = await app.inject({
+      method: 'GET',
+      url: '/api/system/status',
+      headers: { authorization: 'Bearer dev-token' },
+    });
+    expect(diagnostics.statusCode).toBe(200);
+
+    // It never reaches administration: that is the ADR 0075 ceiling.
+    const adminWithToken = await app.inject({
+      method: 'DELETE',
+      url: '/api/auth/sessions',
+      headers: { authorization: 'Bearer dev-token' },
+    });
+    expect(adminWithToken.statusCode).toBe(401);
+    expect(adminWithToken.json()).toEqual({ error: 'Foundation operator session is required.' });
+
+    const adminWithSession = await app.inject({
+      method: 'DELETE',
+      url: '/api/auth/sessions',
+      headers: { authorization: `Bearer ${bootstrapped.json().session as string}` },
+    });
+    expect(adminWithSession.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('requires a credential for diagnostics once an operator exists, even without a token', async () => {
+    const open = await buildAppWithCapturedLog();
+
+    // Nothing claims this host yet: trusted-local behaviour is unchanged.
+    expect((await open.inject({ method: 'GET', url: '/api/system/version' })).statusCode).toBe(200);
+
+    const bootstrapped = await open.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(open), passphrase: OPERATOR_PASSPHRASE },
+    });
+    expect(bootstrapped.statusCode).toBe(201);
+
+    // Establishing an operator is an explicit act: the API now needs one.
+    const anonymous = await open.inject({ method: 'GET', url: '/api/system/version' });
+    expect(anonymous.statusCode).toBe(401);
+
+    const authenticated = await open.inject({
+      method: 'GET',
+      url: '/api/system/version',
+      headers: { authorization: `Bearer ${bootstrapped.json().session as string}` },
+    });
+    expect(authenticated.statusCode).toBe(200);
+
+    // /health stays open for supervisors and watchdogs.
+    expect((await open.inject({ method: 'GET', url: '/health' })).statusCode).toBe(200);
+
+    await open.close();
+  });
+
+  it('clears the operator through the local reset marker and audits it', async () => {
+    const databasePath = createDatabasePath();
+    const first = await buildAppWithCapturedLog({ databasePath });
+    await first.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(first), passphrase: OPERATOR_PASSPHRASE },
+    });
+    await first.close();
+
+    // Creating the marker requires filesystem control of the host.
+    writeFileSync(operatorResetMarkerPath(databasePath), '');
+
+    const restarted = await buildAppWithCapturedLog({ databasePath });
+
+    // The host is back in bootstrap and the old passphrase is gone.
+    expect((await restarted.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: OPERATOR_PASSPHRASE } })).statusCode).toBe(401);
+
+    const rebootstrapped = await restarted.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(restarted), passphrase: 'a fresh operator passphrase' },
+    });
+    expect(rebootstrapped.statusCode).toBe(201);
+
+    const events = await restarted.inject({
+      method: 'GET',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${rebootstrapped.json().session as string}` },
+    });
+    const types = (events.json().events as { type: string }[]).map((event) => event.type);
+    expect(types).toContain('auth.operator_reset');
+
+    // The marker is consumed: a further restart must not reset again.
+    await restarted.close();
+    const third = await buildAppWithCapturedLog({ databasePath });
+    expect((await third.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: 'a fresh operator passphrase' } })).statusCode).toBe(201);
+
+    await third.close();
+  });
+
+  it('never accepts a forged auth audit event from a client', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+
+    for (const type of ['auth.operator_bootstrapped', 'auth.credential_changed', 'auth.operator_reset', 'auth.sessions_revoked']) {
+      const forged = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        headers: { authorization: `Bearer ${session}` },
+        payload: { deviceId: 'attacker', type, payload: type === 'auth.sessions_revoked' ? { revokedSessions: 0 } : {} },
+      });
+
+      expect(forged.statusCode).toBe(400);
+      expect(forged.json()).toEqual({ error: RESERVED_EVENT_ERROR });
+    }
+
+    await app.close();
+  });
+
+  it('mints realtime tickets under an operator session and drops them when the session ends', async () => {
+    const app = await bootstrappedApp();
+    const session = await login(app);
+
+    const ticket = await app.inject({
+      method: 'POST',
+      url: '/api/realtime/tickets',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(ticket.statusCode).toBe(201);
+    expect(ticket.json().ticket).toEqual(expect.any(String));
+
+    // An anonymous caller cannot mint one once an operator exists.
+    const anonymous = await app.inject({ method: 'POST', url: '/api/realtime/tickets' });
+    expect(anonymous.statusCode).toBe(401);
+
+    await app.close();
+  });
+});
+
+describe('Foundation API access classes', () => {
+  it('refuses to serve an unclassified Foundation API route', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    // Adding a Foundation API route without an access class must fail at
+    // registration, not ship open (ADR 0075 A2/A3).
+    expect(() => {
+      app.get('/api/unclassified/example', async () => ({ ok: true }));
+    }).toThrow(/has no access class/);
+
+    // A non-API route is unaffected: classes bound the Foundation API surface.
+    expect(() => {
+      app.get('/unclassified-example', async () => ({ ok: true }));
+    }).not.toThrow();
+
+    await app.close();
+  });
 });
 
 interface TestWebSocket {
@@ -1132,6 +1436,84 @@ async function mintRealtimeTicket(app: Awaited<ReturnType<typeof buildApp>>): Pr
     throw new Error('Realtime ticket response did not include a string ticket.');
   }
   return body.ticket;
+}
+
+/**
+ * Builds an app whose log is captured, so a test can read the operator
+ * bootstrap code the same way an operator does: from the host's local channel.
+ * Reading it any other way would not prove it is actually surfaced there.
+ */
+async function buildAppWithCapturedLog(
+  overrides: Partial<Parameters<typeof buildApp>[0]> = {},
+): Promise<Awaited<ReturnType<typeof buildApp>>> {
+  const lines: string[] = [];
+  const logDestination = new Writable({
+    write(chunk, _encoding, callback) {
+      lines.push(String(chunk));
+      callback();
+    },
+  });
+
+  const app = await buildApp({
+    host: '127.0.0.1',
+    port: 0,
+    databasePath: createDatabasePath(),
+    deviceId: 'test-core',
+    logDestination,
+    ...overrides,
+  });
+
+  capturedLogLines.set(app, lines);
+
+  return app;
+}
+
+function readBootstrapCode(app: Awaited<ReturnType<typeof buildApp>>): string {
+  const lines = capturedLogLines.get(app) ?? [];
+
+  for (const line of lines) {
+    const parsed = JSON.parse(line) as { operatorBootstrapCode?: unknown };
+
+    if (typeof parsed.operatorBootstrapCode === 'string') {
+      return parsed.operatorBootstrapCode;
+    }
+  }
+
+  throw new Error('No operator bootstrap code was surfaced on the host log.');
+}
+
+async function bootstrappedApp(): Promise<Awaited<ReturnType<typeof buildApp>>> {
+  const app = await buildAppWithCapturedLog();
+
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/bootstrap',
+    payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+  });
+
+  if (response.statusCode !== 201) {
+    throw new Error(`Operator bootstrap failed: ${response.body}`);
+  }
+
+  return app;
+}
+
+async function login(app: Awaited<ReturnType<typeof buildApp>>): Promise<string> {
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/session',
+    payload: { passphrase: OPERATOR_PASSPHRASE },
+  });
+
+  if (response.statusCode !== 201) {
+    throw new Error(`Operator login failed: ${response.body}`);
+  }
+
+  return response.json().session as string;
+}
+
+async function probeSession(app: Awaited<ReturnType<typeof buildApp>>, session: string) {
+  return app.inject({ method: 'GET', url: '/api/auth/session', headers: { authorization: `Bearer ${session}` } });
 }
 
 function socketMessageToString(data: unknown): string {

@@ -250,6 +250,10 @@ describe('restoreSqliteBackup', () => {
         id: '0009_memory_retention_policy',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0010_foundation_operator',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

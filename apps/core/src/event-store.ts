@@ -12,6 +12,7 @@ import {
 } from './migrations.js';
 import { MemoryStore } from './memory-store.js';
 import { RetentionPolicyStore } from './retention-policy-store.js';
+import { OperatorStore, type PasswordHashingSodium } from './operator-store.js';
 import type { MemoryContentCrypto } from './memory-content-crypto.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 
@@ -237,6 +238,14 @@ export class EventStore {
   public retentionPolicies(): RetentionPolicyStore {
     this.ensureOpen();
     return new RetentionPolicyStore(this.db);
+  }
+
+  // The Foundation Operator credential (ADR 0075/0076), sharing this store's
+  // connection. Only the Argon2id verifier is persisted; sessions are never
+  // stored here.
+  public operators(sodium: PasswordHashingSodium): OperatorStore {
+    this.ensureOpen();
+    return new OperatorStore(this.db, sodium);
   }
 
   /**

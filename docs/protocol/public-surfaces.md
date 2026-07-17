@@ -128,12 +128,20 @@ avatar.state_changed
 memory.recorded
 memory.tombstone
 memory.domain_shredded
+auth.operator_bootstrapped
+auth.credential_changed
+auth.operator_reset
+auth.sessions_revoked
 ```
 
 Server-synthesized foundation event types (exported as `serverSynthesizedFoundationEventTypes`), appended by the server and never accepted on `POST /api/events`:
 
 ```text
 memory.domain_shredded
+auth.operator_bootstrapped
+auth.credential_changed
+auth.operator_reset
+auth.sessions_revoked
 ```
 
 `memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller? }`); the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.
@@ -141,6 +149,8 @@ memory.domain_shredded
 `memory.tombstone` is the append-only deletion marker for a deleteable memory item (ADR 0014 / ADR 0068). Its payload is `{ memoryItemId, privacyDomain, reason? }` and carries no sensitive content. Writing one transitions a matching `deleted` memory item to `tombstoned` on a best-effort basis; the event log stays the source of truth.
 
 `memory.domain_shredded` is the append-only crypto-shred audit record for a privacy domain (ADR 0071 step 4, ADR 0037 audit style). Its payload is `{ privacyDomain, removedKeyVersions, reason? }` and carries no content or key material; the actor and time are the event's `deviceId` and `wallTime`. It is appended by the server's crypto-shred operation and rejected on the client write path, so a client cannot forge a shred record.
+
+The `auth.*` types are the append-only Foundation Operator audit trail (ADR 0076, ADR 0037 audit style): `auth.operator_bootstrapped` (payload `{}`) when the first operator credential is established, `auth.credential_changed` (payload `{}`) when the passphrase is replaced, `auth.operator_reset` (payload `{ reason? }`) when a local reset clears the operator, and `auth.sessions_revoked` (payload `{ revokedSessions }`) when all sessions are revoked at once. They carry no credential material, no session identifiers and no content; the actor and time are the event's `deviceId` and `wallTime`. All four are server-synthesized and rejected on the client write path. Individual logins, logouts, failed logins and rate-limit hits are deliberately **not** recorded here: they are attacker-triggerable and stay in bounded operational logging so the append-only log cannot be flooded (ADR 0075 A9).
 
 ### Current foundation payload schemas
 

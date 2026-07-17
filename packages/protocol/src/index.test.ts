@@ -55,8 +55,18 @@ describe('Pico protocol types', () => {
       'memory.recorded',
       'memory.tombstone',
       'memory.domain_shredded',
+      'auth.operator_bootstrapped',
+      'auth.credential_changed',
+      'auth.operator_reset',
+      'auth.sessions_revoked',
     ]);
-    expect(serverSynthesizedFoundationEventTypes).toEqual(['memory.domain_shredded']);
+    expect(serverSynthesizedFoundationEventTypes).toEqual([
+      'memory.domain_shredded',
+      'auth.operator_bootstrapped',
+      'auth.credential_changed',
+      'auth.operator_reset',
+      'auth.sessions_revoked',
+    ]);
 
     expect(actionEventTypes).toContain('action.requested');
     expect(actionEventTypes).toContain('pico_rules.decision_created');
@@ -157,6 +167,38 @@ describe('Pico protocol types', () => {
     });
   });
 
+  it('keeps operator audit payloads content-free and credential-free (ADR 0076)', () => {
+    expect(validateFoundationEventPayload('auth.operator_bootstrapped', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('auth.credential_changed', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('auth.operator_reset', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('auth.operator_reset', { reason: 'local reset marker' })).toEqual({
+      ok: true,
+      payload: { reason: 'local reset marker' },
+    });
+    expect(validateFoundationEventPayload('auth.sessions_revoked', { revokedSessions: 3 })).toEqual({
+      ok: true,
+      payload: { revokedSessions: 3 },
+    });
+
+    // Nothing about the credential, the session or the person may ride along.
+    expect(validateFoundationEventPayload('auth.operator_bootstrapped', { passphrase: 'hunter2' })).toEqual({
+      ok: false,
+      error: 'auth.operator_bootstrapped payload has unexpected field: passphrase.',
+    });
+    expect(validateFoundationEventPayload('auth.credential_changed', { verifier: '$argon2id$...' })).toEqual({
+      ok: false,
+      error: 'auth.credential_changed payload has unexpected field: verifier.',
+    });
+    expect(validateFoundationEventPayload('auth.sessions_revoked', { revokedSessions: 1, session: 'abc' })).toEqual({
+      ok: false,
+      error: 'auth.sessions_revoked payload has unexpected field: session.',
+    });
+    expect(validateFoundationEventPayload('auth.sessions_revoked', { revokedSessions: -1 })).toEqual({
+      ok: false,
+      error: 'auth.sessions_revoked revokedSessions must be a non-negative integer.',
+    });
+  });
+
   it('rejects unexpected Foundation event payload fields', () => {
     expect(validateFoundationEventPayload('device.registered', { label: 'dev laptop' })).toEqual({
       ok: false,
@@ -216,6 +258,9 @@ describe('Pico protocol types', () => {
     const publicSurfaces = readRepoFile('docs/protocol/public-surfaces.md');
 
     expect(textFenceAfterHeading(publicSurfaces, '### Foundation event types')).toEqual([...foundationEventTypes]);
+    expect(textFenceAfterHeading(publicSurfaces, 'Server-synthesized foundation event types')).toEqual([
+      ...serverSynthesizedFoundationEventTypes,
+    ]);
     expect(textFenceAfterHeading(publicSurfaces, '### Product action event types')).toEqual([...actionEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Legacy tool/policy event types')).toEqual([...legacyToolPolicyEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Pico Home event direction')).toEqual([...picoHomeEventTypes]);

@@ -7,6 +7,10 @@ export const foundationEventTypes = [
   'memory.recorded',
   'memory.tombstone',
   'memory.domain_shredded',
+  'auth.operator_bootstrapped',
+  'auth.credential_changed',
+  'auth.operator_reset',
+  'auth.sessions_revoked',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -14,9 +18,16 @@ export type FoundationEventType = typeof foundationEventTypes[number];
 // Foundation event types the server synthesizes itself and never accepts on the
 // client write path (a client must not forge them). `memory.domain_shredded` is
 // the crypto-shred audit record (ADR 0071 step 4): it is appended by the shred
-// operation, not by `POST /api/events`.
+// operation, not by `POST /api/events`. The `auth.*` records are the operator
+// audit trail (ADR 0076): only low-volume state changes an attacker cannot
+// trigger are durable — failed logins stay in operational logging so the
+// append-only log cannot be flooded (ADR 0075 A9).
 export const serverSynthesizedFoundationEventTypes = [
   'memory.domain_shredded',
+  'auth.operator_bootstrapped',
+  'auth.credential_changed',
+  'auth.operator_reset',
+  'auth.sessions_revoked',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -238,6 +249,25 @@ export interface MemoryDomainShreddedPayload {
   reason?: string;
 }
 
+// Append-only operator audit records (ADR 0076, ADR 0037 audit style). They
+// carry no credential material, no session identifiers, no passphrase metadata
+// and no content; the actor and time live on the event envelope (deviceId,
+// wallTime). Individual logins, logouts and failed attempts are deliberately
+// absent: failures are attacker-triggerable and must not reach an undeletable
+// log (ADR 0075 A9).
+export type AuthOperatorBootstrappedPayload = Record<string, never>;
+
+export type AuthCredentialChangedPayload = Record<string, never>;
+
+// `reason` distinguishes how the operator was cleared, never who or with what.
+export interface AuthOperatorResetPayload {
+  reason?: string;
+}
+
+export interface AuthSessionsRevokedPayload {
+  revokedSessions: number;
+}
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -246,7 +276,11 @@ export type FoundationEventPayload =
   | AvatarStateChangedPayload
   | MemoryRecordedPayload
   | MemoryTombstonePayload
-  | MemoryDomainShreddedPayload;
+  | MemoryDomainShreddedPayload
+  | AuthOperatorBootstrappedPayload
+  | AuthCredentialChangedPayload
+  | AuthOperatorResetPayload
+  | AuthSessionsRevokedPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -385,6 +419,44 @@ export function validateFoundationEventPayload(
         ...(payload.reason === undefined ? {} : { reason: payload.reason }),
       },
     };
+  }
+
+  if (type === 'auth.operator_bootstrapped' || type === 'auth.credential_changed') {
+    const extraKey = firstUnexpectedKey(payload, []);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
+    }
+
+    return { ok: true, payload: {} };
+  }
+
+  if (type === 'auth.operator_reset') {
+    const extraKey = firstUnexpectedKey(payload, ['reason']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `auth.operator_reset payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (payload.reason !== undefined && !isNonEmptyString(payload.reason, 1_000)) {
+      return { ok: false, error: 'auth.operator_reset reason must be a non-empty string when provided.' };
+    }
+
+    return {
+      ok: true,
+      payload: payload.reason === undefined ? {} : { reason: payload.reason },
+    };
+  }
+
+  if (type === 'auth.sessions_revoked') {
+    const extraKey = firstUnexpectedKey(payload, ['revokedSessions']);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `auth.sessions_revoked payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (typeof payload.revokedSessions !== 'number' || !Number.isInteger(payload.revokedSessions) || payload.revokedSessions < 0) {
+      return { ok: false, error: 'auth.sessions_revoked revokedSessions must be a non-negative integer.' };
+    }
+
+    return { ok: true, payload: { revokedSessions: payload.revokedSessions } };
   }
 
   const extraKey = firstUnexpectedKey(payload, ['mode', 'state', 'intensity', 'statusColor', 'message']);

@@ -37,6 +37,10 @@ import { registerWebDashboard } from './static-web.js';
 import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
+import { AccessClassRegistry, isFoundationApiRoute, type AccessClass } from './access-classes.js';
+import { OperatorOverloadedError, type OperatorStore } from './operator-store.js';
+import { SessionStore } from './session-store.js';
+import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 
 const SERVICE_VERSION = '0.1.7';
@@ -103,7 +107,15 @@ interface RealtimeSocket {
 
 interface RealtimeTicketRecord {
   expiresAtMs: number;
+  // Set when the ticket was minted under an operator session: revoking that
+  // session invalidates its outstanding tickets (ADR 0076).
+  sessionDigest?: string;
 }
+
+// Which authority a request carries. The bearer header holds either the
+// principal-less static token or an operator session; they are resolved apart
+// so the token can never reach beyond its ceiling (ADR 0075).
+type RequestAuthority = 'operator' | 'static-token' | 'none';
 
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Fail loudly on a key/backup-separation misconfiguration before opening any
@@ -118,14 +130,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Memory-content encryption is off by default: content stays plaintext
   // foundation data (ADR 0070). When enabled, the domain_encrypted posture
   // becomes usable (ADR 0071 suite, ADR 0073 AD, ADR 0072 key store).
+  // libsodium is needed unconditionally now: the operator credential uses its
+  // Argon2id (ADR 0076), whether or not memory encryption is on.
+  await sodium.ready;
+
   let memoryCrypto: MemoryContentCrypto | undefined;
   if (config.memoryEncryption === true) {
-    await sodium.ready;
     memoryCrypto = new MemoryContentCrypto(sodium, new KeyStore(keyStorePath));
   }
 
   const app = Fastify({
     logger: {
+      ...(config.logDestination === undefined ? {} : { stream: config.logDestination }),
       serializers: {
         req(request: { method?: string; url?: string; host?: string; remoteAddress?: string; remotePort?: number }) {
           return {
@@ -151,6 +167,48 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const factory = new EventFactory(clock);
   const sockets = new Set<RealtimeSocket>();
   const realtimeTickets = new Map<string, RealtimeTicketRecord>();
+  const operators: OperatorStore = store.operators(sodium);
+  const sessions = new SessionStore();
+  const bootstrapCode = new OperatorBootstrapCode();
+  const accessClasses = new AccessClassRegistry();
+
+  function appendServerEvent(type: FoundationEventType, payload: FoundationEventPayload): void {
+    const event = factory.create({ deviceId: config.deviceId, type, payload });
+
+    if (store.append(event) === 'inserted') {
+      broadcast(event);
+    }
+  }
+
+  // An explicit local reset clears the operator and returns the host to
+  // bootstrap (ADR 0076). Creating the marker requires filesystem control, and
+  // it is consumed here so a reset happens once, not on every restart. It never
+  // touches keys, memory content or the event log.
+  if (consumeOperatorResetMarker(config.databasePath)) {
+    const cleared = operators.clear();
+    const revokedSessions = sessions.revokeAll();
+
+    if (cleared) {
+      appendServerEvent('auth.operator_reset', { reason: 'local reset marker' });
+    }
+
+    if (revokedSessions > 0) {
+      appendServerEvent('auth.sessions_revoked', { revokedSessions });
+    }
+
+    app.log.warn('Foundation operator cleared by local reset marker; the host is back in bootstrap.');
+  }
+
+  // While no operator exists, mint the per-process bootstrap code and surface it
+  // on the host's local channel only (ADR 0076). A restart mints a new one.
+  if (!operators.exists()) {
+    const code = bootstrapCode.mint();
+    app.log.warn(
+      { operatorBootstrapCode: code },
+      'No Foundation operator exists. Bootstrap one by POSTing this code and a passphrase to /api/auth/bootstrap. '
+      + 'This code is valid for this process only and is single-use.',
+    );
+  }
   const websocketKeepalive = setInterval(() => {
     for (const socket of sockets) {
       if (socket.isAlive === false) {
@@ -216,18 +274,102 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
   }
 
+  // Fail closed at registration time: a Foundation API route without an access
+  // class must not become routable (ADR 0075 A2/A3). This is why the registry is
+  // a mechanism and not a checklist — forgetting a class breaks the boot.
+  app.addHook('onRoute', (routeOptions) => {
+    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
+
+    for (const method of methods) {
+      accessClasses.assertClassified(method, routeOptions.url);
+    }
+  });
+
+  /**
+   * Resolves the single bearer credential to one authority. The static token and
+   * an operator session share the header, so they are told apart here: the token
+   * is matched first, and anything else is looked up in the session store.
+   */
+  function resolveAuthority(authorizationHeader: string | string[] | undefined): RequestAuthority {
+    if (config.foundationToken !== undefined && isBearerTokenAuthorized(authorizationHeader, config.foundationToken)) {
+      return 'static-token';
+    }
+
+    if (sessions.touch(readBearerCredential(authorizationHeader)) !== undefined) {
+      return 'operator';
+    }
+
+    return 'none';
+  }
+
   app.addHook('onRequest', async (request, reply) => {
-    if (config.foundationToken === undefined || !isFoundationApiPath(request.url)) {
+    const routeUrl = request.routeOptions?.url;
+
+    if (routeUrl === undefined || !isFoundationApiRoute(routeUrl)) {
       return;
     }
 
-    if (!isBearerTokenAuthorized(request.headers.authorization, config.foundationToken)) {
-      return reply
-        .code(401)
-        .header('WWW-Authenticate', 'Bearer realm="Pico Foundation"')
-        .send({ error: 'Foundation token is required.' });
+    const accessClass = accessClasses.lookup(request.method, routeUrl);
+
+    if (accessClass === undefined) {
+      // Defence in depth: the onRoute hook should have caught this at boot.
+      request.log.error({ route: routeUrl }, 'Foundation API route has no access class.');
+      return reply.code(500).send({ error: 'Route is not classified.' });
+    }
+
+    if (accessClass === 'public') {
+      return;
+    }
+
+    if (accessClass === 'setup-bootstrap') {
+      // Only reachable while the host has no operator (ADR 0075 A10).
+      if (operators.exists()) {
+        return reply.code(404).send({ error: 'Foundation operator bootstrap is not available.' });
+      }
+
+      return;
+    }
+
+    const authority = resolveAuthority(request.headers.authorization);
+
+    if (accessClass === 'foundation-diagnostic') {
+      if (authority !== 'none') {
+        return;
+      }
+
+      // Unchanged trusted-local behaviour only while nothing claims this host:
+      // no token configured and no operator bootstrapped. Establishing an
+      // operator is an explicit act and means the API needs a credential.
+      if (config.foundationToken === undefined && !operators.exists()) {
+        return;
+      }
+
+      return unauthorized(reply, 'Foundation credential is required.');
+    }
+
+    // Every remaining class needs a principal, so the principal-less static
+    // token cannot reach them: its ceiling is foundation-diagnostic (ADR 0075).
+    if (authority !== 'operator') {
+      return unauthorized(reply, 'Foundation operator session is required.');
     }
   });
+
+  // The access class of every Foundation API route (ADR 0075 table, ADR 0076
+  // route shapes). `/api/auth/*` is deliberately not diagnostic: the login and
+  // bootstrap surfaces must be reachable without the static token, or the token
+  // would become a prerequisite for the principal that outranks it.
+  accessClasses.register('POST', '/api/auth/bootstrap', 'setup-bootstrap');
+  accessClasses.register('POST', '/api/auth/session', 'public');
+  accessClasses.register('GET', '/api/auth/session', 'authenticated');
+  accessClasses.register('DELETE', '/api/auth/session', 'authenticated');
+  accessClasses.register('DELETE', '/api/auth/sessions', 'host-admin');
+  accessClasses.register('PUT', '/api/auth/credential', 'host-admin');
+  accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
+  accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
+  accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
+  accessClasses.register('GET', '/api/events', 'foundation-diagnostic');
+  accessClasses.register('GET', '/api/events/tail', 'foundation-diagnostic');
+  accessClasses.register('POST', '/api/events', 'foundation-diagnostic');
 
   app.get('/health', async (): Promise<PicoHealthResponse> => ({
     ok: true,
@@ -266,12 +408,150 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, response);
   });
 
+  app.post('/api/auth/bootstrap', async (request, reply) => {
+    const body = (request.body ?? {}) as { bootstrapCode?: unknown; passphrase?: unknown };
+
+    // Consume the code first: a wrong code must not reach the KDF at all.
+    if (!bootstrapCode.consume(body.bootstrapCode)) {
+      return reply.code(401).send({ error: 'Bootstrap code is invalid.' });
+    }
+
+    try {
+      await operators.create(body.passphrase as string);
+    } catch (error) {
+      if (error instanceof OperatorOverloadedError) {
+        return reply.code(503).send({ error: 'Too many credential operations in flight.' });
+      }
+
+      // The code is spent either way; a failed attempt must not leave a usable
+      // one behind. Re-mint so a legitimate operator can retry from the log.
+      const code = bootstrapCode.mint();
+      app.log.warn({ operatorBootstrapCode: code }, 'Operator bootstrap failed; a new bootstrap code was minted.');
+
+      return reply.code(400).send({ error: (error as Error).message });
+    }
+
+    appendServerEvent('auth.operator_bootstrapped', {});
+    app.log.warn('Foundation operator bootstrapped.');
+
+    const session = sessions.issue();
+
+    return reply
+      .code(201)
+      .header('Cache-Control', 'no-store')
+      .send({ session: session.value, expiresAt: new Date(session.expiresAtMs).toISOString() });
+  });
+
+  app.post('/api/auth/session', async (request, reply) => {
+    const body = (request.body ?? {}) as { passphrase?: unknown };
+
+    let verified: boolean;
+
+    try {
+      verified = await operators.verify(body.passphrase as string);
+    } catch (error) {
+      if (error instanceof OperatorOverloadedError) {
+        return reply.code(503).send({ error: 'Too many credential operations in flight.' });
+      }
+
+      throw error;
+    }
+
+    if (!verified) {
+      // Uniform failure: a wrong passphrase and an absent operator must not be
+      // distinguishable. Failed logins stay in operational logging and never
+      // reach the append-only log (ADR 0075 A9).
+      request.log.warn('Foundation operator login failed.');
+
+      return unauthorized(reply, 'Foundation operator credentials are invalid.');
+    }
+
+    const session = sessions.issue();
+
+    return reply
+      .code(201)
+      .header('Cache-Control', 'no-store')
+      .send({ session: session.value, expiresAt: new Date(session.expiresAtMs).toISOString() });
+  });
+
+  app.get('/api/auth/session', async (request, reply) => {
+    // The onRequest hook already validated and extended the session.
+    const touched = sessions.touch(readBearerCredential(request.headers.authorization));
+
+    if (touched === undefined) {
+      return unauthorized(reply, 'Foundation operator session is required.');
+    }
+
+    return sendNoStore(reply, { expiresAt: new Date(touched.expiresAtMs).toISOString() });
+  });
+
+  app.delete('/api/auth/session', async (request, reply) => {
+    const credential = readBearerCredential(request.headers.authorization);
+    const sessionDigest = sessions.digestOf(credential);
+
+    sessions.revoke(credential);
+
+    if (sessionDigest !== undefined) {
+      purgeSessionRealtimeTickets(realtimeTickets, sessionDigest);
+    }
+
+    return reply.code(204).send();
+  });
+
+  app.delete('/api/auth/sessions', async (_request, reply) => {
+    const revokedSessions = sessions.revokeAll();
+    purgeAllSessionRealtimeTickets(realtimeTickets);
+
+    if (revokedSessions > 0) {
+      appendServerEvent('auth.sessions_revoked', { revokedSessions });
+    }
+
+    return sendNoStore(reply, { revokedSessions });
+  });
+
+  app.put('/api/auth/credential', async (request, reply) => {
+    const body = (request.body ?? {}) as { currentPassphrase?: unknown; passphrase?: unknown };
+
+    let changed: boolean;
+
+    try {
+      changed = await operators.changePassphrase(body.currentPassphrase as string, body.passphrase as string);
+    } catch (error) {
+      if (error instanceof OperatorOverloadedError) {
+        return reply.code(503).send({ error: 'Too many credential operations in flight.' });
+      }
+
+      return reply.code(400).send({ error: (error as Error).message });
+    }
+
+    if (!changed) {
+      // A live session is not enough: the current passphrase is required so a
+      // stolen session cannot lock the real operator out (ADR 0076).
+      return unauthorized(reply, 'Current operator passphrase is invalid.');
+    }
+
+    appendServerEvent('auth.credential_changed', {});
+
+    // Replacing the credential ends every session, including this one.
+    const revokedSessions = sessions.revokeAll();
+    purgeAllSessionRealtimeTickets(realtimeTickets);
+
+    if (revokedSessions > 0) {
+      appendServerEvent('auth.sessions_revoked', { revokedSessions });
+    }
+
+    return sendNoStore(reply, { revokedSessions });
+  });
+
   app.post('/api/realtime/tickets', async (request, reply) => {
-    if (config.foundationToken === undefined) {
+    // Tickets exist to carry a credential through a browser WebSocket handshake.
+    // With neither a token nor an operator, `WS /ws` needs no credential and a
+    // ticket would be meaningless.
+    if (config.foundationToken === undefined && !operators.exists()) {
       return reply.code(404).send({ error: 'Realtime tickets are not enabled.' });
     }
 
-    const ticket = createRealtimeTicket(realtimeTickets);
+    const ticket = createRealtimeTicket(realtimeTickets, sessions.digestOf(readBearerCredential(request.headers.authorization)));
     const response: PicoRealtimeTicketResponse = {
       ticket: ticket.value,
       expiresAt: new Date(ticket.expiresAtMs).toISOString(),
@@ -434,7 +714,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return reply.code(403).send({ error: 'WebSocket origin is not allowed.' });
       }
 
-      if (config.foundationToken !== undefined && !isRealtimeConnectionAuthorized(request.url, request.headers.authorization, config.foundationToken, realtimeTickets)) {
+      // A credential is required once anything claims this host: a configured
+      // token, or a bootstrapped operator. Browsers cannot set headers on a
+      // WebSocket handshake, so they present a short-lived single-use ticket
+      // (ADR 0039); non-browser clients may send a bearer token or session.
+      const realtimeCredentialRequired = config.foundationToken !== undefined || operators.exists();
+
+      if (realtimeCredentialRequired && !isRealtimeConnectionAuthorized(request.url, request.headers.authorization, config.foundationToken, realtimeTickets, sessions)) {
         return reply
           .code(401)
           .header('WWW-Authenticate', 'Bearer realm="Pico Foundation"')
@@ -576,7 +862,10 @@ function isFoundationApiPath(requestUrl: string): boolean {
   return url.pathname.startsWith('/api/');
 }
 
-function createRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>): { value: string; expiresAtMs: number } {
+function createRealtimeTicket(
+  tickets: Map<string, RealtimeTicketRecord>,
+  sessionDigest?: string,
+): { value: string; expiresAtMs: number } {
   purgeExpiredRealtimeTickets(tickets);
 
   while (tickets.size >= MAX_OUTSTANDING_REALTIME_TICKETS) {
@@ -590,17 +879,42 @@ function createRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>): { val
 
   const value = randomBytes(32).toString('base64url');
   const expiresAtMs = Date.now() + REALTIME_TICKET_TTL_MS;
-  tickets.set(secureDigest(value), { expiresAtMs });
+  tickets.set(secureDigest(value), {
+    expiresAtMs,
+    ...(sessionDigest === undefined ? {} : { sessionDigest }),
+  });
   return { value, expiresAtMs };
+}
+
+// A ticket minted under a session dies with it (ADR 0076).
+function purgeSessionRealtimeTickets(tickets: Map<string, RealtimeTicketRecord>, sessionDigest: string): void {
+  for (const [digest, record] of tickets) {
+    if (record.sessionDigest === sessionDigest) {
+      tickets.delete(digest);
+    }
+  }
+}
+
+function purgeAllSessionRealtimeTickets(tickets: Map<string, RealtimeTicketRecord>): void {
+  for (const [digest, record] of tickets) {
+    if (record.sessionDigest !== undefined) {
+      tickets.delete(digest);
+    }
+  }
 }
 
 function isRealtimeConnectionAuthorized(
   requestUrl: string,
   authorizationHeader: string | string[] | undefined,
-  expectedToken: string,
+  expectedToken: string | undefined,
   tickets: Map<string, RealtimeTicketRecord>,
+  sessions: SessionStore,
 ): boolean {
-  if (isBearerTokenAuthorized(authorizationHeader, expectedToken)) {
+  if (expectedToken !== undefined && isBearerTokenAuthorized(authorizationHeader, expectedToken)) {
+    return true;
+  }
+
+  if (sessions.touch(readBearerCredential(authorizationHeader)) !== undefined) {
     return true;
   }
 
@@ -653,21 +967,38 @@ function purgeExpiredRealtimeTickets(tickets: Map<string, RealtimeTicketRecord>)
 }
 
 function isBearerTokenAuthorized(authorizationHeader: string | string[] | undefined, expectedToken: string): boolean {
-  if (typeof authorizationHeader !== 'string') {
-    return false;
-  }
+  const providedToken = readBearerCredential(authorizationHeader);
 
-  const prefix = 'Bearer ';
-  if (!authorizationHeader.startsWith(prefix)) {
-    return false;
-  }
-
-  const providedToken = authorizationHeader.slice(prefix.length);
-  if (providedToken === '') {
+  if (providedToken === undefined) {
     return false;
   }
 
   return secureTokenEquals(providedToken, expectedToken);
+}
+
+// The raw bearer credential, which is either the static token or an operator
+// session; the caller decides which authority it resolves to.
+function readBearerCredential(authorizationHeader: string | string[] | undefined): string | undefined {
+  if (typeof authorizationHeader !== 'string') {
+    return undefined;
+  }
+
+  const prefix = 'Bearer ';
+  if (!authorizationHeader.startsWith(prefix)) {
+    return undefined;
+  }
+
+  const credential = authorizationHeader.slice(prefix.length);
+
+  return credential === '' ? undefined : credential;
+}
+
+function unauthorized(reply: FastifyReply, error: string): FastifyReply {
+  return reply
+    .code(401)
+    .header('WWW-Authenticate', 'Bearer realm="Pico Foundation"')
+    .header('Cache-Control', 'no-store')
+    .send({ error });
 }
 
 function secureTokenEquals(left: string, right: string): boolean {

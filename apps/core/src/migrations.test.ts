@@ -62,6 +62,10 @@ describe('database migrations', () => {
           id: '0009_memory_retention_policy',
           requiresBackup: false,
         },
+        {
+          id: '0010_foundation_operator',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -125,6 +129,10 @@ describe('database migrations', () => {
       },
       {
         id: '0009_memory_retention_policy',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0010_foundation_operator',
         appliedAt: expect.any(String),
       },
     ]);
@@ -207,12 +215,13 @@ describe('database migrations', () => {
         '0007_memory_item_content_posture',
         '0008_memory_key_envelope',
         '0009_memory_retention_policy',
+        '0010_foundation_operator',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(9);
+    expect(listAppliedMigrations(db)).toHaveLength(10);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -222,7 +231,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(9);
+    expect(listAppliedMigrations(db)).toHaveLength(10);
 
     db.close();
   });
@@ -261,7 +270,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(9);
+    expect(listAppliedMigrations(db)).toHaveLength(10);
 
     db.close();
   });
@@ -281,6 +290,7 @@ describe('database migrations', () => {
       '0007_memory_item_content_posture',
       '0008_memory_key_envelope',
       '0009_memory_retention_policy',
+      '0010_foundation_operator',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -298,6 +308,7 @@ describe('database migrations', () => {
           '0007_memory_item_content_posture',
           '0008_memory_key_envelope',
           '0009_memory_retention_policy',
+          '0010_foundation_operator',
         ],
       },
     ]);
@@ -371,6 +382,7 @@ describe('database migrations', () => {
       '0007_memory_item_content_posture',
       '0008_memory_key_envelope',
       '0009_memory_retention_policy',
+      '0010_foundation_operator',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {

@@ -253,6 +253,31 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0010_foundation_operator',
+    requiresBackup: false,
+    up(db) {
+      // The Foundation Operator credential (ADR 0075 principal, ADR 0076
+      // mechanics). This table holds a *verifier* only: an Argon2id hash string
+      // whose parameters and salt are embedded in the string itself. It is never
+      // a key and never content, so it may live in the database and its backups
+      // without touching the ADR 0072 key/backup separation.
+      //
+      // Sessions are deliberately absent: they are in-memory only, so no backup
+      // can resurrect a revoked session (ADR 0076).
+      //
+      // A single operator exists at most; the CHECK pins the row identity so a
+      // second operator cannot be inserted by accident.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS foundation_operator (
+          operator_id TEXT PRIMARY KEY CHECK (operator_id = 'operator'),
+          credential_verifier TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

@@ -14,6 +14,12 @@ export interface CoreConfig {
   wsAllowedOrigins?: string[];
   foundationToken?: string;
   foundationAccessMode?: FoundationAccessMode;
+  /**
+   * Where the process log goes. Defaults to the standard destination. The
+   * operator bootstrap code is surfaced only on this log (ADR 0076), so tests
+   * read it the same way an operator does instead of through a back door.
+   */
+  logDestination?: NodeJS.WritableStream;
 }
 
 type Environment = Record<string, string | undefined>;
