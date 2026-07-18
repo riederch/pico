@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.possession-cross-family-label",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "possession",
+  "construction": "pico.id.possession.v1",
+  "case": "cross-family label confusion is rejected before byte assembly",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "cross_family_label_confusion"
+  },
+  "adr": "0079",
+  "notes": "A possession vector cannot claim the key-record label. Family labels are the domain-separation boundary. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

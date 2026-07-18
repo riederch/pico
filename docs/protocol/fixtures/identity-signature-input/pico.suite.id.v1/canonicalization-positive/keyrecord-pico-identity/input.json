@@ -1,0 +1,9 @@
+{
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "keyRole": "pico_identity",
+    "publicKeyHex": "1111111111111111111111111111111111111111111111111111111111111111"
+  }
+}

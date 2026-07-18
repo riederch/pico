@@ -1,0 +1,24 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-positive.keyrecord-device-key-agreement",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-positive",
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "case": "device key-agreement key record signature input and fingerprint",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000147069636f2e69642e6b65797265636f72642e7631000000107069636f2e73756974652e69642e7631000000146465766963655f6b65795f61677265656d656e74000000203333333333333333333333333333333333333333333333333333333333333333",
+    "signatureInputLen": 104,
+    "fingerprintDigestHex": "2263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3f931b098e06a"
+  },
+  "adr": "0079",
+  "notes": "Device X25519 key-agreement key record; used later as ADR 0078 reader-key material. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

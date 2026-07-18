@@ -1,0 +1,26 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.keyrecord-suite-v2",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "case": "suite swap produces different key-record bytes and fingerprint",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000147069636f2e69642e6b65797265636f72642e7631000000107069636f2e73756974652e69642e76320000000d7069636f5f6964656e74697479000000201111111111111111111111111111111111111111111111111111111111111111",
+    "signatureInputLen": 97,
+    "fingerprintDigestHex": "147888887d25260151ad883c8cd937736ea722dc8b063323bba33aa86cce4e89",
+    "mustDifferFrom": "keyrecord-pico-identity",
+    "fingerprintMustDifferFrom": "keyrecord-pico-identity"
+  },
+  "adr": "0079",
+  "notes": "A key under another suite canonicalizes to different bytes and a different fingerprint; this is a bind-difference vector, not an accepted v2 suite. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

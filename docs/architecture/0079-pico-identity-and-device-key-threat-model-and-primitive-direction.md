@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and primitive direction for Pico Identity Keys and Device Keys, and as the selection of the **signature-input canonicalization method** for Pico-signed records: the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b fingerprints, all libsodium), the two-keypair device rule, labeled length-prefixed binary signature inputs (the ADR 0073 method generalized), fingerprint and possession-proof direction, and per-role custody boundaries — behind three gates. **It implements nothing**: no key is generated, no signature verified, no draft fence (ADR 0051/0052/0053/0055) loosened at fixture level. It is the reviewed key-format direction those fences said must exist before anything chooses algorithms or serialization.
+Accepted as the threat model and primitive direction for Pico Identity Keys and Device Keys, and as the selection of the **signature-input canonicalization method** for Pico-signed records: the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b fingerprints, all libsodium), the two-keypair device rule, labeled length-prefixed binary signature inputs (the ADR 0073 method generalized), fingerprint and possession-proof direction, and per-role custody boundaries — behind three gates. **Gate G1 is now partially implemented as additive protocol vocabulary, canonical signature-input builders and authoritative byte/fingerprint vectors.** No key is generated, no signature is verified, no lifecycle lookup exists and no draft fence (ADR 0051/0052/0053/0055) is loosened at runtime level. This remains the reviewed key-format direction those fences said must exist before anything chooses algorithms or serialization.
 
 ## Context
 
@@ -98,7 +98,187 @@ The record families this ADR sets direction for — final layouts and vectors ar
 - **Possession challenge** (`pico.id.possession.v1` direction): verifier nonce, context binding (who is verifying, for what), subject key fingerprint; answered by a detached signature. Never reusable across contexts — the label and context are protected input.
 - **Revocation statement** (`pico.id.revocation.v1` direction): subject key or delegation reference, reason category, ordering context; signed by the identity key. Realizes the ADR 0052/0053 placeholders' direction. Revocation is never erasure: historical signatures stay verifiable with lifecycle state carrying the trust cut-off (ADR 0033).
 
-All three stay inert (I8, K4-family) until Gate G1 vectors exist and Gate G3 defines how lifecycle state is looked up and reconciled.
+All three stay inert (I8, K4-family) until custody/runtime gates exist and Gate G3 defines how lifecycle state is looked up and reconciled.
+
+### Gate G1 canonical layouts and vectors
+
+Gate G1 now fixes the first four Pico identity signature-input families. Every family uses the ADR 0073 element rule:
+
+```text
+element(b) = U32BE(len(b)) || b
+signatureInput = element(label) || element(field1) || ...
+```
+
+ASCII token fields must be non-empty, at most 1024 bytes and match `[A-Za-z0-9._:/+-]+`. Public keys, nonces and fingerprints are raw bytes carried in fixtures as lowercase hex; Ed25519/X25519 public keys are 32 bytes, nonces are 32 bytes and fingerprints are 32-byte BLAKE2b digests. Scope sets are encoded as `element(decimalScopeCount)` followed by one element per scope in lexicographic order; duplicate or unknown scopes are rejected. `lifecycleOrder` is syntactically pinned to `seq:[0-9]{16}` here so a signed statement always carries protected ordering context; Gate G3 still owns lookup, monotonicity and restore reconciliation semantics.
+
+Layouts:
+
+| Family | Label | Field order after label |
+|---|---|---|
+| keyrecord | `pico.id.keyrecord.v1` | `suite`, `keyRole`, `publicKey` |
+| possession | `pico.id.possession.v1` | `suite`, `subjectKeyFingerprint`, `verifierNonce`, `verifierContext` |
+| delegation | `pico.id.delegation.v1` | `suite`, `delegationId`, `issuerIdentityKeyFingerprint`, `subjectSigningKeyFingerprint`, `subjectKeyAgreementKeyFingerprint`, sorted scope set, `validFrom`, `validUntil`, `lifecycleOrder` |
+| revocation | `pico.id.revocation.v1` | `suite`, `revocationId`, `issuerIdentityKeyFingerprint`, `subjectKind`, `subjectRef`, `reasonCategory`, `revokedAt`, `lifecycleOrder` |
+
+Current vocabulary:
+
+- key roles: `pico_identity`, `device_signing`, `device_key_agreement`, `home_host_signing`, `home_host_key_agreement`
+- delegation scopes: `sign_history`, `verify_history`, `sync_exchange`, `decrypt_domain`, `receive_key_envelope`, `surface_session`, `home_membership`
+- revocation reasons: `lost_device`, `suspected_compromise`, `device_retired`, `key_rotated`, `membership_removed`
+
+The on-disk fixtures live under `docs/protocol/fixtures/identity-signature-input/pico.suite.id.v1/` in their own suite. They are authoritative byte vectors only: no private keys, no signatures, no verification and no runtime authority.
+
+#### canonicalization-positive
+
+**`keyrecord-pico-identity`** — Pico identity key record; fingerprint = BLAKE2b-256 over the canonical key-record bytes.
+
+```text
+len 97
+signatureInputHex
+000000147069636f2e69642e6b65797265636f72642e763100000010
+7069636f2e73756974652e69642e76310000000d7069636f5f696465
+6e746974790000002011111111111111111111111111111111111111
+11111111111111111111111111
+fingerprintDigestHex
+66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616
+```
+
+**`keyrecord-device-signing`** — device signing key record.
+
+```text
+len 98
+signatureInputHex
+000000147069636f2e69642e6b65797265636f72642e763100000010
+7069636f2e73756974652e69642e76310000000e6465766963655f
+7369676e696e67000000202222222222222222222222222222222222
+22222222222222222222222222222222
+fingerprintDigestHex
+5dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5
+```
+
+**`keyrecord-device-key-agreement`** — device X25519 key-agreement key record, the later ADR 0078 reader-key primitive.
+
+```text
+len 104
+signatureInputHex
+000000147069636f2e69642e6b65797265636f72642e763100000010
+7069636f2e73756974652e69642e7631000000146465766963655f
+6b65795f61677265656d656e74000000203333333333333333333333
+333333333333333333333333333333333333333333
+fingerprintDigestHex
+2263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3f931b098e06a
+```
+
+**`possession-device-signing`** — possession challenge input for the device signing key. It protects the subject fingerprint, verifier nonce and context.
+
+```text
+len 144
+signatureInputHex
+000000157069636f2e69642e706f7373657373696f6e2e763100000010
+7069636f2e73756974652e69642e7631000000205dba9b41e6f3f034
+b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b500000020
+4444444444444444444444444444444444444444444444444444444444444444
+000000177069636f2d7661756c743a6465766963652d636c61696d
+```
+
+**`delegation-device-reader`** — identity-issued device delegation with reader-envelope scope.
+
+```text
+len 318
+signatureInputHex
+000000157069636f2e69642e64656c65676174696f6e2e763100000010
+7069636f2e73756974652e69642e76310000001264656c5f3031687a
+78386d397134727435760000002066e6e80bcd9fc83d805ac5f7d902
+1aa10fb1166671c05ca9148bc92ac6e73616000000205dba9b41e6f3
+f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b50000
+00202263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3
+f931b098e06a00000001330000000e646563727970745f646f6d6169
+6e00000014726563656976655f6b65795f656e76656c6f70650000000c
+7369676e5f686973746f727900000018323032362d30372d3138543038
+3a30303a30302e3030305a00000018323032362d31302d3138543038
+3a30303a30302e3030305a000000147365713a30303030303030303030
+303030303031
+```
+
+**`delegation-scope-order-canonical`** — same semantic delegation with reversed input scope order; canonical bytes match `delegation-device-reader`.
+
+```text
+len 318
+signatureInputHex
+000000157069636f2e69642e64656c65676174696f6e2e763100000010
+7069636f2e73756974652e69642e76310000001264656c5f3031687a
+78386d397134727435760000002066e6e80bcd9fc83d805ac5f7d902
+1aa10fb1166671c05ca9148bc92ac6e73616000000205dba9b41e6f3
+f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b50000
+00202263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3
+f931b098e06a00000001330000000e646563727970745f646f6d6169
+6e00000014726563656976655f6b65795f656e76656c6f70650000000c
+7369676e5f686973746f727900000018323032362d30372d3138543038
+3a30303a30302e3030305a00000018323032362d31302d3138543038
+3a30303a30302e3030305a000000147365713a30303030303030303030
+303030303031
+mustMatch delegation-device-reader
+```
+
+**`revocation-delegation-reader`** — identity-issued delegation revocation statement input.
+
+```text
+len 209
+signatureInputHex
+000000157069636f2e69642e7265766f636174696f6e2e763100000010
+7069636f2e73756974652e69642e7631000000127265765f3031687a
+78386d397134727435760000002066e6e80bcd9fc83d805ac5f7d902
+1aa10fb1166671c05ca9148bc92ac6e736160000000a64656c656761
+74696f6e0000001264656c5f3031687a78386d397134727435760000
+000e6465766963655f7265746972656400000018323032362d30382d
+31385430383a30303a30302e3030305a000000147365713a30303030
+303030303030303030303032
+```
+
+#### canonicalization-negative
+
+Bind-difference negatives canonicalize successfully but must authenticate/hash differently:
+
+| Fixture | Expectation |
+|---|---|
+| `keyrecord-suite-v2` | Different bytes and fingerprint from `keyrecord-pico-identity`: `147888887d25260151ad883c8cd937736ea722dc8b063323bba33aa86cce4e89` |
+| `keyrecord-role-swap` | Different bytes and fingerprint from `keyrecord-pico-identity`: `27af8bcdb51ac4e283fae18b9e33cfa077f84d5b15fc4aad44af9a20661b0698` |
+| `possession-context-swap` | Different challenge bytes from `possession-device-signing` |
+
+The bind-difference canonical bytes are:
+
+```text
+keyrecord-suite-v2 len 97
+000000147069636f2e69642e6b65797265636f72642e763100000010
+7069636f2e73756974652e69642e76320000000d7069636f5f696465
+6e746974790000002011111111111111111111111111111111111111
+11111111111111111111111111
+
+keyrecord-role-swap len 98
+000000147069636f2e69642e6b65797265636f72642e763100000010
+7069636f2e73756974652e69642e76310000000e6465766963655f
+7369676e696e67000000201111111111111111111111111111111111
+11111111111111111111111111111111
+
+possession-context-swap len 144
+000000157069636f2e69642e706f7373657373696f6e2e763100000010
+7069636f2e73756974652e69642e7631000000205dba9b41e6f3f034
+b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b500000020
+4444444444444444444444444444444444444444444444444444444444444444
+000000177069636f2d686f6d653a6d6f76652d696e2d636c61696d
+```
+
+Reject negatives produce no signature input:
+
+| Fixture | Reason |
+|---|---|
+| `possession-cross-family-label` | `cross_family_label_confusion` |
+| `delegation-field-order-override` | `field_reordering` |
+| `delegation-truncated-issuer-fingerprint` | `invalid_fingerprint_length` |
+| `delegation-unknown-scope` | `invalid_scope` |
+| `delegation-validity-inverted` | `invalid_validity_bounds` |
+| `revocation-invalid-lifecycle-order` | `invalid_lifecycle_order` |
+| `keyrecord-invalid-public-key-length` | `invalid_public_key_length` |
 
 ### Custody boundaries
 
@@ -111,7 +291,7 @@ Private material custody is decided per role, each in its own step, under the I7
 
 Nothing runtime ships before its gates; nothing at all is security-relevant before **G1**.
 
-1. **Gate G1 — Canonical layouts and authoritative vectors.** Per-family byte layouts (key record, possession challenge, delegation, revocation) with ADR 0073-style accept/reject vectors, including negative vectors for cross-family label confusion, suite swap, role swap, field reordering, truncated-fingerprint comparison and validity/ordering violations. This gate also discharges ADR 0078's Gate R2 method question: envelope bytes use the same construction.
+1. **Done — Gate G1 canonical layouts and authoritative vectors.** Per-family byte layouts (key record, possession challenge, delegation, revocation) with ADR 0073-style accept/reject vectors, including negative vectors for cross-family label confusion, suite swap, role swap, field reordering, truncated-fingerprint comparison and validity/ordering violations. This gate also discharges ADR 0078's Gate R2 method question: envelope bytes use the same construction.
 2. **Gate G2 — Custody story per key role.** Host-role: ADR 0072-pattern file custody, decided alongside the claim flow (now ADR 0080, Gate M2). Person-role: a dedicated custody ADR before any person-identity key exists anywhere (now ADR 0081 — Vault-exclusive custody, `pico.vault.keyfile.v1` direction; the runtime discharge is its Gate P2).
 3. **Gate G3 — Lifecycle lookup and reconciliation.** How delegation and revocation statements are stored, ordered, looked up at verification time, and reconciled after restore (I9) — the ADR 0033 realization for these two record families, with its own lifecycle-negative vectors.
 

@@ -1,0 +1,19 @@
+{
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "delegationId": "del_01hzx8m9q4rt5v",
+    "issuerIdentityKeyFingerprintHex": "66e6e80bcd9fc83d805ac5f7d9021aa1",
+    "subjectSigningKeyFingerprintHex": "5dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5",
+    "subjectKeyAgreementKeyFingerprintHex": "2263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3f931b098e06a",
+    "scopes": [
+      "sign_history",
+      "decrypt_domain",
+      "receive_key_envelope"
+    ],
+    "validFrom": "2026-07-18T08:00:00.000Z",
+    "validUntil": "2026-10-18T08:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000001"
+  }
+}

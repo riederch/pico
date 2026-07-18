@@ -1,0 +1,24 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-positive.delegation-scope-order-canonical",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-positive",
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "case": "delegation scope-set ordering canonicalizes to the same bytes",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000157069636f2e69642e64656c65676174696f6e2e7631000000107069636f2e73756974652e69642e76310000001264656c5f3031687a78386d397134727435760000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616000000205dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5000000202263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3f931b098e06a00000001330000000e646563727970745f646f6d61696e00000014726563656976655f6b65795f656e76656c6f70650000000c7369676e5f686973746f727900000018323032362d30372d31385430383a30303a30302e3030305a00000018323032362d31302d31385430383a30303a30302e3030305a000000147365713a30303030303030303030303030303031",
+    "signatureInputLen": 318,
+    "mustMatch": "delegation-device-reader"
+  },
+  "adr": "0079",
+  "notes": "Scope sets are sorted before byte assembly, so JSON array order does not become signature-input order. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

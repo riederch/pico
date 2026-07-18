@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -34,6 +35,16 @@ import {
   memoryContentPostures,
   memoryDomainCustodyClasses,
   memoryRetentionModes,
+  picoIdentityDelegationScopes,
+  picoIdentityKeyRoles,
+  picoIdentityRevocationReasonCategories,
+  picoIdentitySignatureInputFamilies,
+  picoIdentitySignatureInputLabels,
+  picoIdentitySuite,
+  buildPicoIdentityDelegationSignatureInput,
+  buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoIdentityPossessionSignatureInput,
+  buildPicoIdentityRevocationSignatureInput,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -240,6 +251,40 @@ describe('Pico protocol types', () => {
     expect(memoryRetentionModes).toEqual(['keep_until_deleted', 'delete_after_max_age']);
   });
 
+  it('exports ADR 0079 identity signature-input vocabulary', () => {
+    expect(picoIdentitySuite).toBe('pico.suite.id.v1');
+    expect(picoIdentitySignatureInputFamilies).toEqual(['keyrecord', 'possession', 'delegation', 'revocation']);
+    expect(picoIdentitySignatureInputLabels).toEqual({
+      keyrecord: 'pico.id.keyrecord.v1',
+      possession: 'pico.id.possession.v1',
+      delegation: 'pico.id.delegation.v1',
+      revocation: 'pico.id.revocation.v1',
+    });
+    expect(picoIdentityKeyRoles).toEqual([
+      'pico_identity',
+      'device_signing',
+      'device_key_agreement',
+      'home_host_signing',
+      'home_host_key_agreement',
+    ]);
+    expect(picoIdentityDelegationScopes).toEqual([
+      'sign_history',
+      'verify_history',
+      'sync_exchange',
+      'decrypt_domain',
+      'receive_key_envelope',
+      'surface_session',
+      'home_membership',
+    ]);
+    expect(picoIdentityRevocationReasonCategories).toEqual([
+      'lost_device',
+      'suspected_compromise',
+      'device_retired',
+      'key_rotated',
+      'membership_removed',
+    ]);
+  });
+
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {
     expect(realtimeMessageType).toEqual({
       coreConnected: 'pico.core.connected',
@@ -364,6 +409,7 @@ describe('Pico protocol types', () => {
       .filter((fixturePath) => !fixturePath.startsWith('pico-link/draft/'))
       .filter((fixturePath) => !fixturePath.startsWith('model-delegation/draft/'))
       .filter((fixturePath) => !fixturePath.startsWith('memory-content-ad/'))
+      .filter((fixturePath) => !fixturePath.startsWith('identity-signature-input/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
@@ -513,6 +559,144 @@ describe('Pico protocol types', () => {
         }
         expect(acceptedHexByCase.has(other)).toBe(true);
         expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(other));
+      }
+    }
+  });
+
+  it('keeps Pico identity signature-input vectors byte-exact and aligned with ADR 0079 G1', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/identity-signature-input/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md',
+    ).replace(/\s+/g, '');
+
+    expect(stringField(suite, 'schema')).toBe('pico.identity.signature-input.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.identity-signature-input.pico_suite_id_v1');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'suite')).toBe(picoIdentitySuite);
+    expect(stringField(suite, 'surface')).toBe('identity-signature-input');
+    expect(stringArrayField(suite, 'families')).toEqual(['canonicalization-positive', 'canonicalization-negative']);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('authoritative-signature-input-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('no signature verification');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+
+    expect([...fixturePaths].sort()).toEqual(
+      listFixtureDirectories('docs/protocol/fixtures/identity-signature-input').sort(),
+    );
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current identity signature-input fixtures')).toEqual([
+      'identity-signature-input/suite.json',
+      ...fixturePaths.map((fixturePath) => `identity-signature-input/${fixturePath}/`),
+    ]);
+
+    const acceptedHexByCase = new Map<string, string>();
+    const acceptedFingerprintByCase = new Map<string, string>();
+    const relationships: {
+      caseName: string;
+      mustDifferFrom?: string;
+      fingerprintMustDifferFrom?: string;
+      mustMatch?: string;
+    }[] = [];
+
+    for (const fixturePath of fixturePaths) {
+      const parts = fixturePath.split('/');
+      expect(parts.length).toBe(3);
+      const [suiteSegment, family, caseName] = parts;
+      expect(suiteSegment).toBe(picoIdentitySuite);
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      const base = `docs/protocol/fixtures/identity-signature-input/${fixturePath}`;
+      const fixture = readRepoJsonObject(`${base}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const input = readRepoJsonObject(`${base}/input.json`);
+      const expectBlock = recordField(fixture, 'expect');
+      const identityFamily = stringField(fixture, 'identityFamily');
+
+      expect(stringField(fixture, 'schema')).toBe('pico.identity.signature-input.vector');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(`identity-signature-input.pico_suite_id_v1.${family}.${caseName}`);
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'suite')).toBe(picoIdentitySuite);
+      expect(stringField(fixture, 'surface')).toBe('identity-signature-input');
+      expect(stringField(fixture, 'family')).toBe(family);
+      expect(stringField(fixture, 'adr')).toBe('0079');
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toBeTruthy();
+      expect(stringField(source, 'encoding')).toBe('fields');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(picoIdentitySignatureInputFamilies).toContain(identityFamily as typeof picoIdentitySignatureInputFamilies[number]);
+
+      const construction = picoIdentitySignatureInputLabels[identityFamily as keyof typeof picoIdentitySignatureInputLabels];
+      expect(stringField(fixture, 'construction')).toBe(construction);
+      expect(stringField(input, 'identityFamily')).toBe(identityFamily);
+      const inputConstruction = stringField(input, 'construction');
+      const fields = recordField(input, 'fields');
+      const build = stringField(expectBlock, 'build');
+
+      if (inputConstruction !== construction) {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'reason')).toBe('cross_family_label_confusion');
+        continue;
+      }
+
+      if (build === 'accept') {
+        const recomputed = buildPicoIdentityVector(identityFamily, fields);
+        const hex = Buffer.from(recomputed).toString('hex');
+        expect(hex).toBe(stringField(expectBlock, 'signatureInputHex'));
+        expect(recomputed.length).toBe(numberField(expectBlock, 'signatureInputLen'));
+        expect(adrNoWhitespace).toContain(hex);
+        acceptedHexByCase.set(caseName, hex);
+
+        const fingerprintDigestHex = optionalStringField(expectBlock, 'fingerprintDigestHex');
+        if (fingerprintDigestHex !== undefined) {
+          const recomputedFingerprint = blake2b256Hex(recomputed);
+          expect(recomputedFingerprint).toBe(fingerprintDigestHex);
+          expect(adrNoWhitespace).toContain(fingerprintDigestHex);
+          acceptedFingerprintByCase.set(caseName, fingerprintDigestHex);
+        }
+
+        relationships.push({
+          caseName,
+          mustDifferFrom: optionalStringField(expectBlock, 'mustDifferFrom'),
+          fingerprintMustDifferFrom: optionalStringField(expectBlock, 'fingerprintMustDifferFrom'),
+          mustMatch: optionalStringField(expectBlock, 'mustMatch'),
+        });
+      } else {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'errorCategory')).toBe('canonicalization_error');
+        const reason = stringField(expectBlock, 'reason');
+        expect([
+          'cross_family_label_confusion',
+          'duplicate_scope',
+          'field_reordering',
+          'invalid_field_charset',
+          'invalid_fingerprint_length',
+          'invalid_lifecycle_order',
+          'invalid_public_key_length',
+          'invalid_scope',
+          'invalid_validity_bounds',
+        ]).toContain(reason);
+        expect(() => buildPicoIdentityVector(identityFamily, fields)).toThrow(reason);
+      }
+    }
+
+    for (const { caseName, mustDifferFrom, fingerprintMustDifferFrom, mustMatch } of relationships) {
+      if (mustDifferFrom !== undefined) {
+        expect(acceptedHexByCase.has(mustDifferFrom)).toBe(true);
+        expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(mustDifferFrom));
+      }
+      if (fingerprintMustDifferFrom !== undefined) {
+        expect(acceptedFingerprintByCase.has(fingerprintMustDifferFrom)).toBe(true);
+        expect(acceptedFingerprintByCase.get(caseName)).not.toBe(acceptedFingerprintByCase.get(fingerprintMustDifferFrom));
+      }
+      if (mustMatch !== undefined) {
+        expect(acceptedHexByCase.has(mustMatch)).toBe(true);
+        expect(acceptedHexByCase.get(caseName)).toBe(acceptedHexByCase.get(mustMatch));
       }
     }
   });
@@ -2350,6 +2534,71 @@ function optionalStringField(source: Record<string, unknown>, field: string): st
   }
 
   return value;
+}
+
+function buildPicoIdentityVector(identityFamily: string, fields: Record<string, unknown>): Uint8Array {
+  if (identityFamily === 'keyrecord') {
+    return buildPicoIdentityKeyRecordSignatureInput({
+      suite: stringField(fields, 'suite'),
+      keyRole: stringField(fields, 'keyRole') as typeof picoIdentityKeyRoles[number],
+      publicKeyHex: stringField(fields, 'publicKeyHex'),
+      ...optionalFieldOrder(fields),
+    });
+  }
+
+  if (identityFamily === 'possession') {
+    return buildPicoIdentityPossessionSignatureInput({
+      suite: stringField(fields, 'suite'),
+      subjectKeyFingerprintHex: stringField(fields, 'subjectKeyFingerprintHex'),
+      verifierNonceHex: stringField(fields, 'verifierNonceHex'),
+      verifierContext: stringField(fields, 'verifierContext'),
+      ...optionalFieldOrder(fields),
+    });
+  }
+
+  if (identityFamily === 'delegation') {
+    return buildPicoIdentityDelegationSignatureInput({
+      suite: stringField(fields, 'suite'),
+      delegationId: stringField(fields, 'delegationId'),
+      issuerIdentityKeyFingerprintHex: stringField(fields, 'issuerIdentityKeyFingerprintHex'),
+      subjectSigningKeyFingerprintHex: stringField(fields, 'subjectSigningKeyFingerprintHex'),
+      subjectKeyAgreementKeyFingerprintHex: stringField(fields, 'subjectKeyAgreementKeyFingerprintHex'),
+      scopes: stringArrayField(fields, 'scopes') as typeof picoIdentityDelegationScopes[number][],
+      validFrom: stringField(fields, 'validFrom'),
+      validUntil: stringField(fields, 'validUntil'),
+      lifecycleOrder: stringField(fields, 'lifecycleOrder'),
+      ...optionalFieldOrder(fields),
+    });
+  }
+
+  if (identityFamily === 'revocation') {
+    return buildPicoIdentityRevocationSignatureInput({
+      suite: stringField(fields, 'suite'),
+      revocationId: stringField(fields, 'revocationId'),
+      issuerIdentityKeyFingerprintHex: stringField(fields, 'issuerIdentityKeyFingerprintHex'),
+      subjectKind: stringField(fields, 'subjectKind') as 'delegation' | 'key',
+      subjectRef: stringField(fields, 'subjectRef'),
+      reasonCategory: stringField(fields, 'reasonCategory') as typeof picoIdentityRevocationReasonCategories[number],
+      revokedAt: stringField(fields, 'revokedAt'),
+      lifecycleOrder: stringField(fields, 'lifecycleOrder'),
+      ...optionalFieldOrder(fields),
+    });
+  }
+
+  throw new Error(`Unexpected identity signature-input family: ${identityFamily}`);
+}
+
+function optionalFieldOrder(fields: Record<string, unknown>): Record<string, unknown> {
+  return fields.fieldOrder === undefined ? {} : { fieldOrder: fields.fieldOrder };
+}
+
+function blake2b256Hex(input: Uint8Array): string {
+  const output = execFileSync('b2sum', ['-l', '256'], {
+    input: Buffer.from(input),
+    encoding: 'utf8',
+  });
+
+  return output.split(/\s+/)[0] ?? '';
 }
 
 /**

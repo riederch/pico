@@ -1,0 +1,24 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-positive.keyrecord-pico-identity",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-positive",
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "case": "Pico identity signing key record signature input and fingerprint",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000147069636f2e69642e6b65797265636f72642e7631000000107069636f2e73756974652e69642e76310000000d7069636f5f6964656e74697479000000201111111111111111111111111111111111111111111111111111111111111111",
+    "signatureInputLen": 97,
+    "fingerprintDigestHex": "66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616"
+  },
+  "adr": "0079",
+  "notes": "Baseline identity-root key record. The fingerprint digest is BLAKE2b-256 over this exact canonical byte string. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

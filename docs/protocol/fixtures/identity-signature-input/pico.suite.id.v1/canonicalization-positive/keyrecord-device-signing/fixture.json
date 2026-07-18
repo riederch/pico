@@ -1,0 +1,24 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-positive.keyrecord-device-signing",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-positive",
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "case": "device signing key record signature input and fingerprint",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000147069636f2e69642e6b65797265636f72642e7631000000107069636f2e73756974652e69642e76310000000e6465766963655f7369676e696e67000000202222222222222222222222222222222222222222222222222222222222222222",
+    "signatureInputLen": 98,
+    "fingerprintDigestHex": "5dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5"
+  },
+  "adr": "0079",
+  "notes": "Device signing key record; separate from the device key-agreement key by role and public key. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

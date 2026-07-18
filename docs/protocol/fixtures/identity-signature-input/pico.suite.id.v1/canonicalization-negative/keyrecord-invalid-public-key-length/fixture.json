@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.keyrecord-invalid-public-key-length",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "case": "short public key is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_public_key_length"
+  },
+  "adr": "0079",
+  "notes": "Ed25519 and X25519 public keys are 32-byte raw keys under pico.suite.id.v1. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

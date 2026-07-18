@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.delegation-validity-inverted",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "case": "inverted delegation validity bounds are rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_validity_bounds"
+  },
+  "adr": "0079",
+  "notes": "Validity bounds are protected fields; an inert or backwards interval produces no signature input. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

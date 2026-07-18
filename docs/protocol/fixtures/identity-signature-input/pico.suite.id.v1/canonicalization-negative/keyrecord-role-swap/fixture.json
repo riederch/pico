@@ -1,0 +1,26 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.keyrecord-role-swap",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "keyrecord",
+  "construction": "pico.id.keyrecord.v1",
+  "case": "role swap produces different key-record bytes and fingerprint",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000147069636f2e69642e6b65797265636f72642e7631000000107069636f2e73756974652e69642e76310000000e6465766963655f7369676e696e67000000201111111111111111111111111111111111111111111111111111111111111111",
+    "signatureInputLen": 98,
+    "fingerprintDigestHex": "27af8bcdb51ac4e283fae18b9e33cfa077f84d5b15fc4aad44af9a20661b0698",
+    "mustDifferFrom": "keyrecord-pico-identity",
+    "fingerprintMustDifferFrom": "keyrecord-pico-identity"
+  },
+  "adr": "0079",
+  "notes": "The same public key bytes under another key role produce different canonical bytes and fingerprint. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

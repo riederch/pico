@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.delegation-unknown-scope",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "case": "unknown delegation scope is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_scope"
+  },
+  "adr": "0079",
+  "notes": "Delegation scopes are a closed ADR 0079 vocabulary until a later ADR extends them. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

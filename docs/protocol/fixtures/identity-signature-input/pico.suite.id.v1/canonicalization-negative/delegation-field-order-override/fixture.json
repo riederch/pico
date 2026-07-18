@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.delegation-field-order-override",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "case": "field-order override is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "field_reordering"
+  },
+  "adr": "0079",
+  "notes": "The layout has fixed field order. A supplied fieldOrder is an attempt to move JSON ordering into the signature input. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

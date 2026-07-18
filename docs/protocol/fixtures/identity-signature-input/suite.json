@@ -1,0 +1,39 @@
+{
+  "schema": "pico.identity.signature-input.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.identity-signature-input.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-signature-input-vectors",
+  "disclaimer": "Authoritative signature-input byte vectors for ADR 0079 G1. Not key generation, no signature verification, not identity runtime, not L4 compatibility and no commercial permission.",
+  "fixtures": [
+    "pico.suite.id.v1/canonicalization-positive/keyrecord-pico-identity",
+    "pico.suite.id.v1/canonicalization-positive/keyrecord-device-signing",
+    "pico.suite.id.v1/canonicalization-positive/keyrecord-device-key-agreement",
+    "pico.suite.id.v1/canonicalization-positive/possession-device-signing",
+    "pico.suite.id.v1/canonicalization-positive/delegation-device-reader",
+    "pico.suite.id.v1/canonicalization-positive/delegation-scope-order-canonical",
+    "pico.suite.id.v1/canonicalization-positive/revocation-delegation-reader",
+    "pico.suite.id.v1/canonicalization-negative/keyrecord-suite-v2",
+    "pico.suite.id.v1/canonicalization-negative/keyrecord-role-swap",
+    "pico.suite.id.v1/canonicalization-negative/possession-context-swap",
+    "pico.suite.id.v1/canonicalization-negative/possession-cross-family-label",
+    "pico.suite.id.v1/canonicalization-negative/delegation-field-order-override",
+    "pico.suite.id.v1/canonicalization-negative/delegation-truncated-issuer-fingerprint",
+    "pico.suite.id.v1/canonicalization-negative/delegation-unknown-scope",
+    "pico.suite.id.v1/canonicalization-negative/delegation-validity-inverted",
+    "pico.suite.id.v1/canonicalization-negative/revocation-invalid-lifecycle-order",
+    "pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length"
+  ],
+  "notes": "Canonical byte vectors and key-record BLAKE2b-256 fingerprint vectors for pico.suite.id.v1. These unlock byte-layout review only; G2/G3 and runtime remain separate gates."
+}

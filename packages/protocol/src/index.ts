@@ -117,6 +117,100 @@ export const picoHomeClaimStates = [
 
 export type PicoHomeClaimStateName = typeof picoHomeClaimStates[number];
 
+export const picoIdentitySuite = 'pico.suite.id.v1' as const;
+
+// Authoritative signature-input families for ADR 0079 Gate G1. These builders
+// assemble bytes only; they do not generate keys, sign, verify or authorize.
+export const picoIdentitySignatureInputFamilies = [
+  'keyrecord',
+  'possession',
+  'delegation',
+  'revocation',
+] as const;
+
+export type PicoIdentitySignatureInputFamily = typeof picoIdentitySignatureInputFamilies[number];
+
+export const picoIdentitySignatureInputLabels = {
+  keyrecord: 'pico.id.keyrecord.v1',
+  possession: 'pico.id.possession.v1',
+  delegation: 'pico.id.delegation.v1',
+  revocation: 'pico.id.revocation.v1',
+} as const satisfies Record<PicoIdentitySignatureInputFamily, string>;
+
+export const picoIdentityKeyRoles = [
+  'pico_identity',
+  'device_signing',
+  'device_key_agreement',
+  'home_host_signing',
+  'home_host_key_agreement',
+] as const;
+
+export type PicoIdentityKeyRole = typeof picoIdentityKeyRoles[number];
+
+export const picoIdentityDelegationScopes = [
+  'sign_history',
+  'verify_history',
+  'sync_exchange',
+  'decrypt_domain',
+  'receive_key_envelope',
+  'surface_session',
+  'home_membership',
+] as const;
+
+export type PicoIdentityDelegationScope = typeof picoIdentityDelegationScopes[number];
+
+export const picoIdentityRevocationReasonCategories = [
+  'lost_device',
+  'suspected_compromise',
+  'device_retired',
+  'key_rotated',
+  'membership_removed',
+] as const;
+
+export type PicoIdentityRevocationReasonCategory = typeof picoIdentityRevocationReasonCategories[number];
+
+export interface PicoIdentityKeyRecordSignatureInput {
+  suite: string;
+  keyRole: PicoIdentityKeyRole;
+  publicKeyHex: string;
+}
+
+export interface PicoIdentityPossessionSignatureInput {
+  suite: string;
+  subjectKeyFingerprintHex: string;
+  verifierNonceHex: string;
+  verifierContext: string;
+}
+
+export interface PicoIdentityDelegationSignatureInput {
+  suite: string;
+  delegationId: string;
+  issuerIdentityKeyFingerprintHex: string;
+  subjectSigningKeyFingerprintHex: string;
+  subjectKeyAgreementKeyFingerprintHex: string;
+  scopes: PicoIdentityDelegationScope[];
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoIdentityRevocationSignatureInput {
+  suite: string;
+  revocationId: string;
+  issuerIdentityKeyFingerprintHex: string;
+  subjectKind: 'delegation' | 'key';
+  subjectRef: string;
+  reasonCategory: PicoIdentityRevocationReasonCategory;
+  revokedAt: string;
+  lifecycleOrder: string;
+}
+
+export type PicoIdentitySignatureInput =
+  | PicoIdentityKeyRecordSignatureInput
+  | PicoIdentityPossessionSignatureInput
+  | PicoIdentityDelegationSignatureInput
+  | PicoIdentityRevocationSignatureInput;
+
 export const realtimeMessageType = {
   coreConnected: 'pico.core.connected',
   eventCreated: 'pico.event.created',
@@ -897,6 +991,113 @@ export interface AuditEventCreatedPayload {
   summary: string;
 }
 
+export function buildPicoIdentityKeyRecordSignatureInput(
+  input: PicoIdentityKeyRecordSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, ['suite', 'keyRole', 'publicKeyHex']);
+  assertAsciiToken(input.suite);
+  assertStringMember(input.keyRole, picoIdentityKeyRoles, 'invalid_key_role');
+
+  return concatCanonicalElements([
+    asciiBytes(picoIdentitySignatureInputLabels.keyrecord),
+    asciiBytes(input.suite),
+    asciiBytes(input.keyRole),
+    fixedHexBytes(input.publicKeyHex, 32, 'invalid_public_key_length'),
+  ]);
+}
+
+export function buildPicoIdentityPossessionSignatureInput(
+  input: PicoIdentityPossessionSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'subjectKeyFingerprintHex',
+    'verifierNonceHex',
+    'verifierContext',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.verifierContext);
+
+  return concatCanonicalElements([
+    asciiBytes(picoIdentitySignatureInputLabels.possession),
+    asciiBytes(input.suite),
+    fixedHexBytes(input.subjectKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.verifierNonceHex, 32, 'invalid_nonce_length'),
+    asciiBytes(input.verifierContext),
+  ]);
+}
+
+export function buildPicoIdentityDelegationSignatureInput(
+  input: PicoIdentityDelegationSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'delegationId',
+    'issuerIdentityKeyFingerprintHex',
+    'subjectSigningKeyFingerprintHex',
+    'subjectKeyAgreementKeyFingerprintHex',
+    'scopes',
+    'validFrom',
+    'validUntil',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.delegationId);
+  assertAsciiToken(input.validFrom);
+  assertAsciiToken(input.validUntil);
+  assertLifecycleOrder(input.lifecycleOrder);
+  assertValidBounds(input.validFrom, input.validUntil);
+  const scopes = canonicalScopeSet(input.scopes);
+
+  return concatCanonicalElements([
+    asciiBytes(picoIdentitySignatureInputLabels.delegation),
+    asciiBytes(input.suite),
+    asciiBytes(input.delegationId),
+    fixedHexBytes(input.issuerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.subjectSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.subjectKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(String(scopes.length)),
+    ...scopes.map((scope) => asciiBytes(scope)),
+    asciiBytes(input.validFrom),
+    asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoIdentityRevocationSignatureInput(
+  input: PicoIdentityRevocationSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'revocationId',
+    'issuerIdentityKeyFingerprintHex',
+    'subjectKind',
+    'subjectRef',
+    'reasonCategory',
+    'revokedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.revocationId);
+  assertStringMember(input.subjectKind, ['delegation', 'key'] as const, 'invalid_subject_kind');
+  assertAsciiToken(input.subjectRef);
+  assertStringMember(input.reasonCategory, picoIdentityRevocationReasonCategories, 'invalid_reason_category');
+  assertAsciiToken(input.revokedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoIdentitySignatureInputLabels.revocation),
+    asciiBytes(input.suite),
+    asciiBytes(input.revocationId),
+    fixedHexBytes(input.issuerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.subjectKind),
+    asciiBytes(input.subjectRef),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.revokedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
 function firstUnexpectedKey(record: Record<string, unknown>, allowedKeys: readonly string[]): string | undefined {
   const allowed = new Set(allowedKeys);
   return Object.keys(record).find((key) => !allowed.has(key));
@@ -914,4 +1115,117 @@ function isNonEmptyString(value: unknown, maxLength: number | undefined): value 
   return typeof value === 'string'
     && value.trim().length > 0
     && (maxLength === undefined || value.length <= maxLength);
+}
+
+const canonicalTextEncoder = new TextEncoder();
+const canonicalAsciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
+const canonicalHexPattern = /^[0-9a-f]+$/;
+
+function concatCanonicalElements(elements: readonly Uint8Array[]): Uint8Array {
+  const parts = elements.map((element) => {
+    const length = new Uint8Array(4);
+    new DataView(length.buffer).setUint32(0, element.byteLength, false);
+    return [length, element] as const;
+  }).flat();
+  const totalLength = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.byteLength;
+  }
+
+  return output;
+}
+
+function asciiBytes(value: string): Uint8Array {
+  assertAsciiToken(value);
+  return canonicalTextEncoder.encode(value);
+}
+
+function fixedHexBytes(value: string, expectedByteLength: number, lengthReason: string): Uint8Array {
+  if (!canonicalHexPattern.test(value)) {
+    throw new Error('invalid_hex');
+  }
+  if (value.length !== expectedByteLength * 2) {
+    throw new Error(lengthReason);
+  }
+
+  const output = new Uint8Array(expectedByteLength);
+  for (let i = 0; i < expectedByteLength; i += 1) {
+    output[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
+  }
+
+  return output;
+}
+
+function assertAsciiToken(value: string): void {
+  const bytes = canonicalTextEncoder.encode(value);
+  if (bytes.length === 0) {
+    throw new Error('empty_field');
+  }
+  if (bytes.length > 1024) {
+    throw new Error('field_too_long');
+  }
+  if (!canonicalAsciiTokenPattern.test(value)) {
+    throw new Error('invalid_field_charset');
+  }
+}
+
+function assertExactKeys(record: Record<string, unknown>, expectedKeys: readonly string[]): void {
+  if ('fieldOrder' in record) {
+    throw new Error('field_reordering');
+  }
+
+  const expected = new Set(expectedKeys);
+  const unexpected = Object.keys(record).find((key) => !expected.has(key));
+  if (unexpected !== undefined) {
+    throw new Error('unexpected_field');
+  }
+
+  const missing = expectedKeys.find((key) => !(key in record));
+  if (missing !== undefined) {
+    throw new Error('missing_field');
+  }
+}
+
+function assertStringMember<const TValues extends readonly string[]>(
+  value: string,
+  allowedValues: TValues,
+  reason: string,
+): asserts value is TValues[number] {
+  if (!allowedValues.includes(value)) {
+    throw new Error(reason);
+  }
+}
+
+function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationScope[] {
+  if (!Array.isArray(scopes) || scopes.length === 0) {
+    throw new Error('empty_scope_set');
+  }
+
+  const seen = new Set<string>();
+  for (const scope of scopes) {
+    assertStringMember(scope, picoIdentityDelegationScopes, 'invalid_scope');
+    if (seen.has(scope)) {
+      throw new Error('duplicate_scope');
+    }
+    seen.add(scope);
+  }
+
+  return [...scopes].sort() as PicoIdentityDelegationScope[];
+}
+
+function assertValidBounds(validFrom: string, validUntil: string): void {
+  if (validUntil <= validFrom) {
+    throw new Error('invalid_validity_bounds');
+  }
+}
+
+function assertLifecycleOrder(value: string): void {
+  assertAsciiToken(value);
+  if (!/^seq:[0-9]{16}$/.test(value)) {
+    throw new Error('invalid_lifecycle_order');
+  }
 }

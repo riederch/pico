@@ -1,0 +1,10 @@
+{
+  "identityFamily": "possession",
+  "construction": "pico.id.possession.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "subjectKeyFingerprintHex": "5dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5",
+    "verifierNonceHex": "4444444444444444444444444444444444444444444444444444444444444444",
+    "verifierContext": "pico-vault:device-claim"
+  }
+}

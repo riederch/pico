@@ -56,6 +56,31 @@ memory-content-ad/pico.suite.mem.v1/canonicalization-negative/reject-nonascii-it
 memory-content-ad/pico.suite.mem.v1/canonicalization-negative/reject-overlong-item-id/
 ```
 
+## Current identity signature-input fixtures
+
+These fixtures carry the authoritative canonical signature-input byte vectors for the `pico.suite.id.v1` identity key-record, possession, delegation and revocation families (ADR 0079 Gate G1). They include key-record BLAKE2b-256 fingerprint vectors, but no private keys, signatures, verification runtime, L4 compatibility basis or commercial permission.
+
+```text
+identity-signature-input/suite.json
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/keyrecord-pico-identity/
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/keyrecord-device-signing/
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/keyrecord-device-key-agreement/
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/possession-device-signing/
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/delegation-device-reader/
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/delegation-scope-order-canonical/
+identity-signature-input/pico.suite.id.v1/canonicalization-positive/revocation-delegation-reader/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-suite-v2/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-role-swap/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/possession-context-swap/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/possession-cross-family-label/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-field-order-override/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-truncated-issuer-fingerprint/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-unknown-scope/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-validity-inverted/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/revocation-invalid-lifecycle-order/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length/
+```
+
 ## Current draft Pico Link fixtures
 
 These fixtures are in a separate draft suite and are not part of the Foundation seed suite.

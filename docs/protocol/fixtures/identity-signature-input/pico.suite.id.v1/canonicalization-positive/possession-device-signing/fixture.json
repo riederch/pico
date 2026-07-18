@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-positive.possession-device-signing",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-positive",
+  "identityFamily": "possession",
+  "construction": "pico.id.possession.v1",
+  "case": "device signing-key possession challenge input",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000157069636f2e69642e706f7373657373696f6e2e7631000000107069636f2e73756974652e69642e7631000000205dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5000000204444444444444444444444444444444444444444444444444444444444444444000000177069636f2d7661756c743a6465766963652d636c61696d",
+    "signatureInputLen": 144
+  },
+  "adr": "0079",
+  "notes": "Verifier nonce, context and subject key fingerprint are all protected in the challenge bytes. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

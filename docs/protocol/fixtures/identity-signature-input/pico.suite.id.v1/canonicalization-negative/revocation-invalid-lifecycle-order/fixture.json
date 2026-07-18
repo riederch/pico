@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.revocation-invalid-lifecycle-order",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "revocation",
+  "construction": "pico.id.revocation.v1",
+  "case": "invalid lifecycle ordering context is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_lifecycle_order"
+  },
+  "adr": "0079",
+  "notes": "G3 owns reconciliation semantics, but G1 already requires a versioned sequence-shaped ordering token. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

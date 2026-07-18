@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.delegation-truncated-issuer-fingerprint",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "case": "truncated fingerprint is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_fingerprint_length"
+  },
+  "adr": "0079",
+  "notes": "Security comparisons use full 32-byte fingerprints; truncated values never enter signature input. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

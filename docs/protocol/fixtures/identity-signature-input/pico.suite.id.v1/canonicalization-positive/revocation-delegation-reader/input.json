@@ -1,0 +1,14 @@
+{
+  "identityFamily": "revocation",
+  "construction": "pico.id.revocation.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "revocationId": "rev_01hzx8m9q4rt5v",
+    "issuerIdentityKeyFingerprintHex": "66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616",
+    "subjectKind": "delegation",
+    "subjectRef": "del_01hzx8m9q4rt5v",
+    "reasonCategory": "device_retired",
+    "revokedAt": "2026-08-18T08:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000002"
+  }
+}
