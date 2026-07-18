@@ -58,9 +58,29 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
 
-  packages/protocol: {}
+  packages/protocol:
+    devDependencies:
+      '@types/libsodium-wrappers-sumo':
+        specifier: ^0.8.2
+        version: 0.8.2
+      libsodium-wrappers-sumo:
+        specifier: ^0.8.4
+        version: 0.8.4
 
   packages/sync: {}
+
+  packages/vault:
+    dependencies:
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      libsodium-wrappers-sumo:
+        specifier: ^0.8.4
+        version: 0.8.4
+    devDependencies:
+      '@types/libsodium-wrappers-sumo':
+        specifier: ^0.8.2
+        version: 0.8.2
 
 packages:
 

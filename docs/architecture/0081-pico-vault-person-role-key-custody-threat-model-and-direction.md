@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1`: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. **Gate P1 is implemented for layout and authoritative header-AAD vectors only**: `@pico/protocol` exports the Vault keyfile vocabulary plus a pure `buildPicoVaultKeyfileHeaderAad` builder, and `docs/protocol/fixtures/vault-keyfile/` publishes the vector suite. No Vault runtime exists yet: no key generation, no keyfile write/read path, no Argon2id execution, no AEAD open/decrypt, no signing, no unlock state and no export flow. This is the dedicated custody ADR that ADR 0079 Gate G2 requires before any person-identity key exists anywhere; Gate P2 remains the runtime discharge.
+Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1`: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. **Gate P1 is implemented**: `@pico/protocol` exports the Vault keyfile vocabulary plus a pure `buildPicoVaultKeyfileHeaderAad` builder, and `docs/protocol/fixtures/vault-keyfile/` publishes the authoritative header-AAD vector suite. **Gate P2 is implemented as a minimal package-level runtime in `@pico/vault`**: create/open encrypted person-role keyfiles, Argon2id execution, XChaCha20-Poly1305 seal/open with the P1 header AAD, explicit lock, idle auto-lock, label-checked signing, key-agreement sealed-box unwrap, encrypted export only, private file mode writes and Foundation data/backup path separation tests. This discharges ADR 0079 Gate G2 for the person-role custody floor. Remaining: no Vault product shell, local IPC/daemon, approval UX, platform-keystore unlock, lifecycle lookup/reconciliation, recovery path or compatibility certification; Gate P3 remains platform-keystore work.
 
 ## Context
 
@@ -16,7 +16,7 @@ What is missing is the custody decision itself: where person-role private keys l
 
 Covers: custody for person-role private keys — at-rest format, unlock model, process boundary, creation, export/backup, root-versus-device-key custody asymmetry, platform-keystore posture, and the loss/recovery honesty boundary.
 
-Does not cover: recovery of any kind (ADR 0033 boundary unchanged), passkey/hardware-backed identity (a future suite per ADR 0079 I2), key synchronization between devices, the Vault's product shape and UX beyond the custody floor, multi-person shared Vaults, host-role custody (ADR 0080 Gate M2), or any change to the Foundation auth layer (ADR 0075/0076). No runtime ships from this ADR.
+Does not cover: recovery of any kind (ADR 0033 boundary unchanged), passkey/hardware-backed identity (a future suite per ADR 0079 I2), key synchronization between devices, the Vault's product shape and UX beyond the custody floor, multi-person shared Vaults, host-role custody (ADR 0080 Gate M2), or any change to the Foundation auth layer (ADR 0075/0076). The current runtime slice is a minimal library package, not a deployable Vault daemon, GUI or local-agent transport.
 
 ## Threat model
 
@@ -72,7 +72,7 @@ Does not cover: recovery of any kind (ADR 0033 boundary unchanged), passkey/hard
 
 The Pico Vault (ADR 0026; the Full Client custody role of ADR 0015) is a dedicated local process on a device the person controls. The first implementable shape may be minimal — a local CLI/agent is acceptable — but the role assignment is strict: the browser dashboard is a Pico Surface and never holds person keys; the Foundation host is infrastructure and never holds person keys (ADR 0024), even when Vault and host share hardware — separate process, separate custody paths, outside every host data and backup scope (V1).
 
-Stated for the current deployment because the temptation is concrete: the Home Assistant add-on and the dashboard contain **no Vault-capable surface**, must not fake one, and must not grow one by convenience. Person identity waits for the Vault tool; ADR 0080's precondition is dischargeable only when it exists (Gate P2).
+Stated for the current deployment because the temptation is concrete: the Home Assistant add-on and the dashboard contain **no Vault-capable surface**, must not fake one, and must not grow one by convenience. The first holder now exists only as the `@pico/vault` library package; that does not make the add-on, Core host or browser dashboard a custody surface. ADR 0080's claimant-side precondition has a minimal holder, but the claim runtime still needs its own founding-record, host-custody and membership gates.
 
 ### The keyfile: `pico.vault.keyfile.v1`
 
@@ -136,7 +136,21 @@ Reject vectors:
 | `invalid-nonce-length` | `invalid_aead_nonce_length` |
 | `invalid-fingerprint-length` | `invalid_fingerprint_length` |
 
-Open-negative fixtures reuse the `identity-root-moderate` header AAD and carry synthetic ciphertext metadata only: `wrong-passphrase` expects `authentication_error` / `wrong_passphrase`, and `truncated-ciphertext` expects `malformed_ciphertext` / `truncated_ciphertext`. These expectations document the future open boundary; no current code performs the open.
+Open-negative fixtures reuse the `identity-root-moderate` header AAD and carry synthetic ciphertext metadata only: `wrong-passphrase` expects `authentication_error` / `wrong_passphrase`, and `truncated-ciphertext` expects `malformed_ciphertext` / `truncated_ciphertext`. These expectations document the open boundary for the vector suite; Gate P2's runtime tests now exercise real open failures in `@pico/vault`, but the fixture suite itself still carries no real keyfiles or private material.
+
+### Gate P2 minimal runtime slice
+
+`@pico/vault` is the first concrete Vault holder. It is deliberately small and package-level:
+
+- `createPicoVaultKeyfile(...)` generates exactly one person-role keypair (`pico_identity`, `device_signing` or `device_key_agreement`) using libsodium, derives a file key with the P1 Argon2id moderate parameters, encrypts a length-prefixed private-key payload with XChaCha20-Poly1305 and binds the complete P1 header AAD.
+- `openPicoVaultKeyfile(...)` authenticates/decrypts the keyfile, validates suite, role, key lengths and BLAKE2b-256 key-record fingerprint against the header, and returns a `PicoVaultSession` containing only session metadata plus private material held inside the object.
+- `PicoVaultSession.sign(...)` signs only recognized ADR 0079 canonical signature-input family labels and refuses unknown labels; key-agreement keys cannot sign.
+- `PicoVaultSession.unwrapSealedBox(...)` unwraps libsodium sealed boxes only for `device_key_agreement`; signing keys cannot unwrap.
+- `exportEncryptedKeyfile()` and `serializeEncryptedKeyfile()` return only the encrypted keyfile envelope. There is no raw private-key export API.
+- `writePicoVaultKeyfile(...)` creates parent directories with private mode intent and writes the keyfile with mode `0600` using exclusive create; `assertPicoVaultKeyfileMode(...)` enforces the ADR 0072-style custody-file mode.
+- `assertVaultCustodyPathSeparation(...)` rejects a Vault keyfile path inside the Foundation data or backup scopes, binding V1 as code rather than prose.
+
+Memory hygiene is bounded, not oversold. The runtime zeroizes the derived file key, plaintext payload buffers and session private key on explicit lock, and supports an idle `autoLockAfterMs`. Because this slice runs in JavaScript over `libsodium-wrappers-sumo`, it cannot promise guarded pages, no GC copies, `mlock`, swap/hibernation exclusion or core-dump hardening. Gate P2 is therefore a custody floor and testable boundary, not a hardened endpoint story.
 
 ### Platform keystores hold the unlock secret, never the format
 
@@ -160,7 +174,7 @@ There is no recovery path in this ADR, and none may be improvised around it: no 
 ## Ordering gates
 
 1. **Gate P1 — Keyfile layout and authoritative vectors. Done.** The `pico.vault.keyfile.v1` labeled header-AAD layout is fixed with one keyfile per person-role keypair, ADR 0073-style accept/reject vectors and synthetic open-negative metadata. It covers wrong-label, tampered-header, role-swap, suite-swap, KDF-parameter-downgrade, wrong-passphrase and truncation negatives before any real key exists.
-2. **Gate P2 — Minimal Vault runtime under custody tests.** Create, unlock, lock, label-checked sign, unwrap, encrypted export — with tests binding V1 (path separation from host scopes), V2 (no plaintext anywhere, including temp files), V4 (no export API; unknown labels refused), V7 (auto-lock; documented memory-hygiene limits of the chosen runtime) and the ADR 0072 permission pattern for custody files. **This gate discharges ADR 0079 G2 for the person role**; together with 0079 G1/G3 it makes ADR 0078 R1 and the ADR 0080 precondition dischargeable.
+2. **Gate P2 — Minimal Vault runtime under custody tests. Done.** `@pico/vault` implements create, unlock/open, lock, label-checked sign, key-agreement unwrap, encrypted export only, private keyfile writes and path separation from Foundation scopes. Tests bind V1 (host/browser exclusion by path separation), V2 (encrypted keyfile envelope, no raw private-key export), V4 (no blind signing; unknown labels refused), V7 (explicit lock, idle auto-lock and documented JS memory-hygiene limits) and the ADR 0072 permission pattern for custody files. **This gate discharges ADR 0079 G2 for the person role**; ADR 0078 R1 still also needs ADR 0079 G3 lifecycle mechanics, and ADR 0080 still needs its own claim/runtime gates.
 3. **Gate P3 — Platform keystore integrations.** Per platform, additive to the keyfile, each with its own written analysis of what the keystore protects against there, and with the passphrase floor kept intact.
 
 ## Non-goals
@@ -170,17 +184,17 @@ This ADR does not define or implement:
 - any recovery: social recovery, quorum schemes, memorable encodings, identity replacement continuity (ADR 0033 future work)
 - passkey or hardware-backed identity (a future suite under ADR 0079 I2, with its own custody analysis)
 - key synchronization or multi-device root custody (V5 forbids it by default; a future ADR would have to design reconciliation first)
-- the Vault's product form, GUI, approval UX or local IPC details beyond the boundary rules (Gate P2 territory)
+- the Vault's product form, GUI, approval UX or local IPC details beyond the `@pico/vault` library boundary rules
 - multi-person shared Vaults or family-device semantics
 - secure-input hardening, OS hardening guidance or enterprise HSM support
 - any change to the Foundation host, operator auth (ADR 0075/0076) or host-role custody (ADR 0080 M2)
-- any loosening of the ADR 0051/0055 fixture fences beyond the explicitly implemented 0079 G1 and 0081 P1 byte-vector scopes before the matching runtimes exist
+- any loosening of the ADR 0051/0055 fixture fences beyond the explicitly implemented 0079 G1 and 0081 P1/P2 scopes; a library runtime does not turn draft placeholders into compatibility or production-security claims
 
 ## Open questions
 
 - **Passphrase policy and UX**: minimum-strength guidance, zxcvbn-style feedback, and how the creation flow teaches the loss rule without terrifying people — Vault runtime work above the custody floor.
-- **Auto-lock defaults** (V7): idle thresholds, lock-on-suspend, lock-on-screen-lock — per platform, at Gate P2/P3.
-- **Local consumer transport** for the agent boundary (unix socket permissions, peer credentials, per-app authorization) — Gate P2, with the V4/V10 rules fixed here.
+- **Auto-lock defaults** (V7): idle thresholds, lock-on-suspend, lock-on-screen-lock — per platform/product runtime, and alongside Gate P3 where platform keystores are involved.
+- **Local consumer transport** for the agent boundary (unix socket permissions, peer credentials, per-app authorization) — future daemon/product work, with the V4/V10 rules fixed here.
 - **Paper/offline backup of the *encrypted* export** (printed QR of ciphertext with the passphrase held separately) — allowed in principle by V8; encoding and UX undecided.
 - **Whether the first Vault ships as CLI, daemon or app**, and on which platform first — product sequencing, not custody.
 - **Argon2id parameter defaults over time**: when moderate stops being enough, and how rewrite-on-unlock upgrades interact with exports that were made under older parameters.
@@ -189,7 +203,7 @@ This ADR does not define or implement:
 
 Positive:
 
-- ADR 0079 G2's person-role fence gets its dedicated ADR and its Gate P1 byte layout: the identity strand now has a complete direction from primitives (0079) through host-role custody and ceremony (0080) to person-role custody (this ADR), all from the same libsodium toolkit with zero new primitives
+- ADR 0079 G2's person-role fence now has both its dedicated ADR and a minimal runtime custody floor: the identity strand has a concrete path from primitives (0079) through host-role custody and ceremony direction (0080) to person-role custody (this ADR), all from the same libsodium toolkit with zero new primitives
 - one canonical, vector-covered at-rest header format instead of per-platform key storage drift; platform keystores add convenience without forking the format
 - the blind-signing oracle is closed structurally (label-checked signing), extending the I3 label discipline from verification into the agent boundary
 - browser and host custody are excluded by structure, not policy — the two most tempting shortcuts (keys in the dashboard, keys on the add-on) are named defects
@@ -197,7 +211,7 @@ Positive:
 
 Negative:
 
-- the largest cost is stated plainly: a **new software component** (the Vault) must exist before any real person key, any real reader key (ADR 0078 R1) and any claim (ADR 0080) — Gate P1 fixes bytes but does not reduce the Gate P2 runtime cost; accepted, because the alternative was generating person identities on the host, which inverts the entire ownership model
+- the largest cost remains stated plainly: a **new software component** (the Vault) must exist before any real person key, any real reader key (ADR 0078 R1) and any claim (ADR 0080) — Gate P2 reduces that to a tested library floor, but a product shell, local transport, approval UX, platform keystore integration and lifecycle machinery still have to exist before this is usable by people
 - no recovery means real, irreversible loss for people who skip the export — the price of refusing backdoors until a reviewed recovery ADR exists
 - passphrase UX burden lands on a local-first product, softened only where Gate P3 platform integrations are honest
 - a GC-runtime Vault cannot promise complete memory erasure; the limit is documented rather than solved
@@ -206,11 +220,11 @@ Negative:
 
 ## Relationship to other ADRs
 
-- Discharges the ADR `0079` G2 requirement for the person role at the direction level (the runtime discharge is Gate P2); inherits and sharpens I7 (disjoint custody paths), applies I3 as the agent's label-checked-signing rule, and relies on I8/I9 for the custody-carries-no-authority property (V9).
-- Makes the ADR `0080` precondition concrete: the claimant-side holder of person keys is the Gate P2 Vault; the founding record's identity signature comes from behind this custody boundary.
-- Supplies the custody story for ADR `0078` R1's reader keys: the device X25519 private halves live in the device's Vault, unwrap happens behind the agent boundary.
+- Discharges the ADR `0079` G2 requirement for the person role at the minimal runtime floor; inherits and sharpens I7 (disjoint custody paths), applies I3 as the agent's label-checked-signing rule, and relies on I8/I9 for the custody-carries-no-authority property (V9).
+- Makes the ADR `0080` precondition concrete at the claimant-side holder layer: a founding record's future identity signature can come from behind this custody boundary, while the claim ceremony itself still needs its own layouts, host custody and membership runtime.
+- Supplies the custody holder for ADR `0078` R1's reader keys: the device X25519 private halves can live in the device's Vault, and unwrap happens behind the agent boundary. R1 still also depends on ADR 0079 lifecycle lookup/reconciliation and the reader-membership machinery.
 - Constrained by ADR `0016` and built from its allowed directions: libsodium Argon2id + XChaCha20-Poly1305 (age-style protection), platform keystores as unlock paths, CSPRNG generation; passkeys/hardware stay future suites.
 - Realizes the ADR `0015`/`0026` Pico Vault role custody-wise (Full Clients own keys and backups; Light Clients/Surfaces never do) and the ADR `0029` rule that private identity material never becomes host state.
 - Keeps the ADR `0033` recovery boundary fully intact and adopts its posture: visible loss over hidden impersonation; lost-device handling stays lifecycle work; nothing here becomes a recovery mechanism.
 - Kin to ADR `0072` (file custody, permission pattern, backup separation) with the scope inverted: host key custody excludes files from host backups — Vault custody excludes the host entirely (V1).
-- Leaves ADR `0075`/`0076` untouched: operator sessions and Vault unlock are unrelated acts with no ambient bridge (V10, A11/I10 family); the ADR `0051`/`0055` fixture fences stay strict beyond the implemented ADR 0079 G1 and ADR 0081 P1 byte-vector scopes until the matching runtimes exist.
+- Leaves ADR `0075`/`0076` untouched: operator sessions and Vault unlock are unrelated acts with no ambient bridge (V10, A11/I10 family); the ADR `0051`/`0055` fixture fences stay strict beyond the implemented ADR 0079 G1 and ADR 0081 P1/P2 scopes until their matching higher-level runtimes exist.

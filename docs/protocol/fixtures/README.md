@@ -83,7 +83,7 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-in
 
 ## Current Vault keyfile fixtures
 
-These fixtures carry the authoritative canonical header-AAD byte vectors for the `pico.vault.keyfile.v1` at-rest format (ADR 0081 Gate P1). They include tampered-header bind-difference cases and synthetic wrong-passphrase/truncation open negatives, but no private keys, no real keyfiles, no unlock runtime, no decryption, no L4 compatibility basis and no commercial permission.
+These fixtures carry the authoritative canonical header-AAD byte vectors for the `pico.vault.keyfile.v1` at-rest format (ADR 0081 Gate P1). They include tampered-header bind-difference cases and synthetic wrong-passphrase/truncation open negatives, but no private keys, no real keyfiles, no unlock runtime, no decryption, no L4 compatibility basis and no commercial permission. The Gate P2 runtime is tested separately in `@pico/vault`; this fixture suite remains header-AAD scoped.
 
 ```text
 vault-keyfile/suite.json

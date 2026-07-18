@@ -1,5 +1,5 @@
 {
-  "name": "@pico/protocol",
+  "name": "@pico/vault",
   "version": "0.1.7",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
@@ -12,8 +12,11 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },
-  "devDependencies": {
-    "@types/libsodium-wrappers-sumo": "^0.8.2",
+  "dependencies": {
+    "@pico/protocol": "workspace:*",
     "libsodium-wrappers-sumo": "^0.8.4"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers-sumo": "^0.8.2"
   }
 }

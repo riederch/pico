@@ -17,6 +17,7 @@ const packageFiles = [
   'apps/web/package.json',
   'packages/protocol/package.json',
   'packages/sync/package.json',
+  'packages/vault/package.json',
 ];
 const ignoredDirs = new Set(['.git', 'node_modules', 'dist', 'coverage', '.turbo']);
 const ignoredFiles = new Set([

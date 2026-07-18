@@ -109,6 +109,7 @@ Prepared foundation pieces include:
 - Pico Home Core service
 - event storage
 - sync primitives
+- minimal Pico Vault keyfile runtime package
 - foundation web dashboard
 - release pipeline
 - Home Assistant add-on path
@@ -222,7 +223,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md`](docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md) - memory domain reader membership and key distribution threat model
 - [`docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md`](docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md) - Pico identity/device key primitives and authoritative signature-input vectors
 - [`docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md`](docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md) - Pico Home host key and Move-In claim ceremony direction
-- [`docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md`](docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md) - Pico Vault person-role key custody and keyfile header-AAD vectors
+- [`docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md`](docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md) - Pico Vault person-role key custody, keyfile vectors and minimal runtime floor
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

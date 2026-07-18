@@ -8,6 +8,7 @@ const packageFiles = [
   'apps/web/package.json',
   'packages/protocol/package.json',
   'packages/sync/package.json',
+  'packages/vault/package.json',
 ];
 const errors = [];
 const rootPackage = readJson('package.json');

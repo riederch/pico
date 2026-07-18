@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import sodium from 'libsodium-wrappers-sumo';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type {
   ActionHistoryEventPayload,
   ActionRequestedPayload,
@@ -62,6 +62,10 @@ import {
 } from './index.js';
 
 const repoRootPath = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+
+beforeAll(async () => {
+  await sodium.ready;
+});
 
 describe('Pico protocol types', () => {
   it('exports runtime event type lists for compatibility checks', () => {
@@ -2752,12 +2756,7 @@ function optionalFieldOrder(fields: Record<string, unknown>): Record<string, unk
 }
 
 function blake2b256Hex(input: Uint8Array): string {
-  const output = execFileSync('b2sum', ['-l', '256'], {
-    input: Buffer.from(input),
-    encoding: 'utf8',
-  });
-
-  return output.split(/\s+/)[0] ?? '';
+  return Buffer.from(sodium.crypto_generichash(32, input, null)).toString('hex');
 }
 
 /**
