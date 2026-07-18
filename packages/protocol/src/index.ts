@@ -562,6 +562,17 @@ export const memoryContentPostures = [
 
 export type MemoryContentPosture = typeof memoryContentPostures[number];
 
+// Reserved per-domain memory key custody classes (ADR 0078). `host_custody`
+// is the existing ADR 0071/0072 model: the Foundation host has the domain KEK
+// in its separated key store. `reader_custody` is future envelope-only hosting:
+// the host stores ciphertext and wrapped keys, but never a raw domain KEK.
+export const memoryDomainCustodyClasses = [
+  'host_custody',
+  'reader_custody',
+] as const;
+
+export type MemoryDomainCustodyClass = typeof memoryDomainCustodyClasses[number];
+
 // how a memory item's retention is governed (ADR 0074), referenced by a memory
 // item's retention policy. `keep_until_deleted` is the system default: no
 // automatic expiry, content lives until a user or controller deletes it.

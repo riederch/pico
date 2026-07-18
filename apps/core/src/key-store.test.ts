@@ -64,6 +64,15 @@ describe('KeyStore', () => {
       expect(() => store.createKeyVersion(bad)).toThrow('domainId must match');
     }
   });
+
+  it('refuses raw KEK operations for reader-custody domains (ADR 0078 K6)', () => {
+    const store = new KeyStore(createKeyStorePath());
+
+    expect(() => store.createKeyVersion('domain-hosted', { custodyClass: 'reader_custody' })).toThrow('reader_custody domains');
+    expect(() => store.listVersions('domain-hosted', { custodyClass: 'reader_custody' })).toThrow('reader_custody domains');
+    expect(() => store.loadKeyVersion('domain-hosted', 1, { custodyClass: 'reader_custody' })).toThrow('reader_custody domains');
+    expect(() => store.shredDomain('domain-hosted', { custodyClass: 'reader_custody' })).toThrow('reader_custody domains');
+  });
 });
 
 describe('assertKeyStoreSeparation', () => {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and direction for how memory Domain Content Keys may reach readers beyond the single Foundation process: domain custody classes, the sharing unit, the wrap-suite direction, removal and rotation semantics, and the backup/shred honesty rules — all gated behind three named prerequisites. **It implements nothing and widens no reader set.** Until every gate passes, the runtime keeps exactly the ADR 0071/0072 single-host model; the only near-term implementation step is reserving the custody-class vocabulary additively.
+Accepted as the threat model and direction for how memory Domain Content Keys may reach readers beyond the single Foundation process: domain custody classes, the sharing unit, the wrap-suite direction, removal and rotation semantics, and the backup/shred honesty rules — all gated behind three named prerequisites. **The additive custody-class vocabulary, per-domain marker and K6 key-store guard are implemented; this widens no reader set.** Until every gate passes, the runtime keeps exactly the ADR 0071/0072 single-host model for content, and `reader_custody` remains an inert, fail-closed marker with no envelope runtime.
 
 ## Context
 
@@ -100,9 +100,9 @@ Nothing behind these gates ships, and nothing is security-relevant before **all 
 
 ## Implementation implications
 
-Ordered and additive; only step 1 is near-term:
+Ordered and additive:
 
-1. **Reserve the custody-class vocabulary** (`host_custody`, `reader_custody`) additively in the protocol package, with a per-domain storage marker defaulting to `host_custody`, plus the K6 fail-closed guard in the key store (refuse KEK files for a reader-custody domain). This is the ADR-0068-style reserve-then-build pattern and prevents drift while the gates are open.
+1. **Done — reserve the custody-class vocabulary** (`host_custody`, `reader_custody`) additively in the protocol package, with a per-domain storage marker defaulting to `host_custody`, plus the K6 fail-closed guard in the key store (refuse KEK files for a reader-custody domain). This is the ADR-0068-style reserve-then-build pattern and prevents drift while the gates are open. The current runtime also rejects memory content writes for `reader_custody` domains until reader-custody envelopes exist.
 2. Gate R1/R2/R3 work, each its own reviewed step in the identity/membership strand.
 3. Only after all gates: the wrap module (`pico.suite.share.v1`), envelope storage and issuance, rotation trigger, restore reconciliation, and — separately gated by transport ADRs — any surface that lets an envelope leave the host. Until then, the ADR 0070 rule extends naturally: no envelope leaves the host, because none exists.
 

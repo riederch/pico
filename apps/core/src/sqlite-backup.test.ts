@@ -254,6 +254,10 @@ describe('restoreSqliteBackup', () => {
         id: '0010_foundation_operator',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0011_memory_domain_custody',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

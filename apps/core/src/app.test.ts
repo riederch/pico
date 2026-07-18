@@ -196,6 +196,7 @@ describe('Pico Home Core app', () => {
           { id: '0008_memory_key_envelope', appliedAt: expect.any(String) },
           { id: '0009_memory_retention_policy', appliedAt: expect.any(String) },
           { id: '0010_foundation_operator', appliedAt: expect.any(String) },
+          { id: '0011_memory_domain_custody', appliedAt: expect.any(String) },
         ],
       },
     });

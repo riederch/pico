@@ -66,6 +66,10 @@ describe('database migrations', () => {
           id: '0010_foundation_operator',
           requiresBackup: false,
         },
+        {
+          id: '0011_memory_domain_custody',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -94,6 +98,7 @@ describe('database migrations', () => {
     expect(tables).toContain('schema_migration_audit');
     expect(tables).toContain('pico_event');
     expect(tables).toContain('pico_home_claim_state');
+    expect(tables).toContain('memory_domain_custody');
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: '0001_event_store',
@@ -133,6 +138,10 @@ describe('database migrations', () => {
       },
       {
         id: '0010_foundation_operator',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0011_memory_domain_custody',
         appliedAt: expect.any(String),
       },
     ]);
@@ -216,12 +225,13 @@ describe('database migrations', () => {
         '0008_memory_key_envelope',
         '0009_memory_retention_policy',
         '0010_foundation_operator',
+        '0011_memory_domain_custody',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(10);
+    expect(listAppliedMigrations(db)).toHaveLength(11);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -231,7 +241,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(10);
+    expect(listAppliedMigrations(db)).toHaveLength(11);
 
     db.close();
   });
@@ -270,7 +280,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(10);
+    expect(listAppliedMigrations(db)).toHaveLength(11);
 
     db.close();
   });
@@ -291,6 +301,7 @@ describe('database migrations', () => {
       '0008_memory_key_envelope',
       '0009_memory_retention_policy',
       '0010_foundation_operator',
+      '0011_memory_domain_custody',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -309,6 +320,7 @@ describe('database migrations', () => {
           '0008_memory_key_envelope',
           '0009_memory_retention_policy',
           '0010_foundation_operator',
+          '0011_memory_domain_custody',
         ],
       },
     ]);
@@ -383,6 +395,7 @@ describe('database migrations', () => {
       '0008_memory_key_envelope',
       '0009_memory_retention_policy',
       '0010_foundation_operator',
+      '0011_memory_domain_custody',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {

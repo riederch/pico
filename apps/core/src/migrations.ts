@@ -278,6 +278,36 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0011_memory_domain_custody',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0078 K1/K6: make custody explicit per memory domain. Existing
+      // implicit domains are today's ADR 0071/0072 single-host model.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS memory_domain_custody (
+          privacy_domain TEXT PRIMARY KEY,
+          custody_class TEXT NOT NULL DEFAULT 'host_custody'
+            CHECK (custody_class IN ('host_custody', 'reader_custody')),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        INSERT OR IGNORE INTO memory_domain_custody (
+          privacy_domain,
+          custody_class,
+          created_at,
+          updated_at
+        )
+        SELECT DISTINCT
+          privacy_domain,
+          'host_custody',
+          strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+          strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        FROM memory_item;
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

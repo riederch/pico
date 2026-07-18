@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import type { MemoryDomainCustodyClass } from '@pico/protocol';
 
 /**
  * File-based store for memory Domain Content Keys (KEKs) - ADR 0072.
@@ -19,11 +20,16 @@ export interface KeyVersion {
   version: number;
 }
 
+export interface KeyStoreOperationOptions {
+  custodyClass?: MemoryDomainCustodyClass;
+}
+
 export class KeyStore {
   public constructor(private readonly keyStorePath: string) {}
 
-  public createKeyVersion(domainId: string): KeyVersion {
+  public createKeyVersion(domainId: string, options: KeyStoreOperationOptions = {}): KeyVersion {
     assertDomainId(domainId);
+    assertHostCustodyRawKek(domainId, options.custodyClass);
     mkdirSync(this.keyStorePath, { recursive: true, mode: 0o700 });
 
     const version = this.nextVersion(domainId);
@@ -32,8 +38,9 @@ export class KeyStore {
     return { domainId, version };
   }
 
-  public loadKeyVersion(domainId: string, version: number): Buffer {
+  public loadKeyVersion(domainId: string, version: number, options: KeyStoreOperationOptions = {}): Buffer {
     assertDomainId(domainId);
+    assertHostCustodyRawKek(domainId, options.custodyClass);
     const path = this.keyPath(domainId, version);
 
     if (!existsSync(path)) {
@@ -43,8 +50,9 @@ export class KeyStore {
     return readFileSync(path);
   }
 
-  public listVersions(domainId: string): number[] {
+  public listVersions(domainId: string, options: KeyStoreOperationOptions = {}): number[] {
     assertDomainId(domainId);
+    assertHostCustodyRawKek(domainId, options.custodyClass);
 
     if (!existsSync(this.keyStorePath)) {
       return [];
@@ -63,8 +71,9 @@ export class KeyStore {
    * the local medium; the dependable shred property comes from key/backup
    * separation (R6), not from this delete.
    */
-  public shredDomain(domainId: string): { removed: number } {
-    const versions = this.listVersions(domainId);
+  public shredDomain(domainId: string, options: KeyStoreOperationOptions = {}): { removed: number } {
+    assertHostCustodyRawKek(domainId, options.custodyClass);
+    const versions = this.listVersions(domainId, options);
 
     for (const version of versions) {
       rmSync(this.keyPath(domainId, version), { force: true });
@@ -114,6 +123,14 @@ export function assertKeyStoreSeparation(params: {
 function assertDomainId(domainId: string): void {
   if (typeof domainId !== 'string' || !/^[a-zA-Z0-9_-]{1,128}$/.test(domainId)) {
     throw new Error('Key store domainId must match [a-zA-Z0-9_-]{1,128}.');
+  }
+}
+
+function assertHostCustodyRawKek(domainId: string, custodyClass: MemoryDomainCustodyClass = 'host_custody'): void {
+  if (custodyClass !== 'host_custody') {
+    throw new Error(
+      `Key store refuses raw KEK access for ${domainId}: reader_custody domains must not have host-held KEK files (ADR 0078 K6).`,
+    );
   }
 }
 

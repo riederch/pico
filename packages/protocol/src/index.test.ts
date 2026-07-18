@@ -32,6 +32,7 @@ import {
   memoryItemDeletionStates,
   referenceTargetResolutionStates,
   memoryContentPostures,
+  memoryDomainCustodyClasses,
   memoryRetentionModes,
   picoHomeClaimStates,
   picoEventTypes,
@@ -235,6 +236,7 @@ describe('Pico protocol types', () => {
     expect(memoryItemDeletionStates).toEqual(['active', 'deleted', 'tombstoned']);
     expect(referenceTargetResolutionStates).toEqual(['resolvable', 'deleted', 'unknown']);
     expect(memoryContentPostures).toEqual(['plaintext_foundation', 'domain_encrypted']);
+    expect(memoryDomainCustodyClasses).toEqual(['host_custody', 'reader_custody']);
     expect(memoryRetentionModes).toEqual(['keep_until_deleted', 'delete_after_max_age']);
   });
 

@@ -47,6 +47,7 @@ describe('MemoryStore', () => {
     const memory = openMemory();
 
     const created = memory.create(createInput({ retentionPolicyRef: 'retain-30d', sourceRef: 'event-1' }));
+    expect(memory.getDomainCustodyClass('domain-private')).toBe('host_custody');
     expect(created).toEqual({
       memoryItemId: 'mem-1',
       privacyDomain: 'domain-private',
@@ -74,6 +75,29 @@ describe('MemoryStore', () => {
     const created = memory.create(createInput());
     expect('retentionPolicyRef' in created).toBe(false);
     expect('sourceRef' in created).toBe(false);
+  });
+
+  it('records a fixed domain custody class and refuses silent changes', () => {
+    const memory = openMemory();
+
+    expect(memory.getDomainCustodyClass('new-domain')).toBe('host_custody');
+
+    expect(memory.recordDomainCustodyClass('domain-hosted', 'reader_custody')).toEqual({
+      privacyDomain: 'domain-hosted',
+      custodyClass: 'reader_custody',
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+    expect(memory.getDomainCustodyClass('domain-hosted')).toBe('reader_custody');
+    expect(() => memory.recordDomainCustodyClass('domain-hosted', 'host_custody')).toThrow('refusing to change it silently');
+    expect(() => memory.recordDomainCustodyClass('domain-bad', 'future' as never)).toThrow('custodyClass');
+  });
+
+  it('blocks reader-custody content writes until reader-custody envelopes exist', () => {
+    const memory = openMemory();
+    memory.recordDomainCustodyClass('domain-hosted', 'reader_custody');
+
+    expect(() => memory.create(createInput({ privacyDomain: 'domain-hosted' }))).toThrow('reader_custody domains');
   });
 
   it('deletes content but keeps the item as deleted and excludes it from the active list', () => {

@@ -1,5 +1,11 @@
 import type Database from 'better-sqlite3';
-import type { MemoryContentPosture, MemoryItemDeletionState, ReferenceTargetResolutionState } from '@pico/protocol';
+import { memoryDomainCustodyClasses } from '@pico/protocol';
+import type {
+  MemoryContentPosture,
+  MemoryDomainCustodyClass,
+  MemoryItemDeletionState,
+  ReferenceTargetResolutionState,
+} from '@pico/protocol';
 import type { KeyEnvelopeRecord, MemoryContentCrypto } from './memory-content-crypto.js';
 
 /**
@@ -27,6 +33,11 @@ export interface MemoryItemInput {
    * requires a crypto provider (ADR 0070/0071). Omitted means foundation data.
    */
   contentPosture?: MemoryContentPosture;
+  /**
+   * Explicit per-domain custody class (ADR 0078 K1). Omitted means the current
+   * single-host model, `host_custody`. A domain's class is fixed on first use.
+   */
+  domainCustodyClass?: MemoryDomainCustodyClass;
   retentionPolicyRef?: string;
   sourceRef?: string;
 }
@@ -61,6 +72,13 @@ export interface RetentionCandidate {
   privacyDomain: string;
   retentionPolicyRef: string;
   createdAt: string;
+}
+
+export interface MemoryDomainCustodyRecord {
+  privacyDomain: string;
+  custodyClass: MemoryDomainCustodyClass;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -100,6 +118,15 @@ export class MemoryStore {
 
     const now = new Date().toISOString();
     const insert = this.db.transaction((): void => {
+      const custodyClass = this.ensureDomainCustodyClass(
+        input.privacyDomain,
+        input.domainCustodyClass,
+        now,
+      );
+      if (custodyClass === 'reader_custody') {
+        throw new Error('Cannot store memory content for reader_custody domains until reader-custody envelopes exist (ADR 0078).');
+      }
+
       let storedContent = input.content;
       let keyEnvelopeRef: string | null = null;
 
@@ -109,6 +136,7 @@ export class MemoryStore {
           privacyDomain: input.privacyDomain,
           contentType: input.contentType,
           plaintext: input.content,
+          domainCustodyClass: custodyClass,
         });
         storedContent = encrypted.storedContent;
         keyEnvelopeRef = encrypted.keyEnvelopeId;
@@ -169,6 +197,31 @@ export class MemoryStore {
       .get(memoryItemId, privacyDomain) as MemoryItemRow | undefined;
 
     return row === undefined ? undefined : this.resolveContent(mapRow(row));
+  }
+
+  public getDomainCustodyClass(privacyDomain: string): MemoryDomainCustodyClass {
+    assertNonEmptyString(privacyDomain, 'privacyDomain');
+
+    const row = this.loadDomainCustodyRecord(privacyDomain);
+    return row?.custodyClass ?? 'host_custody';
+  }
+
+  public recordDomainCustodyClass(
+    privacyDomain: string,
+    custodyClass: MemoryDomainCustodyClass,
+  ): MemoryDomainCustodyRecord {
+    assertNonEmptyString(privacyDomain, 'privacyDomain');
+    assertMemoryDomainCustodyClass(custodyClass);
+
+    const now = new Date().toISOString();
+    this.ensureDomainCustodyClass(privacyDomain, custodyClass, now);
+
+    const record = this.loadDomainCustodyRecord(privacyDomain);
+    if (record === undefined) {
+      throw new Error('Memory domain custody marker could not be read back after creation.');
+    }
+
+    return record;
   }
 
   /**
@@ -283,6 +336,7 @@ export class MemoryStore {
       contentType: item.contentType,
       storedContent,
       envelope,
+      domainCustodyClass: this.getDomainCustodyClass(item.privacyDomain),
     });
 
     if (result.status === 'key_unavailable') {
@@ -302,7 +356,7 @@ export class MemoryStore {
       throw new Error('Cannot crypto-shred without a crypto provider.');
     }
 
-    return this.crypto.shredDomain(privacyDomain);
+    return this.crypto.shredDomain(privacyDomain, this.getDomainCustodyClass(privacyDomain));
   }
 
   public deleteInDomain(memoryItemId: string, privacyDomain: string): MemoryDeleteResult {
@@ -416,6 +470,66 @@ export class MemoryStore {
       );
   }
 
+  private ensureDomainCustodyClass(
+    privacyDomain: string,
+    custodyClass: MemoryDomainCustodyClass | undefined,
+    now: string,
+  ): MemoryDomainCustodyClass {
+    if (custodyClass !== undefined) {
+      assertMemoryDomainCustodyClass(custodyClass);
+    }
+
+    const existing = this.loadDomainCustodyRecord(privacyDomain);
+    if (existing !== undefined) {
+      if (custodyClass !== undefined && existing.custodyClass !== custodyClass) {
+        throw new Error(
+          `Memory domain ${privacyDomain} already has custody class ${existing.custodyClass}; refusing to change it silently (ADR 0078 K1).`,
+        );
+      }
+
+      return existing.custodyClass;
+    }
+
+    const chosenCustodyClass = custodyClass ?? 'host_custody';
+    this.db
+      .prepare(`
+        INSERT INTO memory_domain_custody (
+          privacy_domain,
+          custody_class,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?)
+      `)
+      .run(privacyDomain, chosenCustodyClass, now, now);
+
+    return chosenCustodyClass;
+  }
+
+  private loadDomainCustodyRecord(privacyDomain: string): MemoryDomainCustodyRecord | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT
+          privacy_domain,
+          custody_class,
+          created_at,
+          updated_at
+        FROM memory_domain_custody
+        WHERE privacy_domain = ?
+      `)
+      .get(privacyDomain) as MemoryDomainCustodyRow | undefined;
+
+    if (row === undefined) {
+      return undefined;
+    }
+
+    return {
+      privacyDomain: row.privacy_domain,
+      custodyClass: row.custody_class as MemoryDomainCustodyClass,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
   private loadKeyEnvelope(keyEnvelopeId: string): KeyEnvelopeRecord | undefined {
     const row = this.db
       .prepare('SELECT * FROM memory_key_envelope WHERE key_envelope_id = ?')
@@ -488,6 +602,13 @@ interface MemoryItemRow {
   updated_at: string;
 }
 
+interface MemoryDomainCustodyRow {
+  privacy_domain: string;
+  custody_class: string;
+  created_at: string;
+  updated_at: string;
+}
+
 function mapRow(row: MemoryItemRow): MemoryItem {
   return {
     memoryItemId: row.memory_item_id,
@@ -520,6 +641,12 @@ function assertMemoryItemInput(input: MemoryItemInput): void {
 
   if (input.sourceRef !== undefined) {
     assertNonEmptyString(input.sourceRef, 'sourceRef');
+  }
+}
+
+function assertMemoryDomainCustodyClass(value: unknown): asserts value is MemoryDomainCustodyClass {
+  if (!memoryDomainCustodyClasses.includes(value as MemoryDomainCustodyClass)) {
+    throw new Error('Memory domain custodyClass must be host_custody or reader_custody.');
   }
 }
 

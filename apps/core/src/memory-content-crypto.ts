@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { MemoryDomainCustodyClass } from '@pico/protocol';
 import type { KeyStore } from './key-store.js';
 
 /**
@@ -59,6 +60,7 @@ export interface EncryptForWriteInput {
   privacyDomain: string;
   contentType: string;
   plaintext: string;
+  domainCustodyClass?: MemoryDomainCustodyClass;
 }
 
 export interface EncryptForWriteResult {
@@ -73,6 +75,7 @@ export interface DecryptForReadInput {
   contentType: string;
   storedContent: string;
   envelope: KeyEnvelopeRecord;
+  domainCustodyClass?: MemoryDomainCustodyClass;
 }
 
 export type DecryptForReadResult =
@@ -94,6 +97,7 @@ export class MemoryContentCrypto {
 
   public encryptForWrite(input: EncryptForWriteInput): EncryptForWriteResult {
     const domainId = input.privacyDomain;
+    const custodyClass = input.domainCustodyClass ?? 'host_custody';
     const keyEnvelopeId = `kenv_${randomBytes(16).toString('hex')}`;
 
     const contentAd = buildContentAd({
@@ -119,8 +123,8 @@ export class MemoryContentCrypto {
       dek,
     );
 
-    const kekVersion = this.currentOrNewKekVersion(domainId);
-    const kek = this.keyStore.loadKeyVersion(domainId, kekVersion);
+    const kekVersion = this.currentOrNewKekVersion(domainId, custodyClass);
+    const kek = this.keyStore.loadKeyVersion(domainId, kekVersion, { custodyClass });
     const wrapNonce = this.randomNonce();
     const wrappedDek = this.sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
       dek,
@@ -154,10 +158,11 @@ export class MemoryContentCrypto {
   public decryptForRead(input: DecryptForReadInput): DecryptForReadResult {
     const { envelope } = input;
     const domainId = input.privacyDomain;
+    const custodyClass = input.domainCustodyClass ?? 'host_custody';
 
     // A domain whose KEK version was crypto-shredded stays unreadable by design
     // (ADR 0072). Report that instead of throwing.
-    if (!this.keyStore.listVersions(domainId).includes(envelope.kekVersion)) {
+    if (!this.keyStore.listVersions(domainId, { custodyClass }).includes(envelope.kekVersion)) {
       return { status: 'key_unavailable' };
     }
 
@@ -167,7 +172,7 @@ export class MemoryContentCrypto {
       domainId,
       memoryItemId: input.memoryItemId,
     });
-    const kek = this.keyStore.loadKeyVersion(domainId, envelope.kekVersion);
+    const kek = this.keyStore.loadKeyVersion(domainId, envelope.kekVersion, { custodyClass });
     const dek = this.sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
       null,
       Buffer.from(envelope.wrappedDek, 'base64'),
@@ -199,17 +204,17 @@ export class MemoryContentCrypto {
    * items become unreadable, including copies in backups (ADR 0072 R5, with the
    * ADR 0033 limits). Ciphertext and envelopes stay; only the keys are gone.
    */
-  public shredDomain(domainId: string): { removed: number } {
-    return this.keyStore.shredDomain(domainId);
+  public shredDomain(domainId: string, custodyClass: MemoryDomainCustodyClass = 'host_custody'): { removed: number } {
+    return this.keyStore.shredDomain(domainId, { custodyClass });
   }
 
-  private currentOrNewKekVersion(domainId: string): number {
-    const versions = this.keyStore.listVersions(domainId);
+  private currentOrNewKekVersion(domainId: string, custodyClass: MemoryDomainCustodyClass): number {
+    const versions = this.keyStore.listVersions(domainId, { custodyClass });
     if (versions.length > 0) {
       return versions[versions.length - 1];
     }
 
-    return this.keyStore.createKeyVersion(domainId).version;
+    return this.keyStore.createKeyVersion(domainId, { custodyClass }).version;
   }
 
   private randomNonce(): Uint8Array {
