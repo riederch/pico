@@ -1,0 +1,24 @@
+{
+  "schema": "pico.identity.lifecycle.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-lifecycle.pico_suite_id_v1.lifecycle-negative.missing-scope",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-lifecycle",
+  "family": "lifecycle-negative",
+  "case": "delegation without the requested scope does not authorize that use",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "status": "missing_scope",
+    "freshestLifecycleOrder": "seq:0000000000000001",
+    "missingScopes": [
+      "home_membership"
+    ]
+  },
+  "adr": "0079",
+  "notes": "Scope lookup is fail-closed; an otherwise live delegation does not imply unstated authority."
+}

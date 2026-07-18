@@ -1,0 +1,424 @@
+import {
+  buildPicoIdentityDelegationSignatureInput,
+  buildPicoIdentityRevocationSignatureInput,
+  picoIdentityDelegationScopes,
+} from '@pico/protocol';
+import type {
+  PicoIdentityDelegationScope,
+  PicoIdentityDelegationSignatureInput,
+  PicoIdentityRevocationSignatureInput,
+} from '@pico/protocol';
+
+export const picoIdentityLifecycleStatementKinds = [
+  'delegation',
+  'revocation',
+] as const;
+
+export type PicoIdentityLifecycleStatementKind = typeof picoIdentityLifecycleStatementKinds[number];
+
+export type PicoIdentityDelegationLifecycleState =
+  | 'active'
+  | 'expired'
+  | 'missing_scope'
+  | 'not_yet_valid'
+  | 'revoked'
+  | 'unknown';
+
+export type PicoIdentityRevocationMatch =
+  | 'delegation'
+  | 'subject_signing_key'
+  | 'subject_key_agreement_key';
+
+export interface PicoIdentityLifecycleIndexInput {
+  acceptedDelegations?: readonly PicoIdentityDelegationSignatureInput[];
+  acceptedRevocations?: readonly PicoIdentityRevocationSignatureInput[];
+}
+
+export interface PicoIdentityDelegationLookupOptions {
+  at?: string;
+  requiredScopes?: readonly PicoIdentityDelegationScope[];
+}
+
+export interface PicoIdentityRevocationReference {
+  match: PicoIdentityRevocationMatch;
+  revocation: PicoIdentityRevocationSignatureInput;
+}
+
+export interface PicoIdentityDelegationLookupResult {
+  status: PicoIdentityDelegationLifecycleState;
+  delegation?: PicoIdentityDelegationSignatureInput;
+  freshestLifecycleOrder: string | null;
+  revokedBy?: PicoIdentityRevocationReference;
+  missingScopes?: PicoIdentityDelegationScope[];
+}
+
+export interface PicoIdentityLifecycleSnapshot {
+  delegations: PicoIdentityDelegationSignatureInput[];
+  revocations: PicoIdentityRevocationSignatureInput[];
+  freshestLifecycleOrder: string | null;
+}
+
+type LifecycleStatement = {
+  kind: PicoIdentityLifecycleStatementKind;
+  order: bigint;
+  id: string;
+  stableJson: string;
+};
+
+const lifecycleOrderPattern = /^seq:([0-9]{16})$/;
+
+export class PicoIdentityLifecycleIndex {
+  readonly #delegationsById: Map<string, PicoIdentityDelegationSignatureInput>;
+
+  readonly #revocationsById: Map<string, PicoIdentityRevocationSignatureInput>;
+
+  readonly #freshestLifecycleOrder: string | null;
+
+  public constructor(input: PicoIdentityLifecycleIndexInput = {}) {
+    const delegationsById = new Map<string, PicoIdentityDelegationSignatureInput>();
+    const revocationsById = new Map<string, PicoIdentityRevocationSignatureInput>();
+    const statements: LifecycleStatement[] = [];
+
+    for (const delegation of input.acceptedDelegations ?? []) {
+      const canonical = cloneDelegation(delegation);
+      buildPicoIdentityDelegationSignatureInput(canonical);
+      addUniqueStatement(delegationsById, canonical.delegationId, canonical, 'conflicting_delegation_statement');
+      statements.push({
+        kind: 'delegation',
+        order: parsePicoIdentityLifecycleOrder(canonical.lifecycleOrder),
+        id: canonical.delegationId,
+        stableJson: stableJson(canonical),
+      });
+    }
+
+    for (const revocation of input.acceptedRevocations ?? []) {
+      const canonical = cloneRevocation(revocation);
+      buildPicoIdentityRevocationSignatureInput(canonical);
+      addUniqueStatement(revocationsById, canonical.revocationId, canonical, 'conflicting_revocation_statement');
+      statements.push({
+        kind: 'revocation',
+        order: parsePicoIdentityLifecycleOrder(canonical.lifecycleOrder),
+        id: canonical.revocationId,
+        stableJson: stableJson(canonical),
+      });
+    }
+
+    this.#delegationsById = delegationsById;
+    this.#revocationsById = revocationsById;
+    this.#freshestLifecycleOrder = freshestLifecycleOrder(statements);
+  }
+
+  public freshestLifecycleOrder(): string | null {
+    return this.#freshestLifecycleOrder;
+  }
+
+  public delegationIds(): string[] {
+    return [...this.#delegationsById.keys()].sort();
+  }
+
+  public revocationIds(): string[] {
+    return [...this.#revocationsById.keys()].sort();
+  }
+
+  public lookupDelegation(
+    delegationId: string,
+    options: PicoIdentityDelegationLookupOptions = {},
+  ): PicoIdentityDelegationLookupResult {
+    assertAsciiToken(delegationId, 'invalid_delegation_id');
+    const delegation = this.#delegationsById.get(delegationId);
+    if (delegation === undefined) {
+      return {
+        status: 'unknown',
+        freshestLifecycleOrder: this.#freshestLifecycleOrder,
+      };
+    }
+
+    const revokedBy = this.#freshestRevocationForDelegation(delegation);
+    if (revokedBy !== undefined) {
+      return {
+        status: 'revoked',
+        delegation: cloneDelegation(delegation),
+        freshestLifecycleOrder: this.#freshestLifecycleOrder,
+        revokedBy,
+      };
+    }
+
+    if (options.at !== undefined) {
+      assertAsciiToken(options.at, 'invalid_lookup_time');
+      if (options.at < delegation.validFrom) {
+        return {
+          status: 'not_yet_valid',
+          delegation: cloneDelegation(delegation),
+          freshestLifecycleOrder: this.#freshestLifecycleOrder,
+        };
+      }
+      if (options.at >= delegation.validUntil) {
+        return {
+          status: 'expired',
+          delegation: cloneDelegation(delegation),
+          freshestLifecycleOrder: this.#freshestLifecycleOrder,
+        };
+      }
+    }
+
+    const missingScopes = missingRequiredScopes(delegation.scopes, options.requiredScopes ?? []);
+    if (missingScopes.length > 0) {
+      return {
+        status: 'missing_scope',
+        delegation: cloneDelegation(delegation),
+        freshestLifecycleOrder: this.#freshestLifecycleOrder,
+        missingScopes,
+      };
+    }
+
+    return {
+      status: 'active',
+      delegation: cloneDelegation(delegation),
+      freshestLifecycleOrder: this.#freshestLifecycleOrder,
+    };
+  }
+
+  public delegationsForSubjectKey(subjectKeyFingerprintHex: string): PicoIdentityDelegationSignatureInput[] {
+    assertFingerprint(subjectKeyFingerprintHex);
+    return [...this.#delegationsById.values()]
+      .filter((delegation) => (
+        delegation.subjectSigningKeyFingerprintHex === subjectKeyFingerprintHex
+        || delegation.subjectKeyAgreementKeyFingerprintHex === subjectKeyFingerprintHex
+      ))
+      .sort(compareDelegationRecords)
+      .map(cloneDelegation);
+  }
+
+  public snapshot(): PicoIdentityLifecycleSnapshot {
+    return {
+      delegations: [...this.#delegationsById.values()].sort(compareDelegationRecords).map(cloneDelegation),
+      revocations: [...this.#revocationsById.values()].sort(compareRevocationRecords).map(cloneRevocation),
+      freshestLifecycleOrder: this.#freshestLifecycleOrder,
+    };
+  }
+
+  public reconcile(input: PicoIdentityLifecycleIndexInput): PicoIdentityLifecycleIndex {
+    const current = this.snapshot();
+    return createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [
+        ...current.delegations,
+        ...(input.acceptedDelegations ?? []),
+      ],
+      acceptedRevocations: [
+        ...current.revocations,
+        ...(input.acceptedRevocations ?? []),
+      ],
+    });
+  }
+
+  #freshestRevocationForDelegation(
+    delegation: PicoIdentityDelegationSignatureInput,
+  ): PicoIdentityRevocationReference | undefined {
+    const matches: PicoIdentityRevocationReference[] = [];
+
+    for (const revocation of this.#revocationsById.values()) {
+      if (revocation.subjectKind === 'delegation' && revocation.subjectRef === delegation.delegationId) {
+        matches.push({ match: 'delegation', revocation: cloneRevocation(revocation) });
+        continue;
+      }
+
+      if (revocation.subjectKind !== 'key') {
+        continue;
+      }
+
+      if (revocation.subjectRef === delegation.subjectSigningKeyFingerprintHex) {
+        matches.push({ match: 'subject_signing_key', revocation: cloneRevocation(revocation) });
+      }
+      if (revocation.subjectRef === delegation.subjectKeyAgreementKeyFingerprintHex) {
+        matches.push({ match: 'subject_key_agreement_key', revocation: cloneRevocation(revocation) });
+      }
+    }
+
+    return matches.sort(compareRevocationReferences).at(-1);
+  }
+}
+
+export function createPicoIdentityLifecycleIndex(
+  input: PicoIdentityLifecycleIndexInput = {},
+): PicoIdentityLifecycleIndex {
+  return new PicoIdentityLifecycleIndex(input);
+}
+
+export function reconcilePicoIdentityLifecycleInputs(
+  inputs: readonly PicoIdentityLifecycleIndexInput[],
+): PicoIdentityLifecycleIndex {
+  return createPicoIdentityLifecycleIndex({
+    acceptedDelegations: inputs.flatMap((input) => [...(input.acceptedDelegations ?? [])]),
+    acceptedRevocations: inputs.flatMap((input) => [...(input.acceptedRevocations ?? [])]),
+  });
+}
+
+export function parsePicoIdentityLifecycleOrder(value: string): bigint {
+  const match = lifecycleOrderPattern.exec(value);
+  if (match === null) {
+    throw new Error('invalid_lifecycle_order');
+  }
+
+  return BigInt(match[1]);
+}
+
+export function comparePicoIdentityLifecycleOrder(left: string, right: string): number {
+  const leftOrder = parsePicoIdentityLifecycleOrder(left);
+  const rightOrder = parsePicoIdentityLifecycleOrder(right);
+
+  if (leftOrder < rightOrder) {
+    return -1;
+  }
+  if (leftOrder > rightOrder) {
+    return 1;
+  }
+  return 0;
+}
+
+function freshestLifecycleOrder(statements: readonly LifecycleStatement[]): string | null {
+  const freshest = [...statements].sort((left, right) => {
+    const byOrder = compareBigInt(left.order, right.order);
+    if (byOrder !== 0) {
+      return byOrder;
+    }
+
+    const byKind = left.kind.localeCompare(right.kind);
+    if (byKind !== 0) {
+      return byKind;
+    }
+
+    return left.id.localeCompare(right.id) || left.stableJson.localeCompare(right.stableJson);
+  }).at(-1);
+
+  if (freshest === undefined) {
+    return null;
+  }
+
+  return `seq:${freshest.order.toString().padStart(16, '0')}`;
+}
+
+function addUniqueStatement<TStatement>(
+  map: Map<string, TStatement>,
+  id: string,
+  statement: TStatement,
+  conflictReason: string,
+): void {
+  const previous = map.get(id);
+  if (previous === undefined) {
+    map.set(id, statement);
+    return;
+  }
+
+  if (stableJson(previous) !== stableJson(statement)) {
+    throw new Error(conflictReason);
+  }
+}
+
+function missingRequiredScopes(
+  actualScopes: readonly PicoIdentityDelegationScope[],
+  requiredScopes: readonly PicoIdentityDelegationScope[],
+): PicoIdentityDelegationScope[] {
+  const required = new Set<PicoIdentityDelegationScope>();
+  for (const scope of requiredScopes) {
+    if (!picoIdentityDelegationScopes.includes(scope)) {
+      throw new Error('invalid_required_scope');
+    }
+    required.add(scope);
+  }
+
+  const actual = new Set(actualScopes);
+  return [...required].filter((scope) => !actual.has(scope)).sort();
+}
+
+function compareDelegationRecords(
+  left: PicoIdentityDelegationSignatureInput,
+  right: PicoIdentityDelegationSignatureInput,
+): number {
+  return comparePicoIdentityLifecycleOrder(left.lifecycleOrder, right.lifecycleOrder)
+    || left.delegationId.localeCompare(right.delegationId);
+}
+
+function compareRevocationRecords(
+  left: PicoIdentityRevocationSignatureInput,
+  right: PicoIdentityRevocationSignatureInput,
+): number {
+  return comparePicoIdentityLifecycleOrder(left.lifecycleOrder, right.lifecycleOrder)
+    || left.revocationId.localeCompare(right.revocationId);
+}
+
+function compareRevocationReferences(
+  left: PicoIdentityRevocationReference,
+  right: PicoIdentityRevocationReference,
+): number {
+  return compareRevocationRecords(left.revocation, right.revocation)
+    || left.match.localeCompare(right.match);
+}
+
+function compareBigInt(left: bigint, right: bigint): number {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
+}
+
+function cloneDelegation(
+  delegation: PicoIdentityDelegationSignatureInput,
+): PicoIdentityDelegationSignatureInput {
+  return {
+    suite: delegation.suite,
+    delegationId: delegation.delegationId,
+    issuerIdentityKeyFingerprintHex: delegation.issuerIdentityKeyFingerprintHex,
+    subjectSigningKeyFingerprintHex: delegation.subjectSigningKeyFingerprintHex,
+    subjectKeyAgreementKeyFingerprintHex: delegation.subjectKeyAgreementKeyFingerprintHex,
+    scopes: [...delegation.scopes],
+    validFrom: delegation.validFrom,
+    validUntil: delegation.validUntil,
+    lifecycleOrder: delegation.lifecycleOrder,
+  };
+}
+
+function cloneRevocation(
+  revocation: PicoIdentityRevocationSignatureInput,
+): PicoIdentityRevocationSignatureInput {
+  return {
+    suite: revocation.suite,
+    revocationId: revocation.revocationId,
+    issuerIdentityKeyFingerprintHex: revocation.issuerIdentityKeyFingerprintHex,
+    subjectKind: revocation.subjectKind,
+    subjectRef: revocation.subjectRef,
+    reasonCategory: revocation.reasonCategory,
+    revokedAt: revocation.revokedAt,
+    lifecycleOrder: revocation.lifecycleOrder,
+  };
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(',')}]`;
+  }
+
+  if (isRecord(value)) {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+
+  return JSON.stringify(value);
+}
+
+function assertAsciiToken(value: string, reason: string): void {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 1024 || !/^[A-Za-z0-9._:/+-]+$/.test(value)) {
+    throw new Error(reason);
+  }
+}
+
+function assertFingerprint(value: string): void {
+  if (!/^[0-9a-f]{64}$/.test(value)) {
+    throw new Error('invalid_fingerprint_length');
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

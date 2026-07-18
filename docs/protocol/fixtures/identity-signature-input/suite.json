@@ -35,5 +35,5 @@
     "pico.suite.id.v1/canonicalization-negative/revocation-invalid-lifecycle-order",
     "pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length"
   ],
-  "notes": "Canonical byte vectors and key-record BLAKE2b-256 fingerprint vectors for pico.suite.id.v1. These unlock byte-layout review only; G2/G3 and runtime remain separate gates."
+  "notes": "Canonical byte vectors and key-record BLAKE2b-256 fingerprint vectors for pico.suite.id.v1. These unlock byte-layout review only; custody and lifecycle projection live in separate runtime scopes."
 }

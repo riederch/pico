@@ -1,0 +1,20 @@
+{
+  "schema": "pico.identity.lifecycle.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-lifecycle.pico_suite_id_v1.lifecycle-negative.conflicting-delegation-id",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-lifecycle",
+  "family": "lifecycle-negative",
+  "case": "same delegation id with different semantic fields is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "error": "conflicting_delegation_statement"
+  },
+  "adr": "0079",
+  "notes": "Replica dedupe is idempotent only for identical statements. Conflicting reuse of an id fails closed instead of selecting one by arrival order."
+}

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and primitive direction for Pico Identity Keys and Device Keys, and as the selection of the **signature-input canonicalization method** for Pico-signed records: the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b fingerprints, all libsodium), the two-keypair device rule, labeled length-prefixed binary signature inputs (the ADR 0073 method generalized), fingerprint and possession-proof direction, and per-role custody boundaries — behind three gates. **Gate G1 is now partially implemented as additive protocol vocabulary, canonical signature-input builders and authoritative byte/fingerprint vectors.** No key is generated, no signature is verified, no lifecycle lookup exists and no draft fence (ADR 0051/0052/0053/0055) is loosened at runtime level. This remains the reviewed key-format direction those fences said must exist before anything chooses algorithms or serialization.
+Accepted as the threat model and primitive direction for Pico Identity Keys and Device Keys, and as the selection of the **signature-input canonicalization method** for Pico-signed records: the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b fingerprints, all libsodium), the two-keypair device rule, labeled length-prefixed binary signature inputs (the ADR 0073 method generalized), fingerprint and possession-proof direction, per-role custody boundaries, and lifecycle lookup/reconciliation — behind three gates. **Gate G1 is implemented as additive protocol vocabulary, canonical signature-input builders and authoritative byte/fingerprint vectors. Person-role Gate G2 is discharged at the minimal runtime floor by ADR 0081 P2 and `@pico/vault`. Gate G3 is implemented as `@pico/identity`: a deterministic lifecycle projector over already accepted delegation/revocation statements, with authoritative lookup/reconciliation vectors.** No signature is verified, no host-role custody exists, no reader-membership runtime exists and no draft fence (ADR 0051/0052/0053/0055) is loosened at runtime level. This remains the reviewed key-format and lifecycle direction those fences said must exist before anything chooses algorithms, serialization or lifecycle semantics.
 
 ## Context
 
@@ -98,7 +98,7 @@ The record families this ADR sets direction for — final layouts and vectors ar
 - **Possession challenge** (`pico.id.possession.v1` direction): verifier nonce, context binding (who is verifying, for what), subject key fingerprint; answered by a detached signature. Never reusable across contexts — the label and context are protected input.
 - **Revocation statement** (`pico.id.revocation.v1` direction): subject key or delegation reference, reason category, ordering context; signed by the identity key. Realizes the ADR 0052/0053 placeholders' direction. Revocation is never erasure: historical signatures stay verifiable with lifecycle state carrying the trust cut-off (ADR 0033).
 
-All three stay inert (I8, K4-family) until custody/runtime gates exist and Gate G3 defines how lifecycle state is looked up and reconciled.
+All three stayed inert (I8, K4-family) until custody/runtime gates existed and Gate G3 defined how lifecycle state is looked up and reconciled. The current `@pico/identity` G3 runtime consumes already accepted delegation/revocation statements only; it still does not verify signatures, fetch registry freshness or grant membership.
 
 ### Gate G1 canonical layouts and vectors
 
@@ -109,7 +109,7 @@ element(b) = U32BE(len(b)) || b
 signatureInput = element(label) || element(field1) || ...
 ```
 
-ASCII token fields must be non-empty, at most 1024 bytes and match `[A-Za-z0-9._:/+-]+`. Public keys, nonces and fingerprints are raw bytes carried in fixtures as lowercase hex; Ed25519/X25519 public keys are 32 bytes, nonces are 32 bytes and fingerprints are 32-byte BLAKE2b digests. Scope sets are encoded as `element(decimalScopeCount)` followed by one element per scope in lexicographic order; duplicate or unknown scopes are rejected. `lifecycleOrder` is syntactically pinned to `seq:[0-9]{16}` here so a signed statement always carries protected ordering context; Gate G3 still owns lookup, monotonicity and restore reconciliation semantics.
+ASCII token fields must be non-empty, at most 1024 bytes and match `[A-Za-z0-9._:/+-]+`. Public keys, nonces and fingerprints are raw bytes carried in fixtures as lowercase hex; Ed25519/X25519 public keys are 32 bytes, nonces are 32 bytes and fingerprints are 32-byte BLAKE2b digests. Scope sets are encoded as `element(decimalScopeCount)` followed by one element per scope in lexicographic order; duplicate or unknown scopes are rejected. `lifecycleOrder` is syntactically pinned to `seq:[0-9]{16}` here so a signed statement always carries protected ordering context; Gate G3 now uses that field for lookup, monotonicity and restore reconciliation semantics.
 
 Layouts:
 
@@ -293,9 +293,9 @@ Nothing runtime ships before its gates; nothing at all is security-relevant befo
 
 1. **Done — Gate G1 canonical layouts and authoritative vectors.** Per-family byte layouts (key record, possession challenge, delegation, revocation) with ADR 0073-style accept/reject vectors, including negative vectors for cross-family label confusion, suite swap, role swap, field reordering, truncated-fingerprint comparison and validity/ordering violations. This gate also discharges ADR 0078's Gate R2 method question: envelope bytes use the same construction.
 2. **Gate G2 — Custody story per key role.** Host-role remains ADR 0072-pattern file custody, decided alongside the claim flow (now ADR 0080, Gate M2). Person-role custody is discharged at the minimal runtime floor by ADR 0081 P2 and `@pico/vault`: Vault-exclusive custody, `pico.vault.keyfile.v1` encrypted keyfiles, label-checked signing and key-agreement unwrap.
-3. **Gate G3 — Lifecycle lookup and reconciliation.** How delegation and revocation statements are stored, ordered, looked up at verification time, and reconciled after restore (I9) — the ADR 0033 realization for these two record families, with its own lifecycle-negative vectors.
+3. **Done — Gate G3 lifecycle lookup and reconciliation.** `@pico/identity` implements the minimal projector for already accepted ADR 0079 G1 delegation and revocation fields: fixed-width `seq:[0-9]{16}` ordering is compared numerically, identical replica statements dedupe, conflicting statement-id reuse fails closed, lookup resolves `active`, `not_yet_valid`, `expired`, `missing_scope`, `revoked` or `unknown`, direct delegation revocation and subject device-key revocation stop future authority, and reconciliation across restored stale state plus fresher lifecycle records resolves toward the freshest statement. The on-disk `identity-lifecycle/pico.suite.id.v1/` suite publishes lifecycle-positive and lifecycle-negative vectors for these cases. This is lookup/projection only: signature verification, storage adapters, registry freshness, reader membership and host-role custody remain separate work.
 
-After all three: runtime continues in additive steps (host-role key custody, possession verification, delegation verification and lifecycle lookup), at which point ADR 0078 R1 is dischargeable and the claim-flow ADR has its complete signing machinery. Person-role key generation and custody already exist only behind `@pico/vault`.
+After all three: runtime continues in additive steps (host-role key custody, possession verification, delegation signature verification and storage/freshness adapters), at which point ADR 0078 R1 is dischargeable only for consumers that also verify signatures and consume the lifecycle projector. Person-role key generation and custody already exist only behind `@pico/vault`.
 
 ## Non-goals
 
@@ -305,7 +305,7 @@ This ADR does not define or implement:
 - membership credential semantics or issuance (ADR 0045 family — a consumer of this direction, not part of it)
 - relationship or introduction trust between identities (no CA, no registry, no web-of-trust decision here)
 - recovery, social recovery, or identity replacement continuity records (ADR 0033 boundary; explicitly future)
-- host-role key generation/storage, signature verification, lifecycle lookup, or any runtime authority outside the `@pico/vault` person-role custody floor
+- host-role key generation/storage, signature verification, registry freshness, storage adapters or any runtime authority outside the `@pico/vault` person-role custody floor and the accepted-statement `@pico/identity` lifecycle projector
 - signed event segments or manifests (ADR 0032 families — future consumers of the I3 method)
 - passkey/hardware-backed identity (a future suite, per I2)
 - post-quantum selection (see open questions)
@@ -314,7 +314,7 @@ This ADR does not define or implement:
 ## Open questions
 
 - ~~**Person-identity custody** (G2): vault process, platform keystore, passphrase-protected file, hardware — and what the first real deployment (Home Assistant add-on) can honestly offer. Its own ADR.~~ Decided and minimally implemented in ADR 0081: Vault-exclusive custody with one canonical encrypted keyfile (`pico.vault.keyfile.v1`, Argon2id + XChaCha20-Poly1305), label-checked signing/unwrap behind `@pico/vault`, platform keystores as future unlock paths only — and the honest add-on answer remains that the Home Assistant add-on/browser surfaces are not Vault-capable custody locations.
-- **Ordering context format** for lifecycle monotonicity (I9): plain sequence numbers vs predecessor references (hash chaining) — decided at G3 with its reconciliation semantics.
+- ~~**Ordering context format** for lifecycle monotonicity (I9): plain sequence numbers vs predecessor references (hash chaining) — decided at G3 with its reconciliation semantics.~~ Gate G3 uses the existing Gate G1 `seq:[0-9]{16}` protected field as the minimal monotonic ordering context. Hash-chained or manifest-backed freshness can be added as a later storage/freshness layer without changing the current statement projection.
 - **Fingerprint display encoding** for humans (grouping, prefix, checksum) — UX work; the comparison rule (full digest only) is fixed here regardless.
 - **Post-quantum.** Ed25519/X25519 are chosen for review maturity and toolkit consolidation. Harvest-now-decrypt-later pressure applies to key agreement (ADR 0078 envelopes), not signatures; a PQ or hybrid suite would arrive as `pico.suite.id.v2`/`pico.suite.share.v2` through the normal deviation path. Revisit when reviewed implementations stabilize, not before.
 - **Whether signed event segments adopt I3 verbatim** — presumably yes, but their ADR decides, with their own families and vectors.

@@ -437,6 +437,7 @@ describe('Pico protocol types', () => {
       .filter((fixturePath) => !fixturePath.startsWith('model-delegation/draft/'))
       .filter((fixturePath) => !fixturePath.startsWith('memory-content-ad/'))
       .filter((fixturePath) => !fixturePath.startsWith('identity-signature-input/'))
+      .filter((fixturePath) => !fixturePath.startsWith('identity-lifecycle/'))
       .filter((fixturePath) => !fixturePath.startsWith('vault-keyfile/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([

@@ -61,6 +61,7 @@ Implemented or prepared:
 - Fastify-based Pico Home Core foundation service
 - SQLite-backed append-only event store
 - Lamport clock and version-vector helpers
+- minimal `@pico/identity` lifecycle runtime for accepted delegation/revocation statements
 - minimal `@pico/vault` keyfile runtime for person-role custody tests
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state, action terminology and compatibility aliases
@@ -272,6 +273,7 @@ Details are documented in:
 │   ├── protocol          # protocol compatibility and public surface notes
 │   └── release           # release, versioning and documentation notes
 ├── packages
+│   ├── identity          # minimal identity lifecycle projection runtime
 │   ├── protocol          # shared event and payload types
 │   ├── sync              # Lamport clock and version-vector helpers
 │   └── vault             # minimal person-role keyfile runtime
@@ -539,7 +541,7 @@ The project concept is persisted as architecture notes:
 | `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` | ADR 0075 Gate A mechanics: header-bound in-memory sessions (no cookies, no CSRF surface), Argon2id via libsodium, per-process Operator Bootstrap Code, local reset, auth audit events, `/api/auth/*` route shapes |
 | `0077-foundation-memory-content-read-api-and-domain-readership-seam.md` | Foundation memory content read API and domain-readership seam |
 | `0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md` | memory domain reader membership and key distribution threat model |
-| `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` | Pico identity/device key primitives and authoritative signature-input vectors |
+| `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` | Pico identity/device key primitives, authoritative signature-input vectors and lifecycle projection |
 | `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` | Pico Home host key and Move-In claim ceremony direction |
 | `0081-pico-vault-person-role-key-custody-threat-model-and-direction.md` | Pico Vault person-role key custody, keyfile vectors and minimal runtime floor |
 
@@ -549,7 +551,7 @@ Protocol documents:
 |---|---|
 | `docs/protocol/public-surfaces.md` | current and planned public compatibility surfaces |
 | `docs/protocol/compatibility-levels.md` | compatibility level definitions and claim boundaries |
-| `docs/protocol/conformance-fixtures.md` | conformance fixture layout and current Foundation, memory-content AD, identity signature-input, Vault keyfile and draft fixture suites |
+| `docs/protocol/conformance-fixtures.md` | conformance fixture layout and current Foundation, memory-content AD, identity signature-input/lifecycle, Vault keyfile and draft fixture suites |
 
 ## Roadmap
 
@@ -670,9 +672,9 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0076 for the Gate A mechanics, now implemented (`OperatorStore`, `SessionStore`, `OperatorBootstrapCode`, `AccessClassRegistry`, migration `0010`, dashboard login): sessions travel as `Authorization: Bearer <session>` with no cookies (a cookie would be ambient authority across the shared Home Assistant add-on origin; no ambient credential means no CSRF surface to design), sessions are in-memory only and never written to SQLite (a restore cannot resurrect a revoked session), the operator passphrase is verified with Argon2id via the already-present libsodium `crypto_pwhash_str` at interactive limits with bounded serialized verification, bootstrap uses a per-process Operator Bootstrap Code surfaced through the host log (ADR 0027 pattern; never a Move-In Code) with an explicit local reset as the only recovery, and only four content-free auth events (bootstrap, credential change, reset, revoke-all) become append-only while failed logins stay in operational logging; `/api/auth/*` is exempt from the blanket static-token hook and route classification fails closed through a central registry enforced at route registration. Once an operator exists, `foundation-diagnostic` and `WS /ws` require a credential even without a token; hosts with neither keep the unchanged trusted-local behaviour. The static token is enforced at its `foundation-diagnostic` ceiling and can never administer
 - Use ADR 0077 for memory content reads: `domain-content` access is readership, not operator administration, and it is authorized by a per-domain `mayReadDomain` seam that ignores the unverified stored `owner`/`controller`.
 - Use ADR 0078 before adding multi-reader memory domains: domains are either `host_custody` or `reader_custody`, hosted member domains require reader custody, and envelope issuance remains gated on real reader keys, canonical envelope bytes and membership runtime.
-- Use ADR 0079 for identity/device-key primitives: `pico.suite.id.v1` uses Ed25519 signing, X25519 key agreement and BLAKE2b-256 fingerprints; Gate G1 canonical signature-input bytes are implemented in `@pico/protocol`, and person-role key generation/private-key custody/signing/unwrap now exist only behind the minimal `@pico/vault` boundary. Signature verification, host-role custody, lifecycle runtime and reader-membership runtime remain gated.
+- Use ADR 0079 for identity/device-key primitives: `pico.suite.id.v1` uses Ed25519 signing, X25519 key agreement and BLAKE2b-256 fingerprints; Gate G1 canonical signature-input bytes are implemented in `@pico/protocol`, person-role key generation/private-key custody/signing/unwrap exist only behind the minimal `@pico/vault` boundary, and Gate G3 lifecycle lookup/reconciliation is implemented in `@pico/identity` for already accepted delegation/revocation statements. Signature verification, host-role custody, storage/freshness adapters and reader-membership runtime remain gated.
 - Use ADR 0080 before implementing Pico Home claiming: Move-In claim depends on a real claimant-side Vault, host-role key custody, founding-record vectors and membership runtime; the current ADR is ceremony direction, not runtime.
-- Use ADR 0081 for person-role private-key custody: Gate P1 is implemented for the `pico.vault.keyfile.v1` one-keyfile-per-keypair header-AAD layout and authoritative vectors, and Gate P2 is implemented as the minimal `@pico/vault` runtime (create, open/unlock, lock, label-checked sign, key-agreement unwrap, encrypted export only, private file mode and path-separation custody tests). Gate P3 is platform-keystore integration; daemon/IPC/UI, lifecycle lookup, approval UX and recovery remain future work.
+- Use ADR 0081 for person-role private-key custody: Gate P1 is implemented for the `pico.vault.keyfile.v1` one-keyfile-per-keypair header-AAD layout and authoritative vectors, and Gate P2 is implemented as the minimal `@pico/vault` runtime (create, open/unlock, lock, label-checked sign, key-agreement unwrap, encrypted export only, private file mode and path-separation custody tests). Gate P3 is platform-keystore integration; daemon/IPC/UI, approval UX, signature-verification integration and recovery remain future work.
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link
 - Add conformance tests before any strong compatibility claim

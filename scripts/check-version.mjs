@@ -6,6 +6,7 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const packageFiles = [
   'apps/core/package.json',
   'apps/web/package.json',
+  'packages/identity/package.json',
   'packages/protocol/package.json',
   'packages/sync/package.json',
   'packages/vault/package.json',

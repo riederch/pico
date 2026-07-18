@@ -19,5 +19,5 @@
     "reason": "invalid_lifecycle_order"
   },
   "adr": "0079",
-  "notes": "G3 owns reconciliation semantics, but G1 already requires a versioned sequence-shaped ordering token. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+  "notes": "G1 requires a versioned sequence-shaped ordering token, and G3 consumes it for reconciliation. ADR 0079 vector; no private keys, no signatures, no runtime authority."
 }

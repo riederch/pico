@@ -1,0 +1,21 @@
+{
+  "schema": "pico.identity.lifecycle.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-lifecycle.pico_suite_id_v1.lifecycle-positive.delegation-active",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-lifecycle",
+  "family": "lifecycle-positive",
+  "case": "accepted device delegation resolves active for its delegated scopes",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "status": "active",
+    "freshestLifecycleOrder": "seq:0000000000000001"
+  },
+  "adr": "0079",
+  "notes": "G3 lookup over already accepted delegation fields only. This does not verify a signature and does not grant reader membership by itself."
+}

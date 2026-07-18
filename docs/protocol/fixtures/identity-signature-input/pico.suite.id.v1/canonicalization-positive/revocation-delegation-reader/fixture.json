@@ -19,5 +19,5 @@
     "signatureInputLen": 209
   },
   "adr": "0079",
-  "notes": "Revocation is a signed lifecycle statement, not erasure; G3 still owns lookup and reconciliation semantics. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+  "notes": "Revocation is a signed lifecycle statement, not erasure; G3 consumes accepted statements for lookup and reconciliation. ADR 0079 vector; no private keys, no signatures, no runtime authority."
 }

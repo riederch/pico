@@ -1,0 +1,27 @@
+{
+  "schema": "pico.identity.lifecycle.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.identity-lifecycle.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-lifecycle",
+  "families": [
+    "lifecycle-positive",
+    "lifecycle-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-lifecycle-vectors",
+  "disclaimer": "Authoritative lifecycle lookup and reconciliation vectors for ADR 0079 G3. Inputs are already accepted lifecycle statements; no signature verification, no key generation, not reader membership, not L4 compatibility and no commercial permission.",
+  "fixtures": [
+    "pico.suite.id.v1/lifecycle-positive/delegation-active",
+    "pico.suite.id.v1/lifecycle-negative/delegation-revoked-after-restore",
+    "pico.suite.id.v1/lifecycle-negative/key-revocation-terminal",
+    "pico.suite.id.v1/lifecycle-negative/missing-scope",
+    "pico.suite.id.v1/lifecycle-negative/conflicting-delegation-id"
+  ],
+  "notes": "Lifecycle vectors exercise lookup, monotonic order, stale-restore reconciliation, direct delegation revocation, subject-key revocation, scope failure and conflict rejection over already authenticated ADR 0079 G1 delegation/revocation fields."
+}

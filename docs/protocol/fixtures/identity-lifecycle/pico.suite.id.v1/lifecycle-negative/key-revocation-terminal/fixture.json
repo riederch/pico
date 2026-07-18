@@ -1,0 +1,25 @@
+{
+  "schema": "pico.identity.lifecycle.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-lifecycle.pico_suite_id_v1.lifecycle-negative.key-revocation-terminal",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-lifecycle",
+  "family": "lifecycle-negative",
+  "case": "device signing-key revocation makes matching device delegation unusable",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "status": "revoked",
+    "freshestLifecycleOrder": "seq:0000000000000003",
+    "revokedBy": {
+      "match": "subject_signing_key",
+      "revocationId": "rev_device_signing_key"
+    }
+  },
+  "adr": "0079",
+  "notes": "A key revocation affects device delegations that bind the revoked signing key. It does not erase historical signatures."
+}
