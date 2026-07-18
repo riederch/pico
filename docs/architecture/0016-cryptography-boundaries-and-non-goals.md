@@ -68,6 +68,8 @@ ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` mak
 
 ADR `0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md` answers the threat-model questions for distributing memory Domain Content Keys to readers beyond the single host: explicit per-domain custody classes (host-custody vs reader-custody), KEK-per-reader wrapping via libsodium sealed box (`pico.suite.share.v1` direction, in-payload canonical context binding — message format over a reviewed construction, no new primitive), rotation-on-removal with the ADR 0033 honesty limits, and three gates (reader keys, canonical bytes + vectors, membership runtime) before anything is security-relevant.
 
+ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` answers the threat-model questions for identity and device keys and fixes the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b-256 fingerprints — all libsodium, detached signatures, no invented constructions), the two-independent-keypairs device rule (no Ed25519↔X25519 conversion), labeled length-prefixed binary signature inputs (the ADR 0073 method generalized; no JSON canonicalization or CBOR encoder in the trust path), and custody floors generalizing ADR 0072 R6 to all private key material — behind gates for vectors, per-role custody and lifecycle reconciliation.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

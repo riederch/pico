@@ -4,6 +4,8 @@
 
 Accepted as a draft-only Pico identity and device public-key placeholder boundary before key serialization, algorithms, key possession proofs, trust paths or runtime identity verification are implemented.
 
+The reviewed key-format direction this boundary required now exists: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` fixes the suite direction (`pico.suite.id.v1`: Ed25519/X25519/BLAKE2b via libsodium), the two-keypair device rule, the canonical signature-input method and the fingerprint rule. **This fixture fence stays fully in force**: placeholder fixtures remain draft-only, algorithm- and fingerprint-free until ADR 0079's Gate G1 delivers per-family canonical layouts and authoritative vectors.
+
 ## Context
 
 ADR 0029 separates Pico Identity Keys, Device Keys, Pico Home Host Keys, Home Membership Credentials, Domain Content Keys, Transport Session Keys and Relay Routing Identities.
