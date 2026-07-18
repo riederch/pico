@@ -20,6 +20,8 @@ A dedicated Pico Home should be understandable to non-developers: flash an image
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Home Host Key placeholder boundary for future fixture work. It does not implement Setup Mode, Move-In Code validation, host-key serialization, Home continuity verification or runtime host authorization.
 
+ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` defines the reviewed ceremony direction for this flow: the claim bundle shown through the protected display channel carries the host's key pins alongside the Move-In Code, so both directions authenticate out-of-band; the claim ends in a mutually signed founding record. Setup Mode, the claim endpoint and Move-In Code mechanics remain unimplemented behind its gates.
+
 ## Decision
 
 Pico will treat a flashable Pico Home Image as a future official installation path next to the Home Assistant add-on, standalone container, NAS or mini-server, and local service deployments.

@@ -70,6 +70,8 @@ ADR `0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-
 
 ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` answers the threat-model questions for identity and device keys and fixes the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b-256 fingerprints — all libsodium, detached signatures, no invented constructions), the two-independent-keypairs device rule (no Ed25519↔X25519 conversion), labeled length-prefixed binary signature inputs (the ADR 0073 method generalized; no JSON canonicalization or CBOR encoder in the trust path), and custody floors generalizing ADR 0072 R6 to all private key material — behind gates for vectors, per-role custody and lifecycle reconciliation.
 
+ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` answers the threat-model questions for claiming an Empty Pico Home from the same toolkit and nothing more: host keys are ordinary `pico.suite.id.v1` records, claim payloads travel as libsodium sealed boxes with in-payload canonical binding, and the pairing problem is solved by pinning host keys through the ADR 0027 protected display channel — a password-authenticated key exchange is explicitly rejected because libsodium provides none and adopting one would mean a new primitive family for a property the display channel already provides; trust-on-first-use is rejected outright.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

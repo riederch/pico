@@ -96,7 +96,7 @@ Why a code at all: the naive alternative — trust the first caller while unclai
 
 Why per-process and not persisted: a restart is itself a local operation, so regeneration proves local control again and keeps bootstrap state out of the database and its backups. This mirrors the ticket and session decisions.
 
-**This is not a Move-In Code.** It is a Foundation administration bootstrap for the operator principal (ADR 0075 A11), not a claim of an Empty Pico Home. When the ADR 0024/0027 claim flow lands, Setup Mode hosts both, the Move-In Code stays the product-level claim credential, and the operator consolidates under the Home Host Pico. The bootstrap code must never be described as a Move-In Code, a master key, a recovery secret or a durable admin credential (ADR 0027 boundaries apply verbatim).
+**This is not a Move-In Code.** It is a Foundation administration bootstrap for the operator principal (ADR 0075 A11), not a claim of an Empty Pico Home. When the ADR 0024/0027 claim flow lands, Setup Mode hosts both, the Move-In Code stays the product-level claim credential, and the operator consolidates under the Home Host Pico. The bootstrap code must never be described as a Move-In Code, a master key, a recovery secret or a durable admin credential (ADR 0027 boundaries apply verbatim). ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` now designs that claim ceremony — reusing these mechanics (per-process code, digest storage, bounded verification, reset markers, server-synthesized audit) while keeping the two codes strictly distinct — and fixes the consolidation contract.
 
 ### Reset and recovery
 

@@ -104,7 +104,7 @@ All three stay inert (I8, K4-family) until Gate G1 vectors exist and Gate G3 def
 
 Private material custody is decided per role, each in its own step, under the I7 floor (never in SQLite, the event log, env vars, logs or data-backed-up artifacts):
 
-- **Host-role keys** (the future Pico Home Host Key, ADR 0056 realization): file-based custody with ADR 0072 semantics — a separated key directory, backup-exclusion as a release-blocking packaging rule, stated stolen-disk residual — is an acceptable starting point, because host keys are host state. Their creation belongs to the claim-flow ADR.
+- **Host-role keys** (the future Pico Home Host Key, ADR 0056 realization): file-based custody with ADR 0072 semantics — a separated key directory, backup-exclusion as a release-blocking packaging rule, stated stolen-disk residual — is an acceptable starting point, because host keys are host state. Their creation belongs to the claim-flow ADR (now ADR 0080; its Gate M2 discharges this role).
 - **Person-role keys** (Pico Identity, device keys of the owner): **no person-identity private key is created on the Foundation host until a dedicated custody ADR exists** (G2) — vault, platform keystore, passphrase protection (age-style, ADR 0016 allowed direction) or hardware-backed, with the honest analysis each implies. Convenience file storage of a person's identity root is exactly the accretion this ADR exists to forbid.
 
 ## Ordering gates
@@ -121,7 +121,7 @@ After all three: runtime in additive steps (key generation under custody, posses
 
 This ADR does not define or implement:
 
-- the claim/Move-In flow, Setup Mode, or Home Host Key creation (next ADR; ADR 0024/0027/0056 boundaries unchanged)
+- the claim/Move-In flow, Setup Mode, or Home Host Key creation (now ADR 0080; ADR 0024/0027/0056 boundaries unchanged here)
 - membership credential semantics or issuance (ADR 0045 family — a consumer of this direction, not part of it)
 - relationship or introduction trust between identities (no CA, no registry, no web-of-trust decision here)
 - recovery, social recovery, or identity replacement continuity records (ADR 0033 boundary; explicitly future)
@@ -165,4 +165,4 @@ Negative:
 - Supplies what **ADR 0078** gates on: R1's reader keys are this ADR's device X25519 keys under an I8 delegation, and R2's canonical envelope bytes use the I3 method. The custody floor I7 generalizes **ADR 0072** R6 from domain KEKs to all private key material.
 - Constrained by **ADR 0016**: Ed25519/X25519/BLAKE2b via libsodium, detached signatures, no invented constructions — the element rule is byte assembly, not a primitive; passkeys/hardware and PQ arrive as new suites.
 - Realizes direction within **ADR 0029**'s role table (identity delegates, devices operate) and **ADR 0031**'s required properties (device scope detection, no transport-identity elevation — I10); **ADR 0033**'s lifecycle vocabulary and honesty rules (revocation ≠ erasure, stale backups must not resurrect) become I8/I9 with G3 owning the mechanics.
-- Leaves **ADR 0024/0027/0045/0056** exactly where they are: the claim flow and membership credentials are the next consumers of this direction, in their own maximally reviewed step; **ADR 0075 A11 / 0076** stay untouched — operator auth and identity remain separate layers with no ambient bridge (I10).
+- Leaves **ADR 0024/0027/0045/0056** exactly where they are: the claim flow and membership credentials are the next consumers of this direction, in their own maximally reviewed step — that step is now taken by **ADR 0080**; **ADR 0075 A11 / 0076** stay untouched — operator auth and identity remain separate layers with no ambient bridge (I10), with ADR 0080 H9 defining the consolidation contract.

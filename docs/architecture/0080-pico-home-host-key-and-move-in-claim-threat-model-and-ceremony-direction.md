@@ -1,0 +1,228 @@
+# 0080 - Pico Home Host Key and Move-In Claim Threat Model and Ceremony Direction
+
+## Status
+
+Accepted as the threat model and ceremony direction for claiming an Empty Pico Home: the Pico Home Host Key under `pico.suite.id.v1` (ADR 0079, key role `home_host`), the Move-In claim ceremony whose pairing trust comes from the ADR 0027 protected display channel instead of trust-on-first-use or a password-authenticated key exchange, the mutually signed **founding record** that mints the Home identity, the Home Membership Credential realization direction (issuer signature by the Home Host Pico, activation countersignature by the host key), Home continuity rules, and the ADR 0075 A11 consolidation contract for the Foundation operator — behind a precondition and three gates. **It implements nothing**: no Setup Mode, no claim endpoint, no host key, no membership credential, no ceremony message exists, and every draft fence (ADR 0045/0056/0057/0066) stays in force.
+
+## Context
+
+This is the last root ceremony of the tenancy strand without a reviewed design. ADR 0024 defines the empty-house model (unclaimed host → one-time claim → Home Host Pico → invited members) and ADR 0027 its first-boot shape (Setup Mode, Move-In Code, protected display channels) — both deliberately conceptual. ADR 0029/0031/0033 fix the key roles, the threat model and the lifecycle honesty rules; ADR 0032/0045 the membership credential family; ADR 0056/0057/0066 fence the draft fixtures until "a reviewed cryptographic and membership design" exists. ADR 0075/0076 built the Foundation operator explicitly as a phase-scoped principal that the claim flow must later subsume (A11), and reserved the `setup-bootstrap` access class for the future claim endpoint.
+
+ADR 0079 removed the shared bottleneck: the suite (`pico.suite.id.v1`), the signature-input method (I3, labeled length-prefixed binary layouts), possession proofs (I6), delegation/lifecycle statements (I8/I9) and per-role custody floors (I7, G2) now exist as direction. ADR 0078 defined how Domain Content Keys reach readers and gated its membership runtime (R3) on exactly the verified membership records this ADR designs. What remains open is the ceremony itself: how an Empty Pico Home and a first Pico establish mutual trust over an untrusted local network, what record makes the result durable, and how the transitional operator principal dissolves into it.
+
+The runtime today holds only the seat: `pico_home_claim_state` (migration `0004`, states `unclaimed`/`claimed`, a `hostAdminPicoId` column) with a read-only diagnostic in `GET /api/system/status`. It never leaves `unclaimed`.
+
+## Scope
+
+Covers: the Pico Home Host Key (creation trigger, roles, custody direction), Setup Mode as a security state, the Move-In Code's mechanics, the claim ceremony (authentication in both directions, message posture, freshness), the founding record and Home identity, the membership credential realization direction including eviction, Home continuity across rotation/migration/reset, operator consolidation (A11), and claim audit.
+
+Does not cover: invitation transport and UX for later members, remote or Pico-Link claim (the local surface only; ADR 0030 remote boundary unchanged), relationship trust between Picos, recovery (ADR 0033 boundary unchanged), person-identity custody (the dedicated ADR 0079 G2 demands), residency storage policy, Home-to-Home federation, or any runtime. One host carries one Home; multi-host Homes are a non-goal here.
+
+## Threat model
+
+### Protected assets
+
+- the claim itself — whoever completes it owns this host's future (ADR 0024: the house, never the residents)
+- the Move-In Code while Setup Mode lives — the only bridge between local display control and the first trust
+- the host's private keys — Home continuity and the activation-countersignature authority
+- the founding record's integrity — everything later (membership, continuity, consolidation) chains from it
+- the bidirectional authenticity of the ceremony: the claimant must reach the host that displayed the code, the host must admit only someone who saw the display
+- the honesty of "same Home" claims after rotation, migration and reset
+
+### Attacker model
+
+Extending ADR 0031 with what the ceremony itself creates:
+
+| Attacker | Capability | Posture direction |
+|---|---|---|
+| LAN man-in-the-middle / evil-twin host | Sits between claimant and host during Setup Mode; presents a fake Empty Pico Home or relays traffic. | Killed by the display bundle (H2): the claimant seals to host keys pinned out-of-band, so the twin cannot open the claim; the twin's own bundle would need control of the protected display channel, which is the ADR 0027 local-control boundary, not a network capability. No step trusts first use. |
+| Move-In Code thief (display capture, shoulder surf) | Learns the code; can claim the empty house. | The local-control boundary stated honestly (ADR 0075 A10 family): display access *is* claim authority. Bounded: single use, Setup-Mode window, attempt cap, and the prize is an **empty** house — no existing resident data exists at claim time. |
+| Replay attacker (ADR 0031) | Replays claim messages, old founding records, stale membership credentials. | Ceremony messages are context-bound and fresh (H3); the code is consumed atomically with the founding transition; membership and continuity consume I9-ordered lifecycle state, not signature validity alone. |
+| Stale-backup attacker | Restores pre-claim state to reopen Setup Mode on a claimed Home. | H8: claim state and host-key custody are reconciled at boot, conflicts fail closed toward `claimed`; the tombstone-family rule (ADR 0070, 0078 K8, 0079 I9), fourth instance. |
+| Post-claim hostile operator (local reset + re-bootstrap) | Uses filesystem control to become Foundation operator on a claimed Home. | H9: gains host-infrastructure power only — the ADR 0076 honest limit inherited. Cannot sign as the Home Host Pico (its keys are not on the host, H5), cannot mint membership (H6), cannot read reader-custody domains (ADR 0078 K1/K6). |
+| Host-key thief (host disk) | Copies host-role private keys; impersonates host continuity to members. | The ADR 0072-family stolen-disk residual, stated: possible until rotation/continuity acceptance exists; never resident authority (ADR 0056 — host keys sign infrastructure, not people). Member re-acceptance and revocation bound it later (Gate M3, ADR 0033). |
+| Stale-serving host | Withholds membership revocations or continuity statements; serves old-but-signed state. | Cannot fabricate (statements are Home-Host-Pico-signed), can withhold: detectable-not-preventable, same residual as ADR 0079's, bounded later by manifests (ADR 0032). |
+| Compromised host at first boot (image, supply chain) | Displays attacker-controlled pins; owns the Home from birth. | Out of scope for this layer and named: no ceremony outruns a compromised endpoint that controls the display. Image/packaging trust is release-platform work (ADR 0005/0019 families). |
+
+### The ADR 0016 questions, answered for the claim surface
+
+1. **Who controls keys?** The host controls host-role keys (file custody, Gate M2); the claimant's Pico Vault controls person-role keys, which never touch the host (ADR 0079 G2/I7). The Move-In Code is nobody's key — it authorizes once and dies. There is no registry and no CA; the founding record is this Home's root.
+2. **Which devices can read which domain?** Unchanged by claiming: membership grants host use, never readership (ADR 0045 rule kept). Readership stays a per-domain grant through the ADR 0077 seam and ADR 0078 custody/envelopes; the Home Host Pico administers without reading (A7 carried into tenancy).
+3. **What can a server see?** The ceremony hands the host: the claimant's public key records, possession proofs, the founding record, membership records — public by design. It never sees person-role private material, and after claim it holds no reusable claim secret.
+4. **What can a relay see?** Nothing; the first claim is a local-surface ceremony (ADR 0027 channels). Remote claim would be a new decision, not an extension of this one.
+5. **What happens after device loss?** A claimant device loss is ADR 0079 lifecycle work (revocation, I9) plus ADR 0078 rotation for affected domains. Loss of the Home Host Pico's identity is a recovery question — explicitly future (ADR 0033), and the Home never becomes the recovery path (ADR 0033: recovery must not be granted by Home Host role alone).
+6. **What happens after relationship revocation?** Eviction is a signed membership lifecycle statement plus host enforcement plus ADR 0078 K5 rotation where future secrecy is required — never identity destruction, never key seizure (ADR 0024).
+7. **How does backup restore work?** Founding, membership and continuity records restore as signed public state and reconcile I9-style toward the freshest statement. Claim state restores against host-key custody with H8 fail-closed reconciliation: no stale backup reopens Setup Mode.
+8. **How does deletion interact with protected payloads?** Home reset destroys host-role identity and claim state, and must say exactly that: it never claims to delete resident identities, resident keys or resident backups (ADR 0033), and it must be structurally unable to touch Domain Content Keys — resetting the house never shreds the furniture (crypto-shred stays the separate, confirmed, Gate B operation).
+
+## Required properties
+
+- **H1 — The Move-In Code authorizes one claim and nothing else.** High-entropy CSPRNG, per-process, held host-side as digest only, single-use, attempt-bounded, valid only while Setup Mode lives; consumed atomically by the successful claim. It is never an identity, a key, a key-derivation input, a recovery handle or a durable credential (ADR 0027/0029 as an enforced property, not prose).
+- **H2 — Both directions authenticate through the protected display channel, never through the network.** Host→claimant: the displayed bundle pins the host's public keys (full material or full-length fingerprints, I5). Claimant→host: possession of the code. No trust-on-first-use step exists; an evil twin fails for lack of the pinned private key, a remote attacker for lack of the code.
+- **H3 — Ceremony messages are sealed, context-bound and fresh.** Claim payloads travel sealed to the pinned host key-agreement key; the canonical binding (I3 layout) inside the sealed payload covers at least suite, the pinned host key fingerprints, the code and ceremony nonces; host responses are signed by the pinned host signing key over the ceremony context. Cross-host, cross-ceremony and replayed presentations fail closed.
+- **H4 — The founding record is mutually signed and is the only root of Home authority.** It mints the `homeId`, names the host key and the Home Host Pico identity by fingerprint, binds the ceremony context, and carries two signatures: the claimant's identity key and the host's signing key. A half-signed founding record is inert (I8/K4 family), and nothing chains from it.
+- **H5 — Custody per role, no escrow.** Host-role keys live in host file custody with ADR 0072 semantics (Gate M2; backup exclusion release-blocking, blast radius separated from domain KEK files). Person-role private keys are never created, stored or escrowed on the host (ADR 0079 G2/I7); the ceremony proves possession (I6), it never transfers private material.
+- **H6 — Membership authority is the Home Host Pico's signature; the host countersigns activation only.** A credential without the issuer signature is inert; the host alone can deny service but mint nothing. Membership grants scoped host use and never domain plaintext (ADR 0045 rule; readership arrives separately via ADR 0078 R3).
+- **H7 — Home continuity is signed or absent.** Host-key rotation or host migration preserves the `homeId` only through a continuity statement signed by the outgoing host key and accepted by the Home Host Pico. Reset followed by re-claim mints a new `homeId` by construction. "Same Home" can never be asserted — only proven.
+- **H8 — Restore never reopens the house.** Claim state (database) and host-key custody (files) are reconciled at boot; conflict fails closed toward `claimed`, and neither Setup Mode nor a usable Move-In Code exists while founding evidence is present. Re-entering Setup Mode requires the explicit local home reset, never a restore side effect.
+- **H9 — The operator consolidates under the Home Host Pico and never competes with it** (ADR 0075 A11 realized). After claim, host-administration authority belongs to the Home Host Pico; the operator credential survives only as a local access mechanism bounded by host infrastructure. It never signs as anyone, never issues membership, never gains readership of reader-custody domains, and a post-claim operator reset re-establishes host access, never Home authority.
+- **H10 — Claim lifecycle is audited without amplification.** The claim and the home reset are server-synthesized, content-free append-only events (`home.claimed`, `home.reset` reserved; ADR 0076 mechanism reused). Codes, keys and attempt details never enter the append-only log; Setup Mode entry and failed attempts stay in bounded operational logging (A9).
+
+## Decision
+
+### The host identity: `pico.suite.id.v1`, key role `home_host`
+
+The Pico Home Host Key is two independent keypairs under the ADR 0079 suite — Ed25519 signing, X25519 key agreement, no cross-primitive reuse — described by the same key-record family (`pico.id.keyrecord.v1`) with `keyRole: home_host` (the role ADR 0055 reserved). No new suite, no new record family, no host-specific format. The host generates its own keys at first entry into Setup Mode, before any claim exists; they are host state under host file custody (the ADR 0079 G2 host-role direction, discharged concretely at Gate M2 with ADR 0072 semantics). The Move-In Code is never an input to their generation.
+
+Host keys sign host-infrastructure statements only: ceremony responses, the host half of the founding record, activation countersignatures, continuity statements, future host audit bindings. The ADR 0056 core rule becomes structural: nothing a host key signs can express resident authority, because no record family gives it a place to.
+
+### Setup Mode and the two codes
+
+Setup Mode is the host state in which, and only in which, the claim surface exists: active while the host is unclaimed, ended atomically by the successful claim, re-entered only by the explicit local home reset. The claim endpoint sits in the `setup-bootstrap` access class exactly as ADR 0075 reserved, with the class condition generalized: available only while the respective principal does not exist — the operator bootstrap while no operator exists, the claim while no Home exists. The two surfaces are independent; neither is a prerequisite of the other, and each of the four states (operatorless/unclaimed in any combination) fails closed on its own axis.
+
+| | Operator Bootstrap Code (ADR 0076) | Move-In Code (this ADR) |
+|---|---|---|
+| Establishes | Foundation Operator | Home Host Pico |
+| Authority granted | local API administration (transitional, H9) | Home founding |
+| Displayed via | host log / console | ADR 0027 protected display channel, as part of the claim bundle |
+| Lifetime | per process, until first bootstrap | per process, while Setup Mode lives |
+| After success | operator exists; consolidates at claim | founding record exists; Setup Mode ends |
+
+Both codes share the ADR 0076 mechanics: high-entropy CSPRNG, digest-only in memory, never SQLite, never env vars, single-use, bounded verification. Neither may ever be described as the other (ADR 0076's rule, kept verbatim).
+
+### The claim bundle: pairing trust comes from the display, not the network
+
+Setup Mode presents, through an ADR 0027 protected channel (local setup page, HDMI/serial console, attached display — QR where possible), the **claim bundle**: an endpoint hint, the host's public keys pinned by full material or full-length fingerprints (I5 — truncated comparison is forbidden here exactly where substitution would be most valuable), and the Move-In Code.
+
+This dissolves the pairing problem without new cryptography. The alternatives are rejected by name:
+
+- **Trust-on-first-use** would place the claimant's first and most valuable trust decision on the untrusted network — the precise moment an evil twin exists for. The tree's rule is already "no interim trust-on-first-use" (ADR 0078 K4); it holds here.
+- **A PAKE** (password-authenticated key exchange) would let a bare typed code authenticate both directions, but libsodium provides none, so adopting one means a new primitive family and a new dependency under ADR 0016 review — for a property the display channel already provides. The display must exist anyway (ADR 0027 requires a protected channel to show the code); letting it carry the pins costs nothing and removes the need.
+
+The consequence is stated rather than hidden: the ceremony's trust root is the display channel, and whoever controls that channel controls the claim (A10 family). A code-only typed path — where pins cannot be displayed — is not normative in this ADR; the open questions name the two candidate shapes and the constraint that neither may silently degrade to trust-on-first-use.
+
+### The ceremony
+
+Direction, over the local Foundation surface (message count and exact layouts are Gate M1 work):
+
+```text
+Setup Mode display -> claim bundle: {endpoint hint, host key pins, Move-In Code}
+claimant -> host:     sealed to pinned host kex key:
+                      {label, suite, host key fingerprints, Move-In Code,
+                       claimant key records, claimant nonce}
+host -> claimant:     signed by pinned host signing key:
+                      {label, ceremony context, founding proposal}
+claimant -> host:     identity-signed founding acceptance (possession, I6)
+host:                 founding record complete, code consumed,
+                      claim state = claimed, Setup Mode ends — atomically
+```
+
+The sealed request is `crypto_box_seal` to the pinned key with binding-by-inclusion (the ADR 0078 K3 pattern: sealed boxes take no associated data, so context lives inside the sealed payload as an I3 layout) — no new construction. The host verifies the code against its in-memory digest (timing-safe, attempt-bounded, serialized in the ADR 0076 bounded-verification pattern), and only then processes the claimant's key records. The claimant accepts nothing the pinned signing key did not sign. Claimant identity possession is proven by detached signature over ceremony context (I6); whether the bundle itself carries a host challenge that folds possession into the first sealed message, or an explicit round trip provides it, is a Gate M1 layout choice — both satisfy I6.
+
+The transition is atomic on the host: founding record complete, code consumed, `claimed` recorded, Setup Mode ended — or none of it. An abandoned half-ceremony leaves an unclaimed host and (at most) a restart-refreshed code; nothing chains from a half-signed founding record (H4).
+
+The founding record is signed by the claimant's **identity key**, not a device key: founding is a constitutional act, rare and maximally consequential — precisely what ADR 0029 keeps the identity key for. Ongoing host administration is then delegable to device keys under the ADR 0033 `administer_home` scope through ordinary I8 delegations.
+
+### The founding record and `homeId`
+
+The founding record (`pico.home.founding.v1` direction) mints the Home: a fresh random `homeId`, the host key fingerprints, the Home Host Pico identity fingerprint, the ceremony context, and both signatures. The `homeId` is minted **at founding, not at host-key creation** — a deliberate structural choice: an Empty Pico Home is a place, not yet an identity, and a Home exists only as (host infrastructure × founding authority). Reset followed by re-claim therefore produces a *different* Home under a new `homeId` even on identical hardware with surviving host keys — the safe default. Handing a Home to a different person under the same `homeId` (ADR 0045's `transferred_or_reissued`) would be an explicit signed governance flow, deliberately not designed here.
+
+Members later verify against the founding record: membership credentials name the `homeId` and host key, and chains that do not reach a well-formed founding record verify as nothing.
+
+### Membership credentials: authority and activation
+
+The Home Membership Credential (`pico.home.membership.v1` direction, realizing ADR 0032/0045 with the 0045 vocabulary for roles, scopes and states) carries **two signatures with different meanings**:
+
+- the **issuer signature** — the Home Host Pico (identity key, or a device key delegated with `administer_home` scope): this is the authority. Without it a credential is inert, whatever the host says (H6).
+- the **activation countersignature** — the host key: operational acknowledgment that this credential is active at this Home. It lets the host runtime enforce residency offline from the Home Host Pico, and it creates no authority: a host countersignature over an issuer-less credential is a signature over garbage.
+
+The asymmetry is the ADR 0024 rule in cryptographic form: the host can always deny service (it physically could anyway) but can never mint membership; the Home Host Pico owns membership but exercises it through records the host can verify and enforce. Membership status changes (eviction, expiry, reissue) are Home-Host-Pico-signed lifecycle statements with I9 ordering context — the host enforces the freshest statement, restore reconciles toward it, and eviction triggers ADR 0078 K5 rotation where future secrecy is required. The founding record itself doubles as the Home Host Pico's own membership root; it is not re-issued as a credential by its own subject.
+
+These records are what ADR 0078 Gate R3 consumes: verified membership rows drive both envelope issuance and the ADR 0077 `mayReadDomain` seam. Membership never implies readership — a member reads a domain only through an explicit domain grant (custody class rules unchanged, ADR 0078 K1).
+
+### Continuity, rotation and home reset
+
+Host-key rotation or migration to new hardware preserves the Home only through a **continuity statement** (`pico.home.continuity.v1` direction): signed by the outgoing host key, naming the `homeId` and the incoming host key, and accepted by the Home Host Pico (ADR 0056's `memberAcceptanceRequired` posture made concrete: acceptance is the Home Host Pico's signature; how members are notified is Gate M3 / UX work). Without such a statement there is no continuity path — a host that cannot produce one is a new Home (H7), which is exactly the honest answer ADR 0033 required ("same Home with a rotated host key, or a new Home").
+
+The **home reset** is an explicit local startup-time action in the ADR 0076 reset pattern (marker distinct from the operator reset): it destroys host-role identity keys and claim state, is audited (`home.reset`), and returns the host to Setup Mode as a *new* Empty Pico Home. Two hard rules: it must be structurally unable to touch Domain Content Key files (resetting the house never shreds the furniture — key custody namespaces are separated at Gate M2 so the reset path cannot reach KEKs), and it never claims effects on resident identities, resident keys or resident backups (ADR 0024/0033 honesty verbatim).
+
+The stated residual: a copied host disk yields the host keys, and with them continuity impersonation until rotation and member re-acceptance exist — the ADR 0072-family residual, bounded at Gate M3, never denied.
+
+### Operator consolidation under the Home Host Pico
+
+The A11 contract, concretely: **after the founding record exists, host-administration authority *is* the Home Host Pico's**, and the Foundation operator principal becomes one local mechanism for exercising it — the console fallback for a person standing at their own host — never a second root.
+
+- The operator credential never signs anything, is never referenced by any record family, and never appears in any trust chain. It authorizes local API calls; authority semantics come from the Home.
+- Post-claim, the operator cannot: issue or countersign membership (no key), read reader-custody domains (ADR 0078 K1/K6 — the keys do not exist on the host), or alter founding/continuity/membership records (signed by keys it does not hold).
+- A post-claim operator reset + re-bootstrap (filesystem control) yields exactly what ADR 0076 honestly granted: host-infrastructure power — destructive locally (within Gate B confirmation semantics), never Home authority and never resident readership. Host control stays host control; it does not become identity.
+- The mechanics — which `host-admin*` routes remain operator-exercisable on a claimed Home, whether the Home Host Pico's Vault exercises administration through signed requests once transport exists, and whether the operator credential is retired entirely on claimed Homes — are Gate M3 decisions inside this contract. The contract itself is not gated: no design may give the post-claim operator more than host infrastructure.
+
+### Audit and diagnostics
+
+`home.claimed` and `home.reset` are reserved as server-synthesized, content-free append-only event types (the ADR 0076 `serverSynthesizedFoundationEventTypes` mechanism reused; references and fingerprints only, never codes or key material). Setup Mode entry, bundle display and failed claim attempts stay in bounded operational logging — reboots and attackers must not grow the undeletable log (A9). The existing `claimState` diagnostic keeps its shape until Gate M2; whether a claimed Home exposes its `homeId` or host fingerprint through `foundation-diagnostic` is a metadata-exposure decision listed in the open questions, not a default.
+
+## Ordering gates
+
+**Precondition — a Pico Vault custody story.** The claimant signs the founding record with a person-role identity key, and ADR 0079 G2 forbids creating person-role private keys on the Foundation host. Therefore the claim runtime cannot exist before a dedicated person-identity custody ADR and a Vault-side holder of those keys exist. The tempting shortcut — generating the claimant identity on the host "just for the demo" — is exactly the accretion ADR 0079 G2 forbids, and it would invert the entire tenancy model at its root: the house would own its first resident. The Empty Pico Home stays empty until a real Vault can move in.
+
+1. **Gate M1 — Ceremony and record layouts with authoritative vectors.** I3 layouts and ADR 0073-style accept/reject vectors for the claim messages (`pico.home.claim.v1`), founding record (`pico.home.founding.v1`), membership credential (`pico.home.membership.v1`), continuity statement (`pico.home.continuity.v1`) and membership lifecycle statements — consuming ADR 0079 G1 (key records, possession, delegation) and including negative vectors for wrong-host pins, stale or foreign codes, cross-ceremony transplants, half-signed founding records, issuer-less or countersignature-only credentials, continuity without the outgoing key, and role/suite swaps. The ADR 0045/0056/0057/0066 fixture fences loosen only when these vectors exist, and only to them.
+2. **Gate M2 — Host-side runtime: Setup Mode, host-key custody, reconciliation.** Host keypair generation at Setup Mode entry; host-role file custody with ADR 0072 semantics and a key-namespace separation that puts host identity keys outside the domain-KEK blast radius; the per-process Move-In Code and claim bundle on a per-platform protected channel; the claim endpoint under `setup-bootstrap`; the H8 boot reconciliation between claim state and custody; the home-reset marker distinct from the operator reset; `home.claimed`/`home.reset` audit. This gate discharges ADR 0079 G2 for the host role.
+3. **Gate M3 — Membership runtime and consolidation.** Credential and lifecycle-statement verification driving residency enforcement and the ADR 0077/0078 seams (supplying what R3 consumes), eviction with K5 rotation coupling, continuity acceptance and member notification, and the concrete operator-consolidation mechanics inside the H9 contract.
+
+Nothing in any gate is security-relevant before Gate M1's vectors exist; the gates otherwise deliberately mirror ADR 0078/0079 so the three strands converge instead of racing.
+
+## Non-goals
+
+This ADR does not define or implement:
+
+- any runtime, route, key, code or record — the claim surface remains nonexistent and `pico_home_claim_state` stays `unclaimed`
+- invitation transport, invitation UX or member onboarding beyond the credential direction
+- remote claim, Pico Link claim, relay registration or any transport (ADR 0028/0030 boundaries unchanged)
+- person-identity custody (the dedicated ADR that the precondition demands)
+- recovery of identities, Homes or credentials (ADR 0033 boundary; a dead host without a continuity statement is a lost Home, stated plainly)
+- Home handover between people (`transferred_or_reissued` governance), Home-to-Home relationships, or multi-host Homes
+- eviction cleanup policy for host-local ciphertext (ADR 0024's optional-policy stance unchanged)
+- Setup Mode UX, first-boot imaging or packaging (ADR 0027's product path)
+- TLS, mDNS/discovery hardening or browser trust for appliances
+- any loosening of the ADR 0045/0056/0057/0066 fixture fences before Gate M1 vectors exist
+
+## Open questions
+
+- **The typed-code path.** Where no display can carry pins, two shapes exist: user-verified fingerprint comparison (UX-heavy, honest), or serving the host's key records MACed with the code (keyed BLAKE2b — reviewed primitive, no new dependency, but it exposes the code to offline grinding from a captured bundle and softens H1's "never key material" purity). Neither is normative here; whichever is chosen must be its own reviewed decision, and silent trust-on-first-use is not a fallback.
+- **Possession folding** — display-carried host challenge versus explicit round trip (Gate M1 layout work; both satisfy I6).
+- **Member notification and acceptance UX for continuity statements** (Gate M3): what a member device shows when the host key rotates, and what refusal does.
+- **Whether a claimed Home raises the diagnostic bar** the way an existing operator does (ADR 0076's decided behaviour), and whether `homeId`/host fingerprint belong in `foundation-diagnostic` responses at all.
+- **Per-platform bundle channels**: what the Home Assistant add-on can display (QR in the add-on UI?), what a headless container gets, and how the appliance image shows the bundle (ADR 0027 channels, concretized per platform at Gate M2).
+- **Eviction-to-rotation coupling policy**: K5 says rotate "where future secrecy is required" — who states that requirement per domain, and what the default is for household domains.
+- **Operator end-state on claimed Homes** (Gate M3, inside the H9 contract): retained console fallback versus full retirement once Vault-exercised administration exists.
+
+## Consequences
+
+Positive:
+
+- the last root ceremony of the tenancy strand is designed from the same small toolkit — sealed box, detached signatures, digests under `pico.suite.id.v1`/I3 layouts — with zero new primitives and both rejected alternatives (trust-on-first-use, PAKE) named
+- the pairing MITM is closed structurally by the display bundle: the channel ADR 0027 already requires now carries the trust root, and the network is never trusted in either direction
+- the empty-house model becomes cryptographic: `homeId` minted at founding makes "reset = new Home" structural, mutual signatures make "hosting is not owning" a record-format fact, and custody separation (H5) keeps the host from ever holding its residents
+- the operator principal gets its promised end-state (A11): a consolidation contract with hard non-capabilities, instead of an indefinite second root
+- ADR 0078 R3 gains its missing input (verified membership records), and ADR 0079 G2's host-role custody gets its concrete discharge point (Gate M2)
+- every fixture fence stays intact, and the precondition makes the worst shortcut (host-generated claimant identity) impossible to take quietly
+
+Negative:
+
+- the claim runtime is far away: a person-custody ADR, ADR 0079 G1, and Gates M1–M3 all stand before it — accepted, as in ADR 0078/0079: the alternative is improvising the constitutional record of the whole tenancy model
+- the display-bundle requirement constrains minimal setups; the typed-code path stays unresolved rather than quietly weakened
+- per-process codes mean a mid-setup restart re-pairs from the display — the ADR 0076 trade accepted again for the same reason (restart proves local control)
+- an unplanned host death without a continuity statement is a lost Home under H7; honest, and recovery work is explicitly deferred rather than promised
+- the stolen-host-disk continuity residual stands until Gate M3 rotation/acceptance exists
+- two more mutually signed record families mean more layouts and vectors before anything ships — the deliberate ADR 0079 friction, applied to the most consequential records in the system
+
+## Relationship to other ADRs
+
+- Realizes the ADR `0024`/`0027` claim concept as a reviewed ceremony direction: the empty-house model, Setup Mode, Move-In Code semantics and protected display channels become properties H1–H10 with gates; the bootstrap-flow open questions of ADR 0024 (display, expiry, replay, audit) are answered at direction level.
+- Consumes ADR `0079` end to end: the suite and key-record family (host keys are `home_host`-role records), I3 layouts for every ceremony and record family, I6 possession, I8 delegation (`administer_home` scope from ADR `0033`), I9 lifecycle ordering for membership and continuity statements, and the G2 custody split — host-role discharged at Gate M2, person-role as the precondition.
+- Constrained by ADR `0016`: sealed box, detached signatures and keyed/labeled digests only; a PAKE is rejected as a new primitive family; binding-by-inclusion (the ADR `0078` K3 pattern) is message format, not construction.
+- Realizes the ADR `0032`/`0045` membership credential family direction (issuer + activation split, 0045 vocabulary) and answers the ADR `0031` Home-membership requirements (issuer/verifier roles, states, expiry/replay, host-key relationship, domain-key relationship via ADR 0078, audit, reset behaviour).
+- Keeps ADR `0033` verbatim: reset is not identity destruction, recovery is never granted by Home role or Move-In Code, rotation must answer "same Home or new Home" — H7 makes the answer signed-or-new.
+- Realizes the ADR `0075` A10/A11 seam: the claim endpoint takes the reserved `setup-bootstrap` class, and H9 is the consolidation contract A11 demanded; ADR `0076` mechanics (per-process codes, bounded verification, reset markers, server-synthesized audit) are reused, with its bootstrap code and the Move-In Code kept strictly distinct.
+- Supplies ADR `0078` Gate R3's membership records; readership stays separate from membership (K1 custody classes unchanged), and eviction couples to K5 rotation.
+- The ADR `0056`/`0057`/`0066` (and `0045`) draft fences stay fully in force until Gate M1 vectors exist; ADR `0026` product terminology binds throughout (Empty Pico Home, Move-In Code, Home Host Pico, Pico Vault).

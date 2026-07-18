@@ -4,6 +4,8 @@
 
 Accepted as a draft-only Home Membership Credential placeholder boundary before Pico Home Link implementation.
 
+The reviewed credential direction this boundary anticipated now exists: ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` fixes the realization direction (`pico.home.membership.v1`: issuer signature by the Home Host Pico, activation countersignature by the host key, lifecycle statements with ordering context) using this ADR's role, scope and status vocabulary. **This fixture fence stays fully in force**: placeholder fixtures remain draft-only and signature-free until ADR 0080's Gate M1 delivers canonical layouts and authoritative vectors.
+
 ## Context
 
 ADR 0024 defines the Empty Pico Home and claim direction.

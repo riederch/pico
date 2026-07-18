@@ -4,6 +4,8 @@
 
 Accepted as a draft-only Pico Home Host Key placeholder boundary before host-key serialization, Home continuity verification, membership credential verification or runtime Home authorization are implemented.
 
+The reviewed host-key direction this boundary required now exists: ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` fixes the Home Host Key as two independent keypairs under `pico.suite.id.v1` (key role `home_host`, ADR 0079 record family), host-role file custody, the claim ceremony binding, and signed-or-absent Home continuity. **This fixture fence stays fully in force**: placeholder fixtures remain draft-only, algorithm- and fingerprint-free until ADR 0080's Gate M1 delivers canonical layouts and authoritative vectors.
+
 ## Context
 
 ADR 0024 defines Pico Home as infrastructure that may host resident Picos without owning their identities, private keys or personal domains.

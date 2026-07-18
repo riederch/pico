@@ -32,6 +32,8 @@ Host administration controls future use of this host. It does not grant ownershi
 
 ADR `0056-pico-home-link-draft-home-host-key-placeholder.md` narrows the first draft-only Home Host Key placeholder boundary for future fixture work. It does not implement host-key serialization, Home continuity verification, membership issuer verification, Setup Mode, bootstrap token validation, resident signing authority, resident domain decryption or runtime host authorization.
 
+ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` is the reviewed ceremony direction for this model: the Home Host Key under `pico.suite.id.v1`, pairing trust from the protected display channel, the mutually signed founding record that mints the Home identity, the membership credential realization and the operator consolidation contract — behind its own gates, implementing nothing yet.
+
 ## Core design rule
 
 > The Gastgeber Pico manages the house, not the people. It may invite and evict residents from this host, but it must not decrypt, impersonate, rewrite or own resident Picos.

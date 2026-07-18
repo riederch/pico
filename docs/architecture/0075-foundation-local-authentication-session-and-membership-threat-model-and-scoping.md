@@ -101,7 +101,7 @@ Every route carries exactly one class (A2). Authority comes from exactly two sou
 | Class | Authority required | Current occupants | Planned occupants |
 |---|---|---|---|
 | `public` | none | `GET /health`; dashboard shell and static assets (needed to reach a login); `POST /api/auth/session` | — |
-| `setup-bootstrap` | protected local channel, only while no principal exists | `POST /api/auth/bootstrap` | later the Move-In/claim endpoint (ADR 0027) |
+| `setup-bootstrap` | protected local channel, only while no principal exists | `POST /api/auth/bootstrap` | later the Move-In/claim endpoint (ADR 0027; ceremony designed in ADR 0080) |
 | `foundation-diagnostic` | access mode + static token where configured; operator session where one exists | `GET /api/system/version`, `GET /api/system/status`, `GET /api/events`, `GET /api/events/tail`, `POST /api/events`, `POST /api/realtime/tickets`, `WS /ws` | — |
 | `authenticated` | any authenticated principal, no role | `GET /api/auth/session`, `DELETE /api/auth/session` | — |
 | `domain-content` | authenticated principal with domain readership | `GET /api/memory/domains/:privacyDomain/items`, `GET /api/memory/domains/:privacyDomain/items/:memoryItemId` (ADR 0077) | — |
@@ -180,3 +180,4 @@ Negative:
 - Follows ADR `0037`'s audit style and ADR `0074`'s fail-safe principle (A3).
 - Refined by ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`, which specifies the credential, session, bootstrap, reset and auth-audit mechanics this ADR deferred, and which the Gate A runtime implements.
 - Refined by ADR `0077-foundation-memory-content-read-api-and-domain-readership-seam.md`, which designs Gate C: the `domain-content` read surface and the domain readership evaluation seam A7 demanded (readership as an authority distinct from the operator role, never keyed on the unverified stored `owner`/`controller`).
+- Refined by ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md`, which designs the Move-In claim ceremony the `setup-bootstrap` class reserved and makes A11 concrete as a consolidation contract: post-claim, host-administration authority is the Home Host Pico's, and the operator credential survives only as a local mechanism that never signs, never issues membership and never gains reader-custody readership.
