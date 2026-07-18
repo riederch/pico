@@ -6,41 +6,41 @@
 | --- | --- |
 | Letzte Aktualisierung | 2026-07-18 |
 | Analysierter Branch | main |
-| Analysierter Commit | 2eba20dbd0ce0ac6e55fcfedcecdd3acea2c36ef |
+| Analysierter Commit | d48c3f8452998704eccf6ed6ff15f38a979c8629 |
 | Hinweis | Alle Prozentangaben sind Schätzungen auf Basis des Repository-Stands. |
 
 ## Gesamtstatus
 
-- Geschätzter Gesamtfortschritt: ca. 35 %.
-- Aktueller Entwicklungsschwerpunkt: Foundation-Runtime, lokale Authentifizierung, Memory-Härtung, Identity/Vault/Protocol-Gates.
-- Wichtigste Fortschritte: Core-API, Web Dashboard, SQLite-Store, Auth-Sessions, Memory-Verschlüsselung/Retention, Identity/Vault-Runtimes und Home-Signature-Input-Vektoren sind vorhanden.
-- Wichtigste offene Arbeiten: Pico Home Claim Flow, Pico Link/Relay-Runtime, Home-Mitgliedschaft, produktionsreife Berechtigungen, Companion-UX und Policy/Action-Ausführung.
-- Relevante Risiken: Viele ADRs sind noch Konzept, Placeholder oder Gate; echte Home-Assistant-Installation, Schlüssel-Lifecycle und Ende-zu-Ende-Flows bleiben offen.
+- Geschätzter Gesamtfortschritt: ca. 38 %.
+- Aktueller Entwicklungsschwerpunkt: Foundation-Runtime, Pico-Home-Setup-Grundlagen, lokale Authentifizierung und Identity/Vault/Protocol-Gates.
+- Wichtigste Fortschritte: Pico Home hat Setup Mode, Move-In-Code, Host-Key-Custody, Claim Endpoint, Reset-Marker und Audit-Events als ersten Runtime-Slice.
+- Wichtigste offene Arbeiten: signierter/sealed Home Claim, Membership, Pico Link/Relay-Runtime, produktionsreife Berechtigungen, Companion-UX und Policy/Action-Ausführung.
+- Relevante Risiken: Der aktuelle Home-Claim ist noch keine vollständige Claim Ceremony und keine Pico-Home-Link-Kompatibilität; echte Home-Assistant-Installation bleibt offen.
 
 ## Fortschritt der Pico-Hauptkomponenten
 
 | Pico-Komponente | Fortschritt | Status | Aktueller Stand | Wichtigster nächster Schritt |
 | --------------- | ----------: | ------ | --------------- | ---------------------------- |
-| Pico Core | 58 % | In Arbeit | Foundation-Service mit HTTP/WebSocket, SQLite, Auth, Memory, Retention und Dashboard-Anbindung ist lokal nutzbar. | Home-Claim, Mitgliedschaft und produktionsreife Berechtigungen anbinden. |
+| Pico Core | 61 % | In Arbeit | Foundation-Service mit HTTP/WebSocket, SQLite, Auth, Memory, Retention, Dashboard und Home-Setup-Slice ist lokal nutzbar. | signierten Home-Claim, Mitgliedschaft und produktionsreife Berechtigungen anbinden. |
 | Pico Surfaces | 38 % | Teilweise implementiert | Das Foundation Web Dashboard bedient lokale Diagnose-, Auth- und Memory-Flows. | Zur ersten clientnahen Companion-Oberfläche ausbauen. |
-| Pico Protocol | 58 % | In Arbeit | Eventtypen, Payloads, Fixture-Gates und Identity/Home/Vault-Bytes sind testgebunden. | Conformance-Runner und echte Link/Home-Runtime-Schemas ergänzen. |
+| Pico Protocol | 60 % | In Arbeit | Eventtypen, Payloads, Capabilities, Fixture-Gates und Identity/Home/Vault-Bytes sind testgebunden. | Conformance-Runner und echte Link/Home-Runtime-Schemas ergänzen. |
 | Pico Sync | 30 % | Teilweise implementiert | Lamport-Clock und Version-Vector-Helfer sind vorhanden. | Replikationsprotokoll und reale Client-/Vault-Synchronisation bauen. |
 | Pico Identity | 45 % | Teilweise implementiert | Signaturprüfung und Lifecycle-Projektion sind als Paket umgesetzt. | Persistenz, Freshness und Membership-Anbindung ergänzen. |
 | Pico Vault | 48 % | Teilweise implementiert | Encrypted-Keyfile-Runtime mit Person-Key-Custody, Signatur und Unwrap existiert. | Platform-Keystore, Daemon/IPC und Home-Claim-Integration bauen. |
-| Pico Home | 26 % | Teilweise implementiert | Claim-State-Skeleton und M1-Signature-Input-Vektoren existieren, aber kein Claim-Ablauf. | Setup Mode, Move-In Code, Host-Key-Custody und Claim Endpoint implementieren. |
+| Pico Home | 36 % | In Arbeit | Setup Mode, Move-In-Code, Host-Key-Custody, lokaler Claim und Reset-Audit existieren als M2-Teilslice. | Claim signieren/versiegeln, Vault/Identity anbinden und Membership persistieren. |
 | Pico Link | 14 % | Konzipiert | Architektur und draft-only Fixtures sind vorhanden, aber keine Transport- oder Relay-Runtime. | Minimales Transport-/Envelope-Runtime erst nach Sicherheitsgates starten. |
 
 ## Pico Core
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Architektur | 65 % | In Arbeit | Core ist als Fastify/SQLite-Foundation-Service mit klaren Store- und API-Grenzen strukturiert. |
-| Kernfunktionen | 60 % | In Arbeit | Events, Realtime, Memory-Write, Retention, Tombstones, Crypto-Shred und Systemdiagnose funktionieren lokal. |
-| Datenhaltung | 65 % | In Arbeit | SQLite-Migrationen, Backup-Pfad, Event Store, Memory Store, Key Store und Operator Store sind vorhanden. |
-| Schnittstellen | 55 % | Teilweise implementiert | Lokale HTTP- und WebSocket-APIs sind implementiert, aber noch keine produktionsreife Remote- oder Home-Mitgliedschaftsgrenze. |
-| Sicherheit und Berechtigungen | 50 % | In Arbeit | Operator-Bootstrap, Sessions, Access Classes und Static-Token-Begrenzung existieren, ersetzen aber keine Pico-Identity-Authz. |
-| Tests | 80 % | Weitgehend fertig | Core hat eine breite Unit- und API-Testbasis mit 191 Tests. |
-| Installation und Betrieb | 55 % | Teilweise implementiert | Dockerfile, CI-Smokes und Home-Assistant-Add-on-Metadaten existieren, reale HA-Installationsvalidierung bleibt offen. |
+| Architektur | 66 % | In Arbeit | Core ist als Fastify/SQLite-Foundation-Service mit klaren Store-, Setup- und API-Grenzen strukturiert. |
+| Kernfunktionen | 62 % | In Arbeit | Events, Realtime, Memory, Retention, Crypto-Shred, Systemdiagnose und Home-Setup funktionieren lokal. |
+| Datenhaltung | 67 % | In Arbeit | SQLite-Migrationen, Event Store, Memory Store, Key Stores, Operator Store und Home-Claim-Metadaten sind vorhanden. |
+| Schnittstellen | 58 % | Teilweise implementiert | Lokale HTTP/WebSocket-APIs inklusive Home-Setup/Claim existieren, aber noch keine produktionsreife Remote- oder Membership-Grenze. |
+| Sicherheit und Berechtigungen | 53 % | In Arbeit | Operator-Sessions, Access Classes, Move-In-Code und Host-Key-Pfadtrennung existieren, ersetzen aber keine Pico-Identity-Authz. |
+| Tests | 82 % | Weitgehend fertig | Core hat eine breite Unit- und API-Testbasis mit 201 Tests. |
+| Installation und Betrieb | 57 % | Teilweise implementiert | Dockerfile, CI-Smokes, Add-on-Metadaten und Host-Key-Backup-Ausschluss existieren, reale HA-Installationsvalidierung bleibt offen. |
 
 ## Pico Surfaces
 
@@ -56,11 +56,11 @@
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Foundation-Typen | 65 % | In Arbeit | Eventtypen, Payload-Vokabular, Realtime-Formate und Response-Typen sind als Runtime-Exports vorhanden. |
+| Foundation-Typen | 67 % | In Arbeit | Eventtypen, Payload-Vokabular, Capabilities, Realtime-Formate und Response-Typen sind als Runtime-Exports vorhanden. |
 | Kanonische Bytes und Vektoren | 70 % | In Arbeit | Memory-AD, Identity, Home und Vault haben autoritative Vektoren und Builder für abgegrenzte Gates. |
 | Draft-Fixtures | 35 % | Konzipiert | Pico Link, Pico Home Link und Model Delegation besitzen draft-only Fixtures ohne Runtime- oder Kompatibilitätsanspruch. |
-| Validierung und Conformance | 45 % | Teilweise implementiert | Protocol-Tests binden Docs und Fixtures, ein eigenständiger Conformance-Runner fehlt. |
-| Tests | 75 % | Weitgehend fertig | Protocol hat 40 Tests für Exportlisten, Payloads, Docs und Fixture-Bytegleichheit. |
+| Validierung und Conformance | 47 % | Teilweise implementiert | Protocol-Tests binden Docs, Payloads, setupbezogene Audit-Events und Fixtures, ein eigenständiger Conformance-Runner fehlt. |
+| Tests | 76 % | Weitgehend fertig | Protocol hat 41 Tests für Exportlisten, Payloads, Docs und Fixture-Bytegleichheit. |
 
 ## Pico Sync
 
@@ -96,13 +96,13 @@
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Architektur | 45 % | Konzipiert | Home Host, Move-In Code, Membership und Continuity sind per ADR klarer umrissen. |
-| Kernfunktionen | 15 % | Konzipiert | Der Core enthält nur ein internes Claim-State-Skeleton und diagnostische Leseflächen. |
-| Schnittstellen | 10 % | Konzipiert | Claim Endpoint, Setup Mode, Signaturen und Membership-APIs fehlen. |
-| Datenhaltung | 20 % | Teilweise implementiert | Claim-State-Migration existiert, aber keine persistierte Claim- oder Membership-Runtime. |
-| Sicherheit und Berechtigungen | 20 % | Konzipiert | M1-Signature-Input-Bytes sind vorhanden, Host-Key-Custody und Verifikation fehlen. |
-| Tests | 35 % | Teilweise implementiert | Protocol-Vektoren decken M1-Bytes ab, aber keine Ende-zu-Ende-Home-Flows. |
-| Installation und Betrieb | 35 % | Teilweise implementiert | Home-Assistant-Add-on-Pfad existiert für Core, nicht für First-Boot-Claim oder Membership. |
+| Architektur | 50 % | In Arbeit | Home Host, Move-In-Code, Claim State, Membership und Continuity sind abgegrenzt und der erste Runtime-Slice existiert. |
+| Kernfunktionen | 35 % | In Arbeit | Setup Mode, per-Prozess-Move-In-Code, Host-Key-Custody, lokaler Claim und Reset-Audit funktionieren. |
+| Schnittstellen | 30 % | Teilweise implementiert | `GET /api/home/setup` und `POST /api/home/claim` existieren nur im unclaimed Zustand; Signaturen und Membership fehlen. |
+| Datenhaltung | 35 % | Teilweise implementiert | Claim-State-Metadaten speichern Home-ID und Host-Key-Fingerprints, aber keine Membership-Records. |
+| Sicherheit und Berechtigungen | 32 % | Teilweise implementiert | Move-In-Code ist digest-only/single-use und Host-Keys sind getrennt gespeichert; sealed Claim und Verifikation fehlen. |
+| Tests | 50 % | In Arbeit | Core deckt Setup, Claim, Reset und Store-Grenzen ab; Vault/Identity-Ende-zu-Ende-Claim fehlt. |
+| Installation und Betrieb | 45 % | Teilweise implementiert | Host-Key-Pfad, Backup-Ausschluss und Reset-Marker existieren, echte First-Boot-/HA-Validierung fehlt. |
 
 ## Pico Link
 
@@ -119,18 +119,23 @@
 - Es gibt 81 nummerierte ADRs sowie eine Implementation-Status-Matrix.
 - Wichtige getroffene Entscheidungen betreffen Foundation-Grenzen, lokale Authentifizierung, Memory-Verschlüsselung, Schlüsselrollen, Identity/Vault-Custody, Home Claim Ceremony und draft-only Fixture-Gates.
 - Viele ADRs laufen der Implementierung voraus: Pico Link, Relay, Pico Rules, Action Runner, Action History, Companion-UX und große Home-Mitgliedschaftsflüsse sind überwiegend konzipiert.
+- ADR 0080 M2 ist nur teilweise umgesetzt: Host-Setup-Grundlagen existieren, die signierte/sealed Claim Ceremony und Membership-Runtime fehlen.
 - Die ADRs sind hilfreich für Richtung und Sicherheitsreihenfolge, gelten aber nicht als Nachweis fertiger Produktfunktionen.
 
 ## Änderungen seit der letzten Aktualisierung
 
-> Erstmalige Bestandsaufnahme des aktuellen Repository-Stands.
+- Pico Home besitzt jetzt Setup Mode, lokalen Move-In-Code, Host-Key-Custody, Claim Endpoint und lokalen Reset-Marker.
+- Core speichert Home-Claim-Metadaten mit Home-ID und Host-Key-Fingerprints und schreibt `home.claimed`/`home.reset` nur serverseitig mit leerem Payload.
+- Protocol exportiert `home.claimed`, `home.reset`, `pico.home.setup.v1` und Home-Setup-/Claim-Response-Typen.
+- Add-on-/Core-Konfiguration trennt Home-Host-Keys von Datenbank, Memory-Key-Store und Backups.
+- Tests wurden für Core-Setup/Claim/Reset, Store-Migrationen und Protocol-Payload-Grenzen erweitert.
 
 ## Nächste Schwerpunkte
 
-1. Pico Home Claim Flow mit Setup Mode, Move-In Code, Host-Key-Custody, Claim Endpoint und Reset-Audit implementieren.
-2. Pico Identity und Pico Vault in Core/Home so anbinden, dass Membership, Freshness und Autorität nicht nur testlokal existieren.
-3. Pico Link erst als minimales Envelope-/Transport-Walking-Skeleton bauen, sobald die relevanten Sicherheitsgates erfüllt sind.
-4. Home-Assistant-Add-on real installieren und Ingress, Backup/Restore, Datenpfade und Betriebsmodus praktisch validieren.
+1. Claim Ceremony mit Sealed-Box-Payload, Host-/Claimant-Signaturen und Founding Record auf Basis von Vault/Identity umsetzen.
+2. Home Membership persistieren und in den bestehenden Readership-/Berechtigungs-Seam integrieren.
+3. Home-Assistant-Add-on real installieren und Ingress, Backup/Restore, Datenpfade und Betriebsmodus praktisch validieren.
+4. Pico Link erst als minimales Envelope-/Transport-Walking-Skeleton bauen, sobald die relevanten Sicherheitsgates erfüllt sind.
 5. Einen ersten Ende-zu-Ende-Nutzfluss über Surface, Core, Memory, Berechtigungen und Audit herstellen.
 
 ## Pflegeanweisung für Aktualisierungen
