@@ -72,6 +72,8 @@ ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` 
 
 ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` answers the threat-model questions for claiming an Empty Pico Home from the same toolkit and nothing more: host keys are ordinary `pico.suite.id.v1` records, claim payloads travel as libsodium sealed boxes with in-payload canonical binding, and the pairing problem is solved by pinning host keys through the ADR 0027 protected display channel — a password-authenticated key exchange is explicitly rejected because libsodium provides none and adopting one would mean a new primitive family for a property the display channel already provides; trust-on-first-use is rejected outright.
 
+ADR `0081-pico-vault-person-role-key-custody-threat-model-and-direction.md` answers the custody questions for person-role private keys from the allowed directions above: one canonical encrypted keyfile (`pico.vault.keyfile.v1` direction — Argon2id via `crypto_pwhash` with self-describing parameters, XChaCha20-Poly1305 with the labeled header bound as associated data; the age-style pattern), platform keystores as unlock-secret holders rather than storage backends, hardware-backed identity deferred to a future suite, and an agent-pattern process boundary that signs only labeled inputs — no recovery scheme is invented, and visible loss is preferred over hidden recovery channels.
+
 ## Design rule
 
 Pico may use reviewed security primitives. Pico must not invent them.

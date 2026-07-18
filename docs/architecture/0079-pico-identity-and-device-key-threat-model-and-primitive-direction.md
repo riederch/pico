@@ -105,14 +105,14 @@ All three stay inert (I8, K4-family) until Gate G1 vectors exist and Gate G3 def
 Private material custody is decided per role, each in its own step, under the I7 floor (never in SQLite, the event log, env vars, logs or data-backed-up artifacts):
 
 - **Host-role keys** (the future Pico Home Host Key, ADR 0056 realization): file-based custody with ADR 0072 semantics — a separated key directory, backup-exclusion as a release-blocking packaging rule, stated stolen-disk residual — is an acceptable starting point, because host keys are host state. Their creation belongs to the claim-flow ADR (now ADR 0080; its Gate M2 discharges this role).
-- **Person-role keys** (Pico Identity, device keys of the owner): **no person-identity private key is created on the Foundation host until a dedicated custody ADR exists** (G2) — vault, platform keystore, passphrase protection (age-style, ADR 0016 allowed direction) or hardware-backed, with the honest analysis each implies. Convenience file storage of a person's identity root is exactly the accretion this ADR exists to forbid.
+- **Person-role keys** (Pico Identity, device keys of the owner): **no person-identity private key is created on the Foundation host until a dedicated custody ADR exists** (G2) — vault, platform keystore, passphrase protection (age-style, ADR 0016 allowed direction) or hardware-backed, with the honest analysis each implies. Convenience file storage of a person's identity root is exactly the accretion this ADR exists to forbid. That ADR now exists: ADR 0081 fixes the Vault-exclusive boundary, the encrypted keyfile format and the agent-pattern process boundary.
 
 ## Ordering gates
 
 Nothing runtime ships before its gates; nothing at all is security-relevant before **G1**.
 
 1. **Gate G1 — Canonical layouts and authoritative vectors.** Per-family byte layouts (key record, possession challenge, delegation, revocation) with ADR 0073-style accept/reject vectors, including negative vectors for cross-family label confusion, suite swap, role swap, field reordering, truncated-fingerprint comparison and validity/ordering violations. This gate also discharges ADR 0078's Gate R2 method question: envelope bytes use the same construction.
-2. **Gate G2 — Custody story per key role.** Host-role: ADR 0072-pattern file custody, decided alongside the claim flow. Person-role: a dedicated custody ADR before any person-identity key exists anywhere.
+2. **Gate G2 — Custody story per key role.** Host-role: ADR 0072-pattern file custody, decided alongside the claim flow (now ADR 0080, Gate M2). Person-role: a dedicated custody ADR before any person-identity key exists anywhere (now ADR 0081 — Vault-exclusive custody, `pico.vault.keyfile.v1` direction; the runtime discharge is its Gate P2).
 3. **Gate G3 — Lifecycle lookup and reconciliation.** How delegation and revocation statements are stored, ordered, looked up at verification time, and reconciled after restore (I9) — the ADR 0033 realization for these two record families, with its own lifecycle-negative vectors.
 
 After all three: runtime in additive steps (key generation under custody, possession verification, delegation verification), at which point ADR 0078 R1 is dischargeable and the claim-flow ADR has its signing machinery.
@@ -133,7 +133,7 @@ This ADR does not define or implement:
 
 ## Open questions
 
-- **Person-identity custody** (G2): vault process, platform keystore, passphrase-protected file, hardware — and what the first real deployment (Home Assistant add-on) can honestly offer. Its own ADR.
+- ~~**Person-identity custody** (G2): vault process, platform keystore, passphrase-protected file, hardware — and what the first real deployment (Home Assistant add-on) can honestly offer. Its own ADR.~~ Decided in ADR 0081: Vault-exclusive custody with one canonical encrypted keyfile (`pico.vault.keyfile.v1`, Argon2id + XChaCha20-Poly1305), platform keystores as unlock paths only — and the honest add-on answer is that nothing deployable today can hold person keys.
 - **Ordering context format** for lifecycle monotonicity (I9): plain sequence numbers vs predecessor references (hash chaining) — decided at G3 with its reconciliation semantics.
 - **Fingerprint display encoding** for humans (grouping, prefix, checksum) — UX work; the comparison rule (full digest only) is fixed here regardless.
 - **Post-quantum.** Ed25519/X25519 are chosen for review maturity and toolkit consolidation. Harvest-now-decrypt-later pressure applies to key agreement (ADR 0078 envelopes), not signatures; a PQ or hybrid suite would arrive as `pico.suite.id.v2`/`pico.suite.share.v2` through the normal deviation path. Revisit when reviewed implementations stabilize, not before.
