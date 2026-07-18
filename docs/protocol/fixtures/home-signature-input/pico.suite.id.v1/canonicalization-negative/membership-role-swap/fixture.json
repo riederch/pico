@@ -1,0 +1,24 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.membership-role-swap",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "membership",
+  "construction": "pico.home.membership.v1",
+  "case": "membership role swap",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000177069636f2e686f6d652e6d656d626572736869702e7631000000107069636f2e73756974652e69642e7631000000146d656d6265725f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020888888888888888888888888888888888888888888888888888888888888888800000020999999999999999999999999999999999999999999999999999999999999999900000020111111111111111111111111111111111111111111111111111111111111111100000009686f6d655f686f7374000000013400000008686f73742e7573650000000e7061636b65742e726563656976650000000d73746f726167652e71756575650000000d73796e632e65786368616e676500000018323032362d30372d31385430393a30303a30302e3030305a00000018323032362d31302d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031",
+    "signatureInputLen": 363,
+    "mustDifferFrom": "membership-home-member"
+  },
+  "adr": "0080",
+  "notes": "A role swap changes membership bytes and cannot reuse the member credential signature input. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

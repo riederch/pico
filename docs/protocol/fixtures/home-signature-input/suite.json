@@ -1,0 +1,44 @@
+{
+  "schema": "pico.home.signature-input.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.home-signature-input.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-home-signature-input-vectors",
+  "disclaimer": "Authoritative Pico Home signature-input byte vectors for ADR 0080 M1. No private keys, no signature verification, no runtime claim ceremony, not L4 compatibility and no commercial permission.",
+  "fixtures": [
+    "pico.suite.id.v1/canonicalization-positive/claim-display-bundle",
+    "pico.suite.id.v1/canonicalization-positive/claim-response-founding-proposal",
+    "pico.suite.id.v1/canonicalization-positive/founding-record",
+    "pico.suite.id.v1/canonicalization-positive/membership-home-member",
+    "pico.suite.id.v1/canonicalization-positive/membership-scope-order-canonical",
+    "pico.suite.id.v1/canonicalization-positive/membership-lifecycle-evicted",
+    "pico.suite.id.v1/canonicalization-positive/continuity-host-rotation",
+    "pico.suite.id.v1/canonicalization-negative/claim-suite-swap",
+    "pico.suite.id.v1/canonicalization-negative/claim-wrong-host-pin",
+    "pico.suite.id.v1/canonicalization-negative/claim-stale-move-in-code",
+    "pico.suite.id.v1/canonicalization-negative/claim-foreign-move-in-code",
+    "pico.suite.id.v1/canonicalization-negative/claim-cross-ceremony-nonce",
+    "pico.suite.id.v1/canonicalization-negative/claim-cross-family-label",
+    "pico.suite.id.v1/canonicalization-negative/founding-cross-ceremony-nonce",
+    "pico.suite.id.v1/canonicalization-negative/founding-missing-host-key-agreement",
+    "pico.suite.id.v1/canonicalization-negative/membership-role-swap",
+    "pico.suite.id.v1/canonicalization-negative/membership-issuerless-countersignature-only",
+    "pico.suite.id.v1/canonicalization-negative/membership-unknown-scope",
+    "pico.suite.id.v1/canonicalization-negative/membership-duplicate-scope",
+    "pico.suite.id.v1/canonicalization-negative/membership-validity-inverted",
+    "pico.suite.id.v1/canonicalization-negative/continuity-without-outgoing-key",
+    "pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order"
+  ],
+  "notes": "Canonical byte vectors for Pico Home claim, claim-response, founding, membership, membership lifecycle and continuity records. These unlock byte-layout review only; move-in code generation, freshness, authorization and signature verification remain out of scope."
+}

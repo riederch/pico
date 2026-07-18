@@ -81,6 +81,36 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/revocation-i
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length/
 ```
 
+## Current Pico Home signature-input fixtures
+
+These fixtures carry the authoritative canonical signature-input byte vectors for the `pico.suite.id.v1` Pico Home claim, claim-response, founding, membership, membership lifecycle and continuity families (ADR 0080 Gate M1). They include bind-difference cases for wrong-host pins, stale or foreign codes, cross-ceremony transplants and role/suite swaps, plus structural canonicalization rejects. They include no private keys, signatures, verification runtime, Setup Mode, claim endpoint, membership runtime, L4 compatibility basis or commercial permission.
+
+```text
+home-signature-input/suite.json
+home-signature-input/pico.suite.id.v1/canonicalization-positive/claim-display-bundle/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/claim-response-founding-proposal/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/founding-record/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/membership-home-member/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/membership-scope-order-canonical/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/membership-lifecycle-evicted/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/continuity-host-rotation/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-suite-swap/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-wrong-host-pin/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-stale-move-in-code/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-foreign-move-in-code/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-cross-ceremony-nonce/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-cross-family-label/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/founding-cross-ceremony-nonce/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/founding-missing-host-key-agreement/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-role-swap/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-issuerless-countersignature-only/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-unknown-scope/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-duplicate-scope/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-validity-inverted/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-without-outgoing-key/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order/
+```
+
 ## Current identity signature-verification fixtures
 
 These fixtures carry deterministic detached Ed25519 verification vectors for the `pico.suite.id.v1` possession, delegation and revocation families (ADR 0079). They publish public key records and signatures only: no private keys, no registry freshness, no storage adapter, no reader membership, no L4 compatibility basis and no commercial permission.
@@ -230,7 +260,7 @@ Each fixture directory contains:
 
 The Foundation seed fixtures are synthetic Foundation-stage examples. They are not cryptographic vectors and do not include private keys, signatures, canonical bytes, recovery material or production credentials.
 
-The memory-content AD, identity signature-input and Vault keyfile suites are authoritative byte-vector fixtures for their narrow ADR scopes. The identity signature-verification suite adds public-key detached signature vectors only. They still include no private keys, recovery material, production credentials, conformance runner or L4 compatibility basis. The Vault keyfile suite is header-AAD and synthetic open-negative metadata only; it is not an unlock or decryption runtime.
+The memory-content AD, identity signature-input, Pico Home signature-input and Vault keyfile suites are authoritative byte-vector fixtures for their narrow ADR scopes. The identity signature-verification suite adds public-key detached signature vectors only. They still include no private keys, recovery material, production credentials, conformance runner or L4 compatibility basis. The Pico Home signature-input suite is byte-layout only, not Setup Mode or membership runtime. The Vault keyfile suite is header-AAD and synthetic open-negative metadata only; it is not an unlock or decryption runtime.
 
 Draft Pico Link fixtures are non-normative fixture data only. They are not a runner, not a Pico Link implementation, not cryptographic verification, not Home membership authority, not an L4 compatibility basis and not commercial permission.
 

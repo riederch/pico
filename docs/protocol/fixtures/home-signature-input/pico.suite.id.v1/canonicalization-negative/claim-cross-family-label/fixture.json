@@ -1,0 +1,22 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.claim-cross-family-label",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "claim",
+  "construction": "pico.home.claim.v1",
+  "case": "claim cross family label",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "reason": "cross_family_label_confusion"
+  },
+  "adr": "0080",
+  "notes": "A claim fixture carrying the founding construction label is rejected as cross-family label confusion. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and ceremony direction for claiming an Empty Pico Home: the Pico Home Host Key under `pico.suite.id.v1` (ADR 0079, key role `home_host`), the Move-In claim ceremony whose pairing trust comes from the ADR 0027 protected display channel instead of trust-on-first-use or a password-authenticated key exchange, the mutually signed **founding record** that mints the Home identity, the Home Membership Credential realization direction (issuer signature by the Home Host Pico, activation countersignature by the host key), Home continuity rules, and the ADR 0075 A11 consolidation contract for the Foundation operator — behind a precondition and three gates. **It implements nothing**: no Setup Mode, no claim endpoint, no host key, no membership credential, no ceremony message exists, and every draft fence (ADR 0045/0056/0057/0066) stays in force.
+Accepted as the threat model and ceremony direction for claiming an Empty Pico Home: the Pico Home Host Key under `pico.suite.id.v1` (ADR 0079, key roles `home_host_signing` and `home_host_key_agreement`), the Move-In claim ceremony whose pairing trust comes from the ADR 0027 protected display channel instead of trust-on-first-use or a password-authenticated key exchange, the mutually signed **founding record** that mints the Home identity, the Home Membership Credential realization direction (issuer signature by the Home Host Pico, activation countersignature by the host key), Home continuity rules, and the ADR 0075 A11 consolidation contract for the Foundation operator — behind a precondition and three gates. **Gate M1 is implemented for canonical signature-input bytes only**: `@pico/protocol` exports pure builders and `docs/protocol/fixtures/home-signature-input/` publishes authoritative accept/reject vectors. No Setup Mode, claim endpoint, host-key custody, signing, verification, membership runtime, ceremony transport, claim audit or home reset exists yet; the ADR 0045/0056/0057/0066 draft fences loosen only for these M1 vectors.
 
 ## Context
 
@@ -70,9 +70,9 @@ Extending ADR 0031 with what the ceremony itself creates:
 
 ## Decision
 
-### The host identity: `pico.suite.id.v1`, key role `home_host`
+### The host identity: `pico.suite.id.v1`, key roles `home_host_signing` and `home_host_key_agreement`
 
-The Pico Home Host Key is two independent keypairs under the ADR 0079 suite — Ed25519 signing, X25519 key agreement, no cross-primitive reuse — described by the same key-record family (`pico.id.keyrecord.v1`) with `keyRole: home_host` (the role ADR 0055 reserved). No new suite, no new record family, no host-specific format. The host generates its own keys at first entry into Setup Mode, before any claim exists; they are host state under host file custody (the ADR 0079 G2 host-role direction, discharged concretely at Gate M2 with ADR 0072 semantics). The Move-In Code is never an input to their generation.
+The Pico Home Host Key is two independent keypairs under the ADR 0079 suite — Ed25519 signing, X25519 key agreement, no cross-primitive reuse — described by the same key-record family (`pico.id.keyrecord.v1`) with `keyRole: home_host_signing` and `keyRole: home_host_key_agreement`. No new suite, no new record family, no host-specific format. The host generates its own keys at first entry into Setup Mode, before any claim exists; they are host state under host file custody (the ADR 0079 G2 host-role direction, discharged concretely at Gate M2 with ADR 0072 semantics). The Move-In Code is never an input to their generation.
 
 Host keys sign host-infrastructure statements only: ceremony responses, the host half of the founding record, activation countersignatures, continuity statements, future host audit bindings. The ADR 0056 core rule becomes structural: nothing a host key signs can express resident authority, because no record family gives it a place to.
 
@@ -133,7 +133,7 @@ Members later verify against the founding record: membership credentials name th
 
 The Home Membership Credential (`pico.home.membership.v1` direction, realizing ADR 0032/0045 with the 0045 vocabulary for roles, scopes and states) carries **two signatures with different meanings**:
 
-- the **issuer signature** — the Home Host Pico (identity key, or a device key delegated with `administer_home` scope): this is the authority. Without it a credential is inert, whatever the host says (H6).
+- the **issuer signature** — the Home Host Pico (identity key, or a device key delegated with `home_membership` scope): this is the authority. Without it a credential is inert, whatever the host says (H6).
 - the **activation countersignature** — the host key: operational acknowledgment that this credential is active at this Home. It lets the host runtime enforce residency offline from the Home Host Pico, and it creates no authority: a host countersignature over an issuer-less credential is a signature over garbage.
 
 The asymmetry is the ADR 0024 rule in cryptographic form: the host can always deny service (it physically could anyway) but can never mint membership; the Home Host Pico owns membership but exercises it through records the host can verify and enforce. Membership status changes (eviction, expiry, reissue) are Home-Host-Pico-signed lifecycle statements with I9 ordering context — the host enforces the freshest statement, restore reconciles toward it, and eviction triggers ADR 0078 K5 rotation where future secrecy is required. The founding record itself doubles as the Home Host Pico's own membership root; it is not re-issued as a credential by its own subject.
@@ -161,21 +161,139 @@ The A11 contract, concretely: **after the founding record exists, host-administr
 
 `home.claimed` and `home.reset` are reserved as server-synthesized, content-free append-only event types (the ADR 0076 `serverSynthesizedFoundationEventTypes` mechanism reused; references and fingerprints only, never codes or key material). Setup Mode entry, bundle display and failed claim attempts stay in bounded operational logging — reboots and attackers must not grow the undeletable log (A9). The existing `claimState` diagnostic keeps its shape until Gate M2; whether a claimed Home exposes its `homeId` or host fingerprint through `foundation-diagnostic` is a metadata-exposure decision listed in the open questions, not a default.
 
+## Gate M1 canonical layouts and vectors
+
+Gate M1 implements only canonical signature-input construction. The element rule is the ADR 0073/0079 generalized rule: each element is `U32BE(byte_length) || bytes`, element 0 is the domain-separation label, field order is fixed per family, ASCII-token fields use the ADR 0079 token charset, fingerprints are full 32-byte lowercase hex values and nonces are full 32-byte lowercase hex values. Builders do not sign, verify, seal, persist, authorize, generate Move-In Codes, prove freshness or run a claim ceremony.
+
+The on-disk suite is `docs/protocol/fixtures/home-signature-input/` with suite id `pico.home-signature-input.pico_suite_id_v1`. It is separate from the draft Pico Home Link placeholders and from runtime claims.
+
+### M1 labels and field order
+
+| Family | Label | Fixed field order after `label` |
+|---|---|---|
+| `claim` | `pico.home.claim.v1` | `suite`, `claimId`, `hostSigningKeyFingerprintHex`, `hostKeyAgreementKeyFingerprintHex`, `moveInCode`, `claimantIdentityKeyFingerprintHex`, `claimantNonceHex`, `hostSetupNonceHex` |
+| `claimResponse` | `pico.home.claim-response.v1` | `suite`, `claimId`, `homeId`, `hostSigningKeyFingerprintHex`, `hostKeyAgreementKeyFingerprintHex`, `claimantIdentityKeyFingerprintHex`, `claimantNonceHex`, `hostNonceHex`, `foundingRecordId` |
+| `founding` | `pico.home.founding.v1` | `suite`, `foundingId`, `homeId`, `hostSigningKeyFingerprintHex`, `hostKeyAgreementKeyFingerprintHex`, `homeHostPicoIdentityFingerprintHex`, `claimantNonceHex`, `hostNonceHex`, `foundedAt`, `lifecycleOrder` |
+| `membership` | `pico.home.membership.v1` | `suite`, `credentialId`, `homeId`, `issuerPicoIdentityFingerprintHex`, `subjectPicoIdentityFingerprintHex`, `hostSigningKeyFingerprintHex`, `role`, canonical sorted `scopes`, `validFrom`, `validUntil`, `lifecycleOrder` |
+| `membershipLifecycle` | `pico.home.membership-lifecycle.v1` | `suite`, `lifecycleId`, `homeId`, `credentialId`, `issuerPicoIdentityFingerprintHex`, `subjectPicoIdentityFingerprintHex`, `status`, `reasonCategory`, `changedAt`, `lifecycleOrder` |
+| `continuity` | `pico.home.continuity.v1` | `suite`, `continuityId`, `homeId`, `outgoingHostSigningKeyFingerprintHex`, `outgoingHostKeyAgreementKeyFingerprintHex`, `incomingHostSigningKeyFingerprintHex`, `incomingHostKeyAgreementKeyFingerprintHex`, `homeHostPicoIdentityFingerprintHex`, `reasonCategory`, `changedAt`, `lifecycleOrder` |
+
+Membership roles are `home_host` and `home_member`. Membership scopes are the ADR 0045 host-use set: `host.use`, `packet.receive`, `storage.queue`, `sync.exchange`. Lifecycle statuses are `invited`, `active`, `revoked`, `expired`, `evicted` and `transferred_or_reissued`.
+
+### Accepted vector hex
+
+- `claim-display-bundle` (`claim`, positive, 266 bytes)
+
+```text
+000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f30303031000000201111111111111111111111111111111111111111111111111111111111111111000000202222222222222222222222222222222222222222222222222222222222222222000000114d4f5645494e2d32303236303731382d41000000203333333333333333333333333333333333333333333333333333333333333333000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555
+```
+
+- `claim-response-founding-proposal` (`claimResponse`, positive, 302 bytes)
+
+```text
+0000001b7069636f2e686f6d652e636c61696d2d726573706f6e73652e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000020333333333333333333333333333333333333333333333333333333333333333300000020444444444444444444444444444444444444444444444444444444444444444400000020666666666666666666666666666666666666666666666666666666666666666600000016666f756e64696e675f32303236303731385f30303031
+```
+
+- `founding-record` (`founding`, positive, 325 bytes)
+
+```text
+000000157069636f2e686f6d652e666f756e64696e672e7631000000107069636f2e73756974652e69642e763100000016666f756e64696e675f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000020777777777777777777777777777777777777777777777777777777777777777700000020444444444444444444444444444444444444444444444444444444444444444400000020666666666666666666666666666666666666666666666666666666666666666600000018323032362d30372d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031
+```
+
+- `membership-home-member` (`membership`, positive, 365 bytes)
+
+```text
+000000177069636f2e686f6d652e6d656d626572736869702e7631000000107069636f2e73756974652e69642e7631000000146d656d6265725f32303236303731385f3030303100000012686f6d655f32303236303731385f303030310000002088888888888888888888888888888888888888888888888888888888888888880000002099999999999999999999999999999999999999999999999999999999999999990000002011111111111111111111111111111111111111111111111111111111111111110000000b686f6d655f6d656d626572000000013400000008686f73742e7573650000000e7061636b65742e726563656976650000000d73746f726167652e71756575650000000d73796e632e65786368616e676500000018323032362d30372d31385430393a30303a30302e3030305a00000018323032362d31302d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031
+```
+
+- `membership-scope-order-canonical` (`membership`, positive, 365 bytes; matches `membership-home-member`)
+
+```text
+000000177069636f2e686f6d652e6d656d626572736869702e7631000000107069636f2e73756974652e69642e7631000000146d656d6265725f32303236303731385f3030303100000012686f6d655f32303236303731385f303030310000002088888888888888888888888888888888888888888888888888888888888888880000002099999999999999999999999999999999999999999999999999999999999999990000002011111111111111111111111111111111111111111111111111111111111111110000000b686f6d655f6d656d626572000000013400000008686f73742e7573650000000e7061636b65742e726563656976650000000d73746f726167652e71756575650000000d73796e632e65786368616e676500000018323032362d30372d31385430393a30303a30302e3030305a00000018323032362d31302d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031
+```
+
+- `membership-lifecycle-evicted` (`membershipLifecycle`, positive, 290 bytes)
+
+```text
+000000217069636f2e686f6d652e6d656d626572736869702d6c6966656379636c652e7631000000107069636f2e73756974652e69642e76310000001e6d656d6265725f6c6966656379636c655f32303236303731385f3030303200000012686f6d655f32303236303731385f30303031000000146d656d6265725f32303236303731385f3030303100000020888888888888888888888888888888888888888888888888888888888888888800000020999999999999999999999999999999999999999999999999999999999999999900000007657669637465640000000e6d656d6265725f72656d6f76656400000018323032362d30372d31385430393a31303a30302e3030305a000000147365713a30303030303030303030303030303032
+```
+
+- `continuity-host-rotation` (`continuity`, positive, 349 bytes)
+
+```text
+000000177069636f2e686f6d652e636f6e74696e756974792e7631000000107069636f2e73756974652e69642e763100000018636f6e74696e756974795f32303236303731385f3030303200000012686f6d655f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000020aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa00000020bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb00000020777777777777777777777777777777777777777777777777777777777777777700000010686f73745f6b65795f726f746174656400000018323032362d30372d31385430393a31303a30302e3030305a000000147365713a30303030303030303030303030303032
+```
+
+- `claim-suite-swap` (`claim`, negative bind-difference, 266 bytes)
+
+```text
+000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763200000013636c61696d5f32303236303731385f30303031000000201111111111111111111111111111111111111111111111111111111111111111000000202222222222222222222222222222222222222222222222222222222222222222000000114d4f5645494e2d32303236303731382d41000000203333333333333333333333333333333333333333333333333333333333333333000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555
+```
+
+- `claim-wrong-host-pin` (`claim`, negative bind-difference, 266 bytes)
+
+```text
+000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f30303031000000201212121212121212121212121212121212121212121212121212121212121212000000202222222222222222222222222222222222222222222222222222222222222222000000114d4f5645494e2d32303236303731382d41000000203333333333333333333333333333333333333333333333333333333333333333000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555
+```
+
+- `claim-stale-move-in-code` (`claim`, negative bind-difference, 268 bytes)
+
+```text
+000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f30303031000000201111111111111111111111111111111111111111111111111111111111111111000000202222222222222222222222222222222222222222222222222222222222222222000000134d4f5645494e2d32303236303731382d4f4c44000000203333333333333333333333333333333333333333333333333333333333333333000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555
+```
+
+- `claim-foreign-move-in-code` (`claim`, negative bind-difference, 267 bytes)
+
+```text
+000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000012464f524549474e2d32303236303731382d41000000203333333333333333333333333333333333333333333333333333333333333333000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555
+```
+
+- `claim-cross-ceremony-nonce` (`claim`, negative bind-difference, 266 bytes)
+
+```text
+000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f30303031000000201111111111111111111111111111111111111111111111111111111111111111000000202222222222222222222222222222222222222222222222222222222222222222000000114d4f5645494e2d32303236303731382d41000000203333333333333333333333333333333333333333333333333333333333333333000000204545454545454545454545454545454545454545454545454545454545454545000000205555555555555555555555555555555555555555555555555555555555555555
+```
+
+- `founding-cross-ceremony-nonce` (`founding`, negative bind-difference, 325 bytes)
+
+```text
+000000157069636f2e686f6d652e666f756e64696e672e7631000000107069636f2e73756974652e69642e763100000016666f756e64696e675f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000020777777777777777777777777777777777777777777777777777777777777777700000020454545454545454545454545454545454545454545454545454545454545454500000020666666666666666666666666666666666666666666666666666666666666666600000018323032362d30372d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031
+```
+
+- `membership-role-swap` (`membership`, negative bind-difference, 363 bytes)
+
+```text
+000000177069636f2e686f6d652e6d656d626572736869702e7631000000107069636f2e73756974652e69642e7631000000146d656d6265725f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020888888888888888888888888888888888888888888888888888888888888888800000020999999999999999999999999999999999999999999999999999999999999999900000020111111111111111111111111111111111111111111111111111111111111111100000009686f6d655f686f7374000000013400000008686f73742e7573650000000e7061636b65742e726563656976650000000d73746f726167652e71756575650000000d73796e632e65786368616e676500000018323032362d30372d31385430393a30303a30302e3030305a00000018323032362d31302d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031
+```
+
+### Reject-only M1 vectors
+
+The canonicalization-negative suite also includes reject-only cases with no canonical bytes:
+
+- `claim-cross-family-label` -> `cross_family_label_confusion`
+- `founding-missing-host-key-agreement` -> `missing_field`; this is the structural M1 analogue of an inert half-bound founding input before signature verification exists
+- `membership-issuerless-countersignature-only` -> `missing_field`
+- `membership-unknown-scope` -> `invalid_membership_scope`
+- `membership-duplicate-scope` -> `duplicate_scope`
+- `membership-validity-inverted` -> `invalid_validity_bounds`
+- `continuity-without-outgoing-key` -> `missing_field`
+- `continuity-invalid-lifecycle-order` -> `invalid_lifecycle_order`
+
 ## Ordering gates
 
 **Precondition — a Pico Vault custody story.** The claimant signs the founding record with a person-role identity key, and ADR 0079 G2 forbids creating person-role private keys on the Foundation host. Therefore the claim runtime cannot exist before a dedicated person-identity custody ADR and a Vault-side holder of those keys exist. *The custody ADR exists, and ADR 0081 P2 now supplies the minimal `@pico/vault` holder.* The tempting shortcut — generating the claimant identity on the host "just for the demo" — is exactly the accretion ADR 0079 G2 forbids, and it would invert the entire tenancy model at its root: the house would own its first resident. The claim path still waits for M1/M2/M3; the Empty Pico Home cannot be claimed by moving person keys onto the host.
 
-1. **Gate M1 — Ceremony and record layouts with authoritative vectors.** I3 layouts and ADR 0073-style accept/reject vectors for the claim messages (`pico.home.claim.v1`), founding record (`pico.home.founding.v1`), membership credential (`pico.home.membership.v1`), continuity statement (`pico.home.continuity.v1`) and membership lifecycle statements — consuming ADR 0079 G1 (key records, possession, delegation) and including negative vectors for wrong-host pins, stale or foreign codes, cross-ceremony transplants, half-signed founding records, issuer-less or countersignature-only credentials, continuity without the outgoing key, and role/suite swaps. The ADR 0045/0056/0057/0066 fixture fences loosen only when these vectors exist, and only to them.
+1. **Gate M1 — Ceremony and record layouts with authoritative vectors. Done for canonical bytes.** I3 layouts and ADR 0073-style accept/reject vectors now exist for claim messages (`pico.home.claim.v1`, `pico.home.claim-response.v1`), founding record (`pico.home.founding.v1`), membership credential (`pico.home.membership.v1`), continuity statement (`pico.home.continuity.v1`) and membership lifecycle statements (`pico.home.membership-lifecycle.v1`) — consuming ADR 0079 G1 (key records, possession, delegation). The vector suite includes wrong-host pins, stale or foreign codes, cross-ceremony transplants, structurally incomplete founding inputs, issuer-less or countersignature-only credentials, continuity without the outgoing key, and role/suite swaps. The ADR 0045/0056/0057/0066 fixture fences loosen only for these authoritative bytes; placeholder fixtures remain draft-only and no runtime or security claim follows from M1 alone.
 2. **Gate M2 — Host-side runtime: Setup Mode, host-key custody, reconciliation.** Host keypair generation at Setup Mode entry; host-role file custody with ADR 0072 semantics and a key-namespace separation that puts host identity keys outside the domain-KEK blast radius; the per-process Move-In Code and claim bundle on a per-platform protected channel; the claim endpoint under `setup-bootstrap`; the H8 boot reconciliation between claim state and custody; the home-reset marker distinct from the operator reset; `home.claimed`/`home.reset` audit. This gate discharges ADR 0079 G2 for the host role.
 3. **Gate M3 — Membership runtime and consolidation.** Credential and lifecycle-statement verification driving residency enforcement and the ADR 0077/0078 seams (supplying what R3 consumes), eviction with K5 rotation coupling, continuity acceptance and member notification, and the concrete operator-consolidation mechanics inside the H9 contract.
 
-Nothing in any gate is security-relevant before Gate M1's vectors exist; the gates otherwise deliberately mirror ADR 0078/0079 so the three strands converge instead of racing.
+The M1 byte layouts are security-relevant only as reviewed signature inputs. Setup Mode, host-key custody, signatures, freshness, sealed transport, restore reconciliation, membership enforcement and operator consolidation all remain behind M2/M3. The gates otherwise deliberately mirror ADR 0078/0079 so the three strands converge instead of racing.
 
 ## Non-goals
 
 This ADR does not define or implement:
 
-- any runtime, route, key, code or record — the claim surface remains nonexistent and `pico_home_claim_state` stays `unclaimed`
+- any runtime, route, private key, code generation, signing, verification, persisted Home record, claim transport or membership enforcement — the claim surface remains nonexistent and `pico_home_claim_state` stays `unclaimed`
 - invitation transport, invitation UX or member onboarding beyond the credential direction
 - remote claim, Pico Link claim, relay registration or any transport (ADR 0028/0030 boundaries unchanged)
 - person-identity custody (the dedicated ADR that the precondition demands)
@@ -184,7 +302,7 @@ This ADR does not define or implement:
 - eviction cleanup policy for host-local ciphertext (ADR 0024's optional-policy stance unchanged)
 - Setup Mode UX, first-boot imaging or packaging (ADR 0027's product path)
 - TLS, mDNS/discovery hardening or browser trust for appliances
-- any loosening of the ADR 0045/0056/0057/0066 fixture fences before Gate M1 vectors exist
+- any loosening of the ADR 0045/0056/0057/0066 fixture fences beyond the Gate M1 authoritative byte-vector scope
 
 ## Open questions
 
@@ -219,10 +337,10 @@ Negative:
 ## Relationship to other ADRs
 
 - Realizes the ADR `0024`/`0027` claim concept as a reviewed ceremony direction: the empty-house model, Setup Mode, Move-In Code semantics and protected display channels become properties H1–H10 with gates; the bootstrap-flow open questions of ADR 0024 (display, expiry, replay, audit) are answered at direction level.
-- Consumes ADR `0079` end to end: the suite and key-record family (host keys are `home_host`-role records), I3 layouts for every ceremony and record family, I6 possession, I8 delegation (`administer_home` scope from ADR `0033`), I9 lifecycle ordering for membership and continuity statements, and the G2 custody split — host-role discharged at Gate M2, person-role as the precondition.
+- Consumes ADR `0079` end to end: the suite and key-record family (host keys are `home_host_signing` and `home_host_key_agreement` role records), I3 layouts for every ceremony and record family, I6 possession, I8 delegation (`home_membership` scope for membership administration), I9 lifecycle ordering for membership and continuity statements, and the G2 custody split — host-role discharged at Gate M2, person-role as the precondition.
 - Constrained by ADR `0016`: sealed box, detached signatures and keyed/labeled digests only; a PAKE is rejected as a new primitive family; binding-by-inclusion (the ADR `0078` K3 pattern) is message format, not construction.
 - Realizes the ADR `0032`/`0045` membership credential family direction (issuer + activation split, 0045 vocabulary) and answers the ADR `0031` Home-membership requirements (issuer/verifier roles, states, expiry/replay, host-key relationship, domain-key relationship via ADR 0078, audit, reset behaviour).
 - Keeps ADR `0033` verbatim: reset is not identity destruction, recovery is never granted by Home role or Move-In Code, rotation must answer "same Home or new Home" — H7 makes the answer signed-or-new.
 - Realizes the ADR `0075` A10/A11 seam: the claim endpoint takes the reserved `setup-bootstrap` class, and H9 is the consolidation contract A11 demanded; ADR `0076` mechanics (per-process codes, bounded verification, reset markers, server-synthesized audit) are reused, with its bootstrap code and the Move-In Code kept strictly distinct.
 - Supplies ADR `0078` Gate R3's membership records; readership stays separate from membership (K1 custody classes unchanged), and eviction couples to K5 rotation.
-- The ADR `0056`/`0057`/`0066` (and `0045`) draft fences stay fully in force until Gate M1 vectors exist; ADR `0026` product terminology binds throughout (Empty Pico Home, Move-In Code, Home Host Pico, Pico Vault).
+- The ADR `0056`/`0057`/`0066` (and `0045`) draft fences now loosen only for Gate M1's authoritative byte-vector scope; all draft placeholders outside those bytes stay draft-only. ADR `0026` product terminology binds throughout (Empty Pico Home, Move-In Code, Home Host Pico, Pico Vault).

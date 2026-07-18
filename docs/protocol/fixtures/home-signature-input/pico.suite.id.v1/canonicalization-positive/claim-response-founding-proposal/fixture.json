@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-positive.claim-response-founding-proposal",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-positive",
+  "homeFamily": "claimResponse",
+  "construction": "pico.home.claim-response.v1",
+  "case": "claim response founding proposal",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "0000001b7069636f2e686f6d652e636c61696d2d726573706f6e73652e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000020333333333333333333333333333333333333333333333333333333333333333300000020444444444444444444444444444444444444444444444444444444444444444400000020666666666666666666666666666666666666666666666666666666666666666600000016666f756e64696e675f32303236303731385f30303031",
+    "signatureInputLen": 302
+  },
+  "adr": "0080",
+  "notes": "Host response binds the claim, proposed home id, host nonce and founding record id. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

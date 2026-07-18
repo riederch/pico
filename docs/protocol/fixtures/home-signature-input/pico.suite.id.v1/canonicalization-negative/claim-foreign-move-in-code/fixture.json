@@ -1,0 +1,24 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.claim-foreign-move-in-code",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "claim",
+  "construction": "pico.home.claim.v1",
+  "case": "claim foreign move in code",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000127069636f2e686f6d652e636c61696d2e7631000000107069636f2e73756974652e69642e763100000013636c61696d5f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000012464f524549474e2d32303236303731382d41000000203333333333333333333333333333333333333333333333333333333333333333000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555",
+    "signatureInputLen": 267,
+    "mustDifferFrom": "claim-display-bundle"
+  },
+  "adr": "0080",
+  "notes": "A foreign move-in code is bound into different bytes and cannot transplant the original claim input. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

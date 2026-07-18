@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.membership-duplicate-scope",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "membership",
+  "construction": "pico.home.membership.v1",
+  "case": "membership duplicate scope",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "duplicate_scope"
+  },
+  "adr": "0080",
+  "notes": "Duplicate membership scopes are rejected before canonical set sorting. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

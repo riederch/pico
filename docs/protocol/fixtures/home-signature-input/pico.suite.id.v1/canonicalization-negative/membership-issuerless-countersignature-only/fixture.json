@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.membership-issuerless-countersignature-only",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "membership",
+  "construction": "pico.home.membership.v1",
+  "case": "membership issuerless countersignature only",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "missing_field"
+  },
+  "adr": "0080",
+  "notes": "A countersignature-only membership without an issuer fingerprint is structurally incomplete. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

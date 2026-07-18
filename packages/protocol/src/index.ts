@@ -137,6 +137,29 @@ export const picoIdentitySignatureInputLabels = {
   revocation: 'pico.id.revocation.v1',
 } as const satisfies Record<PicoIdentitySignatureInputFamily, string>;
 
+// Authoritative signature-input families for ADR 0080 Gate M1. These builders
+// assemble bytes only; they do not generate move-in codes, sign, verify, persist
+// records or authorize membership transitions.
+export const picoHomeSignatureInputFamilies = [
+  'claim',
+  'claimResponse',
+  'founding',
+  'membership',
+  'membershipLifecycle',
+  'continuity',
+] as const;
+
+export type PicoHomeSignatureInputFamily = typeof picoHomeSignatureInputFamilies[number];
+
+export const picoHomeSignatureInputLabels = {
+  claim: 'pico.home.claim.v1',
+  claimResponse: 'pico.home.claim-response.v1',
+  founding: 'pico.home.founding.v1',
+  membership: 'pico.home.membership.v1',
+  membershipLifecycle: 'pico.home.membership-lifecycle.v1',
+  continuity: 'pico.home.continuity.v1',
+} as const satisfies Record<PicoHomeSignatureInputFamily, string>;
+
 export const picoIdentityKeyRoles = [
   'pico_identity',
   'device_signing',
@@ -168,6 +191,53 @@ export const picoIdentityRevocationReasonCategories = [
 ] as const;
 
 export type PicoIdentityRevocationReasonCategory = typeof picoIdentityRevocationReasonCategories[number];
+
+export const picoHomeMembershipRoles = [
+  'home_host',
+  'home_member',
+] as const;
+
+export type PicoHomeMembershipRole = typeof picoHomeMembershipRoles[number];
+
+export const picoHomeMembershipScopes = [
+  'host.use',
+  'packet.receive',
+  'storage.queue',
+  'sync.exchange',
+] as const;
+
+export type PicoHomeMembershipScope = typeof picoHomeMembershipScopes[number];
+
+export const picoHomeMembershipStatuses = [
+  'invited',
+  'active',
+  'revoked',
+  'expired',
+  'evicted',
+  'transferred_or_reissued',
+] as const;
+
+export type PicoHomeMembershipStatus = typeof picoHomeMembershipStatuses[number];
+
+export const picoHomeMembershipLifecycleReasonCategories = [
+  'invite_accepted',
+  'invite_expired',
+  'member_removed',
+  'host_reset',
+  'membership_reissued',
+  'security_review',
+] as const;
+
+export type PicoHomeMembershipLifecycleReasonCategory =
+  typeof picoHomeMembershipLifecycleReasonCategories[number];
+
+export const picoHomeContinuityReasonCategories = [
+  'host_key_rotated',
+  'host_migrated',
+  'host_restored',
+] as const;
+
+export type PicoHomeContinuityReasonCategory = typeof picoHomeContinuityReasonCategories[number];
 
 export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
 
@@ -240,6 +310,83 @@ export interface PicoIdentityRevocationSignatureInput {
   lifecycleOrder: string;
 }
 
+export interface PicoHomeClaimSignatureInput {
+  suite: string;
+  claimId: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  moveInCode: string;
+  claimantIdentityKeyFingerprintHex: string;
+  claimantNonceHex: string;
+  hostSetupNonceHex: string;
+}
+
+export interface PicoHomeClaimResponseSignatureInput {
+  suite: string;
+  claimId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  claimantIdentityKeyFingerprintHex: string;
+  claimantNonceHex: string;
+  hostNonceHex: string;
+  foundingRecordId: string;
+}
+
+export interface PicoHomeFoundingSignatureInput {
+  suite: string;
+  foundingId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  homeHostPicoIdentityFingerprintHex: string;
+  claimantNonceHex: string;
+  hostNonceHex: string;
+  foundedAt: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoHomeMembershipSignatureInput {
+  suite: string;
+  credentialId: string;
+  homeId: string;
+  issuerPicoIdentityFingerprintHex: string;
+  subjectPicoIdentityFingerprintHex: string;
+  hostSigningKeyFingerprintHex: string;
+  role: PicoHomeMembershipRole;
+  scopes: PicoHomeMembershipScope[];
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoHomeMembershipLifecycleSignatureInput {
+  suite: string;
+  lifecycleId: string;
+  homeId: string;
+  credentialId: string;
+  issuerPicoIdentityFingerprintHex: string;
+  subjectPicoIdentityFingerprintHex: string;
+  status: PicoHomeMembershipStatus;
+  reasonCategory: PicoHomeMembershipLifecycleReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoHomeContinuitySignatureInput {
+  suite: string;
+  continuityId: string;
+  homeId: string;
+  outgoingHostSigningKeyFingerprintHex: string;
+  outgoingHostKeyAgreementKeyFingerprintHex: string;
+  incomingHostSigningKeyFingerprintHex: string;
+  incomingHostKeyAgreementKeyFingerprintHex: string;
+  homeHostPicoIdentityFingerprintHex: string;
+  reasonCategory: PicoHomeContinuityReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}
+
 export interface PicoVaultKeyfileHeaderAadInput {
   format: string;
   suite: string;
@@ -259,6 +406,14 @@ export type PicoIdentitySignatureInput =
   | PicoIdentityPossessionSignatureInput
   | PicoIdentityDelegationSignatureInput
   | PicoIdentityRevocationSignatureInput;
+
+export type PicoHomeSignatureInput =
+  | PicoHomeClaimSignatureInput
+  | PicoHomeClaimResponseSignatureInput
+  | PicoHomeFoundingSignatureInput
+  | PicoHomeMembershipSignatureInput
+  | PicoHomeMembershipLifecycleSignatureInput
+  | PicoHomeContinuitySignatureInput;
 
 export const realtimeMessageType = {
   coreConnected: 'pico.core.connected',
@@ -1147,6 +1302,216 @@ export function buildPicoIdentityRevocationSignatureInput(
   ]);
 }
 
+export function buildPicoHomeClaimSignatureInput(input: PicoHomeClaimSignatureInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'claimId',
+    'hostSigningKeyFingerprintHex',
+    'hostKeyAgreementKeyFingerprintHex',
+    'moveInCode',
+    'claimantIdentityKeyFingerprintHex',
+    'claimantNonceHex',
+    'hostSetupNonceHex',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.claimId);
+  assertAsciiToken(input.moveInCode);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.claim),
+    asciiBytes(input.suite),
+    asciiBytes(input.claimId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.moveInCode),
+    fixedHexBytes(input.claimantIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
+    fixedHexBytes(input.hostSetupNonceHex, 32, 'invalid_nonce_length'),
+  ]);
+}
+
+export function buildPicoHomeClaimResponseSignatureInput(input: PicoHomeClaimResponseSignatureInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'claimId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'hostKeyAgreementKeyFingerprintHex',
+    'claimantIdentityKeyFingerprintHex',
+    'claimantNonceHex',
+    'hostNonceHex',
+    'foundingRecordId',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.claimId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.foundingRecordId);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.claimResponse),
+    asciiBytes(input.suite),
+    asciiBytes(input.claimId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.claimantIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
+    fixedHexBytes(input.hostNonceHex, 32, 'invalid_nonce_length'),
+    asciiBytes(input.foundingRecordId),
+  ]);
+}
+
+export function buildPicoHomeFoundingSignatureInput(input: PicoHomeFoundingSignatureInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'foundingId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'hostKeyAgreementKeyFingerprintHex',
+    'homeHostPicoIdentityFingerprintHex',
+    'claimantNonceHex',
+    'hostNonceHex',
+    'foundedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.foundingId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.foundedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.founding),
+    asciiBytes(input.suite),
+    asciiBytes(input.foundingId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.homeHostPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
+    fixedHexBytes(input.hostNonceHex, 32, 'invalid_nonce_length'),
+    asciiBytes(input.foundedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoHomeMembershipSignatureInput(input: PicoHomeMembershipSignatureInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'credentialId',
+    'homeId',
+    'issuerPicoIdentityFingerprintHex',
+    'subjectPicoIdentityFingerprintHex',
+    'hostSigningKeyFingerprintHex',
+    'role',
+    'scopes',
+    'validFrom',
+    'validUntil',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.credentialId);
+  assertAsciiToken(input.homeId);
+  assertStringMember(input.role, picoHomeMembershipRoles, 'invalid_membership_role');
+  assertAsciiToken(input.validFrom);
+  assertAsciiToken(input.validUntil);
+  assertLifecycleOrder(input.lifecycleOrder);
+  assertValidBounds(input.validFrom, input.validUntil);
+  const scopes = canonicalHomeMembershipScopeSet(input.scopes);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.membership),
+    asciiBytes(input.suite),
+    asciiBytes(input.credentialId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.issuerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.subjectPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.role),
+    asciiBytes(String(scopes.length)),
+    ...scopes.map((scope) => asciiBytes(scope)),
+    asciiBytes(input.validFrom),
+    asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoHomeMembershipLifecycleSignatureInput(
+  input: PicoHomeMembershipLifecycleSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'lifecycleId',
+    'homeId',
+    'credentialId',
+    'issuerPicoIdentityFingerprintHex',
+    'subjectPicoIdentityFingerprintHex',
+    'status',
+    'reasonCategory',
+    'changedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.lifecycleId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.credentialId);
+  assertStringMember(input.status, picoHomeMembershipStatuses, 'invalid_membership_status');
+  assertStringMember(input.reasonCategory, picoHomeMembershipLifecycleReasonCategories, 'invalid_reason_category');
+  assertAsciiToken(input.changedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.membershipLifecycle),
+    asciiBytes(input.suite),
+    asciiBytes(input.lifecycleId),
+    asciiBytes(input.homeId),
+    asciiBytes(input.credentialId),
+    fixedHexBytes(input.issuerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.subjectPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.status),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.changedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoHomeContinuitySignatureInput(input: PicoHomeContinuitySignatureInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'continuityId',
+    'homeId',
+    'outgoingHostSigningKeyFingerprintHex',
+    'outgoingHostKeyAgreementKeyFingerprintHex',
+    'incomingHostSigningKeyFingerprintHex',
+    'incomingHostKeyAgreementKeyFingerprintHex',
+    'homeHostPicoIdentityFingerprintHex',
+    'reasonCategory',
+    'changedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.continuityId);
+  assertAsciiToken(input.homeId);
+  assertStringMember(input.reasonCategory, picoHomeContinuityReasonCategories, 'invalid_reason_category');
+  assertAsciiToken(input.changedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.continuity),
+    asciiBytes(input.suite),
+    asciiBytes(input.continuityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.outgoingHostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.outgoingHostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.incomingHostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.incomingHostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.homeHostPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.changedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
 export function buildPicoVaultKeyfileHeaderAad(input: PicoVaultKeyfileHeaderAadInput): Uint8Array {
   assertExactKeys(input as unknown as Record<string, unknown>, [
     'format',
@@ -1316,6 +1681,23 @@ function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationSco
   }
 
   return [...scopes].sort() as PicoIdentityDelegationScope[];
+}
+
+function canonicalHomeMembershipScopeSet(scopes: readonly string[]): PicoHomeMembershipScope[] {
+  if (!Array.isArray(scopes) || scopes.length === 0) {
+    throw new Error('empty_scope_set');
+  }
+
+  const seen = new Set<string>();
+  for (const scope of scopes) {
+    assertStringMember(scope, picoHomeMembershipScopes, 'invalid_membership_scope');
+    if (seen.has(scope)) {
+      throw new Error('duplicate_scope');
+    }
+    seen.add(scope);
+  }
+
+  return [...scopes].sort() as PicoHomeMembershipScope[];
 }
 
 function assertValidBounds(validFrom: string, validUntil: string): void {

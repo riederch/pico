@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.continuity-invalid-lifecycle-order",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "continuity",
+  "construction": "pico.home.continuity.v1",
+  "case": "continuity invalid lifecycle order",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_lifecycle_order"
+  },
+  "adr": "0080",
+  "notes": "Continuity lifecycle order must use the fixed seq:0000000000000000 shape. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

@@ -1,0 +1,24 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.founding-cross-ceremony-nonce",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "founding",
+  "construction": "pico.home.founding.v1",
+  "case": "founding cross ceremony nonce",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000157069636f2e686f6d652e666f756e64696e672e7631000000107069636f2e73756974652e69642e763100000016666f756e64696e675f32303236303731385f3030303100000012686f6d655f32303236303731385f3030303100000020111111111111111111111111111111111111111111111111111111111111111100000020222222222222222222222222222222222222222222222222222222222222222200000020777777777777777777777777777777777777777777777777777777777777777700000020454545454545454545454545454545454545454545454545454545454545454500000020666666666666666666666666666666666666666666666666666666666666666600000018323032362d30372d31385430393a30303a30302e3030305a000000147365713a30303030303030303030303030303031",
+    "signatureInputLen": 325,
+    "mustDifferFrom": "founding-record"
+  },
+  "adr": "0080",
+  "notes": "A founding record using a claimant nonce from another ceremony changes the founding bytes. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

@@ -1,0 +1,20 @@
+{
+  "homeFamily": "membership",
+  "construction": "pico.home.membership.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "credentialId": "member_20260718_0001",
+    "homeId": "home_20260718_0001",
+    "issuerPicoIdentityFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
+    "subjectPicoIdentityFingerprintHex": "9999999999999999999999999999999999999999999999999999999999999999",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "role": "home_member",
+    "scopes": [
+      "host.use",
+      "host.use"
+    ],
+    "validFrom": "2026-07-18T09:00:00.000Z",
+    "validUntil": "2026-10-18T09:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000001"
+  }
+}

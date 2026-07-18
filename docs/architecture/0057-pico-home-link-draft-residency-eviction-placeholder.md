@@ -4,6 +4,8 @@
 
 Accepted as a draft-only Pico Home Link residency and eviction placeholder boundary before Home Membership Credential verification, host residency enforcement, shared-domain rotation or runtime host authorization are implemented.
 
+ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` Gate M1 now publishes canonical signature-input layouts and authoritative byte vectors for Home membership lifecycle statements. **This fixture fence loosens only for those ADR 0080 M1 byte vectors**: the residency and eviction placeholders here remain draft-only and do not verify Home Host Key authority, credentials, signatures, freshness, revocation, shared-domain rotation, host-local cleanup, runtime denial or conformance.
+
 ## Context
 
 ADR 0024 defines host tenancy and eviction: eviction means future exclusion from one host, not Pico identity destruction, private key seizure, resident history rewrite or global relationship revocation.

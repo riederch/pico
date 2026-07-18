@@ -111,6 +111,7 @@ Prepared foundation pieces include:
 - sync primitives
 - minimal Pico Vault keyfile runtime package
 - minimal Pico identity verification and lifecycle runtime package
+- Pico Home canonical signature-input vector package
 - foundation web dashboard
 - release pipeline
 - Home Assistant add-on path
@@ -223,13 +224,13 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0077-foundation-memory-content-read-api-and-domain-readership-seam.md`](docs/architecture/0077-foundation-memory-content-read-api-and-domain-readership-seam.md) - Foundation memory content read API and domain-readership seam
 - [`docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md`](docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md) - memory domain reader membership and key distribution threat model
 - [`docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md`](docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md) - Pico identity/device key primitives, signature-input vectors, signature verification and lifecycle projection
-- [`docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md`](docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md) - Pico Home host key and Move-In claim ceremony direction
+- [`docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md`](docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md) - Pico Home host key and Move-In claim ceremony direction, with M1 canonical signature-input vectors
 - [`docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md`](docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md) - Pico Vault person-role key custody, keyfile vectors and minimal runtime floor
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
 - [`docs/protocol/compatibility-levels.md`](docs/protocol/compatibility-levels.md) - compatibility level definitions
-- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - conformance fixture layout and current Foundation, memory-content AD, identity signature-input/lifecycle, Vault keyfile and draft fixture suites
+- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - conformance fixture layout and current Foundation, memory-content AD, identity signature-input/signature-verification/lifecycle, Pico Home signature-input, Vault keyfile and draft fixture suites
 
 ## Design principles
 

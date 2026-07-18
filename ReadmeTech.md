@@ -542,7 +542,7 @@ The project concept is persisted as architecture notes:
 | `0077-foundation-memory-content-read-api-and-domain-readership-seam.md` | Foundation memory content read API and domain-readership seam |
 | `0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md` | memory domain reader membership and key distribution threat model |
 | `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` | Pico identity/device key primitives, authoritative signature-input/signature-verification vectors and lifecycle projection |
-| `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` | Pico Home host key and Move-In claim ceremony direction |
+| `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` | Pico Home host key and Move-In claim ceremony direction, with M1 canonical signature-input vectors |
 | `0081-pico-vault-person-role-key-custody-threat-model-and-direction.md` | Pico Vault person-role key custody, keyfile vectors and minimal runtime floor |
 
 Protocol documents:
@@ -551,7 +551,7 @@ Protocol documents:
 |---|---|
 | `docs/protocol/public-surfaces.md` | current and planned public compatibility surfaces |
 | `docs/protocol/compatibility-levels.md` | compatibility level definitions and claim boundaries |
-| `docs/protocol/conformance-fixtures.md` | conformance fixture layout and current Foundation, memory-content AD, identity signature-input/signature-verification/lifecycle, Vault keyfile and draft fixture suites |
+| `docs/protocol/conformance-fixtures.md` | conformance fixture layout and current Foundation, memory-content AD, identity signature-input/signature-verification/lifecycle, Pico Home signature-input, Vault keyfile and draft fixture suites |
 
 ## Roadmap
 
@@ -673,7 +673,7 @@ The demo must not become the path for production remote access. If it starts for
 - Use ADR 0077 for memory content reads: `domain-content` access is readership, not operator administration, and it is authorized by a per-domain `mayReadDomain` seam that ignores the unverified stored `owner`/`controller`.
 - Use ADR 0078 before adding multi-reader memory domains: domains are either `host_custody` or `reader_custody`, hosted member domains require reader custody, and envelope issuance remains gated on real reader keys, canonical envelope bytes and membership runtime.
 - Use ADR 0079 for identity/device-key primitives: `pico.suite.id.v1` uses Ed25519 signing, X25519 key agreement and BLAKE2b-256 fingerprints; Gate G1 canonical signature-input bytes are implemented in `@pico/protocol`, person-role key generation/private-key custody/signing/unwrap exist only behind the minimal `@pico/vault` boundary, and Gate G3 signature verification plus lifecycle lookup/reconciliation is implemented in `@pico/identity` for possession, delegation and revocation statements. Host-role custody, storage/freshness adapters and reader-membership runtime remain gated.
-- Use ADR 0080 before implementing Pico Home claiming: Move-In claim depends on a real claimant-side Vault, host-role key custody, founding-record vectors and membership runtime; the current ADR is ceremony direction, not runtime.
+- Use ADR 0080 before implementing Pico Home claiming: Gate M1 canonical bytes and vectors are implemented for claim, claim-response, founding, membership, membership lifecycle and continuity records. Real claiming still depends on Gate M2 host-role key custody/Setup Mode/restore reconciliation and Gate M3 membership runtime; M1 is not a claim endpoint, signing runtime or compatibility claim.
 - Use ADR 0081 for person-role private-key custody: Gate P1 is implemented for the `pico.vault.keyfile.v1` one-keyfile-per-keypair header-AAD layout and authoritative vectors, and Gate P2 is implemented as the minimal `@pico/vault` runtime (create, open/unlock, lock, label-checked sign, key-agreement unwrap, encrypted export only, private file mode and path-separation custody tests). Gate P3 is platform-keystore integration; daemon/IPC/UI, approval UX, storage integration with verified lifecycle and recovery remain future work.
 - Optionally build the walking-skeleton tech demo only after those drafts exist, and only if it does not slow the foundation schedule
 - Define stable public protocol schemas for Pico Link and Pico Home Link

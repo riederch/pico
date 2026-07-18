@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.membership-validity-inverted",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "membership",
+  "construction": "pico.home.membership.v1",
+  "case": "membership validity inverted",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_validity_bounds"
+  },
+  "adr": "0080",
+  "notes": "Membership validity bounds must be ordered lexically by canonical timestamp. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

@@ -4,6 +4,8 @@
 
 Accepted as a draft-only Pico Home Link Home Membership Credential rejection boundary that deepens ADR 0045, before credential verification, issuer authority, lifecycle enforcement or domain-key membership are implemented.
 
+ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md` Gate M1 now publishes canonical signature-input layouts and authoritative byte vectors for Home membership credentials and lifecycle statements, including structural rejects for issuer-less credentials, invalid scopes, duplicate scopes and inverted validity. **This fixture fence loosens only for those ADR 0080 M1 byte vectors**: these draft rejection placeholders remain below credential verification, issuer authority, lifecycle enforcement, domain-key membership, runtime authorization and conformance.
+
 ## Context
 
 ADR 0024 defines host tenancy: membership grants host use, not ownership of resident identity or resident domains.

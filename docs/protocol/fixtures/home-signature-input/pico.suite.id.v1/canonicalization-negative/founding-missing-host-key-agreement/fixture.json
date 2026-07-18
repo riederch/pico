@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.founding-missing-host-key-agreement",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "founding",
+  "construction": "pico.home.founding.v1",
+  "case": "founding missing host key agreement",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "missing_field"
+  },
+  "adr": "0080",
+  "notes": "A founding input without the host key-agreement pin is structurally incomplete and cannot canonicalize. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

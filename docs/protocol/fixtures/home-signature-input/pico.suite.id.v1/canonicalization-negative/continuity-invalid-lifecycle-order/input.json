@@ -1,0 +1,17 @@
+{
+  "homeFamily": "continuity",
+  "construction": "pico.home.continuity.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "continuityId": "continuity_20260718_0002",
+    "homeId": "home_20260718_0001",
+    "outgoingHostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "outgoingHostKeyAgreementKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "incomingHostSigningKeyFingerprintHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "incomingHostKeyAgreementKeyFingerprintHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "homeHostPicoIdentityFingerprintHex": "7777777777777777777777777777777777777777777777777777777777777777",
+    "reasonCategory": "host_key_rotated",
+    "changedAt": "2026-07-18T09:10:00.000Z",
+    "lifecycleOrder": "seq:2"
+  }
+}
