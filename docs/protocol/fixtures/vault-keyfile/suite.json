@@ -1,0 +1,38 @@
+{
+  "schema": "pico.vault.keyfile.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.vault-keyfile.pico_vault_keyfile_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "format": "pico.vault.keyfile.v1",
+  "surface": "vault-keyfile",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative",
+    "open-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-keyfile-header-aad-vectors",
+  "disclaimer": "Authoritative keyfile header-AAD vectors for ADR 0081 Gate P1. No private keys, no unlock runtime, no decryption, not L4 compatibility and no commercial permission.",
+  "fixtures": [
+    "pico.vault.keyfile.v1/canonicalization-positive/identity-root-moderate",
+    "pico.vault.keyfile.v1/canonicalization-positive/device-signing-moderate",
+    "pico.vault.keyfile.v1/canonicalization-positive/device-key-agreement-moderate",
+    "pico.vault.keyfile.v1/canonicalization-negative/tampered-header-suite-swap",
+    "pico.vault.keyfile.v1/canonicalization-negative/tampered-header-role-swap",
+    "pico.vault.keyfile.v1/canonicalization-negative/tampered-header-nonce-swap",
+    "pico.vault.keyfile.v1/canonicalization-negative/wrong-label",
+    "pico.vault.keyfile.v1/canonicalization-negative/host-role-rejected",
+    "pico.vault.keyfile.v1/canonicalization-negative/kdf-parameter-downgrade",
+    "pico.vault.keyfile.v1/canonicalization-negative/field-order-override",
+    "pico.vault.keyfile.v1/canonicalization-negative/invalid-salt-length",
+    "pico.vault.keyfile.v1/canonicalization-negative/invalid-nonce-length",
+    "pico.vault.keyfile.v1/canonicalization-negative/invalid-fingerprint-length",
+    "pico.vault.keyfile.v1/open-negative/wrong-passphrase",
+    "pico.vault.keyfile.v1/open-negative/truncated-ciphertext"
+  ],
+  "notes": "Canonical header-AAD byte vectors for pico.vault.keyfile.v1 only. No real keyfiles, no key generation, no passphrase KDF runtime and no AEAD open implementation are provided by this suite."
+}

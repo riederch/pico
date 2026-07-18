@@ -81,6 +81,29 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/revocation-i
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length/
 ```
 
+## Current Vault keyfile fixtures
+
+These fixtures carry the authoritative canonical header-AAD byte vectors for the `pico.vault.keyfile.v1` at-rest format (ADR 0081 Gate P1). They include tampered-header bind-difference cases and synthetic wrong-passphrase/truncation open negatives, but no private keys, no real keyfiles, no unlock runtime, no decryption, no L4 compatibility basis and no commercial permission.
+
+```text
+vault-keyfile/suite.json
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-positive/identity-root-moderate/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-positive/device-signing-moderate/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-positive/device-key-agreement-moderate/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/tampered-header-suite-swap/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/tampered-header-role-swap/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/tampered-header-nonce-swap/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/wrong-label/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/host-role-rejected/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/kdf-parameter-downgrade/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/field-order-override/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/invalid-salt-length/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/invalid-nonce-length/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/invalid-fingerprint-length/
+vault-keyfile/pico.vault.keyfile.v1/open-negative/wrong-passphrase/
+vault-keyfile/pico.vault.keyfile.v1/open-negative/truncated-ciphertext/
+```
+
 ## Current draft Pico Link fixtures
 
 These fixtures are in a separate draft suite and are not part of the Foundation seed suite.
@@ -178,7 +201,9 @@ Each fixture directory contains:
 
 ## Boundary
 
-These fixtures are synthetic Foundation-stage examples. They are not cryptographic vectors and do not include private keys, signatures, canonical bytes, recovery material or production credentials.
+The Foundation seed fixtures are synthetic Foundation-stage examples. They are not cryptographic vectors and do not include private keys, signatures, canonical bytes, recovery material or production credentials.
+
+The memory-content AD, identity signature-input and Vault keyfile suites are authoritative byte-vector fixtures for their narrow ADR scopes. They still include no private keys, signatures, recovery material, production credentials, conformance runner or L4 compatibility basis. The Vault keyfile suite is header-AAD and synthetic open-negative metadata only; it is not an unlock or decryption runtime.
 
 Draft Pico Link fixtures are non-normative fixture data only. They are not a runner, not a Pico Link implementation, not cryptographic verification, not Home membership authority, not an L4 compatibility basis and not commercial permission.
 

@@ -1,0 +1,22 @@
+{
+  "schema": "pico.vault.keyfile.vector",
+  "schemaVersion": 1,
+  "fixtureId": "vault-keyfile.pico_vault_keyfile_v1.canonicalization-negative.wrong-label",
+  "stage": "fixture_data",
+  "format": "pico.vault.keyfile.v1",
+  "surface": "vault-keyfile",
+  "family": "canonicalization-negative",
+  "construction": "pico.vault.keyfile.v1",
+  "case": "Wrong keyfile family label is rejected before AAD use",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "wrong_keyfile_label"
+  },
+  "adr": "0081",
+  "notes": "ADR 0081 Gate P1 vector. Synthetic header and ciphertext metadata only; no private keys, no unlock runtime, no AEAD open result and no commercial permission."
+}

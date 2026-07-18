@@ -218,11 +218,16 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0074-memory-retention-policy-and-expiry-deletion-boundary.md`](docs/architecture/0074-memory-retention-policy-and-expiry-deletion-boundary.md) - memory retention model, now implemented: named editable policies, fail-safe keep default, a deletion-only sweep expiring aged items through the tombstoned deletion path
 - [`docs/architecture/0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md`](docs/architecture/0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md) - local access-control scoping: a Foundation Operator principal, revocable sessions instead of signed tokens, one access class per route with an authority ceiling for the static token, and gates for retention administration, the crypto-shred trigger and the memory content read API
 - [`docs/architecture/0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`](docs/architecture/0076-foundation-operator-credential-session-and-bootstrap-mechanics.md) - how that login works, now implemented: header-bound in-memory sessions instead of cookies, Argon2id passphrase verification, a bootstrap code shown through the host log, and an explicit local reset
+- [`docs/architecture/0077-foundation-memory-content-read-api-and-domain-readership-seam.md`](docs/architecture/0077-foundation-memory-content-read-api-and-domain-readership-seam.md) - Foundation memory content read API and domain-readership seam
+- [`docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md`](docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md) - memory domain reader membership and key distribution threat model
+- [`docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md`](docs/architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md) - Pico identity/device key primitives and authoritative signature-input vectors
+- [`docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md`](docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md) - Pico Home host key and Move-In claim ceremony direction
+- [`docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md`](docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md) - Pico Vault person-role key custody and keyfile header-AAD vectors
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
 - [`docs/protocol/compatibility-levels.md`](docs/protocol/compatibility-levels.md) - compatibility level definitions
-- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - conformance fixture layout and current Foundation, memory-content AD, identity signature-input and draft fixture suites
+- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - conformance fixture layout and current Foundation, memory-content AD, identity signature-input, Vault keyfile and draft fixture suites
 
 ## Design principles
 

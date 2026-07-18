@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1` direction: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. This is the dedicated custody ADR that ADR 0079 Gate G2 requires before any person-identity key exists anywhere. **It implements nothing**: no Vault exists, no key is generated, and every draft fixture fence (ADR 0051/0055) stays in force.
+Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1`: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. **Gate P1 is implemented for layout and authoritative header-AAD vectors only**: `@pico/protocol` exports the Vault keyfile vocabulary plus a pure `buildPicoVaultKeyfileHeaderAad` builder, and `docs/protocol/fixtures/vault-keyfile/` publishes the vector suite. No Vault runtime exists yet: no key generation, no keyfile write/read path, no Argon2id execution, no AEAD open/decrypt, no signing, no unlock state and no export flow. This is the dedicated custody ADR that ADR 0079 Gate G2 requires before any person-identity key exists anywhere; Gate P2 remains the runtime discharge.
 
 ## Context
 
@@ -80,9 +80,63 @@ One canonical encrypted at-rest format, from the toolkit already in the tree and
 
 - **KDF**: Argon2id (libsodium `crypto_pwhash`) derives the file key from the passphrase; algorithm, opslimit, memlimit and salt live in the header, so files are self-describing and parameters upgrade on rewrite (the ADR 0076 `needs_rehash` idea, applied to a file format). The default is the **moderate** cost class, not interactive: a Vault runs on the person's own device where unlock is a local, user-initiated act — there is no unauthenticated network surface to protect from memory exhaustion (the inverse of ADR 0076's appliance rationale), and the keyfile's realistic attacker is offline grinding, which is exactly what higher memory cost punishes.
 - **AEAD**: XChaCha20-Poly1305 (`crypto_aead_xchacha20poly1305_ietf`, the ADR 0071 cipher family) over the private-key payload, with the complete labeled header — family label first, then suite, key role, KDF parameters, salt, nonce — bound as associated data in an I3 layout. A tampered header (swapped role, downgraded KDF parameters, foreign suite) fails authentication, not review.
-- **Payload**: private key material for one key role under `pico.suite.id.v1`. Whether a file holds one keypair (the ADR 0072 one-file-per-key pattern) or a per-identity bundle is a Gate P1 layout decision; the vectors decide it, not convenience.
+- **Payload**: private key material for exactly one key role under `pico.suite.id.v1`. Gate P1 chooses one keyfile per keypair, matching the ADR 0072 one-file-per-key pattern and keeping root, device-signing and device-key-agreement lifecycles independently movable, revocable and exportable.
 
-Authoritative accept/reject vectors for the family are Gate P1 work inside the ADR 0079 G1 program — wrong label, tampered header fields, wrong passphrase, truncation, parameter downgrade all get negative vectors before the format carries a single real key.
+Authoritative accept/reject vectors for the family are now Gate P1 work inside the ADR 0079 G1 program — wrong label, tampered header fields, wrong passphrase, truncation and parameter downgrade all have negative vectors before the format carries a single real key.
+
+### Gate P1 keyfile header AAD layout and vectors
+
+The Gate P1 builder constructs **only** the authenticated header bytes. It does not derive a file key, encrypt, decrypt, parse private key payloads or authenticate ciphertext. Its purpose is to freeze the bytes that an eventual `crypto_aead_xchacha20poly1305_ietf_*` call must pass as associated data.
+
+Encoding uses the same I3 element rule as ADR 0073/0079:
+
+```text
+element(b) = U32BE(len(b)) || b
+header_aad = concat(element(field_0), element(field_1), ...)
+```
+
+Header AAD elements, in fixed order:
+
+| # | Field | Encoding | Rule |
+|---|---|---|---|
+| 0 | `format` | ASCII | exactly `pico.vault.keyfile.v1` |
+| 1 | `suite` | ASCII | suite label, currently `pico.suite.id.v1`; foreign ASCII suites bind different bytes |
+| 2 | `keyRole` | ASCII | one of `pico_identity`, `device_signing`, `device_key_agreement` |
+| 3 | `keyFingerprint` | raw bytes from hex | exactly 32 bytes |
+| 4 | `kdfAlgorithm` | ASCII | `argon2id` |
+| 5 | `kdfProfile` | ASCII | `moderate` |
+| 6 | `kdfOpsLimit` | ASCII decimal | minimum `3` |
+| 7 | `kdfMemLimitBytes` | ASCII decimal | minimum `268435456` |
+| 8 | `kdfSalt` | raw bytes from hex | exactly 16 bytes |
+| 9 | `aeadAlgorithm` | ASCII | `xchacha20poly1305-ietf` |
+| 10 | `aeadNonce` | raw bytes from hex | exactly 24 bytes |
+
+Reject reasons are stable for P1 fixture purposes: `wrong_keyfile_label`, `invalid_vault_key_role`, `invalid_fingerprint_length`, `invalid_kdf_algorithm`, `invalid_kdf_profile`, `kdf_parameter_downgrade`, `invalid_kdf_salt_length`, `invalid_aead_algorithm`, `invalid_aead_nonce_length` and `field_reordering`. Header tampering that preserves a canonical header, such as suite, role or nonce swaps, is represented as `build: accept` with different AAD; the future open operation must then fail authentication because the ciphertext was sealed under the original AAD.
+
+Authoritative accepted header-AAD vectors:
+
+| Case | Len | Header AAD hex |
+|---|---:|---|
+| `identity-root-moderate` | 214 | `000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e76310000000d7069636f5f6964656e746974790000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000101010101010101010101010101010101000000016786368616368613230706f6c79313330352d6965746600000018111111111111111111111111111111111111111111111111` |
+| `device-signing-moderate` | 215 | `000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e76310000000e6465766963655f7369676e696e67000000205dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000102020202020202020202020202020202000000016786368616368613230706f6c79313330352d6965746600000018222222222222222222222222222222222222222222222222` |
+| `device-key-agreement-moderate` | 221 | `000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e7631000000146465766963655f6b65795f61677265656d656e74000000202263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3f931b098e06a000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000103030303030303030303030303030303000000016786368616368613230706f6c79313330352d6965746600000018333333333333333333333333333333333333333333333333` |
+| `tampered-header-suite-swap` | 214 | `000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e76320000000d7069636f5f6964656e746974790000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000101010101010101010101010101010101000000016786368616368613230706f6c79313330352d6965746600000018111111111111111111111111111111111111111111111111` |
+| `tampered-header-role-swap` | 215 | `000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e76310000000e6465766963655f7369676e696e670000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000101010101010101010101010101010101000000016786368616368613230706f6c79313330352d6965746600000018111111111111111111111111111111111111111111111111` |
+| `tampered-header-nonce-swap` | 214 | `000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e76310000000d7069636f5f6964656e746974790000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000101010101010101010101010101010101000000016786368616368613230706f6c79313330352d6965746600000018444444444444444444444444444444444444444444444444` |
+
+Reject vectors:
+
+| Case | Expected reason |
+|---|---|
+| `wrong-label` | `wrong_keyfile_label` |
+| `host-role-rejected` | `invalid_vault_key_role` |
+| `kdf-parameter-downgrade` | `kdf_parameter_downgrade` |
+| `field-order-override` | `field_reordering` |
+| `invalid-salt-length` | `invalid_kdf_salt_length` |
+| `invalid-nonce-length` | `invalid_aead_nonce_length` |
+| `invalid-fingerprint-length` | `invalid_fingerprint_length` |
+
+Open-negative fixtures reuse the `identity-root-moderate` header AAD and carry synthetic ciphertext metadata only: `wrong-passphrase` expects `authentication_error` / `wrong_passphrase`, and `truncated-ciphertext` expects `malformed_ciphertext` / `truncated_ciphertext`. These expectations document the future open boundary; no current code performs the open.
 
 ### Platform keystores hold the unlock secret, never the format
 
@@ -105,7 +159,7 @@ There is no recovery path in this ADR, and none may be improvised around it: no 
 
 ## Ordering gates
 
-1. **Gate P1 — Keyfile layout and authoritative vectors.** The `pico.vault.keyfile.v1` labeled layout (header fields, AAD binding, bundle-vs-per-key decision) with ADR 0073-style accept/reject vectors, joined into the ADR 0079 G1 vector program: wrong-label, tampered-header, role-swap, suite-swap, KDF-parameter-downgrade, wrong-passphrase and truncation negatives before any real key exists.
+1. **Gate P1 — Keyfile layout and authoritative vectors. Done.** The `pico.vault.keyfile.v1` labeled header-AAD layout is fixed with one keyfile per person-role keypair, ADR 0073-style accept/reject vectors and synthetic open-negative metadata. It covers wrong-label, tampered-header, role-swap, suite-swap, KDF-parameter-downgrade, wrong-passphrase and truncation negatives before any real key exists.
 2. **Gate P2 — Minimal Vault runtime under custody tests.** Create, unlock, lock, label-checked sign, unwrap, encrypted export — with tests binding V1 (path separation from host scopes), V2 (no plaintext anywhere, including temp files), V4 (no export API; unknown labels refused), V7 (auto-lock; documented memory-hygiene limits of the chosen runtime) and the ADR 0072 permission pattern for custody files. **This gate discharges ADR 0079 G2 for the person role**; together with 0079 G1/G3 it makes ADR 0078 R1 and the ADR 0080 precondition dischargeable.
 3. **Gate P3 — Platform keystore integrations.** Per platform, additive to the keyfile, each with its own written analysis of what the keystore protects against there, and with the passphrase floor kept intact.
 
@@ -120,12 +174,11 @@ This ADR does not define or implement:
 - multi-person shared Vaults or family-device semantics
 - secure-input hardening, OS hardening guidance or enterprise HSM support
 - any change to the Foundation host, operator auth (ADR 0075/0076) or host-role custody (ADR 0080 M2)
-- any loosening of the ADR 0051/0055 fixture fences before ADR 0079 G1 vectors exist
+- any loosening of the ADR 0051/0055 fixture fences beyond the explicitly implemented 0079 G1 and 0081 P1 byte-vector scopes before the matching runtimes exist
 
 ## Open questions
 
 - **Passphrase policy and UX**: minimum-strength guidance, zxcvbn-style feedback, and how the creation flow teaches the loss rule without terrifying people — Vault runtime work above the custody floor.
-- **Bundle versus per-key files** (Gate P1): one keyfile per identity with roles inside, or the ADR 0072 one-file-per-key pattern; the vector families decide.
 - **Auto-lock defaults** (V7): idle thresholds, lock-on-suspend, lock-on-screen-lock — per platform, at Gate P2/P3.
 - **Local consumer transport** for the agent boundary (unix socket permissions, peer credentials, per-app authorization) — Gate P2, with the V4/V10 rules fixed here.
 - **Paper/offline backup of the *encrypted* export** (printed QR of ciphertext with the passphrase held separately) — allowed in principle by V8; encoding and UX undecided.
@@ -136,15 +189,15 @@ This ADR does not define or implement:
 
 Positive:
 
-- ADR 0079 G2's person-role fence gets its dedicated ADR: the identity strand now has a complete direction from primitives (0079) through host-role custody and ceremony (0080) to person-role custody (this ADR), all from the same libsodium toolkit with zero new primitives
-- one canonical, vector-covered at-rest format instead of per-platform key storage drift; platform keystores add convenience without forking the format
+- ADR 0079 G2's person-role fence gets its dedicated ADR and its Gate P1 byte layout: the identity strand now has a complete direction from primitives (0079) through host-role custody and ceremony (0080) to person-role custody (this ADR), all from the same libsodium toolkit with zero new primitives
+- one canonical, vector-covered at-rest header format instead of per-platform key storage drift; platform keystores add convenience without forking the format
 - the blind-signing oracle is closed structurally (label-checked signing), extending the I3 label discipline from verification into the agent boundary
 - browser and host custody are excluded by structure, not policy — the two most tempting shortcuts (keys in the dashboard, keys on the add-on) are named defects
 - loss stays visible and honest: no hidden recovery channel exists to become tomorrow's backdoor, and creation-time export prompting mitigates the real risk the honest way
 
 Negative:
 
-- the largest cost is stated plainly: a **new software component** (the Vault) must exist before any real person key, any real reader key (ADR 0078 R1) and any claim (ADR 0080) — accepted; the alternative was generating person identities on the host, which inverts the entire ownership model
+- the largest cost is stated plainly: a **new software component** (the Vault) must exist before any real person key, any real reader key (ADR 0078 R1) and any claim (ADR 0080) — Gate P1 fixes bytes but does not reduce the Gate P2 runtime cost; accepted, because the alternative was generating person identities on the host, which inverts the entire ownership model
 - no recovery means real, irreversible loss for people who skip the export — the price of refusing backdoors until a reviewed recovery ADR exists
 - passphrase UX burden lands on a local-first product, softened only where Gate P3 platform integrations are honest
 - a GC-runtime Vault cannot promise complete memory erasure; the limit is documented rather than solved
@@ -160,4 +213,4 @@ Negative:
 - Realizes the ADR `0015`/`0026` Pico Vault role custody-wise (Full Clients own keys and backups; Light Clients/Surfaces never do) and the ADR `0029` rule that private identity material never becomes host state.
 - Keeps the ADR `0033` recovery boundary fully intact and adopts its posture: visible loss over hidden impersonation; lost-device handling stays lifecycle work; nothing here becomes a recovery mechanism.
 - Kin to ADR `0072` (file custody, permission pattern, backup separation) with the scope inverted: host key custody excludes files from host backups — Vault custody excludes the host entirely (V1).
-- Leaves ADR `0075`/`0076` untouched: operator sessions and Vault unlock are unrelated acts with no ambient bridge (V10, A11/I10 family); the ADR `0051`/`0055` fixture fences stay exactly as strict until ADR 0079 G1 vectors exist.
+- Leaves ADR `0075`/`0076` untouched: operator sessions and Vault unlock are unrelated acts with no ambient bridge (V10, A11/I10 family); the ADR `0051`/`0055` fixture fences stay strict beyond the implemented ADR 0079 G1 and ADR 0081 P1 byte-vector scopes until the matching runtimes exist.

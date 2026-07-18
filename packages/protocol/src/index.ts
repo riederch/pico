@@ -169,6 +169,41 @@ export const picoIdentityRevocationReasonCategories = [
 
 export type PicoIdentityRevocationReasonCategory = typeof picoIdentityRevocationReasonCategories[number];
 
+export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
+
+// ADR 0081 Gate P1 covers person-role key custody only. Host-role keys stay on
+// the ADR 0080 host-custody path and must not be accepted as Vault keyfiles.
+export const picoVaultPersonKeyRoles = [
+  'pico_identity',
+  'device_signing',
+  'device_key_agreement',
+] as const satisfies readonly PicoIdentityKeyRole[];
+
+export type PicoVaultPersonKeyRole = typeof picoVaultPersonKeyRoles[number];
+
+export const picoVaultKdfAlgorithms = [
+  'argon2id',
+] as const;
+
+export type PicoVaultKdfAlgorithm = typeof picoVaultKdfAlgorithms[number];
+
+export const picoVaultKdfProfiles = [
+  'moderate',
+] as const;
+
+export type PicoVaultKdfProfile = typeof picoVaultKdfProfiles[number];
+
+export const picoVaultAeadAlgorithms = [
+  'xchacha20poly1305-ietf',
+] as const;
+
+export type PicoVaultAeadAlgorithm = typeof picoVaultAeadAlgorithms[number];
+
+export const picoVaultArgon2idModerateParams = {
+  opsLimit: 3,
+  memLimitBytes: 268_435_456,
+} as const;
+
 export interface PicoIdentityKeyRecordSignatureInput {
   suite: string;
   keyRole: PicoIdentityKeyRole;
@@ -203,6 +238,20 @@ export interface PicoIdentityRevocationSignatureInput {
   reasonCategory: PicoIdentityRevocationReasonCategory;
   revokedAt: string;
   lifecycleOrder: string;
+}
+
+export interface PicoVaultKeyfileHeaderAadInput {
+  format: string;
+  suite: string;
+  keyRole: PicoVaultPersonKeyRole;
+  keyFingerprintHex: string;
+  kdfAlgorithm: PicoVaultKdfAlgorithm;
+  kdfProfile: PicoVaultKdfProfile;
+  kdfOpsLimit: number;
+  kdfMemLimitBytes: number;
+  kdfSaltHex: string;
+  aeadAlgorithm: PicoVaultAeadAlgorithm;
+  aeadNonceHex: string;
 }
 
 export type PicoIdentitySignatureInput =
@@ -1098,6 +1147,50 @@ export function buildPicoIdentityRevocationSignatureInput(
   ]);
 }
 
+export function buildPicoVaultKeyfileHeaderAad(input: PicoVaultKeyfileHeaderAadInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'format',
+    'suite',
+    'keyRole',
+    'keyFingerprintHex',
+    'kdfAlgorithm',
+    'kdfProfile',
+    'kdfOpsLimit',
+    'kdfMemLimitBytes',
+    'kdfSaltHex',
+    'aeadAlgorithm',
+    'aeadNonceHex',
+  ]);
+
+  if (input.format !== picoVaultKeyfileFormat) {
+    throw new Error('wrong_keyfile_label');
+  }
+
+  assertAsciiToken(input.suite);
+  assertStringMember(input.keyRole, picoVaultPersonKeyRoles, 'invalid_vault_key_role');
+  assertStringMember(input.kdfAlgorithm, picoVaultKdfAlgorithms, 'invalid_kdf_algorithm');
+  assertStringMember(input.kdfProfile, picoVaultKdfProfiles, 'invalid_kdf_profile');
+  assertStringMember(input.aeadAlgorithm, picoVaultAeadAlgorithms, 'invalid_aead_algorithm');
+
+  return concatCanonicalElements([
+    asciiBytes(picoVaultKeyfileFormat),
+    asciiBytes(input.suite),
+    asciiBytes(input.keyRole),
+    fixedHexBytes(input.keyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.kdfAlgorithm),
+    asciiBytes(input.kdfProfile),
+    decimalBytes(input.kdfOpsLimit, picoVaultArgon2idModerateParams.opsLimit, 'kdf_parameter_downgrade'),
+    decimalBytes(
+      input.kdfMemLimitBytes,
+      picoVaultArgon2idModerateParams.memLimitBytes,
+      'kdf_parameter_downgrade',
+    ),
+    fixedHexBytes(input.kdfSaltHex, 16, 'invalid_kdf_salt_length'),
+    asciiBytes(input.aeadAlgorithm),
+    fixedHexBytes(input.aeadNonceHex, 24, 'invalid_aead_nonce_length'),
+  ]);
+}
+
 function firstUnexpectedKey(record: Record<string, unknown>, allowedKeys: readonly string[]): string | undefined {
   const allowed = new Set(allowedKeys);
   return Object.keys(record).find((key) => !allowed.has(key));
@@ -1158,6 +1251,14 @@ function fixedHexBytes(value: string, expectedByteLength: number, lengthReason: 
   }
 
   return output;
+}
+
+function decimalBytes(value: number, minimumValue: number, reason: string): Uint8Array {
+  if (!Number.isSafeInteger(value) || value < minimumValue) {
+    throw new Error(reason);
+  }
+
+  return asciiBytes(String(value));
 }
 
 function assertAsciiToken(value: string): void {

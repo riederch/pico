@@ -1,0 +1,22 @@
+{
+  "schema": "pico.vault.keyfile.vector",
+  "schemaVersion": 1,
+  "fixtureId": "vault-keyfile.pico_vault_keyfile_v1.canonicalization-positive.identity-root-moderate",
+  "stage": "fixture_data",
+  "format": "pico.vault.keyfile.v1",
+  "surface": "vault-keyfile",
+  "family": "canonicalization-positive",
+  "construction": "pico.vault.keyfile.v1",
+  "case": "Pico identity root keyfile header AAD at the moderate Argon2id floor",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "headerAadHex": "000000157069636f2e7661756c742e6b657966696c652e7631000000107069636f2e73756974652e69642e76310000000d7069636f5f6964656e746974790000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616000000086172676f6e326964000000086d6f646572617465000000013300000009323638343335343536000000101010101010101010101010101010101000000016786368616368613230706f6c79313330352d6965746600000018111111111111111111111111111111111111111111111111",
+    "headerAadLen": 214
+  },
+  "adr": "0081",
+  "notes": "ADR 0081 Gate P1 vector. Synthetic header and ciphertext metadata only; no private keys, no unlock runtime, no AEAD open result and no commercial permission."
+}

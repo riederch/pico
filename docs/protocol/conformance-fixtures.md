@@ -1,6 +1,6 @@
 # Pico Conformance Fixture Layout
 
-This document defines the planned layout for future Pico conformance fixtures, the current experimental Foundation event and realtime fixture seed, and the current draft-only protocol fixture seeds.
+This document defines the planned layout for future Pico conformance fixtures, the current experimental Foundation event and realtime fixture seed, the current authoritative byte-vector fixture suites, and the current draft-only protocol fixture seeds.
 
 It is a planning document for the foundation phase. It does not publish an executable conformance suite, certify compatibility, define final cryptographic vectors or make current Foundation APIs production-ready.
 
@@ -59,6 +59,8 @@ This document follows:
 - `../architecture/0065-pico-link-draft-packet-envelope-rejection-placeholder.md`
 - `../architecture/0066-pico-home-link-draft-home-membership-rejection-placeholder.md`
 - `../architecture/0073-memory-content-ad-canonicalization-and-test-vectors.md`
+- `../architecture/0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md`
+- `../architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md`
 
 ADR 0034 defines the canonicalization and test-vector boundary. ADR 0042 defines the staging gate for draft-only Pico Link and Pico Home Link schema fixtures before real implementation or compatibility claims. ADR 0043 defines the first constrained draft packet-envelope preflight shape. ADR 0044 defines the first constrained protected-payload placeholder boundary. ADR 0045 defines the first constrained Home Membership Credential placeholder boundary. ADR 0046 defines the first constrained compatibility-claim placeholder boundary. ADR 0047 defines the first constrained canonicalization rejection placeholder boundary. ADR 0048 and ADR 0049 define delegated model capability and model job envelope boundaries. ADR 0050 defines the model-delegation draft fixture gate. ADR 0051 defines the first constrained Pico Link Device Credential placeholder boundary. ADR 0052 defines the first constrained Pico Link lost-device revocation placeholder boundary. ADR 0053 defines the first constrained Pico Link revocation registry placeholder boundary. ADR 0054 defines the first constrained Pico Link key-envelope rotation placeholder boundary. ADR 0055 defines the first constrained Pico Link identity-key placeholder boundary. ADR 0056 defines the first constrained Pico Home Link Home Host Key placeholder boundary. ADR 0057 defines the first constrained Pico Home Link residency and eviction placeholder boundary. ADR 0058 defines the first constrained Model Delegation job-envelope scoping placeholder boundary. ADR 0059 defines the first constrained Model Delegation result-envelope provenance placeholder boundary. ADR 0060 defines the first constrained Model Delegation context-reference scoping placeholder boundary. ADR 0061 defines the first constrained Model Delegation provider-registry advertisement placeholder boundary. ADR 0062 defines the first constrained Pico Link signed event segment placeholder boundary. ADR 0063 deepens the Pico Link protected-payload placeholder with its first rejection boundaries. ADR 0064 defines the first constrained Pico Link replica manifest placeholder boundary. ADR 0065 deepens the Pico Link packet-envelope placeholder with its first relay-visible rejection boundaries beyond the plaintext leak. ADR 0066 deepens the Pico Home Link Home Membership placeholder with its first rejection boundaries beyond the Move-In Code boundary. This document turns those boundaries into a planned repository layout.
 
@@ -74,7 +76,6 @@ The current repository does not contain:
 
 - signed fixture vectors
 - cryptographic test keys
-- canonical byte fixtures
 - lifecycle-aware verification fixtures
 - published Pico Link conformance packet fixtures
 - published Pico Home Link conformance membership fixtures
@@ -131,6 +132,11 @@ docs/protocol/fixtures/
     pico.suite.id.v1/
       canonicalization-positive/
       canonicalization-negative/
+  vault-keyfile/
+    pico.vault.keyfile.v1/
+      canonicalization-positive/
+      canonicalization-negative/
+      open-negative/
   pico-link/
     draft/
       packet-envelope/
@@ -161,11 +167,13 @@ docs/protocol/fixtures/
       privacy-negative/
 ```
 
-This layout is implemented for the current Foundation event and realtime seed, the current memory-content AD vector suite, the current identity signature-input vector suite, the current draft Pico Link seed and the current draft Model Delegation seed. Other directories remain conceptual until fixture files are added.
+This layout is implemented for the current Foundation event and realtime seed, the current memory-content AD vector suite, the current identity signature-input vector suite, the current Vault keyfile header-AAD vector suite, the current draft Pico Link seed and the current draft Model Delegation seed. Other directories remain conceptual until fixture files are added.
 
 The `memory-content-ad/pico.suite.mem.v1/` family is seeded: ADR `0073-memory-content-ad-canonicalization-and-test-vectors.md` publishes the authoritative canonical associated-data byte layout and its accept/reject vectors (this is the first surface for which real canonical bytes are selected, per ADR 0034 and unlocking ADR 0047 for that scope only), and `docs/protocol/fixtures/memory-content-ad/` now holds those vectors as on-disk fixtures in its own `pico.mem-ad.vector.suite`. Unlike the draft placeholders these carry real canonical bytes; a protocol test rebuilds each vector from its input fields, checks the bytes against the published hex and against the ADR itself, and covers the `canonicalization-positive` and `canonicalization-negative` families. There is still no cryptographic runtime or round-trip vector: encrypt/decrypt and shred fixtures (ADR 0071 gate point 3) remain future work.
 
 The `identity-signature-input/pico.suite.id.v1/` family is seeded: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` now publishes the authoritative key-record, possession, delegation and revocation signature-input byte layouts and vectors for Gate G1, and `docs/protocol/fixtures/identity-signature-input/` holds those vectors as on-disk fixtures in its own `pico.identity.signature-input.vector.suite`. These carry real canonical bytes and key-record BLAKE2b-256 fingerprint digests, but no private keys, signatures, verification runtime, lifecycle lookup or compatibility certification. A protocol test rebuilds each vector from its semantic fields, checks the bytes and fingerprints against the fixture metadata and checks the published values against ADR 0079.
+
+The `vault-keyfile/pico.vault.keyfile.v1/` family is seeded: ADR `0081-pico-vault-person-role-key-custody-threat-model-and-direction.md` now publishes the authoritative header-AAD byte layout and vectors for Gate P1, and `docs/protocol/fixtures/vault-keyfile/` holds those vectors as on-disk fixtures in its own `pico.vault.keyfile.vector.suite`. These carry real canonical header-AAD bytes and synthetic wrong-passphrase/truncation open negatives, but no private keys, no real keyfiles, no unlock runtime, no decryption, no signature runtime and no compatibility certification. A protocol test rebuilds each header AAD from its semantic fields, checks accepted bytes against the fixture metadata and checks the published values against ADR 0081.
 
 ## Fixture stages
 
@@ -467,7 +475,7 @@ Future Model Delegation fixtures may cover:
 
 ## Canonicalization and signature fixture scope
 
-Canonicalization fixtures must wait for a selected canonicalization spec. The memory-content AD surface has one selected spec (ADR 0073). The Pico identity signature-input surface has one selected spec for Gate G1 (ADR 0079), covering canonical bytes and key-record fingerprint digests only.
+Canonicalization fixtures must wait for a selected canonicalization spec. The memory-content AD surface has one selected spec (ADR 0073). The Pico identity signature-input surface has one selected spec for Gate G1 (ADR 0079), covering canonical bytes and key-record fingerprint digests only. The Pico Vault keyfile surface has one selected header-AAD spec for Gate P1 (ADR 0081), covering the authenticated header binding only.
 
 Signature fixtures must wait for:
 
@@ -532,12 +540,14 @@ It includes:
 - twenty draft Model Delegation fixtures in a separate draft suite
 - eleven memory-content AD canonicalization vectors in a separate authoritative vector suite
 - seventeen Pico identity signature-input canonicalization vectors in a separate authoritative vector suite
+- fifteen Pico Vault keyfile header-AAD vectors in a separate authoritative vector suite
 - protocol tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics, authoritative vector bytes and draft-suite non-claim boundaries
 
 It does not include:
 
 - test keys
 - signature vectors
+- a Vault unlock/decrypt runtime
 - a conformance runner
 - L4 compatibility certification
 

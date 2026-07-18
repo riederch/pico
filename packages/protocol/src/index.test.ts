@@ -41,10 +41,17 @@ import {
   picoIdentitySignatureInputFamilies,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
+  picoVaultAeadAlgorithms,
+  picoVaultArgon2idModerateParams,
+  picoVaultKdfAlgorithms,
+  picoVaultKdfProfiles,
+  picoVaultKeyfileFormat,
+  picoVaultPersonKeyRoles,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoVaultKeyfileHeaderAad,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -285,6 +292,22 @@ describe('Pico protocol types', () => {
     ]);
   });
 
+  it('exports ADR 0081 Vault keyfile vocabulary', () => {
+    expect(picoVaultKeyfileFormat).toBe('pico.vault.keyfile.v1');
+    expect(picoVaultPersonKeyRoles).toEqual([
+      'pico_identity',
+      'device_signing',
+      'device_key_agreement',
+    ]);
+    expect(picoVaultKdfAlgorithms).toEqual(['argon2id']);
+    expect(picoVaultKdfProfiles).toEqual(['moderate']);
+    expect(picoVaultAeadAlgorithms).toEqual(['xchacha20poly1305-ietf']);
+    expect(picoVaultArgon2idModerateParams).toEqual({
+      opsLimit: 3,
+      memLimitBytes: 268_435_456,
+    });
+  });
+
   it('exports runtime realtime message type lists for websocket compatibility checks', () => {
     expect(realtimeMessageType).toEqual({
       coreConnected: 'pico.core.connected',
@@ -410,6 +433,7 @@ describe('Pico protocol types', () => {
       .filter((fixturePath) => !fixturePath.startsWith('model-delegation/draft/'))
       .filter((fixturePath) => !fixturePath.startsWith('memory-content-ad/'))
       .filter((fixturePath) => !fixturePath.startsWith('identity-signature-input/'))
+      .filter((fixturePath) => !fixturePath.startsWith('vault-keyfile/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
@@ -698,6 +722,124 @@ describe('Pico protocol types', () => {
         expect(acceptedHexByCase.has(mustMatch)).toBe(true);
         expect(acceptedHexByCase.get(caseName)).toBe(acceptedHexByCase.get(mustMatch));
       }
+    }
+  });
+
+  it('keeps Pico Vault keyfile header-AAD vectors byte-exact and aligned with ADR 0081 P1', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/vault-keyfile/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0081-pico-vault-person-role-key-custody-threat-model-and-direction.md',
+    ).replace(/\s+/g, '');
+
+    expect(stringField(suite, 'schema')).toBe('pico.vault.keyfile.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.vault-keyfile.pico_vault_keyfile_v1');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'format')).toBe(picoVaultKeyfileFormat);
+    expect(stringField(suite, 'surface')).toBe('vault-keyfile');
+    expect(stringArrayField(suite, 'families')).toEqual([
+      'canonicalization-positive',
+      'canonicalization-negative',
+      'open-negative',
+    ]);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('authoritative-keyfile-header-aad-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('No private keys');
+    expect(stringField(suite, 'disclaimer')).toContain('no unlock runtime');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+
+    expect([...fixturePaths].sort()).toEqual(
+      listFixtureDirectories('docs/protocol/fixtures/vault-keyfile').sort(),
+    );
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Vault keyfile fixtures')).toEqual([
+      'vault-keyfile/suite.json',
+      ...fixturePaths.map((fixturePath) => `vault-keyfile/${fixturePath}/`),
+    ]);
+
+    const acceptedHexByCase = new Map<string, string>();
+    const relationships: { caseName: string; mustDifferFrom?: string }[] = [];
+
+    for (const fixturePath of fixturePaths) {
+      const parts = fixturePath.split('/');
+      expect(parts.length).toBe(3);
+      const [formatSegment, family, caseName] = parts;
+      expect(formatSegment).toBe(picoVaultKeyfileFormat);
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      const base = `docs/protocol/fixtures/vault-keyfile/${fixturePath}`;
+      const fixture = readRepoJsonObject(`${base}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const input = readRepoJsonObject(`${base}/input.json`);
+      const expectBlock = recordField(fixture, 'expect');
+
+      expect(stringField(fixture, 'schema')).toBe('pico.vault.keyfile.vector');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(`vault-keyfile.pico_vault_keyfile_v1.${family}.${caseName}`);
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'format')).toBe(picoVaultKeyfileFormat);
+      expect(stringField(fixture, 'surface')).toBe('vault-keyfile');
+      expect(stringField(fixture, 'family')).toBe(family);
+      expect(stringField(fixture, 'construction')).toBe(picoVaultKeyfileFormat);
+      expect(stringField(fixture, 'adr')).toBe('0081');
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toContain('no private keys');
+      expect(stringField(source, 'encoding')).toBe('fields');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(stringField(input, 'construction')).toBe(stringField(recordField(input, 'header'), 'format'));
+
+      const fields = recordField(input, 'header');
+      const build = stringField(expectBlock, 'build');
+
+      if (build === 'accept') {
+        const recomputed = buildPicoVaultHeaderAadVector(fields);
+        const hex = Buffer.from(recomputed).toString('hex');
+        expect(hex).toBe(stringField(expectBlock, 'headerAadHex'));
+        expect(recomputed.length).toBe(numberField(expectBlock, 'headerAadLen'));
+        expect(adrNoWhitespace).toContain(hex);
+        acceptedHexByCase.set(caseName, hex);
+        relationships.push({
+          caseName,
+          mustDifferFrom: optionalStringField(expectBlock, 'mustDifferFrom'),
+        });
+
+        if (family === 'open-negative') {
+          const encryptedPayload = recordField(input, 'encryptedPayload');
+          expect(stringField(encryptedPayload, 'encoding')).toBe('hex');
+          expect(stringField(encryptedPayload, 'containsPrivateKeys')).toBe('no');
+          expect(stringField(expectBlock, 'open')).toBe('reject');
+          expect(['authentication_error', 'malformed_ciphertext']).toContain(stringField(expectBlock, 'errorCategory'));
+          expect(['wrong_passphrase', 'truncated_ciphertext']).toContain(stringField(expectBlock, 'reason'));
+        }
+      } else {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'errorCategory')).toBe('canonicalization_error');
+        const reason = stringField(expectBlock, 'reason');
+        expect([
+          'field_reordering',
+          'invalid_aead_nonce_length',
+          'invalid_fingerprint_length',
+          'invalid_kdf_algorithm',
+          'invalid_kdf_profile',
+          'invalid_kdf_salt_length',
+          'invalid_vault_key_role',
+          'kdf_parameter_downgrade',
+          'wrong_keyfile_label',
+        ]).toContain(reason);
+        expect(() => buildPicoVaultHeaderAadVector(fields)).toThrow(reason);
+      }
+    }
+
+    for (const { caseName, mustDifferFrom } of relationships) {
+      if (mustDifferFrom === undefined) {
+        continue;
+      }
+      expect(acceptedHexByCase.has(mustDifferFrom)).toBe(true);
+      expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(mustDifferFrom));
     }
   });
 
@@ -2586,6 +2728,23 @@ function buildPicoIdentityVector(identityFamily: string, fields: Record<string, 
   }
 
   throw new Error(`Unexpected identity signature-input family: ${identityFamily}`);
+}
+
+function buildPicoVaultHeaderAadVector(fields: Record<string, unknown>): Uint8Array {
+  return buildPicoVaultKeyfileHeaderAad({
+    format: stringField(fields, 'format'),
+    suite: stringField(fields, 'suite'),
+    keyRole: stringField(fields, 'keyRole') as typeof picoVaultPersonKeyRoles[number],
+    keyFingerprintHex: stringField(fields, 'keyFingerprintHex'),
+    kdfAlgorithm: stringField(fields, 'kdfAlgorithm') as typeof picoVaultKdfAlgorithms[number],
+    kdfProfile: stringField(fields, 'kdfProfile') as typeof picoVaultKdfProfiles[number],
+    kdfOpsLimit: numberField(fields, 'kdfOpsLimit'),
+    kdfMemLimitBytes: numberField(fields, 'kdfMemLimitBytes'),
+    kdfSaltHex: stringField(fields, 'kdfSaltHex'),
+    aeadAlgorithm: stringField(fields, 'aeadAlgorithm') as typeof picoVaultAeadAlgorithms[number],
+    aeadNonceHex: stringField(fields, 'aeadNonceHex'),
+    ...optionalFieldOrder(fields),
+  });
 }
 
 function optionalFieldOrder(fields: Record<string, unknown>): Record<string, unknown> {

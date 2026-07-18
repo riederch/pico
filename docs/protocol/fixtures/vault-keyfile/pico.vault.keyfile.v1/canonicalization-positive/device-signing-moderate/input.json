@@ -1,0 +1,17 @@
+{
+  "format": "pico.vault.keyfile.v1",
+  "construction": "pico.vault.keyfile.v1",
+  "header": {
+    "format": "pico.vault.keyfile.v1",
+    "suite": "pico.suite.id.v1",
+    "keyRole": "device_signing",
+    "keyFingerprintHex": "5dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5",
+    "kdfAlgorithm": "argon2id",
+    "kdfProfile": "moderate",
+    "kdfOpsLimit": 3,
+    "kdfMemLimitBytes": 268435456,
+    "kdfSaltHex": "20202020202020202020202020202020",
+    "aeadAlgorithm": "xchacha20poly1305-ietf",
+    "aeadNonceHex": "222222222222222222222222222222222222222222222222"
+  }
+}

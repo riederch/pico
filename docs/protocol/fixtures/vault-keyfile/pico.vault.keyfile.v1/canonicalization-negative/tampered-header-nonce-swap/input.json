@@ -1,0 +1,17 @@
+{
+  "format": "pico.vault.keyfile.v1",
+  "construction": "pico.vault.keyfile.v1",
+  "header": {
+    "format": "pico.vault.keyfile.v1",
+    "suite": "pico.suite.id.v1",
+    "keyRole": "pico_identity",
+    "keyFingerprintHex": "66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616",
+    "kdfAlgorithm": "argon2id",
+    "kdfProfile": "moderate",
+    "kdfOpsLimit": 3,
+    "kdfMemLimitBytes": 268435456,
+    "kdfSaltHex": "10101010101010101010101010101010",
+    "aeadAlgorithm": "xchacha20poly1305-ietf",
+    "aeadNonceHex": "444444444444444444444444444444444444444444444444"
+  }
+}
