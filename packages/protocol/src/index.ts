@@ -11,6 +11,8 @@ export const foundationEventTypes = [
   'auth.credential_changed',
   'auth.operator_reset',
   'auth.sessions_revoked',
+  'home.claimed',
+  'home.reset',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -28,6 +30,8 @@ export const serverSynthesizedFoundationEventTypes = [
   'auth.credential_changed',
   'auth.operator_reset',
   'auth.sessions_revoked',
+  'home.claimed',
+  'home.reset',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -105,6 +109,7 @@ export const protocolCapabilities = {
   'pico.core.events.v1': true,
   'pico.core.websocket.v1': true,
   'pico.avatar_state.v1': true,
+  'pico.home.setup.v1': true,
 } as const;
 
 export type PicoProtocolCapability = keyof typeof protocolCapabilities;
@@ -566,6 +571,10 @@ export interface AuthSessionsRevokedPayload {
   revokedSessions: number;
 }
 
+export type HomeClaimedPayload = Record<string, never>;
+
+export type HomeResetPayload = Record<string, never>;
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -578,7 +587,9 @@ export type FoundationEventPayload =
   | AuthOperatorBootstrappedPayload
   | AuthCredentialChangedPayload
   | AuthOperatorResetPayload
-  | AuthSessionsRevokedPayload;
+  | AuthSessionsRevokedPayload
+  | HomeClaimedPayload
+  | HomeResetPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -755,6 +766,15 @@ export function validateFoundationEventPayload(
     }
 
     return { ok: true, payload: { revokedSessions: payload.revokedSessions } };
+  }
+
+  if (type === 'home.claimed' || type === 'home.reset') {
+    const extraKey = firstUnexpectedKey(payload, []);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
+    }
+
+    return { ok: true, payload: {} };
   }
 
   const extraKey = firstUnexpectedKey(payload, ['mode', 'state', 'intensity', 'statusColor', 'message']);
@@ -943,14 +963,44 @@ export interface PicoSystemStatusResponse {
   deviceId: string;
   capabilities: Record<string, boolean>;
   picoHome: {
-    claimState: {
-      state: PicoHomeClaimStateName;
-    };
+    claimState: PicoHomeClaimStateResponse;
   };
   database: {
     maxLamport: number;
     migrations: PicoAppliedMigration[];
   };
+}
+
+export interface PicoHomeClaimStateResponse {
+  state: PicoHomeClaimStateName;
+  setupMode: {
+    active: boolean;
+    moveInCodePending: boolean;
+  };
+  homeId?: string;
+  homeHostPicoId?: string;
+  hostSigningKeyFingerprintHex?: string;
+  hostKeyAgreementKeyFingerprintHex?: string;
+  claimedAt?: string;
+}
+
+export interface PicoHomeSetupResponse {
+  setupMode: {
+    active: true;
+    moveInCodePending: true;
+    claimEndpoint: '/api/home/claim';
+  };
+  host: {
+    suite: typeof picoIdentitySuite;
+    signingPublicKeyHex: string;
+    signingKeyFingerprintHex: string;
+    keyAgreementPublicKeyHex: string;
+    keyAgreementKeyFingerprintHex: string;
+  };
+}
+
+export interface PicoHomeClaimResponse {
+  claimState: PicoHomeClaimStateResponse & { state: 'claimed' };
 }
 
 export interface PicoEventListResponse<TPayload = unknown> {

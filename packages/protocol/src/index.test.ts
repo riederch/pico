@@ -95,6 +95,8 @@ describe('Pico protocol types', () => {
       'auth.credential_changed',
       'auth.operator_reset',
       'auth.sessions_revoked',
+      'home.claimed',
+      'home.reset',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -102,6 +104,8 @@ describe('Pico protocol types', () => {
       'auth.credential_changed',
       'auth.operator_reset',
       'auth.sessions_revoked',
+      'home.claimed',
+      'home.reset',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');
@@ -121,6 +125,7 @@ describe('Pico protocol types', () => {
       'pico.core.events.v1': true,
       'pico.core.websocket.v1': true,
       'pico.avatar_state.v1': true,
+      'pico.home.setup.v1': true,
     });
   });
 
@@ -232,6 +237,19 @@ describe('Pico protocol types', () => {
     expect(validateFoundationEventPayload('auth.sessions_revoked', { revokedSessions: -1 })).toEqual({
       ok: false,
       error: 'auth.sessions_revoked revokedSessions must be a non-negative integer.',
+    });
+  });
+
+  it('keeps Pico Home setup audit payloads content-free (ADR 0080 H10)', () => {
+    expect(validateFoundationEventPayload('home.claimed', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('home.reset', {})).toEqual({ ok: true, payload: {} });
+    expect(validateFoundationEventPayload('home.claimed', { moveInCode: 'secret' })).toEqual({
+      ok: false,
+      error: 'home.claimed payload has unexpected field: moveInCode.',
+    });
+    expect(validateFoundationEventPayload('home.reset', { hostPrivateKey: 'secret' })).toEqual({
+      ok: false,
+      error: 'home.reset payload has unexpected field: hostPrivateKey.',
     });
   });
 

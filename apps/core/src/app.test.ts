@@ -23,6 +23,7 @@ import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
+import { homeResetMarkerPath } from './home-setup.js';
 
 const tempDirs: string[] = [];
 const RESERVED_EVENT_ERROR = 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.';
@@ -181,6 +182,10 @@ describe('Pico Home Core app', () => {
       picoHome: {
         claimState: {
           state: 'unclaimed',
+          setupMode: {
+            active: true,
+            moveInCodePending: true,
+          },
         },
       },
       database: {
@@ -197,11 +202,132 @@ describe('Pico Home Core app', () => {
           { id: '0009_memory_retention_policy', appliedAt: expect.any(String) },
           { id: '0010_foundation_operator', appliedAt: expect.any(String) },
           { id: '0011_memory_domain_custody', appliedAt: expect.any(String) },
+          { id: '0012_pico_home_claim_metadata', appliedAt: expect.any(String) },
         ],
       },
     });
 
     await app.close();
+  });
+
+  it('surfaces a setup bundle without exposing the Move-In Code over HTTP', async () => {
+    const app = await buildAppWithCapturedLog();
+    const moveInCode = readMoveInCode(app);
+
+    const response = await app.inject({ method: 'GET', url: '/api/home/setup' });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    const body = response.json();
+    expect(body).toEqual({
+      setupMode: {
+        active: true,
+        moveInCodePending: true,
+        claimEndpoint: '/api/home/claim',
+      },
+      host: {
+        suite: 'pico.suite.id.v1',
+        signingPublicKeyHex: expect.stringMatching(/^[0-9a-f]{64}$/),
+        signingKeyFingerprintHex: expect.stringMatching(/^[0-9a-f]{64}$/),
+        keyAgreementPublicKeyHex: expect.stringMatching(/^[0-9a-f]{64}$/),
+        keyAgreementKeyFingerprintHex: expect.stringMatching(/^[0-9a-f]{64}$/),
+      },
+    });
+    expect(JSON.stringify(body)).not.toContain(moveInCode);
+
+    await app.close();
+  });
+
+  it('claims an empty Pico Home through the Move-In Code and audits the transition', async () => {
+    const app = await buildAppWithCapturedLog();
+    const setup = await app.inject({ method: 'GET', url: '/api/home/setup' });
+    const setupBody = setup.json();
+
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { moveInCode: 'wrong-code', homeHostPicoId: 'pico:home-host' },
+    });
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.json()).toEqual({ error: 'Move-In Code is invalid.' });
+
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { moveInCode: readMoveInCode(app), homeHostPicoId: 'pico:home-host' },
+    });
+    expect(claimed.statusCode).toBe(201);
+    expect(claimed.headers['cache-control']).toBe('no-store');
+    expect(claimed.json()).toEqual({
+      claimState: {
+        state: 'claimed',
+        setupMode: {
+          active: false,
+          moveInCodePending: false,
+        },
+        homeId: expect.stringMatching(/^home_[0-9a-f]{32}$/),
+        homeHostPicoId: 'pico:home-host',
+        hostSigningKeyFingerprintHex: setupBody.host.signingKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: setupBody.host.keyAgreementKeyFingerprintHex,
+        claimedAt: expect.any(String),
+      },
+    });
+
+    const setupAfterClaim = await app.inject({ method: 'GET', url: '/api/home/setup' });
+    expect(setupAfterClaim.statusCode).toBe(404);
+
+    const status = await app.inject({ method: 'GET', url: '/api/system/status' });
+    expect(status.json().picoHome.claimState.state).toBe('claimed');
+    expect(status.json().picoHome.claimState.homeHostPicoId).toBe('pico:home-host');
+
+    const events = await app.inject({ method: 'GET', url: '/api/events' });
+    const homeClaimed = (events.json().events as { type: string; payload: unknown }[])
+      .filter((event) => event.type === 'home.claimed');
+    expect(homeClaimed).toHaveLength(1);
+    expect(homeClaimed[0].payload).toEqual({});
+
+    await app.close();
+  });
+
+  it('resets a claimed Pico Home only through the local home reset marker', async () => {
+    const databasePath = createDatabasePath();
+    const first = await buildAppWithCapturedLog({ databasePath });
+    const firstSetup = (await first.inject({ method: 'GET', url: '/api/home/setup' })).json();
+
+    const claimed = await first.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { moveInCode: readMoveInCode(first), homeHostPicoId: 'pico:home-host' },
+    });
+    expect(claimed.statusCode).toBe(201);
+    await first.close();
+
+    writeFileSync(homeResetMarkerPath(databasePath), '');
+    const restarted = await buildAppWithCapturedLog({ databasePath });
+    const restartedSetup = (await restarted.inject({ method: 'GET', url: '/api/home/setup' })).json();
+
+    expect(restartedSetup.host.signingKeyFingerprintHex).not.toBe(firstSetup.host.signingKeyFingerprintHex);
+    const status = await restarted.inject({ method: 'GET', url: '/api/system/status' });
+    expect(status.json().picoHome.claimState).toEqual({
+      state: 'unclaimed',
+      setupMode: {
+        active: true,
+        moveInCodePending: true,
+      },
+    });
+
+    const events = await restarted.inject({ method: 'GET', url: '/api/events' });
+    const homeReset = (events.json().events as { type: string; payload: unknown }[])
+      .filter((event) => event.type === 'home.reset');
+    expect(homeReset).toHaveLength(1);
+    expect(homeReset[0].payload).toEqual({});
+
+    await restarted.close();
+    const third = await buildAppWithCapturedLog({ databasePath });
+    const thirdEvents = await third.inject({ method: 'GET', url: '/api/events' });
+    expect((thirdEvents.json().events as { type: string }[]).filter((event) => event.type === 'home.reset')).toHaveLength(1);
+
+    await third.close();
   });
 
   it('keeps the dashboard shell and health endpoint open when a foundation token is configured', async () => {
@@ -1340,7 +1466,7 @@ describe('Pico Home Core app', () => {
     const app = await bootstrappedApp();
     const session = await login(app);
 
-    for (const type of ['auth.operator_bootstrapped', 'auth.credential_changed', 'auth.operator_reset', 'auth.sessions_revoked']) {
+    for (const type of ['auth.operator_bootstrapped', 'auth.credential_changed', 'auth.operator_reset', 'auth.sessions_revoked', 'home.claimed', 'home.reset']) {
       const forged = await app.inject({
         method: 'POST',
         url: '/api/events',
@@ -1931,6 +2057,20 @@ function readBootstrapCode(app: Awaited<ReturnType<typeof buildApp>>): string {
   }
 
   throw new Error('No operator bootstrap code was surfaced on the host log.');
+}
+
+function readMoveInCode(app: Awaited<ReturnType<typeof buildApp>>): string {
+  const lines = capturedLogLines.get(app) ?? [];
+
+  for (const line of lines) {
+    const parsed = JSON.parse(line) as { picoHomeMoveInCode?: unknown };
+
+    if (typeof parsed.picoHomeMoveInCode === 'string') {
+      return parsed.picoHomeMoveInCode;
+    }
+  }
+
+  throw new Error('No Move-In Code was surfaced on the host log.');
 }
 
 /** Reads an item the way a key-holding reader would, after the app let go of the database. */

@@ -26,6 +26,9 @@ import {
   type PicoEventListResponse,
   type PicoEventType,
   type PicoHealthResponse,
+  type PicoHomeClaimResponse,
+  type PicoHomeClaimStateResponse,
+  type PicoHomeSetupResponse,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
   type PicoRealtimeTicketResponse,
@@ -37,7 +40,7 @@ import {
 import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
-import { EventStore, type EventCursor } from './event-store.js';
+import { EventStore, type EventCursor, type PicoHomeClaimState } from './event-store.js';
 import type { MemoryContentCursor, MemoryItem, MemoryStore } from './memory-store.js';
 import { SoleResidentReadership, type DomainReadership } from './domain-readership.js';
 import { registerWebDashboard } from './static-web.js';
@@ -50,6 +53,13 @@ import { SessionStore } from './session-store.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { shredDomainWithAudit } from './domain-shred.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
+import {
+  assertHomeHostKeyStoreSeparation,
+  consumeHomeResetMarker,
+  HomeHostKeyStore,
+  MoveInCode,
+  type HomeHostKeyPairSet,
+} from './home-setup.js';
 
 const SERVICE_VERSION = '0.1.7';
 const PROTOCOL_VERSION = '0.1.7';
@@ -130,7 +140,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Fail loudly on a key/backup-separation misconfiguration before opening any
   // resource (ADR 0072 R6).
   const keyStorePath = config.keyStorePath ?? join(dirname(config.databasePath), 'keys');
+  const homeHostKeyStorePath = config.homeHostKeyStorePath ?? join(dirname(config.databasePath), 'home-host-keys');
   assertKeyStoreSeparation({
+    keyStorePath,
+    databasePath: config.databasePath,
+    backupDirectory: config.backupDirectory ?? join(dirname(config.databasePath), 'backups'),
+  });
+  assertHomeHostKeyStoreSeparation({
+    homeHostKeyStorePath,
     keyStorePath,
     databasePath: config.databasePath,
     backupDirectory: config.backupDirectory ?? join(dirname(config.databasePath), 'backups'),
@@ -179,6 +196,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const operators: OperatorStore = store.operators(sodium);
   const sessions = new SessionStore();
   const bootstrapCode = new OperatorBootstrapCode();
+  const moveInCode = new MoveInCode();
+  const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
+  let homeHostKeys: HomeHostKeyPairSet | undefined;
   const accessClasses = new AccessClassRegistry();
   // Domain readership for the `domain-content` class (ADR 0077 A7 seam). A
   // distinct authority from the operator role; the foundation-phase default
@@ -191,6 +211,27 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     if (store.append(event) === 'inserted') {
       broadcast(event);
     }
+  }
+
+  function activateHomeSetupMode(): void {
+    const claimState = store.picoHomeClaimState();
+    if (claimState.state !== 'unclaimed') {
+      moveInCode.clear();
+      return;
+    }
+
+    homeHostKeys = homeHostKeyStore.ensure(sodium);
+    const code = moveInCode.mint();
+
+    app.log.warn(
+      {
+        picoHomeMoveInCode: code,
+        claimEndpoint: '/api/home/claim',
+        hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+      },
+      'Pico Home is unclaimed. The Move-In Code is valid for this process only and must be read from this local host channel.',
+    );
   }
 
   // An explicit local reset clears the operator and returns the host to
@@ -211,6 +252,20 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     app.log.warn('Foundation operator cleared by local reset marker; the host is back in bootstrap.');
   }
+
+  if (consumeHomeResetMarker(config.databasePath)) {
+    const removed = homeHostKeyStore.clear();
+    store.resetPicoHome();
+    homeHostKeys = undefined;
+    moveInCode.clear();
+    appendServerEvent('home.reset', {});
+    app.log.warn(
+      { removedHostKeyFiles: removed.removedFiles },
+      'Pico Home reset by local reset marker; host identity keys were removed and setup mode will mint a fresh Move-In Code.',
+    );
+  }
+
+  activateHomeSetupMode();
 
   // While no operator exists, mint the per-process bootstrap code and surface it
   // on the host's local channel only (ADR 0076). A restart mints a new one.
@@ -335,12 +390,27 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     if (accessClass === 'setup-bootstrap') {
-      // Only reachable while the host has no operator (ADR 0075 A10).
-      if (operators.exists()) {
-        return reply.code(404).send({ error: 'Foundation operator bootstrap is not available.' });
+      if (routeUrl === '/api/auth/bootstrap') {
+        // Only reachable while the host has no operator (ADR 0075 A10).
+        if (operators.exists()) {
+          return reply.code(404).send({ error: 'Foundation operator bootstrap is not available.' });
+        }
+
+        return;
       }
 
-      return;
+      if (routeUrl === '/api/home/setup' || routeUrl === '/api/home/claim') {
+        // Only reachable while no Home exists (ADR 0080 M2). This is separate
+        // from the operator bootstrap: either can exist without the other.
+        if (store.picoHomeClaimState().state !== 'unclaimed') {
+          return reply.code(404).send({ error: 'Pico Home setup is not available.' });
+        }
+
+        return;
+      }
+
+      request.log.error({ route: routeUrl }, 'setup-bootstrap route is not scoped.');
+      return reply.code(500).send({ error: 'Setup route is not scoped.' });
     }
 
     const authority = resolveAuthority(request.headers.authorization);
@@ -419,6 +489,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // bootstrap surfaces must be reachable without the static token, or the token
   // would become a prerequisite for the principal that outranks it.
   accessClasses.register('POST', '/api/auth/bootstrap', 'setup-bootstrap');
+  accessClasses.register('GET', '/api/home/setup', 'setup-bootstrap');
+  accessClasses.register('POST', '/api/home/claim', 'setup-bootstrap');
   accessClasses.register('POST', '/api/auth/session', 'public');
   accessClasses.register('GET', '/api/auth/session', 'authenticated');
   accessClasses.register('DELETE', '/api/auth/session', 'authenticated');
@@ -472,9 +544,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       deviceId: config.deviceId,
       capabilities: protocolCapabilities,
       picoHome: {
-        claimState: {
-          state: store.picoHomeClaimState().state,
-        },
+        claimState: toPicoHomeClaimStateResponse(store.picoHomeClaimState(), moveInCode.isPending()),
       },
       database: {
         maxLamport: store.maxLamport(),
@@ -483,6 +553,80 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     };
 
     return sendNoStore(reply, response);
+  });
+
+  app.get('/api/home/setup', async (_request, reply) => {
+    if (homeHostKeys === undefined || !moveInCode.isPending()) {
+      return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
+    }
+
+    const response: PicoHomeSetupResponse = {
+      setupMode: {
+        active: true,
+        moveInCodePending: true,
+        claimEndpoint: '/api/home/claim',
+      },
+      host: {
+        suite: homeHostKeys.publicBundle.suite,
+        signingPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+        signingKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        keyAgreementPublicKeyHex: homeHostKeys.publicBundle.keyAgreementPublicKeyHex,
+        keyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+      },
+    };
+
+    return sendNoStore(reply, response);
+  });
+
+  app.post('/api/home/claim', async (request, reply) => {
+    const body = (request.body ?? {}) as { moveInCode?: unknown; homeHostPicoId?: unknown; hostAdminPicoId?: unknown };
+
+    const homeHostPicoId = readHomeHostPicoId(body);
+    if (!homeHostPicoId.ok) {
+      return sendNoStore(reply.code(400), { error: homeHostPicoId.error });
+    }
+
+    if (homeHostKeys === undefined || !moveInCode.isPending()) {
+      return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
+    }
+
+    const code = moveInCode.consume(body.moveInCode);
+    if (!code.ok) {
+      return sendNoStore(reply.code(code.exhausted ? 429 : 401), {
+        error: code.exhausted
+          ? 'Move-In Code is exhausted; restart the Pico Home process to mint a fresh code.'
+          : 'Move-In Code is invalid.',
+      });
+    }
+
+    let claimState: PicoHomeClaimState;
+    try {
+      claimState = store.claimPicoHome({
+        homeId: createHomeId(),
+        hostAdminPicoId: homeHostPicoId.value,
+        hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+      });
+    } catch (error) {
+      return sendNoStore(reply.code(409), { error: (error as Error).message });
+    }
+
+    appendServerEvent('home.claimed', {});
+    app.log.warn(
+      {
+        homeId: claimState.homeId,
+        homeHostPicoId: claimState.hostAdminPicoId,
+        hostSigningKeyFingerprintHex: claimState.hostSigningKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: claimState.hostKeyAgreementKeyFingerprintHex,
+      },
+      'Pico Home claimed; setup mode ended.',
+    );
+
+    const response: PicoHomeClaimResponse = {
+      claimState: toPicoHomeClaimStateResponse(claimState, moveInCode.isPending()) as PicoHomeClaimResponse['claimState'],
+    };
+
+    return reply.code(201).header('Cache-Control', 'no-store').send(response);
   });
 
   app.post('/api/auth/bootstrap', async (request, reply) => {
@@ -1009,6 +1153,55 @@ function sendNoStore<TPayload>(reply: FastifyReply, payload: TPayload): FastifyR
   return reply
     .header('Cache-Control', 'no-store')
     .send(payload);
+}
+
+function toPicoHomeClaimStateResponse(
+  state: PicoHomeClaimState,
+  moveInCodePending: boolean,
+): PicoHomeClaimStateResponse {
+  const setupMode = {
+    active: state.state === 'unclaimed' && moveInCodePending,
+    moveInCodePending,
+  };
+
+  if (state.state === 'unclaimed') {
+    return {
+      state: 'unclaimed',
+      setupMode,
+    };
+  }
+
+  return {
+    state: 'claimed',
+    setupMode,
+    ...(state.homeId === null ? {} : { homeId: state.homeId }),
+    homeHostPicoId: state.hostAdminPicoId,
+    ...(state.hostSigningKeyFingerprintHex === null ? {} : { hostSigningKeyFingerprintHex: state.hostSigningKeyFingerprintHex }),
+    ...(state.hostKeyAgreementKeyFingerprintHex === null ? {} : { hostKeyAgreementKeyFingerprintHex: state.hostKeyAgreementKeyFingerprintHex }),
+    claimedAt: state.claimedAt,
+  };
+}
+
+function readHomeHostPicoId(body: { homeHostPicoId?: unknown; hostAdminPicoId?: unknown }):
+  | { ok: true; value: string }
+  | { ok: false; error: string } {
+  const primary = body.homeHostPicoId;
+  const compatibility = body.hostAdminPicoId;
+
+  if (primary !== undefined && compatibility !== undefined && primary !== compatibility) {
+    return { ok: false, error: 'homeHostPicoId and hostAdminPicoId must match when both are provided.' };
+  }
+
+  const value = primary ?? compatibility;
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
+    return { ok: false, error: 'homeHostPicoId must be a non-empty ASCII token.' };
+  }
+
+  return { ok: true, value };
+}
+
+function createHomeId(): string {
+  return `home_${randomBytes(16).toString('hex')}`;
 }
 
 function parseLimit(rawLimit: string | undefined): { ok: true; limit: number } | { ok: false; error: string } {

@@ -36,6 +36,8 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `GET /health` | experimental diagnostic surface | Health check for the current Pico Home Core process. |
 | `GET /api/system/version` | experimental diagnostic surface | Reports service and protocol version information. |
 | `GET /api/system/status` | experimental diagnostic surface | Reports diagnostic service, capability, Pico Home claim-state and database migration state. |
+| `GET /api/home/setup` | experimental setup surface | Returns the current setup bundle with host public keys and fingerprints while the Home is unclaimed. Does not return the Move-In Code. |
+| `POST /api/home/claim` | experimental setup surface | Claims an Empty Pico Home with the per-process Move-In Code from the host local channel and a Home Host Pico id. This is an M2 Foundation setup slice, not full membership runtime. |
 | `GET /api/events` | experimental foundation API | Lists stored foundation events with additive cursor metadata. |
 | `GET /api/events/tail` | experimental diagnostic surface | Returns the latest foundation events for diagnostics dashboard use. Not a replica sync protocol and no durable sync cursors. |
 | `POST /api/realtime/tickets` | experimental foundation realtime guardrail | Mints short-lived single-use tickets for direct `WS /ws` browser upgrades, under the static token or an operator session. |
@@ -63,6 +65,8 @@ They assume a trusted local access path while production authentication, authori
 The current Foundation API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and with a local Foundation Operator login, but this is not production authentication, authorization, membership, claim, production memory or Home Assistant control boundary. Current `deviceId` values are client-supplied metadata, not verified device identity.
 
 Every Foundation API route carries exactly one access class (`../architecture/0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md`), enforced at route registration so an unclassified route cannot be served. Authority comes from two sources: the **operator session** (`../architecture/0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`) and, later, domain readership. The principal-less `PICO_FOUNDATION_TOKEN` reaches diagnostics at most and never administration. Operator sessions are opaque, sent as `Authorization: Bearer <session>`, held in memory only and never persisted; they are not cookies, so the browser attaches no ambient credential.
+
+`GET /api/home/setup` and `POST /api/home/claim` are setup-bootstrap routes for ADR 0080 Gate M2. They are reachable only while the Home is unclaimed. The Move-In Code is printed to the host local channel, not returned by HTTP; `/api/home/setup` returns only public host-key material needed for pinning. The current claim route records host-side claim state and `home.claimed` audit only. It does not seal payloads, verify claimant signatures, issue membership credentials, authorize domain access or implement Pico Home Link compatibility.
 
 When `PICO_FOUNDATION_TOKEN` is configured, or once an operator exists, `WS /ws` requires either a non-browser bearer upgrade header (token or session) or a short-lived single-use realtime ticket. Neither the long-lived token nor a session may be placed in a WebSocket URL.
 
@@ -148,6 +152,8 @@ auth.operator_bootstrapped
 auth.credential_changed
 auth.operator_reset
 auth.sessions_revoked
+home.claimed
+home.reset
 ```
 
 Server-synthesized foundation event types (exported as `serverSynthesizedFoundationEventTypes`), appended by the server and never accepted on `POST /api/events`:
@@ -158,6 +164,8 @@ auth.operator_bootstrapped
 auth.credential_changed
 auth.operator_reset
 auth.sessions_revoked
+home.claimed
+home.reset
 ```
 
 `memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller?, retentionPolicyRef? }`); an unknown `retentionPolicyRef` is rejected at write time, because the sweep's fail-safe rule would otherwise keep the item forever while the writer believed expiry was configured. The reference is stored with the item and does not appear in the event payload; the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.
@@ -167,6 +175,8 @@ auth.sessions_revoked
 `memory.domain_shredded` is the append-only crypto-shred audit record for a privacy domain (ADR 0071 step 4, ADR 0037 audit style). Its payload is `{ privacyDomain, removedKeyVersions, reason? }` and carries no content or key material; the actor and time are the event's `deviceId` and `wallTime`. It is appended by the server's crypto-shred operation and rejected on the client write path, so a client cannot forge a shred record.
 
 The `auth.*` types are the append-only Foundation Operator audit trail (ADR 0076, ADR 0037 audit style): `auth.operator_bootstrapped` (payload `{}`) when the first operator credential is established, `auth.credential_changed` (payload `{}`) when the passphrase is replaced, `auth.operator_reset` (payload `{ reason? }`) when a local reset clears the operator, and `auth.sessions_revoked` (payload `{ revokedSessions }`) when all sessions are revoked at once. They carry no credential material, no session identifiers and no content; the actor and time are the event's `deviceId` and `wallTime`. All four are server-synthesized and rejected on the client write path. Individual logins, logouts, failed logins and rate-limit hits are deliberately **not** recorded here: they are attacker-triggerable and stay in bounded operational logging so the append-only log cannot be flooded (ADR 0075 A9).
+
+`home.claimed` and `home.reset` are the append-only Pico Home setup audit records for ADR 0080 Gate M2. Their payload is `{}`. They never carry Move-In Codes, private keys, public-key material, claimant identifiers, attempt details or membership data; the actor and time are the event envelope. Both are server-synthesized and rejected on the client write path.
 
 ### Current foundation payload schemas
 
@@ -404,6 +414,7 @@ The current Pico Home Core status response advertises these implemented experime
 pico.core.events.v1
 pico.core.websocket.v1
 pico.avatar_state.v1
+pico.home.setup.v1
 ```
 
 These flags do not imply L2 Pico Link compatibility, L3 Pico Home Link compatibility, production readiness or commercial permission.

@@ -308,6 +308,27 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0012_pico_home_claim_metadata',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0080 M2: keep the existing claim-state seat but add the minimum
+      // public metadata needed to make a successful setup-mode claim durable.
+      // Existing claimed rows from earlier foundation builds may have NULLs
+      // here; the runtime treats that as incomplete evidence and never reopens
+      // setup mode because of it.
+      db.exec(`
+        ALTER TABLE pico_home_claim_state
+        ADD COLUMN home_id TEXT NULL;
+
+        ALTER TABLE pico_home_claim_state
+        ADD COLUMN host_signing_key_fingerprint_hex TEXT NULL;
+
+        ALTER TABLE pico_home_claim_state
+        ADD COLUMN host_key_agreement_key_fingerprint_hex TEXT NULL;
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

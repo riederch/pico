@@ -345,6 +345,9 @@ describe('EventStore', () => {
     expect(store.picoHomeClaimState()).toEqual({
       state: 'unclaimed',
       hostAdminPicoId: null,
+      homeId: null,
+      hostSigningKeyFingerprintHex: null,
+      hostKeyAgreementKeyFingerprintHex: null,
       claimedAt: null,
       createdAt: expect.any(String),
       updatedAt: expect.any(String),
@@ -365,11 +368,22 @@ describe('EventStore', () => {
         UPDATE pico_home_claim_state
         SET state = ?,
             host_admin_pico_id = ?,
+            home_id = ?,
+            host_signing_key_fingerprint_hex = ?,
+            host_key_agreement_key_fingerprint_hex = ?,
             claimed_at = ?,
             updated_at = ?
         WHERE id = 1
       `)
-      .run('claimed', 'pico:home-host', claimedAt, claimedAt);
+      .run(
+        'claimed',
+        'pico:home-host',
+        'home_20260718',
+        '1'.repeat(64),
+        '2'.repeat(64),
+        claimedAt,
+        claimedAt,
+      );
     db.close();
 
     const reopenedStore = new EventStore(databasePath);
@@ -377,12 +391,57 @@ describe('EventStore', () => {
     expect(reopenedStore.picoHomeClaimState()).toEqual({
       state: 'claimed',
       hostAdminPicoId: 'pico:home-host',
+      homeId: 'home_20260718',
+      hostSigningKeyFingerprintHex: '1'.repeat(64),
+      hostKeyAgreementKeyFingerprintHex: '2'.repeat(64),
       claimedAt,
       createdAt: expect.any(String),
       updatedAt: claimedAt,
     });
 
     reopenedStore.close();
+  });
+
+  it('claims and resets a Pico Home through the store boundary', () => {
+    const store = new EventStore(createDatabasePath());
+
+    const claimed = store.claimPicoHome({
+      homeId: 'home_20260718',
+      hostAdminPicoId: 'pico:home-host',
+      hostSigningKeyFingerprintHex: '1'.repeat(64),
+      hostKeyAgreementKeyFingerprintHex: '2'.repeat(64),
+      claimedAt: '2026-07-18T09:00:00.000Z',
+    });
+
+    expect(claimed).toEqual({
+      state: 'claimed',
+      hostAdminPicoId: 'pico:home-host',
+      homeId: 'home_20260718',
+      hostSigningKeyFingerprintHex: '1'.repeat(64),
+      hostKeyAgreementKeyFingerprintHex: '2'.repeat(64),
+      claimedAt: '2026-07-18T09:00:00.000Z',
+      createdAt: expect.any(String),
+      updatedAt: '2026-07-18T09:00:00.000Z',
+    });
+    expect(() => store.claimPicoHome({
+      homeId: 'home_20260719',
+      hostAdminPicoId: 'pico:other-host',
+      hostSigningKeyFingerprintHex: '3'.repeat(64),
+      hostKeyAgreementKeyFingerprintHex: '4'.repeat(64),
+    })).toThrow('Pico Home is already claimed.');
+
+    expect(store.resetPicoHome('2026-07-18T10:00:00.000Z')).toEqual({
+      state: 'unclaimed',
+      hostAdminPicoId: null,
+      homeId: null,
+      hostSigningKeyFingerprintHex: null,
+      hostKeyAgreementKeyFingerprintHex: null,
+      claimedAt: null,
+      createdAt: expect.any(String),
+      updatedAt: '2026-07-18T10:00:00.000Z',
+    });
+
+    store.close();
   });
 
   it('closes the SQLite connection idempotently', () => {

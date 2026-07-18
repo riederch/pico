@@ -34,6 +34,9 @@ export type PicoHomeClaimState =
   | {
     state: 'unclaimed';
     hostAdminPicoId: null;
+    homeId: null;
+    hostSigningKeyFingerprintHex: null;
+    hostKeyAgreementKeyFingerprintHex: null;
     claimedAt: null;
     createdAt: string;
     updatedAt: string;
@@ -41,10 +44,21 @@ export type PicoHomeClaimState =
   | {
     state: 'claimed';
     hostAdminPicoId: string;
+    homeId: string | null;
+    hostSigningKeyFingerprintHex: string | null;
+    hostKeyAgreementKeyFingerprintHex: string | null;
     claimedAt: string;
     createdAt: string;
     updatedAt: string;
   };
+
+export interface PicoHomeClaimInput {
+  homeId: string;
+  hostAdminPicoId: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  claimedAt?: string;
+}
 
 export interface EventStoreOpenOptions {
   backupDirectory?: string;
@@ -211,6 +225,9 @@ export class EventStore {
         SELECT
           state,
           host_admin_pico_id AS hostAdminPicoId,
+          ${columnExists(this.db, 'pico_home_claim_state', 'home_id') ? 'home_id' : 'NULL'} AS homeId,
+          ${columnExists(this.db, 'pico_home_claim_state', 'host_signing_key_fingerprint_hex') ? 'host_signing_key_fingerprint_hex' : 'NULL'} AS hostSigningKeyFingerprintHex,
+          ${columnExists(this.db, 'pico_home_claim_state', 'host_key_agreement_key_fingerprint_hex') ? 'host_key_agreement_key_fingerprint_hex' : 'NULL'} AS hostKeyAgreementKeyFingerprintHex,
           claimed_at AS claimedAt,
           created_at AS createdAt,
           updated_at AS updatedAt
@@ -224,6 +241,70 @@ export class EventStore {
     }
 
     return mapPicoHomeClaimState(row);
+  }
+
+  public claimPicoHome(input: PicoHomeClaimInput): PicoHomeClaimState {
+    this.ensureOpen();
+    assertAsciiToken(input.homeId, 'homeId');
+    assertAsciiToken(input.hostAdminPicoId, 'hostAdminPicoId');
+    assertFingerprint(input.hostSigningKeyFingerprintHex, 'hostSigningKeyFingerprintHex');
+    assertFingerprint(input.hostKeyAgreementKeyFingerprintHex, 'hostKeyAgreementKeyFingerprintHex');
+    if (input.claimedAt !== undefined) {
+      assertNonEmptyString(input.claimedAt, 'claimedAt');
+    }
+
+    const claimedAt = input.claimedAt ?? new Date().toISOString();
+    const claim = this.db.transaction(() => {
+      const result = this.db
+        .prepare(`
+          UPDATE pico_home_claim_state
+          SET state = ?,
+              host_admin_pico_id = ?,
+              home_id = ?,
+              host_signing_key_fingerprint_hex = ?,
+              host_key_agreement_key_fingerprint_hex = ?,
+              claimed_at = ?,
+              updated_at = ?
+          WHERE id = 1 AND state = 'unclaimed'
+        `)
+        .run(
+          'claimed',
+          input.hostAdminPicoId,
+          input.homeId,
+          input.hostSigningKeyFingerprintHex,
+          input.hostKeyAgreementKeyFingerprintHex,
+          claimedAt,
+          claimedAt,
+        );
+
+      if (result.changes !== 1) {
+        throw new Error('Pico Home is already claimed.');
+      }
+    });
+
+    claim();
+    return this.picoHomeClaimState();
+  }
+
+  public resetPicoHome(resetAt: string = new Date().toISOString()): PicoHomeClaimState {
+    this.ensureOpen();
+    assertNonEmptyString(resetAt, 'resetAt');
+
+    this.db
+      .prepare(`
+        UPDATE pico_home_claim_state
+        SET state = ?,
+            host_admin_pico_id = NULL,
+            home_id = NULL,
+            host_signing_key_fingerprint_hex = NULL,
+            host_key_agreement_key_fingerprint_hex = NULL,
+            claimed_at = NULL,
+            updated_at = ?
+        WHERE id = 1
+      `)
+      .run('unclaimed', resetAt);
+
+    return this.picoHomeClaimState();
   }
 
   // Deleteable memory store (ADR 0068), sharing this store's database
@@ -380,18 +461,46 @@ interface EventRow {
 interface PicoHomeClaimStateRow {
   state: string;
   hostAdminPicoId: string | null;
+  homeId: string | null;
+  hostSigningKeyFingerprintHex: string | null;
+  hostKeyAgreementKeyFingerprintHex: string | null;
   claimedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
-  if (row.state === 'unclaimed' && row.hostAdminPicoId === null && row.claimedAt === null) {
-    return { state: 'unclaimed', hostAdminPicoId: null, claimedAt: null, createdAt: row.createdAt, updatedAt: row.updatedAt };
+  if (
+    row.state === 'unclaimed'
+    && row.hostAdminPicoId === null
+    && row.homeId === null
+    && row.hostSigningKeyFingerprintHex === null
+    && row.hostKeyAgreementKeyFingerprintHex === null
+    && row.claimedAt === null
+  ) {
+    return {
+      state: 'unclaimed',
+      hostAdminPicoId: null,
+      homeId: null,
+      hostSigningKeyFingerprintHex: null,
+      hostKeyAgreementKeyFingerprintHex: null,
+      claimedAt: null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
   }
 
   if (row.state === 'claimed' && row.hostAdminPicoId !== null && row.hostAdminPicoId.trim() !== '' && row.claimedAt !== null) {
-    return { state: 'claimed', hostAdminPicoId: row.hostAdminPicoId, claimedAt: row.claimedAt, createdAt: row.createdAt, updatedAt: row.updatedAt };
+    return {
+      state: 'claimed',
+      hostAdminPicoId: row.hostAdminPicoId,
+      homeId: row.homeId,
+      hostSigningKeyFingerprintHex: row.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: row.hostKeyAgreementKeyFingerprintHex,
+      claimedAt: row.claimedAt,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
   }
 
   throw new Error('Pico Home claim state is invalid.');
@@ -438,6 +547,18 @@ function assertNonEmptyString(value: string, label: string): void {
   }
 }
 
+function assertAsciiToken(value: string, label: string): void {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
+    throw new Error(`Pico Home ${label} must be a non-empty ASCII token.`);
+  }
+}
+
+function assertFingerprint(value: string, label: string): void {
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) {
+    throw new Error(`Pico Home ${label} must be a lowercase BLAKE2b-256 hex fingerprint.`);
+  }
+}
+
 function assertLamportValue(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error('Event lamport must be a non-negative safe integer.');
@@ -448,6 +569,13 @@ function assertListLimit(limit: number): void {
   if (!Number.isSafeInteger(limit) || limit < 1) {
     throw new Error('EventStore list limit must be a positive safe integer.');
   }
+}
+
+function columnExists(db: Database.Database, tableName: string, columnName: string): boolean {
+  return db
+    .prepare(`PRAGMA table_info(${tableName})`)
+    .all()
+    .some((row) => (row as { name: string }).name === columnName);
 }
 
 // Storage comparison helper only. This is not Pico protocol canonicalization

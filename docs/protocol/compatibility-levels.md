@@ -65,6 +65,8 @@ auth.operator_bootstrapped
 auth.credential_changed
 auth.operator_reset
 auth.sessions_revoked
+home.claimed
+home.reset
 ```
 
 L1 does not imply sync compatibility, Pico Link compatibility, Pico Home hosting compatibility or commercial permission.

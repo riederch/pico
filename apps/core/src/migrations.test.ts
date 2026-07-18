@@ -70,6 +70,10 @@ describe('database migrations', () => {
           id: '0011_memory_domain_custody',
           requiresBackup: false,
         },
+        {
+          id: '0012_pico_home_claim_metadata',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -144,6 +148,10 @@ describe('database migrations', () => {
         id: '0011_memory_domain_custody',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0012_pico_home_claim_metadata',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     db.close();
@@ -160,6 +168,9 @@ describe('database migrations', () => {
           id,
           state,
           host_admin_pico_id AS hostAdminPicoId,
+          home_id AS homeId,
+          host_signing_key_fingerprint_hex AS hostSigningKeyFingerprintHex,
+          host_key_agreement_key_fingerprint_hex AS hostKeyAgreementKeyFingerprintHex,
           claimed_at AS claimedAt,
           created_at AS createdAt,
           updated_at AS updatedAt
@@ -172,6 +183,9 @@ describe('database migrations', () => {
         id: 1,
         state: 'unclaimed',
         hostAdminPicoId: null,
+        homeId: null,
+        hostSigningKeyFingerprintHex: null,
+        hostKeyAgreementKeyFingerprintHex: null,
         claimedAt: null,
         createdAt: expect.any(String),
         updatedAt: expect.any(String),
@@ -226,12 +240,13 @@ describe('database migrations', () => {
         '0009_memory_retention_policy',
         '0010_foundation_operator',
         '0011_memory_domain_custody',
+        '0012_pico_home_claim_metadata',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(11);
+    expect(listAppliedMigrations(db)).toHaveLength(12);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -241,7 +256,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(11);
+    expect(listAppliedMigrations(db)).toHaveLength(12);
 
     db.close();
   });
@@ -280,7 +295,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(11);
+    expect(listAppliedMigrations(db)).toHaveLength(12);
 
     db.close();
   });
@@ -302,6 +317,7 @@ describe('database migrations', () => {
       '0009_memory_retention_policy',
       '0010_foundation_operator',
       '0011_memory_domain_custody',
+      '0012_pico_home_claim_metadata',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -321,6 +337,7 @@ describe('database migrations', () => {
           '0009_memory_retention_policy',
           '0010_foundation_operator',
           '0011_memory_domain_custody',
+          '0012_pico_home_claim_metadata',
         ],
       },
     ]);
@@ -396,6 +413,7 @@ describe('database migrations', () => {
       '0009_memory_retention_policy',
       '0010_foundation_operator',
       '0011_memory_domain_custody',
+      '0012_pico_home_claim_metadata',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
