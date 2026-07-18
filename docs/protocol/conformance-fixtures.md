@@ -132,6 +132,10 @@ docs/protocol/fixtures/
     pico.suite.id.v1/
       canonicalization-positive/
       canonicalization-negative/
+  identity-signature-verification/
+    pico.suite.id.v1/
+      verify-positive/
+      verify-negative/
   identity-lifecycle/
     pico.suite.id.v1/
       lifecycle-positive/
@@ -171,11 +175,13 @@ docs/protocol/fixtures/
       privacy-negative/
 ```
 
-This layout is implemented for the current Foundation event and realtime seed, the current memory-content AD vector suite, the current identity signature-input vector suite, the current identity lifecycle vector suite, the current Vault keyfile header-AAD vector suite, the current draft Pico Link seed and the current draft Model Delegation seed. Other directories remain conceptual until fixture files are added.
+This layout is implemented for the current Foundation event and realtime seed, the current memory-content AD vector suite, the current identity signature-input vector suite, the current identity signature-verification vector suite, the current identity lifecycle vector suite, the current Vault keyfile header-AAD vector suite, the current draft Pico Link seed and the current draft Model Delegation seed. Other directories remain conceptual until fixture files are added.
 
 The `memory-content-ad/pico.suite.mem.v1/` family is seeded: ADR `0073-memory-content-ad-canonicalization-and-test-vectors.md` publishes the authoritative canonical associated-data byte layout and its accept/reject vectors (this is the first surface for which real canonical bytes are selected, per ADR 0034 and unlocking ADR 0047 for that scope only), and `docs/protocol/fixtures/memory-content-ad/` now holds those vectors as on-disk fixtures in its own `pico.mem-ad.vector.suite`. Unlike the draft placeholders these carry real canonical bytes; a protocol test rebuilds each vector from its input fields, checks the bytes against the published hex and against the ADR itself, and covers the `canonicalization-positive` and `canonicalization-negative` families. There is still no cryptographic runtime or round-trip vector: encrypt/decrypt and shred fixtures (ADR 0071 gate point 3) remain future work.
 
 The `identity-signature-input/pico.suite.id.v1/` family is seeded: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` now publishes the authoritative key-record, possession, delegation and revocation signature-input byte layouts and vectors for Gate G1, and `docs/protocol/fixtures/identity-signature-input/` holds those vectors as on-disk fixtures in its own `pico.identity.signature-input.vector.suite`. These carry real canonical bytes and key-record BLAKE2b-256 fingerprint digests, but no private keys, signatures, verification runtime or compatibility certification. A protocol test rebuilds each vector from its semantic fields, checks the bytes and fingerprints against the fixture metadata and checks the published values against ADR 0079.
+
+The `identity-signature-verification/pico.suite.id.v1/` family is seeded: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` now has deterministic detached Ed25519 verification vectors for possession, delegation and revocation over the Gate G1 canonical bytes. These publish public key records and signatures only: no private keys, no storage adapter, no registry freshness, no reader membership and no compatibility certification. The `@pico/identity` test suite reads each vector and verifies accept/reject behavior through the package runtime.
 
 The `identity-lifecycle/pico.suite.id.v1/` family is seeded: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` Gate G3 now has authoritative lookup/reconciliation vectors for accepted delegation and revocation statements. These cover active lookup, scope failure, direct delegation revocation, subject-key revocation, stale-restore reconciliation and conflicting statement rejection. They do not verify signatures, generate keys, provide reader membership, loosen draft fences or certify compatibility. The runtime coverage lives in `@pico/identity` tests, which read the fixture suite and project the expected lifecycle status.
 
@@ -211,10 +217,10 @@ Future fixtures should use stable family names:
 | privacy-negative | Relay-visible or host-visible data must not contain protected plaintext. |
 | downgrade-negative | Version or capability downgrade attempts must fail. |
 | lifecycle-negative | Valid syntax or signatures still fail because authority is revoked, expired or out of scope. |
-| signature-positive | Future known-good signature vector. |
-| signature-negative | Future altered-object, wrong-key or wrong-scope signature failure. |
+| signature-positive | Known-good detached signature vector. |
+| signature-negative | Altered-object, wrong-key or wrong-scope signature failure. |
 
-Signature families remain future-only until algorithms, keys, key serialization and verification semantics are defined.
+The current identity signature-verification suite uses `verify-positive` and `verify-negative` family names for its ADR 0079 surface. Broader Pico Link, Pico Home Link and event-segment signature families remain future-only until their algorithms, keys, key serialization and verification semantics are defined.
 
 ## Surface names
 
@@ -481,9 +487,9 @@ Future Model Delegation fixtures may cover:
 
 ## Canonicalization and signature fixture scope
 
-Canonicalization fixtures must wait for a selected canonicalization spec. The memory-content AD surface has one selected spec (ADR 0073). The Pico identity signature-input surface has one selected spec for Gate G1 (ADR 0079), covering canonical bytes and key-record fingerprint digests only. The Pico identity lifecycle surface has a selected projection fixture suite for Gate G3 (ADR 0079), covering lifecycle lookup/reconciliation over already accepted statements only. The Pico Vault keyfile surface has one selected header-AAD spec for Gate P1 (ADR 0081), covering the authenticated header binding only; the minimal open/sign/unwrap runtime is tested in `@pico/vault`, not in the fixture suite.
+Canonicalization fixtures must wait for a selected canonicalization spec. The memory-content AD surface has one selected spec (ADR 0073). The Pico identity signature-input surface has one selected spec for Gate G1 (ADR 0079), covering canonical bytes and key-record fingerprint digests only. The Pico identity signature-verification surface has deterministic detached Ed25519 vectors for possession, delegation and revocation over those bytes. The Pico identity lifecycle surface has a selected projection fixture suite for Gate G3 (ADR 0079), covering lifecycle lookup/reconciliation over accepted statements only. The Pico Vault keyfile surface has one selected header-AAD spec for Gate P1 (ADR 0081), covering the authenticated header binding only; the minimal open/sign/unwrap runtime is tested in `@pico/vault`, not in the fixture suite.
 
-Signature fixtures must wait for:
+Future signature fixture surfaces must wait for:
 
 - reviewed cryptographic primitive choices
 - key serialization formats
@@ -491,7 +497,7 @@ Signature fixtures must wait for:
 - signature input definitions
 - lifecycle-aware verification semantics
 
-Until then, fixture documents may describe cases but must not provide authoritative verification vectors.
+Until then, fixture documents may describe cases but must not provide authoritative verification vectors. The existing ADR 0079 verification vectors are deliberately limited to the local identity runtime and do not certify transport, membership, registry freshness or L4 compatibility.
 
 ## Privacy fixtures
 
@@ -546,14 +552,14 @@ It includes:
 - twenty draft Model Delegation fixtures in a separate draft suite
 - eleven memory-content AD canonicalization vectors in a separate authoritative vector suite
 - seventeen Pico identity signature-input canonicalization vectors in a separate authoritative vector suite
+- six Pico identity signature verification vectors in a separate authoritative vector suite
 - five Pico identity lifecycle lookup/reconciliation vectors in a separate authoritative vector suite
 - fifteen Pico Vault keyfile header-AAD vectors in a separate authoritative vector suite
-- protocol and identity tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics, authoritative vector bytes, identity lifecycle projections and draft-suite non-claim boundaries
+- protocol and identity tests that validate seed fixture metadata, source files, capability names, current Foundation event/realtime semantics, authoritative vector bytes, identity signature verification, identity lifecycle projections and draft-suite non-claim boundaries
 
 It does not include:
 
-- test keys
-- signature vectors
+- private test keys
 - a conformance runner
 - L4 compatibility certification
 

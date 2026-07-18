@@ -1,0 +1,28 @@
+{
+  "schema": "pico.identity.signature-verification.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.identity-signature-verification.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-verification",
+  "families": [
+    "verify-positive",
+    "verify-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-signature-verification-vectors",
+  "disclaimer": "Authoritative detached signature verification vectors for ADR 0079. Public-key records and signatures only; no private keys, no registry freshness, not reader membership, not L4 compatibility and no commercial permission.",
+  "fixtures": [
+    "pico.suite.id.v1/verify-positive/possession-device-signing",
+    "pico.suite.id.v1/verify-positive/delegation-device-reader",
+    "pico.suite.id.v1/verify-positive/revocation-delegation-reader",
+    "pico.suite.id.v1/verify-negative/delegation-wrong-issuer-key",
+    "pico.suite.id.v1/verify-negative/delegation-tampered-scope",
+    "pico.suite.id.v1/verify-negative/possession-key-agreement-role"
+  ],
+  "notes": "Signature verification vectors use deterministic Ed25519 public keys generated from fixed test seeds, but publish only public records and signatures. Verification rebuilds canonical ADR 0079 G1 bytes, checks issuer or subject fingerprint binding, and verifies detached signatures."
+}

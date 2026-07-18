@@ -1,0 +1,21 @@
+{
+  "schema": "pico.identity.signature-verification.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-verification.pico_suite_id_v1.verify-negative.delegation-tampered-scope",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-verification",
+  "family": "verify-negative",
+  "recordFamily": "delegation",
+  "case": "delegation rejects scope tampering under an otherwise valid identity key",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "verify": "reject",
+    "reason": "signature_mismatch_after_protected_field_change"
+  },
+  "adr": "0079",
+  "notes": "Changing the protected scope set changes pico.id.delegation.v1 canonical bytes, so the detached signature must not verify."
+}

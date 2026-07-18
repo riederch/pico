@@ -63,6 +63,13 @@ importers:
       '@pico/protocol':
         specifier: workspace:*
         version: link:../protocol
+      libsodium-wrappers-sumo:
+        specifier: ^0.8.4
+        version: 0.8.4
+    devDependencies:
+      '@types/libsodium-wrappers-sumo':
+        specifier: ^0.8.2
+        version: 0.8.2
 
   packages/protocol:
     devDependencies:

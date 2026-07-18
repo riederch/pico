@@ -1,0 +1,15 @@
+{
+  "recordFamily": "possession",
+  "subjectKeyRecord": {
+    "suite": "pico.suite.id.v1",
+    "keyRole": "device_signing",
+    "publicKeyHex": "a09aa5f47a6759802ff955f8dc2d2a14a5c99d23be97f864127ff9383455a4f0"
+  },
+  "possession": {
+    "suite": "pico.suite.id.v1",
+    "subjectKeyFingerprintHex": "15643743fbbf1a5c38ad545374697ae37ab1ebd67c6c04f7f8b93b292d32f495",
+    "verifierNonceHex": "4444444444444444444444444444444444444444444444444444444444444444",
+    "verifierContext": "pico-vault:device-claim"
+  },
+  "signatureHex": "e6a39ae08822e45c53dc55f0e22c675878349dc5c78f9a7bae53d15dfbc000391518e5d771102506317f9e59e62eb933aa88a2ae8ec120d1ab2ce7e945c94306"
+}

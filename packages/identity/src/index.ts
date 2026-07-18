@@ -1,11 +1,16 @@
 import {
   buildPicoIdentityDelegationSignatureInput,
+  buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   picoIdentityDelegationScopes,
+  picoIdentitySuite,
 } from '@pico/protocol';
 import type {
   PicoIdentityDelegationScope,
   PicoIdentityDelegationSignatureInput,
+  PicoIdentityKeyRecordSignatureInput,
+  PicoIdentityPossessionSignatureInput,
   PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
 
@@ -32,6 +37,58 @@ export type PicoIdentityRevocationMatch =
 export interface PicoIdentityLifecycleIndexInput {
   acceptedDelegations?: readonly PicoIdentityDelegationSignatureInput[];
   acceptedRevocations?: readonly PicoIdentityRevocationSignatureInput[];
+}
+
+export interface PicoIdentitySignedDelegation {
+  record: PicoIdentityDelegationSignatureInput;
+  signatureHex: string;
+}
+
+export interface PicoIdentitySignedRevocation {
+  record: PicoIdentityRevocationSignatureInput;
+  signatureHex: string;
+}
+
+export interface PicoIdentityKeyRecordFingerprintInput {
+  keyRecord: PicoIdentityKeyRecordSignatureInput;
+  expectedFingerprintHex: string;
+}
+
+export interface PicoIdentityDetachedSignatureVerificationInput {
+  publicKeyHex: string;
+  signatureInput: Uint8Array;
+  signatureHex: string;
+}
+
+export interface PicoIdentityPossessionVerificationInput {
+  subjectKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  possession: PicoIdentityPossessionSignatureInput;
+  signatureHex: string;
+}
+
+export interface PicoIdentityDelegationVerificationInput {
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  delegation: PicoIdentityDelegationSignatureInput;
+  signatureHex: string;
+}
+
+export interface PicoIdentityRevocationVerificationInput {
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  revocation: PicoIdentityRevocationSignatureInput;
+  signatureHex: string;
+}
+
+export interface PicoIdentityVerifiedLifecycleIndexInput {
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  signedDelegations?: readonly PicoIdentitySignedDelegation[];
+  signedRevocations?: readonly PicoIdentitySignedRevocation[];
+}
+
+export interface IdentityVerificationSodium {
+  crypto_sign_BYTES: number;
+  crypto_sign_PUBLICKEYBYTES: number;
+  crypto_generichash(hashLength: number, message: Uint8Array | string, key: Uint8Array | string | null): Uint8Array;
+  crypto_sign_verify_detached(signature: Uint8Array, message: Uint8Array | string, publicKey: Uint8Array): boolean;
 }
 
 export interface PicoIdentityDelegationLookupOptions {
@@ -244,12 +301,139 @@ export function createPicoIdentityLifecycleIndex(
   return new PicoIdentityLifecycleIndex(input);
 }
 
+export function createVerifiedPicoIdentityLifecycleIndex(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityVerifiedLifecycleIndexInput,
+): PicoIdentityLifecycleIndex {
+  assertIdentityIssuerKeyRecord(input.issuerIdentityKeyRecord);
+  const acceptedDelegations: PicoIdentityDelegationSignatureInput[] = [];
+  const acceptedRevocations: PicoIdentityRevocationSignatureInput[] = [];
+
+  for (const signedDelegation of input.signedDelegations ?? []) {
+    if (!verifyPicoIdentityDelegationSignature(sodium, {
+      issuerIdentityKeyRecord: input.issuerIdentityKeyRecord,
+      delegation: signedDelegation.record,
+      signatureHex: signedDelegation.signatureHex,
+    })) {
+      throw new Error('invalid_delegation_signature');
+    }
+    acceptedDelegations.push(cloneDelegation(signedDelegation.record));
+  }
+
+  for (const signedRevocation of input.signedRevocations ?? []) {
+    if (!verifyPicoIdentityRevocationSignature(sodium, {
+      issuerIdentityKeyRecord: input.issuerIdentityKeyRecord,
+      revocation: signedRevocation.record,
+      signatureHex: signedRevocation.signatureHex,
+    })) {
+      throw new Error('invalid_revocation_signature');
+    }
+    acceptedRevocations.push(cloneRevocation(signedRevocation.record));
+  }
+
+  return createPicoIdentityLifecycleIndex({
+    acceptedDelegations,
+    acceptedRevocations,
+  });
+}
+
 export function reconcilePicoIdentityLifecycleInputs(
   inputs: readonly PicoIdentityLifecycleIndexInput[],
 ): PicoIdentityLifecycleIndex {
   return createPicoIdentityLifecycleIndex({
     acceptedDelegations: inputs.flatMap((input) => [...(input.acceptedDelegations ?? [])]),
     acceptedRevocations: inputs.flatMap((input) => [...(input.acceptedRevocations ?? [])]),
+  });
+}
+
+export function computePicoIdentityKeyRecordFingerprintHex(
+  sodium: IdentityVerificationSodium,
+  keyRecord: PicoIdentityKeyRecordSignatureInput,
+): string {
+  const signatureInput = buildPicoIdentityKeyRecordSignatureInput(cloneKeyRecord(keyRecord));
+  return bytesToHex(sodium.crypto_generichash(32, signatureInput, null));
+}
+
+export function verifyPicoIdentityKeyRecordFingerprint(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityKeyRecordFingerprintInput,
+): boolean {
+  assertFingerprint(input.expectedFingerprintHex);
+  return timingSafeAsciiEqual(
+    computePicoIdentityKeyRecordFingerprintHex(sodium, input.keyRecord),
+    input.expectedFingerprintHex,
+  );
+}
+
+export function verifyPicoIdentityDetachedSignature(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityDetachedSignatureVerificationInput,
+): boolean {
+  const signature = fixedHexBytes(input.signatureHex, sodium.crypto_sign_BYTES, 'invalid_signature_length');
+  const publicKey = fixedHexBytes(input.publicKeyHex, sodium.crypto_sign_PUBLICKEYBYTES, 'invalid_public_key_length');
+  return sodium.crypto_sign_verify_detached(signature, input.signatureInput, publicKey);
+}
+
+export function verifyPicoIdentityPossessionSignature(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityPossessionVerificationInput,
+): boolean {
+  assertSigningCapableKeyRecord(input.subjectKeyRecord, 'key_role_cannot_verify_possession');
+  const possession = clonePossession(input.possession);
+  const signatureInput = buildPicoIdentityPossessionSignatureInput(possession);
+  if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+    keyRecord: input.subjectKeyRecord,
+    expectedFingerprintHex: possession.subjectKeyFingerprintHex,
+  })) {
+    return false;
+  }
+
+  return verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: input.subjectKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: input.signatureHex,
+  });
+}
+
+export function verifyPicoIdentityDelegationSignature(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityDelegationVerificationInput,
+): boolean {
+  assertIdentityIssuerKeyRecord(input.issuerIdentityKeyRecord);
+  const delegation = cloneDelegation(input.delegation);
+  const signatureInput = buildPicoIdentityDelegationSignatureInput(delegation);
+  if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+    keyRecord: input.issuerIdentityKeyRecord,
+    expectedFingerprintHex: delegation.issuerIdentityKeyFingerprintHex,
+  })) {
+    return false;
+  }
+
+  return verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: input.issuerIdentityKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: input.signatureHex,
+  });
+}
+
+export function verifyPicoIdentityRevocationSignature(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityRevocationVerificationInput,
+): boolean {
+  assertIdentityIssuerKeyRecord(input.issuerIdentityKeyRecord);
+  const revocation = cloneRevocation(input.revocation);
+  const signatureInput = buildPicoIdentityRevocationSignatureInput(revocation);
+  if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+    keyRecord: input.issuerIdentityKeyRecord,
+    expectedFingerprintHex: revocation.issuerIdentityKeyFingerprintHex,
+  })) {
+    return false;
+  }
+
+  return verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: input.issuerIdentityKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: input.signatureHex,
   });
 }
 
@@ -380,6 +564,27 @@ function cloneDelegation(
   };
 }
 
+function cloneKeyRecord(
+  keyRecord: PicoIdentityKeyRecordSignatureInput,
+): PicoIdentityKeyRecordSignatureInput {
+  return {
+    suite: keyRecord.suite,
+    keyRole: keyRecord.keyRole,
+    publicKeyHex: keyRecord.publicKeyHex,
+  };
+}
+
+function clonePossession(
+  possession: PicoIdentityPossessionSignatureInput,
+): PicoIdentityPossessionSignatureInput {
+  return {
+    suite: possession.suite,
+    subjectKeyFingerprintHex: possession.subjectKeyFingerprintHex,
+    verifierNonceHex: possession.verifierNonceHex,
+    verifierContext: possession.verifierContext,
+  };
+}
+
 function cloneRevocation(
   revocation: PicoIdentityRevocationSignatureInput,
 ): PicoIdentityRevocationSignatureInput {
@@ -417,6 +622,55 @@ function assertFingerprint(value: string): void {
   if (!/^[0-9a-f]{64}$/.test(value)) {
     throw new Error('invalid_fingerprint_length');
   }
+}
+
+function assertIdentityIssuerKeyRecord(keyRecord: PicoIdentityKeyRecordSignatureInput): void {
+  buildPicoIdentityKeyRecordSignatureInput(cloneKeyRecord(keyRecord));
+  if (keyRecord.suite !== picoIdentitySuite || keyRecord.keyRole !== 'pico_identity') {
+    throw new Error('invalid_issuer_key_role');
+  }
+}
+
+function assertSigningCapableKeyRecord(
+  keyRecord: PicoIdentityKeyRecordSignatureInput,
+  reason: string,
+): void {
+  buildPicoIdentityKeyRecordSignatureInput(cloneKeyRecord(keyRecord));
+  if (keyRecord.keyRole === 'device_key_agreement' || keyRecord.keyRole === 'home_host_key_agreement') {
+    throw new Error(reason);
+  }
+}
+
+function fixedHexBytes(value: string, expectedByteLength: number, lengthReason: string): Uint8Array {
+  if (!/^[0-9a-f]+$/.test(value)) {
+    throw new Error('invalid_hex');
+  }
+  if (value.length !== expectedByteLength * 2) {
+    throw new Error(lengthReason);
+  }
+
+  const output = new Uint8Array(expectedByteLength);
+  for (let i = 0; i < expectedByteLength; i += 1) {
+    output[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
+  }
+
+  return output;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function timingSafeAsciiEqual(left: string, right: string): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  let mismatch = 0;
+  for (let i = 0; i < left.length; i += 1) {
+    mismatch |= left.charCodeAt(i) ^ right.charCodeAt(i);
+  }
+  return mismatch === 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

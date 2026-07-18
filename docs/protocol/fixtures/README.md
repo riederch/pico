@@ -2,7 +2,7 @@
 
 This directory contains experimental fixture data for future Pico protocol conformance work.
 
-The current fixture set includes a Foundation event/realtime seed, authoritative byte/lifecycle vector suites and separate draft-only Pico Link and Model Delegation seeds. It does not publish an executable conformance suite, certify L4 compatibility, define Pico Link, Pico Home Link or Model Delegation compatibility, or make current Foundation APIs production-ready.
+The current fixture set includes a Foundation event/realtime seed, authoritative byte/signature/lifecycle vector suites and separate draft-only Pico Link and Model Delegation seeds. It does not publish an executable conformance suite, certify L4 compatibility, define Pico Link, Pico Home Link or Model Delegation compatibility, or make current Foundation APIs production-ready.
 
 ## Current Foundation fixtures
 
@@ -81,9 +81,23 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/revocation-i
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length/
 ```
 
+## Current identity signature-verification fixtures
+
+These fixtures carry deterministic detached Ed25519 verification vectors for the `pico.suite.id.v1` possession, delegation and revocation families (ADR 0079). They publish public key records and signatures only: no private keys, no registry freshness, no storage adapter, no reader membership, no L4 compatibility basis and no commercial permission.
+
+```text
+identity-signature-verification/suite.json
+identity-signature-verification/pico.suite.id.v1/verify-positive/possession-device-signing/
+identity-signature-verification/pico.suite.id.v1/verify-positive/delegation-device-reader/
+identity-signature-verification/pico.suite.id.v1/verify-positive/revocation-delegation-reader/
+identity-signature-verification/pico.suite.id.v1/verify-negative/delegation-wrong-issuer-key/
+identity-signature-verification/pico.suite.id.v1/verify-negative/delegation-tampered-scope/
+identity-signature-verification/pico.suite.id.v1/verify-negative/possession-key-agreement-role/
+```
+
 ## Current identity lifecycle fixtures
 
-These fixtures carry the authoritative lifecycle lookup and reconciliation vectors for the `pico.suite.id.v1` delegation and revocation families (ADR 0079 Gate G3). They operate only on already accepted lifecycle statements: no private keys, no signatures, no signature verification, no reader membership, no L4 compatibility basis and no commercial permission.
+These fixtures carry the authoritative lifecycle lookup and reconciliation vectors for the `pico.suite.id.v1` delegation and revocation families (ADR 0079 Gate G3). They operate only on already accepted lifecycle statements: no private keys, no signatures, no reader membership, no L4 compatibility basis and no commercial permission.
 
 ```text
 identity-lifecycle/suite.json
@@ -216,7 +230,7 @@ Each fixture directory contains:
 
 The Foundation seed fixtures are synthetic Foundation-stage examples. They are not cryptographic vectors and do not include private keys, signatures, canonical bytes, recovery material or production credentials.
 
-The memory-content AD, identity signature-input and Vault keyfile suites are authoritative byte-vector fixtures for their narrow ADR scopes. They still include no private keys, signatures, recovery material, production credentials, conformance runner or L4 compatibility basis. The Vault keyfile suite is header-AAD and synthetic open-negative metadata only; it is not an unlock or decryption runtime.
+The memory-content AD, identity signature-input and Vault keyfile suites are authoritative byte-vector fixtures for their narrow ADR scopes. The identity signature-verification suite adds public-key detached signature vectors only. They still include no private keys, recovery material, production credentials, conformance runner or L4 compatibility basis. The Vault keyfile suite is header-AAD and synthetic open-negative metadata only; it is not an unlock or decryption runtime.
 
 Draft Pico Link fixtures are non-normative fixture data only. They are not a runner, not a Pico Link implementation, not cryptographic verification, not Home membership authority, not an L4 compatibility basis and not commercial permission.
 

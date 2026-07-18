@@ -1,0 +1,21 @@
+{
+  "schema": "pico.identity.signature-verification.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-verification.pico_suite_id_v1.verify-positive.delegation-device-reader",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-verification",
+  "family": "verify-positive",
+  "recordFamily": "delegation",
+  "case": "identity key verifies a scoped device delegation",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "verify": "accept",
+    "issuerIdentityKeyFingerprintHex": "a33a1ab8e9e141ef2a1c2d5506a7874f59f899c0ce9d45baf8dc0ab261812c52"
+  },
+  "adr": "0079",
+  "notes": "Delegation verification rebuilds pico.id.delegation.v1 bytes, checks issuer fingerprint binding and verifies the detached Ed25519 signature."
+}

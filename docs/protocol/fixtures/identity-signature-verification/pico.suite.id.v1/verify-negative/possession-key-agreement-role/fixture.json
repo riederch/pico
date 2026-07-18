@@ -1,0 +1,21 @@
+{
+  "schema": "pico.identity.signature-verification.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-verification.pico_suite_id_v1.verify-negative.possession-key-agreement-role",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-verification",
+  "family": "verify-negative",
+  "recordFamily": "possession",
+  "case": "key-agreement records cannot satisfy signing-key possession challenges",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "verify": "reject",
+    "error": "key_role_cannot_verify_possession"
+  },
+  "adr": "0079",
+  "notes": "ADR 0079 I6 allows challenge-response possession only for signing-capable keys; X25519 key-agreement keys are bound by delegation and envelope use instead."
+}

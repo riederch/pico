@@ -1,0 +1,21 @@
+{
+  "schema": "pico.identity.signature-verification.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-verification.pico_suite_id_v1.verify-positive.possession-device-signing",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-verification",
+  "family": "verify-positive",
+  "recordFamily": "possession",
+  "case": "device signing key verifies a labeled possession challenge",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "verify": "accept",
+    "subjectKeyFingerprintHex": "15643743fbbf1a5c38ad545374697ae37ab1ebd67c6c04f7f8b93b292d32f495"
+  },
+  "adr": "0079",
+  "notes": "Possession verification rebuilds pico.id.possession.v1 bytes and checks the subject key-record fingerprint before Ed25519 verification."
+}

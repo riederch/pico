@@ -1,0 +1,19 @@
+{
+  "recordFamily": "revocation",
+  "issuerIdentityKeyRecord": {
+    "suite": "pico.suite.id.v1",
+    "keyRole": "pico_identity",
+    "publicKeyHex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+  },
+  "revocation": {
+    "suite": "pico.suite.id.v1",
+    "revocationId": "rev_01hzx8m9q4rt5v",
+    "issuerIdentityKeyFingerprintHex": "a33a1ab8e9e141ef2a1c2d5506a7874f59f899c0ce9d45baf8dc0ab261812c52",
+    "subjectKind": "delegation",
+    "subjectRef": "del_01hzx8m9q4rt5v",
+    "reasonCategory": "device_retired",
+    "revokedAt": "2026-08-18T08:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000002"
+  },
+  "signatureHex": "c6b866155e464c4fceea30d5f658c469d31dac875d2f645c24067cc1fee8245e6e3dbb082fa7230b25a5f5d7df48652eb73e9ee2c1529a10527018970cdcaa0e"
+}
