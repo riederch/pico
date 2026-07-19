@@ -1,0 +1,21 @@
+# Docker does not read .gitignore. Without this file the build context carries
+# the local Home data directory into the image: `apps/core/data` holds the
+# SQLite database and, by default, the Pico Home host identity keys.
+apps/core/data
+
+# Installed and built locally; the image installs and builds from the lockfile.
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/coverage
+.pnpm-store
+
+.git
+.gitignore
+.env
+.env.*
+*.log
+.idea
+.DS_Store

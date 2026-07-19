@@ -6,20 +6,28 @@ RUN corepack enable
 
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
-COPY apps/core/package.json apps/core/package.json
-COPY apps/web/package.json apps/web/package.json
-COPY packages/identity/package.json packages/identity/package.json
-COPY packages/protocol/package.json packages/protocol/package.json
-COPY packages/sync/package.json packages/sync/package.json
-COPY packages/vault/package.json packages/vault/package.json
+FROM base AS build
 
+# The whole workspace is installed from the lockfile in one step. Listing single
+# package manifests would cache better, but that list silently drifts whenever a
+# workspace package is added, which is exactly how packages/identity and
+# packages/vault once went missing from the image.
+COPY . .
 RUN pnpm install --frozen-lockfile
-
-COPY apps ./apps
-COPY packages ./packages
-
 RUN pnpm build
+
+# Reinstall production dependencies only, before the runtime stage copies
+# node_modules: the TypeScript compiler, vitest and tsx are build tools and must
+# not ship in a published image. Pruning in place would drop their links but
+# leave the packages in the virtual store, so the modules directories are
+# rebuilt from the pnpm store, which stays behind in this stage. The purge
+# confirmation is answered up front because a build has no one to ask.
+RUN rm -rf node_modules apps/*/node_modules packages/*/node_modules \
+  && pnpm install --frozen-lockfile --offline --prod --config.confirmModulesPurge=false
+
+FROM base AS runtime
+
+COPY --from=build /app /app
 RUN mkdir -p /data
 
 EXPOSE 3100
