@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingRecordSchema,
+  picoHomeMembershipScopes,
   type PicoEvent,
   type PicoHomeFoundingRecord,
 } from '@pico/protocol';
@@ -464,11 +465,74 @@ describe('EventStore', () => {
     expect(claimed.homeId).toBe(foundingRecord.founding.homeId);
     expect(claimed.claimedAt).toBe(foundingRecord.founding.foundedAt);
     expect(store.picoHomeFoundingRecord()).toEqual(foundingRecord);
+    expect(store.picoHomeMemberships()).toEqual([
+      {
+        membershipId: `founding:${foundingRecord.founding.foundingId}:home_host`,
+        homeId: foundingRecord.founding.homeId,
+        picoIdentityFingerprintHex: foundingRecord.founding.homeHostPicoIdentityFingerprintHex,
+        role: 'home_host',
+        status: 'active',
+        scopes: [...picoHomeMembershipScopes],
+        source: 'founding_record',
+        sourceRef: foundingRecord.founding.foundingId,
+        validFrom: foundingRecord.founding.foundedAt,
+        validUntil: null,
+        createdAt: foundingRecord.createdAt,
+        updatedAt: foundingRecord.createdAt,
+      },
+    ]);
+    expect(store.hasActivePicoHomeMembership(foundingRecord.founding.homeHostPicoIdentityFingerprintHex)).toBe(true);
+    expect(store.hasActivePicoHomeMembership('b'.repeat(64))).toBe(false);
 
     store.resetPicoHome('2026-07-19T11:00:00.000Z');
     expect(store.picoHomeFoundingRecord()).toBeUndefined();
+    expect(store.picoHomeMemberships()).toEqual([]);
 
     store.close();
+  });
+
+  it('reconciles restored Pico Home membership projection from founding evidence', async () => {
+    const databasePath = createDatabasePath();
+    const store = new EventStore(databasePath);
+    const foundingRecord = createPicoHomeFoundingRecord();
+
+    store.claimPicoHome({
+      homeId: foundingRecord.founding.homeId,
+      hostAdminPicoId: `pico:identity:${foundingRecord.founding.homeHostPicoIdentityFingerprintHex}`,
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+      foundingRecord,
+    });
+    store.close();
+
+    const stale = new Database(databasePath);
+    stale.prepare('DELETE FROM pico_home_membership').run();
+    stale.close();
+
+    const reopened = await EventStore.open(databasePath);
+
+    expect(reopened.picoHomeMemberships()).toEqual([
+      {
+        membershipId: `founding:${foundingRecord.founding.foundingId}:home_host`,
+        homeId: foundingRecord.founding.homeId,
+        picoIdentityFingerprintHex: foundingRecord.founding.homeHostPicoIdentityFingerprintHex,
+        role: 'home_host',
+        status: 'active',
+        scopes: [...picoHomeMembershipScopes],
+        source: 'founding_record',
+        sourceRef: foundingRecord.founding.foundingId,
+        validFrom: foundingRecord.founding.foundedAt,
+        validUntil: null,
+        createdAt: foundingRecord.createdAt,
+        updatedAt: expect.any(String),
+      },
+    ]);
+    expect(reopened.reconcilePicoHomeMembershipsFromFoundingEvidence('2026-07-19T12:05:00.000Z')).toEqual({
+      foundingRecordPresent: true,
+      restoredMembership: false,
+    });
+
+    reopened.close();
   });
 
   it('reconciles restored Pico Home claim state from founding evidence', async () => {

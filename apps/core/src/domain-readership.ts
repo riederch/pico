@@ -23,10 +23,25 @@ export interface ReadershipPrincipal {
    * the principal it identifies.
    */
   readonly sessionDigest: string;
+  /**
+   * Future principal binding once sessions are tied to a verified Pico identity.
+   * The current operator session does not have one; membership-backed
+   * readership therefore fails closed unless a caller supplies a verified
+   * identity fingerprint.
+   */
+  readonly picoIdentityFingerprintHex?: string;
 }
 
 export interface DomainReadership {
   mayRead(principal: ReadershipPrincipal, privacyDomain: string): boolean;
+}
+
+export interface HomeMembershipDirectory {
+  hasActivePicoHomeMembership(picoIdentityFingerprintHex: string): boolean;
+}
+
+export interface DomainReadGrantDirectory {
+  mayReadDomain(picoIdentityFingerprintHex: string, privacyDomain: string): boolean;
 }
 
 /**
@@ -39,5 +54,27 @@ export interface DomainReadership {
 export class SoleResidentReadership implements DomainReadership {
   public mayRead(_principal: ReadershipPrincipal, _privacyDomain: string): boolean {
     return true;
+  }
+}
+
+/**
+ * Membership-backed readership for the first multi-principal seam. Membership
+ * is necessary but deliberately not sufficient: ADR 0080 H6 and ADR 0078 K1
+ * keep "may use this Home" separate from "may read this privacy domain".
+ */
+export class HomeMembershipReadership implements DomainReadership {
+  public constructor(
+    private readonly memberships: HomeMembershipDirectory,
+    private readonly domainReadGrants: DomainReadGrantDirectory,
+  ) {}
+
+  public mayRead(principal: ReadershipPrincipal, privacyDomain: string): boolean {
+    const identity = principal.picoIdentityFingerprintHex;
+    if (identity === undefined) {
+      return false;
+    }
+
+    return this.memberships.hasActivePicoHomeMembership(identity)
+      && this.domainReadGrants.mayReadDomain(identity, privacyDomain);
   }
 }

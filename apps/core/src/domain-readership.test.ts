@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SoleResidentReadership } from './domain-readership.js';
+import { HomeMembershipReadership, SoleResidentReadership } from './domain-readership.js';
 
 describe('SoleResidentReadership', () => {
   it('grants the sole principal every domain, because a single-principal instance owns them all', () => {
@@ -19,5 +19,40 @@ describe('SoleResidentReadership', () => {
     // Different principals, same trivial answer today; the signature is what a
     // second principal plugs into.
     expect(readership.mayRead({ sessionDigest: 'digest-b' }, 'domain-private')).toBe(true);
+  });
+});
+
+describe('HomeMembershipReadership', () => {
+  it('requires a verified Pico identity binding before consulting membership', () => {
+    const readership = new HomeMembershipReadership(
+      { hasActivePicoHomeMembership: () => true },
+      { mayReadDomain: () => true },
+    );
+
+    expect(readership.mayRead({ sessionDigest: 'digest-a' }, 'domain-private')).toBe(false);
+  });
+
+  it('treats active Home membership as necessary but not sufficient for domain content', () => {
+    const member = 'a'.repeat(64);
+    const memberships = {
+      hasActivePicoHomeMembership: (identity: string) => identity === member,
+    };
+    const domainReadGrants = {
+      mayReadDomain: (identity: string, privacyDomain: string) => identity === member && privacyDomain === 'domain-readable',
+    };
+    const readership = new HomeMembershipReadership(memberships, domainReadGrants);
+
+    expect(readership.mayRead({
+      sessionDigest: 'digest-a',
+      picoIdentityFingerprintHex: member,
+    }, 'domain-readable')).toBe(true);
+    expect(readership.mayRead({
+      sessionDigest: 'digest-a',
+      picoIdentityFingerprintHex: member,
+    }, 'domain-forbidden')).toBe(false);
+    expect(readership.mayRead({
+      sessionDigest: 'digest-a',
+      picoIdentityFingerprintHex: 'b'.repeat(64),
+    }, 'domain-readable')).toBe(false);
   });
 });

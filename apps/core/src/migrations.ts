@@ -360,6 +360,40 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0014_pico_home_membership',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0080 M3 first runtime slice: persist the current Home membership
+      // projection as public state. The founding record projects the Home Host
+      // Pico's own active membership root; future signed member credentials and
+      // lifecycle records reconcile into this table instead of being inferred
+      // from operator sessions or spoofable memory provenance.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_home_membership (
+          membership_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('home_host', 'home_member')),
+          status TEXT NOT NULL CHECK (status IN ('invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued')),
+          scopes_json TEXT NOT NULL,
+          source TEXT NOT NULL CHECK (source = 'founding_record'),
+          source_ref TEXT NOT NULL,
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (home_id, pico_identity_fingerprint_hex, role)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_membership_identity
+        ON pico_home_membership (pico_identity_fingerprint_hex, status);
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_membership_home
+        ON pico_home_membership (home_id, status);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

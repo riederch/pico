@@ -21,6 +21,7 @@ import {
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
+  picoHomeMembershipScopes,
   picoHomeEventTypes,
   picoHomeSealedClaimPayloadSchema,
   picoIdentitySuite,
@@ -220,6 +221,7 @@ describe('Pico Home Core app', () => {
           { id: '0011_memory_domain_custody', appliedAt: expect.any(String) },
           { id: '0012_pico_home_claim_metadata', appliedAt: expect.any(String) },
           { id: '0013_pico_home_founding_record', appliedAt: expect.any(String) },
+          { id: '0014_pico_home_membership', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -396,6 +398,22 @@ describe('Pico Home Core app', () => {
     await app.close();
     const store = new EventStore(databasePath);
     expect(store.picoHomeFoundingRecord()).toEqual(finalBody.foundingRecord);
+    expect(store.picoHomeMemberships()).toEqual([
+      {
+        membershipId: `founding:${pending.pendingClaim.founding.foundingId}:home_host`,
+        homeId: pending.pendingClaim.founding.homeId,
+        picoIdentityFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+        role: 'home_host',
+        status: 'active',
+        scopes: [...picoHomeMembershipScopes],
+        source: 'founding_record',
+        sourceRef: pending.pendingClaim.founding.foundingId,
+        validFrom: pending.pendingClaim.founding.foundedAt,
+        validUntil: null,
+        createdAt: pending.pendingClaim.founding.foundedAt,
+        updatedAt: pending.pendingClaim.founding.foundedAt,
+      },
+    ]);
     store.close();
   });
 
