@@ -336,19 +336,7 @@ export class EventStore {
 
     return this.db
       .prepare(`
-        SELECT
-          membership_id AS membershipId,
-          home_id AS homeId,
-          pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
-          role,
-          status,
-          scopes_json AS scopesJson,
-          source,
-          source_ref AS sourceRef,
-          valid_from AS validFrom,
-          valid_until AS validUntil,
-          created_at AS createdAt,
-          updated_at AS updatedAt
+        SELECT ${picoHomeMembershipColumns}
         FROM pico_home_membership
         ORDER BY home_id ASC, role ASC, pico_identity_fingerprint_hex ASC
       `)
@@ -356,11 +344,24 @@ export class EventStore {
       .map((row) => mapPicoHomeMembership(row as PicoHomeMembershipRow));
   }
 
-  public hasActivePicoHomeMembership(picoIdentityFingerprintHex: string): boolean {
+  /**
+   * Membership is always scoped to one Home. Without an explicit `homeId` the
+   * currently claimed Home is used; an unclaimed Home has no member, so this
+   * fails closed rather than accepting a membership row for any other Home.
+   */
+  public hasActivePicoHomeMembership(picoIdentityFingerprintHex: string, homeId?: string): boolean {
     this.ensureOpen();
     assertFingerprint(picoIdentityFingerprintHex, 'picoIdentityFingerprintHex');
+    if (homeId !== undefined) {
+      assertAsciiToken(homeId, 'homeId');
+    }
 
     if (!tableExists(this.db, 'pico_home_membership')) {
+      return false;
+    }
+
+    const scopedHomeId = homeId ?? this.picoHomeClaimState().homeId ?? undefined;
+    if (scopedHomeId === undefined) {
       return false;
     }
 
@@ -368,11 +369,12 @@ export class EventStore {
       .prepare(`
         SELECT 1 AS present
         FROM pico_home_membership
-        WHERE pico_identity_fingerprint_hex = ?
+        WHERE home_id = ?
+          AND pico_identity_fingerprint_hex = ?
           AND status = 'active'
         LIMIT 1
       `)
-      .get(picoIdentityFingerprintHex) as { present: 1 } | undefined;
+      .get(scopedHomeId, picoIdentityFingerprintHex) as { present: 1 } | undefined;
 
     return row !== undefined;
   }
@@ -545,6 +547,12 @@ export class EventStore {
    * durable founding evidence (ADR 0080 M3). The founding record doubles as the
    * Home Host Pico's own membership root; a stale restore that drops or damages
    * that projection must not leave the Home without its local membership root.
+   *
+   * The current founding record is the only truth for founding-sourced rows, so
+   * rows carrying a different `source_ref` are dropped first: they belong to a
+   * superseded founding and would otherwise both resurrect a stale active
+   * membership and collide with the projected row on
+   * `UNIQUE (home_id, pico_identity_fingerprint_hex, role)`.
    */
   public reconcilePicoHomeMembershipsFromFoundingEvidence(
     reconciledAt: string = new Date().toISOString(),
@@ -564,26 +572,36 @@ export class EventStore {
       ...picoHomeFoundingMembershipFromRecord(foundingRecord),
       updatedAt: reconciledAt,
     };
-    assertPicoHomeMembership(expected);
 
-    const existing = this.picoHomeMemberships().find((membership) => membership.membershipId === expected.membershipId);
-    const alreadyReconciled = existing !== undefined
+    const existing = this.picoHomeMembership(expected.membershipId);
+    const projectionMatches = existing !== undefined
       && existing.homeId === expected.homeId
       && existing.picoIdentityFingerprintHex === expected.picoIdentityFingerprintHex
       && existing.role === expected.role
       && existing.status === expected.status
-      && sameStringArray(existing.scopes, expected.scopes)
+      && sameScopeSet(existing.scopes, expected.scopes)
       && existing.source === expected.source
       && existing.sourceRef === expected.sourceRef
       && existing.validFrom === expected.validFrom
       && existing.validUntil === expected.validUntil;
 
-    if (alreadyReconciled) {
-      return { foundingRecordPresent: true, restoredMembership: false };
-    }
+    const reconcile = this.db.transaction(() => {
+      const pruned = this.db
+        .prepare(`
+          DELETE FROM pico_home_membership
+          WHERE source = 'founding_record'
+            AND source_ref <> ?
+        `)
+        .run(expected.sourceRef).changes;
 
-    this.upsertPicoHomeMembership(expected);
-    return { foundingRecordPresent: true, restoredMembership: true };
+      if (!projectionMatches) {
+        this.upsertPicoHomeMembership(expected);
+      }
+
+      return pruned > 0 || !projectionMatches;
+    });
+
+    return { foundingRecordPresent: true, restoredMembership: reconcile() };
   }
 
   // Deleteable memory store (ADR 0068), sharing this store's database
@@ -750,6 +768,18 @@ export class EventStore {
       );
   }
 
+  private picoHomeMembership(membershipId: string): PicoHomeMembership | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT ${picoHomeMembershipColumns}
+        FROM pico_home_membership
+        WHERE membership_id = ?
+      `)
+      .get(membershipId) as PicoHomeMembershipRow | undefined;
+
+    return row === undefined ? undefined : mapPicoHomeMembership(row);
+  }
+
   private upsertPicoHomeMembership(membership: PicoHomeMembership): void {
     assertPicoHomeMembership(membership);
 
@@ -875,6 +905,21 @@ interface PicoHomeMembershipRow {
   createdAt: string;
   updatedAt: string;
 }
+
+const picoHomeMembershipColumns = `
+          membership_id AS membershipId,
+          home_id AS homeId,
+          pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+          role,
+          status,
+          scopes_json AS scopesJson,
+          source,
+          source_ref AS sourceRef,
+          valid_from AS validFrom,
+          valid_until AS validUntil,
+          created_at AS createdAt,
+          updated_at AS updatedAt
+`;
 
 function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
   if (
@@ -1169,7 +1214,13 @@ function toPicoHomeMembershipSource(value: string): PicoHomeMembershipSource {
 }
 
 function parsePicoHomeMembershipScopes(scopesJson: string): PicoHomeMembershipScope[] {
-  const parsed = JSON.parse(scopesJson) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(scopesJson) as unknown;
+  } catch {
+    throw new Error('Pico Home membership scopes are invalid.');
+  }
+
   if (!Array.isArray(parsed) || !parsed.every((scope) => typeof scope === 'string')) {
     throw new Error('Pico Home membership scopes are invalid.');
   }
@@ -1179,8 +1230,14 @@ function parsePicoHomeMembershipScopes(scopesJson: string): PicoHomeMembershipSc
   return scopes;
 }
 
-function sameStringArray(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
+/** Scope sets carry no order, so compare them as sets and not as sequences. */
+function sameScopeSet(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const known = new Set(left);
+  return right.every((value) => known.has(value));
 }
 
 function assertLamportValue(value: number): void {

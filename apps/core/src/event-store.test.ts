@@ -535,6 +535,87 @@ describe('EventStore', () => {
     reopened.close();
   });
 
+  it('drops restored memberships from a superseded founding instead of failing to open', async () => {
+    const databasePath = createDatabasePath();
+    const store = new EventStore(databasePath);
+    const foundingRecord = createPicoHomeFoundingRecord();
+
+    store.claimPicoHome({
+      homeId: foundingRecord.founding.homeId,
+      hostAdminPicoId: `pico:identity:${foundingRecord.founding.homeHostPicoIdentityFingerprintHex}`,
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+      foundingRecord,
+    });
+    store.close();
+
+    // A restore brings back the membership root of an earlier founding: same
+    // Home, same role, different founding. It occupies the current row's unique
+    // key and would otherwise stay active forever.
+    const stale = new Database(databasePath);
+    stale.prepare('DELETE FROM pico_home_membership').run();
+    stale
+      .prepare(`
+        INSERT INTO pico_home_membership (
+          membership_id, home_id, pico_identity_fingerprint_hex, role, status,
+          scopes_json, source, source_ref, valid_from, valid_until, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        'founding:founding_20260101:home_host',
+        foundingRecord.founding.homeId,
+        foundingRecord.founding.homeHostPicoIdentityFingerprintHex,
+        'home_host',
+        'active',
+        JSON.stringify([...picoHomeMembershipScopes]),
+        'founding_record',
+        'founding_20260101',
+        '2026-01-01T10:00:00.000Z',
+        null,
+        '2026-01-01T10:00:00.000Z',
+        '2026-01-01T10:00:00.000Z',
+      );
+    stale.close();
+
+    const reopened = await EventStore.open(databasePath);
+
+    expect(reopened.picoHomeMemberships().map((membership) => membership.membershipId)).toEqual([
+      `founding:${foundingRecord.founding.foundingId}:home_host`,
+    ]);
+    expect(reopened.picoHomeMemberships()[0]?.sourceRef).toBe(foundingRecord.founding.foundingId);
+    expect(reopened.reconcilePicoHomeMembershipsFromFoundingEvidence('2026-07-19T12:05:00.000Z')).toEqual({
+      foundingRecordPresent: true,
+      restoredMembership: false,
+    });
+
+    reopened.close();
+  });
+
+  it('scopes active membership lookups to the claimed Home', () => {
+    const databasePath = createDatabasePath();
+    const store = new EventStore(databasePath);
+    const foundingRecord = createPicoHomeFoundingRecord();
+
+    store.claimPicoHome({
+      homeId: foundingRecord.founding.homeId,
+      hostAdminPicoId: `pico:identity:${foundingRecord.founding.homeHostPicoIdentityFingerprintHex}`,
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+      foundingRecord,
+    });
+
+    const fingerprint = foundingRecord.founding.homeHostPicoIdentityFingerprintHex;
+    expect(store.hasActivePicoHomeMembership(fingerprint)).toBe(true);
+    expect(store.hasActivePicoHomeMembership(fingerprint, foundingRecord.founding.homeId)).toBe(true);
+    expect(store.hasActivePicoHomeMembership(fingerprint, 'home_other')).toBe(false);
+
+    // An unclaimed Home has no member at all, so the lookup must fail closed.
+    store.resetPicoHome('2026-07-19T11:00:00.000Z');
+    expect(store.hasActivePicoHomeMembership(fingerprint)).toBe(false);
+
+    store.close();
+  });
+
   it('reconciles restored Pico Home claim state from founding evidence', async () => {
     const databasePath = createDatabasePath();
     const store = new EventStore(databasePath);
