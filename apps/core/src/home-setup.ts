@@ -105,6 +105,7 @@ export interface HomeHostKeyStoreSodium {
   crypto_box_keypair(): { publicKey: Uint8Array; privateKey: Uint8Array };
   crypto_box_seal_open(ciphertext: Uint8Array, publicKey: Uint8Array, privateKey: Uint8Array): Uint8Array;
   crypto_generichash(hashLength: number, message: Uint8Array | string, key: Uint8Array | string | null): Uint8Array;
+  crypto_sign_detached(message: Uint8Array, privateKey: Uint8Array): Uint8Array;
   crypto_sign_keypair(): { publicKey: Uint8Array; privateKey: Uint8Array };
   memzero(bytes: Uint8Array): void;
 }
@@ -195,6 +196,17 @@ export class HomeHostKeyStore {
       sodium.memzero(publicKey);
       sodium.memzero(privateKey);
       sodium.memzero(ciphertext);
+    }
+  }
+
+  public signWithHostSigningKey(sodium: HomeHostKeyStoreSodium, signatureInput: Uint8Array): string {
+    const signing = readStoredKeyPair(sodium, this.keyPath(HOST_SIGNING_KEY_FILE), 'home_host_signing');
+    const privateKey = hexToBytes(signing.privateKeyHex);
+
+    try {
+      return bytesToHex(sodium.crypto_sign_detached(signatureInput, privateKey));
+    } finally {
+      sodium.memzero(privateKey);
     }
   }
 

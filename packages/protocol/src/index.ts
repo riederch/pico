@@ -124,6 +124,9 @@ export type PicoHomeClaimStateName = typeof picoHomeClaimStates[number];
 
 export const picoHomeClaimEnvelopeSchema = 'pico.home.claim-envelope.v1' as const;
 export const picoHomeSealedClaimPayloadSchema = 'pico.home.claim-payload.v1' as const;
+export const picoHomeClaimResponseRecordSchema = 'pico.home.claim-response-record.v1' as const;
+export const picoHomeFoundingAcceptanceSchema = 'pico.home.founding-acceptance.v1' as const;
+export const picoHomeFoundingRecordSchema = 'pico.home.founding-record.v1' as const;
 
 export const picoIdentitySuite = 'pico.suite.id.v1' as const;
 
@@ -339,6 +342,30 @@ export interface PicoHomeSealedClaimPayload {
   claim: PicoHomeClaimSignatureInput;
   claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   claimantSignatureHex: string;
+}
+
+export interface PicoHomeClaimResponseRecord {
+  schema: typeof picoHomeClaimResponseRecordSchema;
+  claimResponse: PicoHomeClaimResponseSignatureInput;
+  hostSignatureHex: string;
+}
+
+export interface PicoHomeFoundingAcceptance {
+  schema: typeof picoHomeFoundingAcceptanceSchema;
+  claimId: string;
+  foundingId: string;
+  claimantFoundingSignatureHex: string;
+}
+
+export interface PicoHomeFoundingRecord {
+  schema: typeof picoHomeFoundingRecordSchema;
+  founding: PicoHomeFoundingSignatureInput;
+  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  claimantClaimSignatureHex: string;
+  claimantFoundingSignatureHex: string;
+  hostClaimResponse: PicoHomeClaimResponseRecord;
+  hostFoundingSignatureHex: string;
+  createdAt: string;
 }
 
 export interface PicoHomeClaimResponseSignatureInput {
@@ -1017,6 +1044,15 @@ export interface PicoHomeSetupResponse {
 
 export interface PicoHomeClaimResponse {
   claimState: PicoHomeClaimStateResponse & { state: 'claimed' };
+  claimResponse?: PicoHomeClaimResponseRecord;
+  foundingRecord?: PicoHomeFoundingRecord;
+}
+
+export interface PicoHomePendingClaimResponse {
+  pendingClaim: {
+    claimResponse: PicoHomeClaimResponseRecord;
+    founding: PicoHomeFoundingSignatureInput;
+  };
 }
 
 export interface PicoEventListResponse<TPayload = unknown> {

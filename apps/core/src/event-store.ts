@@ -1,8 +1,8 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
-import type { PayloadPosture, PicoEvent, PicoEventAppendResult } from '@pico/protocol';
-import { payloadPostures } from '@pico/protocol';
+import type { PayloadPosture, PicoEvent, PicoEventAppendResult, PicoHomeFoundingRecord } from '@pico/protocol';
+import { payloadPostures, picoHomeClaimResponseRecordSchema, picoHomeFoundingRecordSchema } from '@pico/protocol';
 import {
   listAppliedMigrations,
   runMigrations,
@@ -57,6 +57,7 @@ export interface PicoHomeClaimInput {
   hostAdminPicoId: string;
   hostSigningKeyFingerprintHex: string;
   hostKeyAgreementKeyFingerprintHex: string;
+  foundingRecord?: PicoHomeFoundingRecord;
   claimedAt?: string;
 }
 
@@ -243,17 +244,55 @@ export class EventStore {
     return mapPicoHomeClaimState(row);
   }
 
+  public picoHomeFoundingRecord(): PicoHomeFoundingRecord | undefined {
+    this.ensureOpen();
+
+    if (!tableExists(this.db, 'pico_home_founding_record')) {
+      return undefined;
+    }
+
+    const row = this.db
+      .prepare(`
+        SELECT
+          schema,
+          founding_id AS foundingId,
+          home_id AS homeId,
+          claim_id AS claimId,
+          home_host_pico_identity_fingerprint_hex AS homeHostPicoIdentityFingerprintHex,
+          host_signing_key_fingerprint_hex AS hostSigningKeyFingerprintHex,
+          host_key_agreement_key_fingerprint_hex AS hostKeyAgreementKeyFingerprintHex,
+          founded_at AS foundedAt,
+          lifecycle_order AS lifecycleOrder,
+          claim_response_json AS claimResponseJson,
+          founding_json AS foundingJson,
+          claimant_identity_key_record_json AS claimantIdentityKeyRecordJson,
+          claimant_claim_signature_hex AS claimantClaimSignatureHex,
+          claimant_founding_signature_hex AS claimantFoundingSignatureHex,
+          host_claim_response_signature_hex AS hostClaimResponseSignatureHex,
+          host_founding_signature_hex AS hostFoundingSignatureHex,
+          created_at AS createdAt
+        FROM pico_home_founding_record
+        WHERE id = 1
+      `)
+      .get() as PicoHomeFoundingRecordRow | undefined;
+
+    return row === undefined ? undefined : mapPicoHomeFoundingRecord(row);
+  }
+
   public claimPicoHome(input: PicoHomeClaimInput): PicoHomeClaimState {
     this.ensureOpen();
     assertAsciiToken(input.homeId, 'homeId');
     assertAsciiToken(input.hostAdminPicoId, 'hostAdminPicoId');
     assertFingerprint(input.hostSigningKeyFingerprintHex, 'hostSigningKeyFingerprintHex');
     assertFingerprint(input.hostKeyAgreementKeyFingerprintHex, 'hostKeyAgreementKeyFingerprintHex');
+    if (input.foundingRecord !== undefined) {
+      assertPicoHomeFoundingRecord(input.foundingRecord, input);
+    }
     if (input.claimedAt !== undefined) {
       assertNonEmptyString(input.claimedAt, 'claimedAt');
     }
 
-    const claimedAt = input.claimedAt ?? new Date().toISOString();
+    const claimedAt = input.claimedAt ?? input.foundingRecord?.founding.foundedAt ?? new Date().toISOString();
     const claim = this.db.transaction(() => {
       const result = this.db
         .prepare(`
@@ -280,6 +319,10 @@ export class EventStore {
       if (result.changes !== 1) {
         throw new Error('Pico Home is already claimed.');
       }
+
+      if (input.foundingRecord !== undefined) {
+        this.insertPicoHomeFoundingRecord(input.foundingRecord);
+      }
     });
 
     claim();
@@ -290,19 +333,27 @@ export class EventStore {
     this.ensureOpen();
     assertNonEmptyString(resetAt, 'resetAt');
 
-    this.db
-      .prepare(`
-        UPDATE pico_home_claim_state
-        SET state = ?,
-            host_admin_pico_id = NULL,
-            home_id = NULL,
-            host_signing_key_fingerprint_hex = NULL,
-            host_key_agreement_key_fingerprint_hex = NULL,
-            claimed_at = NULL,
-            updated_at = ?
-        WHERE id = 1
-      `)
-      .run('unclaimed', resetAt);
+    const reset = this.db.transaction(() => {
+      this.db
+        .prepare(`
+          UPDATE pico_home_claim_state
+          SET state = ?,
+              host_admin_pico_id = NULL,
+              home_id = NULL,
+              host_signing_key_fingerprint_hex = NULL,
+              host_key_agreement_key_fingerprint_hex = NULL,
+              claimed_at = NULL,
+              updated_at = ?
+          WHERE id = 1
+        `)
+        .run('unclaimed', resetAt);
+
+      if (tableExists(this.db, 'pico_home_founding_record')) {
+        this.db.prepare('DELETE FROM pico_home_founding_record WHERE id = 1').run();
+      }
+    });
+
+    reset();
 
     return this.picoHomeClaimState();
   }
@@ -425,6 +476,52 @@ export class EventStore {
     }
   }
 
+  private insertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord): void {
+    this.db
+      .prepare(`
+        INSERT INTO pico_home_founding_record (
+          id,
+          schema,
+          founding_id,
+          home_id,
+          claim_id,
+          home_host_pico_identity_fingerprint_hex,
+          host_signing_key_fingerprint_hex,
+          host_key_agreement_key_fingerprint_hex,
+          founded_at,
+          lifecycle_order,
+          claim_response_json,
+          founding_json,
+          claimant_identity_key_record_json,
+          claimant_claim_signature_hex,
+          claimant_founding_signature_hex,
+          host_claim_response_signature_hex,
+          host_founding_signature_hex,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        1,
+        record.schema,
+        record.founding.foundingId,
+        record.founding.homeId,
+        record.hostClaimResponse.claimResponse.claimId,
+        record.founding.homeHostPicoIdentityFingerprintHex,
+        record.founding.hostSigningKeyFingerprintHex,
+        record.founding.hostKeyAgreementKeyFingerprintHex,
+        record.founding.foundedAt,
+        record.founding.lifecycleOrder,
+        serializePayload(record.hostClaimResponse.claimResponse),
+        serializePayload(record.founding),
+        serializePayload(record.claimantIdentityKeyRecord),
+        record.claimantClaimSignatureHex,
+        record.claimantFoundingSignatureHex,
+        record.hostClaimResponse.hostSignatureHex,
+        record.hostFoundingSignatureHex,
+        record.createdAt,
+      );
+  }
+
   private mapRow(row: EventRow): PicoEvent {
     return {
       eventId: row.event_id,
@@ -469,6 +566,26 @@ interface PicoHomeClaimStateRow {
   updatedAt: string;
 }
 
+interface PicoHomeFoundingRecordRow {
+  schema: string;
+  foundingId: string;
+  homeId: string;
+  claimId: string;
+  homeHostPicoIdentityFingerprintHex: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  foundedAt: string;
+  lifecycleOrder: string;
+  claimResponseJson: string;
+  foundingJson: string;
+  claimantIdentityKeyRecordJson: string;
+  claimantClaimSignatureHex: string;
+  claimantFoundingSignatureHex: string;
+  hostClaimResponseSignatureHex: string;
+  hostFoundingSignatureHex: string;
+  createdAt: string;
+}
+
 function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
   if (
     row.state === 'unclaimed'
@@ -504,6 +621,27 @@ function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
   }
 
   throw new Error('Pico Home claim state is invalid.');
+}
+
+function mapPicoHomeFoundingRecord(row: PicoHomeFoundingRecordRow): PicoHomeFoundingRecord {
+  if (row.schema !== picoHomeFoundingRecordSchema) {
+    throw new Error('Pico Home founding record is invalid.');
+  }
+
+  return {
+    schema: picoHomeFoundingRecordSchema,
+    founding: JSON.parse(row.foundingJson) as PicoHomeFoundingRecord['founding'],
+    claimantIdentityKeyRecord: JSON.parse(row.claimantIdentityKeyRecordJson) as PicoHomeFoundingRecord['claimantIdentityKeyRecord'],
+    claimantClaimSignatureHex: row.claimantClaimSignatureHex,
+    claimantFoundingSignatureHex: row.claimantFoundingSignatureHex,
+    hostClaimResponse: {
+      schema: picoHomeClaimResponseRecordSchema,
+      claimResponse: JSON.parse(row.claimResponseJson) as PicoHomeFoundingRecord['hostClaimResponse']['claimResponse'],
+      hostSignatureHex: row.hostClaimResponseSignatureHex,
+    },
+    hostFoundingSignatureHex: row.hostFoundingSignatureHex,
+    createdAt: row.createdAt,
+  };
 }
 
 function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string): boolean {
@@ -559,6 +697,67 @@ function assertFingerprint(value: string, label: string): void {
   }
 }
 
+function assertDetachedSignature(value: string, label: string): void {
+  if (typeof value !== 'string' || !/^[0-9a-f]{128}$/.test(value)) {
+    throw new Error(`Pico Home ${label} must be a lowercase Ed25519 signature hex value.`);
+  }
+}
+
+function assertLifecycleOrder(value: string, label: string): void {
+  if (typeof value !== 'string' || !/^seq:[0-9]{16}$/.test(value)) {
+    throw new Error(`Pico Home ${label} must be a fixed-width lifecycle order.`);
+  }
+}
+
+function assertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord, claim: PicoHomeClaimInput): void {
+  if (record.schema !== picoHomeFoundingRecordSchema) {
+    throw new Error('Pico Home founding record schema is invalid.');
+  }
+
+  if (record.hostClaimResponse.schema !== picoHomeClaimResponseRecordSchema) {
+    throw new Error('Pico Home claim response record schema is invalid.');
+  }
+
+  const founding = record.founding;
+  const claimResponse = record.hostClaimResponse.claimResponse;
+  assertAsciiToken(founding.foundingId, 'foundingId');
+  assertAsciiToken(founding.homeId, 'homeId');
+  assertFingerprint(founding.hostSigningKeyFingerprintHex, 'founding.hostSigningKeyFingerprintHex');
+  assertFingerprint(founding.hostKeyAgreementKeyFingerprintHex, 'founding.hostKeyAgreementKeyFingerprintHex');
+  assertFingerprint(founding.homeHostPicoIdentityFingerprintHex, 'founding.homeHostPicoIdentityFingerprintHex');
+  assertNonEmptyString(founding.foundedAt, 'foundedAt');
+  assertLifecycleOrder(founding.lifecycleOrder, 'founding.lifecycleOrder');
+  assertAsciiToken(claimResponse.claimId, 'claimId');
+  assertAsciiToken(claimResponse.homeId, 'claimResponse.homeId');
+  assertAsciiToken(claimResponse.foundingRecordId, 'claimResponse.foundingRecordId');
+  assertFingerprint(claimResponse.hostSigningKeyFingerprintHex, 'claimResponse.hostSigningKeyFingerprintHex');
+  assertFingerprint(claimResponse.hostKeyAgreementKeyFingerprintHex, 'claimResponse.hostKeyAgreementKeyFingerprintHex');
+  assertFingerprint(claimResponse.claimantIdentityKeyFingerprintHex, 'claimResponse.claimantIdentityKeyFingerprintHex');
+  assertFingerprint(claimResponse.claimantNonceHex, 'claimResponse.claimantNonceHex');
+  assertFingerprint(claimResponse.hostNonceHex, 'claimResponse.hostNonceHex');
+  assertDetachedSignature(record.claimantClaimSignatureHex, 'claimantClaimSignatureHex');
+  assertDetachedSignature(record.claimantFoundingSignatureHex, 'claimantFoundingSignatureHex');
+  assertDetachedSignature(record.hostClaimResponse.hostSignatureHex, 'hostClaimResponseSignatureHex');
+  assertDetachedSignature(record.hostFoundingSignatureHex, 'hostFoundingSignatureHex');
+  assertNonEmptyString(record.createdAt, 'createdAt');
+
+  if (
+    founding.homeId !== claim.homeId
+    || claimResponse.homeId !== claim.homeId
+    || founding.hostSigningKeyFingerprintHex !== claim.hostSigningKeyFingerprintHex
+    || claimResponse.hostSigningKeyFingerprintHex !== claim.hostSigningKeyFingerprintHex
+    || founding.hostKeyAgreementKeyFingerprintHex !== claim.hostKeyAgreementKeyFingerprintHex
+    || claimResponse.hostKeyAgreementKeyFingerprintHex !== claim.hostKeyAgreementKeyFingerprintHex
+    || claimResponse.foundingRecordId !== founding.foundingId
+    || claimResponse.claimantIdentityKeyFingerprintHex !== founding.homeHostPicoIdentityFingerprintHex
+    || claimResponse.claimantNonceHex !== founding.claimantNonceHex
+    || claimResponse.hostNonceHex !== founding.hostNonceHex
+    || claim.hostAdminPicoId !== `pico:identity:${founding.homeHostPicoIdentityFingerprintHex}`
+  ) {
+    throw new Error('Pico Home founding record is not bound to the claim state.');
+  }
+}
+
 function assertLamportValue(value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error('Event lamport must be a non-negative safe integer.');
@@ -576,6 +775,12 @@ function columnExists(db: Database.Database, tableName: string, columnName: stri
     .prepare(`PRAGMA table_info(${tableName})`)
     .all()
     .some((row) => (row as { name: string }).name === columnName);
+}
+
+function tableExists(db: Database.Database, tableName: string): boolean {
+  return db
+    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName) !== undefined;
 }
 
 // Storage comparison helper only. This is not Pico protocol canonicalization

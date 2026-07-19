@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { PicoEvent } from '@pico/protocol';
+import {
+  picoHomeClaimResponseRecordSchema,
+  picoHomeFoundingRecordSchema,
+  type PicoEvent,
+  type PicoHomeFoundingRecord,
+} from '@pico/protocol';
 import { EventStore } from './event-store.js';
 import type { MigrationDefinition } from './migrations.js';
 
@@ -444,6 +449,28 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('persists and clears the current Pico Home founding record through the store boundary', () => {
+    const store = new EventStore(createDatabasePath());
+    const foundingRecord = createPicoHomeFoundingRecord();
+
+    const claimed = store.claimPicoHome({
+      homeId: foundingRecord.founding.homeId,
+      hostAdminPicoId: `pico:identity:${foundingRecord.founding.homeHostPicoIdentityFingerprintHex}`,
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+      foundingRecord,
+    });
+
+    expect(claimed.homeId).toBe(foundingRecord.founding.homeId);
+    expect(claimed.claimedAt).toBe(foundingRecord.founding.foundedAt);
+    expect(store.picoHomeFoundingRecord()).toEqual(foundingRecord);
+
+    store.resetPicoHome('2026-07-19T11:00:00.000Z');
+    expect(store.picoHomeFoundingRecord()).toBeUndefined();
+
+    store.close();
+  });
+
   it('closes the SQLite connection idempotently', () => {
     const store = new EventStore(createDatabasePath());
 
@@ -528,6 +555,58 @@ function createEvent(overrides: Partial<PicoEvent> = {}): PicoEvent {
       text: 'Hallo Pico',
     },
     ...overrides,
+  };
+}
+
+function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
+  const homeId = 'home_20260719';
+  const foundingId = 'founding_20260719';
+  const claimId = 'claim_20260719';
+  const hostSigningKeyFingerprintHex = '1'.repeat(64);
+  const hostKeyAgreementKeyFingerprintHex = '2'.repeat(64);
+  const homeHostPicoIdentityFingerprintHex = '3'.repeat(64);
+  const claimantNonceHex = '4'.repeat(64);
+  const hostNonceHex = '5'.repeat(64);
+  const foundedAt = '2026-07-19T10:00:00.000Z';
+
+  return {
+    schema: picoHomeFoundingRecordSchema,
+    founding: {
+      suite: 'pico.suite.id.v1',
+      foundingId,
+      homeId,
+      hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex,
+      homeHostPicoIdentityFingerprintHex,
+      claimantNonceHex,
+      hostNonceHex,
+      foundedAt,
+      lifecycleOrder: 'seq:0000000000000001',
+    },
+    claimantIdentityKeyRecord: {
+      suite: 'pico.suite.id.v1',
+      keyRole: 'pico_identity',
+      publicKeyHex: '6'.repeat(64),
+    },
+    claimantClaimSignatureHex: '7'.repeat(128),
+    claimantFoundingSignatureHex: '8'.repeat(128),
+    hostClaimResponse: {
+      schema: picoHomeClaimResponseRecordSchema,
+      claimResponse: {
+        suite: 'pico.suite.id.v1',
+        claimId,
+        homeId,
+        hostSigningKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex,
+        claimantIdentityKeyFingerprintHex: homeHostPicoIdentityFingerprintHex,
+        claimantNonceHex,
+        hostNonceHex,
+        foundingRecordId: foundingId,
+      },
+      hostSignatureHex: '9'.repeat(128),
+    },
+    hostFoundingSignatureHex: 'a'.repeat(128),
+    createdAt: foundedAt,
   };
 }
 

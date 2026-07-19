@@ -4,13 +4,18 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  buildPicoHomeClaimResponseSignatureInput,
   buildPicoHomeClaimSignatureInput,
+  buildPicoHomeFoundingSignatureInput,
   validateFoundationEventPayload,
   foundationEventTypes,
   serverSynthesizedFoundationEventTypes,
   payloadPostures,
   picoEventTypes,
   picoHomeClaimEnvelopeSchema,
+  picoHomeClaimResponseRecordSchema,
+  picoHomeFoundingAcceptanceSchema,
+  picoHomeFoundingRecordSchema,
   picoHomeSealedClaimPayloadSchema,
   picoIdentitySuite,
   protocolCapabilities,
@@ -32,8 +37,14 @@ import {
   type PicoHealthResponse,
   type PicoHomeClaimEnvelope,
   type PicoHomeClaimResponse,
+  type PicoHomeClaimResponseRecord,
+  type PicoHomeClaimResponseSignatureInput,
   type PicoHomeClaimStateResponse,
   type PicoHomeClaimSignatureInput,
+  type PicoHomeFoundingAcceptance,
+  type PicoHomeFoundingRecord,
+  type PicoHomeFoundingSignatureInput,
+  type PicoHomePendingClaimResponse,
   type PicoHomeSealedClaimPayload,
   type PicoHomeSetupResponse,
   type PicoIdentityKeyRecordSignatureInput,
@@ -152,14 +163,41 @@ interface PicoHomeClaimRequestContext {
 type ParsedPicoHomeClaimRequest =
   | {
     ok: true;
+    kind: 'legacy';
     moveInCode: unknown;
     homeHostPicoId: string;
+  }
+  | {
+    ok: true;
+    kind: 'sealed';
+    moveInCode: unknown;
+    homeHostPicoId: string;
+    claim: PicoHomeClaimSignatureInput;
+    claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    claimantSignatureHex: string;
+  }
+  | {
+    ok: true;
+    kind: 'foundingAcceptance';
+    acceptance: PicoHomeFoundingAcceptance;
   }
   | {
     ok: false;
     statusCode: number;
     error: string;
   };
+
+interface PendingPicoHomeClaim {
+  homeHostPicoId: string;
+  claim: PicoHomeClaimSignatureInput;
+  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  claimantSignatureHex: string;
+  claimResponse: PicoHomeClaimResponseRecord;
+  founding: PicoHomeFoundingSignatureInput;
+  createdAt: string;
+}
+
+type ParsedSealedPicoHomeClaimRequest = Extract<ParsedPicoHomeClaimRequest, { ok: true; kind: 'sealed' }>;
 
 // Which authority a request carries. The bearer header holds either the
 // principal-less static token or an operator session; they are resolved apart
@@ -230,6 +268,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
   let homeHostKeys: HomeHostKeyPairSet | undefined;
   let homeSetupNonceHex: string | undefined;
+  let pendingHomeClaim: PendingPicoHomeClaim | undefined;
   const accessClasses = new AccessClassRegistry();
   // Domain readership for the `domain-content` class (ADR 0077 A7 seam). A
   // distinct authority from the operator role; the foundation-phase default
@@ -249,6 +288,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     if (claimState.state !== 'unclaimed') {
       moveInCode.clear();
       homeSetupNonceHex = undefined;
+      pendingHomeClaim = undefined;
       return;
     }
 
@@ -292,6 +332,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     store.resetPicoHome();
     homeHostKeys = undefined;
     homeSetupNonceHex = undefined;
+    pendingHomeClaim = undefined;
     moveInCode.clear();
     appendServerEvent('home.reset', {});
     app.log.warn(
@@ -617,7 +658,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   app.post('/api/home/claim', async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
 
-    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || !moveInCode.isPending()) {
+    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || (!moveInCode.isPending() && pendingHomeClaim === undefined)) {
       return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
     }
 
@@ -630,6 +671,91 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return sendNoStore(reply.code(claimRequest.statusCode), { error: claimRequest.error });
     }
 
+    if (claimRequest.kind === 'foundingAcceptance') {
+      const pending = pendingHomeClaim;
+      if (pending === undefined) {
+        return sendNoStore(reply.code(409), { error: 'No Pico Home claim is pending founding acceptance.' });
+      }
+
+      if (
+        claimRequest.acceptance.claimId !== pending.claim.claimId
+        || claimRequest.acceptance.foundingId !== pending.founding.foundingId
+      ) {
+        return sendNoStore(reply.code(400), { error: 'Pico Home founding acceptance is not bound to the pending claim.' });
+      }
+
+      try {
+        if (!verifyPicoIdentityDetachedSignature(sodium, {
+          publicKeyHex: pending.claimantIdentityKeyRecord.publicKeyHex,
+          signatureInput: buildPicoHomeFoundingSignatureInput(pending.founding),
+          signatureHex: claimRequest.acceptance.claimantFoundingSignatureHex,
+        })) {
+          return sendNoStore(reply.code(401), { error: 'Pico Home founding signature is invalid.' });
+        }
+      } catch {
+        return sendNoStore(reply.code(400), { error: 'Pico Home founding acceptance is invalid.' });
+      }
+
+      const hostFoundingSignatureHex = homeHostKeyStore.signWithHostSigningKey(
+        sodium,
+        buildPicoHomeFoundingSignatureInput(pending.founding),
+      );
+      const foundingRecord: PicoHomeFoundingRecord = {
+        schema: picoHomeFoundingRecordSchema,
+        founding: pending.founding,
+        claimantIdentityKeyRecord: pending.claimantIdentityKeyRecord,
+        claimantClaimSignatureHex: pending.claimantSignatureHex,
+        claimantFoundingSignatureHex: claimRequest.acceptance.claimantFoundingSignatureHex,
+        hostClaimResponse: pending.claimResponse,
+        hostFoundingSignatureHex,
+        createdAt: pending.createdAt,
+      };
+
+      let claimState: PicoHomeClaimState;
+      try {
+        claimState = store.claimPicoHome({
+          homeId: pending.founding.homeId,
+          hostAdminPicoId: pending.homeHostPicoId,
+          hostSigningKeyFingerprintHex: pending.founding.hostSigningKeyFingerprintHex,
+          hostKeyAgreementKeyFingerprintHex: pending.founding.hostKeyAgreementKeyFingerprintHex,
+          foundingRecord,
+          claimedAt: pending.founding.foundedAt,
+        });
+      } catch (error) {
+        return sendNoStore(reply.code(409), { error: (error as Error).message });
+      }
+
+      appendServerEvent('home.claimed', {});
+      pendingHomeClaim = undefined;
+      homeSetupNonceHex = undefined;
+      app.log.warn(
+        {
+          homeId: claimState.homeId,
+          homeHostPicoId: claimState.hostAdminPicoId,
+          foundingId: foundingRecord.founding.foundingId,
+          hostSigningKeyFingerprintHex: claimState.hostSigningKeyFingerprintHex,
+          hostKeyAgreementKeyFingerprintHex: claimState.hostKeyAgreementKeyFingerprintHex,
+        },
+        'Pico Home claimed with a signed founding record; setup mode ended.',
+      );
+
+      const response: PicoHomeClaimResponse = {
+        claimState: toPicoHomeClaimStateResponse(claimState, moveInCode.isPending()) as PicoHomeClaimResponse['claimState'],
+        claimResponse: pending.claimResponse,
+        foundingRecord,
+      };
+
+      return reply.code(201).header('Cache-Control', 'no-store').send(response);
+    }
+
+    if (pendingHomeClaim !== undefined) {
+      return sendNoStore(reply.code(409), { error: 'A Pico Home claim is pending founding acceptance.' });
+    }
+
+    if (!moveInCode.isPending()) {
+      return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
+    }
+
     const code = moveInCode.consume(claimRequest.moveInCode);
     if (!code.ok) {
       return sendNoStore(reply.code(code.exhausted ? 429 : 401), {
@@ -637,6 +763,33 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           ? 'Move-In Code is exhausted; restart the Pico Home process to mint a fresh code.'
           : 'Move-In Code is invalid.',
       });
+    }
+
+    if (claimRequest.kind === 'sealed') {
+      const pending = createPendingPicoHomeClaim({
+        request: claimRequest,
+        homeHostKeys,
+        homeHostKeyStore,
+      });
+      pendingHomeClaim = pending;
+      app.log.warn(
+        {
+          claimId: pending.claim.claimId,
+          foundingId: pending.founding.foundingId,
+          homeId: pending.founding.homeId,
+          homeHostPicoId: pending.homeHostPicoId,
+        },
+        'Pico Home claim verified; waiting for claimant founding acceptance.',
+      );
+
+      const response: PicoHomePendingClaimResponse = {
+        pendingClaim: {
+          claimResponse: pending.claimResponse,
+          founding: pending.founding,
+        },
+      };
+
+      return reply.code(202).header('Cache-Control', 'no-store').send(response);
     }
 
     let claimState: PicoHomeClaimState;
@@ -1227,6 +1380,22 @@ function readPicoHomeClaimRequest(
   body: Record<string, unknown>,
   context: PicoHomeClaimRequestContext,
 ): ParsedPicoHomeClaimRequest {
+  if ('foundingAcceptance' in body) {
+    if (body.claimEnvelope !== undefined || body.moveInCode !== undefined || body.homeHostPicoId !== undefined || body.hostAdminPicoId !== undefined) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error: 'foundingAcceptance cannot be combined with claim fields.',
+      };
+    }
+
+    try {
+      return { ok: true, kind: 'foundingAcceptance', acceptance: parsePicoHomeFoundingAcceptance(body.foundingAcceptance) };
+    } catch (error) {
+      return { ok: false, statusCode: 400, error: (error as Error).message };
+    }
+  }
+
   if ('claimEnvelope' in body) {
     if (body.moveInCode !== undefined || body.homeHostPicoId !== undefined || body.hostAdminPicoId !== undefined) {
       return {
@@ -1246,6 +1415,7 @@ function readPicoHomeClaimRequest(
 
   return {
     ok: true,
+    kind: 'legacy',
     moveInCode: body.moveInCode,
     homeHostPicoId: homeHostPicoId.value,
   };
@@ -1330,8 +1500,12 @@ function readSealedPicoHomeClaimRequest(
 
   return {
     ok: true,
+    kind: 'sealed',
     moveInCode: claim.moveInCode,
     homeHostPicoId: `pico:identity:${claim.claimantIdentityKeyFingerprintHex}`,
+    claim,
+    claimantIdentityKeyRecord: payload.claimantIdentityKeyRecord,
+    claimantSignatureHex: payload.claimantSignatureHex,
   };
 }
 
@@ -1355,6 +1529,94 @@ function readHomeHostPicoId(body: { homeHostPicoId?: unknown; hostAdminPicoId?: 
 
 function createHomeId(): string {
   return `home_${randomBytes(16).toString('hex')}`;
+}
+
+function createFoundingId(): string {
+  return `founding_${randomBytes(16).toString('hex')}`;
+}
+
+function createPendingPicoHomeClaim(params: {
+  request: ParsedSealedPicoHomeClaimRequest;
+  homeHostKeys: HomeHostKeyPairSet;
+  homeHostKeyStore: HomeHostKeyStore;
+}): PendingPicoHomeClaim {
+  const homeId = createHomeId();
+  const hostNonceHex = randomBytes(32).toString('hex');
+  const foundingId = createFoundingId();
+  const createdAt = new Date().toISOString();
+  const claimResponse: PicoHomeClaimResponseSignatureInput = {
+    suite: picoIdentitySuite,
+    claimId: params.request.claim.claimId,
+    homeId,
+    hostSigningKeyFingerprintHex: params.homeHostKeys.publicBundle.signingKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex: params.homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+    claimantIdentityKeyFingerprintHex: params.request.claim.claimantIdentityKeyFingerprintHex,
+    claimantNonceHex: params.request.claim.claimantNonceHex,
+    hostNonceHex,
+    foundingRecordId: foundingId,
+  };
+  const claimResponseRecord: PicoHomeClaimResponseRecord = {
+    schema: picoHomeClaimResponseRecordSchema,
+    claimResponse,
+    hostSignatureHex: params.homeHostKeyStore.signWithHostSigningKey(
+      sodium,
+      buildPicoHomeClaimResponseSignatureInput(claimResponse),
+    ),
+  };
+  const founding: PicoHomeFoundingSignatureInput = {
+    suite: picoIdentitySuite,
+    foundingId,
+    homeId,
+    hostSigningKeyFingerprintHex: params.homeHostKeys.publicBundle.signingKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex: params.homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+    homeHostPicoIdentityFingerprintHex: params.request.claim.claimantIdentityKeyFingerprintHex,
+    claimantNonceHex: params.request.claim.claimantNonceHex,
+    hostNonceHex,
+    foundedAt: createdAt,
+    lifecycleOrder: 'seq:0000000000000001',
+  };
+
+  // Fail here if a future edit drifts from the M1 canonical field contract.
+  buildPicoHomeFoundingSignatureInput(founding);
+
+  return {
+    homeHostPicoId: params.request.homeHostPicoId,
+    claim: params.request.claim,
+    claimantIdentityKeyRecord: params.request.claimantIdentityKeyRecord,
+    claimantSignatureHex: params.request.claimantSignatureHex,
+    claimResponse: claimResponseRecord,
+    founding,
+    createdAt,
+  };
+}
+
+function parsePicoHomeFoundingAcceptance(source: unknown): PicoHomeFoundingAcceptance {
+  if (!isRecord(source) || !hasExactKeys(source, ['schema', 'claimId', 'foundingId', 'claimantFoundingSignatureHex'])) {
+    throw new Error('Pico Home founding acceptance is invalid.');
+  }
+
+  const acceptance = {
+    schema: stringField(source, 'schema', 'Pico Home founding acceptance is invalid.'),
+    claimId: stringField(source, 'claimId', 'Pico Home founding acceptance is invalid.'),
+    foundingId: stringField(source, 'foundingId', 'Pico Home founding acceptance is invalid.'),
+    claimantFoundingSignatureHex: stringField(source, 'claimantFoundingSignatureHex', 'Pico Home founding acceptance is invalid.'),
+  };
+
+  if (
+    acceptance.schema !== picoHomeFoundingAcceptanceSchema
+    || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(acceptance.claimId)
+    || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(acceptance.foundingId)
+    || !/^[0-9a-f]{128}$/.test(acceptance.claimantFoundingSignatureHex)
+  ) {
+    throw new Error('Pico Home founding acceptance is invalid.');
+  }
+
+  return {
+    schema: picoHomeFoundingAcceptanceSchema,
+    claimId: acceptance.claimId,
+    foundingId: acceptance.foundingId,
+    claimantFoundingSignatureHex: acceptance.claimantFoundingSignatureHex,
+  };
 }
 
 function parsePicoHomeClaimEnvelope(source: unknown): PicoHomeClaimEnvelope {

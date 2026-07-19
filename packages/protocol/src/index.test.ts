@@ -43,6 +43,9 @@ import {
   picoIdentitySuite,
   picoHomeContinuityReasonCategories,
   picoHomeClaimEnvelopeSchema,
+  picoHomeClaimResponseRecordSchema,
+  picoHomeFoundingAcceptanceSchema,
+  picoHomeFoundingRecordSchema,
   picoHomeSealedClaimPayloadSchema,
   picoHomeMembershipLifecycleReasonCategories,
   picoHomeMembershipRoles,
@@ -348,6 +351,9 @@ describe('Pico protocol types', () => {
     });
     expect(picoHomeClaimEnvelopeSchema).toBe('pico.home.claim-envelope.v1');
     expect(picoHomeSealedClaimPayloadSchema).toBe('pico.home.claim-payload.v1');
+    expect(picoHomeClaimResponseRecordSchema).toBe('pico.home.claim-response-record.v1');
+    expect(picoHomeFoundingAcceptanceSchema).toBe('pico.home.founding-acceptance.v1');
+    expect(picoHomeFoundingRecordSchema).toBe('pico.home.founding-record.v1');
     expect(picoHomeMembershipRoles).toEqual(['home_host', 'home_member']);
     expect(picoHomeMembershipScopes).toEqual([
       'host.use',

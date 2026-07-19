@@ -329,6 +329,37 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0013_pico_home_founding_record',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0080 M2: the current Home authority root is public signed evidence,
+      // not a reusable secret. Keep exactly one current founding record; an
+      // explicit local home reset clears it before a new Home is founded.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_home_founding_record (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          schema TEXT NOT NULL CHECK (schema = 'pico.home.founding-record.v1'),
+          founding_id TEXT NOT NULL UNIQUE,
+          home_id TEXT NOT NULL UNIQUE,
+          claim_id TEXT NOT NULL UNIQUE,
+          home_host_pico_identity_fingerprint_hex TEXT NOT NULL,
+          host_signing_key_fingerprint_hex TEXT NOT NULL,
+          host_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          founded_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          claim_response_json TEXT NOT NULL,
+          founding_json TEXT NOT NULL,
+          claimant_identity_key_record_json TEXT NOT NULL,
+          claimant_claim_signature_hex TEXT NOT NULL,
+          claimant_founding_signature_hex TEXT NOT NULL,
+          host_claim_response_signature_hex TEXT NOT NULL,
+          host_founding_signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

@@ -74,6 +74,10 @@ describe('database migrations', () => {
           id: '0012_pico_home_claim_metadata',
           requiresBackup: false,
         },
+        {
+          id: '0013_pico_home_founding_record',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -102,6 +106,7 @@ describe('database migrations', () => {
     expect(tables).toContain('schema_migration_audit');
     expect(tables).toContain('pico_event');
     expect(tables).toContain('pico_home_claim_state');
+    expect(tables).toContain('pico_home_founding_record');
     expect(tables).toContain('memory_domain_custody');
     expect(listAppliedMigrations(db)).toEqual([
       {
@@ -150,6 +155,10 @@ describe('database migrations', () => {
       },
       {
         id: '0012_pico_home_claim_metadata',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0013_pico_home_founding_record',
         appliedAt: expect.any(String),
       },
     ]);
@@ -241,12 +250,13 @@ describe('database migrations', () => {
         '0010_foundation_operator',
         '0011_memory_domain_custody',
         '0012_pico_home_claim_metadata',
+        '0013_pico_home_founding_record',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(12);
+    expect(listAppliedMigrations(db)).toHaveLength(13);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -256,7 +266,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(12);
+    expect(listAppliedMigrations(db)).toHaveLength(13);
 
     db.close();
   });
@@ -295,7 +305,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(12);
+    expect(listAppliedMigrations(db)).toHaveLength(13);
 
     db.close();
   });
@@ -318,6 +328,7 @@ describe('database migrations', () => {
       '0010_foundation_operator',
       '0011_memory_domain_custody',
       '0012_pico_home_claim_metadata',
+      '0013_pico_home_founding_record',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -338,6 +349,7 @@ describe('database migrations', () => {
           '0010_foundation_operator',
           '0011_memory_domain_custody',
           '0012_pico_home_claim_metadata',
+          '0013_pico_home_founding_record',
         ],
       },
     ]);
@@ -414,6 +426,7 @@ describe('database migrations', () => {
       '0010_foundation_operator',
       '0011_memory_domain_custody',
       '0012_pico_home_claim_metadata',
+      '0013_pico_home_founding_record',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {

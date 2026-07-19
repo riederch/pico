@@ -11,18 +11,26 @@ import {
   avatarModes,
   avatarStates,
   avatarStatusColors,
+  buildPicoHomeClaimResponseSignatureInput,
   buildPicoHomeClaimSignatureInput,
+  buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   deviceSeenStatuses,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
   picoHomeClaimEnvelopeSchema,
+  picoHomeFoundingAcceptanceSchema,
+  picoHomeFoundingRecordSchema,
   picoHomeEventTypes,
   picoHomeSealedClaimPayloadSchema,
   picoIdentitySuite,
   protocolCapabilities,
   realtimeMessageType,
+  type PicoHomeClaimResponse,
   type PicoHomeClaimSignatureInput,
+  type PicoHomeFoundingAcceptance,
+  type PicoHomeFoundingSignatureInput,
+  type PicoHomePendingClaimResponse,
   type PicoHomeSetupResponse,
   type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
@@ -211,6 +219,7 @@ describe('Pico Home Core app', () => {
           { id: '0010_foundation_operator', appliedAt: expect.any(String) },
           { id: '0011_memory_domain_custody', appliedAt: expect.any(String) },
           { id: '0012_pico_home_claim_metadata', appliedAt: expect.any(String) },
+          { id: '0013_pico_home_founding_record', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -299,34 +308,95 @@ describe('Pico Home Core app', () => {
   });
 
   it('claims an empty Pico Home through a sealed signed claim envelope', async () => {
-    const app = await buildAppWithCapturedLog();
+    const databasePath = createDatabasePath();
+    const app = await buildAppWithCapturedLog({ databasePath });
     const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
     const sealedClaim = createSealedPicoHomeClaim(setup, readMoveInCode(app));
 
-    const claimed = await app.inject({
+    const pendingResponse = await app.inject({
       method: 'POST',
       url: '/api/home/claim',
       payload: { claimEnvelope: sealedClaim.claimEnvelope },
     });
 
+    expect(pendingResponse.statusCode).toBe(202);
+    expect(pendingResponse.headers['cache-control']).toBe('no-store');
+    const pending = pendingResponse.json() as PicoHomePendingClaimResponse;
+    expect(pending.pendingClaim.claimResponse.schema).toBe('pico.home.claim-response-record.v1');
+    expect(pending.pendingClaim.claimResponse.claimResponse).toEqual({
+      suite: picoIdentitySuite,
+      claimId: sealedClaim.claim.claimId,
+      homeId: expect.stringMatching(/^home_[0-9a-f]{32}$/),
+      hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
+      claimantIdentityKeyFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+      claimantNonceHex: sealedClaim.claim.claimantNonceHex,
+      hostNonceHex: expect.stringMatching(/^[0-9a-f]{64}$/),
+      foundingRecordId: expect.stringMatching(/^founding_[0-9a-f]{32}$/),
+    });
+    expect(sodium.crypto_sign_verify_detached(
+      hexToBytes(pending.pendingClaim.claimResponse.hostSignatureHex),
+      buildPicoHomeClaimResponseSignatureInput(pending.pendingClaim.claimResponse.claimResponse),
+      hexToBytes(setup.host.signingPublicKeyHex),
+    )).toBe(true);
+    expect(pending.pendingClaim.founding).toEqual({
+      suite: picoIdentitySuite,
+      foundingId: pending.pendingClaim.claimResponse.claimResponse.foundingRecordId,
+      homeId: pending.pendingClaim.claimResponse.claimResponse.homeId,
+      hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
+      homeHostPicoIdentityFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+      claimantNonceHex: sealedClaim.claim.claimantNonceHex,
+      hostNonceHex: pending.pendingClaim.claimResponse.claimResponse.hostNonceHex,
+      foundedAt: expect.any(String),
+      lifecycleOrder: 'seq:0000000000000001',
+    });
+
+    const foundingAcceptance = createPicoHomeFoundingAcceptance(sealedClaim, pending.pendingClaim.founding);
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { foundingAcceptance },
+    });
+
     expect(claimed.statusCode).toBe(201);
-    expect(claimed.json()).toEqual({
+    const finalBody = claimed.json() as PicoHomeClaimResponse;
+    expect(finalBody).toEqual({
       claimState: {
         state: 'claimed',
         setupMode: {
           active: false,
           moveInCodePending: false,
         },
-        homeId: expect.stringMatching(/^home_[0-9a-f]{32}$/),
+        homeId: pending.pendingClaim.founding.homeId,
         homeHostPicoId: sealedClaim.expectedHomeHostPicoId,
         hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
         hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
         claimedAt: expect.any(String),
       },
+      claimResponse: pending.pendingClaim.claimResponse,
+      foundingRecord: {
+        schema: picoHomeFoundingRecordSchema,
+        founding: pending.pendingClaim.founding,
+        claimantIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        claimantClaimSignatureHex: sealedClaim.claimantSignatureHex,
+        claimantFoundingSignatureHex: foundingAcceptance.claimantFoundingSignatureHex,
+        hostClaimResponse: pending.pendingClaim.claimResponse,
+        hostFoundingSignatureHex: expect.stringMatching(/^[0-9a-f]{128}$/),
+        createdAt: pending.pendingClaim.founding.foundedAt,
+      },
     });
     expect(JSON.stringify(claimed.json())).not.toContain(sealedClaim.moveInCode);
+    expect(sodium.crypto_sign_verify_detached(
+      hexToBytes(finalBody.foundingRecord?.hostFoundingSignatureHex ?? ''),
+      buildPicoHomeFoundingSignatureInput(pending.pendingClaim.founding),
+      hexToBytes(setup.host.signingPublicKeyHex),
+    )).toBe(true);
 
     await app.close();
+    const store = new EventStore(databasePath);
+    expect(store.picoHomeFoundingRecord()).toEqual(finalBody.foundingRecord);
+    store.close();
   });
 
   it('rejects tampered sealed claim signatures without consuming the Move-In Code', async () => {
@@ -346,13 +416,67 @@ describe('Pico Home Core app', () => {
     expect(rejected.json()).toEqual({ error: 'Pico Home claim signature is invalid.' });
 
     const valid = createSealedPicoHomeClaim(setup, moveInCode);
-    const claimed = await app.inject({
+    const pending = await app.inject({
       method: 'POST',
       url: '/api/home/claim',
       payload: { claimEnvelope: valid.claimEnvelope },
     });
+    expect(pending.statusCode).toBe(202);
+    const acceptance = createPicoHomeFoundingAcceptance(valid, (pending.json() as PicoHomePendingClaimResponse).pendingClaim.founding);
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { foundingAcceptance: acceptance },
+    });
     expect(claimed.statusCode).toBe(201);
     expect(claimed.json().claimState.homeHostPicoId).toBe(valid.expectedHomeHostPicoId);
+
+    await app.close();
+  });
+
+  it('rejects tampered founding acceptance without completing the pending claim', async () => {
+    const app = await buildAppWithCapturedLog();
+    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
+    const sealedClaim = createSealedPicoHomeClaim(setup, readMoveInCode(app));
+
+    const pending = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: sealedClaim.claimEnvelope },
+    });
+    expect(pending.statusCode).toBe(202);
+    const founding = (pending.json() as PicoHomePendingClaimResponse).pendingClaim.founding;
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: {
+        foundingAcceptance: {
+          schema: picoHomeFoundingAcceptanceSchema,
+          claimId: sealedClaim.claim.claimId,
+          foundingId: founding.foundingId,
+          claimantFoundingSignatureHex: '00'.repeat(64),
+        },
+      },
+    });
+    expect(rejected.statusCode).toBe(401);
+    expect(rejected.json()).toEqual({ error: 'Pico Home founding signature is invalid.' });
+
+    const status = await app.inject({ method: 'GET', url: '/api/system/status' });
+    expect(status.json().picoHome.claimState).toEqual({
+      state: 'unclaimed',
+      setupMode: {
+        active: false,
+        moveInCodePending: false,
+      },
+    });
+
+    const acceptance = createPicoHomeFoundingAcceptance(sealedClaim, founding);
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { foundingAcceptance: acceptance },
+    });
+    expect(claimed.statusCode).toBe(201);
 
     await app.close();
   });
@@ -2149,6 +2273,10 @@ function createSealedPicoHomeClaim(
   claimEnvelope: { schema: typeof picoHomeClaimEnvelopeSchema; sealedClaimPayloadHex: string };
   expectedHomeHostPicoId: string;
   moveInCode: string;
+  claim: PicoHomeClaimSignatureInput;
+  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  claimantPrivateKey: Uint8Array;
+  claimantSignatureHex: string;
 } {
   const claimant = sodium.crypto_sign_keypair();
   const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
@@ -2193,6 +2321,25 @@ function createSealedPicoHomeClaim(
     },
     expectedHomeHostPicoId: `pico:identity:${claimantIdentityKeyFingerprintHex}`,
     moveInCode,
+    claim,
+    claimantIdentityKeyRecord,
+    claimantPrivateKey: claimant.privateKey,
+    claimantSignatureHex: signatureHex,
+  };
+}
+
+function createPicoHomeFoundingAcceptance(
+  sealedClaim: ReturnType<typeof createSealedPicoHomeClaim>,
+  founding: PicoHomeFoundingSignatureInput,
+): PicoHomeFoundingAcceptance {
+  return {
+    schema: picoHomeFoundingAcceptanceSchema,
+    claimId: sealedClaim.claim.claimId,
+    foundingId: founding.foundingId,
+    claimantFoundingSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+      buildPicoHomeFoundingSignatureInput(founding),
+      sealedClaim.claimantPrivateKey,
+    )),
   };
 }
 
