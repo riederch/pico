@@ -417,6 +417,102 @@ describe('Pico Home Core app', () => {
     store.close();
   });
 
+  it('expires an abandoned pending claim and reopens setup mode with a fresh Move-In Code', async () => {
+    const app = await buildAppWithCapturedLog({ databasePath: createDatabasePath() });
+    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
+    const abandonedCode = readMoveInCode(app);
+    const abandonedClaim = createSealedPicoHomeClaim(setup, abandonedCode);
+
+    const pendingResponse = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: abandonedClaim.claimEnvelope },
+    });
+    expect(pendingResponse.statusCode).toBe(202);
+    const pending = pendingResponse.json() as PicoHomePendingClaimResponse;
+
+    // The claimant walks away after the Move-In Code was consumed. Only the
+    // clock is faked: the request path must stay real.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.now() + (10 * 60 * 1000) + 1_000);
+
+      const reopened = await app.inject({ method: 'GET', url: '/api/home/setup' });
+      expect(reopened.statusCode).toBe(200);
+      const freshSetup = reopened.json() as PicoHomeSetupResponse;
+      const freshCode = readMoveInCode(app);
+      expect(freshCode).not.toBe(abandonedCode);
+      expect(freshSetup.setupMode.hostSetupNonceHex).not.toBe(setup.setupMode.hostSetupNonceHex);
+
+      const staleAcceptance = await app.inject({
+        method: 'POST',
+        url: '/api/home/claim',
+        payload: { foundingAcceptance: createPicoHomeFoundingAcceptance(abandonedClaim, pending.pendingClaim.founding) },
+      });
+      expect(staleAcceptance.statusCode).toBe(409);
+
+      const freshClaim = createSealedPicoHomeClaim(freshSetup, freshCode);
+      const accepted = await app.inject({
+        method: 'POST',
+        url: '/api/home/claim',
+        payload: { claimEnvelope: freshClaim.claimEnvelope },
+      });
+      expect(accepted.statusCode).toBe(202);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    await app.close();
+  });
+
+  it('discards a pending claim after too many rejected founding acceptances', async () => {
+    const app = await buildAppWithCapturedLog({ databasePath: createDatabasePath() });
+    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
+    const consumedCode = readMoveInCode(app);
+    const sealedClaim = createSealedPicoHomeClaim(setup, consumedCode);
+
+    const pendingResponse = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: sealedClaim.claimEnvelope },
+    });
+    expect(pendingResponse.statusCode).toBe(202);
+    const pending = pendingResponse.json() as PicoHomePendingClaimResponse;
+
+    const forgedAcceptance = {
+      ...createPicoHomeFoundingAcceptance(sealedClaim, pending.pendingClaim.founding),
+      claimantFoundingSignatureHex: 'a'.repeat(128),
+    };
+
+    for (let attempt = 1; attempt < 10; attempt += 1) {
+      const rejected = await app.inject({
+        method: 'POST',
+        url: '/api/home/claim',
+        payload: { foundingAcceptance: forgedAcceptance },
+      });
+      expect(rejected.statusCode).toBe(401);
+    }
+
+    const exhausted = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { foundingAcceptance: forgedAcceptance },
+    });
+    expect(exhausted.statusCode).toBe(429);
+    expect(readMoveInCode(app)).not.toBe(consumedCode);
+
+    // The real claimant cannot finish the discarded ceremony either; the whole
+    // claim has to start over with the fresh Move-In Code.
+    const valid = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { foundingAcceptance: createPicoHomeFoundingAcceptance(sealedClaim, pending.pendingClaim.founding) },
+    });
+    expect(valid.statusCode).toBe(409);
+
+    await app.close();
+  });
+
   it('does not reopen setup mode when a stale restore resurrects an unclaimed claim state', async () => {
     const databasePath = createDatabasePath();
     const first = await buildAppWithCapturedLog({ databasePath });
@@ -2329,18 +2425,24 @@ function readBootstrapCode(app: Awaited<ReturnType<typeof buildApp>>): string {
   throw new Error('No operator bootstrap code was surfaced on the host log.');
 }
 
+/** Returns the most recent code, so a reopened setup mode is picked up. */
 function readMoveInCode(app: Awaited<ReturnType<typeof buildApp>>): string {
   const lines = capturedLogLines.get(app) ?? [];
+  let latest: string | undefined;
 
   for (const line of lines) {
     const parsed = JSON.parse(line) as { picoHomeMoveInCode?: unknown };
 
     if (typeof parsed.picoHomeMoveInCode === 'string') {
-      return parsed.picoHomeMoveInCode;
+      latest = parsed.picoHomeMoveInCode;
     }
   }
 
-  throw new Error('No Move-In Code was surfaced on the host log.');
+  if (latest === undefined) {
+    throw new Error('No Move-In Code was surfaced on the host log.');
+  }
+
+  return latest;
 }
 
 function hasMoveInCode(app: Awaited<ReturnType<typeof buildApp>>): boolean {

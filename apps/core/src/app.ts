@@ -95,6 +95,12 @@ const MAX_INCOMING_LAMPORT = 1_000_000_000;
 const WEBSOCKET_KEEPALIVE_INTERVAL_MS = 30_000;
 const RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 const REALTIME_TICKET_TTL_MS = 30_000;
+// A pending claim holds Setup Mode open after the Move-In Code was consumed, so
+// it must expire on its own and must not be retryable without limit. Both cases
+// return the host to Setup Mode with a fresh Move-In Code instead of leaving a
+// claimable Home wedged until the process is restarted (ADR 0080 M2).
+const PENDING_HOME_CLAIM_TTL_MS = 10 * 60 * 1000;
+const MAX_PENDING_HOME_CLAIM_ATTEMPTS = 10;
 const MAX_OUTSTANDING_REALTIME_TICKETS = 128;
 
 const serverOnlyEventTypes = new Set<FoundationEventType>(serverSynthesizedFoundationEventTypes);
@@ -195,6 +201,8 @@ interface PendingPicoHomeClaim {
   claimResponse: PicoHomeClaimResponseRecord;
   founding: PicoHomeFoundingSignatureInput;
   createdAt: string;
+  expiresAtMs: number;
+  attempts: number;
 }
 
 type ParsedSealedPicoHomeClaimRequest = Extract<ParsedPicoHomeClaimRequest, { ok: true; kind: 'sealed' }>;
@@ -313,6 +321,40 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
       },
       'Pico Home is unclaimed. The Move-In Code is valid for this process only and must be read from this local host channel.',
+    );
+  }
+
+  /**
+   * Returns the pending claim only while it is still live. An abandoned or
+   * repeatedly failed ceremony must not keep the consumed Move-In Code and the
+   * setup nonce hostage: dropping it reopens Setup Mode with fresh material.
+   */
+  function currentPendingHomeClaim(): PendingPicoHomeClaim | undefined {
+    if (pendingHomeClaim === undefined) {
+      return undefined;
+    }
+
+    if (Date.now() < pendingHomeClaim.expiresAtMs) {
+      return pendingHomeClaim;
+    }
+
+    discardPendingHomeClaim('expired');
+    return undefined;
+  }
+
+  function discardPendingHomeClaim(reason: 'expired' | 'attempts_exhausted'): void {
+    const discarded = pendingHomeClaim;
+    pendingHomeClaim = undefined;
+    moveInCode.clear();
+    activateHomeSetupMode();
+
+    app.log.warn(
+      {
+        reason,
+        claimId: discarded?.claim.claimId,
+        foundingId: discarded?.founding.foundingId,
+      },
+      'Pending Pico Home claim was discarded; setup mode reopened with a fresh Move-In Code.',
     );
   }
 
@@ -707,6 +749,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.get('/api/home/setup', async (_request, reply) => {
+    currentPendingHomeClaim();
+
     if (homeHostKeys === undefined || homeSetupNonceHex === undefined || !moveInCode.isPending()) {
       return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
     }
@@ -732,8 +776,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.post('/api/home/claim', async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
+    const livePendingClaim = currentPendingHomeClaim();
 
-    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || (!moveInCode.isPending() && pendingHomeClaim === undefined)) {
+    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || (!moveInCode.isPending() && livePendingClaim === undefined)) {
       return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
     }
 
@@ -747,16 +792,31 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     if (claimRequest.kind === 'foundingAcceptance') {
-      const pending = pendingHomeClaim;
+      const pending = livePendingClaim;
       if (pending === undefined) {
         return sendNoStore(reply.code(409), { error: 'No Pico Home claim is pending founding acceptance.' });
       }
+
+      // Every rejected acceptance counts, so guessing a founding signature is
+      // as bounded as guessing the Move-In Code.
+      const rejectAcceptance = (statusCode: number, error: string): FastifyReply => {
+        pending.attempts += 1;
+
+        if (pending.attempts >= MAX_PENDING_HOME_CLAIM_ATTEMPTS) {
+          discardPendingHomeClaim('attempts_exhausted');
+          return sendNoStore(reply.code(429), {
+            error: 'Pico Home founding acceptance is exhausted; setup mode reopened with a fresh Move-In Code.',
+          });
+        }
+
+        return sendNoStore(reply.code(statusCode), { error });
+      };
 
       if (
         claimRequest.acceptance.claimId !== pending.claim.claimId
         || claimRequest.acceptance.foundingId !== pending.founding.foundingId
       ) {
-        return sendNoStore(reply.code(400), { error: 'Pico Home founding acceptance is not bound to the pending claim.' });
+        return rejectAcceptance(400, 'Pico Home founding acceptance is not bound to the pending claim.');
       }
 
       try {
@@ -765,10 +825,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           signatureInput: buildPicoHomeFoundingSignatureInput(pending.founding),
           signatureHex: claimRequest.acceptance.claimantFoundingSignatureHex,
         })) {
-          return sendNoStore(reply.code(401), { error: 'Pico Home founding signature is invalid.' });
+          return rejectAcceptance(401, 'Pico Home founding signature is invalid.');
         }
       } catch {
-        return sendNoStore(reply.code(400), { error: 'Pico Home founding acceptance is invalid.' });
+        return rejectAcceptance(400, 'Pico Home founding acceptance is invalid.');
       }
 
       const hostFoundingSignatureHex = homeHostKeyStore.signWithHostSigningKey(
@@ -823,7 +883,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return reply.code(201).header('Cache-Control', 'no-store').send(response);
     }
 
-    if (pendingHomeClaim !== undefined) {
+    if (livePendingClaim !== undefined) {
       return sendNoStore(reply.code(409), { error: 'A Pico Home claim is pending founding acceptance.' });
     }
 
@@ -1662,6 +1722,8 @@ function createPendingPicoHomeClaim(params: {
     claimResponse: claimResponseRecord,
     founding,
     createdAt,
+    expiresAtMs: Date.now() + PENDING_HOME_CLAIM_TTL_MS,
+    attempts: 0,
   };
 }
 
