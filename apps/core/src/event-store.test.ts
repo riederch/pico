@@ -471,6 +471,54 @@ describe('EventStore', () => {
     store.close();
   });
 
+  it('reconciles restored Pico Home claim state from founding evidence', async () => {
+    const databasePath = createDatabasePath();
+    const store = new EventStore(databasePath);
+    const foundingRecord = createPicoHomeFoundingRecord();
+
+    store.claimPicoHome({
+      homeId: foundingRecord.founding.homeId,
+      hostAdminPicoId: `pico:identity:${foundingRecord.founding.homeHostPicoIdentityFingerprintHex}`,
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+      foundingRecord,
+    });
+    store.close();
+
+    const stale = new Database(databasePath);
+    stale.prepare(`
+      UPDATE pico_home_claim_state
+      SET state = 'unclaimed',
+          host_admin_pico_id = NULL,
+          home_id = NULL,
+          host_signing_key_fingerprint_hex = NULL,
+          host_key_agreement_key_fingerprint_hex = NULL,
+          claimed_at = NULL,
+          updated_at = '2026-07-19T12:00:00.000Z'
+      WHERE id = 1
+    `).run();
+    stale.close();
+
+    const reopened = await EventStore.open(databasePath);
+
+    expect(reopened.picoHomeClaimState()).toEqual({
+      state: 'claimed',
+      hostAdminPicoId: `pico:identity:${foundingRecord.founding.homeHostPicoIdentityFingerprintHex}`,
+      homeId: foundingRecord.founding.homeId,
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+      claimedAt: foundingRecord.founding.foundedAt,
+      createdAt: expect.any(String),
+      updatedAt: expect.any(String),
+    });
+    expect(reopened.reconcilePicoHomeFoundingEvidence('2026-07-19T12:05:00.000Z')).toEqual({
+      foundingRecordPresent: true,
+      restoredClaimState: false,
+    });
+
+    reopened.close();
+  });
+
   it('closes the SQLite connection idempotently', () => {
     const store = new EventStore(createDatabasePath());
 

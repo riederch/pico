@@ -399,6 +399,66 @@ describe('Pico Home Core app', () => {
     store.close();
   });
 
+  it('does not reopen setup mode when a stale restore resurrects an unclaimed claim state', async () => {
+    const databasePath = createDatabasePath();
+    const first = await buildAppWithCapturedLog({ databasePath });
+    const { claimResponse } = await claimHomeThroughSealedFlow(first);
+    await first.close();
+
+    const stale = new Database(databasePath);
+    stale.prepare(`
+      UPDATE pico_home_claim_state
+      SET state = 'unclaimed',
+          host_admin_pico_id = NULL,
+          home_id = NULL,
+          host_signing_key_fingerprint_hex = NULL,
+          host_key_agreement_key_fingerprint_hex = NULL,
+          claimed_at = NULL
+      WHERE id = 1
+    `).run();
+    stale.close();
+
+    const restarted = await buildAppWithCapturedLog({ databasePath });
+
+    expect(hasMoveInCode(restarted)).toBe(false);
+    expect((await restarted.inject({ method: 'GET', url: '/api/home/setup' })).statusCode).toBe(404);
+    expect((await restarted.inject({ method: 'POST', url: '/api/home/claim', payload: { moveInCode: 'anything', homeHostPicoId: 'pico:attacker' } })).statusCode).toBe(404);
+    const status = await restarted.inject({ method: 'GET', url: '/api/system/status' });
+    expect(status.json().picoHome.claimState).toEqual(claimResponse.claimState);
+
+    await restarted.close();
+  });
+
+  it('keeps setup mode closed when restored founding evidence has no matching host key custody', async () => {
+    const databasePath = createDatabasePath();
+    const first = await buildAppWithCapturedLog({ databasePath });
+    const { claimResponse } = await claimHomeThroughSealedFlow(first);
+    await first.close();
+
+    rmSync(join(dirname(databasePath), 'home-host-keys'), { recursive: true, force: true });
+    const stale = new Database(databasePath);
+    stale.prepare(`
+      UPDATE pico_home_claim_state
+      SET state = 'unclaimed',
+          host_admin_pico_id = NULL,
+          home_id = NULL,
+          host_signing_key_fingerprint_hex = NULL,
+          host_key_agreement_key_fingerprint_hex = NULL,
+          claimed_at = NULL
+      WHERE id = 1
+    `).run();
+    stale.close();
+
+    const restarted = await buildAppWithCapturedLog({ databasePath });
+
+    expect(hasMoveInCode(restarted)).toBe(false);
+    expect((await restarted.inject({ method: 'GET', url: '/api/home/setup' })).statusCode).toBe(404);
+    expect((await restarted.inject({ method: 'GET', url: '/api/system/status' })).json().picoHome.claimState).toEqual(claimResponse.claimState);
+    expect(logLines(restarted).some((line) => line.includes('host key custody is missing'))).toBe(true);
+
+    await restarted.close();
+  });
+
   it('rejects tampered sealed claim signatures without consuming the Move-In Code', async () => {
     const app = await buildAppWithCapturedLog();
     const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
@@ -2263,6 +2323,49 @@ function readMoveInCode(app: Awaited<ReturnType<typeof buildApp>>): string {
   }
 
   throw new Error('No Move-In Code was surfaced on the host log.');
+}
+
+function hasMoveInCode(app: Awaited<ReturnType<typeof buildApp>>): boolean {
+  return logLines(app).some((line) => {
+    const parsed = JSON.parse(line) as { picoHomeMoveInCode?: unknown };
+    return typeof parsed.picoHomeMoveInCode === 'string';
+  });
+}
+
+function logLines(app: Awaited<ReturnType<typeof buildApp>>): string[] {
+  return capturedLogLines.get(app) ?? [];
+}
+
+async function claimHomeThroughSealedFlow(app: Awaited<ReturnType<typeof buildApp>>): Promise<{
+  setup: PicoHomeSetupResponse;
+  sealedClaim: ReturnType<typeof createSealedPicoHomeClaim>;
+  claimResponse: PicoHomeClaimResponse;
+}> {
+  const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
+  const sealedClaim = createSealedPicoHomeClaim(setup, readMoveInCode(app));
+  const pending = await app.inject({
+    method: 'POST',
+    url: '/api/home/claim',
+    payload: { claimEnvelope: sealedClaim.claimEnvelope },
+  });
+  expect(pending.statusCode).toBe(202);
+
+  const acceptance = createPicoHomeFoundingAcceptance(
+    sealedClaim,
+    (pending.json() as PicoHomePendingClaimResponse).pendingClaim.founding,
+  );
+  const claimed = await app.inject({
+    method: 'POST',
+    url: '/api/home/claim',
+    payload: { foundingAcceptance: acceptance },
+  });
+  expect(claimed.statusCode).toBe(201);
+
+  return {
+    setup,
+    sealedClaim,
+    claimResponse: claimed.json() as PicoHomeClaimResponse,
+  };
 }
 
 function createSealedPicoHomeClaim(

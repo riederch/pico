@@ -61,6 +61,11 @@ export interface PicoHomeClaimInput {
   claimedAt?: string;
 }
 
+export interface PicoHomeFoundingReconciliationResult {
+  foundingRecordPresent: boolean;
+  restoredClaimState: boolean;
+}
+
 export interface EventStoreOpenOptions {
   backupDirectory?: string;
   requireBackupBeforeMigration?: boolean;
@@ -103,6 +108,9 @@ export class EventStore {
     // Enforce recorded deletions on boot so a restore that resurrected deleted
     // memory items as active is re-tombstoned (ADR 0070 recovery direction).
     store.reconcileMemoryTombstones();
+    // Enforce ADR 0080 H8: a restored stale claim-state row must not reopen
+    // Setup Mode while a founding record is present.
+    store.reconcilePicoHomeFoundingEvidence();
 
     return store;
   }
@@ -356,6 +364,85 @@ export class EventStore {
     reset();
 
     return this.picoHomeClaimState();
+  }
+
+  /**
+   * Reconciles the current Pico Home claim-state projection from the durable
+   * founding evidence (ADR 0080 H8). If a stale restore brings back an
+   * `unclaimed` or conflicting claim-state row while a founding record is
+   * present, the row is projected back to `claimed`. This never mints a new
+   * claim or appends audit; it only prevents Setup Mode from reopening as a
+   * restore side effect.
+   */
+  public reconcilePicoHomeFoundingEvidence(reconciledAt: string = new Date().toISOString()): PicoHomeFoundingReconciliationResult {
+    this.ensureOpen();
+
+    if (!tableExists(this.db, 'pico_home_claim_state') || !tableExists(this.db, 'pico_home_founding_record')) {
+      return { foundingRecordPresent: false, restoredClaimState: false };
+    }
+
+    const foundingRecord = this.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { foundingRecordPresent: false, restoredClaimState: false };
+    }
+
+    const expectedClaim = picoHomeClaimInputFromFoundingRecord(foundingRecord);
+    assertPicoHomeFoundingRecord(foundingRecord, expectedClaim);
+    assertNonEmptyString(reconciledAt, 'reconciledAt');
+
+    const row = this.db
+      .prepare(`
+        SELECT
+          state,
+          host_admin_pico_id AS hostAdminPicoId,
+          home_id AS homeId,
+          host_signing_key_fingerprint_hex AS hostSigningKeyFingerprintHex,
+          host_key_agreement_key_fingerprint_hex AS hostKeyAgreementKeyFingerprintHex,
+          claimed_at AS claimedAt
+        FROM pico_home_claim_state
+        WHERE id = 1
+      `)
+      .get() as Omit<PicoHomeClaimStateRow, 'createdAt' | 'updatedAt'> | undefined;
+
+    const alreadyReconciled = row !== undefined
+      && row.state === 'claimed'
+      && row.hostAdminPicoId === expectedClaim.hostAdminPicoId
+      && row.homeId === expectedClaim.homeId
+      && row.hostSigningKeyFingerprintHex === expectedClaim.hostSigningKeyFingerprintHex
+      && row.hostKeyAgreementKeyFingerprintHex === expectedClaim.hostKeyAgreementKeyFingerprintHex
+      && row.claimedAt === expectedClaim.claimedAt;
+
+    if (alreadyReconciled) {
+      return { foundingRecordPresent: true, restoredClaimState: false };
+    }
+
+    const result = this.db
+      .prepare(`
+        UPDATE pico_home_claim_state
+        SET state = ?,
+            host_admin_pico_id = ?,
+            home_id = ?,
+            host_signing_key_fingerprint_hex = ?,
+            host_key_agreement_key_fingerprint_hex = ?,
+            claimed_at = ?,
+            updated_at = ?
+        WHERE id = 1
+      `)
+      .run(
+        'claimed',
+        expectedClaim.hostAdminPicoId,
+        expectedClaim.homeId,
+        expectedClaim.hostSigningKeyFingerprintHex,
+        expectedClaim.hostKeyAgreementKeyFingerprintHex,
+        expectedClaim.claimedAt,
+        reconciledAt,
+      );
+
+    if (result.changes !== 1) {
+      throw new Error('Pico Home claim state could not be reconciled from founding evidence.');
+    }
+
+    return { foundingRecordPresent: true, restoredClaimState: true };
   }
 
   // Deleteable memory store (ADR 0068), sharing this store's database
@@ -756,6 +843,17 @@ function assertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord, claim: Pic
   ) {
     throw new Error('Pico Home founding record is not bound to the claim state.');
   }
+}
+
+function picoHomeClaimInputFromFoundingRecord(record: PicoHomeFoundingRecord): PicoHomeClaimInput {
+  return {
+    homeId: record.founding.homeId,
+    hostAdminPicoId: `pico:identity:${record.founding.homeHostPicoIdentityFingerprintHex}`,
+    hostSigningKeyFingerprintHex: record.founding.hostSigningKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex: record.founding.hostKeyAgreementKeyFingerprintHex,
+    foundingRecord: record,
+    claimedAt: record.founding.foundedAt,
+  };
 }
 
 function assertLamportValue(value: number): void {

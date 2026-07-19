@@ -284,6 +284,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   }
 
   function activateHomeSetupMode(): void {
+    const foundingRecord = store.picoHomeFoundingRecord();
+    if (foundingRecord !== undefined) {
+      moveInCode.clear();
+      homeSetupNonceHex = undefined;
+      pendingHomeClaim = undefined;
+      return;
+    }
+
     const claimState = store.picoHomeClaimState();
     if (claimState.state !== 'unclaimed') {
       moveInCode.clear();
@@ -341,6 +349,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     );
   }
 
+  const foundingReconciliation = store.reconcilePicoHomeFoundingEvidence();
+  if (foundingReconciliation.restoredClaimState) {
+    app.log.warn(
+      'Pico Home claim state was reconciled from founding evidence; setup mode remains closed after restore.',
+    );
+  }
+  reconcileClaimedHomeHostKeyCustody();
   activateHomeSetupMode();
 
   // While no operator exists, mint the per-process bootstrap code and surface it
@@ -416,6 +431,66 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         socket.send(serialized);
       }
     }
+  }
+
+  function reconcileClaimedHomeHostKeyCustody(): void {
+    const foundingRecord = store.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return;
+    }
+
+    let restoredHomeHostKeys: HomeHostKeyPairSet | undefined;
+    try {
+      restoredHomeHostKeys = homeHostKeyStore.load(sodium);
+    } catch (error) {
+      app.log.error(
+        { err: error, foundingId: foundingRecord.founding.foundingId, homeId: foundingRecord.founding.homeId },
+        'Pico Home host key custody is invalid while founding evidence exists; setup mode remains closed.',
+      );
+      return;
+    }
+
+    if (restoredHomeHostKeys === undefined) {
+      app.log.error(
+        { foundingId: foundingRecord.founding.foundingId, homeId: foundingRecord.founding.homeId },
+        'Pico Home host key custody is missing while founding evidence exists; setup mode remains closed.',
+      );
+      return;
+    }
+
+    const host = restoredHomeHostKeys.publicBundle;
+    if (
+      host.signingKeyFingerprintHex !== foundingRecord.founding.hostSigningKeyFingerprintHex
+      || host.keyAgreementKeyFingerprintHex !== foundingRecord.founding.hostKeyAgreementKeyFingerprintHex
+    ) {
+      app.log.error(
+        {
+          foundingId: foundingRecord.founding.foundingId,
+          homeId: foundingRecord.founding.homeId,
+          expectedHostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+          actualHostSigningKeyFingerprintHex: host.signingKeyFingerprintHex,
+          expectedHostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+          actualHostKeyAgreementKeyFingerprintHex: host.keyAgreementKeyFingerprintHex,
+        },
+        'Pico Home host key custody does not match founding evidence; setup mode remains closed.',
+      );
+      return;
+    }
+
+    const verification = verifyPicoHomeFoundingEvidence(foundingRecord, restoredHomeHostKeys);
+    if (!verification.ok) {
+      app.log.error(
+        {
+          foundingId: foundingRecord.founding.foundingId,
+          homeId: foundingRecord.founding.homeId,
+          reason: verification.reason,
+        },
+        'Pico Home founding evidence signature verification failed; setup mode remains closed.',
+      );
+      return;
+    }
+
+    homeHostKeys = restoredHomeHostKeys;
   }
 
   // Fail closed at registration time: a Foundation API route without an access
@@ -1588,6 +1663,55 @@ function createPendingPicoHomeClaim(params: {
     founding,
     createdAt,
   };
+}
+
+function verifyPicoHomeFoundingEvidence(
+  record: PicoHomeFoundingRecord,
+  homeHostKeys: HomeHostKeyPairSet,
+): { ok: true } | { ok: false; reason: string } {
+  const claimantKey = record.claimantIdentityKeyRecord;
+  const hostSigningPublicKeyHex = homeHostKeys.publicBundle.signingPublicKeyHex;
+
+  try {
+    if (claimantKey.suite !== picoIdentitySuite || claimantKey.keyRole !== 'pico_identity') {
+      return { ok: false, reason: 'invalid_claimant_key_role' };
+    }
+
+    if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+      keyRecord: claimantKey,
+      expectedFingerprintHex: record.founding.homeHostPicoIdentityFingerprintHex,
+    })) {
+      return { ok: false, reason: 'claimant_key_fingerprint_mismatch' };
+    }
+
+    if (!verifyPicoIdentityDetachedSignature(sodium, {
+      publicKeyHex: claimantKey.publicKeyHex,
+      signatureInput: buildPicoHomeFoundingSignatureInput(record.founding),
+      signatureHex: record.claimantFoundingSignatureHex,
+    })) {
+      return { ok: false, reason: 'invalid_claimant_founding_signature' };
+    }
+
+    if (!verifyPicoIdentityDetachedSignature(sodium, {
+      publicKeyHex: hostSigningPublicKeyHex,
+      signatureInput: buildPicoHomeClaimResponseSignatureInput(record.hostClaimResponse.claimResponse),
+      signatureHex: record.hostClaimResponse.hostSignatureHex,
+    })) {
+      return { ok: false, reason: 'invalid_host_claim_response_signature' };
+    }
+
+    if (!verifyPicoIdentityDetachedSignature(sodium, {
+      publicKeyHex: hostSigningPublicKeyHex,
+      signatureInput: buildPicoHomeFoundingSignatureInput(record.founding),
+      signatureHex: record.hostFoundingSignatureHex,
+    })) {
+      return { ok: false, reason: 'invalid_host_founding_signature' };
+    }
+  } catch {
+    return { ok: false, reason: 'malformed_founding_evidence' };
+  }
+
+  return { ok: true };
 }
 
 function parsePicoHomeFoundingAcceptance(source: unknown): PicoHomeFoundingAcceptance {
