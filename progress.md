@@ -21,14 +21,14 @@
 
 | Pico-Komponente | Fortschritt | Status | Aktueller Stand | Wichtigster nächster Schritt |
 | --------------- | ----------: | ------ | --------------- | ---------------------------- |
-| Pico Core | 64 % | In Arbeit | Foundation-Service mit HTTP/WebSocket, SQLite, Auth, Memory, Retention, Dashboard und restore-geschlossenem Home-Claim/Founding-Flow ist lokal nutzbar. | Mitgliedschaft, Operator-Konsolidierung und produktionsreife Berechtigungen anbinden. |
-| Pico Surfaces | 38 % | Teilweise implementiert | Das Foundation Web Dashboard bedient lokale Diagnose-, Auth- und Memory-Flows. | Zur ersten clientnahen Companion-Oberfläche ausbauen. |
-| Pico Protocol | 62 % | In Arbeit | Eventtypen, Payloads, Capabilities, Fixture-Gates und Identity/Home/Vault-Bytes inklusive Claim-/Founding-Records sind testgebunden. | Membership-Runtime-Schemas und Conformance-Runner ergänzen. |
-| Pico Sync | 30 % | Teilweise implementiert | Lamport-Clock und Version-Vector-Helfer sind vorhanden. | Replikationsprotokoll und reale Client-/Vault-Synchronisation bauen. |
-| Pico Identity | 46 % | Teilweise implementiert | Signaturprüfung und Lifecycle-Projektion sind als Paket umgesetzt und im Home Claim erstmals konsumiert. | Persistenz, Freshness und Membership-Anbindung ergänzen. |
-| Pico Vault | 48 % | Teilweise implementiert | Encrypted-Keyfile-Runtime mit Person-Key-Custody, Signatur und Unwrap existiert. | Platform-Keystore, Daemon/IPC und Home-Claim-Integration bauen. |
-| Pico Home | 52 % | In Arbeit | Setup Mode, Move-In-Code, Host-Key-Custody, zweistufiger sealed Claim, Founding Record, Restore-Reconciliation und Reset-Audit existieren als M2-Teilslice. | Membership persistieren und Operator unter dem Home Host Pico konsolidieren. |
-| Pico Link | 14 % | Konzipiert | Architektur und draft-only Fixtures sind vorhanden, aber keine Transport- oder Relay-Runtime. | Minimales Transport-/Envelope-Runtime erst nach Sicherheitsgates starten. |
+| Pico Core<br>Lokaler Foundation-Service für APIs, Events, Memory und Home-Betrieb. | 64 % | In Arbeit | Foundation-Service mit HTTP/WebSocket, SQLite, Auth, Memory, Retention, Dashboard und restore-geschlossenem Home-Claim/Founding-Flow ist lokal nutzbar. | Mitgliedschaft, Operator-Konsolidierung und produktionsreife Berechtigungen anbinden. |
+| Pico Surfaces<br>Benutzeroberflächen für Diagnose, Companion-Interaktion und Alltagsflows. | 38 % | Teilweise implementiert | Das Foundation Web Dashboard bedient lokale Diagnose-, Auth- und Memory-Flows. | Zur ersten clientnahen Companion-Oberfläche ausbauen. |
+| Pico Protocol<br>Gemeinsame Typen, kanonische Bytes und Kompatibilitätsgrenzen. | 62 % | In Arbeit | Eventtypen, Payloads, Capabilities, Fixture-Gates und Identity/Home/Vault-Bytes inklusive Claim-/Founding-Records sind testgebunden. | Membership-Runtime-Schemas und Conformance-Runner ergänzen. |
+| Pico Sync<br>Grundlage für Replikation, Versionierung und Konfliktabgleich. | 30 % | Teilweise implementiert | Lamport-Clock und Version-Vector-Helfer sind vorhanden. | Replikationsprotokoll und reale Client-/Vault-Synchronisation bauen. |
+| Pico Identity<br>Identitäts-, Key- und Signaturprüfung für Picos und Devices. | 46 % | Teilweise implementiert | Signaturprüfung und Lifecycle-Projektion sind als Paket umgesetzt und im Home Claim erstmals konsumiert. | Persistenz, Freshness und Membership-Anbindung ergänzen. |
+| Pico Vault<br>Lokale Schlüssel-Custody für Person-/Device-Keys und Signaturen. | 48 % | Teilweise implementiert | Encrypted-Keyfile-Runtime mit Person-Key-Custody, Signatur und Unwrap existiert. | Platform-Keystore, Daemon/IPC und Home-Claim-Integration bauen. |
+| Pico Home<br>Lokale Host-Instanz, die Picos aufnimmt, betreibt und verwaltet. | 52 % | In Arbeit | Setup Mode, Move-In-Code, Host-Key-Custody, zweistufiger sealed Claim, Founding Record, Restore-Reconciliation und Reset-Audit existieren als M2-Teilslice. | Membership persistieren und Operator unter dem Home Host Pico konsolidieren. |
+| Pico Link<br>Geplanter Transport für sichere Kommunikation zwischen Picos und Homes. | 14 % | Konzipiert | Architektur und draft-only Fixtures sind vorhanden, aber keine Transport- oder Relay-Runtime. | Minimales Transport-/Envelope-Runtime erst nach Sicherheitsgates starten. |
 
 ## Pico Core
 
