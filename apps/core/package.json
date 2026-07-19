@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@fastify/websocket": "^11.0.0",
+    "@pico/identity": "workspace:*",
     "@pico/protocol": "workspace:*",
     "@pico/sync": "workspace:*",
     "better-sqlite3": "^11.0.0",

@@ -42,6 +42,8 @@ import {
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
   picoHomeContinuityReasonCategories,
+  picoHomeClaimEnvelopeSchema,
+  picoHomeSealedClaimPayloadSchema,
   picoHomeMembershipLifecycleReasonCategories,
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
@@ -344,6 +346,8 @@ describe('Pico protocol types', () => {
       membershipLifecycle: 'pico.home.membership-lifecycle.v1',
       continuity: 'pico.home.continuity.v1',
     });
+    expect(picoHomeClaimEnvelopeSchema).toBe('pico.home.claim-envelope.v1');
+    expect(picoHomeSealedClaimPayloadSchema).toBe('pico.home.claim-payload.v1');
     expect(picoHomeMembershipRoles).toEqual(['home_host', 'home_member']);
     expect(picoHomeMembershipScopes).toEqual([
       'host.use',

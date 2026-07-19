@@ -29,6 +29,9 @@ importers:
       '@fastify/websocket':
         specifier: ^11.0.0
         version: 11.2.0
+      '@pico/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@pico/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

@@ -103,8 +103,10 @@ export interface HomeHostKeyStoreSodium {
   crypto_sign_PUBLICKEYBYTES: number;
   crypto_sign_SECRETKEYBYTES: number;
   crypto_box_keypair(): { publicKey: Uint8Array; privateKey: Uint8Array };
+  crypto_box_seal_open(ciphertext: Uint8Array, publicKey: Uint8Array, privateKey: Uint8Array): Uint8Array;
   crypto_generichash(hashLength: number, message: Uint8Array | string, key: Uint8Array | string | null): Uint8Array;
   crypto_sign_keypair(): { publicKey: Uint8Array; privateKey: Uint8Array };
+  memzero(bytes: Uint8Array): void;
 }
 
 interface StoredHostKeyPair {
@@ -172,6 +174,28 @@ export class HomeHostKeyStore {
     }
 
     return { removedFiles };
+  }
+
+  public openSealedClaimPayload(sodium: HomeHostKeyStoreSodium, sealedClaimPayloadHex: string): string {
+    const keyAgreement = readStoredKeyPair(sodium, this.keyPath(HOST_KEY_AGREEMENT_KEY_FILE), 'home_host_key_agreement');
+    const ciphertext = hexToBytes(sealedClaimPayloadHex, 'Pico Home claim envelope must be lowercase hex.');
+    const publicKey = hexToBytes(keyAgreement.publicKeyHex);
+    const privateKey = hexToBytes(keyAgreement.privateKeyHex);
+
+    try {
+      const plaintext = sodium.crypto_box_seal_open(ciphertext, publicKey, privateKey);
+      try {
+        return new TextDecoder().decode(plaintext);
+      } finally {
+        sodium.memzero(plaintext);
+      }
+    } catch {
+      throw new Error('Pico Home claim envelope could not be opened.');
+    } finally {
+      sodium.memzero(publicKey);
+      sodium.memzero(privateKey);
+      sodium.memzero(ciphertext);
+    }
   }
 
   private keyPath(name: string): string {
@@ -326,9 +350,9 @@ function assertExpectedKeyLengths(
   }
 }
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string, errorMessage = 'Pico Home host key material must be lowercase hex.'): Uint8Array {
   if (!/^(?:[0-9a-f]{2})+$/.test(hex)) {
-    throw new Error('Pico Home host key material must be lowercase hex.');
+    throw new Error(errorMessage);
   }
 
   return Uint8Array.from(Buffer.from(hex, 'hex'));

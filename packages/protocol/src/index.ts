@@ -122,6 +122,9 @@ export const picoHomeClaimStates = [
 
 export type PicoHomeClaimStateName = typeof picoHomeClaimStates[number];
 
+export const picoHomeClaimEnvelopeSchema = 'pico.home.claim-envelope.v1' as const;
+export const picoHomeSealedClaimPayloadSchema = 'pico.home.claim-payload.v1' as const;
+
 export const picoIdentitySuite = 'pico.suite.id.v1' as const;
 
 // Authoritative signature-input families for ADR 0079 Gate G1. These builders
@@ -324,6 +327,18 @@ export interface PicoHomeClaimSignatureInput {
   claimantIdentityKeyFingerprintHex: string;
   claimantNonceHex: string;
   hostSetupNonceHex: string;
+}
+
+export interface PicoHomeClaimEnvelope {
+  schema: typeof picoHomeClaimEnvelopeSchema;
+  sealedClaimPayloadHex: string;
+}
+
+export interface PicoHomeSealedClaimPayload {
+  schema: typeof picoHomeSealedClaimPayloadSchema;
+  claim: PicoHomeClaimSignatureInput;
+  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  claimantSignatureHex: string;
 }
 
 export interface PicoHomeClaimResponseSignatureInput {
@@ -989,6 +1004,7 @@ export interface PicoHomeSetupResponse {
     active: true;
     moveInCodePending: true;
     claimEndpoint: '/api/home/claim';
+    hostSetupNonceHex: string;
   };
   host: {
     suite: typeof picoIdentitySuite;

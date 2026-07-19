@@ -11,12 +11,20 @@ import {
   avatarModes,
   avatarStates,
   avatarStatusColors,
+  buildPicoHomeClaimSignatureInput,
+  buildPicoIdentityKeyRecordSignatureInput,
   deviceSeenStatuses,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
+  picoHomeClaimEnvelopeSchema,
   picoHomeEventTypes,
+  picoHomeSealedClaimPayloadSchema,
+  picoIdentitySuite,
   protocolCapabilities,
   realtimeMessageType,
+  type PicoHomeClaimSignatureInput,
+  type PicoHomeSetupResponse,
+  type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
@@ -224,6 +232,7 @@ describe('Pico Home Core app', () => {
         active: true,
         moveInCodePending: true,
         claimEndpoint: '/api/home/claim',
+        hostSetupNonceHex: expect.stringMatching(/^[0-9a-f]{64}$/),
       },
       host: {
         suite: 'pico.suite.id.v1',
@@ -285,6 +294,65 @@ describe('Pico Home Core app', () => {
       .filter((event) => event.type === 'home.claimed');
     expect(homeClaimed).toHaveLength(1);
     expect(homeClaimed[0].payload).toEqual({});
+
+    await app.close();
+  });
+
+  it('claims an empty Pico Home through a sealed signed claim envelope', async () => {
+    const app = await buildAppWithCapturedLog();
+    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
+    const sealedClaim = createSealedPicoHomeClaim(setup, readMoveInCode(app));
+
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: sealedClaim.claimEnvelope },
+    });
+
+    expect(claimed.statusCode).toBe(201);
+    expect(claimed.json()).toEqual({
+      claimState: {
+        state: 'claimed',
+        setupMode: {
+          active: false,
+          moveInCodePending: false,
+        },
+        homeId: expect.stringMatching(/^home_[0-9a-f]{32}$/),
+        homeHostPicoId: sealedClaim.expectedHomeHostPicoId,
+        hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
+        claimedAt: expect.any(String),
+      },
+    });
+    expect(JSON.stringify(claimed.json())).not.toContain(sealedClaim.moveInCode);
+
+    await app.close();
+  });
+
+  it('rejects tampered sealed claim signatures without consuming the Move-In Code', async () => {
+    const app = await buildAppWithCapturedLog();
+    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
+    const moveInCode = readMoveInCode(app);
+    const tampered = createSealedPicoHomeClaim(setup, moveInCode, {
+      claimantSignatureHex: '00'.repeat(64),
+    });
+
+    const rejected = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: tampered.claimEnvelope },
+    });
+    expect(rejected.statusCode).toBe(401);
+    expect(rejected.json()).toEqual({ error: 'Pico Home claim signature is invalid.' });
+
+    const valid = createSealedPicoHomeClaim(setup, moveInCode);
+    const claimed = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: valid.claimEnvelope },
+    });
+    expect(claimed.statusCode).toBe(201);
+    expect(claimed.json().claimState.homeHostPicoId).toBe(valid.expectedHomeHostPicoId);
 
     await app.close();
   });
@@ -2071,6 +2139,73 @@ function readMoveInCode(app: Awaited<ReturnType<typeof buildApp>>): string {
   }
 
   throw new Error('No Move-In Code was surfaced on the host log.');
+}
+
+function createSealedPicoHomeClaim(
+  setup: PicoHomeSetupResponse,
+  moveInCode: string,
+  overrides: { claimantSignatureHex?: string; hostSetupNonceHex?: string } = {},
+): {
+  claimEnvelope: { schema: typeof picoHomeClaimEnvelopeSchema; sealedClaimPayloadHex: string };
+  expectedHomeHostPicoId: string;
+  moveInCode: string;
+} {
+  const claimant = sodium.crypto_sign_keypair();
+  const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: picoIdentitySuite,
+    keyRole: 'pico_identity',
+    publicKeyHex: bytesToHex(claimant.publicKey),
+  };
+  const claimantIdentityKeyFingerprintHex = bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoIdentityKeyRecordSignatureInput(claimantIdentityKeyRecord),
+    null,
+  ));
+  const claim: PicoHomeClaimSignatureInput = {
+    suite: picoIdentitySuite,
+    claimId: `claim_${randomHex(16)}`,
+    hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
+    moveInCode,
+    claimantIdentityKeyFingerprintHex,
+    claimantNonceHex: randomHex(32),
+    hostSetupNonceHex: overrides.hostSetupNonceHex ?? setup.setupMode.hostSetupNonceHex,
+  };
+  const signatureHex = overrides.claimantSignatureHex ?? bytesToHex(sodium.crypto_sign_detached(
+    buildPicoHomeClaimSignatureInput(claim),
+    claimant.privateKey,
+  ));
+  const sealedPayload = {
+    schema: picoHomeSealedClaimPayloadSchema,
+    claim,
+    claimantIdentityKeyRecord,
+    claimantSignatureHex: signatureHex,
+  };
+  const sealed = sodium.crypto_box_seal(
+    Buffer.from(JSON.stringify(sealedPayload), 'utf8'),
+    hexToBytes(setup.host.keyAgreementPublicKeyHex),
+  );
+
+  return {
+    claimEnvelope: {
+      schema: picoHomeClaimEnvelopeSchema,
+      sealedClaimPayloadHex: bytesToHex(sealed),
+    },
+    expectedHomeHostPicoId: `pico:identity:${claimantIdentityKeyFingerprintHex}`,
+    moveInCode,
+  };
+}
+
+function randomHex(bytes: number): string {
+  return bytesToHex(sodium.randombytes_buf(bytes));
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('hex');
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  return Uint8Array.from(Buffer.from(hex, 'hex'));
 }
 
 /** Reads an item the way a key-holding reader would, after the app let go of the database. */

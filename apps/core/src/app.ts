@@ -4,11 +4,15 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
+  buildPicoHomeClaimSignatureInput,
   validateFoundationEventPayload,
   foundationEventTypes,
   serverSynthesizedFoundationEventTypes,
   payloadPostures,
   picoEventTypes,
+  picoHomeClaimEnvelopeSchema,
+  picoHomeSealedClaimPayloadSchema,
+  picoIdentitySuite,
   protocolCapabilities,
   memoryRetentionModes,
   realtimeMessageType,
@@ -26,9 +30,13 @@ import {
   type PicoEventListResponse,
   type PicoEventType,
   type PicoHealthResponse,
+  type PicoHomeClaimEnvelope,
   type PicoHomeClaimResponse,
   type PicoHomeClaimStateResponse,
+  type PicoHomeClaimSignatureInput,
+  type PicoHomeSealedClaimPayload,
   type PicoHomeSetupResponse,
+  type PicoIdentityKeyRecordSignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
   type PicoRealtimeTicketResponse,
@@ -37,6 +45,10 @@ import {
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
 } from '@pico/protocol';
+import {
+  verifyPicoIdentityDetachedSignature,
+  verifyPicoIdentityKeyRecordFingerprint,
+} from '@pico/identity';
 import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
@@ -131,6 +143,24 @@ interface RealtimeTicketRecord {
   sessionDigest?: string;
 }
 
+interface PicoHomeClaimRequestContext {
+  homeHostKeyStore: HomeHostKeyStore;
+  homeHostKeys: HomeHostKeyPairSet;
+  homeSetupNonceHex: string;
+}
+
+type ParsedPicoHomeClaimRequest =
+  | {
+    ok: true;
+    moveInCode: unknown;
+    homeHostPicoId: string;
+  }
+  | {
+    ok: false;
+    statusCode: number;
+    error: string;
+  };
+
 // Which authority a request carries. The bearer header holds either the
 // principal-less static token or an operator session; they are resolved apart
 // so the token can never reach beyond its ceiling (ADR 0075).
@@ -199,6 +229,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const moveInCode = new MoveInCode();
   const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
   let homeHostKeys: HomeHostKeyPairSet | undefined;
+  let homeSetupNonceHex: string | undefined;
   const accessClasses = new AccessClassRegistry();
   // Domain readership for the `domain-content` class (ADR 0077 A7 seam). A
   // distinct authority from the operator role; the foundation-phase default
@@ -217,16 +248,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const claimState = store.picoHomeClaimState();
     if (claimState.state !== 'unclaimed') {
       moveInCode.clear();
+      homeSetupNonceHex = undefined;
       return;
     }
 
     homeHostKeys = homeHostKeyStore.ensure(sodium);
+    homeSetupNonceHex = randomBytes(32).toString('hex');
     const code = moveInCode.mint();
 
     app.log.warn(
       {
         picoHomeMoveInCode: code,
         claimEndpoint: '/api/home/claim',
+        hostSetupNonceHex: homeSetupNonceHex,
         hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
         hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
       },
@@ -257,6 +291,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const removed = homeHostKeyStore.clear();
     store.resetPicoHome();
     homeHostKeys = undefined;
+    homeSetupNonceHex = undefined;
     moveInCode.clear();
     appendServerEvent('home.reset', {});
     app.log.warn(
@@ -556,7 +591,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.get('/api/home/setup', async (_request, reply) => {
-    if (homeHostKeys === undefined || !moveInCode.isPending()) {
+    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || !moveInCode.isPending()) {
       return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
     }
 
@@ -565,6 +600,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         active: true,
         moveInCodePending: true,
         claimEndpoint: '/api/home/claim',
+        hostSetupNonceHex: homeSetupNonceHex,
       },
       host: {
         suite: homeHostKeys.publicBundle.suite,
@@ -579,18 +615,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.post('/api/home/claim', async (request, reply) => {
-    const body = (request.body ?? {}) as { moveInCode?: unknown; homeHostPicoId?: unknown; hostAdminPicoId?: unknown };
+    const body = (request.body ?? {}) as Record<string, unknown>;
 
-    const homeHostPicoId = readHomeHostPicoId(body);
-    if (!homeHostPicoId.ok) {
-      return sendNoStore(reply.code(400), { error: homeHostPicoId.error });
-    }
-
-    if (homeHostKeys === undefined || !moveInCode.isPending()) {
+    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || !moveInCode.isPending()) {
       return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
     }
 
-    const code = moveInCode.consume(body.moveInCode);
+    const claimRequest = readPicoHomeClaimRequest(body, {
+      homeHostKeyStore,
+      homeHostKeys,
+      homeSetupNonceHex,
+    });
+    if (!claimRequest.ok) {
+      return sendNoStore(reply.code(claimRequest.statusCode), { error: claimRequest.error });
+    }
+
+    const code = moveInCode.consume(claimRequest.moveInCode);
     if (!code.ok) {
       return sendNoStore(reply.code(code.exhausted ? 429 : 401), {
         error: code.exhausted
@@ -603,7 +643,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     try {
       claimState = store.claimPicoHome({
         homeId: createHomeId(),
-        hostAdminPicoId: homeHostPicoId.value,
+        hostAdminPicoId: claimRequest.homeHostPicoId,
         hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
         hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
       });
@@ -612,6 +652,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     appendServerEvent('home.claimed', {});
+    homeSetupNonceHex = undefined;
     app.log.warn(
       {
         homeId: claimState.homeId,
@@ -1182,6 +1223,118 @@ function toPicoHomeClaimStateResponse(
   };
 }
 
+function readPicoHomeClaimRequest(
+  body: Record<string, unknown>,
+  context: PicoHomeClaimRequestContext,
+): ParsedPicoHomeClaimRequest {
+  if ('claimEnvelope' in body) {
+    if (body.moveInCode !== undefined || body.homeHostPicoId !== undefined || body.hostAdminPicoId !== undefined) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error: 'claimEnvelope cannot be combined with legacy Move-In Code fields.',
+      };
+    }
+
+    return readSealedPicoHomeClaimRequest(body.claimEnvelope, context);
+  }
+
+  const homeHostPicoId = readHomeHostPicoId(body);
+  if (!homeHostPicoId.ok) {
+    return { ok: false, statusCode: 400, error: homeHostPicoId.error };
+  }
+
+  return {
+    ok: true,
+    moveInCode: body.moveInCode,
+    homeHostPicoId: homeHostPicoId.value,
+  };
+}
+
+function readSealedPicoHomeClaimRequest(
+  claimEnvelope: unknown,
+  context: PicoHomeClaimRequestContext,
+): ParsedPicoHomeClaimRequest {
+  let envelope: PicoHomeClaimEnvelope;
+  let payload: PicoHomeSealedClaimPayload;
+
+  try {
+    envelope = parsePicoHomeClaimEnvelope(claimEnvelope);
+    payload = parsePicoHomeSealedClaimPayload(
+      context.homeHostKeyStore.openSealedClaimPayload(sodium, envelope.sealedClaimPayloadHex),
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: (error as Error).message,
+    };
+  }
+
+  const claim = payload.claim;
+  const host = context.homeHostKeys.publicBundle;
+  if (
+    claim.suite !== picoIdentitySuite
+    || claim.hostSigningKeyFingerprintHex !== host.signingKeyFingerprintHex
+    || claim.hostKeyAgreementKeyFingerprintHex !== host.keyAgreementKeyFingerprintHex
+    || claim.hostSetupNonceHex !== context.homeSetupNonceHex
+  ) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'Pico Home claim is not bound to this setup session.',
+    };
+  }
+
+  if (
+    payload.claimantIdentityKeyRecord.suite !== picoIdentitySuite
+    || payload.claimantIdentityKeyRecord.keyRole !== 'pico_identity'
+  ) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'Pico Home claim requires a pico_identity claimant key.',
+    };
+  }
+
+  try {
+    if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+      keyRecord: payload.claimantIdentityKeyRecord,
+      expectedFingerprintHex: claim.claimantIdentityKeyFingerprintHex,
+    })) {
+      return {
+        ok: false,
+        statusCode: 400,
+        error: 'Pico Home claimant identity fingerprint does not match the key record.',
+      };
+    }
+
+    if (!verifyPicoIdentityDetachedSignature(sodium, {
+      publicKeyHex: payload.claimantIdentityKeyRecord.publicKeyHex,
+      signatureInput: buildPicoHomeClaimSignatureInput(claim),
+      signatureHex: payload.claimantSignatureHex,
+    })) {
+      return {
+        ok: false,
+        statusCode: 401,
+        error: 'Pico Home claim signature is invalid.',
+      };
+    }
+  } catch {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'Pico Home claim payload is invalid.',
+    };
+  }
+
+  return {
+    ok: true,
+    moveInCode: claim.moveInCode,
+    homeHostPicoId: `pico:identity:${claim.claimantIdentityKeyFingerprintHex}`,
+  };
+}
+
 function readHomeHostPicoId(body: { homeHostPicoId?: unknown; hostAdminPicoId?: unknown }):
   | { ok: true; value: string }
   | { ok: false; error: string } {
@@ -1202,6 +1355,98 @@ function readHomeHostPicoId(body: { homeHostPicoId?: unknown; hostAdminPicoId?: 
 
 function createHomeId(): string {
   return `home_${randomBytes(16).toString('hex')}`;
+}
+
+function parsePicoHomeClaimEnvelope(source: unknown): PicoHomeClaimEnvelope {
+  if (!isRecord(source) || !hasExactKeys(source, ['schema', 'sealedClaimPayloadHex'])) {
+    throw new Error('Pico Home claim envelope is invalid.');
+  }
+
+  const envelope = {
+    schema: stringField(source, 'schema', 'Pico Home claim envelope is invalid.'),
+    sealedClaimPayloadHex: stringField(source, 'sealedClaimPayloadHex', 'Pico Home claim envelope is invalid.'),
+  };
+
+  if (envelope.schema !== picoHomeClaimEnvelopeSchema || !/^[0-9a-f]{1,16384}$/.test(envelope.sealedClaimPayloadHex)) {
+    throw new Error('Pico Home claim envelope is invalid.');
+  }
+
+  return {
+    schema: picoHomeClaimEnvelopeSchema,
+    sealedClaimPayloadHex: envelope.sealedClaimPayloadHex,
+  };
+}
+
+function parsePicoHomeSealedClaimPayload(serialized: string): PicoHomeSealedClaimPayload {
+  let source: unknown;
+  try {
+    source = JSON.parse(serialized);
+  } catch {
+    throw new Error('Pico Home claim payload is invalid.');
+  }
+
+  if (!isRecord(source) || !hasExactKeys(source, ['schema', 'claim', 'claimantIdentityKeyRecord', 'claimantSignatureHex'])) {
+    throw new Error('Pico Home claim payload is invalid.');
+  }
+
+  const payload = {
+    schema: stringField(source, 'schema'),
+    claim: parsePicoHomeClaim(source.claim),
+    claimantIdentityKeyRecord: parsePicoIdentityKeyRecord(source.claimantIdentityKeyRecord),
+    claimantSignatureHex: stringField(source, 'claimantSignatureHex'),
+  };
+
+  if (payload.schema !== picoHomeSealedClaimPayloadSchema || !/^[0-9a-f]{128}$/.test(payload.claimantSignatureHex)) {
+    throw new Error('Pico Home claim payload is invalid.');
+  }
+
+  return {
+    schema: picoHomeSealedClaimPayloadSchema,
+    claim: payload.claim,
+    claimantIdentityKeyRecord: payload.claimantIdentityKeyRecord,
+    claimantSignatureHex: payload.claimantSignatureHex,
+  };
+}
+
+function parsePicoHomeClaim(source: unknown): PicoHomeClaimSignatureInput {
+  if (!isRecord(source) || !hasExactKeys(source, [
+    'suite',
+    'claimId',
+    'hostSigningKeyFingerprintHex',
+    'hostKeyAgreementKeyFingerprintHex',
+    'moveInCode',
+    'claimantIdentityKeyFingerprintHex',
+    'claimantNonceHex',
+    'hostSetupNonceHex',
+  ])) {
+    throw new Error('Pico Home claim payload is invalid.');
+  }
+
+  const claim: PicoHomeClaimSignatureInput = {
+    suite: stringField(source, 'suite'),
+    claimId: stringField(source, 'claimId'),
+    hostSigningKeyFingerprintHex: stringField(source, 'hostSigningKeyFingerprintHex'),
+    hostKeyAgreementKeyFingerprintHex: stringField(source, 'hostKeyAgreementKeyFingerprintHex'),
+    moveInCode: stringField(source, 'moveInCode'),
+    claimantIdentityKeyFingerprintHex: stringField(source, 'claimantIdentityKeyFingerprintHex'),
+    claimantNonceHex: stringField(source, 'claimantNonceHex'),
+    hostSetupNonceHex: stringField(source, 'hostSetupNonceHex'),
+  };
+
+  buildPicoHomeClaimSignatureInput(claim);
+  return claim;
+}
+
+function parsePicoIdentityKeyRecord(source: unknown): PicoIdentityKeyRecordSignatureInput {
+  if (!isRecord(source) || !hasExactKeys(source, ['suite', 'keyRole', 'publicKeyHex'])) {
+    throw new Error('Pico Home claim payload is invalid.');
+  }
+
+  return {
+    suite: stringField(source, 'suite'),
+    keyRole: stringField(source, 'keyRole') as PicoIdentityKeyRecordSignatureInput['keyRole'],
+    publicKeyHex: stringField(source, 'publicKeyHex'),
+  };
 }
 
 function parseLimit(rawLimit: string | undefined): { ok: true; limit: number } | { ok: false; error: string } {
@@ -1762,6 +2007,21 @@ function isKnownEventType(value: unknown): value is PicoEventType {
 
 function isRetentionMode(value: unknown): value is MemoryRetentionMode {
   return typeof value === 'string' && (memoryRetentionModes as readonly string[]).includes(value);
+}
+
+function stringField(source: Record<string, unknown>, key: string, error = 'Pico Home claim payload is invalid.'): string {
+  const value = source[key];
+  if (typeof value !== 'string') {
+    throw new Error(error);
+  }
+
+  return value;
+}
+
+function hasExactKeys(source: Record<string, unknown>, expectedKeys: readonly string[]): boolean {
+  const expected = new Set(expectedKeys);
+  return Object.keys(source).every((key) => expected.has(key))
+    && expectedKeys.every((key) => key in source);
 }
 
 function isNonEmptyString(value: unknown, maxLength: number): value is string {
