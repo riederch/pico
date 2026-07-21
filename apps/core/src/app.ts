@@ -976,14 +976,16 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     try {
       await operators.create(body.passphrase as string);
     } catch (error) {
+      // The code is spent either way; a failed attempt must not leave a usable
+      // one behind. Re-mint so a legitimate operator can retry from the log —
+      // including when the failure was an overload, which used to return early
+      // and burn the code against this very rule.
+      const code = bootstrapCode.mint();
+      app.log.warn({ operatorBootstrapCode: code }, 'Operator bootstrap failed; a new bootstrap code was minted.');
+
       if (error instanceof OperatorOverloadedError) {
         return reply.code(503).send({ error: 'Too many credential operations in flight.' });
       }
-
-      // The code is spent either way; a failed attempt must not leave a usable
-      // one behind. Re-mint so a legitimate operator can retry from the log.
-      const code = bootstrapCode.mint();
-      app.log.warn({ operatorBootstrapCode: code }, 'Operator bootstrap failed; a new bootstrap code was minted.');
 
       return reply.code(400).send({ error: (error as Error).message });
     }

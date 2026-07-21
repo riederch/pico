@@ -119,7 +119,19 @@ export class OperatorStore {
       return false;
     }
 
-    return this.enqueue(() => this.sodium.crypto_pwhash_str_verify(row.credential_verifier, passphrase));
+    const verified = await this.enqueue(
+      () => this.sodium.crypto_pwhash_str_verify(row.credential_verifier, passphrase),
+    );
+
+    if (verified && this.needsRehash()) {
+      // The upgrade path the self-describing verifier exists for. A successful
+      // login is the only moment the plaintext is available to re-derive from,
+      // so it happens here or not at all — and "not at all" is what it was:
+      // nothing called needsRehash outside its own test.
+      await this.rehash(passphrase);
+    }
+
+    return verified;
   }
 
   /**
@@ -167,6 +179,22 @@ export class OperatorStore {
       this.sodium.crypto_pwhash_OPSLIMIT_INTERACTIVE,
       this.sodium.crypto_pwhash_MEMLIMIT_INTERACTIVE,
     );
+  }
+
+  /**
+   * Re-derives the verifier under current parameters. Best effort on purpose:
+   * a failed upgrade must never turn a correct passphrase into a failed login,
+   * so the old verifier simply stays and the next login tries again.
+   */
+  private async rehash(passphrase: string): Promise<void> {
+    try {
+      const verifier = await this.hash(passphrase);
+      this.db
+        .prepare('UPDATE foundation_operator SET credential_verifier = ?, updated_at = ? WHERE operator_id = ?')
+        .run(verifier, new Date().toISOString(), OPERATOR_ROW_ID);
+    } catch {
+      // Keeping the working verifier is the safe outcome.
+    }
   }
 
   private read(): OperatorRow | undefined {

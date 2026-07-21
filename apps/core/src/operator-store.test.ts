@@ -125,6 +125,32 @@ describe('OperatorStore', () => {
   });
 });
 
+  it('upgrades a verifier made with weaker parameters on the next successful login', async () => {
+    const { operators } = openOperators();
+
+    // Write a verifier at the weakest parameters libsodium offers, the way an
+    // older release would have left one behind.
+    await operators.create(PASSPHRASE);
+    const weakVerifier = sodium.crypto_pwhash_str(
+      PASSPHRASE,
+      sodium.crypto_pwhash_OPSLIMIT_MIN,
+      sodium.crypto_pwhash_MEMLIMIT_MIN,
+    );
+    writeVerifier(operators, weakVerifier);
+
+    expect(operators.needsRehash()).toBe(true);
+
+    // A wrong passphrase must not upgrade anything.
+    expect(await operators.verify('not the passphrase at all')).toBe(false);
+    expect(readVerifier(operators)).toBe(weakVerifier);
+
+    // The correct one is the only moment the plaintext exists to re-derive from.
+    expect(await operators.verify(PASSPHRASE)).toBe(true);
+    expect(readVerifier(operators)).not.toBe(weakVerifier);
+    expect(operators.needsRehash()).toBe(false);
+    expect(await operators.verify(PASSPHRASE)).toBe(true);
+  });
+
 describe('OperatorBootstrapCode', () => {
   it('accepts its code exactly once', () => {
     const bootstrap = new OperatorBootstrapCode();
@@ -166,6 +192,12 @@ describe('consumeOperatorResetMarker', () => {
     expect(consumeOperatorResetMarker(databasePath)).toBe(false);
   });
 });
+
+function writeVerifier(operators: OperatorStore, verifier: string): void {
+  const db = (operators as unknown as { db: { prepare(sql: string): { run(value: string): void } } }).db;
+
+  db.prepare('UPDATE foundation_operator SET credential_verifier = ?').run(verifier);
+}
 
 function readVerifier(operators: OperatorStore): string {
   const db = (operators as unknown as { db: { prepare(sql: string): { get(): { credential_verifier: string } } } }).db;
