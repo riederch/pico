@@ -279,6 +279,11 @@ export function createPicoVaultKeyfile(
   sodium.memzero(fileKey);
   sodium.memzero(payload);
   sodium.memzero(privateKey);
+  // The buffer libsodium handed back is a second copy of the same secret. JS
+  // memory hygiene is best-effort (V7), but leaving the generator's own copy of
+  // a freshly minted root key alive for the collector is the one part we can
+  // actually control here.
+  sodium.memzero(keypair.privateKey);
 
   return {
     keyfile: {
