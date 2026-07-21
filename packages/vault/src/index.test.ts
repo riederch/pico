@@ -2,6 +2,9 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  buildPicoHomeClaimSignatureInput,
+  buildPicoHomeContinuitySignatureInput,
+  buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   picoIdentitySuite,
@@ -73,6 +76,75 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       Buffer.from(created.publicKeyHex, 'hex'),
     )).toBe(true);
     expect(() => session.sign(new Uint8Array([0, 0, 0, 4, 116, 101, 115, 116]))).toThrow('unknown_signature_input_label');
+  });
+
+  it('signs the Move-In ceremony with an identity key and refuses host families', () => {
+    // The point of the Vault boundary: the claimant's identity key never leaves
+    // it, so the ADR 0080 ceremony has to be signable from inside (ADR 0081 V1).
+    const created = createPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: 'correct horse battery staple',
+    });
+    const session = openPicoVaultKeyfile(sodium, {
+      keyfile: created.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+
+    const claim = buildPicoHomeClaimSignatureInput({
+      suite: picoIdentitySuite,
+      claimId: 'claim_20260718_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      moveInCode: 'MOVEIN-20260718-A',
+      claimantIdentityKeyFingerprintHex: created.keyFingerprintHex,
+      claimantNonceHex: '33'.repeat(32),
+      hostSetupNonceHex: '44'.repeat(32),
+    });
+    const founding = buildPicoHomeFoundingSignatureInput({
+      suite: picoIdentitySuite,
+      foundingId: 'founding_20260718_0001',
+      homeId: 'home_20260718_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      homeHostPicoIdentityFingerprintHex: created.keyFingerprintHex,
+      claimantNonceHex: '33'.repeat(32),
+      hostNonceHex: '55'.repeat(32),
+      foundedAt: '2026-07-18T09:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    });
+
+    for (const signatureInput of [claim, founding]) {
+      expect(sodium.crypto_sign_verify_detached(
+        session.sign(signatureInput),
+        signatureInput,
+        Buffer.from(created.publicKeyHex, 'hex'),
+      )).toBe(true);
+    }
+
+    // Continuity is a host statement; a person-role key never signs one.
+    expect(() => session.sign(buildPicoHomeContinuitySignatureInput({
+      suite: picoIdentitySuite,
+      continuityId: 'continuity_20260718_0001',
+      homeId: 'home_20260718_0001',
+      outgoingHostSigningKeyFingerprintHex: '11'.repeat(32),
+      outgoingHostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      incomingHostSigningKeyFingerprintHex: '55'.repeat(32),
+      incomingHostKeyAgreementKeyFingerprintHex: '66'.repeat(32),
+      homeHostPicoIdentityFingerprintHex: created.keyFingerprintHex,
+      reasonCategory: 'host_key_rotated',
+      changedAt: '2026-07-18T09:10:00.000Z',
+      lifecycleOrder: 'seq:0000000000000002',
+    }))).toThrow('unknown_signature_input_label');
+
+    // And a delegated device key stays inside the identity families.
+    const device = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_signing',
+      passphrase: 'correct horse battery staple',
+    });
+    expect(() => openPicoVaultKeyfile(sodium, {
+      keyfile: device.keyfile,
+      passphrase: 'correct horse battery staple',
+    }).sign(claim)).toThrow('unknown_signature_input_label');
   });
 
   it('rejects wrong passphrases, tampered headers and truncated ciphertext', () => {

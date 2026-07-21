@@ -3,6 +3,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoVaultKeyfileHeaderAad,
+  picoHomeSignatureInputLabels,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
   picoVaultAeadAlgorithms,
@@ -114,7 +115,27 @@ interface PrivateKeyPayload {
   privateKey: Uint8Array;
 }
 
-const recognizedSignatureInputLabels = new Set<string>(Object.values(picoIdentitySignatureInputLabels));
+/**
+ * What each person-role key may be asked to sign (ADR 0081 V4). Keyed by role
+ * rather than one flat set, because "never signs blind" and least privilege are
+ * the same rule at this boundary: an identity root is the only key the ADR 0080
+ * ceremony wants, so it is the only one that can produce those bytes.
+ *
+ * Host families (`claim-response`, `continuity`) appear nowhere on purpose -
+ * host-role keys are not Vault keys at all (`picoVaultPersonKeyRoles`), so
+ * those labels stay unrepresentable rather than merely unlisted. The membership
+ * families wait for the runtime that issues them; listing them now would be a
+ * guess about who signs which half.
+ */
+const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string>> = {
+  pico_identity: new Set<string>([
+    ...Object.values(picoIdentitySignatureInputLabels),
+    picoHomeSignatureInputLabels.claim,
+    picoHomeSignatureInputLabels.founding,
+  ]),
+  device_signing: new Set<string>(Object.values(picoIdentitySignatureInputLabels)),
+  device_key_agreement: new Set<string>(),
+};
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const canonicalHexPattern = /^[0-9a-f]+$/;
@@ -182,7 +203,7 @@ export class PicoVaultSession {
     }
 
     const label = firstCanonicalElementAscii(signatureInput);
-    if (!recognizedSignatureInputLabels.has(label)) {
+    if (!signableLabelsByKeyRole[this.#metadata.keyRole].has(label)) {
       throw new Error('unknown_signature_input_label');
     }
 
