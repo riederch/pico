@@ -1455,6 +1455,53 @@ describe('Pico Home Core app', () => {
     }
   });
 
+  it('throttles repeated failed logins without locking the operator out', async () => {
+    const app = await buildAppWithCapturedLog();
+    const bootstrapCode = readBootstrapCode(app);
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    })).statusCode).toBe(201);
+
+    // The bounded verification queue caps memory, not attempts; without a
+    // throttle the passphrase can be ground at the rate of one KDF run.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const failed = await app.inject({
+        method: 'POST',
+        url: '/api/auth/session',
+        payload: { passphrase: 'definitely not the passphrase' },
+      });
+      expect(failed.statusCode).toBe(401);
+    }
+
+    const throttled = await app.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      payload: { passphrase: 'definitely not the passphrase' },
+    });
+    expect(throttled.statusCode).toBe(429);
+    expect(throttled.headers['retry-after']).toBe('1');
+
+    // The correct passphrase is throttled too - the endpoint cannot tell them
+    // apart before the KDF, which is the point.
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      payload: { passphrase: OPERATOR_PASSPHRASE },
+    })).statusCode).toBe(429);
+
+    // Failed logins never reach the append-only log (ADR 0075 A9).
+    const session = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    })).statusCode;
+    expect(session).toBe(404);
+
+    await app.close();
+  });
+
   it('cuts live realtime connections when their session is revoked', async () => {
     const app = await buildAppWithCapturedLog();
     const bootstrapCode = readBootstrapCode(app);

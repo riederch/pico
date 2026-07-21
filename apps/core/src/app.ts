@@ -74,6 +74,7 @@ import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, t
 import { OperatorOverloadedError, type OperatorStore } from './operator-store.js';
 import { SessionStore } from './session-store.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
+import { LoginThrottle } from './login-throttle.js';
 import { shredDomainWithAudit } from './domain-shred.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 import {
@@ -278,6 +279,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
+  const loginThrottle = new LoginThrottle();
   const sockets = new Set<RealtimeSocket>();
   // Carries the session a handshake resolved to from preValidation into the
   // socket handler, keyed by request so nothing leaks between connections.
@@ -1000,6 +1002,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   app.post('/api/auth/session', async (request, reply) => {
     const body = (request.body ?? {}) as { passphrase?: unknown };
 
+    // Before the KDF, so a throttled attempt costs no memory-hard work either.
+    const throttle = loginThrottle.check();
+    if (!throttle.allowed) {
+      request.log.warn({ retryAfterSeconds: throttle.retryAfterSeconds }, 'Foundation operator login is throttled.');
+
+      return reply
+        .code(429)
+        .header('Retry-After', String(throttle.retryAfterSeconds))
+        .header('Cache-Control', 'no-store')
+        .send({ error: 'Too many failed login attempts. Try again shortly.' });
+    }
+
     let verified: boolean;
 
     try {
@@ -1013,6 +1027,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     if (!verified) {
+      loginThrottle.recordFailure();
+
       // Uniform failure: a wrong passphrase and an absent operator must not be
       // distinguishable. Failed logins stay in operational logging and never
       // reach the append-only log (ADR 0075 A9).
@@ -1021,6 +1037,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return unauthorized(reply, 'Foundation operator credentials are invalid.');
     }
 
+    loginThrottle.recordSuccess();
     const session = sessions.issue();
 
     return reply
