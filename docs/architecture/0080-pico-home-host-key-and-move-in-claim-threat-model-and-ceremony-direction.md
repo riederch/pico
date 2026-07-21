@@ -276,8 +276,11 @@ The canonicalization-negative suite also includes reject-only cases with no cano
 - `membership-unknown-scope` -> `invalid_membership_scope`
 - `membership-duplicate-scope` -> `duplicate_scope`
 - `membership-validity-inverted` -> `invalid_validity_bounds`
+- `membership-validity-offset-form` -> `invalid_instant`
 - `continuity-without-outgoing-key` -> `missing_field`
 - `continuity-invalid-lifecycle-order` -> `invalid_lifecycle_order`
+
+Protected timestamps (`foundedAt`, `validFrom`, `validUntil`, `changedAt`) carry the ADR 0079 rule: exactly `YYYY-MM-DDTHH:MM:SS.sssZ`, rejected as `invalid_instant` otherwise, because membership validity is decided by comparing these fields as strings and a UTC offset sorts before `Z` at the same instant.
 
 ## Ordering gates
 

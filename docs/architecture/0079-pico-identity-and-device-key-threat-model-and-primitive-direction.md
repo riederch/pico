@@ -125,6 +125,7 @@ Current vocabulary:
 - key roles: `pico_identity`, `device_signing`, `device_key_agreement`, `home_host_signing`, `home_host_key_agreement`
 - delegation scopes: `sign_history`, `verify_history`, `sync_exchange`, `decrypt_domain`, `receive_key_envelope`, `surface_session`, `home_membership`
 - revocation reasons: `lost_device`, `suspected_compromise`, `device_retired`, `key_rotated`, `membership_removed`
+- timestamps (`validFrom`, `validUntil`, `revokedAt`): exactly `YYYY-MM-DDTHH:MM:SS.sssZ`, one fixed-width UTC form, rejected as `invalid_instant` otherwise. Consumers decide validity windows by comparing these fields as strings, and a UTC offset sorts before `Z` at the same instant — a second form would leave an expired delegation looking active. The same rule governs the lookup time `@pico/identity` is asked about.
 
 The on-disk signature-input fixtures live under `docs/protocol/fixtures/identity-signature-input/pico.suite.id.v1/` in their own suite. They are authoritative byte vectors only: no private keys, no signatures and no runtime authority. The separate `docs/protocol/fixtures/identity-signature-verification/pico.suite.id.v1/` suite publishes deterministic public-key detached signature verification vectors for possession, delegation and revocation.
 
@@ -277,6 +278,7 @@ Reject negatives produce no signature input:
 | `delegation-truncated-issuer-fingerprint` | `invalid_fingerprint_length` |
 | `delegation-unknown-scope` | `invalid_scope` |
 | `delegation-validity-inverted` | `invalid_validity_bounds` |
+| `delegation-validity-offset-form` | `invalid_instant` |
 | `revocation-invalid-lifecycle-order` | `invalid_lifecycle_order` |
 | `keyrecord-invalid-public-key-length` | `invalid_public_key_length` |
 

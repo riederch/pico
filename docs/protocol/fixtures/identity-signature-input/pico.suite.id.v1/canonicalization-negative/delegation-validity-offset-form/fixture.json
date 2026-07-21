@@ -1,0 +1,23 @@
+{
+  "schema": "pico.identity.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-signature-input.pico_suite_id_v1.canonicalization-negative.delegation-validity-offset-form",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-signature-input",
+  "family": "canonicalization-negative",
+  "identityFamily": "delegation",
+  "construction": "pico.id.delegation.v1",
+  "case": "a UTC-offset validity bound is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_instant"
+  },
+  "adr": "0079",
+  "notes": "Validity windows are decided by comparing these timestamps as strings, so only the fixed-width UTC form is canonical: an offset form sorts before Z at the same instant and would leave an expired delegation looking active. ADR 0079 vector; no private keys, no signatures, no runtime authority."
+}

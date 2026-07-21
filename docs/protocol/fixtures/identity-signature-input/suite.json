@@ -32,6 +32,7 @@
     "pico.suite.id.v1/canonicalization-negative/delegation-truncated-issuer-fingerprint",
     "pico.suite.id.v1/canonicalization-negative/delegation-unknown-scope",
     "pico.suite.id.v1/canonicalization-negative/delegation-validity-inverted",
+    "pico.suite.id.v1/canonicalization-negative/delegation-validity-offset-form",
     "pico.suite.id.v1/canonicalization-negative/revocation-invalid-lifecycle-order",
     "pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length"
   ],

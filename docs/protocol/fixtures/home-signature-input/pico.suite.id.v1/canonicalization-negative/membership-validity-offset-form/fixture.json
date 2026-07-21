@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.membership-validity-offset-form",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "membership",
+  "construction": "pico.home.membership.v1",
+  "case": "a UTC-offset membership validity bound is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_instant"
+  },
+  "adr": "0080",
+  "notes": "Membership validity is decided by comparing these timestamps as strings, so only the fixed-width UTC form is canonical: an offset form sorts before Z at the same instant and would leave an ended membership looking valid. ADR 0080 M1 vector; no private keys, no signatures, no runtime authority."
+}

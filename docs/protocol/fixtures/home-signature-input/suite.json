@@ -37,6 +37,7 @@
     "pico.suite.id.v1/canonicalization-negative/membership-unknown-scope",
     "pico.suite.id.v1/canonicalization-negative/membership-duplicate-scope",
     "pico.suite.id.v1/canonicalization-negative/membership-validity-inverted",
+    "pico.suite.id.v1/canonicalization-negative/membership-validity-offset-form",
     "pico.suite.id.v1/canonicalization-negative/continuity-without-outgoing-key",
     "pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order"
   ],

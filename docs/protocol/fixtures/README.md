@@ -77,6 +77,7 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-f
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-truncated-issuer-fingerprint/
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-unknown-scope/
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-validity-inverted/
+identity-signature-input/pico.suite.id.v1/canonicalization-negative/delegation-validity-offset-form/
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/revocation-invalid-lifecycle-order/
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length/
 ```
@@ -107,6 +108,7 @@ home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-issue
 home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-unknown-scope/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-duplicate-scope/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-validity-inverted/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-validity-offset-form/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-without-outgoing-key/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order/
 ```

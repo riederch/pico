@@ -795,6 +795,7 @@ describe('Pico protocol types', () => {
           'field_reordering',
           'invalid_field_charset',
           'invalid_fingerprint_length',
+          'invalid_instant',
           'invalid_lifecycle_order',
           'invalid_public_key_length',
           'invalid_scope',
@@ -934,6 +935,7 @@ describe('Pico protocol types', () => {
           'field_reordering',
           'invalid_field_charset',
           'invalid_fingerprint_length',
+          'invalid_instant',
           'invalid_lifecycle_order',
           'invalid_membership_role',
           'invalid_membership_scope',
@@ -961,6 +963,112 @@ describe('Pico protocol types', () => {
         expect(acceptedHexByCase.get(caseName)).toBe(acceptedHexByCase.get(mustMatch));
       }
     }
+  });
+
+  it('pins every protected timestamp to one canonical UTC form', () => {
+    // These fields are compared as strings by every consumer, so a second form
+    // is not cosmetic: `+02:00` and `Z` sort differently at the same instant.
+    const rejected = [
+      '2026-07-18T08:00:00Z',
+      '2026-07-18T10:00:00+02:00',
+      '2026-07-18T08:00:00.000',
+      '2026-07-18',
+      '2026-13-18T08:00:00.000Z',
+      '2026-02-30T08:00:00.000Z',
+      'now',
+    ];
+
+    for (const instant of rejected) {
+      expect(() => buildPicoIdentityDelegationSignatureInput({
+        suite: picoIdentitySuite,
+        delegationId: 'del_01hzx8m9q4rt5v',
+        issuerIdentityKeyFingerprintHex: '66'.repeat(32),
+        subjectSigningKeyFingerprintHex: '5d'.repeat(32),
+        subjectKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+        scopes: ['sign_history'],
+        validFrom: instant,
+        validUntil: '2026-10-18T08:00:00.000Z',
+        lifecycleOrder: 'seq:0000000000000001',
+      })).toThrow('invalid_instant');
+
+      expect(() => buildPicoIdentityRevocationSignatureInput({
+        suite: picoIdentitySuite,
+        revocationId: 'rev_01hzx8m9q4rt5v',
+        issuerIdentityKeyFingerprintHex: '66'.repeat(32),
+        subjectKind: 'delegation',
+        subjectRef: 'del_01hzx8m9q4rt5v',
+        reasonCategory: 'device_retired',
+        revokedAt: instant,
+        lifecycleOrder: 'seq:0000000000000002',
+      })).toThrow('invalid_instant');
+
+      expect(() => buildPicoHomeFoundingSignatureInput({
+        suite: picoIdentitySuite,
+        foundingId: 'founding_20260718_0001',
+        homeId: 'home_20260718_0001',
+        hostSigningKeyFingerprintHex: '11'.repeat(32),
+        hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+        homeHostPicoIdentityFingerprintHex: '88'.repeat(32),
+        claimantNonceHex: '33'.repeat(32),
+        hostNonceHex: '44'.repeat(32),
+        foundedAt: instant,
+        lifecycleOrder: 'seq:0000000000000001',
+      })).toThrow('invalid_instant');
+
+      expect(() => buildPicoHomeMembershipSignatureInput({
+        suite: picoIdentitySuite,
+        credentialId: 'member_20260718_0001',
+        homeId: 'home_20260718_0001',
+        issuerPicoIdentityFingerprintHex: '88'.repeat(32),
+        subjectPicoIdentityFingerprintHex: '99'.repeat(32),
+        hostSigningKeyFingerprintHex: '11'.repeat(32),
+        role: 'home_member',
+        scopes: ['host.use'],
+        validFrom: instant,
+        validUntil: '2026-10-18T09:00:00.000Z',
+        lifecycleOrder: 'seq:0000000000000001',
+      })).toThrow('invalid_instant');
+
+      expect(() => buildPicoHomeMembershipLifecycleSignatureInput({
+        suite: picoIdentitySuite,
+        lifecycleId: 'memberlc_20260718_0001',
+        homeId: 'home_20260718_0001',
+        credentialId: 'member_20260718_0001',
+        issuerPicoIdentityFingerprintHex: '88'.repeat(32),
+        subjectPicoIdentityFingerprintHex: '99'.repeat(32),
+        status: 'evicted',
+        reasonCategory: 'member_removed',
+        changedAt: instant,
+        lifecycleOrder: 'seq:0000000000000002',
+      })).toThrow('invalid_instant');
+
+      expect(() => buildPicoHomeContinuitySignatureInput({
+        suite: picoIdentitySuite,
+        continuityId: 'continuity_20260718_0001',
+        homeId: 'home_20260718_0001',
+        outgoingHostSigningKeyFingerprintHex: '11'.repeat(32),
+        outgoingHostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+        incomingHostSigningKeyFingerprintHex: '55'.repeat(32),
+        incomingHostKeyAgreementKeyFingerprintHex: '66'.repeat(32),
+        homeHostPicoIdentityFingerprintHex: '88'.repeat(32),
+        reasonCategory: 'host_key_rotated',
+        changedAt: instant,
+        lifecycleOrder: 'seq:0000000000000002',
+      })).toThrow('invalid_instant');
+    }
+
+    // The form the runtime actually produces stays accepted.
+    expect(() => buildPicoIdentityDelegationSignatureInput({
+      suite: picoIdentitySuite,
+      delegationId: 'del_01hzx8m9q4rt5v',
+      issuerIdentityKeyFingerprintHex: '66'.repeat(32),
+      subjectSigningKeyFingerprintHex: '5d'.repeat(32),
+      subjectKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      scopes: ['sign_history'],
+      validFrom: new Date('2026-07-18T08:00:00.000Z').toISOString(),
+      validUntil: '2026-10-18T08:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    })).not.toThrow();
   });
 
   it('keeps Pico Vault keyfile header-AAD vectors byte-exact and aligned with ADR 0081 P1', () => {

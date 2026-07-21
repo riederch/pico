@@ -1349,8 +1349,8 @@ export function buildPicoIdentityDelegationSignatureInput(
   ]);
   assertAsciiToken(input.suite);
   assertAsciiToken(input.delegationId);
-  assertAsciiToken(input.validFrom);
-  assertAsciiToken(input.validUntil);
+  assertInstant(input.validFrom);
+  assertInstant(input.validUntil);
   assertLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
   const scopes = canonicalScopeSet(input.scopes);
@@ -1388,7 +1388,7 @@ export function buildPicoIdentityRevocationSignatureInput(
   assertStringMember(input.subjectKind, ['delegation', 'key'] as const, 'invalid_subject_kind');
   assertAsciiToken(input.subjectRef);
   assertStringMember(input.reasonCategory, picoIdentityRevocationReasonCategories, 'invalid_reason_category');
-  assertAsciiToken(input.revokedAt);
+  assertInstant(input.revokedAt);
   assertLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
@@ -1479,7 +1479,7 @@ export function buildPicoHomeFoundingSignatureInput(input: PicoHomeFoundingSigna
   assertAsciiToken(input.suite);
   assertAsciiToken(input.foundingId);
   assertAsciiToken(input.homeId);
-  assertAsciiToken(input.foundedAt);
+  assertInstant(input.foundedAt);
   assertLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
@@ -1515,8 +1515,8 @@ export function buildPicoHomeMembershipSignatureInput(input: PicoHomeMembershipS
   assertAsciiToken(input.credentialId);
   assertAsciiToken(input.homeId);
   assertStringMember(input.role, picoHomeMembershipRoles, 'invalid_membership_role');
-  assertAsciiToken(input.validFrom);
-  assertAsciiToken(input.validUntil);
+  assertInstant(input.validFrom);
+  assertInstant(input.validUntil);
   assertLifecycleOrder(input.lifecycleOrder);
   assertValidBounds(input.validFrom, input.validUntil);
   const scopes = canonicalHomeMembershipScopeSet(input.scopes);
@@ -1559,7 +1559,7 @@ export function buildPicoHomeMembershipLifecycleSignatureInput(
   assertAsciiToken(input.credentialId);
   assertStringMember(input.status, picoHomeMembershipStatuses, 'invalid_membership_status');
   assertStringMember(input.reasonCategory, picoHomeMembershipLifecycleReasonCategories, 'invalid_reason_category');
-  assertAsciiToken(input.changedAt);
+  assertInstant(input.changedAt);
   assertLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
@@ -1595,7 +1595,7 @@ export function buildPicoHomeContinuitySignatureInput(input: PicoHomeContinuityS
   assertAsciiToken(input.continuityId);
   assertAsciiToken(input.homeId);
   assertStringMember(input.reasonCategory, picoHomeContinuityReasonCategories, 'invalid_reason_category');
-  assertAsciiToken(input.changedAt);
+  assertInstant(input.changedAt);
   assertLifecycleOrder(input.lifecycleOrder);
 
   return concatCanonicalElements([
@@ -1680,6 +1680,7 @@ function isNonEmptyString(value: unknown, maxLength: number | undefined): value 
 const canonicalTextEncoder = new TextEncoder();
 const canonicalAsciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
 const canonicalHexPattern = /^[0-9a-f]+$/;
+const canonicalInstantPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 function concatCanonicalElements(elements: readonly Uint8Array[]): Uint8Array {
   const parts = elements.map((element) => {
@@ -1739,6 +1740,32 @@ function assertAsciiToken(value: string): void {
   if (!canonicalAsciiTokenPattern.test(value)) {
     throw new Error('invalid_field_charset');
   }
+}
+
+/**
+ * Every consumer of a protected timestamp compares it as a string: validity
+ * windows here, lifecycle lookups in `@pico/identity`, membership projections in
+ * the Foundation. That is only sound while all writers use one fixed-width UTC
+ * form, so it is pinned at the canonicalization boundary rather than left to
+ * issuer discipline. An offset form sorts before `Z` at the same instant
+ * (`+` = 0x2B, `.` = 0x2E, `Z` = 0x5A), which would keep an expired delegation
+ * looking active; second precision misses the exact boundary the same way.
+ */
+function assertInstant(value: string): void {
+  assertAsciiToken(value);
+  if (!canonicalInstantPattern.test(value) || !isRoundTripInstant(value)) {
+    throw new Error('invalid_instant');
+  }
+}
+
+/**
+ * The shape check alone still admits impossible dates: `Date.parse` rolls
+ * `2026-02-30` forward to March 2 rather than failing. Re-serializing is the
+ * exact calendar check, because `toISOString` emits precisely this form.
+ */
+function isRoundTripInstant(value: string): boolean {
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
 }
 
 function assertExactKeys(record: Record<string, unknown>, expectedKeys: readonly string[]): void {
