@@ -89,7 +89,7 @@ While the host has **no operator**, and only then, the `setup-bootstrap` class a
 | Lifetime | the process; a restart mints a new code and invalidates the old one |
 | Storage | in-memory digest, never SQLite, never an env var |
 | Use | single-use; consumed by the first successful bootstrap |
-| Rate limiting | shares the bounded-verification path with login |
+| Rate limiting | shares the bounded-verification path with login. Bounded verification caps *memory*, not attempts, so login additionally carries an attempt throttle (below); a 192-bit single-use code needs no attempt bound of its own |
 | Audit | the bootstrap is recorded append-only |
 
 Why a code at all: the naive alternative — trust the first caller while unclaimed — is wrong precisely where the product ships. Under `ha-ingress` the caller is not necessarily the operator; it is anything that can reach the ingress path on the shared Home Assistant origin. A code sourced from the host's log requires the same local control that ADR 0027 requires, on every platform, without a platform-specific display path.
@@ -130,7 +130,7 @@ Gate A target shapes, with their ADR 0075 access class:
 | Route | Class | Notes |
 |---|---|---|
 | `POST /api/auth/bootstrap` | `setup-bootstrap` | Bootstrap code + initial passphrase. Available only while no operator exists; `404`/`409` afterwards. |
-| `POST /api/auth/session` | `public` | Login. Unauthenticated by definition; the rate-limited, bounded-verification surface. Returns `{ session, expiresAt }` in the ADR 0039 ticket-response style. |
+| `POST /api/auth/session` | `public` | Login. Unauthenticated by definition; the rate-limited, bounded-verification surface. The two are separate bounds: bounded verification keeps one Argon2id allocation in flight, while the attempt throttle applies a growing, capped delay before the KDF and answers `429` with `Retry-After`. Deliberately a delay and not a lockout — a lockout would let anyone deny the owner their own appliance by failing logins on purpose. Failed attempts stay in operational logging. Returns `{ session, expiresAt }` in the ADR 0039 ticket-response style. |
 | `DELETE /api/auth/session` | authenticated | Logout of the calling session. |
 | `GET /api/auth/session` | authenticated | Session probe for the dashboard (does the session still live, when does it expire). No credential echo. |
 | `DELETE /api/auth/sessions` | `host-admin` | Revoke all sessions, including the caller's. |
