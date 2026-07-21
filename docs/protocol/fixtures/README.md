@@ -136,6 +136,7 @@ identity-lifecycle/suite.json
 identity-lifecycle/pico.suite.id.v1/lifecycle-positive/delegation-active/
 identity-lifecycle/pico.suite.id.v1/lifecycle-negative/delegation-revoked-after-restore/
 identity-lifecycle/pico.suite.id.v1/lifecycle-negative/key-revocation-terminal/
+identity-lifecycle/pico.suite.id.v1/lifecycle-negative/identity-key-revocation-terminal/
 identity-lifecycle/pico.suite.id.v1/lifecycle-negative/missing-scope/
 identity-lifecycle/pico.suite.id.v1/lifecycle-negative/conflicting-delegation-id/
 ```

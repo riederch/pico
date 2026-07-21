@@ -20,8 +20,9 @@
     "pico.suite.id.v1/lifecycle-positive/delegation-active",
     "pico.suite.id.v1/lifecycle-negative/delegation-revoked-after-restore",
     "pico.suite.id.v1/lifecycle-negative/key-revocation-terminal",
+    "pico.suite.id.v1/lifecycle-negative/identity-key-revocation-terminal",
     "pico.suite.id.v1/lifecycle-negative/missing-scope",
     "pico.suite.id.v1/lifecycle-negative/conflicting-delegation-id"
   ],
-  "notes": "Lifecycle vectors exercise lookup, monotonic order, stale-restore reconciliation, direct delegation revocation, subject-key revocation, scope failure and conflict rejection over already authenticated ADR 0079 G1 delegation/revocation fields."
+  "notes": "Lifecycle vectors exercise lookup, monotonic order, stale-restore reconciliation, direct delegation revocation, subject-key revocation, issuer identity-key revocation, scope failure and conflict rejection over already authenticated ADR 0079 G1 delegation/revocation fields."
 }

@@ -1,0 +1,25 @@
+{
+  "schema": "pico.identity.lifecycle.vector",
+  "schemaVersion": 1,
+  "fixtureId": "identity-lifecycle.pico_suite_id_v1.lifecycle-negative.identity-key-revocation-terminal",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "identity-lifecycle",
+  "family": "lifecycle-negative",
+  "case": "identity key revocation ends a delegation issued by that key, even a fresher one",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "status": "revoked",
+    "freshestLifecycleOrder": "seq:0000000000000009",
+    "revokedBy": {
+      "match": "issuer_identity_key",
+      "revocationId": "rev_identity_root"
+    }
+  },
+  "adr": "0079",
+  "notes": "Revoking the identity key ends the future authority of everything it delegated, regardless of ordering: whoever holds a stolen root can mint further delegations the owner never learns about, so enumerating known delegations is not a substitute. Historical signatures stay verifiable."
+}

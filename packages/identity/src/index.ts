@@ -31,6 +31,7 @@ export type PicoIdentityDelegationLifecycleState =
 
 export type PicoIdentityRevocationMatch =
   | 'delegation'
+  | 'issuer_identity_key'
   | 'subject_signing_key'
   | 'subject_key_agreement_key';
 
@@ -295,6 +296,15 @@ export class PicoIdentityLifecycleIndex {
 
       if (revocation.subjectKind !== 'key') {
         continue;
+      }
+
+      // Revoking the identity key itself ends everything it delegated,
+      // regardless of ordering. Enumerating delegations is no substitute:
+      // whoever holds a stolen root can mint new ones, and the owner cannot
+      // revoke what they never learned exists. Signed history stays verifiable
+      // (ADR 0033) - only future authority ends here.
+      if (revocation.subjectRef === delegation.issuerIdentityKeyFingerprintHex) {
+        matches.push({ match: 'issuer_identity_key', revocation: cloneRevocation(revocation) });
       }
 
       if (revocation.subjectRef === delegation.subjectSigningKeyFingerprintHex) {

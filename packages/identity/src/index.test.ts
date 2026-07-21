@@ -294,6 +294,44 @@ describe('PicoIdentityLifecycleIndex', () => {
     })).toThrow('invalid_lookup_time');
   });
 
+  it('ends every delegation an identity issued when that identity key is revoked', () => {
+    const index = createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [delegation()],
+      acceptedRevocations: [
+        revocation({
+          revocationId: 'rev_identity_root',
+          subjectKind: 'key',
+          subjectRef: identityFingerprint,
+          reasonCategory: 'suspected_compromise',
+          lifecycleOrder: 'seq:0000000000000007',
+        }),
+      ],
+    });
+
+    expect(index.lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: '2026-08-19T08:00:00.000Z',
+    })).toMatchObject({
+      status: 'revoked',
+      revokedBy: {
+        match: 'issuer_identity_key',
+        revocation: { revocationId: 'rev_identity_root' },
+      },
+    });
+
+    // A thief holding the root can still mint delegations; ordering must not
+    // let a newer one outlive the revocation of the key that signed it.
+    expect(index.reconcile({
+      acceptedDelegations: [
+        delegation({
+          delegationId: 'del_minted_after_theft',
+          lifecycleOrder: 'seq:0000000000000009',
+        }),
+      ],
+    }).lookupDelegation('del_minted_after_theft', {
+      at: '2026-08-19T08:00:00.000Z',
+    })).toMatchObject({ status: 'revoked', revokedBy: { match: 'issuer_identity_key' } });
+  });
+
   it('lets only the issuing identity revoke its own delegations', () => {
     const index = createPicoIdentityLifecycleIndex({
       acceptedDelegations: [delegation()],
