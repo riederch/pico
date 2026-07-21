@@ -173,6 +173,37 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
     })).toThrow();
   });
 
+  it('refuses a keyfile whose KDF cost is above the sensitive ceiling', () => {
+    const created = createPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: 'correct horse battery staple',
+    });
+    const damaged = parsePicoVaultKeyfile(serializePicoVaultKeyfile(created.keyfile));
+
+    // These parameters are read before the AEAD authenticates the header, so a
+    // single damaged byte here cannot be caught by the AAD. Argon2id is a
+    // synchronous, non-interruptible call: unbounded, this is a hang rather
+    // than an error - roughly 215 ms per pass at the moderate memory cost.
+    damaged.header.kdfOpsLimit = 2_147_483_647;
+    expect(() => openPicoVaultKeyfile(sodium, {
+      keyfile: damaged,
+      passphrase: 'correct horse battery staple',
+    })).toThrow('kdf_parameter_unsupported');
+
+    const overMemory = parsePicoVaultKeyfile(serializePicoVaultKeyfile(created.keyfile));
+    overMemory.header.kdfMemLimitBytes = 2 ** 42;
+    expect(() => openPicoVaultKeyfile(sodium, {
+      keyfile: overMemory,
+      passphrase: 'correct horse battery staple',
+    })).toThrow('kdf_parameter_unsupported');
+
+    // The declared upgrade path stays open: moderate through sensitive.
+    const sensitive = parsePicoVaultKeyfile(serializePicoVaultKeyfile(created.keyfile));
+    sensitive.header.kdfOpsLimit = 4;
+    sensitive.header.kdfMemLimitBytes = 1_073_741_824;
+    expect(() => parsePicoVaultKeyfile(JSON.stringify(sensitive))).not.toThrow();
+  });
+
   it('locks explicitly and auto-locks after the configured idle window', () => {
     const created = createPicoVaultKeyfile(sodium, {
       keyRole: 'device_signing',

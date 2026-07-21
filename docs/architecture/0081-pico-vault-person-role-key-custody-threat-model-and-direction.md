@@ -78,7 +78,7 @@ Stated for the current deployment because the temptation is concrete: the Home A
 
 One canonical encrypted at-rest format, from the toolkit already in the tree and the age pattern ADR 0016 points at:
 
-- **KDF**: Argon2id (libsodium `crypto_pwhash`) derives the file key from the passphrase; algorithm, opslimit, memlimit and salt live in the header, so files are self-describing and parameters upgrade on rewrite (the ADR 0076 `needs_rehash` idea, applied to a file format). The default is the **moderate** cost class, not interactive: a Vault runs on the person's own device where unlock is a local, user-initiated act — there is no unauthenticated network surface to protect from memory exhaustion (the inverse of ADR 0076's appliance rationale), and the keyfile's realistic attacker is offline grinding, which is exactly what higher memory cost punishes.
+- **KDF**: Argon2id (libsodium `crypto_pwhash`) derives the file key from the passphrase; algorithm, opslimit, memlimit and salt live in the header, so files are self-describing and parameters upgrade on rewrite (the ADR 0076 `needs_rehash` idea, applied to a file format). Parameters are bounded on both sides: the moderate class is the floor, and libsodium's own SENSITIVE class (`4` / `1 GiB`) is the ceiling. The ceiling is not a memory-exhaustion defence - the paragraph below still holds - it is a failure-mode bound. These fields are read before the AEAD authenticates the header, so the AAD cannot protect them, and `crypto_pwhash` is a synchronous, non-interruptible call: at the moderate memory cost one pass takes roughly 215 ms, so an unbounded `opsLimit` turns one damaged byte into an unlock that never returns rather than one that fails. Bounded, the worst declared cost is a slow unlock, and anything past it is `kdf_parameter_unsupported`. The default is the **moderate** cost class, not interactive: a Vault runs on the person's own device where unlock is a local, user-initiated act — there is no unauthenticated network surface to protect from memory exhaustion (the inverse of ADR 0076's appliance rationale), and the keyfile's realistic attacker is offline grinding, which is exactly what higher memory cost punishes.
 - **AEAD**: XChaCha20-Poly1305 (`crypto_aead_xchacha20poly1305_ietf`, the ADR 0071 cipher family) over the private-key payload, with the complete labeled header — family label first, then suite, key role, KDF parameters, salt, nonce — bound as associated data in an I3 layout. A tampered header (swapped role, downgraded KDF parameters, foreign suite) fails authentication, not review.
 - **Payload**: private key material for exactly one key role under `pico.suite.id.v1`. Gate P1 chooses one keyfile per keypair, matching the ADR 0072 one-file-per-key pattern and keeping root, device-signing and device-key-agreement lifecycles independently movable, revocable and exportable.
 
@@ -105,13 +105,13 @@ Header AAD elements, in fixed order:
 | 3 | `keyFingerprint` | raw bytes from hex | exactly 32 bytes |
 | 4 | `kdfAlgorithm` | ASCII | `argon2id` |
 | 5 | `kdfProfile` | ASCII | `moderate` |
-| 6 | `kdfOpsLimit` | ASCII decimal | minimum `3` |
-| 7 | `kdfMemLimitBytes` | ASCII decimal | minimum `268435456` |
+| 6 | `kdfOpsLimit` | ASCII decimal | minimum `3`, maximum `4` |
+| 7 | `kdfMemLimitBytes` | ASCII decimal | minimum `268435456`, maximum `1073741824` |
 | 8 | `kdfSalt` | raw bytes from hex | exactly 16 bytes |
 | 9 | `aeadAlgorithm` | ASCII | `xchacha20poly1305-ietf` |
 | 10 | `aeadNonce` | raw bytes from hex | exactly 24 bytes |
 
-Reject reasons are stable for P1 fixture purposes: `wrong_keyfile_label`, `invalid_vault_key_role`, `invalid_fingerprint_length`, `invalid_kdf_algorithm`, `invalid_kdf_profile`, `kdf_parameter_downgrade`, `invalid_kdf_salt_length`, `invalid_aead_algorithm`, `invalid_aead_nonce_length` and `field_reordering`. Header tampering that preserves a canonical header, such as suite, role or nonce swaps, is represented as `build: accept` with different AAD; the future open operation must then fail authentication because the ciphertext was sealed under the original AAD.
+Reject reasons are stable for P1 fixture purposes: `wrong_keyfile_label`, `invalid_vault_key_role`, `invalid_fingerprint_length`, `invalid_kdf_algorithm`, `invalid_kdf_profile`, `kdf_parameter_downgrade`, `kdf_parameter_unsupported`, `invalid_kdf_salt_length`, `invalid_aead_algorithm`, `invalid_aead_nonce_length` and `field_reordering`. Header tampering that preserves a canonical header, such as suite, role or nonce swaps, is represented as `build: accept` with different AAD; the future open operation must then fail authentication because the ciphertext was sealed under the original AAD.
 
 Authoritative accepted header-AAD vectors:
 
@@ -131,6 +131,7 @@ Reject vectors:
 | `wrong-label` | `wrong_keyfile_label` |
 | `host-role-rejected` | `invalid_vault_key_role` |
 | `kdf-parameter-downgrade` | `kdf_parameter_downgrade` |
+| `kdf-parameter-unsupported` | `kdf_parameter_unsupported` |
 | `field-order-override` | `field_reordering` |
 | `invalid-salt-length` | `invalid_kdf_salt_length` |
 | `invalid-nonce-length` | `invalid_aead_nonce_length` |

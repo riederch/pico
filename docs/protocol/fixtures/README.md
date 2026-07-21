@@ -156,6 +156,7 @@ vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/tampered-header-no
 vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/wrong-label/
 vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/host-role-rejected/
 vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/kdf-parameter-downgrade/
+vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/kdf-parameter-unsupported/
 vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/field-order-override/
 vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/invalid-salt-length/
 vault-keyfile/pico.vault.keyfile.v1/canonicalization-negative/invalid-nonce-length/

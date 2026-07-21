@@ -1174,6 +1174,7 @@ describe('Pico protocol types', () => {
           'invalid_kdf_salt_length',
           'invalid_vault_key_role',
           'kdf_parameter_downgrade',
+          'kdf_parameter_unsupported',
           'wrong_keyfile_label',
         ]).toContain(reason);
         expect(() => buildPicoVaultHeaderAadVector(fields)).toThrow(reason);

@@ -27,6 +27,7 @@
     "pico.vault.keyfile.v1/canonicalization-negative/wrong-label",
     "pico.vault.keyfile.v1/canonicalization-negative/host-role-rejected",
     "pico.vault.keyfile.v1/canonicalization-negative/kdf-parameter-downgrade",
+    "pico.vault.keyfile.v1/canonicalization-negative/kdf-parameter-unsupported",
     "pico.vault.keyfile.v1/canonicalization-negative/field-order-override",
     "pico.vault.keyfile.v1/canonicalization-negative/invalid-salt-length",
     "pico.vault.keyfile.v1/canonicalization-negative/invalid-nonce-length",

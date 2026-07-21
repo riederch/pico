@@ -285,6 +285,18 @@ export const picoVaultArgon2idModerateParams = {
   memLimitBytes: 268_435_456,
 } as const;
 
+// The upper end of what a keyfile header may declare: libsodium's own SENSITIVE
+// class, so the bound is a named cost class rather than an invented number, and
+// the moderate-to-sensitive upgrade on rewrite still fits. Above it the file is
+// refused instead of derived from, because these parameters are read before the
+// AEAD authenticates the header - the AAD cannot protect them - and Argon2id is
+// a synchronous, non-interruptible call. At the moderate memory cost one pass
+// takes roughly 215 ms, so an opsLimit near 2^31 is not slow, it never returns.
+export const picoVaultArgon2idMaximumParams = {
+  opsLimit: 4,
+  memLimitBytes: 1_073_741_824,
+} as const;
+
 export interface PicoIdentityKeyRecordSignatureInput {
   suite: string;
   keyRole: PicoIdentityKeyRole;
@@ -1650,11 +1662,15 @@ export function buildPicoVaultKeyfileHeaderAad(input: PicoVaultKeyfileHeaderAadI
     fixedHexBytes(input.keyFingerprintHex, 32, 'invalid_fingerprint_length'),
     asciiBytes(input.kdfAlgorithm),
     asciiBytes(input.kdfProfile),
-    decimalBytes(input.kdfOpsLimit, picoVaultArgon2idModerateParams.opsLimit, 'kdf_parameter_downgrade'),
-    decimalBytes(
+    kdfParameterBytes(
+      input.kdfOpsLimit,
+      picoVaultArgon2idModerateParams.opsLimit,
+      picoVaultArgon2idMaximumParams.opsLimit,
+    ),
+    kdfParameterBytes(
       input.kdfMemLimitBytes,
       picoVaultArgon2idModerateParams.memLimitBytes,
-      'kdf_parameter_downgrade',
+      picoVaultArgon2idMaximumParams.memLimitBytes,
     ),
     fixedHexBytes(input.kdfSaltHex, 16, 'invalid_kdf_salt_length'),
     asciiBytes(input.aeadAlgorithm),
@@ -1725,9 +1741,12 @@ function fixedHexBytes(value: string, expectedByteLength: number, lengthReason: 
   return output;
 }
 
-function decimalBytes(value: number, minimumValue: number, reason: string): Uint8Array {
+function kdfParameterBytes(value: number, minimumValue: number, maximumValue: number): Uint8Array {
   if (!Number.isSafeInteger(value) || value < minimumValue) {
-    throw new Error(reason);
+    throw new Error('kdf_parameter_downgrade');
+  }
+  if (value > maximumValue) {
+    throw new Error('kdf_parameter_unsupported');
   }
 
   return asciiBytes(String(value));
