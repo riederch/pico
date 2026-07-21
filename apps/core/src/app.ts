@@ -169,12 +169,6 @@ interface PicoHomeClaimRequestContext {
 type ParsedPicoHomeClaimRequest =
   | {
     ok: true;
-    kind: 'legacy';
-    moveInCode: unknown;
-    homeHostPicoId: string;
-  }
-  | {
-    ok: true;
     kind: 'sealed';
     moveInCode: unknown;
     homeHostPicoId: string;
@@ -839,7 +833,6 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         schema: picoHomeFoundingRecordSchema,
         founding: pending.founding,
         claimantIdentityKeyRecord: pending.claimantIdentityKeyRecord,
-        claimantClaimSignatureHex: pending.claimantSignatureHex,
         claimantFoundingSignatureHex: claimRequest.acceptance.claimantFoundingSignatureHex,
         hostClaimResponse: pending.claimResponse,
         hostFoundingSignatureHex,
@@ -900,62 +893,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       });
     }
 
-    if (claimRequest.kind === 'sealed') {
-      const pending = createPendingPicoHomeClaim({
-        request: claimRequest,
-        homeHostKeys,
-        homeHostKeyStore,
-      });
-      pendingHomeClaim = pending;
-      app.log.warn(
-        {
-          claimId: pending.claim.claimId,
-          foundingId: pending.founding.foundingId,
-          homeId: pending.founding.homeId,
-          homeHostPicoId: pending.homeHostPicoId,
-        },
-        'Pico Home claim verified; waiting for claimant founding acceptance.',
-      );
-
-      const response: PicoHomePendingClaimResponse = {
-        pendingClaim: {
-          claimResponse: pending.claimResponse,
-          founding: pending.founding,
-        },
-      };
-
-      return reply.code(202).header('Cache-Control', 'no-store').send(response);
-    }
-
-    let claimState: PicoHomeClaimState;
-    try {
-      claimState = store.claimPicoHome({
-        homeId: createHomeId(),
-        hostAdminPicoId: claimRequest.homeHostPicoId,
-        hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
-        hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
-      });
-    } catch (error) {
-      return sendNoStore(reply.code(409), { error: (error as Error).message });
-    }
-
-    appendServerEvent('home.claimed', {});
-    homeSetupNonceHex = undefined;
+    const pending = createPendingPicoHomeClaim({
+      request: claimRequest,
+      homeHostKeys,
+      homeHostKeyStore,
+    });
+    pendingHomeClaim = pending;
     app.log.warn(
       {
-        homeId: claimState.homeId,
-        homeHostPicoId: claimState.hostAdminPicoId,
-        hostSigningKeyFingerprintHex: claimState.hostSigningKeyFingerprintHex,
-        hostKeyAgreementKeyFingerprintHex: claimState.hostKeyAgreementKeyFingerprintHex,
+        claimId: pending.claim.claimId,
+        foundingId: pending.founding.foundingId,
+        homeId: pending.founding.homeId,
+        homeHostPicoId: pending.homeHostPicoId,
       },
-      'Pico Home claimed; setup mode ended.',
+      'Pico Home claim verified; waiting for claimant founding acceptance.',
     );
 
-    const response: PicoHomeClaimResponse = {
-      claimState: toPicoHomeClaimStateResponse(claimState, moveInCode.isPending()) as PicoHomeClaimResponse['claimState'],
+    const response: PicoHomePendingClaimResponse = {
+      pendingClaim: {
+        claimResponse: pending.claimResponse,
+        founding: pending.founding,
+      },
     };
 
-    return reply.code(201).header('Cache-Control', 'no-store').send(response);
+    return reply.code(202).header('Cache-Control', 'no-store').send(response);
   });
 
   app.post('/api/auth/bootstrap', async (request, reply) => {
@@ -1516,7 +1477,7 @@ function readPicoHomeClaimRequest(
   context: PicoHomeClaimRequestContext,
 ): ParsedPicoHomeClaimRequest {
   if ('foundingAcceptance' in body) {
-    if (body.claimEnvelope !== undefined || body.moveInCode !== undefined || body.homeHostPicoId !== undefined || body.hostAdminPicoId !== undefined) {
+    if (!hasExactKeys(body, ['foundingAcceptance'])) {
       return {
         ok: false,
         statusCode: 400,
@@ -1531,29 +1492,23 @@ function readPicoHomeClaimRequest(
     }
   }
 
-  if ('claimEnvelope' in body) {
-    if (body.moveInCode !== undefined || body.homeHostPicoId !== undefined || body.hostAdminPicoId !== undefined) {
-      return {
-        ok: false,
-        statusCode: 400,
-        error: 'claimEnvelope cannot be combined with legacy Move-In Code fields.',
-      };
-    }
-
-    return readSealedPicoHomeClaimRequest(body.claimEnvelope, context);
+  if (!('claimEnvelope' in body)) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'Pico Home claim requires a sealed claimEnvelope.',
+    };
   }
 
-  const homeHostPicoId = readHomeHostPicoId(body);
-  if (!homeHostPicoId.ok) {
-    return { ok: false, statusCode: 400, error: homeHostPicoId.error };
+  if (!hasExactKeys(body, ['claimEnvelope'])) {
+    return {
+      ok: false,
+      statusCode: 400,
+      error: 'claimEnvelope cannot be combined with other claim fields.',
+    };
   }
 
-  return {
-    ok: true,
-    kind: 'legacy',
-    moveInCode: body.moveInCode,
-    homeHostPicoId: homeHostPicoId.value,
-  };
+  return readSealedPicoHomeClaimRequest(body.claimEnvelope, context);
 }
 
 function readSealedPicoHomeClaimRequest(
@@ -1642,24 +1597,6 @@ function readSealedPicoHomeClaimRequest(
     claimantIdentityKeyRecord: payload.claimantIdentityKeyRecord,
     claimantSignatureHex: payload.claimantSignatureHex,
   };
-}
-
-function readHomeHostPicoId(body: { homeHostPicoId?: unknown; hostAdminPicoId?: unknown }):
-  | { ok: true; value: string }
-  | { ok: false; error: string } {
-  const primary = body.homeHostPicoId;
-  const compatibility = body.hostAdminPicoId;
-
-  if (primary !== undefined && compatibility !== undefined && primary !== compatibility) {
-    return { ok: false, error: 'homeHostPicoId and hostAdminPicoId must match when both are provided.' };
-  }
-
-  const value = primary ?? compatibility;
-  if (typeof value !== 'string' || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
-    return { ok: false, error: 'homeHostPicoId must be a non-empty ASCII token.' };
-  }
-
-  return { ok: true, value };
 }
 
 function createHomeId(): string {

@@ -314,7 +314,6 @@ export class EventStore {
           claim_response_json AS claimResponseJson,
           founding_json AS foundingJson,
           claimant_identity_key_record_json AS claimantIdentityKeyRecordJson,
-          claimant_claim_signature_hex AS claimantClaimSignatureHex,
           claimant_founding_signature_hex AS claimantFoundingSignatureHex,
           host_claim_response_signature_hex AS hostClaimResponseSignatureHex,
           host_founding_signature_hex AS hostFoundingSignatureHex,
@@ -739,12 +738,11 @@ export class EventStore {
           claim_response_json,
           founding_json,
           claimant_identity_key_record_json,
-          claimant_claim_signature_hex,
           claimant_founding_signature_hex,
           host_claim_response_signature_hex,
           host_founding_signature_hex,
           created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         1,
@@ -760,7 +758,6 @@ export class EventStore {
         serializePayload(record.hostClaimResponse.claimResponse),
         serializePayload(record.founding),
         serializePayload(record.claimantIdentityKeyRecord),
-        record.claimantClaimSignatureHex,
         record.claimantFoundingSignatureHex,
         record.hostClaimResponse.hostSignatureHex,
         record.hostFoundingSignatureHex,
@@ -884,7 +881,6 @@ interface PicoHomeFoundingRecordRow {
   claimResponseJson: string;
   foundingJson: string;
   claimantIdentityKeyRecordJson: string;
-  claimantClaimSignatureHex: string;
   claimantFoundingSignatureHex: string;
   hostClaimResponseSignatureHex: string;
   hostFoundingSignatureHex: string;
@@ -967,7 +963,6 @@ function mapPicoHomeFoundingRecord(row: PicoHomeFoundingRecordRow): PicoHomeFoun
     schema: picoHomeFoundingRecordSchema,
     founding: JSON.parse(row.foundingJson) as PicoHomeFoundingRecord['founding'],
     claimantIdentityKeyRecord: JSON.parse(row.claimantIdentityKeyRecordJson) as PicoHomeFoundingRecord['claimantIdentityKeyRecord'],
-    claimantClaimSignatureHex: row.claimantClaimSignatureHex,
     claimantFoundingSignatureHex: row.claimantFoundingSignatureHex,
     hostClaimResponse: {
       schema: picoHomeClaimResponseRecordSchema,
@@ -1138,7 +1133,6 @@ function assertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord, claim: Pic
   assertFingerprint(claimResponse.claimantIdentityKeyFingerprintHex, 'claimResponse.claimantIdentityKeyFingerprintHex');
   assertFingerprint(claimResponse.claimantNonceHex, 'claimResponse.claimantNonceHex');
   assertFingerprint(claimResponse.hostNonceHex, 'claimResponse.hostNonceHex');
-  assertDetachedSignature(record.claimantClaimSignatureHex, 'claimantClaimSignatureHex');
   assertDetachedSignature(record.claimantFoundingSignatureHex, 'claimantFoundingSignatureHex');
   assertDetachedSignature(record.hostClaimResponse.hostSignatureHex, 'hostClaimResponseSignatureHex');
   assertDetachedSignature(record.hostFoundingSignatureHex, 'hostFoundingSignatureHex');

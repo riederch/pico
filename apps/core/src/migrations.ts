@@ -394,6 +394,21 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0015_pico_home_founding_record_drop_claim_signature',
+    requiresBackup: false,
+    up(db) {
+      // The claimant's signature over the claim was stored but could never be
+      // checked again: its signed bytes carry the Move-In Code and the host
+      // setup nonce, and neither is kept. A field that looks like evidence and
+      // cannot be verified is worse than no field, so it goes. What remains is
+      // fully checkable - both founding signatures cover the stored `founding`,
+      // and the host claim-response signature covers the stored response.
+      if (columnExists(db, 'pico_home_founding_record', 'claimant_claim_signature_hex')) {
+        db.exec('ALTER TABLE pico_home_founding_record DROP COLUMN claimant_claim_signature_hex;');
+      }
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

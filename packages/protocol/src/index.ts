@@ -361,7 +361,11 @@ export interface PicoHomeFoundingRecord {
   schema: typeof picoHomeFoundingRecordSchema;
   founding: PicoHomeFoundingSignatureInput;
   claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
-  claimantClaimSignatureHex: string;
+  // No claimant signature over the claim: the claim's signed bytes carry the
+  // Move-In Code and the host setup nonce, and neither is kept, so such a field
+  // could never be re-verified. What the record does carry is checkable for as
+  // long as it exists - both founding signatures cover `founding`, which is
+  // stored in full.
   claimantFoundingSignatureHex: string;
   hostClaimResponse: PicoHomeClaimResponseRecord;
   hostFoundingSignatureHex: string;

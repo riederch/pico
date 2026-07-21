@@ -222,6 +222,7 @@ describe('Pico Home Core app', () => {
           { id: '0012_pico_home_claim_metadata', appliedAt: expect.any(String) },
           { id: '0013_pico_home_founding_record', appliedAt: expect.any(String) },
           { id: '0014_pico_home_membership', appliedAt: expect.any(String) },
+          { id: '0015_pico_home_founding_record_drop_claim_signature', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -260,37 +261,39 @@ describe('Pico Home Core app', () => {
 
   it('claims an empty Pico Home through the Move-In Code and audits the transition', async () => {
     const app = await buildAppWithCapturedLog();
-    const setup = await app.inject({ method: 'GET', url: '/api/home/setup' });
-    const setupBody = setup.json();
+    const setupBody = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
 
-    const wrong = await app.inject({
-      method: 'POST',
-      url: '/api/home/claim',
-      payload: { moveInCode: 'wrong-code', homeHostPicoId: 'pico:home-host' },
-    });
-    expect(wrong.statusCode).toBe(401);
-    expect(wrong.json()).toEqual({ error: 'Move-In Code is invalid.' });
-
-    const claimed = await app.inject({
+    // A claim is only ever a sealed, signed envelope: there is no shape that
+    // claims a Home under an unauthenticated identity string.
+    const unsealed = await app.inject({
       method: 'POST',
       url: '/api/home/claim',
       payload: { moveInCode: readMoveInCode(app), homeHostPicoId: 'pico:home-host' },
     });
-    expect(claimed.statusCode).toBe(201);
-    expect(claimed.headers['cache-control']).toBe('no-store');
-    expect(claimed.json()).toEqual({
-      claimState: {
-        state: 'claimed',
-        setupMode: {
-          active: false,
-          moveInCodePending: false,
-        },
-        homeId: expect.stringMatching(/^home_[0-9a-f]{32}$/),
-        homeHostPicoId: 'pico:home-host',
-        hostSigningKeyFingerprintHex: setupBody.host.signingKeyFingerprintHex,
-        hostKeyAgreementKeyFingerprintHex: setupBody.host.keyAgreementKeyFingerprintHex,
-        claimedAt: expect.any(String),
+    expect(unsealed.statusCode).toBe(400);
+    expect(unsealed.json()).toEqual({ error: 'Pico Home claim requires a sealed claimEnvelope.' });
+
+    const wrongCode = createSealedPicoHomeClaim(setupBody, 'MOVEIN-00000000-WRONG');
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/home/claim',
+      payload: { claimEnvelope: wrongCode.claimEnvelope },
+    });
+    expect(wrong.statusCode).toBe(401);
+    expect(wrong.json()).toEqual({ error: 'Move-In Code is invalid.' });
+
+    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    expect(claimResponse.claimState).toEqual({
+      state: 'claimed',
+      setupMode: {
+        active: false,
+        moveInCodePending: false,
       },
+      homeId: expect.stringMatching(/^home_[0-9a-f]{32}$/),
+      homeHostPicoId: sealedClaim.expectedHomeHostPicoId,
+      hostSigningKeyFingerprintHex: setupBody.host.signingKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: setupBody.host.keyAgreementKeyFingerprintHex,
+      claimedAt: expect.any(String),
     });
 
     const setupAfterClaim = await app.inject({ method: 'GET', url: '/api/home/setup' });
@@ -298,7 +301,7 @@ describe('Pico Home Core app', () => {
 
     const status = await app.inject({ method: 'GET', url: '/api/system/status' });
     expect(status.json().picoHome.claimState.state).toBe('claimed');
-    expect(status.json().picoHome.claimState.homeHostPicoId).toBe('pico:home-host');
+    expect(status.json().picoHome.claimState.homeHostPicoId).toBe(sealedClaim.expectedHomeHostPicoId);
 
     const events = await app.inject({ method: 'GET', url: '/api/events' });
     const homeClaimed = (events.json().events as { type: string; payload: unknown }[])
@@ -381,7 +384,6 @@ describe('Pico Home Core app', () => {
         schema: picoHomeFoundingRecordSchema,
         founding: pending.pendingClaim.founding,
         claimantIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
-        claimantClaimSignatureHex: sealedClaim.claimantSignatureHex,
         claimantFoundingSignatureHex: foundingAcceptance.claimantFoundingSignatureHex,
         hostClaimResponse: pending.pendingClaim.claimResponse,
         hostFoundingSignatureHex: expect.stringMatching(/^[0-9a-f]{128}$/),
@@ -536,7 +538,7 @@ describe('Pico Home Core app', () => {
 
     expect(hasMoveInCode(restarted)).toBe(false);
     expect((await restarted.inject({ method: 'GET', url: '/api/home/setup' })).statusCode).toBe(404);
-    expect((await restarted.inject({ method: 'POST', url: '/api/home/claim', payload: { moveInCode: 'anything', homeHostPicoId: 'pico:attacker' } })).statusCode).toBe(404);
+    expect((await restarted.inject({ method: 'POST', url: '/api/home/claim', payload: { claimEnvelope: { schema: picoHomeClaimEnvelopeSchema, sealedClaimPayloadHex: 'ff'.repeat(64) } } })).statusCode).toBe(404);
     const status = await restarted.inject({ method: 'GET', url: '/api/system/status' });
     expect(status.json().picoHome.claimState).toEqual(claimResponse.claimState);
 
@@ -660,12 +662,7 @@ describe('Pico Home Core app', () => {
     const first = await buildAppWithCapturedLog({ databasePath });
     const firstSetup = (await first.inject({ method: 'GET', url: '/api/home/setup' })).json();
 
-    const claimed = await first.inject({
-      method: 'POST',
-      url: '/api/home/claim',
-      payload: { moveInCode: readMoveInCode(first), homeHostPicoId: 'pico:home-host' },
-    });
-    expect(claimed.statusCode).toBe(201);
+    await claimHomeThroughSealedFlow(first);
     await first.close();
 
     writeFileSync(homeResetMarkerPath(databasePath), '');

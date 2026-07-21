@@ -781,7 +781,6 @@ function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
       keyRole: 'pico_identity',
       publicKeyHex: '6'.repeat(64),
     },
-    claimantClaimSignatureHex: '7'.repeat(128),
     claimantFoundingSignatureHex: '8'.repeat(128),
     hostClaimResponse: {
       schema: picoHomeClaimResponseRecordSchema,
