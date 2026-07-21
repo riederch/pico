@@ -8,6 +8,7 @@ import {
 import type {
   PicoHomeFoundingRecord,
   PicoHomeMembershipCredential,
+  PicoHomeMembershipIssuerStatement,
   PicoHomeMembershipLifecycleRecord,
   PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
@@ -56,7 +57,11 @@ export type PicoHomeMembershipVerification =
   | { ok: false; reason: PicoHomeMembershipVerificationFailure };
 
 export interface PicoHomeMembershipAuthorityInput {
-  credential: PicoHomeMembershipCredential;
+  /**
+   * Only the issuer half is needed, and taking only that is the point: the
+   * authority check must be answerable before this Home has signed anything.
+   */
+  credential: PicoHomeMembershipIssuerStatement;
   foundingRecord: PicoHomeFoundingRecord;
 }
 

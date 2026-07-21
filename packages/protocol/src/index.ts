@@ -13,6 +13,8 @@ export const foundationEventTypes = [
   'auth.sessions_revoked',
   'home.claimed',
   'home.reset',
+  'home.membership_recorded',
+  'home.membership_changed',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -32,6 +34,8 @@ export const serverSynthesizedFoundationEventTypes = [
   'auth.sessions_revoked',
   'home.claimed',
   'home.reset',
+  'home.membership_recorded',
+  'home.membership_changed',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -393,12 +397,22 @@ export interface PicoHomeFoundingRecord {
   createdAt: string;
 }
 
-export interface PicoHomeMembershipCredential {
+/**
+ * What the Home Host Pico produces and hands over: the authority half on its
+ * own. A Home turns this into a credential by adding its activation
+ * countersignature, which is why the two are separate types - the host signs
+ * only what already verified, and no code path can pass around a "credential"
+ * whose activation half is a placeholder.
+ */
+export interface PicoHomeMembershipIssuerStatement {
   schema: typeof picoHomeMembershipCredentialSchema;
   membership: PicoHomeMembershipSignatureInput;
   issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   /** The authority (ADR 0080 H6). Without it the credential is inert. */
   issuerSignatureHex: string;
+}
+
+export interface PicoHomeMembershipCredential extends PicoHomeMembershipIssuerStatement {
   /**
    * Operational acknowledgment by the host key that this credential is active
    * at this Home. It creates no authority: over an issuer-less credential it
@@ -666,6 +680,16 @@ export type HomeClaimedPayload = Record<string, never>;
 
 export type HomeResetPayload = Record<string, never>;
 
+export interface HomeMembershipRecordedPayload {
+  credentialId: string;
+  subjectPicoIdentityFingerprintHex: string;
+  status: PicoHomeMembershipStatus;
+}
+
+export interface HomeMembershipChangedPayload extends HomeMembershipRecordedPayload {
+  lifecycleId: string;
+}
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -680,7 +704,9 @@ export type FoundationEventPayload =
   | AuthOperatorResetPayload
   | AuthSessionsRevokedPayload
   | HomeClaimedPayload
-  | HomeResetPayload;
+  | HomeResetPayload
+  | HomeMembershipRecordedPayload
+  | HomeMembershipChangedPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -866,6 +892,39 @@ export function validateFoundationEventPayload(
     }
 
     return { ok: true, payload: {} };
+  }
+
+  // ADR 0078 K7 audit: references and counts, never key material and never
+  // content. A membership fingerprint is a key reference, which is exactly the
+  // class the reader-graph metadata rule allows.
+  if (type === 'home.membership_recorded' || type === 'home.membership_changed') {
+    const allowed = type === 'home.membership_recorded'
+      ? ['credentialId', 'subjectPicoIdentityFingerprintHex', 'status']
+      : ['credentialId', 'lifecycleId', 'subjectPicoIdentityFingerprintHex', 'status'];
+    const extraKey = firstUnexpectedKey(payload, allowed);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isNonEmptyString(payload.credentialId, 256)
+      || !isNonEmptyString(payload.subjectPicoIdentityFingerprintHex, 64)
+      || !isStringMember(payload.status, picoHomeMembershipStatuses)) {
+      return { ok: false, error: `${type} payload requires credentialId, subjectPicoIdentityFingerprintHex and status.` };
+    }
+
+    if (type === 'home.membership_changed' && !isNonEmptyString(payload.lifecycleId, 256)) {
+      return { ok: false, error: 'home.membership_changed payload requires lifecycleId.' };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        credentialId: payload.credentialId,
+        ...(type === 'home.membership_changed' ? { lifecycleId: payload.lifecycleId } : {}),
+        subjectPicoIdentityFingerprintHex: payload.subjectPicoIdentityFingerprintHex,
+        status: payload.status,
+      },
+    };
   }
 
   const extraKey = firstUnexpectedKey(payload, ['mode', 'state', 'intensity', 'statusColor', 'message']);

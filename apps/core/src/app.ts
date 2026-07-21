@@ -17,6 +17,8 @@ import {
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
   picoHomeSealedClaimPayloadSchema,
+  buildPicoHomeMembershipSignatureInput,
+  picoHomeMembershipCredentialSchema,
   picoIdentitySuite,
   protocolCapabilities,
   memoryRetentionModes,
@@ -47,6 +49,9 @@ import {
   type PicoHomePendingClaimResponse,
   type PicoHomeSealedClaimPayload,
   type PicoHomeSetupResponse,
+  type PicoHomeMembershipCredential,
+  type PicoHomeMembershipIssuerStatement,
+  type PicoHomeMembershipLifecycleRecord,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
@@ -75,6 +80,7 @@ import { OperatorOverloadedError, type OperatorStore } from './operator-store.js
 import { SessionStore } from './session-store.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { LoginThrottle } from './login-throttle.js';
+import { verifyPicoHomeMembershipAuthority } from './home-membership.js';
 import { shredDomainWithAudit } from './domain-shred.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 import {
@@ -764,6 +770,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // session alone does not read content, and the static token never reaches here.
   accessClasses.register('GET', '/api/memory/domains/:privacyDomain/items', 'domain-content');
   accessClasses.register('GET', '/api/memory/domains/:privacyDomain/items/:memoryItemId', 'domain-content');
+  // Relaying a signed membership credential is host administration, not Home
+  // authority: the operator can hand the host a credential the Home Host Pico
+  // signed, and can refuse to, but cannot mint one (ADR 0080 H6/H9). The
+  // member list is reader-graph metadata and stays behind the same class; the
+  // static token never reaches any of them.
+  accessClasses.register('POST', '/api/home/memberships', 'host-admin');
+  accessClasses.register('POST', '/api/home/membership-lifecycle', 'host-admin');
+  accessClasses.register('GET', '/api/home/memberships', 'host-admin');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -981,6 +995,88 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     };
 
     return reply.code(202).header('Cache-Control', 'no-store').send(response);
+  });
+
+  app.get('/api/home/memberships', async (_request, reply) => {
+    return sendNoStore(reply, { memberships: store.picoHomeMemberships() });
+  });
+
+  app.post('/api/home/memberships', async (request, reply) => {
+    if (homeHostKeys === undefined) {
+      return sendNoStore(reply.code(409), { error: 'Pico Home host keys are unavailable.' });
+    }
+
+    const foundingRecord = store.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return sendNoStore(reply.code(409), { error: 'no_founding_record' });
+    }
+
+    let issuerStatement: PicoHomeMembershipIssuerStatement;
+    try {
+      issuerStatement = parsePicoHomeMembershipIssuerStatement(request.body);
+    } catch (error) {
+      return sendNoStore(reply.code(400), { error: (error as Error).message });
+    }
+
+    // The host countersigns only what already carries the Home Host Pico's
+    // authority: activation is an acknowledgment, so activating an unverified
+    // statement would be signing garbage (ADR 0080 H6). The store verifies both
+    // halves again before it writes anything - a few hundred microseconds to
+    // keep "nothing unverified is stored" true of the store on its own.
+    const authority = verifyPicoHomeMembershipAuthority(sodium, {
+      credential: issuerStatement,
+      foundingRecord,
+    });
+    if (!authority.ok) {
+      return sendNoStore(reply.code(membershipFailureStatus(authority.reason)), { error: authority.reason });
+    }
+
+    const credential: PicoHomeMembershipCredential = {
+      ...issuerStatement,
+      hostActivationSignatureHex: homeHostKeyStore.signWithHostSigningKey(
+        sodium,
+        buildPicoHomeMembershipSignatureInput(issuerStatement.membership),
+      ),
+      // Host-stamped: the record is this Home's, and client clocks are not an
+      // input to anything here.
+      createdAt: new Date().toISOString(),
+    };
+
+    const recorded = store.recordPicoHomeMembershipCredential({
+      sodium,
+      credential,
+      hostSigningPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+    });
+
+    if (!recorded.ok) {
+      return sendNoStore(reply.code(membershipFailureStatus(recorded.reason)), { error: recorded.reason });
+    }
+
+    appendServerEvent('home.membership_recorded', {
+      credentialId: recorded.membership.sourceRef,
+      subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
+      status: recorded.membership.status,
+    });
+
+    return reply.code(201).header('Cache-Control', 'no-store').send({ membership: recorded.membership });
+  });
+
+  app.post('/api/home/membership-lifecycle', async (request, reply) => {
+    const record = (request.body ?? {}) as PicoHomeMembershipLifecycleRecord;
+    const recorded = store.recordPicoHomeMembershipLifecycle({ sodium, record });
+
+    if (!recorded.ok) {
+      return sendNoStore(reply.code(membershipFailureStatus(recorded.reason)), { error: recorded.reason });
+    }
+
+    appendServerEvent('home.membership_changed', {
+      credentialId: recorded.membership.sourceRef,
+      lifecycleId: record.lifecycle?.lifecycleId ?? '',
+      subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
+      status: recorded.membership.status,
+    });
+
+    return sendNoStore(reply, { membership: recorded.membership });
   });
 
   app.post('/api/auth/bootstrap', async (request, reply) => {
@@ -1701,6 +1797,49 @@ function readSealedPicoHomeClaimRequest(
     claim,
     claimantIdentityKeyRecord: payload.claimantIdentityKeyRecord,
     claimantSignatureHex: payload.claimantSignatureHex,
+  };
+}
+
+/**
+ * A credential the host cannot verify is not a server fault: 409 says "this
+ * Home cannot accept that", 401 says the signature does not hold, 400 says the
+ * record is malformed. Reasons are returned verbatim because they are a closed
+ * vocabulary and name no key material.
+ */
+function membershipFailureStatus(reason: string): number {
+  if (reason === 'invalid_issuer_signature' || reason === 'invalid_host_activation_signature') {
+    return 401;
+  }
+
+  if (reason === 'no_founding_record' || reason === 'conflicting_record' || reason === 'unknown_credential') {
+    return 409;
+  }
+
+  return 400;
+}
+
+/**
+ * The intake shape: the Home Host Pico's issuer statement, without the
+ * activation half this Home has not added yet and without a `createdAt` the
+ * host stamps itself.
+ */
+function parsePicoHomeMembershipIssuerStatement(source: unknown): PicoHomeMembershipIssuerStatement {
+  if (!isRecord(source) || !hasExactKeys(source, ['schema', 'membership', 'issuerIdentityKeyRecord', 'issuerSignatureHex'])) {
+    throw new Error('Pico Home membership credential is invalid.');
+  }
+
+  if (source.schema !== picoHomeMembershipCredentialSchema
+    || !isRecord(source.membership)
+    || !isRecord(source.issuerIdentityKeyRecord)
+    || !/^[0-9a-f]{128}$/.test(stringField(source, 'issuerSignatureHex'))) {
+    throw new Error('Pico Home membership credential is invalid.');
+  }
+
+  return {
+    schema: picoHomeMembershipCredentialSchema,
+    membership: source.membership as unknown as PicoHomeMembershipIssuerStatement['membership'],
+    issuerIdentityKeyRecord: parsePicoIdentityKeyRecord(source.issuerIdentityKeyRecord),
+    issuerSignatureHex: stringField(source, 'issuerSignatureHex'),
   };
 }
 

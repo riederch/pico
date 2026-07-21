@@ -13,6 +13,10 @@ import {
   avatarStatusColors,
   buildPicoHomeClaimResponseSignatureInput,
   buildPicoHomeClaimSignatureInput,
+  buildPicoHomeMembershipLifecycleSignatureInput,
+  buildPicoHomeMembershipSignatureInput,
+  picoHomeMembershipCredentialSchema,
+  picoHomeMembershipLifecycleRecordSchema,
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   deviceSeenStatuses,
@@ -33,6 +37,8 @@ import {
   type PicoHomeFoundingSignatureInput,
   type PicoHomePendingClaimResponse,
   type PicoHomeSetupResponse,
+  type PicoHomeMembershipLifecycleSignatureInput,
+  type PicoHomeMembershipSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
 import { buildApp } from './app.js';
@@ -1454,6 +1460,126 @@ describe('Pico Home Core app', () => {
       socket.terminate();
       await app.close();
     }
+  });
+
+  it('activates an issuer-signed membership credential and audits it content-free', async () => {
+    const app = await buildAppWithCapturedLog();
+    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const homeId = (claimResponse.claimState as { homeId: string }).homeId;
+    const bootstrapCode = readBootstrapCode(app);
+    const session = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    })).json().session as string;
+    const auth = { authorization: `Bearer ${session}` };
+
+    const memberFingerprint = 'b'.repeat(64);
+    const membership: PicoHomeMembershipSignatureInput = {
+      suite: picoIdentitySuite,
+      credentialId: 'member_20260719_0001',
+      homeId,
+      issuerPicoIdentityFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+      subjectPicoIdentityFingerprintHex: memberFingerprint,
+      hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+      role: 'home_member',
+      scopes: ['host.use', 'packet.receive'],
+      validFrom: '2026-07-19T11:00:00.000Z',
+      validUntil: '2027-07-19T11:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    const membershipBytes = buildPicoHomeMembershipSignatureInput(membership);
+    const issuerStatement = (privateKey: Uint8Array) => ({
+      schema: picoHomeMembershipCredentialSchema,
+      membership,
+      issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+      issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(membershipBytes, privateKey)),
+    });
+
+    // The operator relays what the Home Host Pico signed; it cannot mint one.
+    // A statement signed by anyone else is refused, and the host never
+    // countersigns it (ADR 0080 H6/H9).
+    const stranger = sodium.crypto_sign_keypair();
+    const forged = await app.inject({
+      method: 'POST',
+      url: '/api/home/memberships',
+      headers: auth,
+      payload: issuerStatement(stranger.privateKey),
+    });
+    expect(forged.statusCode).toBe(401);
+    expect(forged.json()).toEqual({ error: 'invalid_issuer_signature' });
+
+    const accepted = await app.inject({
+      method: 'POST',
+      url: '/api/home/memberships',
+      headers: auth,
+      payload: issuerStatement(sealedClaim.claimantPrivateKey),
+    });
+    expect(accepted.statusCode).toBe(201);
+    expect(accepted.json().membership).toMatchObject({
+      homeId,
+      picoIdentityFingerprintHex: memberFingerprint,
+      role: 'home_member',
+      status: 'active',
+      source: 'membership_credential',
+      sourceRef: 'member_20260719_0001',
+    });
+
+    const listed = await app.inject({ method: 'GET', url: '/api/home/memberships', headers: auth });
+    expect((listed.json().memberships as { role: string }[]).map((row) => row.role).sort())
+      .toEqual(['home_host', 'home_member']);
+
+    // The Home Host Pico evicts the member; the freshest statement wins.
+    const lifecycle: PicoHomeMembershipLifecycleSignatureInput = {
+      suite: picoIdentitySuite,
+      lifecycleId: 'memberlc_20260719_0001',
+      homeId,
+      credentialId: 'member_20260719_0001',
+      issuerPicoIdentityFingerprintHex: sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+      subjectPicoIdentityFingerprintHex: memberFingerprint,
+      status: 'evicted',
+      reasonCategory: 'member_removed',
+      changedAt: '2026-08-01T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000005',
+    };
+    const evicted = await app.inject({
+      method: 'POST',
+      url: '/api/home/membership-lifecycle',
+      headers: auth,
+      payload: {
+        schema: picoHomeMembershipLifecycleRecordSchema,
+        lifecycle,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeMembershipLifecycleSignatureInput(lifecycle),
+          sealedClaim.claimantPrivateKey,
+        )),
+        createdAt: '2026-08-01T10:00:00.000Z',
+      },
+    });
+    expect(evicted.statusCode).toBe(200);
+    expect(evicted.json().membership).toMatchObject({ status: 'evicted' });
+
+    // ADR 0078 K7: references and a status, never key material and never content.
+    const events = await app.inject({ method: 'GET', url: '/api/events', headers: auth });
+    const membershipEvents = (events.json().events as { type: string; payload: Record<string, unknown> }[])
+      .filter((event) => event.type.startsWith('home.membership'));
+    expect(membershipEvents.map((event) => event.type))
+      .toEqual(['home.membership_recorded', 'home.membership_changed']);
+    expect(membershipEvents[0].payload).toEqual({
+      credentialId: 'member_20260719_0001',
+      subjectPicoIdentityFingerprintHex: memberFingerprint,
+      status: 'active',
+    });
+    expect(membershipEvents[1].payload).toEqual({
+      credentialId: 'member_20260719_0001',
+      lifecycleId: 'memberlc_20260719_0001',
+      subjectPicoIdentityFingerprintHex: memberFingerprint,
+      status: 'evicted',
+    });
+    expect(JSON.stringify(membershipEvents)).not.toContain(sealedClaim.claimantIdentityKeyRecord.publicKeyHex);
+
+    await app.close();
   });
 
   it('throttles repeated failed logins without locking the operator out', async () => {

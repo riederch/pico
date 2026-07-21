@@ -102,6 +102,8 @@ describe('Pico protocol types', () => {
       'auth.sessions_revoked',
       'home.claimed',
       'home.reset',
+      'home.membership_recorded',
+      'home.membership_changed',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -111,6 +113,8 @@ describe('Pico protocol types', () => {
       'auth.sessions_revoked',
       'home.claimed',
       'home.reset',
+      'home.membership_recorded',
+      'home.membership_changed',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');
