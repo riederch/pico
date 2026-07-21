@@ -92,7 +92,14 @@ export interface IdentityVerificationSodium {
 }
 
 export interface PicoIdentityDelegationLookupOptions {
-  at?: string;
+  /**
+   * The instant the authority question is asked at, in the protocol's canonical
+   * UTC form. Required: an optional evaluation time made "caller forgot" and
+   * "delegation is inside its window" indistinguishable, and the index answered
+   * `active` for expired delegations (ADR 0079 I8/I9). The index derives no time
+   * of its own, so the caller states it.
+   */
+  at: string;
   requiredScopes?: readonly PicoIdentityDelegationScope[];
 }
 
@@ -179,9 +186,10 @@ export class PicoIdentityLifecycleIndex {
 
   public lookupDelegation(
     delegationId: string,
-    options: PicoIdentityDelegationLookupOptions = {},
+    options: PicoIdentityDelegationLookupOptions,
   ): PicoIdentityDelegationLookupResult {
     assertAsciiToken(delegationId, 'invalid_delegation_id');
+    assertInstant(options.at, 'invalid_lookup_time');
     const delegation = this.#delegationsById.get(delegationId);
     if (delegation === undefined) {
       return {
@@ -200,22 +208,19 @@ export class PicoIdentityLifecycleIndex {
       };
     }
 
-    if (options.at !== undefined) {
-      assertAsciiToken(options.at, 'invalid_lookup_time');
-      if (options.at < delegation.validFrom) {
-        return {
-          status: 'not_yet_valid',
-          delegation: cloneDelegation(delegation),
-          freshestLifecycleOrder: this.#freshestLifecycleOrder,
-        };
-      }
-      if (options.at >= delegation.validUntil) {
-        return {
-          status: 'expired',
-          delegation: cloneDelegation(delegation),
-          freshestLifecycleOrder: this.#freshestLifecycleOrder,
-        };
-      }
+    if (options.at < delegation.validFrom) {
+      return {
+        status: 'not_yet_valid',
+        delegation: cloneDelegation(delegation),
+        freshestLifecycleOrder: this.#freshestLifecycleOrder,
+      };
+    }
+    if (options.at >= delegation.validUntil) {
+      return {
+        status: 'expired',
+        delegation: cloneDelegation(delegation),
+        freshestLifecycleOrder: this.#freshestLifecycleOrder,
+      };
     }
 
     const missingScopes = missingRequiredScopes(delegation.scopes, options.requiredScopes ?? []);
@@ -274,6 +279,15 @@ export class PicoIdentityLifecycleIndex {
     const matches: PicoIdentityRevocationReference[] = [];
 
     for (const revocation of this.#revocationsById.values()) {
+      // Only the identity that issued a delegation can revoke it. Without this
+      // the index is safe just as long as it holds one issuer's statements, and
+      // the exported merge paths take whatever they are handed: a Home holding
+      // several members' lifecycle records would let any member's revocation
+      // reference a foreign delegationId or subject key and kill it.
+      if (revocation.issuerIdentityKeyFingerprintHex !== delegation.issuerIdentityKeyFingerprintHex) {
+        continue;
+      }
+
       if (revocation.subjectKind === 'delegation' && revocation.subjectRef === delegation.delegationId) {
         matches.push({ match: 'delegation', revocation: cloneRevocation(revocation) });
         continue;
@@ -557,7 +571,12 @@ function cloneDelegation(
     issuerIdentityKeyFingerprintHex: delegation.issuerIdentityKeyFingerprintHex,
     subjectSigningKeyFingerprintHex: delegation.subjectSigningKeyFingerprintHex,
     subjectKeyAgreementKeyFingerprintHex: delegation.subjectKeyAgreementKeyFingerprintHex,
-    scopes: [...delegation.scopes],
+    // Sorted, because the signature input sorts the scope set: two replicas of
+    // one signed statement that list the same scopes in different order are the
+    // same statement, and unsorted clones made them collide as
+    // `conflicting_delegation_statement` on exactly the restore-plus-registry
+    // merge ADR 0079 I9 asks reconciliation to survive.
+    scopes: [...delegation.scopes].sort(),
     validFrom: delegation.validFrom,
     validUntil: delegation.validUntil,
     lifecycleOrder: delegation.lifecycleOrder,
@@ -621,6 +640,25 @@ function assertAsciiToken(value: string, reason: string): void {
 function assertFingerprint(value: string): void {
   if (!/^[0-9a-f]{64}$/.test(value)) {
     throw new Error('invalid_fingerprint_length');
+  }
+}
+
+/**
+ * Validity windows are decided by comparing these strings, so the lookup time
+ * has to be in the same fixed-width UTC form the signature-input builders pin
+ * for `validFrom`/`validUntil`. A `+02:00` form sorts before `Z` at the same
+ * instant and would report an expired delegation as active.
+ */
+function assertInstant(value: string, reason: string): void {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    throw new Error(reason);
+  }
+
+  // Re-serializing rejects impossible dates the shape check admits: `new Date`
+  // rolls `2026-02-30` forward to March 2 instead of failing.
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
+    throw new Error(reason);
   }
 }
 

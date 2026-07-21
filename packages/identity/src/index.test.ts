@@ -44,6 +44,7 @@ const identityFingerprint = '66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148
 const signingFingerprint = '5dba9b41e6f3f034b84d142eeac499f404237f4dd9ff4add17b5f4843e2240b5';
 const agreementFingerprint = '2263a4d54b123d8227780014ec313e7afe88a0f8f880a07026a3f931b098e06a';
 const replacementSigningFingerprint = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const foreignIdentityFingerprint = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const verifierNonceHex = '44'.repeat(32);
 
 beforeAll(async () => {
@@ -55,7 +56,7 @@ interface IdentityLifecycleFixtureInput {
   acceptedRevocations?: PicoIdentityRevocationSignatureInput[];
   lookup?: {
     delegationId: string;
-    at?: string;
+    at: string;
     requiredScopes?: PicoIdentityDelegationScope[];
   };
 }
@@ -146,6 +147,17 @@ function delegation(overrides: Partial<PicoIdentityDelegationSignatureInput> = {
   };
 }
 
+/**
+ * What the index hands back: the same statement with the scope set in canonical
+ * order, matching the bytes the signature input covers.
+ */
+function canonicalDelegation(
+  overrides: Partial<PicoIdentityDelegationSignatureInput> = {},
+): PicoIdentityDelegationSignatureInput {
+  const record = delegation(overrides);
+  return { ...record, scopes: [...record.scopes].sort() };
+}
+
 function revocation(overrides: Partial<PicoIdentityRevocationSignatureInput> = {}): PicoIdentityRevocationSignatureInput {
   return {
     suite: picoIdentitySuite,
@@ -218,7 +230,7 @@ describe('PicoIdentityLifecycleIndex', () => {
       ],
     });
 
-    expect(index.delegationsForSubjectKey(signingFingerprint)).toEqual([delegation()]);
+    expect(index.delegationsForSubjectKey(signingFingerprint)).toEqual([canonicalDelegation()]);
     expect(index.lookupDelegation('del_01hzx8m9q4rt5v', {
       at: '2026-07-19T08:00:00.000Z',
     })).toMatchObject({
@@ -258,15 +270,91 @@ describe('PicoIdentityLifecycleIndex', () => {
     });
   });
 
+  it('refuses to answer an authority question without a canonical lookup time', () => {
+    const index = createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [delegation()],
+    });
+
+    // An omitted lookup time used to skip the validity window entirely, so an
+    // expired delegation answered `active` (ADR 0079 I8/I9).
+    expect(() => index.lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: undefined as unknown as string,
+    })).toThrow('invalid_lookup_time');
+    // A same-instant offset form sorts before `Z` and would report the
+    // delegation active an hour past its real expiry.
+    expect(() => index.lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: '2026-10-18T10:00:00+02:00',
+    })).toThrow('invalid_lookup_time');
+    expect(() => index.lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: '2026-10-18T08:00:00Z',
+    })).toThrow('invalid_lookup_time');
+    // Shape alone admits impossible dates; `new Date` rolls this to March 2.
+    expect(() => index.lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: '2026-02-30T08:00:00.000Z',
+    })).toThrow('invalid_lookup_time');
+  });
+
+  it('lets only the issuing identity revoke its own delegations', () => {
+    const index = createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [delegation()],
+      acceptedRevocations: [
+        // A merged index holds several identities' statements. A foreign
+        // issuer naming this delegation, or its subject key, must not end it.
+        revocation({
+          revocationId: 'rev_foreign_delegation_ref',
+          issuerIdentityKeyFingerprintHex: foreignIdentityFingerprint,
+          subjectKind: 'delegation',
+          subjectRef: 'del_01hzx8m9q4rt5v',
+          lifecycleOrder: 'seq:0000000000000004',
+        }),
+        revocation({
+          revocationId: 'rev_foreign_key_ref',
+          issuerIdentityKeyFingerprintHex: foreignIdentityFingerprint,
+          subjectKind: 'key',
+          subjectRef: signingFingerprint,
+          lifecycleOrder: 'seq:0000000000000005',
+        }),
+      ],
+    });
+
+    expect(index.lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: '2026-08-19T08:00:00.000Z',
+    })).toMatchObject({ status: 'active' });
+
+    expect(index.reconcile({
+      acceptedRevocations: [
+        revocation({
+          revocationId: 'rev_own_delegation_ref',
+          subjectKind: 'delegation',
+          subjectRef: 'del_01hzx8m9q4rt5v',
+          lifecycleOrder: 'seq:0000000000000006',
+        }),
+      ],
+    }).lookupDelegation('del_01hzx8m9q4rt5v', {
+      at: '2026-08-19T08:00:00.000Z',
+    })).toMatchObject({
+      status: 'revoked',
+      revokedBy: { revocation: { revocationId: 'rev_own_delegation_ref' } },
+    });
+  });
+
   it('deduplicates identical replica records and rejects conflicting ids', () => {
     expect(createPicoIdentityLifecycleIndex({
       acceptedDelegations: [delegation(), delegation()],
       acceptedRevocations: [revocation(), revocation()],
     }).snapshot()).toMatchObject({
-      delegations: [delegation()],
+      delegations: [canonicalDelegation()],
       revocations: [revocation()],
       freshestLifecycleOrder: 'seq:0000000000000002',
     });
+
+    // The signature input sorts the scope set, so two replicas that list one
+    // statement's scopes in different order carry the same signed bytes and
+    // must dedupe rather than collide.
+    expect(reconcilePicoIdentityLifecycleInputs([
+      { acceptedDelegations: [delegation()] },
+      { acceptedDelegations: [delegation({ scopes: ['decrypt_domain', 'sign_history', 'receive_key_envelope'] })] },
+    ]).snapshot().delegations).toEqual([canonicalDelegation()]);
 
     expect(() => createPicoIdentityLifecycleIndex({
       acceptedDelegations: [
