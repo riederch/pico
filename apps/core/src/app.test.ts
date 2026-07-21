@@ -1455,6 +1455,106 @@ describe('Pico Home Core app', () => {
     }
   });
 
+  it('cuts live realtime connections when their session is revoked', async () => {
+    const app = await buildAppWithCapturedLog();
+    const bootstrapCode = readBootstrapCode(app);
+    const bootstrapped = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    });
+    expect(bootstrapped.statusCode).toBe(201);
+    const stolenSession = bootstrapped.json().session as string;
+
+    let initial: Promise<unknown> | null = null;
+    const socket = await app.injectWS('/ws', {
+      headers: { authorization: `Bearer ${stolenSession}` },
+    }, { onInit(ws) { initial = readSocketJson(ws as unknown as TestWebSocket); } });
+
+    try {
+      expect(await requireMessagePromise(initial)).toMatchObject({ type: realtimeMessageType.coreConnected });
+
+      const closed = new Promise<void>((resolve) => {
+        (socket as unknown as { once(event: 'close', listener: () => void): void }).once('close', resolve);
+      });
+
+      // Revoking every session must reach the live stream too, or the stolen
+      // credential keeps reading the Foundation until the process restarts.
+      expect((await app.inject({
+        method: 'DELETE',
+        url: '/api/auth/sessions',
+        headers: { authorization: `Bearer ${stolenSession}` },
+      })).statusCode).toBe(200);
+
+      await closed;
+
+      // The Foundation carries on for a legitimate operator; the cut connection
+      // sees none of it.
+      const relogin = await app.inject({
+        method: 'POST',
+        url: '/api/auth/session',
+        payload: { passphrase: OPERATOR_PASSPHRASE },
+      });
+      expect(relogin.statusCode).toBe(201);
+      const appended = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        headers: { authorization: `Bearer ${relogin.json().session as string}` },
+        payload: { deviceId: 'probe-device', type: 'message.created', payload: { role: 'user', text: 'after revocation' } },
+      });
+      expect(appended.statusCode).toBe(201);
+      await expect(readSocketJson(socket as unknown as TestWebSocket)).rejects.toThrow(/Timed out|closed/i);
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
+  it('cuts a ticket-opened connection when the session behind the ticket is revoked', async () => {
+    const app = await buildAppWithCapturedLog();
+    const bootstrapCode = readBootstrapCode(app);
+    const session = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: OPERATOR_PASSPHRASE },
+    })).json().session as string;
+
+    // A browser cannot set handshake headers, so it presents a ticket. The
+    // ticket is single-use and spent at the handshake; the connection must
+    // still inherit the session it was minted under.
+    const ticketResponse = await app.inject({
+      method: 'POST',
+      url: '/api/realtime/tickets',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(ticketResponse.statusCode).toBe(201);
+    const ticket = ticketResponse.json().ticket as string;
+
+    let initial: Promise<unknown> | null = null;
+    const socket = await app.injectWS(`/ws?ticket=${encodeURIComponent(ticket)}`, {}, {
+      onInit(ws) { initial = readSocketJson(ws as unknown as TestWebSocket); },
+    });
+
+    try {
+      expect(await requireMessagePromise(initial)).toMatchObject({ type: realtimeMessageType.coreConnected });
+
+      const closed = new Promise<void>((resolve) => {
+        (socket as unknown as { once(event: 'close', listener: () => void): void }).once('close', resolve);
+      });
+
+      expect((await app.inject({
+        method: 'DELETE',
+        url: '/api/auth/session',
+        headers: { authorization: `Bearer ${session}` },
+      })).statusCode).toBe(204);
+
+      await closed;
+    } finally {
+      socket.terminate();
+      await app.close();
+    }
+  });
+
   it('accepts a minted realtime ticket for one websocket upgrade only', async () => {
     const app = await buildApp({
       host: '127.0.0.1',

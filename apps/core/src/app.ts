@@ -2,7 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { dirname, join } from 'node:path';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   buildPicoHomeClaimResponseSignatureInput,
   buildPicoHomeClaimSignatureInput,
@@ -147,11 +147,28 @@ interface RealtimeSocket {
   readyState: number;
   OPEN: number;
   isAlive?: boolean;
+  /**
+   * The session this connection was opened under, when it was opened under one.
+   * Revoking that session has to reach the live stream too: the handshake is
+   * where authority is checked, and without this binding the connection would
+   * outlive the credential that opened it (ADR 0076). Absent for the static
+   * token, which is not revocable, and for the credential-free local mode.
+   */
+  sessionDigest?: string;
   send(payload: string): void;
   ping(): void;
   terminate(): void;
   on(event: 'close' | 'pong', listener: () => void): void;
 }
+
+/**
+ * What the realtime handshake resolved to. A ticket carries the session it was
+ * minted under, so the connection inherits that binding rather than losing it
+ * when the single-use ticket is consumed.
+ */
+type RealtimeAuthorization =
+  | { authorized: false }
+  | { authorized: true; sessionDigest?: string };
 
 interface RealtimeTicketRecord {
   expiresAtMs: number;
@@ -262,6 +279,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
   const sockets = new Set<RealtimeSocket>();
+  // Carries the session a handshake resolved to from preValidation into the
+  // socket handler, keyed by request so nothing leaks between connections.
+  const handshakeSessionDigests = new WeakMap<FastifyRequest, string>();
   const realtimeTickets = new Map<string, RealtimeTicketRecord>();
   const operators: OperatorStore = store.operators(sodium);
   const sessions = new SessionStore();
@@ -457,6 +477,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     sockets.clear();
     store.close();
   });
+
+  /**
+   * Revocation has to reach the live stream, not just the next HTTP request.
+   * These mirror the ticket purges: one session's connections, or every
+   * session-backed connection. A connection opened under the static token or in
+   * the credential-free local mode carries no session and is left alone.
+   */
+  function terminateSessionSockets(sessionDigest: string): void {
+    for (const socket of sockets) {
+      if (socket.sessionDigest === sessionDigest) {
+        socket.terminate();
+        sockets.delete(socket);
+      }
+    }
+  }
+
+  function terminateAllSessionSockets(): void {
+    for (const socket of sockets) {
+      if (socket.sessionDigest !== undefined) {
+        socket.terminate();
+        sockets.delete(socket);
+      }
+    }
+  }
 
   function broadcast(event: PicoEvent): void {
     const message: PicoEventCreatedMessage = { type: realtimeMessageType.eventCreated, event };
@@ -1004,6 +1048,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     if (sessionDigest !== undefined) {
       purgeSessionRealtimeTickets(realtimeTickets, sessionDigest);
+      terminateSessionSockets(sessionDigest);
     }
 
     return reply.code(204).send();
@@ -1012,6 +1057,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   app.delete('/api/auth/sessions', async (_request, reply) => {
     const revokedSessions = sessions.revokeAll();
     purgeAllSessionRealtimeTickets(realtimeTickets);
+    terminateAllSessionSockets();
 
     if (revokedSessions > 0) {
       appendServerEvent('auth.sessions_revoked', { revokedSessions });
@@ -1046,6 +1092,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     // Replacing the credential ends every session, including this one.
     const revokedSessions = sessions.revokeAll();
     purgeAllSessionRealtimeTickets(realtimeTickets);
+    terminateAllSessionSockets();
 
     if (revokedSessions > 0) {
       appendServerEvent('auth.sessions_revoked', { revokedSessions });
@@ -1413,16 +1460,37 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // (ADR 0039); non-browser clients may send a bearer token or session.
       const realtimeCredentialRequired = config.foundationToken !== undefined || operators.exists();
 
-      if (realtimeCredentialRequired && !isRealtimeConnectionAuthorized(request.url, request.headers.authorization, config.foundationToken, realtimeTickets, sessions)) {
+      if (!realtimeCredentialRequired) {
+        return;
+      }
+
+      const authorization = authorizeRealtimeConnection(
+        request.url,
+        request.headers.authorization,
+        config.foundationToken,
+        realtimeTickets,
+        sessions,
+      );
+
+      if (!authorization.authorized) {
         return reply
           .code(401)
           .header('WWW-Authenticate', 'Bearer realm="Pico Foundation"')
           .send({ error: 'Foundation realtime credential is required.' });
       }
+
+      // A single-use ticket is spent here, so the session it stood for has to be
+      // carried across to the handler; the handshake is the only place that
+      // still knows it.
+      if (authorization.sessionDigest !== undefined) {
+        handshakeSessionDigests.set(request, authorization.sessionDigest);
+      }
     },
-  }, (connection) => {
+  }, (connection, request) => {
     const socket = connection as RealtimeSocket;
     socket.isAlive = true;
+    socket.sessionDigest = handshakeSessionDigests.get(request);
+    handshakeSessionDigests.delete(request);
     sockets.add(socket);
     const message: PicoCoreConnectedMessage = { type: realtimeMessageType.coreConnected, deviceId: config.deviceId };
     socket.send(JSON.stringify(message));
@@ -2034,24 +2102,26 @@ function purgeAllSessionRealtimeTickets(tickets: Map<string, RealtimeTicketRecor
   }
 }
 
-function isRealtimeConnectionAuthorized(
+function authorizeRealtimeConnection(
   requestUrl: string,
   authorizationHeader: string | string[] | undefined,
   expectedToken: string | undefined,
   tickets: Map<string, RealtimeTicketRecord>,
   sessions: SessionStore,
-): boolean {
+): RealtimeAuthorization {
   if (expectedToken !== undefined && isBearerTokenAuthorized(authorizationHeader, expectedToken)) {
-    return true;
+    return { authorized: true };
   }
 
-  if (sessions.touch(readBearerCredential(authorizationHeader)) !== undefined) {
-    return true;
+  const credential = readBearerCredential(authorizationHeader);
+  if (sessions.touch(credential) !== undefined) {
+    const sessionDigest = sessions.digestOf(credential);
+    return { authorized: true, ...(sessionDigest === undefined ? {} : { sessionDigest }) };
   }
 
   const ticket = readRealtimeTicketQueryValue(requestUrl);
   if (ticket === null) {
-    return false;
+    return { authorized: false };
   }
 
   return consumeRealtimeTicket(tickets, ticket);
@@ -2074,17 +2144,24 @@ function readRealtimeTicketQueryValue(requestUrl: string): string | null {
   return ticket;
 }
 
-function consumeRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>, ticket: string): boolean {
+function consumeRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>, ticket: string): RealtimeAuthorization {
   purgeExpiredRealtimeTickets(tickets);
 
   const digest = secureDigest(ticket);
   const record = tickets.get(digest);
   if (record === undefined) {
-    return false;
+    return { authorized: false };
   }
 
   tickets.delete(digest);
-  return record.expiresAtMs > Date.now();
+  if (record.expiresAtMs <= Date.now()) {
+    return { authorized: false };
+  }
+
+  return {
+    authorized: true,
+    ...(record.sessionDigest === undefined ? {} : { sessionDigest: record.sessionDigest }),
+  };
 }
 
 function purgeExpiredRealtimeTickets(tickets: Map<string, RealtimeTicketRecord>): void {
