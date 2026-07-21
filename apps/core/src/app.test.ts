@@ -223,6 +223,7 @@ describe('Pico Home Core app', () => {
           { id: '0013_pico_home_founding_record', appliedAt: expect.any(String) },
           { id: '0014_pico_home_membership', appliedAt: expect.any(String) },
           { id: '0015_pico_home_founding_record_drop_claim_signature', appliedAt: expect.any(String) },
+          { id: '0016_pico_home_membership_credentials', appliedAt: expect.any(String) },
         ],
       },
     });

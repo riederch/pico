@@ -128,6 +128,15 @@ export const picoHomeClaimResponseRecordSchema = 'pico.home.claim-response-recor
 export const picoHomeFoundingAcceptanceSchema = 'pico.home.founding-acceptance.v1' as const;
 export const picoHomeFoundingRecordSchema = 'pico.home.founding-record.v1' as const;
 
+// ADR 0080 H6 record families. A credential carries two signatures with
+// different meanings: the Home Host Pico's issuer signature is the authority,
+// and the host's activation countersignature is operational acknowledgment
+// that creates none. Lifecycle statements are issuer-signed only - the host
+// enforces the freshest, it does not co-decide status.
+export const picoHomeMembershipCredentialSchema = 'pico.home.membership-credential.v1' as const;
+
+export const picoHomeMembershipLifecycleRecordSchema = 'pico.home.membership-lifecycle-record.v1' as const;
+
 export const picoIdentitySuite = 'pico.suite.id.v1' as const;
 
 // Authoritative signature-input families for ADR 0079 Gate G1. These builders
@@ -381,6 +390,30 @@ export interface PicoHomeFoundingRecord {
   claimantFoundingSignatureHex: string;
   hostClaimResponse: PicoHomeClaimResponseRecord;
   hostFoundingSignatureHex: string;
+  createdAt: string;
+}
+
+export interface PicoHomeMembershipCredential {
+  schema: typeof picoHomeMembershipCredentialSchema;
+  membership: PicoHomeMembershipSignatureInput;
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  /** The authority (ADR 0080 H6). Without it the credential is inert. */
+  issuerSignatureHex: string;
+  /**
+   * Operational acknowledgment by the host key that this credential is active
+   * at this Home. It creates no authority: over an issuer-less credential it
+   * would be a signature over garbage, which is why verification checks the
+   * issuer first.
+   */
+  hostActivationSignatureHex: string;
+  createdAt: string;
+}
+
+export interface PicoHomeMembershipLifecycleRecord {
+  schema: typeof picoHomeMembershipLifecycleRecordSchema;
+  lifecycle: PicoHomeMembershipLifecycleSignatureInput;
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  issuerSignatureHex: string;
   createdAt: string;
 }
 

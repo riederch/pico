@@ -409,6 +409,84 @@ const migrations: readonly MigrationDefinition[] = [
       }
     },
   },
+  {
+    id: '0016_pico_home_membership_credentials',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0080 Gate M3: the signed records behind the membership projection.
+      // Both signatures are kept because they answer different questions later:
+      // the issuer signature is the authority and must stay re-verifiable after
+      // any restore, the host activation countersignature only records that this
+      // Home acknowledged the credential.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_home_membership_credential (
+          credential_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          issuer_pico_identity_fingerprint_hex TEXT NOT NULL,
+          subject_pico_identity_fingerprint_hex TEXT NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('home_host', 'home_member')),
+          lifecycle_order TEXT NOT NULL,
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NOT NULL,
+          membership_json TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          issuer_signature_hex TEXT NOT NULL,
+          host_activation_signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_membership_credential_subject
+        ON pico_home_membership_credential (home_id, subject_pico_identity_fingerprint_hex);
+
+        CREATE TABLE IF NOT EXISTS pico_home_membership_lifecycle (
+          lifecycle_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          credential_id TEXT NOT NULL,
+          subject_pico_identity_fingerprint_hex TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued')),
+          reason_category TEXT NOT NULL,
+          changed_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          lifecycle_json TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          issuer_signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_membership_lifecycle_credential
+        ON pico_home_membership_lifecycle (credential_id, lifecycle_order);
+      `);
+
+      // The projection now has a second source. Rebuilding the table is the only
+      // way to widen a CHECK constraint in SQLite; the rows are a projection and
+      // are rebuilt from their signed sources on the next reconciliation anyway.
+      db.exec(`
+        DROP TABLE IF EXISTS pico_home_membership;
+
+        CREATE TABLE pico_home_membership (
+          membership_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          role TEXT NOT NULL CHECK (role IN ('home_host', 'home_member')),
+          status TEXT NOT NULL CHECK (status IN ('invited', 'active', 'revoked', 'expired', 'evicted', 'transferred_or_reissued')),
+          scopes_json TEXT NOT NULL,
+          source TEXT NOT NULL CHECK (source IN ('founding_record', 'membership_credential')),
+          source_ref TEXT NOT NULL,
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          UNIQUE (home_id, pico_identity_fingerprint_hex, role)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_membership_identity
+        ON pico_home_membership (pico_identity_fingerprint_hex, status);
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_membership_home
+        ON pico_home_membership (home_id, status);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

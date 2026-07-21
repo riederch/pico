@@ -9,8 +9,11 @@ import type {
   PicoHomeMembershipRole,
   PicoHomeMembershipScope,
   PicoHomeMembershipStatus,
+  PicoHomeMembershipCredential,
+  PicoHomeMembershipLifecycleRecord,
 } from '@pico/protocol';
 import {
+  picoHomeMembershipCredentialSchema,
   payloadPostures,
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingRecordSchema,
@@ -28,6 +31,13 @@ import {
 import { MemoryStore } from './memory-store.js';
 import { RetentionPolicyStore } from './retention-policy-store.js';
 import { OperatorStore, type PasswordHashingSodium } from './operator-store.js';
+import {
+  verifyPicoHomeMembershipActivation,
+  verifyPicoHomeMembershipAuthority,
+  verifyPicoHomeMembershipLifecycleRecord,
+  type PicoHomeMembershipVerificationFailure,
+} from './home-membership.js';
+import type { IdentityVerificationSodium } from '@pico/identity';
 import type { MemoryContentCrypto } from './memory-content-crypto.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 
@@ -81,7 +91,7 @@ export interface PicoHomeFoundingReconciliationResult {
   restoredClaimState: boolean;
 }
 
-export type PicoHomeMembershipSource = 'founding_record';
+export type PicoHomeMembershipSource = 'founding_record' | 'membership_credential';
 
 export interface PicoHomeMembership {
   membershipId: string;
@@ -102,6 +112,16 @@ export interface PicoHomeMembershipReconciliationResult {
   foundingRecordPresent: boolean;
   restoredMembership: boolean;
 }
+
+export interface PicoHomeMembershipCredentialReconciliationResult {
+  verifiedCredentials: number;
+  droppedCredentials: number;
+  projectedMemberships: number;
+}
+
+export type PicoHomeMembershipRecordResult =
+  | { ok: true; membership: PicoHomeMembership }
+  | { ok: false; reason: PicoHomeMembershipVerificationFailure | 'no_founding_record' | 'conflicting_record' };
 
 export interface EventStoreOpenOptions {
   backupDirectory?: string;
@@ -348,7 +368,11 @@ export class EventStore {
    * currently claimed Home is used; an unclaimed Home has no member, so this
    * fails closed rather than accepting a membership row for any other Home.
    */
-  public hasActivePicoHomeMembership(picoIdentityFingerprintHex: string, homeId?: string): boolean {
+  public hasActivePicoHomeMembership(
+    picoIdentityFingerprintHex: string,
+    homeId?: string,
+    at: string = new Date().toISOString(),
+  ): boolean {
     this.ensureOpen();
     assertFingerprint(picoIdentityFingerprintHex, 'picoIdentityFingerprintHex');
     if (homeId !== undefined) {
@@ -359,6 +383,9 @@ export class EventStore {
       return false;
     }
 
+    // An expired credential is not an active membership. The stored status
+    // cannot express that on its own - expiry is a function of the clock, not
+    // of a statement - so the window is part of the question, not a later sweep.
     const scopedHomeId = homeId ?? this.picoHomeClaimState().homeId ?? undefined;
     if (scopedHomeId === undefined) {
       return false;
@@ -371,9 +398,11 @@ export class EventStore {
         WHERE home_id = ?
           AND pico_identity_fingerprint_hex = ?
           AND status = 'active'
+          AND valid_from <= ?
+          AND (valid_until IS NULL OR valid_until > ?)
         LIMIT 1
       `)
-      .get(scopedHomeId, picoIdentityFingerprintHex) as { present: 1 } | undefined;
+      .get(scopedHomeId, picoIdentityFingerprintHex, at, at) as { present: 1 } | undefined;
 
     return row !== undefined;
   }
@@ -601,6 +630,369 @@ export class EventStore {
     });
 
     return { foundingRecordPresent: true, restoredMembership: reconcile() };
+  }
+
+  /**
+   * Accepts a signed Home Membership Credential (ADR 0080 H6, Gate M3). The
+   * issuer signature is the authority and is checked first; the host activation
+   * countersignature is checked only here, at intake, because it is operational
+   * acknowledgment rather than authority and must not outrank a later host-key
+   * rotation.
+   */
+  public recordPicoHomeMembershipCredential(params: {
+    sodium: IdentityVerificationSodium;
+    credential: PicoHomeMembershipCredential;
+    hostSigningPublicKeyHex: string;
+    recordedAt?: string;
+  }): PicoHomeMembershipRecordResult {
+    this.ensureOpen();
+
+    const foundingRecord = this.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { ok: false, reason: 'no_founding_record' };
+    }
+
+    const authority = verifyPicoHomeMembershipAuthority(params.sodium, {
+      credential: params.credential,
+      foundingRecord,
+    });
+    if (!authority.ok) {
+      return { ok: false, reason: authority.reason };
+    }
+
+    const activation = verifyPicoHomeMembershipActivation(params.sodium, {
+      credential: params.credential,
+      hostSigningPublicKeyHex: params.hostSigningPublicKeyHex,
+    });
+    if (!activation.ok) {
+      return { ok: false, reason: activation.reason };
+    }
+
+    const membership = params.credential.membership;
+    const serialized = serializePayload(membership);
+    const existing = this.db
+      .prepare('SELECT membership_json FROM pico_home_membership_credential WHERE credential_id = ?')
+      .get(membership.credentialId) as { membership_json: string } | undefined;
+
+    // A re-sent identical credential is a replay and is fine; the same id with
+    // different content is two different statements claiming one name.
+    if (existing !== undefined && existing.membership_json !== serialized) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    const recordedAt = params.recordedAt ?? new Date().toISOString();
+
+    const write = this.db.transaction(() => {
+      this.db
+        .prepare(`
+          INSERT INTO pico_home_membership_credential (
+            credential_id,
+            home_id,
+            issuer_pico_identity_fingerprint_hex,
+            subject_pico_identity_fingerprint_hex,
+            role,
+            lifecycle_order,
+            valid_from,
+            valid_until,
+            membership_json,
+            issuer_identity_key_record_json,
+            issuer_signature_hex,
+            host_activation_signature_hex,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(credential_id) DO NOTHING
+        `)
+        .run(
+          membership.credentialId,
+          membership.homeId,
+          membership.issuerPicoIdentityFingerprintHex,
+          membership.subjectPicoIdentityFingerprintHex,
+          membership.role,
+          membership.lifecycleOrder,
+          membership.validFrom,
+          membership.validUntil,
+          serialized,
+          serializePayload(params.credential.issuerIdentityKeyRecord),
+          params.credential.issuerSignatureHex,
+          params.credential.hostActivationSignatureHex,
+          params.credential.createdAt,
+        );
+
+      return this.projectPicoHomeMemberMembership(
+        membership.homeId,
+        membership.subjectPicoIdentityFingerprintHex,
+        recordedAt,
+      );
+    });
+
+    const projected = write();
+    if (projected === undefined) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    return { ok: true, membership: projected };
+  }
+
+  /**
+   * Accepts a signed membership lifecycle statement. Statements are kept even
+   * when they are not the freshest — they are history, and the projection reads
+   * the freshest of them (ADR 0079 I9 ordering, ADR 0080 H6).
+   */
+  public recordPicoHomeMembershipLifecycle(params: {
+    sodium: IdentityVerificationSodium;
+    record: PicoHomeMembershipLifecycleRecord;
+    recordedAt?: string;
+  }): PicoHomeMembershipRecordResult {
+    this.ensureOpen();
+
+    const foundingRecord = this.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { ok: false, reason: 'no_founding_record' };
+    }
+
+    const lifecycle = params.record.lifecycle;
+    const credential = this.picoHomeMembershipCredential(lifecycle.credentialId);
+    if (credential === undefined) {
+      return { ok: false, reason: 'unknown_credential' };
+    }
+
+    const verification = verifyPicoHomeMembershipLifecycleRecord(params.sodium, {
+      record: params.record,
+      credential,
+      foundingRecord,
+    });
+    if (!verification.ok) {
+      return { ok: false, reason: verification.reason };
+    }
+
+    const serialized = serializePayload(lifecycle);
+    const existing = this.db
+      .prepare('SELECT lifecycle_json FROM pico_home_membership_lifecycle WHERE lifecycle_id = ?')
+      .get(lifecycle.lifecycleId) as { lifecycle_json: string } | undefined;
+
+    if (existing !== undefined && existing.lifecycle_json !== serialized) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    const recordedAt = params.recordedAt ?? new Date().toISOString();
+
+    const write = this.db.transaction(() => {
+      this.db
+        .prepare(`
+          INSERT INTO pico_home_membership_lifecycle (
+            lifecycle_id,
+            home_id,
+            credential_id,
+            subject_pico_identity_fingerprint_hex,
+            status,
+            reason_category,
+            changed_at,
+            lifecycle_order,
+            lifecycle_json,
+            issuer_identity_key_record_json,
+            issuer_signature_hex,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(lifecycle_id) DO NOTHING
+        `)
+        .run(
+          lifecycle.lifecycleId,
+          lifecycle.homeId,
+          lifecycle.credentialId,
+          lifecycle.subjectPicoIdentityFingerprintHex,
+          lifecycle.status,
+          lifecycle.reasonCategory,
+          lifecycle.changedAt,
+          lifecycle.lifecycleOrder,
+          serialized,
+          serializePayload(params.record.issuerIdentityKeyRecord),
+          params.record.issuerSignatureHex,
+          params.record.createdAt,
+        );
+
+      return this.projectPicoHomeMemberMembership(
+        lifecycle.homeId,
+        lifecycle.subjectPicoIdentityFingerprintHex,
+        recordedAt,
+      );
+    });
+
+    const projected = write();
+    if (projected === undefined) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    return { ok: true, membership: projected };
+  }
+
+  /**
+   * Re-verifies every stored credential against the current founding record and
+   * rebuilds the member rows from it. Only the authority half is re-checked: a
+   * host key may legitimately have rotated since intake, and a membership has to
+   * survive that. A credential that no longer verifies is dropped rather than
+   * left projecting authority nobody can prove.
+   */
+  public reconcilePicoHomeMembershipsFromCredentials(
+    sodium: IdentityVerificationSodium,
+    reconciledAt: string = new Date().toISOString(),
+  ): PicoHomeMembershipCredentialReconciliationResult {
+    this.ensureOpen();
+
+    if (!tableExists(this.db, 'pico_home_membership_credential') || !tableExists(this.db, 'pico_home_membership')) {
+      return { verifiedCredentials: 0, droppedCredentials: 0, projectedMemberships: 0 };
+    }
+
+    const foundingRecord = this.picoHomeFoundingRecord();
+    const credentialIds = this.db
+      .prepare('SELECT credential_id FROM pico_home_membership_credential ORDER BY credential_id')
+      .all()
+      .map((row) => (row as { credential_id: string }).credential_id);
+
+    let verifiedCredentials = 0;
+    let droppedCredentials = 0;
+    const subjects = new Set<string>();
+
+    const reconcile = this.db.transaction(() => {
+      for (const credentialId of credentialIds) {
+        const credential = this.picoHomeMembershipCredential(credentialId);
+        const verification = credential === undefined || foundingRecord === undefined
+          ? { ok: false as const, reason: 'no_founding_record' as const }
+          : verifyPicoHomeMembershipAuthority(sodium, { credential, foundingRecord });
+
+        if (!verification.ok) {
+          this.dropPicoHomeMembershipCredential(credentialId);
+          droppedCredentials += 1;
+          continue;
+        }
+
+        verifiedCredentials += 1;
+        subjects.add(`${credential!.membership.homeId}\u0000${credential!.membership.subjectPicoIdentityFingerprintHex}`);
+      }
+
+      // Member rows whose credential is gone must go with it.
+      this.db
+        .prepare(`
+          DELETE FROM pico_home_membership
+          WHERE source = 'membership_credential'
+            AND source_ref NOT IN (SELECT credential_id FROM pico_home_membership_credential)
+        `)
+        .run();
+
+      let projectedMemberships = 0;
+      for (const key of subjects) {
+        const [homeId, subject] = key.split('\u0000');
+        if (this.projectPicoHomeMemberMembership(homeId, subject, reconciledAt) !== undefined) {
+          projectedMemberships += 1;
+        }
+      }
+
+      return projectedMemberships;
+    });
+
+    // The counters are filled inside the transaction, so it has to run before
+    // the result object reads them.
+    const projectedMemberships = reconcile();
+
+    return { verifiedCredentials, droppedCredentials, projectedMemberships };
+  }
+
+  public picoHomeMembershipCredential(credentialId: string): PicoHomeMembershipCredential | undefined {
+    this.ensureOpen();
+
+    if (!tableExists(this.db, 'pico_home_membership_credential')) {
+      return undefined;
+    }
+
+    const row = this.db
+      .prepare(`
+        SELECT membership_json, issuer_identity_key_record_json, issuer_signature_hex,
+               host_activation_signature_hex, created_at
+        FROM pico_home_membership_credential
+        WHERE credential_id = ?
+      `)
+      .get(credentialId) as PicoHomeMembershipCredentialRow | undefined;
+
+    if (row === undefined) {
+      return undefined;
+    }
+
+    return {
+      schema: picoHomeMembershipCredentialSchema,
+      membership: JSON.parse(row.membership_json) as PicoHomeMembershipCredential['membership'],
+      issuerIdentityKeyRecord: JSON.parse(row.issuer_identity_key_record_json) as PicoHomeMembershipCredential['issuerIdentityKeyRecord'],
+      issuerSignatureHex: row.issuer_signature_hex,
+      hostActivationSignatureHex: row.host_activation_signature_hex,
+      createdAt: row.created_at,
+    };
+  }
+
+  private dropPicoHomeMembershipCredential(credentialId: string): void {
+    this.db.prepare('DELETE FROM pico_home_membership_lifecycle WHERE credential_id = ?').run(credentialId);
+    this.db.prepare('DELETE FROM pico_home_membership_credential WHERE credential_id = ?').run(credentialId);
+    this.db
+      .prepare("DELETE FROM pico_home_membership WHERE source = 'membership_credential' AND source_ref = ?")
+      .run(credentialId);
+  }
+
+  /**
+   * One projection row per person per Home, backed by whichever of their
+   * credentials is freshest and carrying the status of that credential's
+   * freshest lifecycle statement. Keying on the subject rather than on the
+   * credential is what lets a reissue replace a membership instead of colliding
+   * with it on the one-row-per-person constraint.
+   */
+  private projectPicoHomeMemberMembership(
+    homeId: string,
+    subjectPicoIdentityFingerprintHex: string,
+    projectedAt: string,
+  ): PicoHomeMembership | undefined {
+    const credentialRow = this.db
+      .prepare(`
+        SELECT credential_id
+        FROM pico_home_membership_credential
+        WHERE home_id = ? AND subject_pico_identity_fingerprint_hex = ?
+        ORDER BY lifecycle_order DESC, credential_id DESC
+        LIMIT 1
+      `)
+      .get(homeId, subjectPicoIdentityFingerprintHex) as { credential_id: string } | undefined;
+
+    if (credentialRow === undefined) {
+      return undefined;
+    }
+
+    const credential = this.picoHomeMembershipCredential(credentialRow.credential_id);
+    if (credential === undefined) {
+      return undefined;
+    }
+
+    const statusRow = this.db
+      .prepare(`
+        SELECT status
+        FROM pico_home_membership_lifecycle
+        WHERE credential_id = ?
+        ORDER BY lifecycle_order DESC, lifecycle_id DESC
+        LIMIT 1
+      `)
+      .get(credential.membership.credentialId) as { status: string } | undefined;
+
+    const membership: PicoHomeMembership = {
+      membershipId: `member:${homeId}:${subjectPicoIdentityFingerprintHex}`,
+      homeId,
+      picoIdentityFingerprintHex: subjectPicoIdentityFingerprintHex,
+      role: credential.membership.role,
+      status: statusRow === undefined ? 'active' : toPicoHomeMembershipStatus(statusRow.status),
+      scopes: [...credential.membership.scopes],
+      source: 'membership_credential',
+      sourceRef: credential.membership.credentialId,
+      validFrom: credential.membership.validFrom,
+      validUntil: credential.membership.validUntil,
+      createdAt: credential.createdAt,
+      updatedAt: projectedAt,
+    };
+
+    this.upsertPicoHomeMembership(membership);
+
+    return membership;
   }
 
   // Deleteable memory store (ADR 0068), sharing this store's database
@@ -887,6 +1279,14 @@ interface PicoHomeFoundingRecordRow {
   createdAt: string;
 }
 
+interface PicoHomeMembershipCredentialRow {
+  membership_json: string;
+  issuer_identity_key_record_json: string;
+  issuer_signature_hex: string;
+  host_activation_signature_hex: string;
+  created_at: string;
+}
+
 interface PicoHomeMembershipRow {
   membershipId: string;
   homeId: string;
@@ -1066,7 +1466,7 @@ function assertPicoHomeMembership(membership: PicoHomeMembership): void {
   assertPicoHomeMembershipRole(membership.role);
   assertPicoHomeMembershipStatus(membership.status);
   assertPicoHomeMembershipScopes(membership.scopes);
-  if (membership.source !== 'founding_record') {
+  if (membership.source !== 'founding_record' && membership.source !== 'membership_credential') {
     throw new Error('Pico Home membership source is invalid.');
   }
   assertAsciiToken(membership.sourceRef, 'membership.sourceRef');
@@ -1200,7 +1600,7 @@ function toPicoHomeMembershipStatus(value: string): PicoHomeMembershipStatus {
 }
 
 function toPicoHomeMembershipSource(value: string): PicoHomeMembershipSource {
-  if (value !== 'founding_record') {
+  if (value !== 'founding_record' && value !== 'membership_credential') {
     throw new Error('Pico Home membership source is invalid.');
   }
 

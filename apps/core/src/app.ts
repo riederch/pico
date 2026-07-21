@@ -414,6 +414,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     );
   }
   reconcileClaimedHomeHostKeyCustody();
+  reconcileHomeMembershipCredentials();
   activateHomeSetupMode();
 
   // While no operator exists, mint the per-process bootstrap code and surface it
@@ -512,6 +513,23 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       if (socket.readyState === socket.OPEN) {
         socket.send(serialized);
       }
+    }
+  }
+
+  /**
+   * Re-verifies stored membership credentials against the current founding
+   * record on every boot, so a restored database cannot carry a member row whose
+   * authority nobody can prove any more (ADR 0080 H6, the H8 rule applied to
+   * membership).
+   */
+  function reconcileHomeMembershipCredentials(): void {
+    const result = store.reconcilePicoHomeMembershipsFromCredentials(sodium);
+
+    if (result.droppedCredentials > 0) {
+      app.log.warn(
+        result,
+        'Pico Home membership credentials failed re-verification on boot and were dropped with their projected rows.',
+      );
     }
   }
 

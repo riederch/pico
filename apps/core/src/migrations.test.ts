@@ -86,6 +86,10 @@ describe('database migrations', () => {
           id: '0015_pico_home_founding_record_drop_claim_signature',
           requiresBackup: false,
         },
+        {
+          id: '0016_pico_home_membership_credentials',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -176,6 +180,10 @@ describe('database migrations', () => {
       },
       {
         id: '0015_pico_home_founding_record_drop_claim_signature',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0016_pico_home_membership_credentials',
         appliedAt: expect.any(String),
       },
     ]);
@@ -308,12 +316,13 @@ describe('database migrations', () => {
         '0013_pico_home_founding_record',
         '0014_pico_home_membership',
         '0015_pico_home_founding_record_drop_claim_signature',
+        '0016_pico_home_membership_credentials',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(15);
+    expect(listAppliedMigrations(db)).toHaveLength(16);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -323,7 +332,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(15);
+    expect(listAppliedMigrations(db)).toHaveLength(16);
 
     db.close();
   });
@@ -362,7 +371,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(15);
+    expect(listAppliedMigrations(db)).toHaveLength(16);
 
     db.close();
   });
@@ -388,6 +397,7 @@ describe('database migrations', () => {
       '0013_pico_home_founding_record',
       '0014_pico_home_membership',
       '0015_pico_home_founding_record_drop_claim_signature',
+      '0016_pico_home_membership_credentials',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -411,6 +421,7 @@ describe('database migrations', () => {
           '0013_pico_home_founding_record',
           '0014_pico_home_membership',
           '0015_pico_home_founding_record_drop_claim_signature',
+          '0016_pico_home_membership_credentials',
         ],
       },
     ]);
@@ -490,6 +501,7 @@ describe('database migrations', () => {
       '0013_pico_home_founding_record',
       '0014_pico_home_membership',
       '0015_pico_home_founding_record_drop_claim_signature',
+      '0016_pico_home_membership_credentials',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
