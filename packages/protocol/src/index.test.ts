@@ -72,6 +72,7 @@ import {
   buildPicoShareEnvelopeSignatureInput,
   buildPicoShareWrapPayload,
   buildPicoVaultKeyfileHeaderAad,
+  picoShareCanonicalFamilies,
   picoShareCanonicalLabels,
   picoShareSuite,
   picoHomeClaimStates,
@@ -1199,6 +1200,15 @@ describe('Pico protocol types', () => {
     }
   });
 
+  it('exports the ADR 0078 share vocabulary', () => {
+    expect(picoShareSuite).toBe('pico.suite.share.v1');
+    expect(picoShareCanonicalFamilies).toEqual(['wrap', 'envelope']);
+    expect(picoShareCanonicalLabels).toEqual({
+      wrap: 'pico.share.wrap.v1',
+      envelope: 'pico.share.envelope.v1',
+    });
+  });
+
   it('keeps Pico share wrap and envelope vectors byte-exact and aligned with ADR 0078 R2', () => {
     const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
     const suite = readRepoJsonObject('docs/protocol/fixtures/share-envelope/suite.json');
@@ -1278,8 +1288,8 @@ describe('Pico protocol types', () => {
       if (build === 'accept') {
         const recomputed = buildPicoShareVector(shareFamily, fields);
         const hex = Buffer.from(recomputed).toString('hex');
-        expect(hex).toBe(stringField(expectBlock, 'signatureInputHex'));
-        expect(recomputed.length).toBe(numberField(expectBlock, 'signatureInputLen'));
+        expect(hex).toBe(stringField(expectBlock, 'canonicalBytesHex'));
+        expect(recomputed.length).toBe(numberField(expectBlock, 'canonicalBytesLen'));
         expect(adrNoWhitespace).toContain(hex);
         acceptedHexByCase.set(caseName, hex);
         relationships.push({
@@ -1292,6 +1302,7 @@ describe('Pico protocol types', () => {
         const reason = stringField(expectBlock, 'reason');
         expect([
           'field_reordering',
+          'invalid_field_charset',
           'invalid_fingerprint_length',
           'invalid_instant',
           'invalid_kek_length',
@@ -3207,7 +3218,7 @@ function buildPicoShareVector(shareFamily: string, fields: Record<string, unknow
       readerKeyFingerprintHex: stringField(fields, 'readerKeyFingerprintHex'),
       kekHex: stringField(fields, 'kekHex'),
       ...optionalFieldOrder(fields),
-    } as unknown as Parameters<typeof buildPicoShareWrapPayload>[0]);
+    });
   }
 
   if (shareFamily === 'envelope') {
@@ -3216,12 +3227,13 @@ function buildPicoShareVector(shareFamily: string, fields: Record<string, unknow
       grantId: stringField(fields, 'grantId'),
       domainId: stringField(fields, 'domainId'),
       kekVersion: numberField(fields, 'kekVersion'),
+      hostSigningKeyFingerprintHex: stringField(fields, 'hostSigningKeyFingerprintHex'),
       issuerIdentityKeyFingerprintHex: stringField(fields, 'issuerIdentityKeyFingerprintHex'),
       readerKeyFingerprintHex: stringField(fields, 'readerKeyFingerprintHex'),
       wrapDigestHex: stringField(fields, 'wrapDigestHex'),
       grantedAt: stringField(fields, 'grantedAt'),
       ...optionalFieldOrder(fields),
-    } as unknown as Parameters<typeof buildPicoShareEnvelopeSignatureInput>[0]);
+    });
   }
 
   throw new Error(`Unexpected share family: ${shareFamily}`);

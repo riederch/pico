@@ -1,0 +1,24 @@
+{
+  "schema": "pico.share.envelope.vector",
+  "schemaVersion": 1,
+  "fixtureId": "share-envelope.pico_suite_share_v1.canonicalization-negative.envelope-cross-reader",
+  "stage": "fixture_data",
+  "suite": "pico.suite.share.v1",
+  "surface": "share-envelope",
+  "family": "canonicalization-negative",
+  "shareFamily": "envelope",
+  "construction": "pico.share.envelope.v1",
+  "case": "an envelope for a different reader binds different bytes",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "canonicalBytesHex": "000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7631000000136772616e745f32303236303732325f303030310000000e646f6d61696e5f6a6f75726e616c000000013100000020111111111111111111111111111111111111111111111111111111111111111100000020888888888888888888888888888888888888888888888888888888888888888800000020333333333333333333333333333333333333333333333333333333333333333300000020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000018323032362d30372d32325431303a30303a30302e3030305a",
+    "canonicalBytesLen": 267,
+    "mustDifferFrom": "envelope-canonical"
+  },
+  "adr": "0078",
+  "notes": "ADR 0078 Gate R2 vector. Synthetic key material only; no real KEK, no sealing, no signing, no runtime authority and no commercial permission."
+}

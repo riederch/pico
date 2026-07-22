@@ -2,10 +2,11 @@
   "shareFamily": "envelope",
   "construction": "pico.share.envelope.v1",
   "fields": {
-    "suite": "pico.suite.share.v1",
+    "suite": "pico.suite.share.v2",
     "grantId": "grant_20260722_0001",
     "domainId": "domain_journal",
-    "kekVersion": 2,
+    "kekVersion": 1,
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
     "issuerIdentityKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
     "readerKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
     "wrapDigestHex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",

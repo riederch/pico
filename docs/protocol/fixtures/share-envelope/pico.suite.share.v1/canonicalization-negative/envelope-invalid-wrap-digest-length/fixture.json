@@ -1,0 +1,23 @@
+{
+  "schema": "pico.share.envelope.vector",
+  "schemaVersion": 1,
+  "fixtureId": "share-envelope.pico_suite_share_v1.canonicalization-negative.envelope-invalid-wrap-digest-length",
+  "stage": "fixture_data",
+  "suite": "pico.suite.share.v1",
+  "surface": "share-envelope",
+  "family": "canonicalization-negative",
+  "shareFamily": "envelope",
+  "construction": "pico.share.envelope.v1",
+  "case": "a truncated wrap digest is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_wrap_digest_length"
+  },
+  "adr": "0078",
+  "notes": "ADR 0078 Gate R2 vector. Synthetic key material only; no real KEK, no sealing, no signing, no runtime authority and no commercial permission."
+}

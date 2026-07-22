@@ -1,10 +1,10 @@
 {
   "shareFamily": "envelope",
-  "construction": "pico.share.wrap.v1",
+  "construction": "pico.share.envelope.v1",
   "fields": {
     "suite": "pico.suite.share.v1",
     "grantId": "grant_20260722_0001",
-    "domainId": "domain_journal",
+    "domainId": "domain journal",
     "kekVersion": 1,
     "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
     "issuerIdentityKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",

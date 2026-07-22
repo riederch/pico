@@ -297,6 +297,15 @@ export interface PicoShareEnvelopeSignatureInput {
   grantId: string;
   domainId: string;
   kekVersion: number;
+  /**
+   * The Foundation instance the domain and its KEK live on — the host signing
+   * key fingerprint, the same instance anchor the membership credential binds.
+   * A domainId alone is ambiguous across instances: the same controller may run
+   * an identically-named domain at two hosts, and without this a genuine
+   * envelope would carry across instances. Binding it scopes the grant, exactly
+   * as the founding record's host key mints "this Home".
+   */
+  hostSigningKeyFingerprintHex: string;
   /** The controller identity whose signature is the grant's authority. */
   issuerIdentityKeyFingerprintHex: string;
   /** The reader's X25519 key-agreement key the wrap is sealed to. */
@@ -1846,6 +1855,7 @@ export function buildPicoShareEnvelopeSignatureInput(input: PicoShareEnvelopeSig
     'grantId',
     'domainId',
     'kekVersion',
+    'hostSigningKeyFingerprintHex',
     'issuerIdentityKeyFingerprintHex',
     'readerKeyFingerprintHex',
     'wrapDigestHex',
@@ -1862,6 +1872,7 @@ export function buildPicoShareEnvelopeSignatureInput(input: PicoShareEnvelopeSig
     asciiBytes(input.grantId),
     asciiBytes(input.domainId),
     kekVersionBytes(input.kekVersion),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.issuerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.readerKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.wrapDigestHex, 32, 'invalid_wrap_digest_length'),

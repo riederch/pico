@@ -4,9 +4,10 @@
   "fields": {
     "suite": "pico.suite.share.v1",
     "grantId": "grant_20260722_0001",
-    "domainId": "domain_photos",
+    "domainId": "domain_journal",
     "kekVersion": 1,
-    "issuerIdentityKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "issuerIdentityKeyFingerprintHex": "9999999999999999999999999999999999999999999999999999999999999999",
     "readerKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
     "wrapDigestHex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
     "grantedAt": "2026-07-22T10:00:00.000Z"

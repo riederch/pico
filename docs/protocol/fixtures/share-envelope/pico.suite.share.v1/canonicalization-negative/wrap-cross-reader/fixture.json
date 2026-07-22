@@ -1,11 +1,11 @@
 {
   "schema": "pico.share.envelope.vector",
   "schemaVersion": 1,
-  "fixtureId": "share-envelope.pico_suite_share_v1.canonicalization-positive.wrap-cross-reader",
+  "fixtureId": "share-envelope.pico_suite_share_v1.canonicalization-negative.wrap-cross-reader",
   "stage": "fixture_data",
   "suite": "pico.suite.share.v1",
   "surface": "share-envelope",
-  "family": "canonicalization-positive",
+  "family": "canonicalization-negative",
   "shareFamily": "wrap",
   "construction": "pico.share.wrap.v1",
   "case": "a wrap for a different reader binds different bytes",
@@ -15,8 +15,8 @@
   },
   "expect": {
     "build": "accept",
-    "signatureInputHex": "000000127069636f2e73686172652e777261702e7631000000137069636f2e73756974652e73686172652e76310000000e646f6d61696e5f6a6f75726e616c000000013100000020333333333333333333333333333333333333333333333333333333333333333300000020eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-    "signatureInputLen": 140,
+    "canonicalBytesHex": "000000127069636f2e73686172652e777261702e7631000000137069636f2e73756974652e73686172652e76310000000e646f6d61696e5f6a6f75726e616c000000013100000020333333333333333333333333333333333333333333333333333333333333333300000020eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "canonicalBytesLen": 140,
     "mustDifferFrom": "wrap-payload-canonical"
   },
   "adr": "0078",

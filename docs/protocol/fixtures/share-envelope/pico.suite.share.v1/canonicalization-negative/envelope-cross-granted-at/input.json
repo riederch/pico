@@ -6,9 +6,10 @@
     "grantId": "grant_20260722_0001",
     "domainId": "domain_journal",
     "kekVersion": 1,
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
     "issuerIdentityKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
-    "readerKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "readerKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
     "wrapDigestHex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    "grantedAt": "2026-07-22T10:00:00.000Z"
+    "grantedAt": "2026-08-01T00:00:00.000Z"
   }
 }
