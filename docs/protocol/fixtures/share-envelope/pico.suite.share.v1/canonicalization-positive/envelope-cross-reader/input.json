@@ -1,0 +1,14 @@
+{
+  "shareFamily": "envelope",
+  "construction": "pico.share.envelope.v1",
+  "fields": {
+    "suite": "pico.suite.share.v1",
+    "grantId": "grant_20260722_0001",
+    "domainId": "domain_journal",
+    "kekVersion": 1,
+    "issuerIdentityKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
+    "readerKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "wrapDigestHex": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "grantedAt": "2026-07-22T10:00:00.000Z"
+  }
+}

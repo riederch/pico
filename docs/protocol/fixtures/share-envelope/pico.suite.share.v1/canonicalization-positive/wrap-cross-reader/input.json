@@ -1,0 +1,11 @@
+{
+  "shareFamily": "wrap",
+  "construction": "pico.share.wrap.v1",
+  "fields": {
+    "suite": "pico.suite.share.v1",
+    "domainId": "domain_journal",
+    "kekVersion": 1,
+    "readerKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "kekHex": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+  }
+}

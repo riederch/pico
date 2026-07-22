@@ -1,0 +1,36 @@
+{
+  "schema": "pico.share.envelope.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.share-envelope.pico_suite_share_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.share.v1",
+  "surface": "share-envelope",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-share-envelope-vectors",
+  "disclaimer": "Authoritative wrap-payload and envelope-byte vectors for ADR 0078 Gate R2. Synthetic key material only, no real KEKs, no sealing, no signing, no runtime, not L4 compatibility and no commercial permission.",
+  "fixtures": [
+    "pico.suite.share.v1/canonicalization-positive/wrap-payload-canonical",
+    "pico.suite.share.v1/canonicalization-positive/wrap-cross-reader",
+    "pico.suite.share.v1/canonicalization-positive/envelope-canonical",
+    "pico.suite.share.v1/canonicalization-positive/envelope-cross-domain",
+    "pico.suite.share.v1/canonicalization-positive/envelope-cross-version",
+    "pico.suite.share.v1/canonicalization-positive/envelope-cross-reader",
+    "pico.suite.share.v1/canonicalization-positive/envelope-cross-suite",
+    "pico.suite.share.v1/canonicalization-positive/envelope-cross-wrap",
+    "pico.suite.share.v1/canonicalization-negative/envelope-field-order-override",
+    "pico.suite.share.v1/canonicalization-negative/envelope-truncated-reader-fingerprint",
+    "pico.suite.share.v1/canonicalization-negative/envelope-invalid-granted-at",
+    "pico.suite.share.v1/canonicalization-negative/envelope-zero-kek-version",
+    "pico.suite.share.v1/canonicalization-negative/wrap-truncated-kek",
+    "pico.suite.share.v1/canonicalization-negative/envelope-cross-family-label"
+  ],
+  "notes": "Canonical byte layouts for the pico.suite.share.v1 wrap payload (sealed to the reader) and the issuer-signed envelope that binds it. Wrong-domain, wrong-version, wrong-reader, suite-swap and wrap-swap presentations each change the bytes; the envelope binds the wrap digest so a swapped sealed box breaks the signature."
+}

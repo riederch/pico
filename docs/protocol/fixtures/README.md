@@ -165,6 +165,28 @@ vault-keyfile/pico.vault.keyfile.v1/open-negative/wrong-passphrase/
 vault-keyfile/pico.vault.keyfile.v1/open-negative/truncated-ciphertext/
 ```
 
+## Current Pico share fixtures
+
+These fixtures carry the authoritative canonical byte layouts for the `pico.suite.share.v1` reader-key sharing family (ADR 0078 Gate R2): the wrap payload that is sealed to a reader key, and the issuer-signed envelope that binds it. The envelope binds a digest of the sealed wrap, so a swapped sealed box breaks the issuer signature — the vectors carry synthetic key material only, no real KEKs, no sealing, no signing and no runtime. Nothing accepts, honors or acts on an envelope until Gates R1 and R3 also pass (K4).
+
+```text
+share-envelope/suite.json
+share-envelope/pico.suite.share.v1/canonicalization-positive/wrap-payload-canonical/
+share-envelope/pico.suite.share.v1/canonicalization-positive/wrap-cross-reader/
+share-envelope/pico.suite.share.v1/canonicalization-positive/envelope-canonical/
+share-envelope/pico.suite.share.v1/canonicalization-positive/envelope-cross-domain/
+share-envelope/pico.suite.share.v1/canonicalization-positive/envelope-cross-version/
+share-envelope/pico.suite.share.v1/canonicalization-positive/envelope-cross-reader/
+share-envelope/pico.suite.share.v1/canonicalization-positive/envelope-cross-suite/
+share-envelope/pico.suite.share.v1/canonicalization-positive/envelope-cross-wrap/
+share-envelope/pico.suite.share.v1/canonicalization-negative/envelope-field-order-override/
+share-envelope/pico.suite.share.v1/canonicalization-negative/envelope-truncated-reader-fingerprint/
+share-envelope/pico.suite.share.v1/canonicalization-negative/envelope-invalid-granted-at/
+share-envelope/pico.suite.share.v1/canonicalization-negative/envelope-zero-kek-version/
+share-envelope/pico.suite.share.v1/canonicalization-negative/wrap-truncated-kek/
+share-envelope/pico.suite.share.v1/canonicalization-negative/envelope-cross-family-label/
+```
+
 ## Current draft Pico Link fixtures
 
 These fixtures are in a separate draft suite and are not part of the Foundation seed suite.

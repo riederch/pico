@@ -78,6 +78,50 @@ The two classes of K1 are the structural decision of this ADR. Host-custody is n
 - **Envelope authenticity is a signature concern, not a wrap concern.** Sealed boxes authenticate no sender by design. The envelope — row metadata plus sealed wrap — must carry an issuer signature over canonical envelope bytes before any runtime trusts it; the signature scheme and issuer key model belong to the identity and canonicalization strand (ADR 0029/0033/0034). This ADR requires their existence (Gate R2) and refuses every interim substitute (K4).
 - **Deviations are new suites, never silent changes** — the ADR 0071 rule verbatim. Hardware-backed reader keys (platform keystore or passkey-class hardware, typically P-256 ECDH rather than X25519) or an HPKE-based construction (reviewed AAD support, but outside libsodium) would enter as `pico.suite.share.v2`, with their own vectors.
 
+### Gate R2 canonical byte layouts (implemented for canonical bytes)
+
+Two labeled length-prefixed layouts (ADR 0079 I3: `U32BE(len) || bytes`, family label as element 0), pure builders in `@pico/protocol`, authoritative vectors in `docs/protocol/fixtures/share-envelope/`. These assemble bytes only — no sealing, no signing, no runtime; K4 keeps them inert until Gates R1 and R3 also pass.
+
+**Wrap payload `pico.share.wrap.v1`** — the plaintext the KEK grant seals to the reader key (K3). The reader verifies this binding after unsealing.
+
+| # | Field | Encoding |
+|---|---|---|
+| 0 | label | `pico.share.wrap.v1` |
+| 1 | `suite` | ASCII token, `pico.suite.share.v1` |
+| 2 | `domainId` | ASCII token |
+| 3 | `kekVersion` | ASCII decimal, minimum `1` (the ADR 0072 `domain_<id>.v<n>.key` version) |
+| 4 | `readerKeyFingerprint` | raw bytes from hex, exactly 32 bytes |
+| 5 | `kek` | raw bytes, exactly 32 bytes (synthetic in every vector) |
+
+**Envelope `pico.share.envelope.v1`** — what the controller signs, and what makes an envelope trustworthy (K4). Field 7 is load-bearing: a sealed box authenticates no sender, so binding the digest of the sealed wrap is what stops a swapped sealed box — a well-formed wrap payload carrying a *wrong* KEK, sealed to the same reader, passes the reader's K3 context check and is defeated only by the issuer signature over this digest.
+
+| # | Field | Encoding |
+|---|---|---|
+| 0 | label | `pico.share.envelope.v1` |
+| 1 | `suite` | ASCII token, `pico.suite.share.v1` |
+| 2 | `grantId` | ASCII token |
+| 3 | `domainId` | ASCII token |
+| 4 | `kekVersion` | ASCII decimal, minimum `1` |
+| 5 | `issuerIdentityKeyFingerprint` | raw bytes from hex, exactly 32 bytes (the controller) |
+| 6 | `readerKeyFingerprint` | raw bytes from hex, exactly 32 bytes |
+| 7 | `wrapDigest` | raw bytes from hex, exactly 32 bytes (BLAKE2b-256 of the sealed wrap) |
+| 8 | `grantedAt` | ASCII, canonical UTC instant `YYYY-MM-DDTHH:MM:SS.sssZ` |
+
+Reject reasons are stable for the vector suite: `invalid_field_charset`, `field_reordering`, `invalid_fingerprint_length`, `invalid_kek_length`, `invalid_kek_version`, `invalid_wrap_digest_length`, `invalid_instant` and `cross_family_label_confusion`. Wrong-domain, wrong-version, wrong-reader, suite-swap and wrap-swap presentations are represented as accepted bytes that differ from the canonical vector, so each is a real bind-difference rather than a rejected input.
+
+Authoritative accepted vectors:
+
+| Case | Bytes | Canonical bytes (hex) |
+|---|---|---|
+| `wrap-payload-canonical` | 140 | `000000127069636f2e73686172652e777261702e7631000000137069636f2e73756974652e73686172652e76310000000e646f6d61696e5f6a6f75726e616c000000013100000020222222222222222222222222222222222222222222222222222222222222222200000020eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` |
+| `wrap-cross-reader` | 140 | `000000127069636f2e73686172652e777261702e7631000000137069636f2e73756974652e73686172652e76310000000e646f6d61696e5f6a6f75726e616c000000013100000020333333333333333333333333333333333333333333333333333333333333333300000020eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee` |
+| `envelope-canonical` | 231 | `000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7631000000136772616e745f32303236303732325f303030310000000e646f6d61696e5f6a6f75726e616c000000013100000020888888888888888888888888888888888888888888888888888888888888888800000020222222222222222222222222222222222222222222222222222222222222222200000020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000018323032362d30372d32325431303a30303a30302e3030305a` |
+| `envelope-cross-domain` | 230 | `000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7631000000136772616e745f32303236303732325f303030310000000d646f6d61696e5f70686f746f73000000013100000020888888888888888888888888888888888888888888888888888888888888888800000020222222222222222222222222222222222222222222222222222222222222222200000020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000018323032362d30372d32325431303a30303a30302e3030305a` |
+| `envelope-cross-version` | 231 | `000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7631000000136772616e745f32303236303732325f303030310000000e646f6d61696e5f6a6f75726e616c000000013200000020888888888888888888888888888888888888888888888888888888888888888800000020222222222222222222222222222222222222222222222222222222222222222200000020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000018323032362d30372d32325431303a30303a30302e3030305a` |
+| `envelope-cross-reader` | 231 | `000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7631000000136772616e745f32303236303732325f303030310000000e646f6d61696e5f6a6f75726e616c000000013100000020888888888888888888888888888888888888888888888888888888888888888800000020333333333333333333333333333333333333333333333333333333333333333300000020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000018323032362d30372d32325431303a30303a30302e3030305a` |
+| `envelope-cross-suite` | 231 | `000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7632000000136772616e745f32303236303732325f303030310000000e646f6d61696e5f6a6f75726e616c000000013100000020888888888888888888888888888888888888888888888888888888888888888800000020222222222222222222222222222222222222222222222222222222222222222200000020cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc00000018323032362d30372d32325431303a30303a30302e3030305a` |
+| `envelope-cross-wrap` | 231 | `000000167069636f2e73686172652e656e76656c6f70652e7631000000137069636f2e73756974652e73686172652e7631000000136772616e745f32303236303732325f303030310000000e646f6d61696e5f6a6f75726e616c000000013100000020888888888888888888888888888888888888888888888888888888888888888800000020222222222222222222222222222222222222222222222222222222222222222200000020dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd00000018323032362d30372d32325431303a30303a30302e3030305a` |
+
 ### Removal and rotation on the existing versioned store
 
 The ADR 0072 layout already carries versions (`domain_<id>.v<n>.key`), and the runtime already writes new content under the latest version. Rotation therefore has a prepared seat: create version `n+1`, wrap it to the remaining readers, and new content is dark to the removed reader with no re-encryption of history. Historical versions remain available to remaining readers so old items stay readable. Whether a *newly added* reader receives historical versions (read-history) or only the current one (forward-only) is an explicit, per-grant, audited decision — never a default hidden in code. And the two speeds of removal stay separate and honest: the API path (session revocation, readership denial) cuts off immediately; the cryptographic path bounds only the future.
@@ -95,7 +139,7 @@ The envelope inventory is a relationship graph: which reader refs hold which dom
 Nothing behind these gates ships, and nothing is security-relevant before **all three** pass. Draft fixtures stay inside the ADR 0042/0054 fences — which forbid wrapped-key material entirely; the authoritative accept/reject vectors of Gate R2 are a different artifact class (synthetic keys, ADR 0073 precedent), not draft placeholders.
 
 1. **Gate R1 — Reader keys are real.** Device-held X25519 keys with a reviewed delegation and possession story (ADR 0029 Device Key role, ADR 0033 lifecycle, realization of the ADR 0055 family). Without them there is no one to wrap to, and no envelope can be issued. *Direction now exists: ADR 0079 fixes the device key-agreement key (X25519 under `pico.suite.id.v1`) and the delegation record direction, ADR 0081 P2 supplies the minimal Vault custody holder and agent-boundary unwrap for the private halves, and ADR 0079 G3 now supplies local signature verification plus lifecycle lookup/reconciliation in `@pico/identity`. The gate still needs reader-membership runtime and storage/freshness integration before reader keys are real for this surface.*
-2. **Gate R2 — Canonical bytes and vectors.** Canonical wrap-payload and envelope-byte layouts with authoritative accept/reject vectors (ADR 0034 discipline), including negative vectors for wrong-domain, wrong-version, wrong-reader and suite-swap presentations. *Method now selected: ADR 0079 I3 (labeled length-prefixed binary layouts); the envelope-family layouts and vectors themselves remain this gate's work.*
+2. **Gate R2 — Canonical bytes and vectors. Implemented for canonical bytes.** Canonical wrap-payload and envelope-byte layouts with authoritative accept/reject vectors (ADR 0034 discipline), including negative vectors for wrong-domain, wrong-version, wrong-reader and suite-swap presentations. *`@pico/protocol` exports the `pico.suite.share.v1` builders and `docs/protocol/fixtures/share-envelope/` publishes the authoritative vectors (see the byte-layout section above): the wrap payload sealed to the reader and the issuer-signed envelope that binds its digest. Bytes only — no sealing, signing, issuance or runtime; K4 keeps envelopes inert until R1 and R3 also pass.*
 3. **Gate R3 — Membership runtime.** Verified membership records that drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. The stored `owner`/`controller` fields remain non-authorization inputs forever (ADR 0077 C2); membership rows are the readership source the seam was cut for. *Direction now exists: ADR 0080 fixes the membership credential realization these records verify against (issuer signature by the Home Host Pico, activation countersignature by the host key, I9-ordered lifecycle statements) — the gate discharges when ADR 0080's Gates M1/M3 deliver layouts, vectors and the membership runtime.*
 
 ## Implementation implications

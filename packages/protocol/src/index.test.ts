@@ -69,7 +69,11 @@ import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoShareEnvelopeSignatureInput,
+  buildPicoShareWrapPayload,
   buildPicoVaultKeyfileHeaderAad,
+  picoShareCanonicalLabels,
+  picoShareSuite,
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
@@ -533,6 +537,7 @@ describe('Pico protocol types', () => {
       .filter((fixturePath) => !fixturePath.startsWith('identity-lifecycle/'))
       .filter((fixturePath) => !fixturePath.startsWith('home-signature-input/'))
       .filter((fixturePath) => !fixturePath.startsWith('vault-keyfile/'))
+      .filter((fixturePath) => !fixturePath.startsWith('share-envelope/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
@@ -1182,6 +1187,118 @@ describe('Pico protocol types', () => {
           'wrong_keyfile_label',
         ]).toContain(reason);
         expect(() => buildPicoVaultHeaderAadVector(fields)).toThrow(reason);
+      }
+    }
+
+    for (const { caseName, mustDifferFrom } of relationships) {
+      if (mustDifferFrom === undefined) {
+        continue;
+      }
+      expect(acceptedHexByCase.has(mustDifferFrom)).toBe(true);
+      expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(mustDifferFrom));
+    }
+  });
+
+  it('keeps Pico share wrap and envelope vectors byte-exact and aligned with ADR 0078 R2', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject('docs/protocol/fixtures/share-envelope/suite.json');
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md',
+    ).replace(/\s+/g, '');
+
+    expect(stringField(suite, 'schema')).toBe('pico.share.envelope.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId')).toBe('pico.share-envelope.pico_suite_share_v1');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'suite')).toBe(picoShareSuite);
+    expect(stringField(suite, 'surface')).toBe('share-envelope');
+    expect(stringArrayField(suite, 'families')).toEqual(['canonicalization-positive', 'canonicalization-negative']);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel')).toBe('authoritative-share-envelope-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('no sealing');
+    expect(stringField(suite, 'disclaimer')).toContain('no signing');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+
+    expect([...fixturePaths].sort()).toEqual(
+      listFixtureDirectories('docs/protocol/fixtures/share-envelope').sort(),
+    );
+    expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Pico share fixtures')).toEqual([
+      'share-envelope/suite.json',
+      ...fixturePaths.map((fixturePath) => `share-envelope/${fixturePath}/`),
+    ]);
+
+    const acceptedHexByCase = new Map<string, string>();
+    const relationships: { caseName: string; mustDifferFrom?: string }[] = [];
+
+    for (const fixturePath of fixturePaths) {
+      const parts = fixturePath.split('/');
+      expect(parts.length).toBe(3);
+      const [suiteSegment, family, caseName] = parts;
+      expect(suiteSegment).toBe(picoShareSuite);
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      const base = `docs/protocol/fixtures/share-envelope/${fixturePath}`;
+      const fixture = readRepoJsonObject(`${base}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const input = readRepoJsonObject(`${base}/input.json`);
+      const expectBlock = recordField(fixture, 'expect');
+      const shareFamily = stringField(fixture, 'shareFamily');
+
+      expect(stringField(fixture, 'schema')).toBe('pico.share.envelope.vector');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(`share-envelope.pico_suite_share_v1.${family}.${caseName}`);
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'suite')).toBe(picoShareSuite);
+      expect(stringField(fixture, 'surface')).toBe('share-envelope');
+      expect(stringField(fixture, 'family')).toBe(family);
+      expect(stringField(fixture, 'adr')).toBe('0078');
+      expect(stringField(fixture, 'case')).toBeTruthy();
+      expect(stringField(fixture, 'notes')).toContain('no real KEK');
+      expect(stringField(source, 'encoding')).toBe('fields');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(picoShareCanonicalLabels[shareFamily as keyof typeof picoShareCanonicalLabels]).toBeTruthy();
+
+      const construction = picoShareCanonicalLabels[shareFamily as keyof typeof picoShareCanonicalLabels];
+      expect(stringField(fixture, 'construction')).toBe(construction);
+      expect(stringField(input, 'shareFamily')).toBe(shareFamily);
+      const inputConstruction = stringField(input, 'construction');
+      const fields = recordField(input, 'fields');
+      const build = stringField(expectBlock, 'build');
+
+      if (inputConstruction !== construction) {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'reason')).toBe('cross_family_label_confusion');
+        continue;
+      }
+
+      if (build === 'accept') {
+        const recomputed = buildPicoShareVector(shareFamily, fields);
+        const hex = Buffer.from(recomputed).toString('hex');
+        expect(hex).toBe(stringField(expectBlock, 'signatureInputHex'));
+        expect(recomputed.length).toBe(numberField(expectBlock, 'signatureInputLen'));
+        expect(adrNoWhitespace).toContain(hex);
+        acceptedHexByCase.set(caseName, hex);
+        relationships.push({
+          caseName,
+          mustDifferFrom: optionalStringField(expectBlock, 'mustDifferFrom'),
+        });
+      } else {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'errorCategory')).toBe('canonicalization_error');
+        const reason = stringField(expectBlock, 'reason');
+        expect([
+          'field_reordering',
+          'invalid_fingerprint_length',
+          'invalid_instant',
+          'invalid_kek_length',
+          'invalid_kek_version',
+          'invalid_wrap_digest_length',
+        ]).toContain(reason);
+        expect(() => buildPicoShareVector(shareFamily, fields)).toThrow(reason);
       }
     }
 
@@ -3079,6 +3196,35 @@ function buildPicoIdentityVector(identityFamily: string, fields: Record<string, 
   }
 
   throw new Error(`Unexpected identity signature-input family: ${identityFamily}`);
+}
+
+function buildPicoShareVector(shareFamily: string, fields: Record<string, unknown>): Uint8Array {
+  if (shareFamily === 'wrap') {
+    return buildPicoShareWrapPayload({
+      suite: stringField(fields, 'suite'),
+      domainId: stringField(fields, 'domainId'),
+      kekVersion: numberField(fields, 'kekVersion'),
+      readerKeyFingerprintHex: stringField(fields, 'readerKeyFingerprintHex'),
+      kekHex: stringField(fields, 'kekHex'),
+      ...optionalFieldOrder(fields),
+    } as unknown as Parameters<typeof buildPicoShareWrapPayload>[0]);
+  }
+
+  if (shareFamily === 'envelope') {
+    return buildPicoShareEnvelopeSignatureInput({
+      suite: stringField(fields, 'suite'),
+      grantId: stringField(fields, 'grantId'),
+      domainId: stringField(fields, 'domainId'),
+      kekVersion: numberField(fields, 'kekVersion'),
+      issuerIdentityKeyFingerprintHex: stringField(fields, 'issuerIdentityKeyFingerprintHex'),
+      readerKeyFingerprintHex: stringField(fields, 'readerKeyFingerprintHex'),
+      wrapDigestHex: stringField(fields, 'wrapDigestHex'),
+      grantedAt: stringField(fields, 'grantedAt'),
+      ...optionalFieldOrder(fields),
+    } as unknown as Parameters<typeof buildPicoShareEnvelopeSignatureInput>[0]);
+  }
+
+  throw new Error(`Unexpected share family: ${shareFamily}`);
 }
 
 function buildPicoHomeVector(homeFamily: string, fields: Record<string, unknown>): Uint8Array {

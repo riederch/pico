@@ -1,0 +1,23 @@
+{
+  "schema": "pico.share.envelope.vector",
+  "schemaVersion": 1,
+  "fixtureId": "share-envelope.pico_suite_share_v1.canonicalization-negative.envelope-cross-family-label",
+  "stage": "fixture_data",
+  "suite": "pico.suite.share.v1",
+  "surface": "share-envelope",
+  "family": "canonicalization-negative",
+  "shareFamily": "envelope",
+  "construction": "pico.share.envelope.v1",
+  "case": "a wrap construction presented as an envelope is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "cross_family_label_confusion"
+  },
+  "adr": "0078",
+  "notes": "ADR 0078 Gate R2 vector. Synthetic key material only; no real KEK, no sealing, no signing, no runtime authority and no commercial permission."
+}

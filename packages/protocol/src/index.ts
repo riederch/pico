@@ -263,6 +263,55 @@ export const picoHomeContinuityReasonCategories = [
 
 export type PicoHomeContinuityReasonCategory = typeof picoHomeContinuityReasonCategories[number];
 
+// ADR 0078 Gate R2 wrap suite. Reader keys are X25519 key-agreement keys; a KEK
+// grant is a libsodium sealed box over the wrap payload, and the envelope that
+// carries it is authenticated by a separate issuer signature — sealed boxes
+// authenticate no sender, so authenticity is a signature concern, not a wrap
+// concern. These layouts are authoritative bytes only; nothing here seals,
+// signs, issues or honors an envelope (K4).
+export const picoShareSuite = 'pico.suite.share.v1' as const;
+
+export const picoShareCanonicalFamilies = ['wrap', 'envelope'] as const;
+
+export type PicoShareCanonicalFamily = typeof picoShareCanonicalFamilies[number];
+
+export const picoShareCanonicalLabels = {
+  // The sealed plaintext (K3): the reader verifies this binding after unsealing.
+  wrap: 'pico.share.wrap.v1',
+  // What the controller signs (K4): binds the wrap so a swapped sealed box is
+  // visible to the signature.
+  envelope: 'pico.share.envelope.v1',
+} as const satisfies Record<PicoShareCanonicalFamily, string>;
+
+export interface PicoShareWrapPayloadInput {
+  suite: string;
+  domainId: string;
+  kekVersion: number;
+  readerKeyFingerprintHex: string;
+  /** The domain KEK bytes, 32 bytes hex. Synthetic in authoritative vectors. */
+  kekHex: string;
+}
+
+export interface PicoShareEnvelopeSignatureInput {
+  suite: string;
+  grantId: string;
+  domainId: string;
+  kekVersion: number;
+  /** The controller identity whose signature is the grant's authority. */
+  issuerIdentityKeyFingerprintHex: string;
+  /** The reader's X25519 key-agreement key the wrap is sealed to. */
+  readerKeyFingerprintHex: string;
+  /**
+   * BLAKE2b-256 of the sealed wrap ciphertext. Binding it is the load-bearing
+   * decision of this layout: without it an attacker can seal a well-formed
+   * wrap payload carrying the wrong KEK to the same reader — the reader's K3
+   * context check passes — and only the issuer signature over this digest makes
+   * the swap fail.
+   */
+  wrapDigestHex: string;
+  grantedAt: string;
+}
+
 export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
 
 // ADR 0081 Gate P1 covers person-role key custody only. Host-role keys stay on
@@ -1768,6 +1817,66 @@ export function buildPicoVaultKeyfileHeaderAad(input: PicoVaultKeyfileHeaderAadI
     asciiBytes(input.aeadAlgorithm),
     fixedHexBytes(input.aeadNonceHex, 24, 'invalid_aead_nonce_length'),
   ]);
+}
+
+export function buildPicoShareWrapPayload(input: PicoShareWrapPayloadInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'domainId',
+    'kekVersion',
+    'readerKeyFingerprintHex',
+    'kekHex',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.domainId);
+
+  return concatCanonicalElements([
+    asciiBytes(picoShareCanonicalLabels.wrap),
+    asciiBytes(input.suite),
+    asciiBytes(input.domainId),
+    kekVersionBytes(input.kekVersion),
+    fixedHexBytes(input.readerKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.kekHex, 32, 'invalid_kek_length'),
+  ]);
+}
+
+export function buildPicoShareEnvelopeSignatureInput(input: PicoShareEnvelopeSignatureInput): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'grantId',
+    'domainId',
+    'kekVersion',
+    'issuerIdentityKeyFingerprintHex',
+    'readerKeyFingerprintHex',
+    'wrapDigestHex',
+    'grantedAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.grantId);
+  assertAsciiToken(input.domainId);
+  assertInstant(input.grantedAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoShareCanonicalLabels.envelope),
+    asciiBytes(input.suite),
+    asciiBytes(input.grantId),
+    asciiBytes(input.domainId),
+    kekVersionBytes(input.kekVersion),
+    fixedHexBytes(input.issuerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.wrapDigestHex, 32, 'invalid_wrap_digest_length'),
+    asciiBytes(input.grantedAt),
+  ]);
+}
+
+// KEK versions are the ADR 0072 `domain_<id>.v<n>.key` versions, which start at
+// 1. Serialized as ASCII decimal, mirroring the KDF-parameter encoding.
+function kekVersionBytes(value: number): Uint8Array {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error('invalid_kek_version');
+  }
+
+  return asciiBytes(String(value));
 }
 
 function firstUnexpectedKey(record: Record<string, unknown>, allowedKeys: readonly string[]): string | undefined {
