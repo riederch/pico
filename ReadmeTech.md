@@ -64,7 +64,7 @@ Implemented or prepared:
 - minimal `@pico/identity` signature verification and lifecycle runtime for identity/device-key statements
 - minimal `@pico/vault` keyfile runtime for person-role custody tests
 - migration runner and backup-before-migration contract
-- shared protocol package for events, avatar state, action terminology and compatibility aliases
+- shared protocol package for events, avatar state and canonical product action terminology
 - WebSocket endpoint for event streaming
 - foundation diagnostics dashboard with an operator login and a small administration area (retention policies, crypto-shred)
 - CI release gates
@@ -410,7 +410,9 @@ PICO_FOUNDATION_TOKEN=<token> \
 pnpm dev:core
 ```
 
-`PICO_FOUNDATION_ACCESS_MODE=unsafe-trusted-local` exists only for controlled diagnostics and CI smoke tests.
+The accepted access modes are `loopback-dev`, `direct-token` and `ha-ingress`.
+Tokenless direct non-loopback startup fails closed; CI direct-port smokes use
+`direct-token` with disposable tokens.
 
 Mint a short-lived realtime ticket for browser WebSocket access:
 

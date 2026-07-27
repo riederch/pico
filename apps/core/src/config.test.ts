@@ -69,9 +69,11 @@ describe('Core config', () => {
   });
 
   it('rejects invalid foundation access modes', () => {
-    expect(() => loadConfig({ PICO_FOUNDATION_ACCESS_MODE: 'public' })).toThrow(
-      'PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress, unsafe-trusted-local.',
-    );
+    for (const mode of ['public', 'unsafe-trusted-local']) {
+      expect(() => loadConfig({ PICO_FOUNDATION_ACCESS_MODE: mode })).toThrow(
+        'PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress.',
+      );
+    }
   });
 
   it('rejects loopback-dev mode on non-loopback hosts', () => {
@@ -88,16 +90,11 @@ describe('Core config', () => {
     })).toThrow('PICO_FOUNDATION_ACCESS_MODE=direct-token requires PICO_FOUNDATION_TOKEN.');
   });
 
-  it('accepts explicit ha-ingress and unsafe trusted-local modes for non-loopback hosts', () => {
+  it('accepts explicit ha-ingress mode for non-loopback hosts', () => {
     expect(loadConfig({
       PICO_HOST: '0.0.0.0',
       PICO_FOUNDATION_ACCESS_MODE: 'ha-ingress',
     }).foundationAccessMode).toBe('ha-ingress');
-
-    expect(loadConfig({
-      PICO_HOST: '0.0.0.0',
-      PICO_FOUNDATION_ACCESS_MODE: 'unsafe-trusted-local',
-    }).foundationAccessMode).toBe('unsafe-trusted-local');
   });
 
   it('rejects invalid ports', () => {

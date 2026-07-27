@@ -63,9 +63,8 @@ export interface DeviceSeenPayload {
 
 export type SessionCreatedPayload = Record<string, never>;
 
-// Reserved product protocol direction. These event names are known for
-// compatibility and documentation, but the current Foundation POST /api/events
-// endpoint must reject them until dedicated Pico Rules, Action Runner or
+// Reserved product protocol direction. The current Foundation POST /api/events
+// endpoint must reject these names until dedicated Pico Rules, Action Runner or
 // Action History write paths exist.
 export const actionEventTypes = [
   'action.requested',
@@ -79,22 +78,6 @@ export const actionEventTypes = [
 ] as const;
 
 export type ActionEventType = typeof actionEventTypes[number];
-
-// Reserved compatibility aliases for earlier tool/policy terminology. They are
-// exported so readers can map old names, but they are not writable Foundation
-// events and are not implemented policy or executor APIs.
-export const legacyToolPolicyEventTypes = [
-  'tool.call_requested',
-  'tool.call_completed',
-  'policy.decision_created',
-  'confirmation.requested',
-  'confirmation.resolved',
-  'executor.action_started',
-  'executor.action_completed',
-  'audit.event_created',
-] as const;
-
-export type LegacyToolPolicyEventType = typeof legacyToolPolicyEventTypes[number];
 
 // Reserved Pico Home Link direction. These names are not claim, membership or
 // residency write APIs in the current Foundation implementation.
@@ -111,7 +94,6 @@ export type PicoHomeEventType = typeof picoHomeEventTypes[number];
 export const picoEventTypes = [
   ...foundationEventTypes,
   ...actionEventTypes,
-  ...legacyToolPolicyEventTypes,
   ...picoHomeEventTypes,
 ] as const;
 
@@ -899,16 +881,10 @@ export type PicoNodeType =
   | 'browser_extension'
   | 'unknown';
 
-/** @deprecated Use PicoNodeType. */
-export type DeviceType = PicoNodeType | 'core' | 'web';
-
-// Reserved context-signal posture. These values are compatibility and planning
-// direction only. `admin` is a legacy/placeholder signal label and must not be
-// used as an authorization role, host-administration grant or capability.
-export type ContextSignalLevel = 'untrusted' | 'known' | 'trusted' | 'admin';
-
-/** @deprecated Use ContextSignalLevel. */
-export type TrustedLevel = ContextSignalLevel;
+// Reserved context-signal posture. These values are planning direction only
+// and must not be used as authorization roles, host-administration grants or
+// capabilities.
+export type ContextSignalLevel = 'untrusted' | 'known' | 'trusted';
 
 export const messageCreatedRoles = [
   'user',
@@ -1516,9 +1492,9 @@ export const memoryRetentionModes = [
 export type MemoryRetentionMode = typeof memoryRetentionModes[number];
 
 // Reserved action/policy/audit protocol direction. The current Foundation API
-// exports these shapes for documentation and compatibility planning only; it
-// must not accept them on the generic event write path until dedicated product
-// APIs and policy gates exist.
+// exports these shapes for product planning only; it must not accept them on
+// the generic event write path until dedicated product APIs and policy gates
+// exist.
 export type ActionRisk =
   | 'read_only'
   | 'local_write'
@@ -1527,13 +1503,7 @@ export type ActionRisk =
   | 'security_sensitive'
   | 'privileged_system_action';
 
-/** @deprecated Use ActionRisk. */
-export type ToolRiskLevel = ActionRisk;
-
 export type PicoRulesDecision = 'allow' | 'require_approval' | 'deny';
-
-/** @deprecated Use PicoRulesDecision. */
-export type PolicyDecision = 'allow' | 'require_confirmation' | 'deny';
 
 export interface PicoEvent<TPayload = unknown> {
   eventId: string;
@@ -1699,15 +1669,6 @@ export interface PicoEventCreatedMessage<TPayload = unknown> {
 
 export type PicoRealtimeMessage = PicoCoreConnectedMessage | PicoEventCreatedMessage;
 
-export interface PicoDevice {
-  deviceId: string;
-  name: string;
-  type: DeviceType;
-  trustedLevel: TrustedLevel;
-  capabilities: Record<string, boolean>;
-  lastSeenAt?: string;
-}
-
 export interface PicoNode {
   nodeId: string;
   name: string;
@@ -1798,70 +1759,6 @@ export interface ActionHistoryEventPayload {
   action: string;
   decision?: PicoRulesDecision;
   dataSpace?: string;
-  redaction: 'none' | 'summary' | 'reference_only';
-  summary: string;
-}
-
-/** @deprecated Use ActionRequestedPayload. */
-export interface ToolCallRequestedPayload {
-  toolName: string;
-  riskLevel: ToolRiskLevel;
-  arguments: Record<string, unknown>;
-}
-
-/** @deprecated Use ActionCompletedPayload. */
-export interface ToolCallCompletedPayload {
-  toolName: string;
-  success: boolean;
-  summary: string;
-}
-
-/** @deprecated Use PicoRulesDecisionCreatedPayload. */
-export interface PolicyDecisionCreatedPayload {
-  requestedEventId: string;
-  decision: PolicyDecision;
-  reason: string;
-  riskLevel?: ToolRiskLevel;
-  dataDomain?: string;
-}
-
-/** @deprecated Use ApprovalRequestedPayload. */
-export interface ConfirmationRequestedPayload {
-  requestedEventId: string;
-  prompt: string;
-  riskLevel: ToolRiskLevel;
-  expiresAt?: string;
-}
-
-/** @deprecated Use ApprovalResolvedPayload. */
-export interface ConfirmationResolvedPayload {
-  confirmationEventId: string;
-  approved: boolean;
-  resolvedAt: string;
-}
-
-/** @deprecated Use ActionRunnerStartedPayload. */
-export interface ExecutorActionStartedPayload {
-  requestedEventId: string;
-  toolName: string;
-  riskLevel: ToolRiskLevel;
-}
-
-/** @deprecated Use ActionRunnerCompletedPayload. */
-export interface ExecutorActionCompletedPayload {
-  startedEventId: string;
-  toolName: string;
-  success: boolean;
-  summary: string;
-}
-
-/** @deprecated Use ActionHistoryEventPayload. */
-export interface AuditEventCreatedPayload {
-  subjectEventId?: string;
-  actorDeviceId?: string;
-  action: string;
-  decision?: PolicyDecision;
-  dataDomain?: string;
   redaction: 'none' | 'summary' | 'reference_only';
   summary: string;
 }

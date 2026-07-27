@@ -87,7 +87,7 @@ jobs:
 
       - name: Smoke-test amd64 container health endpoint and dashboard
         run: |
-          docker run --rm -d --name pico-core-smoke-amd64 -p 3100:3100 -e PICO_FOUNDATION_ACCESS_MODE=unsafe-trusted-local pico-core:amd64-test
+          docker run --rm -d --name pico-core-smoke-amd64 -p 3100:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -e PICO_FOUNDATION_TOKEN=ci-smoke-token pico-core:amd64-test
           for i in $(seq 1 20); do
             if curl -fsS http://127.0.0.1:3100/health && curl -fsS http://127.0.0.1:3100/ | grep -q "Pico Home Foundation Dashboard"; then
               docker stop pico-core-smoke-amd64
@@ -129,7 +129,7 @@ jobs:
 
       - name: Smoke-test arm64 container health endpoint and dashboard
         run: |
-          docker run --platform linux/arm64 --rm -d --name pico-core-smoke-arm64 -p 3101:3100 -e PICO_FOUNDATION_ACCESS_MODE=unsafe-trusted-local pico-core:arm64-test
+          docker run --platform linux/arm64 --rm -d --name pico-core-smoke-arm64 -p 3101:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -e PICO_FOUNDATION_TOKEN=ci-smoke-token pico-core:arm64-test
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3101/health && curl -fsS http://127.0.0.1:3101/ | grep -q "Pico Home Foundation Dashboard"; then
               docker stop pico-core-smoke-arm64

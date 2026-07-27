@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted and implemented for Foundation access-mode parsing, startup validation, Home Assistant add-on defaulting and default direct host-port disablement.
+Accepted and implemented for Foundation access-mode parsing, startup validation, Home Assistant add-on defaulting and default direct host-port disablement. The temporary unsafe compatibility mode was removed before the first deployment.
 
 ## Context
 
@@ -35,7 +35,6 @@ The implementation supports these modes:
 | `loopback-dev` | Local development on the same machine. | Core must bind only to a loopback host. `PICO_FOUNDATION_TOKEN` is optional. |
 | `direct-token` | Standalone/container direct access where the port is reachable beyond loopback. | `PICO_FOUNDATION_TOKEN` is required. Core may bind to non-loopback addresses. |
 | `ha-ingress` | Home Assistant add-on ingress path. | Packaging must not expose the direct host port by default. Core may bind to the internal add-on interface. Token remains optional. |
-| `unsafe-trusted-local` | Temporary explicit compatibility escape hatch for controlled test environments. | Allows non-loopback without token only when explicitly configured. Must be documented as unsafe and temporary. |
 
 The default is fail-closed for unsafe ambiguity:
 
@@ -45,15 +44,13 @@ The default is fail-closed for unsafe ambiguity:
 | no explicit mode, non-loopback bind, token configured | treat as `direct-token` |
 | no explicit mode, non-loopback bind, no token | startup error |
 
-`unsafe-trusted-local` exists only to avoid hiding a breaking change behind ambiguous behavior. It must not be used by the Home Assistant add-on default, production docs or examples that publish `3100`.
-
-The standalone `PICO_HOST` default is `127.0.0.1` so ordinary local development starts in `loopback-dev`. Docker keeps explicit all-interface binding for container operation, and CI smokes set an explicit access mode. The Home Assistant add-on entrypoint sets `ha-ingress` when `/data/options.json` exists and no explicit access mode was already configured.
+The standalone `PICO_HOST` default is `127.0.0.1` so ordinary local development starts in `loopback-dev`. Docker keeps explicit all-interface binding for container operation, and CI direct-port smokes use `direct-token` with disposable tokens. The Home Assistant add-on entrypoint sets `ha-ingress` when `/data/options.json` exists and no explicit access mode was already configured.
 
 ## Core design rule
 
 ```text
 No non-loopback Foundation API without an explicit access mode.
-No direct non-loopback Foundation API without either a token or an explicit unsafe escape hatch.
+No direct non-loopback Foundation API without a token.
 No tokenless ha-ingress mode while the add-on direct host port is mapped.
 ```
 
@@ -83,6 +80,12 @@ Ingress headers may later become useful diagnostic or audit context, but only af
 - the behavior is tested with a real Home Assistant add-on installation.
 
 Until then, `ha-ingress` is a packaging boundary, not a header-authentication mechanism.
+
+## Pre-release unsafe-mode removal
+
+The first implementation included an explicit unsafe non-loopback mode so the access-mode gate could land without immediately rewriting container smokes. Before any Pico deployment existed, CI gained disposable-token coverage for both architectures and that escape hatch was removed from configuration, tests and operational documentation.
+
+This is a pre-release hardening cleanup. A tokenless non-loopback direct path must not be reintroduced as a compatibility shortcut.
 
 ## Token behavior
 
@@ -140,8 +143,7 @@ Negative:
 
 - changes default startup behavior for non-loopback tokenless deployments,
 - requires Docker, CI and add-on environment updates,
-- may force a temporary add-on UX decision if real ingress validation is not yet available,
-- keeps one explicit unsafe compatibility escape hatch until all transitional paths are removed.
+- may force a temporary add-on UX decision if real ingress validation is not yet available.
 
 ## Relationship to other ADRs
 

@@ -24,7 +24,6 @@
     "libsodium-wrappers-sumo": "^0.8.4"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
-    "@types/libsodium-wrappers-sumo": "^0.8.2"
+    "@types/better-sqlite3": "^7.6.0"
   }
 }

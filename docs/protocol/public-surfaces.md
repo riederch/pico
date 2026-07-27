@@ -355,9 +355,7 @@ delete_after_max_age
 
 ### Reserved context-signal direction
 
-`ContextSignalLevel` and its deprecated alias `TrustedLevel` are TypeScript planning types only. They are not fields in the current Foundation event payload schema and do not create an authorization, membership or host-administration boundary.
-
-The current compatibility type still contains the legacy value `admin`. That value must be read only as a reserved context-signal label. It is not a role, permission, capability, Home Host Pico membership grant, Pico Rules decision or Action Runner authorization.
+`ContextSignalLevel` is a TypeScript planning type with the values `untrusted`, `known` and `trusted`. It is not a field in the current Foundation event payload schema and does not create an authorization, membership or host-administration boundary.
 
 Future work should separate context evidence, roles, capabilities and membership credentials explicitly before any context-signal data becomes writable or security-relevant.
 
@@ -376,22 +374,9 @@ action_runner.action_completed
 action_history.event_created
 ```
 
-### Legacy tool/policy event types
+### Pre-release action terminology consolidation
 
-These names exist as reserved compatibility aliases for earlier technical terminology:
-
-```text
-tool.call_requested
-tool.call_completed
-policy.decision_created
-confirmation.requested
-confirmation.resolved
-executor.action_started
-executor.action_completed
-audit.event_created
-```
-
-They are not writable through the current Foundation `POST /api/events` endpoint and must not be silently removed without an alias period, versioning or compatibility adapter.
+Before the first deployment or external protocol publication, the unused aliases for earlier tool, policy, confirmation, executor and audit terminology were removed. The product action names above are the only exported action-event direction. No stored data, deployed client or published compatibility surface required an adapter or alias period. Any later rename after deployment or publication still requires the versioned compatibility process defined by ADR 0025 and ADR 0026.
 
 ### Pico Home event direction
 

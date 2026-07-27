@@ -39,9 +39,6 @@ interface BrowserLocation {
   protocol: string;
 }
 
-/** @deprecated Use DEFAULT_PICO_HOME_URL. */
-export const DEFAULT_CORE_URL = DEFAULT_PICO_HOME_URL;
-
 export function defaultPicoHomeUrl(location: BrowserLocation): string {
   if (location.protocol === 'http:' || location.protocol === 'https:') {
     const basePath = defaultBasePath(location);
@@ -50,9 +47,6 @@ export function defaultPicoHomeUrl(location: BrowserLocation): string {
 
   return DEFAULT_PICO_HOME_URL;
 }
-
-/** @deprecated Use defaultPicoHomeUrl. */
-export const defaultCoreUrl = defaultPicoHomeUrl;
 
 export function normalizePicoHomeUrl(rawValue: string): string {
   const trimmedValue = rawValue.trim() || DEFAULT_PICO_HOME_URL;
@@ -66,9 +60,6 @@ export function normalizePicoHomeUrl(rawValue: string): string {
   const pathname = url.pathname.replace(/\/+$/, '');
   return `${url.origin}${pathname === '/' ? '' : pathname}`;
 }
-
-/** @deprecated Use normalizePicoHomeUrl. */
-export const normalizeCoreUrl = normalizePicoHomeUrl;
 
 export function buildEndpointUrl(baseUrl: string, endpoint: string): URL {
   const url = new URL(baseUrl);

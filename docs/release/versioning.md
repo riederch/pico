@@ -95,7 +95,7 @@ The Home Assistant add-on versioned image tag must be created by pushing the mat
 
 The CI workflow builds and publishes a multi-arch image for `linux/amd64` and `linux/arm64`.
 
-Before publishing, CI builds local smoke-test images for both `linux/amd64` and `linux/arm64`. The `linux/amd64` image runs natively on the GitHub-hosted runner. The `linux/arm64` image runs through QEMU and must pass the same `/health` and dashboard-shell smoke checks. Direct-port smoke tests must choose an explicit `PICO_FOUNDATION_ACCESS_MODE`; the intentionally unprotected smoke uses `unsafe-trusted-local`.
+Before publishing, CI builds local smoke-test images for both `linux/amd64` and `linux/arm64`. The `linux/amd64` image runs natively on the GitHub-hosted runner. The `linux/arm64` image runs through QEMU and must pass the same `/health` and dashboard-shell smoke checks. Direct-port smoke tests use `PICO_FOUNDATION_ACCESS_MODE=direct-token` with disposable tokens; there is no tokenless non-loopback smoke path.
 
 Both local smoke-test images also run with a disposable `/data/options.json` containing `pico_foundation_token` and direct token mode. Those checks verify that direct API access returns `401` without the token and succeeds with the configured bearer token.
 

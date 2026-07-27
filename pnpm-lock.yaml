@@ -51,9 +51,6 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.0
         version: 7.6.13
-      '@types/libsodium-wrappers-sumo':
-        specifier: ^0.8.2
-        version: 0.8.2
 
   apps/web:
     dependencies:
@@ -69,16 +66,9 @@ importers:
       libsodium-wrappers-sumo:
         specifier: ^0.8.4
         version: 0.8.4
-    devDependencies:
-      '@types/libsodium-wrappers-sumo':
-        specifier: ^0.8.2
-        version: 0.8.2
 
   packages/protocol:
     devDependencies:
-      '@types/libsodium-wrappers-sumo':
-        specifier: ^0.8.2
-        version: 0.8.2
       libsodium-wrappers-sumo:
         specifier: ^0.8.4
         version: 0.8.4
@@ -93,10 +83,6 @@ importers:
       libsodium-wrappers-sumo:
         specifier: ^0.8.4
         version: 0.8.4
-    devDependencies:
-      '@types/libsodium-wrappers-sumo':
-        specifier: ^0.8.2
-        version: 0.8.2
 
 packages:
 
@@ -597,10 +583,6 @@ packages:
 
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
-
-  '@types/libsodium-wrappers-sumo@0.8.2':
-    resolution: {integrity: sha512-uFOBpg/r21hExVlh2ty8YpDfSR+Yy3Jn8XS4+SSjitbhTxdYq+pBz/49XRxyUFe8SzqujHf/Wu0/O4d+FUtNfQ==}
-    deprecated: This is a stub types definition. libsodium-wrappers-sumo provides its own type definitions, so you do not need this installed.
 
   '@types/node@22.20.0':
     resolution: {integrity: sha512-QWlFW2wf3nTjC13/DqRnBpR4ZO36VJH/JVBkA/vcnmbTBNQIlnObqyqZE1tUR7+Ni23Lda8R1BxMfbXRpCUx5g==}
@@ -1622,10 +1604,6 @@ snapshots:
       '@types/node': 22.20.0
 
   '@types/estree@1.0.9': {}
-
-  '@types/libsodium-wrappers-sumo@0.8.2':
-    dependencies:
-      libsodium-wrappers-sumo: 0.8.4
 
   '@types/node@22.20.0':
     dependencies:

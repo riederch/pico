@@ -144,7 +144,7 @@ Direction:
 - A future token-required mode should be considered for direct all-interface deployments.
 - Home Assistant ingress should reduce reliance on direct browser access to port `3100`.
 
-ADR 0041 refines and implements the bind/port gate with `PICO_FOUNDATION_ACCESS_MODE`, a loopback standalone default, explicit direct-token mode, an explicit unsafe compatibility escape hatch for controlled smokes and a closed default Home Assistant host-port mapping.
+ADR 0041 refines and implements the bind/port gate with `PICO_FOUNDATION_ACCESS_MODE`, a loopback standalone default, explicit direct-token mode and a closed default Home Assistant host-port mapping. Its temporary unsafe compatibility escape hatch was removed before the first deployment once every CI direct-port smoke used a disposable token.
 
 ## Threat posture
 
@@ -201,10 +201,10 @@ Implemented ADR 0041 access-mode work:
 - `PICO_FOUNDATION_ACCESS_MODE` parsing and validation
 - standalone default `PICO_HOST=127.0.0.1`
 - fail-closed non-loopback startup when neither a token nor an explicit access mode is configured
-- `direct-token`, `ha-ingress`, `loopback-dev` and temporary `unsafe-trusted-local` modes
+- `direct-token`, `ha-ingress` and `loopback-dev` modes
 - Home Assistant add-on entrypoint defaulting to `ha-ingress` when `/data/options.json` exists
 - Home Assistant host-port mapping disabled by default
-- CI direct-port smokes marked as explicit `unsafe-trusted-local` or `direct-token`
+- CI direct-port smokes using `direct-token` with disposable tokens
 
 No implementation should describe the result as production authentication or membership.
 

@@ -6,7 +6,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type {
   ActionHistoryEventPayload,
   ActionRequestedPayload,
-  AuditEventCreatedPayload,
   AvatarStateChangedPayload,
   PicoEvent,
   PicoHomeMembership,
@@ -14,8 +13,6 @@ import type {
   PicoRealtimeTicketResponse,
   PayloadPosture,
   PicoRulesDecisionCreatedPayload,
-  PolicyDecisionCreatedPayload,
-  ToolCallRequestedPayload,
 } from './index.js';
 import {
   actionEventTypes,
@@ -26,7 +23,6 @@ import {
   deviceSeenStatuses,
   foundationEventTypes,
   serverSynthesizedFoundationEventTypes,
-  legacyToolPolicyEventTypes,
   messageCreatedRoles,
   payloadPostures,
   writablePayloadPostures,
@@ -149,14 +145,11 @@ describe('Pico protocol types', () => {
 
     expect(actionEventTypes).toContain('action.requested');
     expect(actionEventTypes).toContain('pico_rules.decision_created');
-    expect(legacyToolPolicyEventTypes).toContain('tool.call_requested');
-    expect(legacyToolPolicyEventTypes).toContain('policy.decision_created');
     expect(picoHomeEventTypes).toContain('pico_home.claim_requested');
 
     expect(picoEventTypes).toEqual([
       ...foundationEventTypes,
       ...actionEventTypes,
-      ...legacyToolPolicyEventTypes,
       ...picoHomeEventTypes,
     ]);
 
@@ -515,7 +508,6 @@ describe('Pico protocol types', () => {
       ...serverSynthesizedFoundationEventTypes,
     ]);
     expect(textFenceAfterHeading(publicSurfaces, '### Product action event types')).toEqual([...actionEventTypes]);
-    expect(textFenceAfterHeading(publicSurfaces, '### Legacy tool/policy event types')).toEqual([...legacyToolPolicyEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Pico Home event direction')).toEqual([...picoHomeEventTypes]);
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved memory item deletion states')).toEqual([...memoryItemDeletionStates]);
     expect(textFenceAfterHeading(publicSurfaces, '### Reserved reference target resolution states')).toEqual([...referenceTargetResolutionStates]);
@@ -2016,18 +2008,6 @@ describe('Pico protocol types', () => {
     expect(payload.risk).toBe('read_only');
   });
 
-  it('keeps legacy tool payloads available for compatibility', () => {
-    const payload: ToolCallRequestedPayload = {
-      toolName: 'homeassistant.get_entity_state',
-      riskLevel: 'read_only',
-      arguments: {
-        entityId: 'sensor.pico_status',
-      },
-    };
-
-    expect(payload.riskLevel).toBe('read_only');
-  });
-
   it('accepts Pico Rules decisions with product terminology', () => {
     const payload: PicoRulesDecisionCreatedPayload = {
       requestedEventId: 'evt-action-request',
@@ -2038,18 +2018,6 @@ describe('Pico protocol types', () => {
     };
 
     expect(payload.decision).toBe('require_approval');
-  });
-
-  it('keeps legacy policy decisions separate from tool risk classes', () => {
-    const payload: PolicyDecisionCreatedPayload = {
-      requestedEventId: 'evt-tool-request',
-      decision: 'require_confirmation',
-      reason: 'External write requires user confirmation.',
-      riskLevel: 'external_write',
-      dataDomain: 'home_assistant',
-    };
-
-    expect(payload.decision).toBe('require_confirmation');
   });
 
   it('supports product-named action history records', () => {
@@ -2070,20 +2038,6 @@ describe('Pico protocol types', () => {
     const posture: PayloadPosture = 'reference_only';
 
     expect(payloadPostures).toContain(posture);
-  });
-
-  it('keeps legacy redacted audit records available for compatibility', () => {
-    const payload: AuditEventCreatedPayload = {
-      subjectEventId: 'evt-policy-decision',
-      actorDeviceId: 'desktop-dev',
-      action: 'policy.decision_created',
-      decision: 'deny',
-      dataDomain: 'personal',
-      redaction: 'summary',
-      summary: 'Policy result was recorded without storing the original payload.',
-    };
-
-    expect(payload.redaction).toBe('summary');
   });
 
   it('accepts Pico Home membership terminology', () => {

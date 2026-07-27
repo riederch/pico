@@ -24,7 +24,6 @@ import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   deviceSeenStatuses,
-  legacyToolPolicyEventTypes,
   messageCreatedRoles,
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
@@ -1306,10 +1305,10 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
-  it('rejects reserved legacy and product event types on the foundation API', async () => {
+  it('rejects reserved product event types on the foundation API', async () => {
     const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
 
-    for (const type of [...actionEventTypes, ...legacyToolPolicyEventTypes, ...picoHomeEventTypes]) {
+    for (const type of [...actionEventTypes, ...picoHomeEventTypes]) {
       const response = await app.inject({
         method: 'POST',
         url: '/api/events',
@@ -1323,6 +1322,18 @@ describe('Pico Home Core app', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json()).toEqual({ error: RESERVED_EVENT_ERROR });
     }
+
+    const removedAlias = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'tool.call_requested',
+        payload: { toolName: 'homeassistant.get_entity_state' },
+      },
+    });
+    expect(removedAlias.statusCode).toBe(400);
+    expect(removedAlias.json()).toEqual({ error: 'deviceId, type and payload are required.' });
 
     // The server-synthesized crypto-shred audit event cannot be forged by a client.
     const shredForge = await app.inject({

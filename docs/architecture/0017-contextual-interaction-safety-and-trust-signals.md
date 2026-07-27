@@ -133,9 +133,7 @@ A severe negative signal may trigger stronger protective behavior, but must stil
 
 ## Current protocol naming caveat
 
-The current TypeScript protocol package contains a reserved planning type named `ContextSignalLevel` and a deprecated alias named `TrustedLevel`.
-
-That type currently includes the legacy value `admin`. This value must not be treated as a role, permission, capability, host-administration grant, Home membership credential, Pico Rules decision or Action Runner authorization.
+The current TypeScript protocol package contains a reserved planning type named `ContextSignalLevel` with the deliberately non-authoritative values `untrusted`, `known` and `trusted`. Unused pre-release aliases and the authority-like placeholder value were removed before any deployment or external protocol publication.
 
 Context signals are evidence hints for local evaluation only. Roles, capabilities, membership and authorization must be modeled separately before this area becomes writable or security-relevant.
 

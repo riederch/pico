@@ -50,7 +50,6 @@ const foundationAccessModes = [
   'loopback-dev',
   'direct-token',
   'ha-ingress',
-  'unsafe-trusted-local',
 ] as const;
 
 export function defaultWebRootPath(): string {
@@ -171,7 +170,7 @@ function resolveFoundationAccessMode(options: {
   }
 
   if (!isFoundationAccessMode(requestedAccessMode)) {
-    throw new Error('PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress, unsafe-trusted-local.');
+    throw new Error('PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress.');
   }
 
   if (requestedAccessMode === 'loopback-dev' && !isLoopbackHost(options.host)) {

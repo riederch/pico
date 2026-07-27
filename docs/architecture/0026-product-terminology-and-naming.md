@@ -90,13 +90,13 @@ New code should prefer product terms where they do not create protocol ambiguity
 
 Examples:
 
-- `ActionRisk` should be preferred over `ToolRiskLevel`.
-- `PicoRulesDecision` should be preferred over `PolicyDecision`.
-- `ActionRequestedPayload` should be preferred for new action APIs.
-- `ActionHistoryEventPayload` should be preferred for new action-history APIs.
+- `ActionRisk` is the canonical action-risk type.
+- `PicoRulesDecision` is the canonical rule-decision type.
+- `ActionRequestedPayload` is the canonical shape for future action APIs.
+- `ActionHistoryEventPayload` is the canonical shape for future action-history APIs.
 - UI labels should prefer Pico Home, Pico Vault, Pico Surface, Pico Relay, Pico Rules, Action Runner and Action History.
 
-Legacy names may remain as deprecated type aliases or compatibility event names.
+Compatibility aliases should exist only when a real published or deployed consumer requires them.
 
 ## Protocol and compatibility rule
 
@@ -112,6 +112,12 @@ When a product term replaces a technical term in the protocol, the change must u
 - a compatibility adapter
 - explicit migration documentation
 - conformance tests
+
+## Pre-release terminology consolidation
+
+On 2026-07-27, before the first deployment or external protocol publication, Pico removed the unused TypeScript aliases, payload interfaces and reserved event names for the earlier tool, policy, confirmation, executor, audit, Core-URL and device/trust terminology.
+
+The Protocol package is private, the old names had no runtime callers, the old events were never writable through the Foundation API and no stored wire data existed. The product names in this ADR therefore became the sole code and reserved event direction without an alias period. This is an explicit pre-release breaking cleanup, not precedent for silently renaming a deployed or published protocol surface.
 
 ## Wire naming rule
 
@@ -175,9 +181,9 @@ Positive:
 
 Negative:
 
-- some old and new terms will coexist during migration
-- requires aliases and documentation discipline
-- full code/path/API renames must be delayed until compatibility handling exists
+- historical documents and external discussions may still use technical terms
+- future public renames require versioning and documentation discipline
+- full code/path/API renames after deployment must wait for compatibility handling
 
 ## Design rule
 
