@@ -237,6 +237,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0090-durable-reader-sync-floor-and-crash-safe-apply.md`](docs/architecture/0090-durable-reader-sync-floor-and-crash-safe-apply.md) - private durable Reader floor plus verify-persist-expose ordering across restarts and crashes
 - [`docs/architecture/0091-bounded-reader-sync-run-and-cursor-reconciliation.md`](docs/architecture/0091-bounded-reader-sync-run-and-cursor-reconciliation.md) - bounded explicit Reader page runs with at-least-once projection delivery and untrusted-cursor reconciliation
 - [`docs/architecture/0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md`](docs/architecture/0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md) - private one-batch Reader inbox with floor-bound expiry recovery and durable projection acknowledgement
+- [`docs/architecture/0093-private-durable-reader-projection-archive-and-idempotent-receipts.md`](docs/architecture/0093-private-durable-reader-projection-archive-and-idempotent-receipts.md) - bounded private archive for Reader-sealed projections, idempotent receipts and full cryptographic restore
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

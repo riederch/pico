@@ -12,9 +12,13 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  buildPicoReaderCustodySyncManifestSignatureInput,
   picoIdentitySuite,
+  picoMemoryContentSuite,
   picoReaderCustodySyncBatchRecordSchema,
+  picoReaderCustodySyncPayloadSchema,
   type PicoReaderCustodySyncBatchRecord,
+  type PicoReaderCustodySyncPayload,
 } from '@pico/protocol';
 import {
   createPicoReaderCustodyDomain,
@@ -40,24 +44,32 @@ import {
   InMemoryPicoSyncOpaqueTransport,
   LamportClock,
   MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES,
+  MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES,
   PicoReaderCustodySyncBatchPublisher,
   PicoReaderCustodySyncBatchSource,
   PicoReaderCustodySyncClient,
   PicoReaderCustodySyncFilePendingStore,
   PicoReaderCustodySyncFileStateStore,
   PicoReaderCustodySyncProjector,
+  PicoReaderCustodySyncProtectedProjectionFileStore,
   PicoReaderCustodySyncRunner,
+  createPicoReaderCustodySyncProjectionMaterializationConsumer,
   mergeVersionVector,
   picoReaderCustodySyncClientStateSchema,
   picoReaderCustodySyncPendingRecordSchema,
+  picoReaderCustodySyncProjectionReceiptSchema,
+  picoReaderCustodySyncProtectedProjectionArchiveSchema,
+  picoReaderCustodySyncProtectedProjectionRecordSchema,
   updateVersionVector,
   type PicoReaderCustodySyncBatchReader,
+  type PicoReaderCustodySyncClientApplySuccess,
   type PicoReaderCustodySyncClientApplyResult,
   type PicoReaderCustodySyncClientState,
   type PicoReaderCustodySyncClientStateStore,
   type PicoReaderCustodySyncPins,
   type PicoReaderCustodySyncPendingRecord,
   type PicoReaderCustodySyncPendingStore,
+  type PicoReaderCustodySyncProjectionMaterializationStore,
   type PicoReaderCustodySyncRunClient,
   type PicoSyncOpaqueTransport,
 } from './index.js';
@@ -453,6 +465,385 @@ describe('durable reader-custody pending inbox (ADR 0092)', () => {
     });
     expect(deliveries).toBe(2);
     expect(ackBase.load()).toBeUndefined();
+  });
+});
+
+describe('protected reader-custody projection archive (ADR 0093)', () => {
+  it('materializes sealed batches and stable receipts privately and idempotently', () => {
+    const archivePath = createReaderSyncProjectionArchivePath();
+    const routeRef = readerSyncClientPins().routeRef;
+    const store =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        archivePath,
+        routeRef,
+      );
+    const projection1 = protectedProjection(1);
+    const projection2 = protectedProjection(
+      2,
+      projection1.value.floor.manifestDigestHex,
+    );
+
+    expect(store.materialize(projection1)).toEqual({
+      inserted: true,
+      receipt: {
+        schema: picoReaderCustodySyncProjectionReceiptSchema,
+        routeRef,
+        syncBatchId: 'reader_sync_batch_0001',
+        sequence: 1,
+        manifestDigestHex:
+          projection1.value.floor.manifestDigestHex,
+        previousManifestDigestHex: '00'.repeat(32),
+        verifiedAt: '2026-07-27T10:30:00.000Z',
+      },
+    });
+    expect(store.materialize(projection1))
+      .toMatchObject({ inserted: false });
+    expect(store.materialize(projection2))
+      .toMatchObject({ inserted: true });
+    const reverifiedProjection2 = structuredClone(projection2);
+    reverifiedProjection2.state.verifiedAt =
+      '2026-07-27T10:31:00.000Z';
+    expect(store.materialize(reverifiedProjection2)).toMatchObject({
+      inserted: false,
+      receipt: {
+        verifiedAt: '2026-07-27T10:30:00.000Z',
+      },
+    });
+
+    expect(store.load()).toMatchObject({
+      schema: picoReaderCustodySyncProtectedProjectionArchiveSchema,
+      schemaVersion: 1,
+      routeRef,
+      records: [
+        {
+          schema: picoReaderCustodySyncProtectedProjectionRecordSchema,
+          schemaVersion: 1,
+          receipt: { sequence: 1 },
+        },
+        {
+          schema: picoReaderCustodySyncProtectedProjectionRecordSchema,
+          schemaVersion: 1,
+          receipt: { sequence: 2 },
+        },
+      ],
+    });
+    expect(statSync(archivePath).mode & 0o777).toBe(0o600);
+    const serialized = readFileSync(archivePath, 'utf8');
+    expect(serialized).not.toContain(
+      readerSyncClientPins().homeId,
+    );
+    expect(serialized).not.toContain(
+      readerSyncClientPins().domainId,
+    );
+    expect(serialized).not.toContain('plaintext');
+    expect(readdirSync(join(archivePath, '..')))
+      .toEqual(['projections.json']);
+  });
+
+  it('rejects gaps, forks, stale archive heads, quota and filesystem tampering', () => {
+    const routeRef = readerSyncClientPins().routeRef;
+    const projection1 = protectedProjection(1);
+    const projection1Fork = protectedProjection(
+      1,
+      '00'.repeat(32),
+      '-fork',
+    );
+    const projection2 = protectedProjection(
+      2,
+      projection1.value.floor.manifestDigestHex,
+    );
+
+    const gapStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        createReaderSyncProjectionArchivePath(),
+        routeRef,
+      );
+    expect(() => gapStore.materialize(projection2)).toThrow(
+      'reader_sync_projection_archive_sequence_gap',
+    );
+    const wrongScopeProjection = structuredClone(projection1);
+    wrongScopeProjection.state.pins.homeId =
+      'home_reader_sync_cross_scope';
+    expect(() => gapStore.materialize(wrongScopeProjection)).toThrow(
+      'invalid_reader_sync_projection_materialization',
+    );
+
+    const orderedStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        createReaderSyncProjectionArchivePath(),
+        routeRef,
+      );
+    orderedStore.materialize(projection1);
+    expect(() => orderedStore.materialize(projection1Fork)).toThrow(
+      'reader_sync_projection_archive_fork',
+    );
+    orderedStore.materialize(projection2);
+    expect(() => orderedStore.materialize(projection1)).toThrow(
+      'reader_sync_projection_archive_ahead_of_sync_floor',
+    );
+
+    const quotaStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        createReaderSyncProjectionArchivePath(),
+        routeRef,
+        { maxRecords: 1 },
+      );
+    quotaStore.materialize(projection1);
+    expect(() => quotaStore.materialize(projection2)).toThrow(
+      'reader_sync_projection_archive_quota_exceeded',
+    );
+    expect(quotaStore.load()?.records).toHaveLength(1);
+    expect(() =>
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        createReaderSyncProjectionArchivePath(),
+        routeRef,
+        {
+          maxBytes:
+            MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES
+            + 1,
+        },
+      )).toThrow('invalid_reader_sync_projection_archive_limits');
+
+    const receiptTamperPath =
+      createReaderSyncProjectionArchivePath();
+    const receiptTamperStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        receiptTamperPath,
+        routeRef,
+      );
+    receiptTamperStore.materialize(projection1);
+    const receiptTamper = JSON.parse(
+      readFileSync(receiptTamperPath, 'utf8'),
+    ) as {
+      records: Array<{
+        receipt: { verifiedAt: string };
+      }>;
+    };
+    receiptTamper.records[0]!.receipt.verifiedAt =
+      '2026-07-27T10:31:00.000Z';
+    writeFileSync(
+      receiptTamperPath,
+      `${JSON.stringify(receiptTamper)}\n`,
+    );
+    expect(() => receiptTamperStore.materialize(projection1))
+      .toThrow(
+        'reader_sync_projection_archive_verified_at_rollback',
+      );
+
+    const ciphertextTamperPath =
+      createReaderSyncProjectionArchivePath();
+    const ciphertextTamperStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        ciphertextTamperPath,
+        routeRef,
+      );
+    ciphertextTamperStore.materialize(projection1);
+    const ciphertextTamper = JSON.parse(
+      readFileSync(ciphertextTamperPath, 'utf8'),
+    ) as {
+      records: Array<{
+        batchRecord: { sealedPayloadHex: string };
+      }>;
+    };
+    const sealedPayloadHex =
+      ciphertextTamper.records[0]!.batchRecord.sealedPayloadHex;
+    ciphertextTamper.records[0]!.batchRecord.sealedPayloadHex =
+      `${sealedPayloadHex.startsWith('00') ? '01' : '00'}`
+      + sealedPayloadHex.slice(2);
+    writeFileSync(
+      ciphertextTamperPath,
+      `${JSON.stringify(ciphertextTamper)}\n`,
+    );
+    expect(() => ciphertextTamperStore.load()).toThrow(
+      'invalid_reader_sync_projection_archive',
+    );
+
+    const boundedPath = createReaderSyncProjectionArchivePath();
+    const boundedStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        boundedPath,
+        routeRef,
+        { maxBytes: 4_096 },
+      );
+    boundedStore.materialize(projection1);
+    truncateSync(boundedPath, 4_097);
+    expect(() => boundedStore.load()).toThrow(
+      'invalid_reader_sync_projection_archive_file',
+    );
+
+    const truncatedPath =
+      createReaderSyncProjectionArchivePath();
+    const truncatedStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        truncatedPath,
+        routeRef,
+      );
+    truncatedStore.materialize(projection1);
+    truncateSync(truncatedPath, 16);
+    expect(() => truncatedStore.load()).toThrow(
+      'invalid_reader_sync_projection_archive',
+    );
+
+    const permissionsPath =
+      createReaderSyncProjectionArchivePath();
+    const permissionsStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        permissionsPath,
+        routeRef,
+      );
+    permissionsStore.materialize(projection1);
+    chmodSync(permissionsPath, 0o644);
+    expect(() => permissionsStore.load()).toThrow(
+      'invalid_reader_sync_projection_archive_file',
+    );
+    chmodSync(permissionsPath, 0o600);
+    chmodSync(join(permissionsPath, '..'), 0o755);
+    expect(() => permissionsStore.load()).toThrow(
+      'reader_sync_state_directory_permissions',
+    );
+
+    const symlinkPath = createReaderSyncProjectionArchivePath();
+    const symlinkTarget = join(symlinkPath, '..', 'target.json');
+    const targetStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        symlinkTarget,
+        routeRef,
+      );
+    targetStore.materialize(projection1);
+    symlinkSync(symlinkTarget, symlinkPath);
+    expect(() =>
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        symlinkPath,
+        routeRef,
+      ).load()).toThrow(
+      'reader_sync_projection_archive_unreadable',
+    );
+  });
+
+  it('keeps pending until materialization is durable and recovers uncertain commits', async () => {
+    const routeRef = readerSyncClientPins().routeRef;
+    const projection = protectedProjection(1);
+    const source: PicoReaderCustodySyncBatchReader = {
+      read: async () => ({
+        batches: [{ ...projection.batchRecord }],
+        nextCursor: 'cursor:0000000000000001',
+        hasMore: false,
+      }),
+    };
+    const client = createProjectionRunnerClient(projection);
+    const pendingStore = createMemoryPendingStore();
+    const archiveStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        createReaderSyncProjectionArchivePath(),
+        routeRef,
+      );
+    const uncertainStore:
+    PicoReaderCustodySyncProjectionMaterializationStore = {
+      materialize: (nextProjection) => {
+        archiveStore.materialize(nextProjection);
+        throw new Error('simulated_crash_after_materialization_commit');
+      },
+    };
+
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      client.client,
+      pendingStore,
+      createPicoReaderCustodySyncProjectionMaterializationConsumer(
+        uncertainStore,
+      ),
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+      maxBatches: 1,
+    }, { signal: new AbortController().signal })).rejects.toThrow(
+      'simulated_crash_after_materialization_commit',
+    );
+    expect(client.getState()?.floor.sequence).toBe(1);
+    expect(pendingStore.load()?.batchRecord.syncBatchId)
+      .toBe(projection.batchRecord.syncBatchId);
+    expect(archiveStore.load()?.records).toHaveLength(1);
+
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      client.client,
+      pendingStore,
+      createPicoReaderCustodySyncProjectionMaterializationConsumer(
+        archiveStore,
+      ),
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+      maxBatches: 2,
+    }, { signal: new AbortController().signal })).resolves.toMatchObject({
+      ok: true,
+      status: 'source_drained',
+      counters: {
+        replayedBatches: 1,
+        obsoleteBatches: 1,
+      },
+    });
+    expect(pendingStore.load()).toBeUndefined();
+    expect(archiveStore.load()?.records).toHaveLength(1);
+
+    const quotaClient = createProjectionRunnerClient(projection);
+    const quotaPendingStore = createMemoryPendingStore();
+    const quotaPath = createReaderSyncProjectionArchivePath();
+    const undersizedStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        quotaPath,
+        routeRef,
+        { maxBytes: 1 },
+      );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      quotaClient.client,
+      quotaPendingStore,
+      createPicoReaderCustodySyncProjectionMaterializationConsumer(
+        undersizedStore,
+      ),
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+      maxBatches: 1,
+    }, { signal: new AbortController().signal })).rejects.toThrow(
+      'reader_sync_projection_archive_quota_exceeded',
+    );
+    expect(quotaClient.getState()?.floor.sequence).toBe(1);
+    expect(quotaPendingStore.load()).toBeDefined();
+    expect(undersizedStore.load()).toBeUndefined();
+
+    const recoveredStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        quotaPath,
+        routeRef,
+      );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      quotaClient.client,
+      quotaPendingStore,
+      createPicoReaderCustodySyncProjectionMaterializationConsumer(
+        recoveredStore,
+      ),
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+      maxBatches: 2,
+    }, { signal: new AbortController().signal }))
+      .resolves.toMatchObject({ ok: true, status: 'source_drained' });
+    expect(quotaPendingStore.load()).toBeUndefined();
+    expect(recoveredStore.load()?.records).toHaveLength(1);
   });
 });
 
@@ -1222,6 +1613,111 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
     });
     expect(runDeliveries).toEqual([1, 2, 3]);
 
+    const materializedStateStore =
+      new PicoReaderCustodySyncFileStateStore(
+        createReaderSyncStatePath(),
+      );
+    const materializedPendingStore =
+      new PicoReaderCustodySyncFilePendingStore(
+        join(materializedStateStore.path, '..', 'pending.json'),
+      );
+    const materializedArchiveStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        join(materializedStateStore.path, '..', 'projections.json'),
+        routeRef,
+      );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      createDurableClient(materializedStateStore),
+      materializedPendingStore,
+      createPicoReaderCustodySyncProjectionMaterializationConsumer(
+        materializedArchiveStore,
+      ),
+    ).run({
+      evaluatedAt: '2026-07-27T10:46:00.000Z',
+      pageSize: 3,
+      maxPages: 1,
+      maxBatches: 3,
+    }, { signal })).resolves.toMatchObject({
+      ok: true,
+      status: 'source_drained',
+      counters: {
+        insertedBatches: 3,
+        projectionsDelivered: 3,
+      },
+    });
+    const materializedState = materializedStateStore.load()!;
+    const restoredProjections = materializedArchiveStore.restore(
+      pins,
+      materializedState,
+      ({ batchRecord, evaluatedAt }) =>
+        openPicoReaderCustodySyncBatch(sodium, {
+          readerKeyAgreementSession: readerAgreementSession,
+          batchRecord,
+          evaluatedAt,
+        }),
+    );
+    expect(restoredProjections.map((restored) => ({
+      sequence: restored.receipt.sequence,
+      batchId: restored.receipt.syncBatchId,
+      itemPackageIds: restored.value.itemPackageIds,
+    }))).toEqual([
+      {
+        sequence: 1,
+        batchId: batch1.batchRecord.syncBatchId,
+        itemPackageIds: ['reader_sync_package_0001'],
+      },
+      {
+        sequence: 2,
+        batchId: batch2.batchRecord.syncBatchId,
+        itemPackageIds: ['reader_sync_package_0001'],
+      },
+      {
+        sequence: 3,
+        batchId: batch3.batchRecord.syncBatchId,
+        itemPackageIds: ['reader_sync_package_0001'],
+      },
+    ]);
+    expect(readFileSync(materializedArchiveStore.path, 'utf8'))
+      .not.toContain(domainRecord.domain.homeId);
+    expect(() => materializedArchiveStore.restore(
+      pins,
+      {
+        ...materializedState,
+        floor: { ...restoredProjections[1]!.value.floor },
+      },
+      ({ batchRecord, evaluatedAt }) =>
+        openPicoReaderCustodySyncBatch(sodium, {
+          readerKeyAgreementSession: readerAgreementSession,
+          batchRecord,
+          evaluatedAt,
+        }),
+    )).toThrow('reader_sync_projection_archive_state_mismatch');
+    const materializedArchive = JSON.parse(
+      readFileSync(materializedArchiveStore.path, 'utf8'),
+    ) as {
+      records: Array<{
+        receipt: { manifestDigestHex: string };
+      }>;
+    };
+    materializedArchive.records.at(-1)!.receipt.manifestDigestHex =
+      'ab'.repeat(32);
+    writeFileSync(
+      materializedArchiveStore.path,
+      `${JSON.stringify(materializedArchive)}\n`,
+    );
+    expect(() => materializedArchiveStore.restore(
+      pins,
+      materializedState,
+      ({ batchRecord, evaluatedAt }) =>
+        openPicoReaderCustodySyncBatch(sodium, {
+          readerKeyAgreementSession: readerAgreementSession,
+          batchRecord,
+          evaluatedAt,
+        }),
+    )).toThrow('invalid_reader_sync_projection_archive');
+
     const midPageStateStore = new PicoReaderCustodySyncFileStateStore(
       createReaderSyncStatePath(),
     );
@@ -1588,6 +2084,163 @@ function createReaderSyncPendingPath(): string {
   );
   temporaryDirectories.push(directory);
   return join(directory, 'pending.json');
+}
+
+function createReaderSyncProjectionArchivePath(): string {
+  const directory = mkdtempSync(
+    join(tmpdir(), 'pico-reader-sync-projections-'),
+  );
+  temporaryDirectories.push(directory);
+  return join(directory, 'projections.json');
+}
+
+function protectedProjection(
+  sequence: number,
+  previousManifestDigestHex =
+    sequence === 1 ? '00'.repeat(32) : 'ff'.repeat(32),
+  suffix = '',
+): PicoReaderCustodySyncClientApplySuccess {
+  const pins = readerSyncClientPins();
+  const syncBatchId =
+    `reader_sync_batch_${String(sequence).padStart(4, '0')}${suffix}`;
+  const createdAt =
+    `2026-07-27T10:${String(sequence).padStart(2, '0')}:00.000Z`;
+  const expiresAt = '2026-07-27T11:00:00.000Z';
+  const manifest = {
+    suite: picoMemoryContentSuite,
+    syncBatchId,
+    routeRef: pins.routeRef,
+    domainAuthorityId: pins.domainAuthorityId,
+    homeId: pins.homeId,
+    hostSigningKeyFingerprintHex:
+      pins.hostSigningKeyFingerprintHex,
+    domainId: pins.domainId,
+    ownerIdentityKeyFingerprintHex:
+      pins.ownerIdentityKeyFingerprintHex,
+    readerGrantId: pins.readerGrantId,
+    readerKeyFingerprintHex: pins.readerKeyFingerprintHex,
+    sequence,
+    previousManifestDigestHex,
+    evidenceDigestHex: 'ee'.repeat(32),
+    throughKekVersion: sequence,
+    observedThroughLifecycleOrder:
+      `seq:${String(sequence).padStart(16, '0')}`,
+    createdAt,
+    expiresAt,
+  };
+  const manifestDigestHex = Buffer.from(
+    sodium.crypto_generichash(
+      32,
+      buildPicoReaderCustodySyncManifestSignatureInput(manifest),
+      null,
+    ),
+  ).toString('hex');
+  const sealedPayloadHex = Buffer.from(
+    `sealed-reader-projection:${syncBatchId}`,
+    'utf8',
+  ).toString('hex');
+  const batchRecord: PicoReaderCustodySyncBatchRecord = {
+    schema: picoReaderCustodySyncBatchRecordSchema,
+    routeRef: pins.routeRef,
+    syncBatchId,
+    sealedPayloadHex,
+    sealedPayloadDigestHex: Buffer.from(
+      sodium.crypto_generichash(
+        32,
+        Buffer.from(sealedPayloadHex, 'hex'),
+        null,
+      ),
+    ).toString('hex'),
+    expiresAt,
+  };
+  const floor = {
+    routeRef: pins.routeRef,
+    syncBatchId,
+    sequence,
+    manifestDigestHex,
+    throughKekVersion: sequence,
+    observedThroughLifecycleOrder:
+      manifest.observedThroughLifecycleOrder,
+    createdAt,
+  };
+  const state: PicoReaderCustodySyncClientState = {
+    schema: picoReaderCustodySyncClientStateSchema,
+    schemaVersion: 1,
+    revision: sequence,
+    pins,
+    floor,
+    verifiedAt: '2026-07-27T10:30:00.000Z',
+    transportCursor: null,
+  };
+  return {
+    ok: true,
+    inserted: true,
+    batchRecord,
+    payload: {
+      schema: picoReaderCustodySyncPayloadSchema,
+      manifest,
+    } as unknown as PicoReaderCustodySyncPayload,
+    value: {
+      floor: { ...floor },
+      readerStatus: 'active',
+      readerEnvelopeVersions: [sequence],
+      writerGrantIds: [],
+      itemPackageIds: [],
+    },
+    state,
+  };
+}
+
+function createProjectionRunnerClient(
+  projection: PicoReaderCustodySyncClientApplySuccess,
+): {
+  client: PicoReaderCustodySyncRunClient;
+  getState: () => PicoReaderCustodySyncClientState | undefined;
+} {
+  let state: PicoReaderCustodySyncClientState | undefined;
+  const client: PicoReaderCustodySyncRunClient = {
+    routeRef: () => projection.state.pins.routeRef,
+    syncPins: () => ({ ...projection.state.pins }),
+    state: () => state === undefined
+      ? undefined
+      : structuredClone(state),
+    commitTransportCursor: (transportCursor) => {
+      if (state === undefined) {
+        throw new Error('reader_sync_cursor_without_floor');
+      }
+      state = {
+        ...state,
+        revision: state.revision + 1,
+        pins: { ...state.pins },
+        floor: { ...state.floor },
+        transportCursor,
+      };
+      return structuredClone(state);
+    },
+    apply: ({ batchRecord, evaluatedAt }) => {
+      if (JSON.stringify(batchRecord)
+        !== JSON.stringify(projection.batchRecord)) {
+        return { ok: false, reason: 'fork' };
+      }
+      const inserted = state === undefined;
+      if (state === undefined) {
+        state = {
+          ...structuredClone(projection.state),
+          verifiedAt: evaluatedAt ?? projection.state.verifiedAt,
+        };
+      }
+      const result = structuredClone(projection);
+      result.inserted = inserted;
+      result.state = structuredClone(state);
+      return result;
+    },
+  };
+  return {
+    client,
+    getState: () => state === undefined
+      ? undefined
+      : structuredClone(state),
+  };
 }
 
 function readerSyncPendingRecord(

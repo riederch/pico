@@ -68,7 +68,8 @@ the pending record. A different acknowledgement value is rejected.
 Consumer delivery remains at least once. Completion means the consumer has
 made its own downstream effect durable; the runner cannot infer that property.
 The consumer must remain idempotent by a stable signed batch or manifest
-identifier.
+identifier. ADR 0093 supplies a concrete private sealed-batch archive and
+receipt consumer that fulfills this contract for the local reference path.
 
 The state and pending files are not claimed to form one filesystem
 transaction. Their ordered state machine is the recovery protocol:
@@ -162,7 +163,8 @@ Positive:
 
 Negative and residual:
 
-- consumers still require durable idempotency;
+- custom consumers still require durable idempotency; ADR 0093 supplies the
+  default private reference materializer;
 - every in-flight Reader can retain one potentially large sealed batch;
 - separate state and pending files rely on ordered recovery, not atomic
   multi-file replacement;
@@ -188,3 +190,4 @@ Negative and residual:
 - [ADR 0089](0089-authenticated-checkpoint-and-reader-custody-sync.md)
 - [ADR 0090](0090-durable-reader-sync-floor-and-crash-safe-apply.md)
 - [ADR 0091](0091-bounded-reader-sync-run-and-cursor-reconciliation.md)
+- [ADR 0093](0093-private-durable-reader-projection-archive-and-idempotent-receipts.md)

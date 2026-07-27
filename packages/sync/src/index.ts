@@ -604,6 +604,16 @@ export const MAX_PICO_READER_CUSTODY_SYNC_SEALED_PAYLOAD_BYTES =
   (16 * 1024 * 1024) + 128;
 export const MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES =
   MAX_PICO_SYNC_OPAQUE_PAYLOAD_BYTES + (64 * 1024);
+export const picoReaderCustodySyncProjectionReceiptSchema =
+  'pico.sync.reader-custody-projection-receipt.v1' as const;
+export const picoReaderCustodySyncProtectedProjectionRecordSchema =
+  'pico.sync.reader-custody-protected-projection.v1' as const;
+export const picoReaderCustodySyncProtectedProjectionArchiveSchema =
+  'pico.sync.reader-custody-protected-projection-archive.v1' as const;
+export const MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_RECORDS =
+  1_000;
+export const MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES =
+  256 * 1024 * 1024;
 
 export interface PicoReaderCustodySyncClientState {
   schema: typeof picoReaderCustodySyncClientStateSchema;
@@ -640,6 +650,46 @@ export interface PicoReaderCustodySyncPendingStore {
   acknowledge(
     expected: PicoReaderCustodySyncPendingRecord,
   ): { removed: boolean };
+}
+
+export interface PicoReaderCustodySyncProjectionReceipt {
+  schema: typeof picoReaderCustodySyncProjectionReceiptSchema;
+  routeRef: string;
+  syncBatchId: string;
+  sequence: number;
+  manifestDigestHex: string;
+  previousManifestDigestHex: string;
+  verifiedAt: string;
+}
+
+export interface PicoReaderCustodySyncProtectedProjectionRecord {
+  schema: typeof picoReaderCustodySyncProtectedProjectionRecordSchema;
+  schemaVersion: 1;
+  receipt: PicoReaderCustodySyncProjectionReceipt;
+  batchRecord: PicoReaderCustodySyncBatchRecord;
+}
+
+export interface PicoReaderCustodySyncProtectedProjectionArchive {
+  schema: typeof picoReaderCustodySyncProtectedProjectionArchiveSchema;
+  schemaVersion: 1;
+  routeRef: string;
+  records: PicoReaderCustodySyncProtectedProjectionRecord[];
+}
+
+export interface PicoReaderCustodySyncRestoredProjection {
+  receipt: PicoReaderCustodySyncProjectionReceipt;
+  batchRecord: PicoReaderCustodySyncBatchRecord;
+  payload: PicoReaderCustodySyncPayload;
+  value: PicoReaderCustodySyncProjectionView;
+}
+
+export interface PicoReaderCustodySyncProjectionMaterializationStore {
+  materialize(
+    projection: PicoReaderCustodySyncClientApplySuccess,
+  ): {
+    inserted: boolean;
+    receipt: PicoReaderCustodySyncProjectionReceipt;
+  };
 }
 
 export class PicoReaderCustodySyncFileStateStore
@@ -881,6 +931,283 @@ implements PicoReaderCustodySyncPendingStore {
   }
 }
 
+export interface PicoReaderCustodySyncProtectedProjectionArchiveOptions {
+  maxRecords?: number;
+  maxBytes?: number;
+}
+
+export class PicoReaderCustodySyncProtectedProjectionFileStore
+implements PicoReaderCustodySyncProjectionMaterializationStore {
+  public readonly path: string;
+
+  public readonly routeRef: string;
+
+  public readonly maxRecords: number;
+
+  public readonly maxBytes: number;
+
+  public constructor(
+    private readonly sodium: IdentityVerificationSodium,
+    path: string,
+    routeRef: string,
+    options: PicoReaderCustodySyncProtectedProjectionArchiveOptions = {},
+  ) {
+    if (typeof path !== 'string' || path.length < 1) {
+      throw new Error('invalid_reader_sync_projection_archive_path');
+    }
+    assertRouteRef(routeRef);
+    const maxRecords = options.maxRecords
+      ?? MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_RECORDS;
+    const maxBytes = options.maxBytes
+      ?? MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES;
+    if (!Number.isSafeInteger(maxRecords)
+      || maxRecords < 1
+      || maxRecords
+        > MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_RECORDS
+      || !Number.isSafeInteger(maxBytes)
+      || maxBytes < 1
+      || maxBytes
+        > MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES) {
+      throw new Error('invalid_reader_sync_projection_archive_limits');
+    }
+    this.path = resolve(path);
+    this.routeRef = routeRef;
+    this.maxRecords = maxRecords;
+    this.maxBytes = maxBytes;
+  }
+
+  public load():
+  PicoReaderCustodySyncProtectedProjectionArchive | undefined {
+    let fileDescriptor: number;
+    try {
+      fileDescriptor = openSync(
+        this.path,
+        fsConstants.O_RDONLY | noFollowFlag(),
+      );
+    } catch (error) {
+      if (isFileSystemError(error, 'ENOENT')) {
+        return undefined;
+      }
+      throw new Error('reader_sync_projection_archive_unreadable', {
+        cause: error,
+      });
+    }
+
+    try {
+      assertPrivateReaderSyncStateDirectory(dirname(this.path));
+      const stats = fstatSync(fileDescriptor);
+      if (!stats.isFile()
+        || (stats.mode & 0o777) !== 0o600
+        || stats.size < 1
+        || stats.size > this.maxBytes) {
+        throw new Error('invalid_reader_sync_projection_archive_file');
+      }
+      return parseReaderSyncProtectedProjectionArchive(
+        this.sodium,
+        readFileSync(fileDescriptor, 'utf8'),
+        this.routeRef,
+        this.maxRecords,
+      );
+    } finally {
+      closeSync(fileDescriptor);
+    }
+  }
+
+  public materialize(
+    projection: PicoReaderCustodySyncClientApplySuccess,
+  ): {
+    inserted: boolean;
+    receipt: PicoReaderCustodySyncProjectionReceipt;
+  } {
+    const nextRecord =
+      protectedProjectionRecordFromApplySuccess(this.sodium, projection);
+    if (nextRecord.receipt.routeRef !== this.routeRef) {
+      throw new Error('reader_sync_projection_archive_scope_mismatch');
+    }
+    const currentArchive = this.load();
+    const currentHead = currentArchive?.records.at(-1);
+    if (currentHead === undefined) {
+      if (nextRecord.receipt.sequence !== 1) {
+        throw new Error('reader_sync_projection_archive_sequence_gap');
+      }
+      if (nextRecord.receipt.previousManifestDigestHex
+        !== PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX) {
+        throw new Error('reader_sync_projection_archive_fork');
+      }
+    } else if (nextRecord.receipt.sequence
+      < currentHead.receipt.sequence) {
+      throw new Error(
+        'reader_sync_projection_archive_ahead_of_sync_floor',
+      );
+    } else if (nextRecord.receipt.sequence
+      === currentHead.receipt.sequence) {
+      if (!protectedProjectionRecordsShareStableIdentity(
+        currentHead,
+        nextRecord,
+      )) {
+        throw new Error('reader_sync_projection_archive_fork');
+      }
+      if (nextRecord.receipt.verifiedAt
+        < currentHead.receipt.verifiedAt) {
+        throw new Error(
+          'reader_sync_projection_archive_verified_at_rollback',
+        );
+      }
+      return {
+        inserted: false,
+        receipt:
+          cloneReaderSyncProjectionReceipt(currentHead.receipt),
+      };
+    } else {
+      if (nextRecord.receipt.sequence
+        !== currentHead.receipt.sequence + 1) {
+        throw new Error('reader_sync_projection_archive_sequence_gap');
+      }
+      if (nextRecord.receipt.previousManifestDigestHex
+        !== currentHead.receipt.manifestDigestHex) {
+        throw new Error('reader_sync_projection_archive_fork');
+      }
+    }
+
+    const nextArchive: PicoReaderCustodySyncProtectedProjectionArchive = {
+      schema: picoReaderCustodySyncProtectedProjectionArchiveSchema,
+      schemaVersion: 1,
+      routeRef: this.routeRef,
+      records: [
+        ...(currentArchive?.records ?? []).map(
+          cloneReaderSyncProtectedProjectionRecord,
+        ),
+        nextRecord,
+      ],
+    };
+    if (nextArchive.records.length > this.maxRecords) {
+      throw new Error('reader_sync_projection_archive_quota_exceeded');
+    }
+    const serialized = `${JSON.stringify(nextArchive)}\n`;
+    if (Buffer.byteLength(serialized, 'utf8') > this.maxBytes) {
+      throw new Error('reader_sync_projection_archive_quota_exceeded');
+    }
+
+    const parentPath = dirname(this.path);
+    mkdirSync(parentPath, { recursive: true, mode: 0o700 });
+    assertPrivateReaderSyncStateDirectory(parentPath);
+    const temporaryPath =
+      `${this.path}.${process.pid}.${randomUUID()}.tmp`;
+    let temporaryFileDescriptor: number | undefined;
+    try {
+      temporaryFileDescriptor = openSync(
+        temporaryPath,
+        fsConstants.O_CREAT
+          | fsConstants.O_EXCL
+          | fsConstants.O_WRONLY
+          | noFollowFlag(),
+        0o600,
+      );
+      writeFileSync(temporaryFileDescriptor, serialized, {
+        encoding: 'utf8',
+      });
+      fsyncSync(temporaryFileDescriptor);
+      closeSync(temporaryFileDescriptor);
+      temporaryFileDescriptor = undefined;
+
+      renameSync(temporaryPath, this.path);
+      fsyncDirectory(parentPath);
+    } catch (error) {
+      if (temporaryFileDescriptor !== undefined) {
+        closeSync(temporaryFileDescriptor);
+      }
+      try {
+        unlinkSync(temporaryPath);
+      } catch (cleanupError) {
+        if (!isFileSystemError(cleanupError, 'ENOENT')) {
+          throw new Error(
+            'reader_sync_projection_archive_cleanup_failed',
+            { cause: cleanupError },
+          );
+        }
+      }
+      throw error;
+    }
+
+    return {
+      inserted: true,
+      receipt: cloneReaderSyncProjectionReceipt(nextRecord.receipt),
+    };
+  }
+
+  public restore(
+    pins: PicoReaderCustodySyncPins,
+    state: PicoReaderCustodySyncClientState,
+    openPayload: PicoReaderCustodySyncPayloadOpener,
+  ): PicoReaderCustodySyncRestoredProjection[] {
+    assertSyncPins(pins);
+    assertReaderSyncClientState(state);
+    if (!readerSyncPinsEqual(pins, state.pins)
+      || pins.routeRef !== this.routeRef) {
+      throw new Error('reader_sync_projection_archive_scope_mismatch');
+    }
+    const archive = this.load();
+    if (archive === undefined) {
+      throw new Error('reader_sync_projection_archive_missing');
+    }
+
+    const projector = new PicoReaderCustodySyncProjector(
+      this.sodium,
+      pins,
+    );
+    const restored: PicoReaderCustodySyncRestoredProjection[] = [];
+    for (const record of archive.records) {
+      const payload = openPayload({
+        batchRecord: { ...record.batchRecord },
+        evaluatedAt: record.receipt.verifiedAt,
+      });
+      const projected = projector.accept(
+        payload,
+        record.receipt.verifiedAt,
+      );
+      if (!projected.ok
+        || !projected.inserted
+        || projected.value.floor.routeRef
+          !== record.receipt.routeRef
+        || projected.value.floor.syncBatchId
+          !== record.receipt.syncBatchId
+        || projected.value.floor.sequence
+          !== record.receipt.sequence
+        || projected.value.floor.manifestDigestHex
+          !== record.receipt.manifestDigestHex
+        || payload.manifest.previousManifestDigestHex
+          !== record.receipt.previousManifestDigestHex) {
+        throw new Error('invalid_reader_sync_projection_archive');
+      }
+      restored.push({
+        receipt: cloneReaderSyncProjectionReceipt(record.receipt),
+        batchRecord: { ...record.batchRecord },
+        payload,
+        value: cloneProjectionView(projected.value),
+      });
+    }
+    const head = restored.at(-1);
+    if (head === undefined
+      || !readerSyncFloorsEqual(head.value.floor, state.floor)
+      || state.verifiedAt < head.receipt.verifiedAt) {
+      throw new Error(
+        'reader_sync_projection_archive_state_mismatch',
+      );
+    }
+    return restored;
+  }
+}
+
+export function createPicoReaderCustodySyncProjectionMaterializationConsumer(
+  store: PicoReaderCustodySyncProjectionMaterializationStore,
+): PicoReaderCustodySyncProjectionConsumer {
+  return (projection, options) => {
+    throwIfAborted(options.signal);
+    store.materialize(projection);
+    throwIfAborted(options.signal);
+  };
+}
+
 export interface PicoReaderCustodySyncPayloadOpener {
   (input: {
     batchRecord: PicoReaderCustodySyncBatchRecord;
@@ -891,6 +1218,7 @@ export interface PicoReaderCustodySyncPayloadOpener {
 export interface PicoReaderCustodySyncClientApplySuccess {
   ok: true;
   inserted: boolean;
+  batchRecord: PicoReaderCustodySyncBatchRecord;
   payload: PicoReaderCustodySyncPayload;
   value: PicoReaderCustodySyncProjectionView;
   state: PicoReaderCustodySyncClientState;
@@ -1015,6 +1343,7 @@ implements PicoReaderCustodySyncRunClient {
       return {
         ok: true,
         inserted: false,
+        batchRecord: { ...input.batchRecord },
         payload,
         value: cloneProjectionView(projected.value),
         state: cloneReaderSyncClientState(currentState),
@@ -1025,6 +1354,7 @@ implements PicoReaderCustodySyncRunClient {
     return {
       ok: true,
       inserted: projected.inserted,
+      batchRecord: { ...input.batchRecord },
       payload,
       value: cloneProjectionView(projected.value),
       state: cloneReaderSyncClientState(nextState),
@@ -2326,6 +2656,240 @@ function parseReaderSyncPendingRecord(
   return cloneReaderSyncPendingRecord(parsed);
 }
 
+function parseReaderSyncProtectedProjectionArchive(
+  sodium: IdentityVerificationSodium,
+  serialized: string,
+  routeRef: string,
+  maxRecords: number,
+): PicoReaderCustodySyncProtectedProjectionArchive {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized) as unknown;
+  } catch (error) {
+    throw new Error('invalid_reader_sync_projection_archive', {
+      cause: error,
+    });
+  }
+  assertReaderSyncProtectedProjectionArchive(
+    sodium,
+    parsed,
+    routeRef,
+    maxRecords,
+  );
+  return cloneReaderSyncProtectedProjectionArchive(parsed);
+}
+
+function assertReaderSyncProtectedProjectionArchive(
+  sodium: IdentityVerificationSodium,
+  archive: unknown,
+  routeRef: string,
+  maxRecords: number,
+): asserts archive is PicoReaderCustodySyncProtectedProjectionArchive {
+  if (!isUnknownRecord(archive)
+    || !hasExactKeys(archive, [
+      'schema',
+      'schemaVersion',
+      'routeRef',
+      'records',
+    ])
+    || archive.schema
+      !== picoReaderCustodySyncProtectedProjectionArchiveSchema
+    || archive.schemaVersion !== 1
+    || archive.routeRef !== routeRef
+    || !Array.isArray(archive.records)
+    || archive.records.length < 1
+    || archive.records.length > maxRecords) {
+    throw new Error('invalid_reader_sync_projection_archive');
+  }
+
+  let previousManifestDigestHex =
+    PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX;
+  for (const [index, candidate] of archive.records.entries()) {
+    assertReaderSyncProtectedProjectionRecord(
+      sodium,
+      candidate,
+      routeRef,
+    );
+    if (candidate.receipt.sequence !== index + 1
+      || candidate.receipt.previousManifestDigestHex
+        !== previousManifestDigestHex) {
+      throw new Error('invalid_reader_sync_projection_archive');
+    }
+    previousManifestDigestHex = candidate.receipt.manifestDigestHex;
+  }
+}
+
+function assertReaderSyncProtectedProjectionRecord(
+  sodium: IdentityVerificationSodium,
+  record: unknown,
+  routeRef: string,
+): asserts record is PicoReaderCustodySyncProtectedProjectionRecord {
+  if (!isUnknownRecord(record)
+    || !hasExactKeys(record, [
+      'schema',
+      'schemaVersion',
+      'receipt',
+      'batchRecord',
+    ])
+    || record.schema
+      !== picoReaderCustodySyncProtectedProjectionRecordSchema
+    || record.schemaVersion !== 1
+    || !isUnknownRecord(record.receipt)
+    || !hasExactKeys(record.receipt, [
+      'schema',
+      'routeRef',
+      'syncBatchId',
+      'sequence',
+      'manifestDigestHex',
+      'previousManifestDigestHex',
+      'verifiedAt',
+    ])
+    || record.receipt.schema
+      !== picoReaderCustodySyncProjectionReceiptSchema
+    || record.receipt.routeRef !== routeRef
+    || typeof record.receipt.syncBatchId !== 'string'
+    || !Number.isSafeInteger(record.receipt.sequence)
+    || (record.receipt.sequence as number) < 1
+    || typeof record.receipt.manifestDigestHex !== 'string'
+    || typeof record.receipt.previousManifestDigestHex !== 'string'
+    || typeof record.receipt.verifiedAt !== 'string'
+    || !isUnknownRecord(record.batchRecord)
+    || !hasExactKeys(record.batchRecord, [
+      'schema',
+      'routeRef',
+      'syncBatchId',
+      'sealedPayloadHex',
+      'sealedPayloadDigestHex',
+      'expiresAt',
+    ])) {
+    throw new Error('invalid_reader_sync_projection_archive');
+  }
+  const receipt = record.receipt as unknown as
+    PicoReaderCustodySyncProjectionReceipt;
+  const batch = record.batchRecord as unknown as
+    PicoReaderCustodySyncBatchRecord;
+  assertAsciiReference(receipt.syncBatchId);
+  assertDigest(receipt.manifestDigestHex);
+  assertDigest(receipt.previousManifestDigestHex);
+  assertCanonicalInstant(receipt.verifiedAt);
+  assertProtectedProjectionBatchRecord(sodium, batch, routeRef);
+  if (batch.syncBatchId !== receipt.syncBatchId
+    || receipt.verifiedAt >= batch.expiresAt) {
+    throw new Error('invalid_reader_sync_projection_archive');
+  }
+}
+
+function assertProtectedProjectionBatchRecord(
+  sodium: IdentityVerificationSodium,
+  batch: PicoReaderCustodySyncBatchRecord,
+  routeRef: string,
+): void {
+  if (batch.schema !== picoReaderCustodySyncBatchRecordSchema
+    || batch.routeRef !== routeRef
+    || typeof batch.syncBatchId !== 'string'
+    || typeof batch.sealedPayloadHex !== 'string'
+    || typeof batch.sealedPayloadDigestHex !== 'string'
+    || typeof batch.expiresAt !== 'string'
+    || !isCanonicalHex(batch.sealedPayloadHex)
+    || batch.sealedPayloadHex.length / 2
+      > MAX_PICO_READER_CUSTODY_SYNC_SEALED_PAYLOAD_BYTES) {
+    throw new Error('invalid_reader_sync_projection_archive');
+  }
+  assertAsciiReference(batch.syncBatchId);
+  assertDigest(batch.sealedPayloadDigestHex);
+  assertCanonicalInstant(batch.expiresAt);
+  if (generichashHex(sodium, hexToBytes(batch.sealedPayloadHex))
+    !== batch.sealedPayloadDigestHex) {
+    throw new Error('invalid_reader_sync_projection_archive');
+  }
+}
+
+function protectedProjectionRecordFromApplySuccess(
+  sodium: IdentityVerificationSodium,
+  projection: PicoReaderCustodySyncClientApplySuccess,
+): PicoReaderCustodySyncProtectedProjectionRecord {
+  try {
+    if (!isUnknownRecord(projection)
+      || !hasExactKeys(projection, [
+        'ok',
+        'inserted',
+        'batchRecord',
+        'payload',
+        'value',
+        'state',
+      ])
+      || projection.ok !== true
+      || typeof projection.inserted !== 'boolean'
+      || !isUnknownRecord(projection.payload)
+      || projection.payload.schema !== picoReaderCustodySyncPayloadSchema
+      || !isUnknownRecord(projection.payload.manifest)
+      || !isUnknownRecord(projection.value)
+      || !isUnknownRecord(projection.value.floor)) {
+      throw new Error('invalid_projection');
+    }
+    assertReaderSyncClientState(projection.state);
+    assertSyncFloor(projection.value.floor);
+    const floor = projection.value.floor;
+    const manifest = projection.payload.manifest;
+    const batch = projection.batchRecord;
+    assertProtectedProjectionBatchRecord(
+      sodium,
+      batch,
+      floor.routeRef,
+    );
+    const manifestDigestHex = generichashHex(
+      sodium,
+      buildPicoReaderCustodySyncManifestSignatureInput(manifest),
+    );
+    if (!readerSyncFloorsEqual(projection.state.floor, floor)
+      || manifest.routeRef !== floor.routeRef
+      || manifest.domainAuthorityId
+        !== projection.state.pins.domainAuthorityId
+      || manifest.homeId !== projection.state.pins.homeId
+      || manifest.hostSigningKeyFingerprintHex
+        !== projection.state.pins.hostSigningKeyFingerprintHex
+      || manifest.domainId !== projection.state.pins.domainId
+      || manifest.ownerIdentityKeyFingerprintHex
+        !== projection.state.pins.ownerIdentityKeyFingerprintHex
+      || manifest.readerGrantId
+        !== projection.state.pins.readerGrantId
+      || manifest.readerKeyFingerprintHex
+        !== projection.state.pins.readerKeyFingerprintHex
+      || manifest.syncBatchId !== floor.syncBatchId
+      || manifest.sequence !== floor.sequence
+      || manifestDigestHex !== floor.manifestDigestHex
+      || manifest.throughKekVersion !== floor.throughKekVersion
+      || manifest.observedThroughLifecycleOrder
+        !== floor.observedThroughLifecycleOrder
+      || manifest.createdAt !== floor.createdAt
+      || batch.routeRef !== manifest.routeRef
+      || batch.syncBatchId !== manifest.syncBatchId
+      || batch.expiresAt !== manifest.expiresAt
+      || projection.state.verifiedAt >= batch.expiresAt) {
+      throw new Error('invalid_projection');
+    }
+    return {
+      schema: picoReaderCustodySyncProtectedProjectionRecordSchema,
+      schemaVersion: 1,
+      receipt: {
+        schema: picoReaderCustodySyncProjectionReceiptSchema,
+        routeRef: floor.routeRef,
+        syncBatchId: floor.syncBatchId,
+        sequence: floor.sequence,
+        manifestDigestHex: floor.manifestDigestHex,
+        previousManifestDigestHex:
+          manifest.previousManifestDigestHex,
+        verifiedAt: projection.state.verifiedAt,
+      },
+      batchRecord: { ...batch },
+    };
+  } catch (error) {
+    throw new Error('invalid_reader_sync_projection_materialization', {
+      cause: error,
+    });
+  }
+}
+
 function assertReaderSyncPendingRecord(
   pending: unknown,
 ): asserts pending is PicoReaderCustodySyncPendingRecord {
@@ -2540,6 +3104,61 @@ function cloneReaderSyncPendingRecord(
       pending.baseFloor === null ? null : { ...pending.baseFloor },
     batchRecord: { ...pending.batchRecord },
   };
+}
+
+function cloneReaderSyncProjectionReceipt(
+  receipt: PicoReaderCustodySyncProjectionReceipt,
+): PicoReaderCustodySyncProjectionReceipt {
+  return {
+    schema: picoReaderCustodySyncProjectionReceiptSchema,
+    routeRef: receipt.routeRef,
+    syncBatchId: receipt.syncBatchId,
+    sequence: receipt.sequence,
+    manifestDigestHex: receipt.manifestDigestHex,
+    previousManifestDigestHex: receipt.previousManifestDigestHex,
+    verifiedAt: receipt.verifiedAt,
+  };
+}
+
+function cloneReaderSyncProtectedProjectionRecord(
+  record: PicoReaderCustodySyncProtectedProjectionRecord,
+): PicoReaderCustodySyncProtectedProjectionRecord {
+  return {
+    schema: picoReaderCustodySyncProtectedProjectionRecordSchema,
+    schemaVersion: 1,
+    receipt: cloneReaderSyncProjectionReceipt(record.receipt),
+    batchRecord: { ...record.batchRecord },
+  };
+}
+
+function cloneReaderSyncProtectedProjectionArchive(
+  archive: PicoReaderCustodySyncProtectedProjectionArchive,
+): PicoReaderCustodySyncProtectedProjectionArchive {
+  return {
+    schema: picoReaderCustodySyncProtectedProjectionArchiveSchema,
+    schemaVersion: 1,
+    routeRef: archive.routeRef,
+    records: archive.records.map(
+      cloneReaderSyncProtectedProjectionRecord,
+    ),
+  };
+}
+
+function protectedProjectionRecordsShareStableIdentity(
+  left: PicoReaderCustodySyncProtectedProjectionRecord,
+  right: PicoReaderCustodySyncProtectedProjectionRecord,
+): boolean {
+  return left.receipt.routeRef === right.receipt.routeRef
+    && left.receipt.syncBatchId === right.receipt.syncBatchId
+    && left.receipt.sequence === right.receipt.sequence
+    && left.receipt.manifestDigestHex
+      === right.receipt.manifestDigestHex
+    && left.receipt.previousManifestDigestHex
+      === right.receipt.previousManifestDigestHex
+    && readerSyncBatchRecordsEqual(
+      left.batchRecord,
+      right.batchRecord,
+    );
 }
 
 function readerSyncPendingRecordsEqual(
