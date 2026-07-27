@@ -115,6 +115,8 @@ describe('Pico protocol types', () => {
       'home.membership_changed',
       'home.domain_read_granted',
       'home.domain_read_revoked',
+      'home.share_envelope_issued',
+      'home.share_envelope_removed',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -128,6 +130,8 @@ describe('Pico protocol types', () => {
       'home.membership_changed',
       'home.domain_read_granted',
       'home.domain_read_revoked',
+      'home.share_envelope_issued',
+      'home.share_envelope_removed',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');
@@ -272,6 +276,40 @@ describe('Pico protocol types', () => {
     expect(validateFoundationEventPayload('home.reset', { hostPrivateKey: 'secret' })).toEqual({
       ok: false,
       error: 'home.reset payload has unexpected field: hostPrivateKey.',
+    });
+  });
+
+  it('keeps share-envelope audit payloads reference-only (ADR 0084)', () => {
+    const reference = {
+      grantId: 'grant_0001',
+      privacyDomain: 'domain-private',
+      readerKeyFingerprintHex: '11'.repeat(32),
+      kekVersion: 2,
+    };
+    expect(validateFoundationEventPayload(
+      'home.share_envelope_issued',
+      reference,
+    )).toEqual({ ok: true, payload: reference });
+    expect(validateFoundationEventPayload('home.share_envelope_removed', {
+      ...reference,
+      reasonCategory: 'authority_reconciliation',
+    })).toEqual({
+      ok: true,
+      payload: { ...reference, reasonCategory: 'authority_reconciliation' },
+    });
+    expect(validateFoundationEventPayload('home.share_envelope_issued', {
+      ...reference,
+      sealedWrapHex: 'secret-ciphertext',
+    })).toEqual({
+      ok: false,
+      error: 'home.share_envelope_issued payload has unexpected field: sealedWrapHex.',
+    });
+    expect(validateFoundationEventPayload('home.share_envelope_removed', {
+      ...reference,
+      reasonCategory: 'invented',
+    })).toEqual({
+      ok: false,
+      error: 'home.share_envelope_removed payload requires reasonCategory.',
     });
   });
 

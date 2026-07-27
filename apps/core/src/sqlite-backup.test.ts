@@ -286,6 +286,10 @@ describe('restoreSqliteBackup', () => {
         id: '0018_pico_identity_reader_keys',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0019_pico_share_envelopes',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

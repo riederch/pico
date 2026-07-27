@@ -98,6 +98,10 @@ describe('database migrations', () => {
           id: '0018_pico_identity_reader_keys',
           requiresBackup: false,
         },
+        {
+          id: '0019_pico_share_envelopes',
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: false,
@@ -129,6 +133,7 @@ describe('database migrations', () => {
     expect(tables).toContain('pico_home_founding_record');
     expect(tables).toContain('pico_home_membership');
     expect(tables).toContain('memory_domain_custody');
+    expect(tables).toContain('pico_share_envelope');
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: '0001_event_store',
@@ -200,6 +205,10 @@ describe('database migrations', () => {
       },
       {
         id: '0018_pico_identity_reader_keys',
+        appliedAt: expect.any(String),
+      },
+      {
+        id: '0019_pico_share_envelopes',
         appliedAt: expect.any(String),
       },
     ]);
@@ -335,12 +344,13 @@ describe('database migrations', () => {
         '0016_pico_home_membership_credentials',
         '0017_identity_sessions_and_domain_read_grants',
         '0018_pico_identity_reader_keys',
+        '0019_pico_share_envelopes',
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(18);
+    expect(listAppliedMigrations(db)).toHaveLength(19);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -350,7 +360,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(18);
+    expect(listAppliedMigrations(db)).toHaveLength(19);
 
     db.close();
   });
@@ -389,7 +399,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(18);
+    expect(listAppliedMigrations(db)).toHaveLength(19);
 
     db.close();
   });
@@ -418,6 +428,7 @@ describe('database migrations', () => {
       '0016_pico_home_membership_credentials',
       '0017_identity_sessions_and_domain_read_grants',
       '0018_pico_identity_reader_keys',
+      '0019_pico_share_envelopes',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -444,6 +455,7 @@ describe('database migrations', () => {
           '0016_pico_home_membership_credentials',
           '0017_identity_sessions_and_domain_read_grants',
           '0018_pico_identity_reader_keys',
+          '0019_pico_share_envelopes',
         ],
       },
     ]);
@@ -526,6 +538,7 @@ describe('database migrations', () => {
       '0016_pico_home_membership_credentials',
       '0017_identity_sessions_and_domain_read_grants',
       '0018_pico_identity_reader_keys',
+      '0019_pico_share_envelopes',
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {

@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DomainReadership } from './domain-readership.js';
+import type { PicoIdentityReaderKeyFreshnessSource } from './reader-key.js';
 
 export interface CoreConfig {
   host: string;
@@ -29,6 +30,13 @@ export interface CoreConfig {
    * policy to prove the seam gates reads independently of the operator role.
    */
   readership?: DomainReadership;
+  /**
+   * Authenticated registry/sync freshness adapter used only for reader-key
+   * selection immediately before share-envelope preparation/finalization.
+   * Production configuration deliberately has no environment-backed shortcut;
+   * absent an injected authenticated adapter, issuance fails closed.
+   */
+  readerKeyFreshnessSource?: PicoIdentityReaderKeyFreshnessSource;
 }
 
 type Environment = Record<string, string | undefined>;

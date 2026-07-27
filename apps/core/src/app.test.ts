@@ -241,6 +241,7 @@ describe('Pico Home Core app', () => {
           { id: '0016_pico_home_membership_credentials', appliedAt: expect.any(String) },
           { id: '0017_identity_sessions_and_domain_read_grants', appliedAt: expect.any(String) },
           { id: '0018_pico_identity_reader_keys', appliedAt: expect.any(String) },
+          { id: '0019_pico_share_envelopes', appliedAt: expect.any(String) },
         ],
       },
     });

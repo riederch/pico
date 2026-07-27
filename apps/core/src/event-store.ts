@@ -14,12 +14,16 @@ import type {
   PicoHomeDomainReadGrantLifecycleRecord,
   PicoHomeDomainReadGrantRecord,
   PicoIdentityKeyRecordSignatureInput,
+  PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
+  buildPicoShareEnvelopeSignatureInput,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
   picoIdentitySuite,
+  picoShareEnvelopeRecordSchema,
+  picoShareSuite,
   payloadPostures,
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingRecordSchema,
@@ -45,6 +49,7 @@ import {
 } from './home-membership.js';
 import {
   createVerifiedPicoIdentityLifecycleIndex,
+  verifyPicoIdentityDetachedSignature,
   verifyPicoIdentityKeyRecordFingerprint,
   type IdentityVerificationSodium,
   type PicoIdentitySignedDelegation,
@@ -165,6 +170,38 @@ export interface PicoIdentityReaderKeyCandidate {
   delegationLifecycleOrder: string;
   locallyObservedThroughLifecycleOrder: string;
   validUntil: string;
+}
+
+export interface PicoShareEnvelopeStoredRecord {
+  issuanceId: string;
+  delegationId: string;
+  record: PicoShareEnvelopeRecord;
+}
+
+export interface PicoShareEnvelopeReference {
+  grantId: string;
+  privacyDomain: string;
+  readerKeyFingerprintHex: string;
+  kekVersion: number;
+}
+
+export type PicoShareEnvelopeRecordResult =
+  | { ok: true; inserted: boolean; envelope: PicoShareEnvelopeStoredRecord }
+  | {
+    ok: false;
+    reason:
+      | 'invalid_envelope'
+      | 'inactive_grant'
+      | 'reader_key_is_not_locally_eligible'
+      | 'conflicting_record';
+  };
+
+export interface PicoShareEnvelopeVerificationSodium extends IdentityVerificationSodium {
+  crypto_generichash(
+    hashLength: number,
+    message: Uint8Array | string,
+    key?: Uint8Array | string | null,
+  ): Uint8Array;
 }
 
 export interface PicoHomeDomainReadGrantView {
@@ -567,6 +604,9 @@ export class EventStore {
       }
       if (tableExists(this.db, 'pico_home_domain_read_grant')) {
         this.db.prepare('DELETE FROM pico_home_domain_read_grant').run();
+      }
+      if (tableExists(this.db, 'pico_share_envelope')) {
+        this.db.prepare('DELETE FROM pico_share_envelope').run();
       }
     });
 
@@ -1768,6 +1808,269 @@ export class EventStore {
     return { droppedGrants, droppedLifecycleRecords };
   }
 
+  /**
+   * Resolves the complete signed authority record for one currently usable
+   * grant. Callers never reconstruct issuer authority from the read model.
+   */
+  public activePicoHomeDomainReadGrantRecord(
+    sodium: IdentityVerificationSodium,
+    grantId: string,
+    at: string = new Date().toISOString(),
+  ): PicoHomeDomainReadGrantRecord | undefined {
+    this.ensureOpen();
+    try {
+      const foundingRecord = this.picoHomeFoundingRecord();
+      const record = this.picoHomeDomainReadGrantRecord(grantId);
+      if (foundingRecord === undefined
+        || record === undefined
+        || !verifyPicoHomeDomainReadGrant(sodium, { record, foundingRecord }).ok
+        || this.picoHomeDomainReadGrantView(grantId, at).status !== 'active'
+        || !this.hasActivePicoHomeMembership(
+          record.grant.readerPicoIdentityFingerprintHex,
+          record.grant.homeId,
+          at,
+        )
+        || !this.isExistingHostCustodyDomain(record.grant.privacyDomain)) {
+        return undefined;
+      }
+      return record;
+    } catch {
+      return undefined;
+    }
+  }
+
+  public isHostCustodyDomain(privacyDomain: string): boolean {
+    this.ensureOpen();
+    return this.isExistingHostCustodyDomain(privacyDomain);
+  }
+
+  public recordPicoShareEnvelope(params: {
+    sodium: PicoShareEnvelopeVerificationSodium;
+    issuanceId: string;
+    delegationId: string;
+    record: PicoShareEnvelopeRecord;
+    at?: string;
+  }): PicoShareEnvelopeRecordResult {
+    this.ensureOpen();
+    const candidate: PicoShareEnvelopeStoredRecord = {
+      issuanceId: params.issuanceId,
+      delegationId: params.delegationId,
+      record: params.record,
+    };
+    if (!this.isPicoShareEnvelopeValid(params.sodium, candidate, params.at)) {
+      return { ok: false, reason: this.activePicoHomeDomainReadGrantRecord(
+        params.sodium,
+        params.record.envelope.grantId,
+        params.at,
+      ) === undefined ? 'inactive_grant' : 'invalid_envelope' };
+    }
+
+    const envelopeJson = serializePayload(params.record.envelope);
+    const issuerKeyJson = serializePayload(params.record.issuerIdentityKeyRecord);
+    const existingByIssuance = this.picoShareEnvelope(params.issuanceId);
+    if (existingByIssuance !== undefined) {
+      return serializePayload(existingByIssuance) === serializePayload(candidate)
+        ? { ok: true, inserted: false, envelope: existingByIssuance }
+        : { ok: false, reason: 'conflicting_record' };
+    }
+
+    const existingTuple = this.db
+      .prepare(`
+        SELECT issuance_id AS issuanceId
+        FROM pico_share_envelope
+        WHERE grant_id = ?
+          AND reader_key_fingerprint_hex = ?
+          AND kek_version = ?
+      `)
+      .get(
+        params.record.envelope.grantId,
+        params.record.envelope.readerKeyFingerprintHex,
+        params.record.envelope.kekVersion,
+      ) as { issuanceId: string } | undefined;
+    if (existingTuple !== undefined) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    const grant = this.activePicoHomeDomainReadGrantRecord(
+      params.sodium,
+      params.record.envelope.grantId,
+      params.at,
+    )!;
+    const inserted = this.db
+      .prepare(`
+        INSERT INTO pico_share_envelope (
+          issuance_id,
+          grant_id,
+          delegation_id,
+          home_id,
+          privacy_domain,
+          kek_version,
+          host_signing_key_fingerprint_hex,
+          issuer_identity_key_fingerprint_hex,
+          reader_key_fingerprint_hex,
+          wrap_digest_hex,
+          granted_at,
+          envelope_json,
+          sealed_wrap_hex,
+          issuer_identity_key_record_json,
+          issuer_signature_hex,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        params.issuanceId,
+        params.record.envelope.grantId,
+        params.delegationId,
+        grant.grant.homeId,
+        params.record.envelope.domainId,
+        params.record.envelope.kekVersion,
+        params.record.envelope.hostSigningKeyFingerprintHex,
+        params.record.envelope.issuerIdentityKeyFingerprintHex,
+        params.record.envelope.readerKeyFingerprintHex,
+        params.record.envelope.wrapDigestHex,
+        params.record.envelope.grantedAt,
+        envelopeJson,
+        params.record.sealedWrapHex,
+        issuerKeyJson,
+        params.record.issuerSignatureHex,
+        params.record.createdAt,
+      ).changes === 1;
+
+    return { ok: true, inserted, envelope: candidate };
+  }
+
+  public picoShareEnvelope(issuanceId: string): PicoShareEnvelopeStoredRecord | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT issuance_id AS issuanceId,
+               delegation_id AS delegationId,
+               envelope_json AS envelopeJson,
+               sealed_wrap_hex AS sealedWrapHex,
+               issuer_identity_key_record_json AS issuerIdentityKeyRecordJson,
+               issuer_signature_hex AS issuerSignatureHex,
+               created_at AS createdAt
+        FROM pico_share_envelope
+        WHERE issuance_id = ?
+      `)
+      .get(issuanceId) as PicoShareEnvelopeRow | undefined;
+    return row === undefined ? undefined : mapPicoShareEnvelopeRow(row);
+  }
+
+  public picoShareEnvelopes(): PicoShareEnvelopeStoredRecord[] {
+    this.ensureOpen();
+    return (this.db
+      .prepare(`
+        SELECT issuance_id AS issuanceId,
+               delegation_id AS delegationId,
+               envelope_json AS envelopeJson,
+               sealed_wrap_hex AS sealedWrapHex,
+               issuer_identity_key_record_json AS issuerIdentityKeyRecordJson,
+               issuer_signature_hex AS issuerSignatureHex,
+               created_at AS createdAt
+        FROM pico_share_envelope
+        ORDER BY granted_at, issuance_id
+      `)
+      .all() as PicoShareEnvelopeRow[])
+      .map(mapPicoShareEnvelopeRow);
+  }
+
+  public reconcilePicoShareEnvelopes(
+    sodium: PicoShareEnvelopeVerificationSodium,
+    keyAvailable: (privacyDomain: string, kekVersion: number) => boolean,
+    at: string = new Date().toISOString(),
+  ): {
+    removedForAuthority: PicoShareEnvelopeReference[];
+    removedForMissingKey: PicoShareEnvelopeReference[];
+  } {
+    this.ensureOpen();
+    const removedForAuthority: PicoShareEnvelopeReference[] = [];
+    const removedForMissingKey: PicoShareEnvelopeReference[] = [];
+    const reconcile = this.db.transaction(() => {
+      for (const stored of this.picoShareEnvelopes()) {
+        const reference = picoShareEnvelopeReference(stored);
+        let reason: 'authority' | 'key' | undefined;
+        if (!this.isPicoShareEnvelopeValid(sodium, stored, at)) {
+          reason = 'authority';
+        } else {
+          try {
+            if (!keyAvailable(reference.privacyDomain, reference.kekVersion)) {
+              reason = 'key';
+            }
+          } catch {
+            reason = 'key';
+          }
+        }
+        if (reason === undefined) {
+          continue;
+        }
+
+        this.db.prepare('DELETE FROM pico_share_envelope WHERE issuance_id = ?').run(stored.issuanceId);
+        (reason === 'authority' ? removedForAuthority : removedForMissingKey).push(reference);
+      }
+    });
+    reconcile();
+    return { removedForAuthority, removedForMissingKey };
+  }
+
+  public isPicoShareEnvelopeValid(
+    sodium: PicoShareEnvelopeVerificationSodium,
+    stored: PicoShareEnvelopeStoredRecord,
+    at: string = new Date().toISOString(),
+  ): boolean {
+    try {
+      const { record } = stored;
+      const envelope = record.envelope;
+      const grant = this.activePicoHomeDomainReadGrantRecord(
+        sodium,
+        envelope.grantId,
+        at,
+      );
+      if (!isAsciiToken(stored.issuanceId)
+        || !isAsciiToken(stored.delegationId)
+        || record.schema !== picoShareEnvelopeRecordSchema
+        || envelope.suite !== picoShareSuite
+        || grant === undefined
+        || envelope.domainId !== grant.grant.privacyDomain
+        || envelope.hostSigningKeyFingerprintHex !== grant.grant.hostSigningKeyFingerprintHex
+        || envelope.issuerIdentityKeyFingerprintHex
+          !== grant.grant.controllerPicoIdentityFingerprintHex
+        || envelope.readerKeyFingerprintHex
+          !== this.picoIdentityReaderKeyCandidate({
+            homeId: grant.grant.homeId,
+            picoIdentityFingerprintHex: grant.grant.readerPicoIdentityFingerprintHex,
+            delegationId: stored.delegationId,
+            deviceKeyAgreementKeyFingerprintHex: envelope.readerKeyFingerprintHex,
+            sodium,
+            at,
+          })?.deviceKeyAgreementKeyFingerprintHex
+        || record.issuerIdentityKeyRecord.keyRole !== 'pico_identity'
+        || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+          keyRecord: record.issuerIdentityKeyRecord,
+          expectedFingerprintHex: envelope.issuerIdentityKeyFingerprintHex,
+        })
+        || serializePayload(record.issuerIdentityKeyRecord)
+          !== serializePayload(grant.issuerIdentityKeyRecord)
+        || !isCanonicalHex(record.sealedWrapHex)
+        || !isCanonicalInstant(record.createdAt)) {
+        return false;
+      }
+
+      const sealedWrap = Buffer.from(record.sealedWrapHex, 'hex');
+      const wrapDigestHex = Buffer.from(
+        sodium.crypto_generichash(32, sealedWrap, null),
+      ).toString('hex');
+      return wrapDigestHex === envelope.wrapDigestHex
+        && verifyPicoIdentityDetachedSignature(sodium, {
+          publicKeyHex: record.issuerIdentityKeyRecord.publicKeyHex,
+          signatureInput: buildPicoShareEnvelopeSignatureInput(envelope),
+          signatureHex: record.issuerSignatureHex,
+        });
+    } catch {
+      return false;
+    }
+  }
+
   private picoIdentitySignedRevocations(
     issuerPicoIdentityFingerprintHex: string,
   ): PicoIdentitySignedRevocation[] {
@@ -2376,6 +2679,16 @@ interface DomainReadGrantViewRow {
   createdAt: string;
 }
 
+interface PicoShareEnvelopeRow {
+  issuanceId: string;
+  delegationId: string;
+  envelopeJson: string;
+  sealedWrapHex: string;
+  issuerIdentityKeyRecordJson: string;
+  issuerSignatureHex: string;
+  createdAt: string;
+}
+
 interface PicoHomeMembershipRow {
   membershipId: string;
   homeId: string;
@@ -2483,6 +2796,32 @@ function mapPicoHomeMembership(row: PicoHomeMembershipRow): PicoHomeMembership {
   return membership;
 }
 
+function mapPicoShareEnvelopeRow(row: PicoShareEnvelopeRow): PicoShareEnvelopeStoredRecord {
+  return {
+    issuanceId: row.issuanceId,
+    delegationId: row.delegationId,
+    record: {
+      schema: picoShareEnvelopeRecordSchema,
+      envelope: JSON.parse(row.envelopeJson) as PicoShareEnvelopeRecord['envelope'],
+      sealedWrapHex: row.sealedWrapHex,
+      issuerIdentityKeyRecord: JSON.parse(
+        row.issuerIdentityKeyRecordJson,
+      ) as PicoShareEnvelopeRecord['issuerIdentityKeyRecord'],
+      issuerSignatureHex: row.issuerSignatureHex,
+      createdAt: row.createdAt,
+    },
+  };
+}
+
+function picoShareEnvelopeReference(stored: PicoShareEnvelopeStoredRecord): PicoShareEnvelopeReference {
+  return {
+    grantId: stored.record.envelope.grantId,
+    privacyDomain: stored.record.envelope.domainId,
+    readerKeyFingerprintHex: stored.record.envelope.readerKeyFingerprintHex,
+    kekVersion: stored.record.envelope.kekVersion,
+  };
+}
+
 function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string): boolean {
   return row.event_id === event.eventId
     && row.device_id === event.deviceId
@@ -2528,6 +2867,22 @@ function assertAsciiToken(value: string, label: string): void {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
     throw new Error(`Pico Home ${label} must be a non-empty ASCII token.`);
   }
+}
+
+function isAsciiToken(value: string): boolean {
+  return typeof value === 'string' && /^[A-Za-z0-9._:/+-]{1,256}$/.test(value);
+}
+
+function isCanonicalHex(value: string): boolean {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length % 2 === 0
+    && /^[0-9a-f]+$/.test(value);
+}
+
+function isCanonicalInstant(value: string): boolean {
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString() === value;
 }
 
 function assertFingerprint(value: string, label: string): void {

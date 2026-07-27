@@ -64,6 +64,7 @@ import {
   type PicoRealtimeTicketResponse,
   type PicoRetentionPolicyListResponse,
   type PicoRetentionPolicyResponse,
+  type PicoShareEnvelopeRecord,
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
 } from '@pico/protocol';
@@ -76,7 +77,12 @@ import {
 import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
-import { EventStore, type EventCursor, type PicoHomeClaimState } from './event-store.js';
+import {
+  EventStore,
+  type EventCursor,
+  type PicoHomeClaimState,
+  type PicoShareEnvelopeStoredRecord,
+} from './event-store.js';
 import type { MemoryContentCursor, MemoryItem, MemoryStore } from './memory-store.js';
 import { HomeMembershipReadership, SoleResidentReadership, type DomainReadership } from './domain-readership.js';
 import { registerWebDashboard } from './static-web.js';
@@ -103,6 +109,11 @@ import {
   MoveInCode,
   type HomeHostKeyPairSet,
 } from './home-setup.js';
+import { PicoIdentityReaderKeySelector } from './reader-key.js';
+import {
+  PicoShareEnvelopeIssuer,
+  type PicoShareEnvelopePrepareInput,
+} from './share-envelope.js';
 
 const SERVICE_VERSION = '0.1.7';
 const PROTOCOL_VERSION = '0.1.7';
@@ -274,9 +285,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Argon2id (ADR 0076), whether or not memory encryption is on.
   await sodium.ready;
 
+  let keyStore: KeyStore | undefined;
   let memoryCrypto: MemoryContentCrypto | undefined;
   if (config.memoryEncryption === true) {
-    memoryCrypto = new MemoryContentCrypto(sodium, new KeyStore(keyStorePath));
+    keyStore = new KeyStore(keyStorePath);
+    memoryCrypto = new MemoryContentCrypto(sodium, keyStore);
   }
 
   const app = Fastify({
@@ -314,6 +327,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const operators: OperatorStore = store.operators(sodium);
   const sessions = new SessionStore();
   const identitySessionChallenges = new IdentitySessionChallengeStore();
+  const readerKeySelector = new PicoIdentityReaderKeySelector(
+    store,
+    sodium,
+    config.readerKeyFreshnessSource,
+  );
+  const shareEnvelopeIssuer = new PicoShareEnvelopeIssuer(
+    store,
+    sodium,
+    readerKeySelector,
+    keyStore,
+  );
   const bootstrapCode = new OperatorBootstrapCode();
   const moveInCode = new MoveInCode();
   const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
@@ -339,6 +363,27 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     if (store.append(event) === 'inserted') {
       broadcast(event);
+    }
+  }
+
+  function reconcileShareEnvelopes(): void {
+    const reconciliation = store.reconcilePicoShareEnvelopes(
+      sodium,
+      (privacyDomain, kekVersion) => keyStore?.listVersions(privacyDomain, {
+        custodyClass: 'host_custody',
+      }).includes(kekVersion) === true,
+    );
+    for (const removed of reconciliation.removedForAuthority) {
+      appendServerEvent('home.share_envelope_removed', {
+        ...removed,
+        reasonCategory: 'authority_reconciliation',
+      });
+    }
+    for (const removed of reconciliation.removedForMissingKey) {
+      appendServerEvent('home.share_envelope_removed', {
+        ...removed,
+        reasonCategory: 'key_unavailable',
+      });
     }
   }
 
@@ -466,6 +511,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       'Pico Home domain read-grant evidence failed re-verification on boot and was dropped.',
     );
   }
+  reconcileShareEnvelopes();
   activateHomeSetupMode();
 
   // While no operator exists, mint the per-process bootstrap code and surface it
@@ -863,6 +909,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('POST', '/api/home/domain-read-grants', 'host-admin');
   accessClasses.register('POST', '/api/home/domain-read-grant-lifecycle', 'host-admin');
   accessClasses.register('GET', '/api/home/domain-read-grants', 'host-admin');
+  accessClasses.register('POST', '/api/home/share-envelope-issuance', 'host-admin');
+  accessClasses.register('POST', '/api/home/share-envelopes', 'host-admin');
+  accessClasses.register('GET', '/api/home/share-envelopes', 'host-admin');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -1160,6 +1209,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
       status: recorded.membership.status,
     });
+    if (recorded.membership.status !== 'active') {
+      reconcileShareEnvelopes();
+    }
 
     return sendNoStore(reply, { membership: recorded.membership });
   });
@@ -1220,9 +1272,56 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         privacyDomain: recorded.grant.privacyDomain,
         readerPicoIdentityFingerprintHex: recorded.grant.readerPicoIdentityFingerprintHex,
       });
+      reconcileShareEnvelopes();
     }
 
     return sendNoStore(reply.code(recorded.inserted ? 201 : 200), { grant: recorded.grant });
+  });
+
+  app.post('/api/home/share-envelope-issuance', async (request, reply) => {
+    const result = await shareEnvelopeIssuer.prepare(
+      (request.body ?? {}) as PicoShareEnvelopePrepareInput,
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(shareEnvelopeFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    return sendNoStore(reply.code(201), { issuance: result.pending });
+  });
+
+  app.post('/api/home/share-envelopes', async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      issuanceId?: unknown;
+      issuerSignatureHex?: unknown;
+    };
+    const result = await shareEnvelopeIssuer.finalize(
+      typeof body.issuanceId === 'string' ? body.issuanceId : '',
+      typeof body.issuerSignatureHex === 'string' ? body.issuerSignatureHex : '',
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(shareEnvelopeFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    if (result.inserted) {
+      appendServerEvent('home.share_envelope_issued', {
+        grantId: result.envelope.record.envelope.grantId,
+        privacyDomain: result.envelope.record.envelope.domainId,
+        readerKeyFingerprintHex: result.envelope.record.envelope.readerKeyFingerprintHex,
+        kekVersion: result.envelope.record.envelope.kekVersion,
+      });
+    }
+    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+      envelope: publicPicoShareEnvelope(result.envelope),
+    });
+  });
+
+  app.get('/api/home/share-envelopes', async (_request, reply) => {
+    reconcileShareEnvelopes();
+    return sendNoStore(reply, {
+      envelopes: store.picoShareEnvelopes().map(publicPicoShareEnvelope),
+    });
   });
 
   app.post('/api/auth/identity-challenges', async (_request, reply) => {
@@ -1272,6 +1371,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       delegation: verified.delegation,
       revocations: verified.revocations,
     });
+    if (recorded.ok && verified.revocations.length > 0) {
+      reconcileShareEnvelopes();
+    }
     const registered = recorded.ok
       ? store.registerPicoIdentityReaderKey({
         sodium,
@@ -1589,6 +1691,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     );
 
     request.log.warn({ privacyDomain, removedKeyVersions }, 'Privacy domain crypto-shredded.');
+    reconcileShareEnvelopes();
 
     return sendNoStore(reply, { privacyDomain, removedKeyVersions });
   });
@@ -2063,6 +2166,32 @@ function domainReadGrantFailureStatus(reason: string): number {
   }
 
   return 400;
+}
+
+function shareEnvelopeFailureStatus(reason: string): number {
+  if (reason === 'invalid_issuer_signature') {
+    return 401;
+  }
+  if (reason === 'unknown_or_expired_issuance') {
+    return 404;
+  }
+  if (reason === 'invalid_request') {
+    return 400;
+  }
+  if (reason === 'freshness_unavailable' || reason === 'envelope_issuance_unavailable') {
+    return 503;
+  }
+  return 409;
+}
+
+function publicPicoShareEnvelope(stored: PicoShareEnvelopeStoredRecord): {
+  issuanceId: string;
+  record: PicoShareEnvelopeRecord;
+} {
+  return {
+    issuanceId: stored.issuanceId,
+    record: stored.record,
+  };
 }
 
 /**

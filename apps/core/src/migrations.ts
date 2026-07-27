@@ -597,6 +597,39 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0019_pico_share_envelopes',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0084: only controller-signed envelopes cross the durable boundary.
+      // The sealed wrap is ciphertext whose digest is signature-bound; raw
+      // domain KEKs and unsigned pending issuance state never enter SQLite.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_share_envelope (
+          issuance_id TEXT PRIMARY KEY,
+          grant_id TEXT NOT NULL,
+          delegation_id TEXT NOT NULL,
+          home_id TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          kek_version INTEGER NOT NULL CHECK (kek_version >= 1),
+          host_signing_key_fingerprint_hex TEXT NOT NULL,
+          issuer_identity_key_fingerprint_hex TEXT NOT NULL,
+          reader_key_fingerprint_hex TEXT NOT NULL,
+          wrap_digest_hex TEXT NOT NULL,
+          granted_at TEXT NOT NULL,
+          envelope_json TEXT NOT NULL,
+          sealed_wrap_hex TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          issuer_signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          UNIQUE (grant_id, reader_key_fingerprint_hex, kek_version)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_share_envelope_domain
+        ON pico_share_envelope (home_id, privacy_domain, kek_version);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

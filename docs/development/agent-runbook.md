@@ -109,7 +109,7 @@ erledigt behauptet werden.
   Fixtures oder dauerhafte Logs uebernehmen.
 - Restore- und Migrationstests muessen fail-closed Security-Grenzen erhalten.
 
-Die autoritativen Details stehen in ADR 0070-0081 und
+Die autoritativen Details stehen in ADR 0070-0084 und
 `docs/release/backup-before-migration.md`.
 
 ## Dokumentationskonsistenz

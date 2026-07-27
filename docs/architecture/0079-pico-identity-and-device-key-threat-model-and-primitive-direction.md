@@ -317,7 +317,9 @@ Nothing runtime ships before its gates; nothing at all is security-relevant befo
 After all three, runtime continues in additive consumers. Host-role custody now
 exists in ADR 0080, ADR 0082 supplies local signed-lifecycle persistence, and
 ADR 0083 completes ADR 0078 R1's reader-key/freshness contract. Person-role key
-generation and custody remain exclusively behind `@pico/vault`.
+generation and custody remain exclusively behind `@pico/vault`; ADR 0084
+consumes that Vault boundary for external controller signing without copying
+the identity key into Foundation.
 
 ## Non-goals
 

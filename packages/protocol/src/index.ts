@@ -17,6 +17,8 @@ export const foundationEventTypes = [
   'home.membership_changed',
   'home.domain_read_granted',
   'home.domain_read_revoked',
+  'home.share_envelope_issued',
+  'home.share_envelope_removed',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -40,6 +42,8 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.membership_changed',
   'home.domain_read_granted',
   'home.domain_read_revoked',
+  'home.share_envelope_issued',
+  'home.share_envelope_removed',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -349,6 +353,23 @@ export interface PicoShareEnvelopeSignatureInput {
    */
   wrapDigestHex: string;
   grantedAt: string;
+}
+
+/**
+ * Persisted, controller-authenticated share envelope. The sealed wrap is
+ * public ciphertext; its BLAKE2b-256 digest is bound by `envelope`, while the
+ * detached signature proves controller authority. No raw KEK is represented
+ * by this record.
+ */
+export const picoShareEnvelopeRecordSchema = 'pico.share.envelope-record.v1' as const;
+
+export interface PicoShareEnvelopeRecord {
+  schema: typeof picoShareEnvelopeRecordSchema;
+  envelope: PicoShareEnvelopeSignatureInput;
+  sealedWrapHex: string;
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  issuerSignatureHex: string;
+  createdAt: string;
 }
 
 export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
@@ -834,6 +855,25 @@ export interface HomeDomainReadRevokedPayload extends HomeDomainReadGrantedPaylo
   lifecycleId: string;
 }
 
+export interface HomeShareEnvelopeIssuedPayload {
+  grantId: string;
+  privacyDomain: string;
+  readerKeyFingerprintHex: string;
+  kekVersion: number;
+}
+
+export const homeShareEnvelopeRemovalReasonCategories = [
+  'authority_reconciliation',
+  'key_unavailable',
+] as const;
+
+export type HomeShareEnvelopeRemovalReasonCategory =
+  typeof homeShareEnvelopeRemovalReasonCategories[number];
+
+export interface HomeShareEnvelopeRemovedPayload extends HomeShareEnvelopeIssuedPayload {
+  reasonCategory: HomeShareEnvelopeRemovalReasonCategory;
+}
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -852,7 +892,9 @@ export type FoundationEventPayload =
   | HomeMembershipRecordedPayload
   | HomeMembershipChangedPayload
   | HomeDomainReadGrantedPayload
-  | HomeDomainReadRevokedPayload;
+  | HomeDomainReadRevokedPayload
+  | HomeShareEnvelopeIssuedPayload
+  | HomeShareEnvelopeRemovedPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -1102,6 +1144,46 @@ export function validateFoundationEventPayload(
         ...(type === 'home.domain_read_revoked' ? { lifecycleId: payload.lifecycleId } : {}),
         privacyDomain: payload.privacyDomain,
         readerPicoIdentityFingerprintHex: payload.readerPicoIdentityFingerprintHex,
+      },
+    };
+  }
+
+  if (type === 'home.share_envelope_issued' || type === 'home.share_envelope_removed') {
+    const allowed = type === 'home.share_envelope_issued'
+      ? ['grantId', 'privacyDomain', 'readerKeyFingerprintHex', 'kekVersion']
+      : ['grantId', 'privacyDomain', 'readerKeyFingerprintHex', 'kekVersion', 'reasonCategory'];
+    const extraKey = firstUnexpectedKey(payload, allowed);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isNonEmptyString(payload.grantId, 256)
+      || !isNonEmptyString(payload.privacyDomain, 256)
+      || typeof payload.readerKeyFingerprintHex !== 'string'
+      || !/^[0-9a-f]{64}$/.test(payload.readerKeyFingerprintHex)
+      || !Number.isSafeInteger(payload.kekVersion)
+      || (payload.kekVersion as number) < 1) {
+      return {
+        ok: false,
+        error: `${type} payload requires grantId, privacyDomain, readerKeyFingerprintHex and kekVersion.`,
+      };
+    }
+
+    if (type === 'home.share_envelope_removed'
+      && !isStringMember(payload.reasonCategory, homeShareEnvelopeRemovalReasonCategories)) {
+      return { ok: false, error: 'home.share_envelope_removed payload requires reasonCategory.' };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        grantId: payload.grantId,
+        privacyDomain: payload.privacyDomain,
+        readerKeyFingerprintHex: payload.readerKeyFingerprintHex,
+        kekVersion: payload.kekVersion as number,
+        ...(type === 'home.share_envelope_removed'
+          ? { reasonCategory: payload.reasonCategory as HomeShareEnvelopeRemovalReasonCategory }
+          : {}),
       },
     };
   }

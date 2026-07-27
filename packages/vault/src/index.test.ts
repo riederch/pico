@@ -7,6 +7,7 @@ import {
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoShareEnvelopeSignatureInput,
   picoIdentitySuite,
   picoVaultKeyfileFormat,
 } from '@pico/protocol';
@@ -145,6 +146,42 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       keyfile: device.keyfile,
       passphrase: 'correct horse battery staple',
     }).sign(claim)).toThrow('unknown_signature_input_label');
+  });
+
+  it('lets only the Pico identity key authorize a share envelope', () => {
+    const identity = createPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: 'correct horse battery staple',
+    });
+    const envelope = buildPicoShareEnvelopeSignatureInput({
+      suite: 'pico.suite.share.v1',
+      grantId: 'grant_vault_0001',
+      domainId: 'family',
+      kekVersion: 1,
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      issuerIdentityKeyFingerprintHex: identity.keyFingerprintHex,
+      readerKeyFingerprintHex: '22'.repeat(32),
+      wrapDigestHex: '33'.repeat(32),
+      grantedAt: '2026-07-27T10:00:00.000Z',
+    });
+    const identitySession = openPicoVaultKeyfile(sodium, {
+      keyfile: identity.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    expect(sodium.crypto_sign_verify_detached(
+      identitySession.sign(envelope),
+      envelope,
+      Buffer.from(identity.publicKeyHex, 'hex'),
+    )).toBe(true);
+
+    const device = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_signing',
+      passphrase: 'correct horse battery staple',
+    });
+    expect(() => openPicoVaultKeyfile(sodium, {
+      keyfile: device.keyfile,
+      passphrase: 'correct horse battery staple',
+    }).sign(envelope)).toThrow('unknown_signature_input_label');
   });
 
   it('rejects wrong passphrases, tampered headers and truncated ciphertext', () => {
