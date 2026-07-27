@@ -15,16 +15,22 @@
     "status": "none"
   },
   "compatibilityLevel": "authoritative-reader-custody-signature-input-vectors",
-  "disclaimer": "Authoritative ADR 0086 signature-input byte vectors with synthetic public fields only: no private keys, raw KEKs, raw DEKs, ciphertext claims, L4 compatibility basis and no commercial permission.",
+  "disclaimer": "Authoritative ADR 0086/0088 signature-input byte vectors with synthetic public fields only: no private keys, raw KEKs, raw DEKs, ciphertext claims, L4 compatibility basis and no commercial permission.",
   "fixtures": [
     "pico.suite.mem.v1/canonicalization-positive/domain-authority",
+    "pico.suite.mem.v1/canonicalization-positive/reader-grant-from-version",
+    "pico.suite.mem.v1/canonicalization-positive/reader-grant-revoked",
     "pico.suite.mem.v1/canonicalization-positive/writer-grant",
     "pico.suite.mem.v1/canonicalization-positive/writer-grant-revoked",
+    "pico.suite.mem.v1/canonicalization-positive/kek-rotation",
     "pico.suite.mem.v1/canonicalization-positive/opaque-item",
     "pico.suite.mem.v1/canonicalization-negative/domain-cross-family-label",
     "pico.suite.mem.v1/canonicalization-negative/domain-host-custody",
+    "pico.suite.mem.v1/canonicalization-negative/reader-grant-invalid-access-mode",
     "pico.suite.mem.v1/canonicalization-negative/writer-grant-inverted-window",
+    "pico.suite.mem.v1/canonicalization-negative/kek-rotation-skips-version",
+    "pico.suite.mem.v1/canonicalization-negative/kek-rotation-without-cause",
     "pico.suite.mem.v1/canonicalization-negative/item-truncated-content-nonce"
   ],
-  "notes": "Canonical authority and item signature inputs only. Vault and Core tests cover signing, envelope sealing, AEAD, exact binding, revocation, restore and opaque persistence."
+  "notes": "Canonical authority, multi-reader, rotation and item signature inputs only. Vault and Core tests cover signing, envelope sealing, AEAD, exact binding, freshness, revocation, rotation debt, restore and opaque persistence."
 }

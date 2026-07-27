@@ -7,6 +7,7 @@ import {
   foundationOperatorHomeBindingMigrationId,
   listAppliedMigrations,
   picoSchemaBaselineMigrationId,
+  readerCustodyMultiReaderRotationMigrationId,
   runMigrations,
 } from './migrations.js';
 import { createSqliteBackup, restoreSqliteBackup } from './sqlite-backup.js';
@@ -225,6 +226,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: foundationOperatorHomeBindingMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: readerCustodyMultiReaderRotationMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

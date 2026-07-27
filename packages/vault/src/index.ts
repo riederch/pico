@@ -5,6 +5,9 @@ import {
   buildPicoMemoryDekWrapAd,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
+  buildPicoReaderCustodyKekRotationSignatureInput,
+  buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
+  buildPicoReaderCustodyReaderGrantSignatureInput,
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
@@ -15,6 +18,9 @@ import {
   picoReaderCustodyCanonicalLabels,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
+  picoReaderCustodyKekRotationRecordSchema,
+  picoReaderCustodyReaderGrantLifecycleRecordSchema,
+  picoReaderCustodyReaderGrantRecordSchema,
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
   picoHomeSignatureInputLabels,
@@ -42,6 +48,12 @@ import type {
   PicoReaderCustodyDomainSignatureInput,
   PicoReaderCustodyItemRecord,
   PicoReaderCustodyItemSignatureInput,
+  PicoReaderCustodyKekRotationRecord,
+  PicoReaderCustodyKekRotationSignatureInput,
+  PicoReaderCustodyReaderGrantLifecycleRecord,
+  PicoReaderCustodyReaderGrantLifecycleSignatureInput,
+  PicoReaderCustodyReaderGrantRecord,
+  PicoReaderCustodyReaderGrantSignatureInput,
   PicoReaderCustodyWriterGrantLifecycleRecord,
   PicoReaderCustodyWriterGrantLifecycleSignatureInput,
   PicoReaderCustodyWriterGrantRecord,
@@ -111,6 +123,7 @@ export interface CreatePicoReaderCustodyDomainInput {
 export interface CreatePicoReaderCustodyWriterGrantInput {
   ownerIdentitySession: PicoVaultSession;
   domainRecord: PicoReaderCustodyDomainRecord;
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   writerDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
   writerGrantId: string;
   writerIdentityKeyFingerprintHex: string;
@@ -120,9 +133,55 @@ export interface CreatePicoReaderCustodyWriterGrantInput {
   receivedAt?: string;
 }
 
+export interface CreatePicoReaderCustodyReaderGrantInput {
+  ownerIdentitySession: PicoVaultSession;
+  ownerReaderKeyAgreementSession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
+  readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  readerGrantId: string;
+  readerIdentityKeyFingerprintHex: string;
+  readerDeviceSigningKeyFingerprintHex: string;
+  readerDelegationId: string;
+  accessMode: PicoReaderCustodyReaderGrantSignatureInput['accessMode'];
+  firstKekVersion: number;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface RevokePicoReaderCustodyReaderGrantInput {
+  ownerIdentitySession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
+  lifecycleId: string;
+  reasonCategory:
+    PicoReaderCustodyReaderGrantLifecycleSignatureInput['reasonCategory'];
+  changedAt: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface RotatePicoReaderCustodyDomainInput {
+  ownerIdentitySession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
+  readerGrantLifecycleRecords?:
+    PicoReaderCustodyReaderGrantLifecycleRecord[];
+  writerGrantLifecycleRecords?:
+    PicoReaderCustodyWriterGrantLifecycleRecord[];
+  remainingReaderGrantRecords?: PicoReaderCustodyReaderGrantRecord[];
+  rotationId: string;
+  rotatedAt: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
 export interface RevokePicoReaderCustodyWriterGrantInput {
   ownerIdentitySession: PicoVaultSession;
   domainRecord: PicoReaderCustodyDomainRecord;
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
   lifecycleId: string;
   reasonCategory: PicoReaderCustodyWriterGrantLifecycleSignatureInput['reasonCategory'];
@@ -135,6 +194,7 @@ export interface EncryptPicoReaderCustodyItemInput {
   readerKeyAgreementSession: PicoVaultSession;
   writerSigningSession: PicoVaultSession;
   domainRecord: PicoReaderCustodyDomainRecord;
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
   packageId: string;
   memoryItemId: string;
@@ -147,6 +207,8 @@ export interface EncryptPicoReaderCustodyItemInput {
 export interface DecryptPicoReaderCustodyItemInput {
   readerKeyAgreementSession: PicoVaultSession;
   domainRecord: PicoReaderCustodyDomainRecord;
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
+  readerGrantRecord?: PicoReaderCustodyReaderGrantRecord;
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
   itemRecord: PicoReaderCustodyItemRecord;
 }
@@ -225,8 +287,11 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     picoIdentityReaderKeyFreshnessSignatureInputLabel,
     picoShareCanonicalLabels.envelope,
     picoReaderCustodyCanonicalLabels.domain,
+    picoReaderCustodyCanonicalLabels.readerGrant,
+    picoReaderCustodyCanonicalLabels.readerGrantLifecycle,
     picoReaderCustodyCanonicalLabels.writerGrant,
     picoReaderCustodyCanonicalLabels.writerGrantLifecycle,
+    picoReaderCustodyCanonicalLabels.kekRotation,
   ]),
   device_signing: new Set<string>([
     ...Object.values(picoIdentitySignatureInputLabels),
@@ -441,11 +506,318 @@ export function createPicoReaderCustodyDomain(
   }
 }
 
+export function createPicoReaderCustodyReaderGrant(
+  sodium: VaultSodium,
+  input: CreatePicoReaderCustodyReaderGrantInput,
+): PicoReaderCustodyReaderGrantRecord {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  if (ownerMetadata.keyRole !== 'pico_identity'
+    || ownerMetadata.keyFingerprintHex
+      !== input.domainRecord.domain.ownerIdentityKeyFingerprintHex) {
+    throw new Error('owner_identity_key_required');
+  }
+  assertKeyRecordMatchesMetadata(
+    sodium,
+    input.readerKeyRecord,
+    'device_key_agreement',
+  );
+  const currentKekVersion = currentReaderCustodyKekVersion(
+    input.domainRecord,
+    rotations,
+  );
+  if (!Number.isSafeInteger(input.firstKekVersion)
+    || input.firstKekVersion < input.domainRecord.domain.kekVersion
+    || input.firstKekVersion > currentKekVersion
+    || (input.accessMode === 'forward_only'
+      && input.firstKekVersion !== currentKekVersion)) {
+    throw new Error('invalid_reader_history_range');
+  }
+
+  const domain = input.domainRecord.domain;
+  const readerKeyFingerprintHex = keyRecordFingerprintHex(
+    sodium,
+    'device_key_agreement',
+    hexToBytes(input.readerKeyRecord.publicKeyHex),
+  );
+  const grant: PicoReaderCustodyReaderGrantSignatureInput = {
+    suite: picoMemoryContentSuite,
+    readerGrantId: input.readerGrantId,
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    readerIdentityKeyFingerprintHex: input.readerIdentityKeyFingerprintHex,
+    readerDeviceSigningKeyFingerprintHex:
+      input.readerDeviceSigningKeyFingerprintHex,
+    readerKeyFingerprintHex,
+    readerDelegationId: input.readerDelegationId,
+    accessMode: input.accessMode,
+    firstKekVersion: input.firstKekVersion,
+    validFrom: input.validFrom,
+    validUntil: input.validUntil,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+  const ownerIdentityKeyRecord = keyRecordFromMetadata(ownerMetadata);
+  const envelopes: PicoShareEnvelopeRecord[] = [];
+
+  for (
+    let kekVersion = input.firstKekVersion;
+    kekVersion <= currentKekVersion;
+    kekVersion += 1
+  ) {
+    const ownerEnvelope = ownerEnvelopeForVersion(
+      input.domainRecord,
+      rotations,
+      kekVersion,
+    );
+    const kek = openPicoReaderCustodyKekFromEnvelope(
+      sodium,
+      input.ownerReaderKeyAgreementSession,
+      domain.domainId,
+      kekVersion,
+      domain.ownerReaderKeyFingerprintHex,
+      ownerEnvelope,
+    );
+    try {
+      envelopes.push(createPicoReaderCustodyEnvelope(sodium, {
+        ownerIdentitySession: input.ownerIdentitySession,
+        ownerIdentityKeyRecord,
+        grantId: grant.readerGrantId,
+        domain,
+        kekVersion,
+        readerKeyRecord: input.readerKeyRecord,
+        readerKeyFingerprintHex,
+        kek,
+        grantedAt: input.validFrom,
+        createdAt: input.receivedAt ?? input.validFrom,
+      }));
+    } finally {
+      sodium.memzero(kek);
+    }
+  }
+
+  return {
+    schema: picoReaderCustodyReaderGrantRecordSchema,
+    grant,
+    ownerIdentityKeyRecord,
+    readerKeyRecord: { ...input.readerKeyRecord },
+    envelopes,
+    ownerSignatureHex: bytesToHex(
+      input.ownerIdentitySession.sign(
+        buildPicoReaderCustodyReaderGrantSignatureInput(grant),
+      ),
+    ),
+    receivedAt: input.receivedAt ?? input.validFrom,
+  };
+}
+
+export function revokePicoReaderCustodyReaderGrant(
+  sodium: VaultSodium,
+  input: RevokePicoReaderCustodyReaderGrantInput,
+): PicoReaderCustodyReaderGrantLifecycleRecord {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  assertPicoReaderCustodyReaderGrantRecord(
+    sodium,
+    input.domainRecord,
+    input.readerGrantRecord,
+  );
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  if (ownerMetadata.keyRole !== 'pico_identity'
+    || ownerMetadata.keyFingerprintHex
+      !== input.domainRecord.domain.ownerIdentityKeyFingerprintHex) {
+    throw new Error('owner_identity_key_required');
+  }
+  const domain = input.domainRecord.domain;
+  const grant = input.readerGrantRecord.grant;
+  const lifecycle: PicoReaderCustodyReaderGrantLifecycleSignatureInput = {
+    suite: picoMemoryContentSuite,
+    lifecycleId: input.lifecycleId,
+    readerGrantId: grant.readerGrantId,
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    readerIdentityKeyFingerprintHex: grant.readerIdentityKeyFingerprintHex,
+    readerKeyFingerprintHex: grant.readerKeyFingerprintHex,
+    status: 'revoked',
+    reasonCategory: input.reasonCategory,
+    changedAt: input.changedAt,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+
+  return {
+    schema: picoReaderCustodyReaderGrantLifecycleRecordSchema,
+    lifecycle,
+    ownerIdentityKeyRecord: keyRecordFromMetadata(ownerMetadata),
+    ownerSignatureHex: bytesToHex(
+      input.ownerIdentitySession.sign(
+        buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(lifecycle),
+      ),
+    ),
+    receivedAt: input.receivedAt ?? input.changedAt,
+  };
+}
+
+export function rotatePicoReaderCustodyDomain(
+  sodium: VaultSodium,
+  input: RotatePicoReaderCustodyDomainInput,
+): PicoReaderCustodyKekRotationRecord {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  if (ownerMetadata.keyRole !== 'pico_identity'
+    || ownerMetadata.keyFingerprintHex
+      !== input.domainRecord.domain.ownerIdentityKeyFingerprintHex) {
+    throw new Error('owner_identity_key_required');
+  }
+  const domain = input.domainRecord.domain;
+  const readerLifecycles = input.readerGrantLifecycleRecords ?? [];
+  const writerLifecycles = input.writerGrantLifecycleRecords ?? [];
+  for (const lifecycle of readerLifecycles) {
+    assertPicoReaderCustodyReaderGrantLifecycleRecord(
+      sodium,
+      input.domainRecord,
+      lifecycle,
+    );
+  }
+  for (const lifecycle of writerLifecycles) {
+    assertPicoReaderCustodyWriterGrantLifecycleRecord(
+      sodium,
+      input.domainRecord,
+      lifecycle,
+    );
+  }
+  const causeLifecycleIds = [
+    ...readerLifecycles.map((record) => record.lifecycle.lifecycleId),
+    ...writerLifecycles.map((record) => record.lifecycle.lifecycleId),
+  ].sort();
+  if (causeLifecycleIds.length === 0
+    || new Set(causeLifecycleIds).size !== causeLifecycleIds.length) {
+    throw new Error('invalid_rotation_causes');
+  }
+  const previousLifecycleOrder = rotations.at(-1)?.rotation.lifecycleOrder
+    ?? domain.lifecycleOrder;
+  const causeLifecycles = [
+    ...readerLifecycles.map((record) => record.lifecycle),
+    ...writerLifecycles.map((record) => record.lifecycle),
+  ];
+  if (causeLifecycles.some((lifecycle) =>
+    lifecycle.lifecycleOrder <= previousLifecycleOrder
+    || lifecycle.lifecycleOrder >= input.lifecycleOrder
+    || lifecycle.changedAt > input.rotatedAt)) {
+    throw new Error('invalid_rotation_causes');
+  }
+
+  const remainingReaderGrantRecords =
+    input.remainingReaderGrantRecords ?? [];
+  for (const grant of remainingReaderGrantRecords) {
+    assertPicoReaderCustodyReaderGrantRecord(
+      sodium,
+      input.domainRecord,
+      grant,
+    );
+    if (grant.grant.validFrom > input.rotatedAt
+      || grant.grant.validUntil <= input.rotatedAt) {
+      throw new Error('inactive_reader_grant');
+    }
+  }
+  const remainingReaderGrantIds = remainingReaderGrantRecords
+    .map((record) => record.grant.readerGrantId)
+    .sort();
+  if (new Set(remainingReaderGrantIds).size
+      !== remainingReaderGrantIds.length) {
+    throw new Error('duplicate_reader_grant');
+  }
+
+  const previousKekVersion = currentReaderCustodyKekVersion(
+    input.domainRecord,
+    rotations,
+  );
+  const rotation: PicoReaderCustodyKekRotationSignatureInput = {
+    suite: picoMemoryContentSuite,
+    rotationId: input.rotationId,
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    previousKekVersion,
+    kekVersion: previousKekVersion + 1,
+    causeLifecycleIds,
+    remainingReaderGrantIds,
+    rotatedAt: input.rotatedAt,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+  const ownerIdentityKeyRecord = keyRecordFromMetadata(ownerMetadata);
+  const kek = sodium.randombytes_buf(32);
+  try {
+    const envelopes = [
+      createPicoReaderCustodyEnvelope(sodium, {
+        ownerIdentitySession: input.ownerIdentitySession,
+        ownerIdentityKeyRecord,
+        grantId: rotation.rotationId,
+        domain,
+        kekVersion: rotation.kekVersion,
+        readerKeyRecord: input.domainRecord.ownerReaderKeyRecord,
+        readerKeyFingerprintHex: domain.ownerReaderKeyFingerprintHex,
+        kek,
+        grantedAt: input.rotatedAt,
+        createdAt: input.receivedAt ?? input.rotatedAt,
+      }),
+      ...remainingReaderGrantRecords.map((readerGrant) =>
+        createPicoReaderCustodyEnvelope(sodium, {
+          ownerIdentitySession: input.ownerIdentitySession,
+          ownerIdentityKeyRecord,
+          grantId: readerGrant.grant.readerGrantId,
+          domain,
+          kekVersion: rotation.kekVersion,
+          readerKeyRecord: readerGrant.readerKeyRecord,
+          readerKeyFingerprintHex:
+            readerGrant.grant.readerKeyFingerprintHex,
+          kek,
+          grantedAt: input.rotatedAt,
+          createdAt: input.receivedAt ?? input.rotatedAt,
+        })),
+    ];
+    return {
+      schema: picoReaderCustodyKekRotationRecordSchema,
+      rotation,
+      ownerIdentityKeyRecord,
+      envelopes,
+      ownerSignatureHex: bytesToHex(
+        input.ownerIdentitySession.sign(
+          buildPicoReaderCustodyKekRotationSignatureInput(rotation),
+        ),
+      ),
+      receivedAt: input.receivedAt ?? input.rotatedAt,
+    };
+  } finally {
+    sodium.memzero(kek);
+  }
+}
+
 export function createPicoReaderCustodyWriterGrant(
   sodium: VaultSodium,
   input: CreatePicoReaderCustodyWriterGrantInput,
 ): PicoReaderCustodyWriterGrantRecord {
   assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
   const ownerMetadata = input.ownerIdentitySession.metadata();
   if (ownerMetadata.keyRole !== 'pico_identity'
     || ownerMetadata.keyFingerprintHex
@@ -465,7 +837,10 @@ export function createPicoReaderCustodyWriterGrant(
     homeId: domain.homeId,
     hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
     domainId: domain.domainId,
-    kekVersion: domain.kekVersion,
+    kekVersion: currentReaderCustodyKekVersion(
+      input.domainRecord,
+      rotations,
+    ),
     ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
     writerIdentityKeyFingerprintHex: input.writerIdentityKeyFingerprintHex,
     writerDeviceSigningKeyFingerprintHex: keyRecordFingerprintHex(
@@ -497,10 +872,16 @@ export function revokePicoReaderCustodyWriterGrant(
   input: RevokePicoReaderCustodyWriterGrantInput,
 ): PicoReaderCustodyWriterGrantLifecycleRecord {
   assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
   assertPicoReaderCustodyWriterGrantRecord(
     sodium,
     input.domainRecord,
     input.writerGrantRecord,
+    currentReaderCustodyKekVersion(input.domainRecord, rotations),
   );
   const ownerMetadata = input.ownerIdentitySession.metadata();
   if (ownerMetadata.keyRole !== 'pico_identity'
@@ -551,13 +932,25 @@ export function encryptPicoReaderCustodyItem(
   input: EncryptPicoReaderCustodyItemInput,
 ): PicoReaderCustodyItemRecord {
   assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
   assertPicoReaderCustodyWriterGrantRecord(
     sodium,
     input.domainRecord,
     input.writerGrantRecord,
+    currentReaderCustodyKekVersion(input.domainRecord, rotations),
   );
   const domain = input.domainRecord.domain;
   const grant = input.writerGrantRecord.grant;
+  if (grant.kekVersion !== currentReaderCustodyKekVersion(
+    input.domainRecord,
+    rotations,
+  )) {
+    throw new Error('writer_grant_not_current');
+  }
   if (input.createdAt < grant.validFrom || input.createdAt >= grant.validUntil) {
     throw new Error('writer_grant_inactive');
   }
@@ -569,10 +962,17 @@ export function encryptPicoReaderCustodyItem(
     throw new Error('writer_signing_key_mismatch');
   }
 
-  const kek = openPicoReaderCustodyDomainKek(
+  const kek = openPicoReaderCustodyKekFromEnvelope(
     sodium,
     input.readerKeyAgreementSession,
-    input.domainRecord,
+    domain.domainId,
+    grant.kekVersion,
+    domain.ownerReaderKeyFingerprintHex,
+    ownerEnvelopeForVersion(
+      input.domainRecord,
+      rotations,
+      grant.kekVersion,
+    ),
   );
   const dek = sodium.randombytes_buf(32);
   const contentNonce = sodium.randombytes_buf(
@@ -618,7 +1018,7 @@ export function encryptPicoReaderCustodyItem(
       domainId: domain.domainId,
       memoryItemId: input.memoryItemId,
       contentType: input.contentType,
-      kekVersion: domain.kekVersion,
+      kekVersion: grant.kekVersion,
       writerIdentityKeyFingerprintHex: grant.writerIdentityKeyFingerprintHex,
       writerDeviceSigningKeyFingerprintHex:
         grant.writerDeviceSigningKeyFingerprintHex,
@@ -660,10 +1060,16 @@ export function decryptPicoReaderCustodyItem(
   input: DecryptPicoReaderCustodyItemInput,
 ): string {
   assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
   assertPicoReaderCustodyWriterGrantRecord(
     sodium,
     input.domainRecord,
     input.writerGrantRecord,
+    currentReaderCustodyKekVersion(input.domainRecord, rotations),
   );
   assertPicoReaderCustodyItemRecord(
     sodium,
@@ -671,10 +1077,29 @@ export function decryptPicoReaderCustodyItem(
     input.writerGrantRecord,
     input.itemRecord,
   );
-  const kek = openPicoReaderCustodyDomainKek(
+  const metadata = input.readerKeyAgreementSession.metadata();
+  const envelope = metadata.keyFingerprintHex
+      === input.domainRecord.domain.ownerReaderKeyFingerprintHex
+    ? ownerEnvelopeForVersion(
+      input.domainRecord,
+      rotations,
+      input.itemRecord.item.kekVersion,
+    )
+    : readerEnvelopeForVersion(
+      sodium,
+      input.domainRecord,
+      rotations,
+      input.readerGrantRecord,
+      input.itemRecord.item.kekVersion,
+      metadata.keyFingerprintHex,
+    );
+  const kek = openPicoReaderCustodyKekFromEnvelope(
     sodium,
     input.readerKeyAgreementSession,
-    input.domainRecord,
+    input.domainRecord.domain.domainId,
+    input.itemRecord.item.kekVersion,
+    metadata.keyFingerprintHex,
+    envelope,
   );
   const item = input.itemRecord.item;
   const wrappedDek = hexToBytes(input.itemRecord.wrappedDekHex);
@@ -959,10 +1384,228 @@ function assertPicoReaderCustodyDomainRecord(
   }
 }
 
+function assertPicoReaderCustodyReaderGrantRecord(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  record: PicoReaderCustodyReaderGrantRecord,
+): void {
+  const domain = domainRecord.domain;
+  const grant = record.grant;
+  if (record.schema !== picoReaderCustodyReaderGrantRecordSchema
+    || grant.suite !== picoMemoryContentSuite
+    || grant.domainAuthorityId !== domain.domainAuthorityId
+    || grant.homeId !== domain.homeId
+    || grant.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || grant.domainId !== domain.domainId
+    || grant.ownerIdentityKeyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex
+    || !sameKeyRecord(
+      record.ownerIdentityKeyRecord,
+      domainRecord.ownerIdentityKeyRecord,
+    )
+    || !isCanonicalInstant(record.receivedAt)
+    || !Array.isArray(record.envelopes)
+    || record.envelopes.length === 0) {
+    throw new Error('invalid_reader_custody_reader_grant');
+  }
+  buildPicoReaderCustodyReaderGrantSignatureInput(grant);
+  assertKeyRecordMatchesMetadata(
+    sodium,
+    record.readerKeyRecord,
+    'device_key_agreement',
+  );
+  const readerKeyFingerprintHex = keyRecordFingerprintHex(
+    sodium,
+    'device_key_agreement',
+    hexToBytes(record.readerKeyRecord.publicKeyHex),
+  );
+  const versions = record.envelopes
+    .map((envelope) => envelope.envelope.kekVersion)
+    .sort((left, right) => left - right);
+  if (grant.readerKeyFingerprintHex !== readerKeyFingerprintHex
+    || versions[0] !== grant.firstKekVersion
+    || new Set(versions).size !== versions.length
+    || versions.some((version, index) =>
+      version !== grant.firstKekVersion + index)
+    || (grant.accessMode === 'forward_only' && versions.length !== 1)
+    || !verifyDetached(
+      sodium,
+      record.ownerIdentityKeyRecord.publicKeyHex,
+      buildPicoReaderCustodyReaderGrantSignatureInput(grant),
+      record.ownerSignatureHex,
+    )) {
+    throw new Error('invalid_reader_custody_reader_grant');
+  }
+  for (const envelope of record.envelopes) {
+    assertPicoReaderCustodyEnvelope(sodium, {
+      envelope,
+      ownerIdentityKeyRecord: record.ownerIdentityKeyRecord,
+      grantId: grant.readerGrantId,
+      domain,
+      kekVersion: envelope.envelope.kekVersion,
+      readerKeyFingerprintHex,
+      grantedAt: grant.validFrom,
+    });
+  }
+}
+
+function assertPicoReaderCustodyReaderGrantLifecycleRecord(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  record: PicoReaderCustodyReaderGrantLifecycleRecord,
+): void {
+  const domain = domainRecord.domain;
+  const lifecycle = record.lifecycle;
+  if (record.schema !== picoReaderCustodyReaderGrantLifecycleRecordSchema
+    || lifecycle.suite !== picoMemoryContentSuite
+    || lifecycle.domainAuthorityId !== domain.domainAuthorityId
+    || lifecycle.homeId !== domain.homeId
+    || lifecycle.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || lifecycle.domainId !== domain.domainId
+    || lifecycle.ownerIdentityKeyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex
+    || !sameKeyRecord(
+      record.ownerIdentityKeyRecord,
+      domainRecord.ownerIdentityKeyRecord,
+    )
+    || !isCanonicalInstant(record.receivedAt)) {
+    throw new Error('invalid_reader_custody_reader_lifecycle');
+  }
+  buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(lifecycle);
+  if (!verifyDetached(
+    sodium,
+    record.ownerIdentityKeyRecord.publicKeyHex,
+    buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(lifecycle),
+    record.ownerSignatureHex,
+  )) {
+    throw new Error('invalid_reader_custody_reader_lifecycle');
+  }
+}
+
+function assertPicoReaderCustodyWriterGrantLifecycleRecord(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  record: PicoReaderCustodyWriterGrantLifecycleRecord,
+): void {
+  const domain = domainRecord.domain;
+  const lifecycle = record.lifecycle;
+  if (record.schema !== picoReaderCustodyWriterGrantLifecycleRecordSchema
+    || lifecycle.suite !== picoMemoryContentSuite
+    || lifecycle.domainAuthorityId !== domain.domainAuthorityId
+    || lifecycle.homeId !== domain.homeId
+    || lifecycle.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || lifecycle.domainId !== domain.domainId
+    || lifecycle.ownerIdentityKeyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex
+    || !sameKeyRecord(
+      record.ownerIdentityKeyRecord,
+      domainRecord.ownerIdentityKeyRecord,
+    )
+    || !isCanonicalInstant(record.receivedAt)) {
+    throw new Error('invalid_reader_custody_writer_lifecycle');
+  }
+  buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(lifecycle);
+  if (!verifyDetached(
+    sodium,
+    record.ownerIdentityKeyRecord.publicKeyHex,
+    buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(lifecycle),
+    record.ownerSignatureHex,
+  )) {
+    throw new Error('invalid_reader_custody_writer_lifecycle');
+  }
+}
+
+function assertPicoReaderCustodyKekRotationRecord(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  record: PicoReaderCustodyKekRotationRecord,
+): void {
+  const domain = domainRecord.domain;
+  const rotation = record.rotation;
+  if (record.schema !== picoReaderCustodyKekRotationRecordSchema
+    || rotation.suite !== picoMemoryContentSuite
+    || rotation.domainAuthorityId !== domain.domainAuthorityId
+    || rotation.homeId !== domain.homeId
+    || rotation.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || rotation.domainId !== domain.domainId
+    || rotation.ownerIdentityKeyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex
+    || !sameKeyRecord(
+      record.ownerIdentityKeyRecord,
+      domainRecord.ownerIdentityKeyRecord,
+    )
+    || !Array.isArray(record.envelopes)
+    || record.envelopes.length
+      !== rotation.remainingReaderGrantIds.length + 1
+    || !isCanonicalInstant(record.receivedAt)) {
+    throw new Error('invalid_reader_custody_rotation');
+  }
+  buildPicoReaderCustodyKekRotationSignatureInput(rotation);
+  if (!verifyDetached(
+    sodium,
+    record.ownerIdentityKeyRecord.publicKeyHex,
+    buildPicoReaderCustodyKekRotationSignatureInput(rotation),
+    record.ownerSignatureHex,
+  )) {
+    throw new Error('invalid_reader_custody_rotation');
+  }
+
+  const envelopeByGrant = new Map(
+    record.envelopes.map((envelope) => [
+      envelope.envelope.grantId,
+      envelope,
+    ]),
+  );
+  if (envelopeByGrant.size !== record.envelopes.length) {
+    throw new Error('invalid_reader_custody_rotation');
+  }
+  const ownerEnvelope = envelopeByGrant.get(rotation.rotationId);
+  if (ownerEnvelope === undefined) {
+    throw new Error('invalid_reader_custody_rotation');
+  }
+  assertPicoReaderCustodyEnvelope(sodium, {
+    envelope: ownerEnvelope,
+    ownerIdentityKeyRecord: record.ownerIdentityKeyRecord,
+    grantId: rotation.rotationId,
+    domain,
+    kekVersion: rotation.kekVersion,
+    readerKeyFingerprintHex: domain.ownerReaderKeyFingerprintHex,
+    grantedAt: rotation.rotatedAt,
+  });
+  const readerGrantIds = [...rotation.remainingReaderGrantIds].sort();
+  const envelopeGrantIds = record.envelopes
+    .map((envelope) => envelope.envelope.grantId)
+    .filter((grantId) => grantId !== rotation.rotationId)
+    .sort();
+  if (JSON.stringify(readerGrantIds) !== JSON.stringify(envelopeGrantIds)) {
+    throw new Error('invalid_reader_custody_rotation');
+  }
+  for (const grantId of readerGrantIds) {
+    const envelope = envelopeByGrant.get(grantId);
+    if (envelope === undefined) {
+      throw new Error('invalid_reader_custody_rotation');
+    }
+    assertPicoReaderCustodyEnvelope(sodium, {
+      envelope,
+      ownerIdentityKeyRecord: record.ownerIdentityKeyRecord,
+      grantId,
+      domain,
+      kekVersion: rotation.kekVersion,
+      readerKeyFingerprintHex: envelope.envelope.readerKeyFingerprintHex,
+      grantedAt: rotation.rotatedAt,
+    });
+  }
+}
+
 function assertPicoReaderCustodyWriterGrantRecord(
   sodium: VaultSodium,
   domainRecord: PicoReaderCustodyDomainRecord,
   record: PicoReaderCustodyWriterGrantRecord,
+  maximumKekVersion: number = domainRecord.domain.kekVersion,
 ): void {
   const domain = domainRecord.domain;
   const grant = record.grant;
@@ -973,7 +1616,8 @@ function assertPicoReaderCustodyWriterGrantRecord(
     || grant.hostSigningKeyFingerprintHex
       !== domain.hostSigningKeyFingerprintHex
     || grant.domainId !== domain.domainId
-    || grant.kekVersion !== domain.kekVersion
+    || grant.kekVersion < domain.kekVersion
+    || grant.kekVersion > maximumKekVersion
     || grant.ownerIdentityKeyFingerprintHex
       !== domain.ownerIdentityKeyFingerprintHex
     || record.ownerIdentityKeyRecord.suite
@@ -1024,7 +1668,7 @@ function assertPicoReaderCustodyItemRecord(
     || item.hostSigningKeyFingerprintHex
       !== domain.hostSigningKeyFingerprintHex
     || item.domainId !== domain.domainId
-    || item.kekVersion !== domain.kekVersion
+    || item.kekVersion !== grant.kekVersion
     || item.writerIdentityKeyFingerprintHex
       !== grant.writerIdentityKeyFingerprintHex
     || item.writerDeviceSigningKeyFingerprintHex
@@ -1057,29 +1701,92 @@ function assertPicoReaderCustodyItemRecord(
   }
 }
 
-function openPicoReaderCustodyDomainKek(
+function createPicoReaderCustodyEnvelope(
+  sodium: VaultSodium,
+  input: {
+    ownerIdentitySession: PicoVaultSession;
+    ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    grantId: string;
+    domain: PicoReaderCustodyDomainSignatureInput;
+    kekVersion: number;
+    readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    readerKeyFingerprintHex: string;
+    kek: Uint8Array;
+    grantedAt: string;
+    createdAt: string;
+  },
+): PicoShareEnvelopeRecord {
+  const wrapPayload = buildPicoShareWrapPayload({
+    suite: picoShareSuite,
+    domainId: input.domain.domainId,
+    kekVersion: input.kekVersion,
+    readerKeyFingerprintHex: input.readerKeyFingerprintHex,
+    kekHex: bytesToHex(input.kek),
+  });
+  try {
+    const sealedWrap = sodium.crypto_box_seal(
+      wrapPayload,
+      hexToBytes(input.readerKeyRecord.publicKeyHex),
+    );
+    const envelope = {
+      suite: picoShareSuite,
+      grantId: input.grantId,
+      domainId: input.domain.domainId,
+      kekVersion: input.kekVersion,
+      hostSigningKeyFingerprintHex:
+        input.domain.hostSigningKeyFingerprintHex,
+      issuerIdentityKeyFingerprintHex:
+        input.domain.ownerIdentityKeyFingerprintHex,
+      readerKeyFingerprintHex: input.readerKeyFingerprintHex,
+      wrapDigestHex: bytesToHex(
+        sodium.crypto_generichash(32, sealedWrap, null),
+      ),
+      grantedAt: input.grantedAt,
+    };
+    return {
+      schema: picoShareEnvelopeRecordSchema,
+      envelope,
+      sealedWrapHex: bytesToHex(sealedWrap),
+      issuerIdentityKeyRecord: { ...input.ownerIdentityKeyRecord },
+      issuerSignatureHex: bytesToHex(
+        input.ownerIdentitySession.sign(
+          buildPicoShareEnvelopeSignatureInput(envelope),
+        ),
+      ),
+      createdAt: input.createdAt,
+    };
+  } finally {
+    sodium.memzero(wrapPayload);
+  }
+}
+
+function openPicoReaderCustodyKekFromEnvelope(
   sodium: VaultSodium,
   readerSession: PicoVaultSession,
-  record: PicoReaderCustodyDomainRecord,
+  domainId: string,
+  kekVersion: number,
+  readerKeyFingerprintHex: string,
+  envelope: PicoShareEnvelopeRecord,
 ): Uint8Array {
   const metadata = readerSession.metadata();
   if (metadata.keyRole !== 'device_key_agreement'
-    || metadata.keyFingerprintHex
-      !== record.domain.ownerReaderKeyFingerprintHex) {
+    || metadata.keyFingerprintHex !== readerKeyFingerprintHex
+    || envelope.envelope.domainId !== domainId
+    || envelope.envelope.kekVersion !== kekVersion
+    || envelope.envelope.readerKeyFingerprintHex
+      !== readerKeyFingerprintHex) {
     throw new Error('reader_key_mismatch');
   }
-
   const plaintext = readerSession.unwrapSealedBox(
-    hexToBytes(record.ownerEnvelope.sealedWrapHex),
+    hexToBytes(envelope.sealedWrapHex),
   );
   try {
     const reader = new CanonicalElementReader(plaintext, 'invalid_share_wrap');
     if (reader.readAscii() !== picoShareCanonicalLabels.wrap
       || reader.readAscii() !== picoShareSuite
-      || reader.readAscii() !== record.domain.domainId
-      || reader.readAscii() !== String(record.domain.kekVersion)
-      || bytesToHex(reader.readBytes())
-        !== record.domain.ownerReaderKeyFingerprintHex) {
+      || reader.readAscii() !== domainId
+      || reader.readAscii() !== String(kekVersion)
+      || bytesToHex(reader.readBytes()) !== readerKeyFingerprintHex) {
       throw new Error('invalid_share_wrap');
     }
     const kek = reader.readBytes();
@@ -1091,6 +1798,161 @@ function openPicoReaderCustodyDomainKek(
   } finally {
     sodium.memzero(plaintext);
   }
+}
+
+function validatedRotationChain(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  rotationRecords: readonly PicoReaderCustodyKekRotationRecord[],
+): PicoReaderCustodyKekRotationRecord[] {
+  const rotations = [...rotationRecords].sort(
+    (left, right) =>
+      left.rotation.kekVersion - right.rotation.kekVersion,
+  );
+  let previousVersion = domainRecord.domain.kekVersion;
+  let previousLifecycleOrder = domainRecord.domain.lifecycleOrder;
+  const coveredCauses = new Set<string>();
+  for (const record of rotations) {
+    assertPicoReaderCustodyKekRotationRecord(sodium, domainRecord, record);
+    const rotation = record.rotation;
+    if (rotation.previousKekVersion !== previousVersion
+      || rotation.kekVersion !== previousVersion + 1
+      || rotation.lifecycleOrder <= previousLifecycleOrder
+      || rotation.causeLifecycleIds.some((id) => coveredCauses.has(id))) {
+      throw new Error('invalid_reader_custody_rotation_chain');
+    }
+    rotation.causeLifecycleIds.forEach((id) => coveredCauses.add(id));
+    previousVersion = rotation.kekVersion;
+    previousLifecycleOrder = rotation.lifecycleOrder;
+  }
+  return rotations;
+}
+
+function currentReaderCustodyKekVersion(
+  domainRecord: PicoReaderCustodyDomainRecord,
+  rotationRecords: readonly PicoReaderCustodyKekRotationRecord[],
+): number {
+  return rotationRecords.at(-1)?.rotation.kekVersion
+    ?? domainRecord.domain.kekVersion;
+}
+
+function ownerEnvelopeForVersion(
+  domainRecord: PicoReaderCustodyDomainRecord,
+  rotationRecords: readonly PicoReaderCustodyKekRotationRecord[],
+  kekVersion: number,
+): PicoShareEnvelopeRecord {
+  if (kekVersion === domainRecord.domain.kekVersion) {
+    return domainRecord.ownerEnvelope;
+  }
+  const rotation = rotationRecords.find(
+    (record) => record.rotation.kekVersion === kekVersion,
+  );
+  const envelope = rotation?.envelopes.find(
+    (candidate) =>
+      candidate.envelope.grantId === rotation.rotation.rotationId
+      && candidate.envelope.readerKeyFingerprintHex
+        === domainRecord.domain.ownerReaderKeyFingerprintHex,
+  );
+  if (envelope === undefined) {
+    throw new Error('owner_kek_envelope_unavailable');
+  }
+  return envelope;
+}
+
+function readerEnvelopeForVersion(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  rotationRecords: readonly PicoReaderCustodyKekRotationRecord[],
+  readerGrantRecord: PicoReaderCustodyReaderGrantRecord | undefined,
+  kekVersion: number,
+  readerKeyFingerprintHex: string,
+): PicoShareEnvelopeRecord {
+  if (readerGrantRecord === undefined) {
+    throw new Error('reader_grant_required');
+  }
+  assertPicoReaderCustodyReaderGrantRecord(
+    sodium,
+    domainRecord,
+    readerGrantRecord,
+  );
+  if (readerGrantRecord.grant.readerKeyFingerprintHex
+      !== readerKeyFingerprintHex
+    || kekVersion < readerGrantRecord.grant.firstKekVersion) {
+    throw new Error('reader_key_mismatch');
+  }
+  const initialEnvelope = readerGrantRecord.envelopes.find(
+    (envelope) => envelope.envelope.kekVersion === kekVersion,
+  );
+  if (initialEnvelope !== undefined) {
+    return initialEnvelope;
+  }
+  const rotatedEnvelope = rotationRecords
+    .find((record) => record.rotation.kekVersion === kekVersion)
+    ?.envelopes.find(
+      (envelope) =>
+        envelope.envelope.grantId
+          === readerGrantRecord.grant.readerGrantId
+        && envelope.envelope.readerKeyFingerprintHex
+          === readerKeyFingerprintHex,
+    );
+  if (rotatedEnvelope === undefined) {
+    throw new Error('reader_kek_envelope_unavailable');
+  }
+  return rotatedEnvelope;
+}
+
+function assertPicoReaderCustodyEnvelope(
+  sodium: VaultSodium,
+  input: {
+    envelope: PicoShareEnvelopeRecord;
+    ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    grantId: string;
+    domain: PicoReaderCustodyDomainSignatureInput;
+    kekVersion: number;
+    readerKeyFingerprintHex: string;
+    grantedAt: string;
+  },
+): void {
+  const record = input.envelope;
+  const envelope = record.envelope;
+  if (record.schema !== picoShareEnvelopeRecordSchema
+    || envelope.suite !== picoShareSuite
+    || envelope.grantId !== input.grantId
+    || envelope.domainId !== input.domain.domainId
+    || envelope.kekVersion !== input.kekVersion
+    || envelope.hostSigningKeyFingerprintHex
+      !== input.domain.hostSigningKeyFingerprintHex
+    || envelope.issuerIdentityKeyFingerprintHex
+      !== input.domain.ownerIdentityKeyFingerprintHex
+    || envelope.readerKeyFingerprintHex !== input.readerKeyFingerprintHex
+    || envelope.grantedAt !== input.grantedAt
+    || !sameKeyRecord(
+      record.issuerIdentityKeyRecord,
+      input.ownerIdentityKeyRecord,
+    )
+    || !isCanonicalInstant(record.createdAt)) {
+    throw new Error('invalid_reader_custody_envelope');
+  }
+  const sealedWrap = hexToBytes(record.sealedWrapHex);
+  if (bytesToHex(sodium.crypto_generichash(32, sealedWrap, null))
+      !== envelope.wrapDigestHex
+    || !verifyDetached(
+      sodium,
+      input.ownerIdentityKeyRecord.publicKeyHex,
+      buildPicoShareEnvelopeSignatureInput(envelope),
+      record.issuerSignatureHex,
+    )) {
+    throw new Error('invalid_reader_custody_envelope');
+  }
+}
+
+function sameKeyRecord(
+  left: PicoIdentityKeyRecordSignatureInput,
+  right: PicoIdentityKeyRecordSignatureInput,
+): boolean {
+  return left.suite === right.suite
+    && left.keyRole === right.keyRole
+    && left.publicKeyHex === right.publicKeyHex;
 }
 
 function assertKeyRecordMatchesMetadata(

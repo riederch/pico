@@ -16,8 +16,10 @@ injected. ADR 0084 implements controller-signed sealing, storage,
 reconciliation and audit for existing host-custody KEK versions. The separate
 reader-custody path now has its first running slice under ADR 0086: owner-rooted
 domain/writer authority, Vault-only KEK/DEK handling and a separate opaque Core
-ingestion/storage path. Automatic rotation, additional-reader distribution,
-delegated controllers and reader-facing transport remain open.
+ingestion/storage path. ADR 0088 adds exact additional-reader grants,
+version-explicit history, atomic remaining-reader envelope sets and a
+revocation-coupled write barrier/KEK rotation. Delegated controllers,
+reader-facing transport and automatic execution remain open.
 
 ## Context
 
@@ -172,7 +174,7 @@ Nothing behind these gates ships, and nothing is security-relevant before **all 
 
 1. **Gate R1 — Reader keys are real. Implemented as a fail-closed pre-issuance authority contract.** Device-held X25519 keys with a reviewed delegation and possession story (ADR 0029 Device Key role, ADR 0033 lifecycle, realization of the ADR 0055 family). Without them there is no one to wrap to, and no envelope can be issued. *ADR 0079 fixes the device key-agreement key and delegation direction, ADR 0081 P2 supplies minimal Vault custody/unwrap, ADR 0082 supplies signed lifecycle persistence, ADR 0083 verifies/persists the exact key record, and ADR 0085 verifies identity-root-signed bounded Registry/Sync checkpoints. Its default transport is unavailable, so no envelope path can confuse local evidence with external freshness.*
 2. **Gate R2 — Canonical bytes and vectors. Implemented.** Canonical wrap-payload and envelope-byte layouts with authoritative accept/reject vectors (ADR 0034 discipline), including negative vectors for wrong-domain, wrong-version, wrong-reader and suite-swap presentations. *`@pico/protocol` exports the `pico.suite.share.v1` builders and `docs/protocol/fixtures/share-envelope/` publishes the authoritative vectors (see the byte-layout section above). ADR 0084 consumes those unchanged bytes for the narrow host-custody issuance runtime.*
-3. **Gate R3 — Membership runtime. Implemented for host custody and the narrow ADR 0086 owner-bootstrap reader-custody slice.** Verified membership records drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. Stored `owner`/`controller` fields remain non-authorization inputs forever. *ADR 0080 delivers signed membership/lifecycle projection; ADR 0082 delivers the claimed-home read path and Home-Host-Pico-signed grant/revoke records for existing `host_custody` domains; ADR 0083 supplies fail-closed reader-key selection; ADR 0084 supplies controller-signed host-custody sealing, storage and reconciliation; ADR 0085 supplies authenticated freshness verification; ADR 0086 adds owner-rooted reader-domain/writer authority and opaque item storage. Additional readers, delegated controllers, transport and key-distribution/rotation coupling remain open.*
+3. **Gate R3 — Membership runtime. Implemented for host custody and the ADR 0086/0088 reader-custody slices.** Verified membership records drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. Stored `owner`/`controller` fields remain non-authorization inputs forever. *ADR 0080 delivers signed membership/lifecycle projection; ADR 0082 delivers the claimed-home read path and Home-Host-Pico-signed grant/revoke records for existing `host_custody` domains; ADR 0083 supplies fail-closed reader-key selection; ADR 0084 supplies controller-signed host-custody sealing, storage and reconciliation; ADR 0085 supplies authenticated freshness verification; ADR 0086 adds owner-rooted reader-domain/writer authority and opaque item storage; ADR 0088 adds fresh exact additional readers and rotation-coupled version authority. Delegated controllers and reader-facing transport remain open.*
 
 ## Implementation implications
 
@@ -184,11 +186,13 @@ Ordered and additive:
    storage and reconciliation** (ADR 0084). Production issuance remains
    fail-closed without an injected ADR 0085 checkpoint transport, and no
    reader-facing transport exists.
-4. **Partly done — build the separate reader-custody Vault/Companion data path,
-   rotation coupling and, behind transport ADRs, reader distribution.** ADR
-   0086 implements owner bootstrap, one exact writer, opaque item crypto/storage
-   and restore reconciliation without reusing Foundation raw-KEK handling.
-   Rotation, additional readers, delegated controllers and transport remain.
+4. **Done for local cryptographic/runtime authority — build the separate
+   reader-custody Vault/Companion data path and rotation coupling.** ADR 0086
+   implements owner bootstrap, one exact writer, opaque item crypto/storage and
+   restore reconciliation without reusing Foundation raw-KEK handling. ADR 0088
+   adds exact additional readers, explicit version-history semantics, complete
+   remaining-reader envelope sets and a write barrier until revocation debt is
+   rotated. Delegated controllers, automatic execution and transport remain.
 
 ## Non-goals
 

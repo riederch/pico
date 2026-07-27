@@ -4,9 +4,10 @@
 
 Accepted and implemented as the first reader-custody domain slice for ADR 0078.
 It defines owner-rooted domain and writer authority, Vault-side KEK/DEK
-handling, opaque Core ingestion/storage and restore reconciliation. Automatic
-rotation, additional-reader distribution, reader-facing transport and a
-deployable Vault shell remain future work.
+handling, opaque Core ingestion/storage and restore reconciliation. ADR 0088
+now builds additional-reader distribution and revocation-coupled KEK rotation
+on this boundary. Reader-facing transport and a deployable Vault shell remain
+future work.
 
 ## Context
 
@@ -247,11 +248,11 @@ restore cannot silently reinterpret the domain as host custody.
 - A writer compromise is bounded by an exact device key and grant window;
   owner-signed revocation stops new host ingestion.
 - Revocation alone does not remove access to old KEK versions already present
-  on a compromised reader. Future secrecy still requires KEK rotation and
-  rewrapping to the remaining reader set.
-- The owner bootstrap envelope supports only the owner reader key. Additional
-  readers and transport require the existing domain-read grant/freshness
-  authority plus a later reader-custody envelope flow.
+  on a compromised reader. ADR 0088 adds the required future-only rotation and
+  remaining-reader rewrapping, without retroactive claims.
+- The owner bootstrap envelope supports only the owner reader key. ADR 0088
+  adds fresh exact additional-reader grants and local envelope records;
+  reader-facing transport remains separate.
 - JavaScript zeroization is best effort, matching ADR 0081's stated limitation.
 
 ## Gates
@@ -285,6 +286,9 @@ This ADR does not define:
 - identity recovery, Home continuity or multi-registry consensus;
 - L4 compatibility certification or commercial permission.
 
+The first two non-goals are implemented by ADR 0088 without changing this
+ADR's owner-bootstrap record formats or custody seam.
+
 ## References
 
 - [ADR 0071](0071-memory-content-encryption-threat-model-and-primitive-direction.md)
@@ -295,3 +299,4 @@ This ADR does not define:
 - [ADR 0082](0082-identity-bound-foundation-sessions-and-domain-read-grants.md)
 - [ADR 0083](0083-reader-key-registration-and-freshness-contract.md)
 - [ADR 0085](0085-authenticated-reader-key-freshness-checkpoints.md)
+- [ADR 0088](0088-reader-custody-multi-reader-and-kek-rotation.md)

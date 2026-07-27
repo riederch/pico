@@ -189,14 +189,16 @@ The `identity-signature-input/pico.suite.id.v1/` family is seeded: ADR `0079-pic
 The `reader-key-freshness/pico.suite.id.v1/` family is seeded: ADR `0085-authenticated-reader-key-freshness-checkpoints.md` publishes the authoritative `pico.id.reader-key-freshness.v1` signature-input layout, and `docs/protocol/fixtures/reader-key-freshness/` carries current/revoked positive vectors plus cross-family-label, invalid-status and inverted-window negatives. These are canonical bytes only: no private keys, no public Registry/Sync transport, no HTTP freshness assertion and no compatibility certification. A protocol test rebuilds every accepted vector and checks the published bytes against ADR 0085; runtime identity signature, exact binding, replay, timeout, restore and revocation coverage lives in `@pico/identity`, `@pico/vault` and Core tests.
 
 The `reader-custody/pico.suite.mem.v1/` family is seeded: ADR
-`0086-reader-custody-authority-and-opaque-storage.md` publishes the four
-authoritative owner-domain, writer-grant, writer-revocation and opaque-item
-signature-input layouts. `docs/protocol/fixtures/reader-custody/` carries one
-positive vector per family plus cross-family-label, wrong-custody-class,
-inverted-writer-window and truncated-nonce negatives. The vectors contain no
-private keys, raw KEKs/DEKs or real ciphertext. A protocol test rebuilds every
-accepted vector and checks it against ADR 0086; Vault/Core tests cover actual
-signatures, sealed owner envelope, AEAD, revocation and restore reconciliation.
+`0086-reader-custody-authority-and-opaque-storage.md` publishes the original
+owner-domain, writer-grant, writer-revocation and opaque-item inputs; ADR
+`0088-reader-custody-multi-reader-and-kek-rotation.md` adds reader grant,
+reader revocation and KEK-rotation inputs. The directory carries one positive
+vector per family plus cross-family-label, custody-class, validity-window,
+history-mode, rotation-version/cause and nonce negatives. The vectors contain
+no private keys, raw KEKs/DEKs or real ciphertext. A protocol test rebuilds
+every accepted vector and checks it against ADR 0086/0088; Vault/Core tests
+cover signatures, exact envelopes, AEAD, freshness, rotation debt and restore
+reconciliation.
 
 The `identity-signature-verification/pico.suite.id.v1/` family is seeded: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` now has deterministic detached Ed25519 verification vectors for possession, delegation and revocation over the Gate G1 canonical bytes. These publish public key records and signatures only: no private keys, no storage adapter, no registry freshness, no reader membership and no compatibility certification. The `@pico/identity` test suite reads each vector and verifies accept/reject behavior through the package runtime.
 

@@ -103,21 +103,29 @@ reader-key-freshness/pico.suite.id.v1/canonicalization-negative/inverted-window/
 ## Current reader-custody fixtures
 
 These fixtures carry the authoritative canonical signature-input bytes for the
-ADR 0086 reader-custody domain, writer grant, writer revocation and opaque item
-families. They bind Home and host identity, the owner and exact writer device,
-the KEK version, ciphertext/wrapped-DEK digests and lifecycle context. The
-vectors contain synthetic public fields only: no private keys, raw KEKs, raw
-DEKs, real ciphertext, L4 compatibility basis or commercial permission.
+ADR 0086/0088 reader-custody domain, reader/writer grants and revocations, KEK
+rotation and opaque item families. They bind Home and host identity, the owner,
+exact reader/writer devices, explicit history mode, KEK versions, rotation
+cause/remaining-reader sets, ciphertext/wrapped-DEK digests and lifecycle
+context. The vectors contain synthetic public fields only: no private keys, raw
+KEKs, raw DEKs, real ciphertext, L4 compatibility basis or commercial
+permission.
 
 ```text
 reader-custody/suite.json
 reader-custody/pico.suite.mem.v1/canonicalization-positive/domain-authority/
+reader-custody/pico.suite.mem.v1/canonicalization-positive/reader-grant-from-version/
+reader-custody/pico.suite.mem.v1/canonicalization-positive/reader-grant-revoked/
 reader-custody/pico.suite.mem.v1/canonicalization-positive/writer-grant/
 reader-custody/pico.suite.mem.v1/canonicalization-positive/writer-grant-revoked/
+reader-custody/pico.suite.mem.v1/canonicalization-positive/kek-rotation/
 reader-custody/pico.suite.mem.v1/canonicalization-positive/opaque-item/
 reader-custody/pico.suite.mem.v1/canonicalization-negative/domain-cross-family-label/
 reader-custody/pico.suite.mem.v1/canonicalization-negative/domain-host-custody/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/reader-grant-invalid-access-mode/
 reader-custody/pico.suite.mem.v1/canonicalization-negative/writer-grant-inverted-window/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/kek-rotation-skips-version/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/kek-rotation-without-cause/
 reader-custody/pico.suite.mem.v1/canonicalization-negative/item-truncated-content-nonce/
 ```
 

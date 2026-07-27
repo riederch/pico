@@ -56,6 +56,7 @@ import { MemoryContentCrypto } from './memory-content-crypto.js';
 import {
   foundationOperatorHomeBindingMigrationId,
   picoSchemaBaselineMigrationId,
+  readerCustodyMultiReaderRotationMigrationId,
 } from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
 import { homeResetMarkerPath } from './home-setup.js';
@@ -228,6 +229,7 @@ describe('Pico Home Core app', () => {
         migrations: [
           { id: picoSchemaBaselineMigrationId, appliedAt: expect.any(String) },
           { id: foundationOperatorHomeBindingMigrationId, appliedAt: expect.any(String) },
+          { id: readerCustodyMultiReaderRotationMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
@@ -1850,6 +1852,16 @@ describe('Pico Home Core app', () => {
       url: '/api/home/domain-read-grants',
       headers: identityAuth,
     })).statusCode).toBe(200);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/reader-custody/reader-grants',
+      headers: identityAuth,
+    })).statusCode).toBe(200);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/reader-custody/kek-rotations',
+      headers: identityAuth,
+    })).statusCode).toBe(200);
 
     // An ordinary active Home member has a valid identity session and may read
     // only granted domains; it must not become a confused deputy for Home
@@ -1898,6 +1910,16 @@ describe('Pico Home Core app', () => {
     expect((await app.inject({
       method: 'GET',
       url: '/api/home/domain-read-grants',
+      headers: { authorization: `Bearer ${memberSession}` },
+    })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/reader-custody/reader-grants',
+      headers: { authorization: `Bearer ${memberSession}` },
+    })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/reader-custody/kek-rotations',
       headers: { authorization: `Bearer ${memberSession}` },
     })).statusCode).toBe(401);
 

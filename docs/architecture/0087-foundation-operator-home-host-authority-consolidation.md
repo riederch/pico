@@ -38,7 +38,7 @@ The local API distinguishes two planes:
 |---|---|---|---|
 | Local host infrastructure (`host-admin`) | Current operator session | global session revocation, operator credential change, retention-policy CRUD | Local host control. |
 | Destructive local infrastructure (`host-admin-destructive`) | Current operator session plus exact confirmation | host-custody domain shred | Local host control, with existing durable audit. |
-| Signed authority relay (`home-authority-relay`) | Exact Home-bound operator fallback, or active founding Home Host Pico identity session | membership/lifecycle, domain-read grants/lifecycle, share-envelope issuance/finalization/list, reader-custody domain/writer/lifecycle/item relay/list | The signed founding, controller, owner, issuer or exact writer evidence verified by each handler. |
+| Signed authority relay (`home-authority-relay`) | Exact Home-bound operator fallback, or active founding Home Host Pico identity session | membership/lifecycle, domain-read grants/lifecycle, share-envelope issuance/finalization/list, reader-custody domain/reader/writer/lifecycle/rotation/item relay/list | The signed founding, controller, owner, issuer, exact reader/writer or rotation evidence verified by each handler. |
 
 `public`, `setup-bootstrap`, `foundation-diagnostic`, `authenticated` and
 `domain-content` retain their existing meanings. The static token remains

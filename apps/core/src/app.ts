@@ -63,6 +63,9 @@ import {
   type PicoMemoryContentListResponse,
   type PicoReaderCustodyDomainRecord,
   type PicoReaderCustodyItemRecord,
+  type PicoReaderCustodyKekRotationRecord,
+  type PicoReaderCustodyReaderGrantLifecycleRecord,
+  type PicoReaderCustodyReaderGrantRecord,
   type PicoReaderCustodyWriterGrantLifecycleRecord,
   type PicoReaderCustodyWriterGrantRecord,
   type PicoRealtimeTicketResponse,
@@ -359,7 +362,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     readerKeySelector,
     keyStore,
   );
-  const readerCustody = store.readerCustody(sodium);
+  const readerCustody = store.readerCustody(sodium, readerKeySelector);
   const bootstrapCode = new OperatorBootstrapCode();
   const moveInCode = new MoveInCode();
   const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
@@ -1043,9 +1046,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // or plaintext. This is signed-authority relay, not readership (ADR 0086/87).
   accessClasses.register('POST', '/api/home/reader-custody/domains', 'home-authority-relay');
   accessClasses.register('GET', '/api/home/reader-custody/domains', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-custody/reader-grants', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/reader-custody/reader-grants', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-custody/reader-grant-lifecycle', 'home-authority-relay');
   accessClasses.register('POST', '/api/home/reader-custody/writer-grants', 'home-authority-relay');
   accessClasses.register('GET', '/api/home/reader-custody/writer-grants', 'home-authority-relay');
   accessClasses.register('POST', '/api/home/reader-custody/writer-grant-lifecycle', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-custody/kek-rotations', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/reader-custody/kek-rotations', 'home-authority-relay');
   accessClasses.register('POST', '/api/home/reader-custody/items', 'home-authority-relay');
   accessClasses.register('GET', '/api/home/reader-custody/items', 'home-authority-relay');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
@@ -1503,6 +1511,42 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, { domains: readerCustody.domains() });
   });
 
+  app.post('/api/home/reader-custody/reader-grants', async (request, reply) => {
+    const result = await readerCustody.recordReaderGrant(
+      (request.body ?? {}) as PicoReaderCustodyReaderGrantRecord,
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+      readerGrant: result.value,
+    });
+  });
+
+  app.get('/api/home/reader-custody/reader-grants', async (_request, reply) => {
+    return sendNoStore(reply, { readerGrants: readerCustody.readerGrants() });
+  });
+
+  app.post(
+    '/api/home/reader-custody/reader-grant-lifecycle',
+    async (request, reply) => {
+      const result = readerCustody.recordReaderGrantLifecycle(
+        (request.body ?? {}) as PicoReaderCustodyReaderGrantLifecycleRecord,
+      );
+      if (!result.ok) {
+        return sendNoStore(
+          reply.code(readerCustodyFailureStatus(result.reason)),
+          { error: result.reason },
+        );
+      }
+      return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+        readerGrant: result.value,
+      });
+    },
+  );
+
   app.post('/api/home/reader-custody/writer-grants', async (request, reply) => {
     const result = readerCustody.recordWriterGrant(
       (request.body ?? {}) as PicoReaderCustodyWriterGrantRecord,
@@ -1538,6 +1582,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       });
     },
   );
+
+  app.post('/api/home/reader-custody/kek-rotations', async (request, reply) => {
+    const result = readerCustody.recordKekRotation(
+      (request.body ?? {}) as PicoReaderCustodyKekRotationRecord,
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+      rotation: result.value,
+    });
+  });
+
+  app.get('/api/home/reader-custody/kek-rotations', async (request, reply) => {
+    const query = request.query as { domainAuthorityId?: unknown };
+    const domainAuthorityId = typeof query.domainAuthorityId === 'string'
+      ? query.domainAuthorityId
+      : undefined;
+    return sendNoStore(reply, {
+      rotations: readerCustody.kekRotations(domainAuthorityId),
+    });
+  });
 
   app.post('/api/home/reader-custody/items', async (request, reply) => {
     const result = readerCustody.recordItem(
@@ -2448,6 +2516,9 @@ function readerCustodyFailureStatus(
 ): number {
   if (reason === 'invalid_record' || reason === 'wrong_home') {
     return 400;
+  }
+  if (reason === 'freshness_unavailable') {
+    return 503;
   }
   return 409;
 }

@@ -1,0 +1,20 @@
+{
+  "construction": "pico.mem.reader-grant-lifecycle.v1",
+  "custodyFamily": "readerGrantLifecycle",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "lifecycleId": "rcrlife_20260801_0001",
+    "readerGrantId": "rcreader_20260727_0001",
+    "domainAuthorityId": "rcdom_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "domainId": "domain-journal",
+    "ownerIdentityKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "readerIdentityKeyFingerprintHex": "4444444444444444444444444444444444444444444444444444444444444444",
+    "readerKeyFingerprintHex": "6666666666666666666666666666666666666666666666666666666666666666",
+    "status": "revoked",
+    "reasonCategory": "reader_removed",
+    "changedAt": "2026-08-01T10:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000004"
+  }
+}

@@ -2,6 +2,9 @@ import type Database from 'better-sqlite3';
 import {
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
+  buildPicoReaderCustodyKekRotationSignatureInput,
+  buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
+  buildPicoReaderCustodyReaderGrantSignatureInput,
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
@@ -9,6 +12,9 @@ import {
   picoMemoryContentSuite,
   picoReaderCustodyDomainRecordSchema,
   picoReaderCustodyItemRecordSchema,
+  picoReaderCustodyKekRotationRecordSchema,
+  picoReaderCustodyReaderGrantLifecycleRecordSchema,
+  picoReaderCustodyReaderGrantRecordSchema,
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
   picoShareEnvelopeRecordSchema,
@@ -18,6 +24,9 @@ import type {
   PicoHomeFoundingRecord,
   PicoReaderCustodyDomainRecord,
   PicoReaderCustodyItemRecord,
+  PicoReaderCustodyKekRotationRecord,
+  PicoReaderCustodyReaderGrantLifecycleRecord,
+  PicoReaderCustodyReaderGrantRecord,
   PicoReaderCustodyWriterGrantLifecycleRecord,
   PicoReaderCustodyWriterGrantRecord,
 } from '@pico/protocol';
@@ -26,6 +35,9 @@ import {
   verifyPicoIdentityKeyRecordFingerprint,
 } from '@pico/identity';
 import type { IdentityVerificationSodium } from '@pico/identity';
+import type {
+  PicoIdentityReaderKeySelectionResult,
+} from './reader-key.js';
 
 export interface ReaderCustodyAuthoritySource {
   foundingRecord(): PicoHomeFoundingRecord | undefined;
@@ -34,6 +46,13 @@ export interface ReaderCustodyAuthoritySource {
     homeId: string,
     at: string,
   ): boolean;
+  selectReaderKey?(input: {
+    homeId: string;
+    picoIdentityFingerprintHex: string;
+    delegationId: string;
+    deviceKeyAgreementKeyFingerprintHex: string;
+    at: string;
+  }): Promise<PicoIdentityReaderKeySelectionResult>;
 }
 
 export interface PicoReaderCustodyDomainView {
@@ -54,9 +73,41 @@ export interface PicoReaderCustodyWriterGrantView {
   domainId: string;
   writerIdentityKeyFingerprintHex: string;
   writerDeviceSigningKeyFingerprintHex: string;
+  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked' | 'superseded';
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyReaderGrantView {
+  readerGrantId: string;
+  domainAuthorityId: string;
+  domainId: string;
+  readerIdentityKeyFingerprintHex: string;
+  readerDeviceSigningKeyFingerprintHex: string;
+  readerKeyFingerprintHex: string;
+  readerDelegationId: string;
+  accessMode: 'from_version' | 'forward_only';
+  firstKekVersion: number;
+  envelopeKekVersions: number[];
   status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
   validFrom: string;
   validUntil: string;
+  lifecycleOrder: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyKekRotationView {
+  rotationId: string;
+  domainAuthorityId: string;
+  domainId: string;
+  previousKekVersion: number;
+  kekVersion: number;
+  causeLifecycleIds: string[];
+  remainingReaderGrantIds: string[];
+  envelopeReaderKeyFingerprintHexes: string[];
+  rotatedAt: string;
   lifecycleOrder: string;
   receivedAt: string;
 }
@@ -82,9 +133,17 @@ export type ReaderCustodyFailureReason =
   | 'wrong_home'
   | 'owner_is_not_active_member'
   | 'writer_is_not_active_member'
+  | 'reader_is_not_active_member'
+  | 'reader_key_is_not_current'
+  | 'freshness_unavailable'
+  | 'freshness_stale'
+  | 'reader_key_revoked'
   | 'unknown_domain'
+  | 'unknown_reader_grant'
   | 'unknown_writer_grant'
   | 'inactive_writer_grant'
+  | 'rotation_required'
+  | 'invalid_rotation'
   | 'invalid_record'
   | 'conflicting_record'
   | 'domain_custody_conflict';
@@ -98,8 +157,11 @@ export type ReaderCustodyRecordResult<T> =
 
 export interface ReaderCustodyReconciliation {
   droppedDomains: number;
+  droppedReaderGrants: number;
+  droppedReaderLifecycleRecords: number;
   droppedWriterGrants: number;
   droppedWriterLifecycleRecords: number;
+  droppedRotations: number;
   droppedItems: number;
 }
 
@@ -199,6 +261,249 @@ export class ReaderCustodyStore {
     return { ok: true, inserted: true, value: domainView(record) };
   }
 
+  public async recordReaderGrant(
+    record: PicoReaderCustodyReaderGrantRecord,
+    at: string = new Date().toISOString(),
+  ): Promise<ReaderCustodyRecordResult<PicoReaderCustodyReaderGrantView>> {
+    const domain = this.domainRecord(record.grant.domainAuthorityId);
+    if (domain === undefined) {
+      return { ok: false, reason: 'unknown_domain' };
+    }
+    const domainVerification = this.verifyDomain(domain, at, true);
+    if (domainVerification !== undefined) {
+      return { ok: false, reason: domainVerification };
+    }
+    const currentKekVersion = this.currentKekVersion(
+      domain.domain.domainAuthorityId,
+    );
+    if (!this.verifyReaderGrant(domain, record, currentKekVersion)) {
+      return { ok: false, reason: 'invalid_record' };
+    }
+    if (!this.authority.hasActiveMembership(
+      record.grant.readerIdentityKeyFingerprintHex,
+      record.grant.homeId,
+      at,
+    )) {
+      return { ok: false, reason: 'reader_is_not_active_member' };
+    }
+    if (this.authority.selectReaderKey === undefined) {
+      return { ok: false, reason: 'reader_key_is_not_current' };
+    }
+    const selected = await this.authority.selectReaderKey({
+      homeId: record.grant.homeId,
+      picoIdentityFingerprintHex:
+        record.grant.readerIdentityKeyFingerprintHex,
+      delegationId: record.grant.readerDelegationId,
+      deviceKeyAgreementKeyFingerprintHex:
+        record.grant.readerKeyFingerprintHex,
+      at,
+    });
+    if (!selected.ok) {
+      if (selected.reason === 'freshness_unavailable') {
+        return { ok: false, reason: 'freshness_unavailable' };
+      }
+      if (selected.reason === 'freshness_stale') {
+        return { ok: false, reason: 'freshness_stale' };
+      }
+      if (selected.reason === 'reader_key_revoked') {
+        return { ok: false, reason: 'reader_key_revoked' };
+      }
+      return { ok: false, reason: 'reader_key_is_not_current' };
+    }
+    if (selected.candidate.deviceSigningKeyFingerprintHex
+        !== record.grant.readerDeviceSigningKeyFingerprintHex
+      || selected.candidate.deviceKeyAgreementKeyFingerprintHex
+        !== record.grant.readerKeyFingerprintHex) {
+      return { ok: false, reason: 'reader_key_is_not_current' };
+    }
+
+    const existing = this.readerGrantRecord(record.grant.readerGrantId);
+    if (existing !== undefined) {
+      return sameJson(existing, record)
+        ? {
+          ok: true,
+          inserted: false,
+          value: this.readerGrantView(existing, at),
+        }
+        : { ok: false, reason: 'conflicting_record' };
+    }
+    this.db
+      .prepare(`
+        INSERT INTO pico_reader_custody_reader_grant (
+          reader_grant_id,
+          domain_authority_id,
+          home_id,
+          privacy_domain,
+          owner_identity_key_fingerprint_hex,
+          reader_identity_key_fingerprint_hex,
+          reader_device_signing_key_fingerprint_hex,
+          reader_key_fingerprint_hex,
+          reader_delegation_id,
+          access_mode,
+          first_kek_version,
+          valid_from,
+          valid_until,
+          lifecycle_order,
+          reader_grant_record_json,
+          received_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        record.grant.readerGrantId,
+        record.grant.domainAuthorityId,
+        record.grant.homeId,
+        record.grant.domainId,
+        record.grant.ownerIdentityKeyFingerprintHex,
+        record.grant.readerIdentityKeyFingerprintHex,
+        record.grant.readerDeviceSigningKeyFingerprintHex,
+        record.grant.readerKeyFingerprintHex,
+        record.grant.readerDelegationId,
+        record.grant.accessMode,
+        record.grant.firstKekVersion,
+        record.grant.validFrom,
+        record.grant.validUntil,
+        record.grant.lifecycleOrder,
+        JSON.stringify(record),
+        record.receivedAt,
+      );
+    return {
+      ok: true,
+      inserted: true,
+      value: this.readerGrantView(record, at),
+    };
+  }
+
+  public recordReaderGrantLifecycle(
+    record: PicoReaderCustodyReaderGrantLifecycleRecord,
+    at: string = new Date().toISOString(),
+  ): ReaderCustodyRecordResult<PicoReaderCustodyReaderGrantView> {
+    const grant = this.readerGrantRecord(record.lifecycle.readerGrantId);
+    if (grant === undefined) {
+      return { ok: false, reason: 'unknown_reader_grant' };
+    }
+    const domain = this.domainRecord(grant.grant.domainAuthorityId);
+    if (domain === undefined) {
+      return { ok: false, reason: 'unknown_domain' };
+    }
+    const domainVerification = this.verifyDomain(domain, at, true);
+    if (domainVerification !== undefined) {
+      return { ok: false, reason: domainVerification };
+    }
+    if (!this.verifyReaderGrantLifecycle(domain, grant, record)) {
+      return { ok: false, reason: 'invalid_record' };
+    }
+    const existing = this.readerGrantLifecycleRecord(
+      record.lifecycle.lifecycleId,
+    );
+    if (existing !== undefined) {
+      return sameJson(existing, record)
+        ? {
+          ok: true,
+          inserted: false,
+          value: this.readerGrantView(grant, at),
+        }
+        : { ok: false, reason: 'conflicting_record' };
+    }
+    this.db
+      .prepare(`
+        INSERT INTO pico_reader_custody_reader_grant_lifecycle (
+          lifecycle_id,
+          reader_grant_id,
+          domain_authority_id,
+          status,
+          reason_category,
+          changed_at,
+          lifecycle_order,
+          lifecycle_record_json,
+          received_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        record.lifecycle.lifecycleId,
+        record.lifecycle.readerGrantId,
+        record.lifecycle.domainAuthorityId,
+        record.lifecycle.status,
+        record.lifecycle.reasonCategory,
+        record.lifecycle.changedAt,
+        record.lifecycle.lifecycleOrder,
+        JSON.stringify(record),
+        record.receivedAt,
+      );
+    return {
+      ok: true,
+      inserted: true,
+      value: this.readerGrantView(grant, at),
+    };
+  }
+
+  public recordKekRotation(
+    record: PicoReaderCustodyKekRotationRecord,
+    at: string = new Date().toISOString(),
+  ): ReaderCustodyRecordResult<PicoReaderCustodyKekRotationView> {
+    const domain = this.domainRecord(record.rotation.domainAuthorityId);
+    if (domain === undefined) {
+      return { ok: false, reason: 'unknown_domain' };
+    }
+    const domainVerification = this.verifyDomain(domain, at, true);
+    if (domainVerification !== undefined) {
+      return { ok: false, reason: domainVerification };
+    }
+    if (!this.verifyKekRotation(domain, record, at)) {
+      return { ok: false, reason: 'invalid_rotation' };
+    }
+    const existing = this.kekRotationRecord(record.rotation.rotationId);
+    if (existing !== undefined) {
+      return sameJson(existing, record)
+        ? {
+          ok: true,
+          inserted: false,
+          value: kekRotationView(existing),
+        }
+        : { ok: false, reason: 'conflicting_record' };
+    }
+    const existingVersion = this.db
+      .prepare(`
+        SELECT rotation_id AS rotationId
+        FROM pico_reader_custody_kek_rotation
+        WHERE domain_authority_id = ? AND kek_version = ?
+      `)
+      .get(
+        record.rotation.domainAuthorityId,
+        record.rotation.kekVersion,
+      ) as { rotationId: string } | undefined;
+    if (existingVersion !== undefined) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+    this.db
+      .prepare(`
+        INSERT INTO pico_reader_custody_kek_rotation (
+          rotation_id,
+          domain_authority_id,
+          previous_kek_version,
+          kek_version,
+          rotated_at,
+          lifecycle_order,
+          rotation_record_json,
+          received_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        record.rotation.rotationId,
+        record.rotation.domainAuthorityId,
+        record.rotation.previousKekVersion,
+        record.rotation.kekVersion,
+        record.rotation.rotatedAt,
+        record.rotation.lifecycleOrder,
+        JSON.stringify(record),
+        record.receivedAt,
+      );
+    return {
+      ok: true,
+      inserted: true,
+      value: kekRotationView(record),
+    };
+  }
+
   public recordWriterGrant(
     record: PicoReaderCustodyWriterGrantRecord,
     at: string = new Date().toISOString(),
@@ -213,6 +518,11 @@ export class ReaderCustodyStore {
     }
     if (!this.verifyWriterGrant(domain, record)) {
       return { ok: false, reason: 'invalid_record' };
+    }
+    if (this.hasRotationDebt(record.grant.domainAuthorityId)
+      || record.grant.kekVersion
+        !== this.currentKekVersion(record.grant.domainAuthorityId)) {
+      return { ok: false, reason: 'rotation_required' };
     }
     if (!this.authority.hasActiveMembership(
       record.grant.writerIdentityKeyFingerprintHex,
@@ -361,6 +671,14 @@ export class ReaderCustodyStore {
       || !this.verifyItem(domain, grant, record)) {
       return { ok: false, reason: 'invalid_record' };
     }
+    if (this.hasRotationDebt(record.item.domainAuthorityId)) {
+      return { ok: false, reason: 'rotation_required' };
+    }
+    if (record.item.kekVersion
+        !== this.currentKekVersion(record.item.domainAuthorityId)
+      || grant.grant.kekVersion !== record.item.kekVersion) {
+      return { ok: false, reason: 'inactive_writer_grant' };
+    }
     if (this.writerGrantView(grant, at).status !== 'active') {
       return { ok: false, reason: 'inactive_writer_grant' };
     }
@@ -447,6 +765,46 @@ export class ReaderCustodyStore {
       .map((row) => domainView(parseJson<PicoReaderCustodyDomainRecord>(row)));
   }
 
+  public readerGrants(
+    at: string = new Date().toISOString(),
+  ): PicoReaderCustodyReaderGrantView[] {
+    return (this.db
+      .prepare(`
+        SELECT reader_grant_record_json AS recordJson
+        FROM pico_reader_custody_reader_grant
+        ORDER BY valid_from, reader_grant_id
+      `)
+      .all() as StoredJsonRow[])
+      .map((row) => this.readerGrantView(
+        parseJson<PicoReaderCustodyReaderGrantRecord>(row),
+        at,
+      ));
+  }
+
+  public kekRotations(
+    domainAuthorityId?: string,
+  ): PicoReaderCustodyKekRotationView[] {
+    const rows = (domainAuthorityId === undefined
+      ? this.db
+        .prepare(`
+          SELECT rotation_record_json AS recordJson
+          FROM pico_reader_custody_kek_rotation
+          ORDER BY kek_version, rotation_id
+        `)
+        .all()
+      : this.db
+        .prepare(`
+          SELECT rotation_record_json AS recordJson
+          FROM pico_reader_custody_kek_rotation
+          WHERE domain_authority_id = ?
+          ORDER BY kek_version, rotation_id
+        `)
+        .all(domainAuthorityId)) as StoredJsonRow[];
+    return rows.map((row) => kekRotationView(
+      parseJson<PicoReaderCustodyKekRotationRecord>(row),
+    ));
+  }
+
   public writerGrants(
     at: string = new Date().toISOString(),
   ): PicoReaderCustodyWriterGrantView[] {
@@ -489,8 +847,11 @@ export class ReaderCustodyStore {
     at: string = new Date().toISOString(),
   ): ReaderCustodyReconciliation {
     let droppedDomains = 0;
+    let droppedReaderGrants = 0;
+    let droppedReaderLifecycleRecords = 0;
     let droppedWriterGrants = 0;
     let droppedWriterLifecycleRecords = 0;
+    let droppedRotations = 0;
     let droppedItems = 0;
     const reconcile = this.db.transaction(() => {
       const domainIds = this.db
@@ -508,9 +869,82 @@ export class ReaderCustodyStore {
         }
         const removed = this.dropDomain(domainAuthorityId);
         droppedDomains += removed.domains;
+        droppedReaderGrants += removed.readerGrants;
+        droppedReaderLifecycleRecords += removed.readerLifecycleRecords;
         droppedWriterGrants += removed.writerGrants;
         droppedWriterLifecycleRecords += removed.writerLifecycleRecords;
+        droppedRotations += removed.rotations;
         droppedItems += removed.items;
+      }
+
+      const readerGrantIds = this.db
+        .prepare(`
+          SELECT reader_grant_id AS readerGrantId
+          FROM pico_reader_custody_reader_grant
+        `)
+        .all()
+        .map((row) => (row as { readerGrantId: string }).readerGrantId);
+      for (const readerGrantId of readerGrantIds) {
+        const grant = this.readerGrantRecord(readerGrantId);
+        const domain = grant === undefined
+          ? undefined
+          : this.domainRecord(grant.grant.domainAuthorityId);
+        if (grant !== undefined
+          && domain !== undefined
+          && this.verifyReaderGrant(
+            domain,
+            grant,
+            this.currentKekVersion(grant.grant.domainAuthorityId),
+            true,
+          )
+          && this.authority.hasActiveMembership(
+            grant.grant.readerIdentityKeyFingerprintHex,
+            grant.grant.homeId,
+            at,
+          )) {
+          continue;
+        }
+        droppedReaderLifecycleRecords += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_reader_grant_lifecycle
+            WHERE reader_grant_id = ?
+          `)
+          .run(readerGrantId).changes;
+        droppedReaderGrants += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_reader_grant
+            WHERE reader_grant_id = ?
+          `)
+          .run(readerGrantId).changes;
+      }
+
+      const readerLifecycleIds = this.db
+        .prepare(`
+          SELECT lifecycle_id AS lifecycleId
+          FROM pico_reader_custody_reader_grant_lifecycle
+        `)
+        .all()
+        .map((row) => (row as { lifecycleId: string }).lifecycleId);
+      for (const lifecycleId of readerLifecycleIds) {
+        const lifecycle = this.readerGrantLifecycleRecord(lifecycleId);
+        const grant = lifecycle === undefined
+          ? undefined
+          : this.readerGrantRecord(lifecycle.lifecycle.readerGrantId);
+        const domain = grant === undefined
+          ? undefined
+          : this.domainRecord(grant.grant.domainAuthorityId);
+        if (lifecycle !== undefined
+          && grant !== undefined
+          && domain !== undefined
+          && this.verifyReaderGrantLifecycle(domain, grant, lifecycle)) {
+          continue;
+        }
+        droppedReaderLifecycleRecords += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_reader_grant_lifecycle
+            WHERE lifecycle_id = ?
+          `)
+          .run(lifecycleId).changes;
       }
 
       const grantIds = this.db
@@ -583,6 +1017,107 @@ export class ReaderCustodyStore {
           .run(lifecycleId).changes;
       }
 
+      const rotationIds = this.db
+        .prepare(`
+          SELECT rotation_id AS rotationId
+          FROM pico_reader_custody_kek_rotation
+          ORDER BY kek_version, rotation_id
+        `)
+        .all()
+        .map((row) => (row as { rotationId: string }).rotationId);
+      for (const rotationId of rotationIds) {
+        const rotation = this.kekRotationRecord(rotationId);
+        const domain = rotation === undefined
+          ? undefined
+          : this.domainRecord(rotation.rotation.domainAuthorityId);
+        if (rotation !== undefined
+          && domain !== undefined
+          && this.verifyKekRotation(domain, rotation, at)) {
+          continue;
+        }
+        droppedRotations += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_kek_rotation
+            WHERE rotation_id = ?
+          `)
+          .run(rotationId).changes;
+      }
+
+      // A dropped/tampered rotation can make grants from that KEK version
+      // unsupported. Re-evaluate both grant families against the now-valid
+      // contiguous version chain before item reconciliation.
+      const remainingReaderGrantIds = this.db
+        .prepare(`
+          SELECT reader_grant_id AS readerGrantId
+          FROM pico_reader_custody_reader_grant
+        `)
+        .all()
+        .map((row) => (row as { readerGrantId: string }).readerGrantId);
+      for (const readerGrantId of remainingReaderGrantIds) {
+        const grant = this.readerGrantRecord(readerGrantId);
+        const domain = grant === undefined
+          ? undefined
+          : this.domainRecord(grant.grant.domainAuthorityId);
+        if (grant !== undefined
+          && domain !== undefined
+          && this.verifyReaderGrant(
+            domain,
+            grant,
+            this.currentKekVersion(grant.grant.domainAuthorityId),
+            true,
+          )) {
+          continue;
+        }
+        droppedReaderLifecycleRecords += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_reader_grant_lifecycle
+            WHERE reader_grant_id = ?
+          `)
+          .run(readerGrantId).changes;
+        droppedReaderGrants += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_reader_grant
+            WHERE reader_grant_id = ?
+          `)
+          .run(readerGrantId).changes;
+      }
+
+      const remainingWriterGrantIds = this.db
+        .prepare(`
+          SELECT writer_grant_id AS writerGrantId
+          FROM pico_reader_custody_writer_grant
+        `)
+        .all()
+        .map((row) => (row as { writerGrantId: string }).writerGrantId);
+      for (const writerGrantId of remainingWriterGrantIds) {
+        const grant = this.writerGrantRecord(writerGrantId);
+        const domain = grant === undefined
+          ? undefined
+          : this.domainRecord(grant.grant.domainAuthorityId);
+        if (grant !== undefined
+          && domain !== undefined
+          && this.verifyWriterGrant(domain, grant)) {
+          continue;
+        }
+        droppedItems += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_item WHERE writer_grant_id = ?
+          `)
+          .run(writerGrantId).changes;
+        droppedWriterLifecycleRecords += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_writer_grant_lifecycle
+            WHERE writer_grant_id = ?
+          `)
+          .run(writerGrantId).changes;
+        droppedWriterGrants += this.db
+          .prepare(`
+            DELETE FROM pico_reader_custody_writer_grant
+            WHERE writer_grant_id = ?
+          `)
+          .run(writerGrantId).changes;
+      }
+
       const packageIds = this.db
         .prepare(`
           SELECT package_id AS packageId FROM pico_reader_custody_item
@@ -613,8 +1148,11 @@ export class ReaderCustodyStore {
     reconcile();
     return {
       droppedDomains,
+      droppedReaderGrants,
+      droppedReaderLifecycleRecords,
       droppedWriterGrants,
       droppedWriterLifecycleRecords,
+      droppedRotations,
       droppedItems,
     };
   }
@@ -723,6 +1261,305 @@ export class ReaderCustodyStore {
     }
   }
 
+  private verifyReaderGrant(
+    domainRecord: PicoReaderCustodyDomainRecord,
+    record: PicoReaderCustodyReaderGrantRecord,
+    currentKekVersion: number,
+    allowHistoricalEnvelopeSet = false,
+  ): boolean {
+    try {
+      assertExactKeys(record as unknown as Record<string, unknown>, [
+        'schema',
+        'grant',
+        'ownerIdentityKeyRecord',
+        'readerKeyRecord',
+        'envelopes',
+        'ownerSignatureHex',
+        'receivedAt',
+      ]);
+      const domain = domainRecord.domain;
+      const grant = record.grant;
+      if (record.schema !== picoReaderCustodyReaderGrantRecordSchema
+        || grant.suite !== picoMemoryContentSuite
+        || grant.domainAuthorityId !== domain.domainAuthorityId
+        || grant.homeId !== domain.homeId
+        || grant.hostSigningKeyFingerprintHex
+          !== domain.hostSigningKeyFingerprintHex
+        || grant.domainId !== domain.domainId
+        || grant.ownerIdentityKeyFingerprintHex
+          !== domain.ownerIdentityKeyFingerprintHex
+        || !sameJson(
+          record.ownerIdentityKeyRecord,
+          domainRecord.ownerIdentityKeyRecord,
+        )
+        || record.readerKeyRecord.suite !== picoIdentitySuite
+        || record.readerKeyRecord.keyRole !== 'device_key_agreement'
+        || !verifyPicoIdentityKeyRecordFingerprint(this.sodium, {
+          keyRecord: record.readerKeyRecord,
+          expectedFingerprintHex: grant.readerKeyFingerprintHex,
+        })
+        || !Array.isArray(record.envelopes)
+        || record.envelopes.length === 0
+        || !isCanonicalInstant(record.receivedAt)) {
+        return false;
+      }
+      buildPicoReaderCustodyReaderGrantSignatureInput(grant);
+      const versions = record.envelopes
+        .map((envelope) => envelope.envelope.kekVersion)
+        .sort((left, right) => left - right);
+      const envelopeMaximum = versions.at(-1);
+      if (envelopeMaximum === undefined
+        || versions[0] !== grant.firstKekVersion
+        || new Set(versions).size !== versions.length
+        || versions.some((version, index) =>
+          version !== grant.firstKekVersion + index)
+        || envelopeMaximum > currentKekVersion
+        || (!allowHistoricalEnvelopeSet
+          && envelopeMaximum !== currentKekVersion)
+        || (grant.accessMode === 'forward_only'
+          && (versions.length !== 1
+            || grant.firstKekVersion !== envelopeMaximum))
+        || !verifyPicoIdentityDetachedSignature(this.sodium, {
+          publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
+          signatureInput:
+            buildPicoReaderCustodyReaderGrantSignatureInput(grant),
+          signatureHex: record.ownerSignatureHex,
+        })) {
+        return false;
+      }
+      return record.envelopes.every((envelope) =>
+        this.verifyReaderCustodyEnvelope(envelope, {
+          ownerIdentityKeyRecord: record.ownerIdentityKeyRecord,
+          grantId: grant.readerGrantId,
+          domain,
+          kekVersion: envelope.envelope.kekVersion,
+          readerKeyFingerprintHex: grant.readerKeyFingerprintHex,
+          grantedAt: grant.validFrom,
+        }));
+    } catch {
+      return false;
+    }
+  }
+
+  private verifyReaderGrantLifecycle(
+    domainRecord: PicoReaderCustodyDomainRecord,
+    grantRecord: PicoReaderCustodyReaderGrantRecord,
+    record: PicoReaderCustodyReaderGrantLifecycleRecord,
+  ): boolean {
+    try {
+      assertExactKeys(record as unknown as Record<string, unknown>, [
+        'schema',
+        'lifecycle',
+        'ownerIdentityKeyRecord',
+        'ownerSignatureHex',
+        'receivedAt',
+      ]);
+      const domain = domainRecord.domain;
+      const grant = grantRecord.grant;
+      const lifecycle = record.lifecycle;
+      return record.schema
+          === picoReaderCustodyReaderGrantLifecycleRecordSchema
+        && lifecycle.suite === picoMemoryContentSuite
+        && lifecycle.readerGrantId === grant.readerGrantId
+        && lifecycle.domainAuthorityId === domain.domainAuthorityId
+        && lifecycle.homeId === domain.homeId
+        && lifecycle.hostSigningKeyFingerprintHex
+          === domain.hostSigningKeyFingerprintHex
+        && lifecycle.domainId === domain.domainId
+        && lifecycle.ownerIdentityKeyFingerprintHex
+          === domain.ownerIdentityKeyFingerprintHex
+        && lifecycle.readerIdentityKeyFingerprintHex
+          === grant.readerIdentityKeyFingerprintHex
+        && lifecycle.readerKeyFingerprintHex
+          === grant.readerKeyFingerprintHex
+        && lifecycle.lifecycleOrder > grant.lifecycleOrder
+        && sameJson(
+          record.ownerIdentityKeyRecord,
+          domainRecord.ownerIdentityKeyRecord,
+        )
+        && isCanonicalInstant(record.receivedAt)
+        && verifyPicoIdentityDetachedSignature(this.sodium, {
+          publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
+          signatureInput:
+            buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(
+              lifecycle,
+            ),
+          signatureHex: record.ownerSignatureHex,
+        });
+    } catch {
+      return false;
+    }
+  }
+
+  private verifyKekRotation(
+    domainRecord: PicoReaderCustodyDomainRecord,
+    record: PicoReaderCustodyKekRotationRecord,
+    at: string,
+  ): boolean {
+    try {
+      assertExactKeys(record as unknown as Record<string, unknown>, [
+        'schema',
+        'rotation',
+        'ownerIdentityKeyRecord',
+        'envelopes',
+        'ownerSignatureHex',
+        'receivedAt',
+      ]);
+      const domain = domainRecord.domain;
+      const rotation = record.rotation;
+      if (record.schema !== picoReaderCustodyKekRotationRecordSchema
+        || rotation.suite !== picoMemoryContentSuite
+        || rotation.domainAuthorityId !== domain.domainAuthorityId
+        || rotation.homeId !== domain.homeId
+        || rotation.hostSigningKeyFingerprintHex
+          !== domain.hostSigningKeyFingerprintHex
+        || rotation.domainId !== domain.domainId
+        || rotation.ownerIdentityKeyFingerprintHex
+          !== domain.ownerIdentityKeyFingerprintHex
+        || !sameJson(
+          record.ownerIdentityKeyRecord,
+          domainRecord.ownerIdentityKeyRecord,
+        )
+        || !Array.isArray(record.envelopes)
+        || rotation.rotatedAt > at
+        || !isCanonicalInstant(record.receivedAt)) {
+        return false;
+      }
+      buildPicoReaderCustodyKekRotationSignatureInput(rotation);
+      const previous = this.previousVersionAuthority(
+        rotation.domainAuthorityId,
+        rotation.kekVersion,
+        domainRecord,
+      );
+      if (rotation.previousKekVersion !== previous.kekVersion
+        || rotation.kekVersion !== previous.kekVersion + 1
+        || rotation.lifecycleOrder <= previous.lifecycleOrder
+        || !verifyPicoIdentityDetachedSignature(this.sodium, {
+          publicKeyHex: record.ownerIdentityKeyRecord.publicKeyHex,
+          signatureInput:
+            buildPicoReaderCustodyKekRotationSignatureInput(rotation),
+          signatureHex: record.ownerSignatureHex,
+        })) {
+        return false;
+      }
+
+      const causes = this.uncoveredLifecycleRecords(
+        rotation.domainAuthorityId,
+        previous.lifecycleOrder,
+        rotation.rotatedAt,
+      );
+      if (causes.some((cause) =>
+        cause.lifecycleOrder >= rotation.lifecycleOrder
+        || cause.changedAt > rotation.rotatedAt)
+        || !sameStringSet(
+          rotation.causeLifecycleIds,
+          causes.map((cause) => cause.lifecycleId),
+        )) {
+        return false;
+      }
+      const remainingReaders = this.activeReaderGrantRecords(
+        rotation.domainAuthorityId,
+        rotation.rotatedAt,
+      );
+      if (!sameStringSet(
+          rotation.remainingReaderGrantIds,
+          remainingReaders.map((grant) => grant.grant.readerGrantId),
+        )
+        || record.envelopes.length !== remainingReaders.length + 1) {
+        return false;
+      }
+
+      const envelopeByGrantId = new Map(
+        record.envelopes.map((envelope) => [
+          envelope.envelope.grantId,
+          envelope,
+        ]),
+      );
+      if (envelopeByGrantId.size !== record.envelopes.length) {
+        return false;
+      }
+      const ownerEnvelope = envelopeByGrantId.get(rotation.rotationId);
+      if (ownerEnvelope === undefined
+        || !this.verifyReaderCustodyEnvelope(ownerEnvelope, {
+          ownerIdentityKeyRecord: record.ownerIdentityKeyRecord,
+          grantId: rotation.rotationId,
+          domain,
+          kekVersion: rotation.kekVersion,
+          readerKeyFingerprintHex: domain.ownerReaderKeyFingerprintHex,
+          grantedAt: rotation.rotatedAt,
+        })) {
+        return false;
+      }
+      return remainingReaders.every((readerGrant) => {
+        const envelope = envelopeByGrantId.get(
+          readerGrant.grant.readerGrantId,
+        );
+        return envelope !== undefined
+          && this.verifyReaderCustodyEnvelope(envelope, {
+            ownerIdentityKeyRecord: record.ownerIdentityKeyRecord,
+            grantId: readerGrant.grant.readerGrantId,
+            domain,
+            kekVersion: rotation.kekVersion,
+            readerKeyFingerprintHex:
+              readerGrant.grant.readerKeyFingerprintHex,
+            grantedAt: rotation.rotatedAt,
+          });
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  private verifyReaderCustodyEnvelope(
+    record: PicoReaderCustodyReaderGrantRecord['envelopes'][number],
+    expected: {
+      ownerIdentityKeyRecord:
+        PicoReaderCustodyDomainRecord['ownerIdentityKeyRecord'];
+      grantId: string;
+      domain: PicoReaderCustodyDomainRecord['domain'];
+      kekVersion: number;
+      readerKeyFingerprintHex: string;
+      grantedAt: string;
+    },
+  ): boolean {
+    try {
+      const envelope = record.envelope;
+      if (record.schema !== picoShareEnvelopeRecordSchema
+        || envelope.suite !== picoShareSuite
+        || envelope.grantId !== expected.grantId
+        || envelope.domainId !== expected.domain.domainId
+        || envelope.kekVersion !== expected.kekVersion
+        || envelope.hostSigningKeyFingerprintHex
+          !== expected.domain.hostSigningKeyFingerprintHex
+        || envelope.issuerIdentityKeyFingerprintHex
+          !== expected.domain.ownerIdentityKeyFingerprintHex
+        || envelope.readerKeyFingerprintHex
+          !== expected.readerKeyFingerprintHex
+        || envelope.grantedAt !== expected.grantedAt
+        || !sameJson(
+          record.issuerIdentityKeyRecord,
+          expected.ownerIdentityKeyRecord,
+        )
+        || !isCanonicalInstant(record.createdAt)
+        || !isCanonicalHex(record.sealedWrapHex)) {
+        return false;
+      }
+      const digest = Buffer.from(this.sodium.crypto_generichash(
+        32,
+        Buffer.from(record.sealedWrapHex, 'hex'),
+        null,
+      )).toString('hex');
+      return digest === envelope.wrapDigestHex
+        && verifyPicoIdentityDetachedSignature(this.sodium, {
+          publicKeyHex: expected.ownerIdentityKeyRecord.publicKeyHex,
+          signatureInput: buildPicoShareEnvelopeSignatureInput(envelope),
+          signatureHex: record.issuerSignatureHex,
+        });
+    } catch {
+      return false;
+    }
+  }
+
   private verifyWriterGrant(
     domainRecord: PicoReaderCustodyDomainRecord,
     record: PicoReaderCustodyWriterGrantRecord,
@@ -745,7 +1582,9 @@ export class ReaderCustodyStore {
         && grant.hostSigningKeyFingerprintHex
           === domain.hostSigningKeyFingerprintHex
         && grant.domainId === domain.domainId
-        && grant.kekVersion === domain.kekVersion
+        && grant.kekVersion >= domain.kekVersion
+        && grant.kekVersion
+          <= this.currentKekVersion(domain.domainAuthorityId)
         && grant.ownerIdentityKeyFingerprintHex
           === domain.ownerIdentityKeyFingerprintHex
         && sameJson(
@@ -845,7 +1684,7 @@ export class ReaderCustodyStore {
         || item.hostSigningKeyFingerprintHex
           !== domain.hostSigningKeyFingerprintHex
         || item.domainId !== domain.domainId
-        || item.kekVersion !== domain.kekVersion
+        || item.kekVersion !== grant.kekVersion
         || item.writerIdentityKeyFingerprintHex
           !== grant.writerIdentityKeyFingerprintHex
         || item.writerDeviceSigningKeyFingerprintHex
@@ -893,11 +1732,11 @@ export class ReaderCustodyStore {
       .prepare(`
         SELECT lifecycle_record_json AS recordJson
         FROM pico_reader_custody_writer_grant_lifecycle
-        WHERE writer_grant_id = ?
+        WHERE writer_grant_id = ? AND changed_at <= ?
         ORDER BY lifecycle_order DESC, lifecycle_id DESC
         LIMIT 1
       `)
-      .get(grant.writerGrantId) as StoredJsonRow | undefined;
+      .get(grant.writerGrantId, at) as StoredJsonRow | undefined;
     let status: PicoReaderCustodyWriterGrantView['status'];
     if (lifecycle !== undefined) {
       status = 'revoked';
@@ -905,6 +1744,9 @@ export class ReaderCustodyStore {
       status = 'not_yet_valid';
     } else if (at >= grant.validUntil) {
       status = 'expired';
+    } else if (grant.kekVersion
+        < this.currentKekVersion(grant.domainAuthorityId)) {
+      status = 'superseded';
     } else {
       status = 'active';
     }
@@ -924,6 +1766,196 @@ export class ReaderCustodyStore {
     };
   }
 
+  private readerGrantView(
+    record: PicoReaderCustodyReaderGrantRecord,
+    at: string,
+  ): PicoReaderCustodyReaderGrantView {
+    const grant = record.grant;
+    const lifecycle = this.db
+      .prepare(`
+        SELECT lifecycle_record_json AS recordJson
+        FROM pico_reader_custody_reader_grant_lifecycle
+        WHERE reader_grant_id = ? AND changed_at <= ?
+        ORDER BY lifecycle_order DESC, lifecycle_id DESC
+        LIMIT 1
+      `)
+      .get(grant.readerGrantId, at) as StoredJsonRow | undefined;
+    let status: PicoReaderCustodyReaderGrantView['status'];
+    if (lifecycle !== undefined) {
+      status = 'revoked';
+    } else if (at < grant.validFrom) {
+      status = 'not_yet_valid';
+    } else if (at >= grant.validUntil) {
+      status = 'expired';
+    } else {
+      status = 'active';
+    }
+    return {
+      readerGrantId: grant.readerGrantId,
+      domainAuthorityId: grant.domainAuthorityId,
+      domainId: grant.domainId,
+      readerIdentityKeyFingerprintHex:
+        grant.readerIdentityKeyFingerprintHex,
+      readerDeviceSigningKeyFingerprintHex:
+        grant.readerDeviceSigningKeyFingerprintHex,
+      readerKeyFingerprintHex: grant.readerKeyFingerprintHex,
+      readerDelegationId: grant.readerDelegationId,
+      accessMode: grant.accessMode,
+      firstKekVersion: grant.firstKekVersion,
+      envelopeKekVersions: record.envelopes
+        .map((envelope) => envelope.envelope.kekVersion)
+        .sort((left, right) => left - right),
+      status,
+      validFrom: grant.validFrom,
+      validUntil: grant.validUntil,
+      lifecycleOrder: grant.lifecycleOrder,
+      receivedAt: record.receivedAt,
+    };
+  }
+
+  private currentKekVersion(domainAuthorityId: string): number {
+    const domain = this.domainRecord(domainAuthorityId);
+    if (domain === undefined) {
+      return 0;
+    }
+    const row = this.db
+      .prepare(`
+        SELECT MAX(kek_version) AS kekVersion
+        FROM pico_reader_custody_kek_rotation
+        WHERE domain_authority_id = ?
+      `)
+      .get(domainAuthorityId) as { kekVersion: number | null };
+    return row.kekVersion ?? domain.domain.kekVersion;
+  }
+
+  private currentVersionAuthority(domainAuthorityId: string): {
+    kekVersion: number;
+    lifecycleOrder: string;
+  } {
+    const rotation = this.db
+      .prepare(`
+        SELECT rotation_record_json AS recordJson
+        FROM pico_reader_custody_kek_rotation
+        WHERE domain_authority_id = ?
+        ORDER BY kek_version DESC
+        LIMIT 1
+      `)
+      .get(domainAuthorityId) as StoredJsonRow | undefined;
+    if (rotation !== undefined) {
+      const record = parseJson<PicoReaderCustodyKekRotationRecord>(rotation);
+      return {
+        kekVersion: record.rotation.kekVersion,
+        lifecycleOrder: record.rotation.lifecycleOrder,
+      };
+    }
+    const domain = this.domainRecord(domainAuthorityId);
+    return {
+      kekVersion: domain?.domain.kekVersion ?? 0,
+      lifecycleOrder: domain?.domain.lifecycleOrder ?? '',
+    };
+  }
+
+  private previousVersionAuthority(
+    domainAuthorityId: string,
+    beforeKekVersion: number,
+    domainRecord: PicoReaderCustodyDomainRecord,
+  ): { kekVersion: number; lifecycleOrder: string } {
+    const previous = this.db
+      .prepare(`
+        SELECT rotation_record_json AS recordJson
+        FROM pico_reader_custody_kek_rotation
+        WHERE domain_authority_id = ? AND kek_version < ?
+        ORDER BY kek_version DESC
+        LIMIT 1
+      `)
+      .get(domainAuthorityId, beforeKekVersion) as StoredJsonRow | undefined;
+    if (previous === undefined) {
+      return {
+        kekVersion: domainRecord.domain.kekVersion,
+        lifecycleOrder: domainRecord.domain.lifecycleOrder,
+      };
+    }
+    const record = parseJson<PicoReaderCustodyKekRotationRecord>(previous);
+    return {
+      kekVersion: record.rotation.kekVersion,
+      lifecycleOrder: record.rotation.lifecycleOrder,
+    };
+  }
+
+  private uncoveredLifecycleRecords(
+    domainAuthorityId: string,
+    afterLifecycleOrder: string,
+    throughAt: string = new Date().toISOString(),
+  ): {
+    lifecycleId: string;
+    lifecycleOrder: string;
+    changedAt: string;
+  }[] {
+    return this.db
+      .prepare(`
+        SELECT
+          lifecycle_id AS lifecycleId,
+          lifecycle_order AS lifecycleOrder,
+          changed_at AS changedAt
+        FROM pico_reader_custody_reader_grant_lifecycle
+        WHERE domain_authority_id = ?
+          AND lifecycle_order > ?
+          AND changed_at <= ?
+        UNION ALL
+        SELECT
+          lifecycle_id AS lifecycleId,
+          lifecycle_order AS lifecycleOrder,
+          changed_at AS changedAt
+        FROM pico_reader_custody_writer_grant_lifecycle
+        WHERE domain_authority_id = ?
+          AND lifecycle_order > ?
+          AND changed_at <= ?
+        ORDER BY lifecycleOrder, lifecycleId
+      `)
+      .all(
+        domainAuthorityId,
+        afterLifecycleOrder,
+        throughAt,
+        domainAuthorityId,
+        afterLifecycleOrder,
+        throughAt,
+      ) as {
+        lifecycleId: string;
+        lifecycleOrder: string;
+        changedAt: string;
+      }[];
+  }
+
+  private activeReaderGrantRecords(
+    domainAuthorityId: string,
+    at: string,
+  ): PicoReaderCustodyReaderGrantRecord[] {
+    return (this.db
+      .prepare(`
+        SELECT reader_grant_record_json AS recordJson
+        FROM pico_reader_custody_reader_grant
+        WHERE domain_authority_id = ?
+        ORDER BY reader_grant_id
+      `)
+      .all(domainAuthorityId) as StoredJsonRow[])
+      .map((row) => parseJson<PicoReaderCustodyReaderGrantRecord>(row))
+      .filter((record) =>
+        this.readerGrantView(record, at).status === 'active'
+        && this.authority.hasActiveMembership(
+          record.grant.readerIdentityKeyFingerprintHex,
+          record.grant.homeId,
+          at,
+        ));
+  }
+
+  private hasRotationDebt(domainAuthorityId: string): boolean {
+    const authority = this.currentVersionAuthority(domainAuthorityId);
+    return this.uncoveredLifecycleRecords(
+      domainAuthorityId,
+      authority.lifecycleOrder,
+    ).length > 0;
+  }
+
   private domainRecord(
     domainAuthorityId: string,
   ): PicoReaderCustodyDomainRecord | undefined {
@@ -937,6 +1969,36 @@ export class ReaderCustodyStore {
     return row === undefined
       ? undefined
       : parseJson<PicoReaderCustodyDomainRecord>(row);
+  }
+
+  private readerGrantRecord(
+    readerGrantId: string,
+  ): PicoReaderCustodyReaderGrantRecord | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT reader_grant_record_json AS recordJson
+        FROM pico_reader_custody_reader_grant
+        WHERE reader_grant_id = ?
+      `)
+      .get(readerGrantId) as StoredJsonRow | undefined;
+    return row === undefined
+      ? undefined
+      : parseJson<PicoReaderCustodyReaderGrantRecord>(row);
+  }
+
+  private readerGrantLifecycleRecord(
+    lifecycleId: string,
+  ): PicoReaderCustodyReaderGrantLifecycleRecord | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT lifecycle_record_json AS recordJson
+        FROM pico_reader_custody_reader_grant_lifecycle
+        WHERE lifecycle_id = ?
+      `)
+      .get(lifecycleId) as StoredJsonRow | undefined;
+    return row === undefined
+      ? undefined
+      : parseJson<PicoReaderCustodyReaderGrantLifecycleRecord>(row);
   }
 
   private writerGrantRecord(
@@ -982,10 +2044,28 @@ export class ReaderCustodyStore {
       : parseJson<PicoReaderCustodyItemRecord>(row);
   }
 
+  private kekRotationRecord(
+    rotationId: string,
+  ): PicoReaderCustodyKekRotationRecord | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT rotation_record_json AS recordJson
+        FROM pico_reader_custody_kek_rotation
+        WHERE rotation_id = ?
+      `)
+      .get(rotationId) as StoredJsonRow | undefined;
+    return row === undefined
+      ? undefined
+      : parseJson<PicoReaderCustodyKekRotationRecord>(row);
+  }
+
   private dropDomain(domainAuthorityId: string): {
     domains: number;
+    readerGrants: number;
+    readerLifecycleRecords: number;
     writerGrants: number;
     writerLifecycleRecords: number;
+    rotations: number;
     items: number;
   } {
     const items = this.db
@@ -996,6 +2076,24 @@ export class ReaderCustodyStore {
     const writerLifecycleRecords = this.db
       .prepare(`
         DELETE FROM pico_reader_custody_writer_grant_lifecycle
+        WHERE domain_authority_id = ?
+      `)
+      .run(domainAuthorityId).changes;
+    const readerLifecycleRecords = this.db
+      .prepare(`
+        DELETE FROM pico_reader_custody_reader_grant_lifecycle
+        WHERE domain_authority_id = ?
+      `)
+      .run(domainAuthorityId).changes;
+    const readerGrants = this.db
+      .prepare(`
+        DELETE FROM pico_reader_custody_reader_grant
+        WHERE domain_authority_id = ?
+      `)
+      .run(domainAuthorityId).changes;
+    const rotations = this.db
+      .prepare(`
+        DELETE FROM pico_reader_custody_kek_rotation
         WHERE domain_authority_id = ?
       `)
       .run(domainAuthorityId).changes;
@@ -1011,7 +2109,15 @@ export class ReaderCustodyStore {
         WHERE domain_authority_id = ?
       `)
       .run(domainAuthorityId).changes;
-    return { domains, writerGrants, writerLifecycleRecords, items };
+    return {
+      domains,
+      readerGrants,
+      readerLifecycleRecords,
+      writerGrants,
+      writerLifecycleRecords,
+      rotations,
+      items,
+    };
   }
 }
 
@@ -1056,12 +2162,39 @@ function itemView(record: PicoReaderCustodyItemRecord): PicoReaderCustodyItemVie
   };
 }
 
+function kekRotationView(
+  record: PicoReaderCustodyKekRotationRecord,
+): PicoReaderCustodyKekRotationView {
+  return {
+    rotationId: record.rotation.rotationId,
+    domainAuthorityId: record.rotation.domainAuthorityId,
+    domainId: record.rotation.domainId,
+    previousKekVersion: record.rotation.previousKekVersion,
+    kekVersion: record.rotation.kekVersion,
+    causeLifecycleIds: [...record.rotation.causeLifecycleIds].sort(),
+    remainingReaderGrantIds:
+      [...record.rotation.remainingReaderGrantIds].sort(),
+    envelopeReaderKeyFingerprintHexes: record.envelopes
+      .map((envelope) => envelope.envelope.readerKeyFingerprintHex)
+      .sort(),
+    rotatedAt: record.rotation.rotatedAt,
+    lifecycleOrder: record.rotation.lifecycleOrder,
+    receivedAt: record.receivedAt,
+  };
+}
+
 function parseJson<T>(row: StoredJsonRow): T {
   return JSON.parse(row.recordJson) as T;
 }
 
 function sameJson(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function sameStringSet(left: readonly string[], right: readonly string[]): boolean {
+  return new Set(left).size === left.length
+    && new Set(right).size === right.length
+    && JSON.stringify([...left].sort()) === JSON.stringify([...right].sort());
 }
 
 function assertExactKeys(

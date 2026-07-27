@@ -18,6 +18,7 @@ import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
   createPicoReaderCustodyDomain,
+  createPicoReaderCustodyReaderGrant,
   createPicoReaderCustodyWriterGrant,
   createPicoVaultKeyfile,
   decryptPicoReaderCustodyItem,
@@ -25,7 +26,9 @@ import {
   openPicoVaultKeyfile,
   parsePicoVaultKeyfile,
   readPicoVaultKeyfile,
+  revokePicoReaderCustodyReaderGrant,
   revokePicoReaderCustodyWriterGrant,
+  rotatePicoReaderCustodyDomain,
   serializePicoVaultKeyfile,
   writePicoVaultKeyfile,
 } from './index.js';
@@ -333,6 +336,226 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       changedAt: '2026-07-27T10:03:00.000Z',
       lifecycleOrder: 'seq:0000000000000003',
     }).lifecycle.status).toBe('revoked');
+  });
+
+  it('distributes explicit KEK versions and rotates after reader or writer revocation', () => {
+    const identity = createPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: 'correct horse battery staple',
+    });
+    const ownerAgreement = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_key_agreement',
+      passphrase: 'correct horse battery staple',
+    });
+    const readerAgreement = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_key_agreement',
+      passphrase: 'correct horse battery staple',
+    });
+    const signing = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_signing',
+      passphrase: 'correct horse battery staple',
+    });
+    const identitySession = openPicoVaultKeyfile(sodium, {
+      keyfile: identity.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    const ownerAgreementSession = openPicoVaultKeyfile(sodium, {
+      keyfile: ownerAgreement.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    const readerAgreementSession = openPicoVaultKeyfile(sodium, {
+      keyfile: readerAgreement.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    const signingSession = openPicoVaultKeyfile(sodium, {
+      keyfile: signing.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    const ownerReaderKeyRecord = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_key_agreement' as const,
+      publicKeyHex: ownerAgreement.publicKeyHex,
+    };
+    const writerKeyRecord = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_signing' as const,
+      publicKeyHex: signing.publicKeyHex,
+    };
+    const domainRecord = createPicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      ownerReaderKeyRecord,
+      domainAuthorityId: 'reader_domain_rotation_0001',
+      homeId: 'home_vault_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      domainId: 'domain_reader_rotating',
+      authorizedAt: '2026-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    });
+    const writerV1 = createPicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      writerDeviceSigningKeyRecord: writerKeyRecord,
+      writerGrantId: 'reader_writer_rotation_v1',
+      writerIdentityKeyFingerprintHex: identity.keyFingerprintHex,
+      validFrom: '2026-07-27T10:00:00.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000002',
+    });
+    const itemV1 = encryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: ownerAgreementSession,
+      writerSigningSession: signingSession,
+      domainRecord,
+      writerGrantRecord: writerV1,
+      packageId: 'reader_item_rotation_v1',
+      memoryItemId: 'memory_rotation_v1',
+      contentType: 'text/plain',
+      plaintext: 'version one',
+      createdAt: '2026-07-27T10:01:00.000Z',
+    });
+    const writerV1Revoked = revokePicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      writerGrantRecord: writerV1,
+      lifecycleId: 'reader_writer_rotation_lifecycle_v1',
+      reasonCategory: 'writer_removed',
+      changedAt: '2026-07-27T10:02:00.000Z',
+      lifecycleOrder: 'seq:0000000000000003',
+    });
+    const rotationV2 = rotatePicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      writerGrantLifecycleRecords: [writerV1Revoked],
+      rotationId: 'reader_rotation_v2',
+      rotatedAt: '2026-07-27T10:03:00.000Z',
+      lifecycleOrder: 'seq:0000000000000004',
+    });
+    const rotationsV2 = [rotationV2];
+    const writerV2 = createPicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      writerDeviceSigningKeyRecord: writerKeyRecord,
+      writerGrantId: 'reader_writer_rotation_v2',
+      writerIdentityKeyFingerprintHex: identity.keyFingerprintHex,
+      validFrom: '2026-07-27T10:03:00.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000005',
+    });
+    const itemV2 = encryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: ownerAgreementSession,
+      writerSigningSession: signingSession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      writerGrantRecord: writerV2,
+      packageId: 'reader_item_rotation_v2',
+      memoryItemId: 'memory_rotation_v2',
+      contentType: 'text/plain',
+      plaintext: 'version two',
+      createdAt: '2026-07-27T10:04:00.000Z',
+    });
+    const readerGrant = createPicoReaderCustodyReaderGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      ownerReaderKeyAgreementSession: ownerAgreementSession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerKeyRecord: {
+        suite: picoIdentitySuite,
+        keyRole: 'device_key_agreement',
+        publicKeyHex: readerAgreement.publicKeyHex,
+      },
+      readerGrantId: 'reader_grant_forward_v2',
+      readerIdentityKeyFingerprintHex: '44'.repeat(32),
+      readerDeviceSigningKeyFingerprintHex: '55'.repeat(32),
+      readerDelegationId: 'reader_delegation_forward_v2',
+      accessMode: 'forward_only',
+      firstKekVersion: 2,
+      validFrom: '2026-07-27T10:05:00.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000006',
+    });
+
+    expect(decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerGrantRecord: readerGrant,
+      writerGrantRecord: writerV2,
+      itemRecord: itemV2,
+    })).toBe('version two');
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerGrantRecord: readerGrant,
+      writerGrantRecord: writerV1,
+      itemRecord: itemV1,
+    })).toThrow('reader_key_mismatch');
+
+    const readerRevoked = revokePicoReaderCustodyReaderGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      readerGrantRecord: readerGrant,
+      lifecycleId: 'reader_grant_forward_revoked',
+      reasonCategory: 'reader_removed',
+      changedAt: '2026-07-27T10:06:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    });
+    const writerV2Revoked = revokePicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      writerGrantRecord: writerV2,
+      lifecycleId: 'reader_writer_rotation_lifecycle_v2',
+      reasonCategory: 'writer_removed',
+      changedAt: '2026-07-27T10:06:00.000Z',
+      lifecycleOrder: 'seq:0000000000000008',
+    });
+    const rotationV3 = rotatePicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV2,
+      readerGrantLifecycleRecords: [readerRevoked],
+      writerGrantLifecycleRecords: [writerV2Revoked],
+      rotationId: 'reader_rotation_v3',
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+    });
+    const rotationsV3 = [rotationV2, rotationV3];
+    const writerV3 = createPicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession: identitySession,
+      domainRecord,
+      rotationRecords: rotationsV3,
+      writerDeviceSigningKeyRecord: writerKeyRecord,
+      writerGrantId: 'reader_writer_rotation_v3',
+      writerIdentityKeyFingerprintHex: identity.keyFingerprintHex,
+      validFrom: '2026-07-27T10:07:00.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000010',
+    });
+    const itemV3 = encryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: ownerAgreementSession,
+      writerSigningSession: signingSession,
+      domainRecord,
+      rotationRecords: rotationsV3,
+      writerGrantRecord: writerV3,
+      packageId: 'reader_item_rotation_v3',
+      memoryItemId: 'memory_rotation_v3',
+      contentType: 'text/plain',
+      plaintext: 'version three',
+      createdAt: '2026-07-27T10:08:00.000Z',
+    });
+
+    expect(rotationV3.rotation.kekVersion).toBe(3);
+    expect(rotationV3.envelopes).toHaveLength(1);
+    expect(JSON.stringify(rotationV3)).not.toContain('kekHex');
+    expect(() => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      domainRecord,
+      rotationRecords: rotationsV3,
+      readerGrantRecord: readerGrant,
+      writerGrantRecord: writerV3,
+      itemRecord: itemV3,
+    })).toThrow('reader_kek_envelope_unavailable');
   });
 
   it('rejects wrong passphrases, tampered headers and truncated ciphertext', () => {

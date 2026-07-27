@@ -63,6 +63,7 @@ import {
   type PicoHomeDomainReadGrantVerificationFailure,
 } from './domain-read-grant.js';
 import { ReaderCustodyStore } from './reader-custody.js';
+import type { PicoIdentityReaderKeySelector } from './reader-key.js';
 
 export type AppendResult = PicoEventAppendResult;
 
@@ -2357,6 +2358,7 @@ export class EventStore {
 
   public readerCustody(
     sodium: IdentityVerificationSodium,
+    readerKeySelector?: PicoIdentityReaderKeySelector,
   ): ReaderCustodyStore {
     this.ensureOpen();
     return new ReaderCustodyStore(this.db, sodium, {
@@ -2367,6 +2369,9 @@ export class EventStore {
           homeId,
           at,
         ),
+      selectReaderKey: readerKeySelector === undefined
+        ? undefined
+        : (input) => readerKeySelector.select(input),
     });
   }
 

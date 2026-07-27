@@ -9,6 +9,7 @@ import {
   listAppliedMigrations,
   listMigrationAuditRecords,
   picoSchemaBaselineMigrationId,
+  readerCustodyMultiReaderRotationMigrationId,
   runMigrations,
 } from './migrations.js';
 
@@ -39,6 +40,10 @@ describe('database migrations', () => {
         },
         {
           id: foundationOperatorHomeBindingMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: readerCustodyMultiReaderRotationMigrationId,
           requiresBackup: false,
         },
       ],
@@ -77,6 +82,9 @@ describe('database migrations', () => {
     expect(tables).toContain('pico_reader_custody_writer_grant');
     expect(tables).toContain('pico_reader_custody_writer_grant_lifecycle');
     expect(tables).toContain('pico_reader_custody_item');
+    expect(tables).toContain('pico_reader_custody_reader_grant');
+    expect(tables).toContain('pico_reader_custody_reader_grant_lifecycle');
+    expect(tables).toContain('pico_reader_custody_kek_rotation');
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
@@ -84,6 +92,10 @@ describe('database migrations', () => {
       },
       {
         id: foundationOperatorHomeBindingMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: readerCustodyMultiReaderRotationMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -188,12 +200,16 @@ describe('database migrations', () => {
     runMigrations(db);
 
     expect(describeMigrationState(db)).toEqual({
-      appliedMigrationIds: [picoSchemaBaselineMigrationId, foundationOperatorHomeBindingMigrationId],
+      appliedMigrationIds: [
+        picoSchemaBaselineMigrationId,
+        foundationOperatorHomeBindingMigrationId,
+        readerCustodyMultiReaderRotationMigrationId,
+      ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listAppliedMigrations(db)).toHaveLength(3);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -203,7 +219,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listAppliedMigrations(db)).toHaveLength(3);
 
     db.close();
   });
@@ -242,7 +258,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(2);
+    expect(listAppliedMigrations(db)).toHaveLength(3);
 
     db.close();
   });
@@ -255,6 +271,7 @@ describe('database migrations', () => {
     expect(result.appliedMigrationIds).toEqual([
       picoSchemaBaselineMigrationId,
       foundationOperatorHomeBindingMigrationId,
+      readerCustodyMultiReaderRotationMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -262,7 +279,11 @@ describe('database migrations', () => {
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         status: 'applied',
-        migrationIds: [picoSchemaBaselineMigrationId, foundationOperatorHomeBindingMigrationId],
+        migrationIds: [
+          picoSchemaBaselineMigrationId,
+          foundationOperatorHomeBindingMigrationId,
+          readerCustodyMultiReaderRotationMigrationId,
+        ],
       },
     ]);
 
@@ -321,7 +342,11 @@ describe('database migrations', () => {
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         status: 'failed',
-        migrationIds: [picoSchemaBaselineMigrationId, foundationOperatorHomeBindingMigrationId],
+        migrationIds: [
+          picoSchemaBaselineMigrationId,
+          foundationOperatorHomeBindingMigrationId,
+          readerCustodyMultiReaderRotationMigrationId,
+        ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },
     ]);

@@ -57,6 +57,8 @@ export interface MigrationDefinition {
 
 export const picoSchemaBaselineMigrationId = '0001_initial_schema' as const;
 export const foundationOperatorHomeBindingMigrationId = '0002_foundation_operator_home_binding' as const;
+export const readerCustodyMultiReaderRotationMigrationId =
+  '0003_reader_custody_multi_reader_rotation' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -492,6 +494,77 @@ const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         ALTER TABLE foundation_operator
         ADD COLUMN home_binding_json TEXT NULL
+      `);
+    },
+  },
+  {
+    id: readerCustodyMultiReaderRotationMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_reader_custody_reader_grant (
+          reader_grant_id TEXT PRIMARY KEY,
+          domain_authority_id TEXT NOT NULL,
+          home_id TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          owner_identity_key_fingerprint_hex TEXT NOT NULL,
+          reader_identity_key_fingerprint_hex TEXT NOT NULL,
+          reader_device_signing_key_fingerprint_hex TEXT NOT NULL,
+          reader_key_fingerprint_hex TEXT NOT NULL,
+          reader_delegation_id TEXT NOT NULL,
+          access_mode TEXT NOT NULL
+            CHECK (access_mode IN ('from_version', 'forward_only')),
+          first_kek_version INTEGER NOT NULL CHECK (first_kek_version >= 1),
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          reader_grant_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_reader_custody_reader_domain
+        ON pico_reader_custody_reader_grant (
+          domain_authority_id,
+          reader_identity_key_fingerprint_hex,
+          reader_key_fingerprint_hex
+        );
+
+        CREATE TABLE pico_reader_custody_reader_grant_lifecycle (
+          lifecycle_id TEXT PRIMARY KEY,
+          reader_grant_id TEXT NOT NULL,
+          domain_authority_id TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status = 'revoked'),
+          reason_category TEXT NOT NULL,
+          changed_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          lifecycle_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_reader_custody_reader_lifecycle
+        ON pico_reader_custody_reader_grant_lifecycle (
+          reader_grant_id,
+          lifecycle_order
+        );
+
+        CREATE TABLE pico_reader_custody_kek_rotation (
+          rotation_id TEXT PRIMARY KEY,
+          domain_authority_id TEXT NOT NULL,
+          previous_kek_version INTEGER NOT NULL
+            CHECK (previous_kek_version >= 1),
+          kek_version INTEGER NOT NULL CHECK (kek_version >= 2),
+          rotated_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          rotation_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL,
+          UNIQUE (domain_authority_id, kek_version)
+        );
+
+        CREATE INDEX idx_reader_custody_rotation_domain
+        ON pico_reader_custody_kek_rotation (
+          domain_authority_id,
+          kek_version
+        );
       `);
     },
   },

@@ -1,0 +1,19 @@
+{
+  "construction": "pico.mem.reader-kek-rotation.v1",
+  "custodyFamily": "kekRotation",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "rotationId": "rcrotate_20260801_0001",
+    "domainAuthorityId": "rcdom_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "domainId": "domain-journal",
+    "ownerIdentityKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "previousKekVersion": 1,
+    "kekVersion": 2,
+    "causeLifecycleIds": [],
+    "remainingReaderGrantIds": [],
+    "rotatedAt": "2026-08-01T10:01:00.000Z",
+    "lifecycleOrder": "seq:0000000000000005"
+  }
+}

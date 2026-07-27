@@ -378,8 +378,11 @@ export interface PicoShareEnvelopeRecord {
 // freeze canonical bytes; they never grant authority by themselves.
 export const picoReaderCustodyCanonicalFamilies = [
   'domain',
+  'readerGrant',
+  'readerGrantLifecycle',
   'writerGrant',
   'writerGrantLifecycle',
+  'kekRotation',
   'item',
 ] as const;
 
@@ -388,19 +391,54 @@ export type PicoReaderCustodyCanonicalFamily =
 
 export const picoReaderCustodyCanonicalLabels = {
   domain: 'pico.mem.reader-domain.v1',
+  readerGrant: 'pico.mem.reader-grant.v1',
+  readerGrantLifecycle: 'pico.mem.reader-grant-lifecycle.v1',
   writerGrant: 'pico.mem.reader-writer-grant.v1',
   writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
+  kekRotation: 'pico.mem.reader-kek-rotation.v1',
   item: 'pico.mem.reader-item.v1',
 } as const satisfies Record<PicoReaderCustodyCanonicalFamily, string>;
 
 export const picoReaderCustodyDomainRecordSchema =
   'pico.mem.reader-domain-record.v1' as const;
+export const picoReaderCustodyReaderGrantRecordSchema =
+  'pico.mem.reader-grant-record.v1' as const;
+export const picoReaderCustodyReaderGrantLifecycleRecordSchema =
+  'pico.mem.reader-grant-lifecycle-record.v1' as const;
 export const picoReaderCustodyWriterGrantRecordSchema =
   'pico.mem.reader-writer-grant-record.v1' as const;
 export const picoReaderCustodyWriterGrantLifecycleRecordSchema =
   'pico.mem.reader-writer-grant-lifecycle-record.v1' as const;
+export const picoReaderCustodyKekRotationRecordSchema =
+  'pico.mem.reader-kek-rotation-record.v1' as const;
 export const picoReaderCustodyItemRecordSchema =
   'pico.mem.reader-item-record.v1' as const;
+
+export const picoReaderCustodyReaderAccessModes = [
+  'from_version',
+  'forward_only',
+] as const;
+
+export type PicoReaderCustodyReaderAccessMode =
+  typeof picoReaderCustodyReaderAccessModes[number];
+
+export const picoReaderCustodyReaderGrantLifecycleStatuses = [
+  'revoked',
+] as const;
+
+export type PicoReaderCustodyReaderGrantLifecycleStatus =
+  typeof picoReaderCustodyReaderGrantLifecycleStatuses[number];
+
+export const picoReaderCustodyReaderGrantRevocationReasonCategories = [
+  'reader_removed',
+  'device_retired',
+  'relationship_revoked',
+  'security_review',
+  'grant_reissued',
+] as const;
+
+export type PicoReaderCustodyReaderGrantRevocationReasonCategory =
+  typeof picoReaderCustodyReaderGrantRevocationReasonCategories[number];
 
 export const picoReaderCustodyWriterGrantLifecycleStatuses = [
   'revoked',
@@ -450,6 +488,42 @@ export interface PicoReaderCustodyWriterGrantSignatureInput {
   lifecycleOrder: string;
 }
 
+export interface PicoReaderCustodyReaderGrantSignatureInput {
+  suite: string;
+  readerGrantId: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  ownerIdentityKeyFingerprintHex: string;
+  readerIdentityKeyFingerprintHex: string;
+  readerDeviceSigningKeyFingerprintHex: string;
+  readerKeyFingerprintHex: string;
+  readerDelegationId: string;
+  accessMode: PicoReaderCustodyReaderAccessMode;
+  firstKekVersion: number;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoReaderCustodyReaderGrantLifecycleSignatureInput {
+  suite: string;
+  lifecycleId: string;
+  readerGrantId: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  ownerIdentityKeyFingerprintHex: string;
+  readerIdentityKeyFingerprintHex: string;
+  readerKeyFingerprintHex: string;
+  status: PicoReaderCustodyReaderGrantLifecycleStatus;
+  reasonCategory: PicoReaderCustodyReaderGrantRevocationReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}
+
 export interface PicoReaderCustodyWriterGrantLifecycleSignatureInput {
   suite: string;
   lifecycleId: string;
@@ -487,12 +561,46 @@ export interface PicoReaderCustodyItemSignatureInput {
   createdAt: string;
 }
 
+export interface PicoReaderCustodyKekRotationSignatureInput {
+  suite: string;
+  rotationId: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  ownerIdentityKeyFingerprintHex: string;
+  previousKekVersion: number;
+  kekVersion: number;
+  causeLifecycleIds: string[];
+  remainingReaderGrantIds: string[];
+  rotatedAt: string;
+  lifecycleOrder: string;
+}
+
 export interface PicoReaderCustodyDomainRecord {
   schema: typeof picoReaderCustodyDomainRecordSchema;
   domain: PicoReaderCustodyDomainSignatureInput;
   ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   ownerReaderKeyRecord: PicoIdentityKeyRecordSignatureInput;
   ownerEnvelope: PicoShareEnvelopeRecord;
+  ownerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyReaderGrantRecord {
+  schema: typeof picoReaderCustodyReaderGrantRecordSchema;
+  grant: PicoReaderCustodyReaderGrantSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  readerKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  envelopes: PicoShareEnvelopeRecord[];
+  ownerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyReaderGrantLifecycleRecord {
+  schema: typeof picoReaderCustodyReaderGrantLifecycleRecordSchema;
+  lifecycle: PicoReaderCustodyReaderGrantLifecycleSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   ownerSignatureHex: string;
   receivedAt: string;
 }
@@ -521,6 +629,15 @@ export interface PicoReaderCustodyItemRecord {
   wrappedDekHex: string;
   writerDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
   writerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyKekRotationRecord {
+  schema: typeof picoReaderCustodyKekRotationRecordSchema;
+  rotation: PicoReaderCustodyKekRotationSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  envelopes: PicoShareEnvelopeRecord[];
+  ownerSignatureHex: string;
   receivedAt: string;
 }
 
@@ -2355,6 +2472,121 @@ export function buildPicoReaderCustodyDomainSignatureInput(
   ]);
 }
 
+export function buildPicoReaderCustodyReaderGrantSignatureInput(
+  input: PicoReaderCustodyReaderGrantSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'readerGrantId',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'ownerIdentityKeyFingerprintHex',
+    'readerIdentityKeyFingerprintHex',
+    'readerDeviceSigningKeyFingerprintHex',
+    'readerKeyFingerprintHex',
+    'readerDelegationId',
+    'accessMode',
+    'firstKekVersion',
+    'validFrom',
+    'validUntil',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.readerGrantId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertAsciiToken(input.readerDelegationId);
+  assertStringMember(
+    input.accessMode,
+    picoReaderCustodyReaderAccessModes,
+    'invalid_reader_access_mode',
+  );
+  assertInstant(input.validFrom);
+  assertInstant(input.validUntil);
+  assertLifecycleOrder(input.lifecycleOrder);
+  assertValidBounds(input.validFrom, input.validUntil);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.readerGrant),
+    asciiBytes(input.suite),
+    asciiBytes(input.readerGrantId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.readerDelegationId),
+    asciiBytes(input.accessMode),
+    kekVersionBytes(input.firstKekVersion),
+    asciiBytes(input.validFrom),
+    asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(
+  input: PicoReaderCustodyReaderGrantLifecycleSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'lifecycleId',
+    'readerGrantId',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'ownerIdentityKeyFingerprintHex',
+    'readerIdentityKeyFingerprintHex',
+    'readerKeyFingerprintHex',
+    'status',
+    'reasonCategory',
+    'changedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.lifecycleId);
+  assertAsciiToken(input.readerGrantId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertStringMember(
+    input.status,
+    picoReaderCustodyReaderGrantLifecycleStatuses,
+    'invalid_reader_grant_status',
+  );
+  assertStringMember(
+    input.reasonCategory,
+    picoReaderCustodyReaderGrantRevocationReasonCategories,
+    'invalid_reason_category',
+  );
+  assertInstant(input.changedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.readerGrantLifecycle),
+    asciiBytes(input.suite),
+    asciiBytes(input.lifecycleId),
+    asciiBytes(input.readerGrantId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.status),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.changedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
 export function buildPicoReaderCustodyWriterGrantSignatureInput(
   input: PicoReaderCustodyWriterGrantSignatureInput,
 ): Uint8Array {
@@ -2454,6 +2686,67 @@ export function buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(
     asciiBytes(input.status),
     asciiBytes(input.reasonCategory),
     asciiBytes(input.changedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoReaderCustodyKekRotationSignatureInput(
+  input: PicoReaderCustodyKekRotationSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'rotationId',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'ownerIdentityKeyFingerprintHex',
+    'previousKekVersion',
+    'kekVersion',
+    'causeLifecycleIds',
+    'remainingReaderGrantIds',
+    'rotatedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.rotationId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  const causeLifecycleIds = canonicalAsciiTokenSet(
+    input.causeLifecycleIds,
+    false,
+    'invalid_rotation_causes',
+  );
+  const remainingReaderGrantIds = canonicalAsciiTokenSet(
+    input.remainingReaderGrantIds,
+    true,
+    'invalid_remaining_reader_set',
+  );
+  if (!Number.isSafeInteger(input.previousKekVersion)
+    || input.previousKekVersion < 1
+    || input.kekVersion !== input.previousKekVersion + 1) {
+    throw new Error('invalid_kek_rotation');
+  }
+  assertInstant(input.rotatedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.kekRotation),
+    asciiBytes(input.suite),
+    asciiBytes(input.rotationId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    kekVersionBytes(input.previousKekVersion),
+    kekVersionBytes(input.kekVersion),
+    asciiBytes(String(causeLifecycleIds.length)),
+    ...causeLifecycleIds.map((id) => asciiBytes(id)),
+    asciiBytes(String(remainingReaderGrantIds.length)),
+    ...remainingReaderGrantIds.map((id) => asciiBytes(id)),
+    asciiBytes(input.rotatedAt),
     asciiBytes(input.lifecycleOrder),
   ]);
 }
@@ -2721,6 +3014,29 @@ function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationSco
   }
 
   return [...scopes].sort() as PicoIdentityDelegationScope[];
+}
+
+function canonicalAsciiTokenSet(
+  values: readonly string[],
+  allowEmpty: boolean,
+  error: string,
+): string[] {
+  if (!Array.isArray(values) || (!allowEmpty && values.length === 0)) {
+    throw new Error(error);
+  }
+  const unique = new Set<string>();
+  for (const value of values) {
+    try {
+      assertAsciiToken(value);
+    } catch {
+      throw new Error(error);
+    }
+    if (unique.has(value)) {
+      throw new Error(error);
+    }
+    unique.add(value);
+  }
+  return [...values].sort();
 }
 
 function canonicalHomeMembershipScopeSet(scopes: readonly string[]): PicoHomeMembershipScope[] {

@@ -1,0 +1,23 @@
+{
+  "schema": "pico.reader-custody.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-custody.pico_suite_mem_v1.canonicalization-negative.kek-rotation-skips-version",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "family": "canonicalization-negative",
+  "custodyFamily": "kekRotation",
+  "construction": "pico.mem.reader-kek-rotation.v1",
+  "case": "rotation may advance by exactly one KEK version",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_kek_rotation"
+  },
+  "adr": "0088",
+  "notes": "Synthetic public fields only; no private keys, raw KEK, raw DEK or commercial permission."
+}
