@@ -6,6 +6,8 @@ Pico keeps several README-style documents with different scopes.
 
 | File | Role | Audience |
 |---|---|---|
+| `AGENTS.md` | repository-wide durable agent working rules and invariants | coding agents and maintainers |
+| `.agent-context.md` | compact current handoff with the next concrete work block | coding agents |
 | `README.md` | non-technical project introduction | interested readers, users, repository visitors |
 | `ReadmeTech.md` | full technical project README | contributors, reviewers, operators, future architecture work |
 | `pico_core/README.md` | Home Assistant add-on overview in the style of the root README | Home Assistant users browsing the add-on |
@@ -13,7 +15,7 @@ Pico keeps several README-style documents with different scopes.
 | `pico_core/CHANGELOG.md` | add-on-specific change history | Home Assistant users and administrators |
 | `docs/architecture/*.md` | architecture decisions and concept constraints | architecture and design work |
 | `docs/protocol/*.md` | protocol surfaces, compatibility levels and conformance fixture planning | protocol and compatibility work |
-| `docs/development/*.md` | development notes and preserved reviewer context that should not bloat root README files | maintainers and future agents |
+| `docs/development/*.md` | on-demand runbooks, development notes and preserved reviewer context that should not bloat root or active handoff files | maintainers and future agents |
 | `docs/release/*.md` | release, versioning and documentation rules | maintainers |
 
 ## Root README purpose
