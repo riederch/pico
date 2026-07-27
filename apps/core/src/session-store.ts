@@ -36,7 +36,14 @@ export interface IssuedSession {
 }
 
 export type SessionPrincipal =
-  | { readonly kind: 'operator' }
+  | {
+    readonly kind: 'operator';
+    readonly homeBinding?: {
+      readonly homeId: string;
+      readonly foundingId: string;
+      readonly hostSigningKeyFingerprintHex: string;
+    };
+  }
   | {
     readonly kind: 'pico_identity';
     readonly picoIdentityFingerprintHex: string;
@@ -203,7 +210,10 @@ export class SessionStore {
 
 function clonePrincipal(principal: SessionPrincipal): SessionPrincipal {
   if (principal.kind === 'operator') {
-    return { kind: 'operator' };
+    return {
+      kind: 'operator',
+      ...(principal.homeBinding === undefined ? {} : { homeBinding: { ...principal.homeBinding } }),
+    };
   }
 
   return {

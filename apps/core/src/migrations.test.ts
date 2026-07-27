@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   describeMigrationState,
+  foundationOperatorHomeBindingMigrationId,
   listAppliedMigrations,
   listMigrationAuditRecords,
   picoSchemaBaselineMigrationId,
@@ -34,6 +35,10 @@ describe('database migrations', () => {
       pendingMigrations: [
         {
           id: picoSchemaBaselineMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: foundationOperatorHomeBindingMigrationId,
           requiresBackup: false,
         },
       ],
@@ -75,6 +80,10 @@ describe('database migrations', () => {
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: foundationOperatorHomeBindingMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -179,12 +188,12 @@ describe('database migrations', () => {
     runMigrations(db);
 
     expect(describeMigrationState(db)).toEqual({
-      appliedMigrationIds: [picoSchemaBaselineMigrationId],
+      appliedMigrationIds: [picoSchemaBaselineMigrationId, foundationOperatorHomeBindingMigrationId],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -194,7 +203,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
 
     db.close();
   });
@@ -233,7 +242,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
 
     db.close();
   });
@@ -243,14 +252,17 @@ describe('database migrations', () => {
 
     const result = runMigrations(db);
 
-    expect(result.appliedMigrationIds).toEqual([picoSchemaBaselineMigrationId]);
+    expect(result.appliedMigrationIds).toEqual([
+      picoSchemaBaselineMigrationId,
+      foundationOperatorHomeBindingMigrationId,
+    ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
         id: 1,
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         status: 'applied',
-        migrationIds: [picoSchemaBaselineMigrationId],
+        migrationIds: [picoSchemaBaselineMigrationId, foundationOperatorHomeBindingMigrationId],
       },
     ]);
 
@@ -298,7 +310,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     runMigrations(db);
-    db.prepare('DELETE FROM schema_migration WHERE id = ?').run(picoSchemaBaselineMigrationId);
+    db.prepare('DELETE FROM schema_migration').run();
     db.prepare('DELETE FROM schema_migration_audit').run();
 
     expect(() => runMigrations(db)).toThrow(/schema_migration_audit already exists/);
@@ -309,7 +321,7 @@ describe('database migrations', () => {
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         status: 'failed',
-        migrationIds: [picoSchemaBaselineMigrationId],
+        migrationIds: [picoSchemaBaselineMigrationId, foundationOperatorHomeBindingMigrationId],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },
     ]);

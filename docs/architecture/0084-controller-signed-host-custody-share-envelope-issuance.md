@@ -41,7 +41,8 @@ or envelope fields from the finalization request.
 
 ### Two-phase issuance
 
-`POST /api/home/share-envelope-issuance` is a `host-admin` relay endpoint. Its
+`POST /api/home/share-envelope-issuance` is an ADR 0087
+`home-authority-relay` endpoint. Its
 request names an existing signed grant, registered delegation, exact reader-key
 fingerprint and existing KEK version. Core:
 
@@ -97,11 +98,13 @@ reader-key and KEK-version references; removal additionally carries the bounded
 reason category `authority_reconciliation` or `key_unavailable`. They never
 carry the envelope, ciphertext, signature, key material or content.
 
-All three HTTP routes are `host-admin`. The inventory route exposes sensitive
-reader-graph metadata and sealed ciphertext only to an operator session. A
-static Foundation token, identity session or unauthenticated request cannot
-prepare, finalize or list envelopes. There is deliberately no reader-facing
-distribution endpoint in this slice.
+All three HTTP routes are `home-authority-relay`. The inventory route exposes
+sensitive reader-graph metadata and sealed ciphertext only to the exact
+Home-bound operator fallback or active founding Home Host Pico identity
+session. An ordinary member, static Foundation token or unauthenticated request
+cannot prepare, finalize or list envelopes. Controller signatures, not either
+relay session, remain the envelope authority. There is deliberately no
+reader-facing distribution endpoint in this slice.
 
 ## Compatibility
 

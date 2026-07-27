@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted as the mechanism design for ADR 0075 Gate A, now implemented for the Foundation surface: operator credential, sessions, bootstrap, local reset, access-class enforcement, auth audit events and the dashboard login all exist. Gate A is therefore open; the surfaces behind Gates B and C stay closed.
+Accepted and implemented as the mechanism design for ADR 0075 Gate A:
+operator credential, sessions, bootstrap, local reset, access-class
+enforcement, auth audit events and dashboard login exist. ADR 0087 extends the
+mechanism with exact phase/Home binding; Gates B/C and the signed Home/domain
+relay are also implemented by their respective ADRs.
 
 ## Context
 
@@ -60,6 +64,13 @@ Sessions live in a process-local map keyed by digest. They are **never written t
 Not persisting is a decision, not laziness. It **resolves the ADR 0075 restore-resurrection question by construction**: a restored backup cannot resurrect a revoked session, because no backup ever contained one. It also removes the need to exclude session rows from `sqlite-backup` and keeps the ADR 0072 backup story unchanged. It follows the ADR 0039 in-memory ticket precedent for exactly the same reason: a credential that is cheap to recreate should not become durable state.
 
 The residual honest limit stands: a restored backup **can** resurrect a replaced operator credential, bounded by nothing but the operator noticing. A credential epoch does not fix this (the epoch restores too). It is documented, not denied.
+
+ADR 0087 narrows that residual. The verifier persists with either an unclaimed
+phase or the exact `homeId`, `foundingId` and host signing-key fingerprint.
+Every operator session snapshots the binding and Core compares session,
+credential and current founding on each request. A matching backup can still
+restore an older passphrase; a foreign/unbound claimed-state restore cannot
+log in and is never auto-rebound.
 
 Persisted state is therefore only: the credential verifier, its parameters and its creation/change timestamps.
 
@@ -155,22 +166,26 @@ Failure responses follow the existing posture: `401` with `WWW-Authenticate` for
 
 Gate A checklist, now built:
 
-1. **Done** — `OperatorStore` (`apps/core/src/operator-store.ts`): Argon2id verifier at interactive limits in the baseline `foundation_operator` table, serialized verification with a bounded queue, passphrase change requiring the current one.
-2. **Done** — `SessionStore` (`apps/core/src/session-store.ts`): digest-keyed, sliding idle + absolute expiry, per-session and global revocation, count cap with oldest-first eviction, purge. Never persisted.
+1. **Done** — `OperatorStore` (`apps/core/src/operator-store.ts`): Argon2id verifier at interactive limits in `foundation_operator`, serialized verification with a bounded queue, passphrase change requiring the current one, plus ADR 0087 one-way exact Home binding.
+2. **Done** — `SessionStore` (`apps/core/src/session-store.ts`): digest-keyed, sliding idle + absolute expiry, per-session and global revocation, count cap with oldest-first eviction, purge and operator-binding snapshot. Never persisted.
 3. **Done** — `OperatorBootstrapCode` (`apps/core/src/operator-bootstrap.ts`): per-process code on the host log, single use, gated on operator absence.
 4. **Done** — one-shot local reset marker (`<data>/operator-reset`), consumed at boot, audited.
 5. **Done** — `AccessClassRegistry` (`apps/core/src/access-classes.ts`) enforced from Fastify's `onRoute` hook, replacing the blanket static-token hook; `/api/auth/*` is reachable without the token and the token stops at `foundation-diagnostic`.
 6. **Done** — the four `auth.*` types via `serverSynthesizedFoundationEventTypes`, with the `public-surfaces.md` and `compatibility-levels.md` fences updated and test-bound.
 7. **Done** — tickets mint under a session and are purged when it is revoked.
 8. **Done** — dashboard operator login: memory-only session, preferred over the static token, re-login on reload, no persistent store touched.
-9. **Done** — Core 141 → 167, web 17 → 22, protocol 33 → 34.
+9. **Done** — ADR 0087 claim/reset/restore transition tests keep the credential
+   mechanism subordinate to current founding state.
 
 Two behaviours worth recording because they were decided during implementation:
 
 - **An operator raises the bar for diagnostics.** Once an operator exists, `foundation-diagnostic` requires a credential even when no static token is configured. Establishing an operator is an explicit act, and on the shared ingress origin an open diagnostic surface would keep leaking event metadata to every add-on page — which would make bootstrapping pointless for reads. Hosts with no token and no operator keep the unchanged trusted-local behaviour, so nothing that exists today breaks. For the same reason `WS /ws` requires a credential once an operator exists.
 - **Fastify's auto-generated HEAD routes are classified with their GET.** They serve the same resource; a HEAD route without a GET still fails closed. The registry found this on its first run, which is the point of enforcing at registration.
 
-Known residual, honest: the Argon2id verifier lives in the database, so a stolen database or backup permits offline guessing of the operator passphrase. Argon2id is the mitigation, not a proof; a weak passphrase falls. This does not widen content exposure — whoever holds the database already holds whatever the ADR 0071/0072 at-rest layer does not protect.
+Known residual, honest: the Argon2id verifier and non-secret Home binding live
+in the database, so a stolen database or backup permits offline guessing of
+the operator passphrase. Argon2id is the mitigation, not a proof; a weak
+passphrase falls. The binding prevents authority transplant, not guessing.
 
 No implementation describes the result as production authentication for remote access, Pico identity, Home membership or Pico Link.
 
@@ -213,7 +228,8 @@ Negative:
 
 - a page reload and a process restart both force a new login; this is real UX friction accepted for the foundation phase
 - header transport gives up `HttpOnly`, so an XSS on the serving origin can exfiltrate a live session
-- a stale restore can resurrect a replaced credential; unresolved and documented
+- a matching stale restore can resurrect a replaced passphrase; foreign or
+  unbound claimed-state restores fail closed per ADR 0087
 - host filesystem/console control defeats operator auth by design; the layer's honest limit
 - an operator login is added on top of the Home Assistant login under ingress
 - more transitional surface (`/api/auth/*`) that the claim flow must later consolidate
@@ -225,4 +241,8 @@ Negative:
 - Refines `0039-foundation-websocket-ticket-boundary.md`: the ticket flow survives, re-scoped under sessions; the no-credentials-in-URLs and no-dashboard-persistence rules stay intact.
 - Extends `0038-foundation-local-access-hardening-and-ingress-boundary.md` and leaves `0041-foundation-access-modes-and-direct-port-gate.md` unchanged, naming the session-aware access mode as a separate follow-on.
 - Follows the ADR 0027 protected-channel pattern for bootstrap without becoming the ADR 0024/0027 Move-In Code, and consolidates under the Home Host Pico per ADR 0075 A11.
+- Extended by ADR
+  `0087-foundation-operator-home-host-authority-consolidation.md` with exact
+  Home/founding binding, transition revocation and separate signed-evidence
+  relay.
 - Reuses the server-synthesized event mechanism introduced for `memory.domain_shredded` (ADR 0071 step 4) and the audit style of ADR 0037.

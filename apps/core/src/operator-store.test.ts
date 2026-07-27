@@ -8,6 +8,11 @@ import { OperatorOverloadedError, type OperatorStore } from './operator-store.js
 import { consumeOperatorResetMarker, OperatorBootstrapCode, operatorResetMarkerPath } from './operator-bootstrap.js';
 
 const PASSPHRASE = 'correct horse battery staple';
+const HOME_BINDING = {
+  homeId: 'home_20260727',
+  foundingId: 'founding_20260727',
+  hostSigningKeyFingerprintHex: 'a'.repeat(64),
+};
 const tempDirs: string[] = [];
 const stores: EventStore[] = [];
 
@@ -79,6 +84,31 @@ describe('OperatorStore', () => {
     const { operators: fresh } = openOperators();
     await expect(fresh.create('short')).rejects.toThrow(/at least/);
     expect(fresh.exists()).toBe(false);
+  });
+
+  it('binds a credential once to an exact Home founding and refuses cross-Home reuse', async () => {
+    const { operators } = openOperators();
+    await operators.create(PASSPHRASE);
+
+    expect(operators.get()?.homeBinding).toBeUndefined();
+    expect(operators.bindToHome(HOME_BINDING).homeBinding).toEqual(HOME_BINDING);
+    expect(operators.bindToHome(HOME_BINDING).homeBinding).toEqual(HOME_BINDING);
+    expect(() => operators.bindToHome({
+      ...HOME_BINDING,
+      foundingId: 'founding_replacement',
+    })).toThrow(/different Pico Home founding/);
+    expect(operators.get()?.homeBinding).toEqual(HOME_BINDING);
+  });
+
+  it('creates a post-claim credential already bound and unbinds only for explicit Home reset', async () => {
+    const { operators } = openOperators();
+    await operators.create(PASSPHRASE, HOME_BINDING);
+
+    expect(operators.get()?.homeBinding).toEqual(HOME_BINDING);
+    expect(operators.clearHomeBinding()).toBe(true);
+    expect(operators.get()?.homeBinding).toBeUndefined();
+    expect(operators.clearHomeBinding()).toBe(false);
+    expect(await operators.verify(PASSPHRASE)).toBe(true);
   });
 
   it('requires the current passphrase to change it, so a stolen session cannot lock the operator out', async () => {

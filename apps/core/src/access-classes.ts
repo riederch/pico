@@ -1,10 +1,11 @@
 /**
  * Route access classes (ADR 0075 A2, route table in ADR 0076).
  *
- * Every route above `public` resolves to exactly one class, and authority comes
- * from exactly two sources: the operator role, and domain readership.
+ * Every route above `public` resolves to exactly one class. Authority comes
+ * from local host access, the founding Home Host Pico, and domain readership;
+ * none implies either of the others.
  * Administration is not readership (ADR 0075 A7) — the ADR 0024 host-admin
- * boundary, enforced here before a second principal exists.
+ * boundary, enforced here for both operator and identity principals.
  *
  * The registry is the enforcement mechanism, not a checklist: `assertClassified`
  * runs at route registration, so a Foundation API route added without a class
@@ -26,6 +27,10 @@ export const accessClasses = [
   'host-admin',
   // Operator role plus explicit confirmation of the exact target.
   'host-admin-destructive',
+  // Signed Home-authority evidence may be relayed by the exact Home-bound
+  // operator fallback or by the active founding Home Host Pico. The route
+  // handler still verifies the evidence signature before changing state.
+  'home-authority-relay',
 ] as const;
 
 export type AccessClass = typeof accessClasses[number];

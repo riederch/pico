@@ -94,7 +94,11 @@ import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
 import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, type AccessClass } from './access-classes.js';
-import { OperatorOverloadedError, type OperatorStore } from './operator-store.js';
+import {
+  OperatorOverloadedError,
+  type OperatorHomeBinding,
+  type OperatorStore,
+} from './operator-store.js';
 import { SessionStore, type SessionPrincipal } from './session-store.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { LoginThrottle } from './login-throttle.js';
@@ -260,7 +264,11 @@ type ParsedSealedPicoHomeClaimRequest = Extract<ParsedPicoHomeClaimRequest, { ok
 // A bearer resolves to one typed authority. In particular, an identity-bound
 // session does not inherit operator or diagnostic powers (ADR 0082).
 type RequestAuthority =
-  | { kind: 'operator'; sessionDigest: string }
+  | {
+    kind: 'operator';
+    sessionDigest: string;
+    principal: Extract<SessionPrincipal, { kind: 'operator' }>;
+  }
   | {
     kind: 'pico-identity';
     sessionDigest: string;
@@ -401,6 +409,71 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
   }
 
+  function currentOperatorHomeBinding(): OperatorHomeBinding | undefined {
+    const founding = store.picoHomeFoundingRecord()?.founding;
+
+    // A row alone is not enough after restore. `homeHostKeys` is populated for
+    // a claimed Home only after custody fingerprints and both founding
+    // signatures have been re-verified. Treat unverifiable founding state as
+    // no current binding, then distinguish it from a genuinely unclaimed Home
+    // in `operatorPrincipalIsCurrent`.
+    if (founding === undefined || homeHostKeys === undefined) {
+      return undefined;
+    }
+
+    return {
+      homeId: founding.homeId,
+      foundingId: founding.foundingId,
+      hostSigningKeyFingerprintHex: founding.hostSigningKeyFingerprintHex,
+    };
+  }
+
+  function sameOperatorHomeBinding(
+    left: OperatorHomeBinding | undefined,
+    right: OperatorHomeBinding | undefined,
+  ): boolean {
+    if (left === undefined || right === undefined) {
+      return left === right;
+    }
+
+    return left.homeId === right.homeId
+      && left.foundingId === right.foundingId
+      && left.hostSigningKeyFingerprintHex === right.hostSigningKeyFingerprintHex;
+  }
+
+  function currentOperatorPrincipal(): Extract<SessionPrincipal, { kind: 'operator' }> {
+    const homeBinding = operators.get()?.homeBinding;
+
+    return {
+      kind: 'operator',
+      ...(homeBinding === undefined ? {} : { homeBinding }),
+    };
+  }
+
+  function operatorPrincipalIsCurrent(
+    principal: Extract<SessionPrincipal, { kind: 'operator' }>,
+  ): boolean {
+    const operator = operators.get();
+    const foundingExists = store.picoHomeFoundingRecord() !== undefined;
+    const currentHomeBinding = currentOperatorHomeBinding();
+
+    return operator !== undefined
+      && !(foundingExists && currentHomeBinding === undefined)
+      && sameOperatorHomeBinding(principal.homeBinding, operator.homeBinding)
+      && sameOperatorHomeBinding(principal.homeBinding, currentHomeBinding);
+  }
+
+  function isCurrentHomeHostPico(
+    principal: Extract<SessionPrincipal, { kind: 'pico_identity' }>,
+  ): boolean {
+    const founding = store.picoHomeFoundingRecord()?.founding;
+
+    return founding !== undefined
+      && currentOperatorHomeBinding() !== undefined
+      && principal.picoIdentityFingerprintHex === founding.homeHostPicoIdentityFingerprintHex
+      && store.hasActivePicoHomeMembership(principal.picoIdentityFingerprintHex, founding.homeId);
+  }
+
   function activateHomeSetupMode(): void {
     const foundingRecord = store.picoHomeFoundingRecord();
     if (foundingRecord !== undefined) {
@@ -490,13 +563,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   if (consumeHomeResetMarker(config.databasePath)) {
     const removed = homeHostKeyStore.clear();
     store.resetPicoHome();
+    const operatorUnbound = operators.clearHomeBinding();
+    const revokedSessions = sessions.revokeAll();
     homeHostKeys = undefined;
     homeSetupNonceHex = undefined;
     pendingHomeClaim = undefined;
     moveInCode.clear();
     appendServerEvent('home.reset', {});
     app.log.warn(
-      { removedHostKeyFiles: removed.removedFiles },
+      { removedHostKeyFiles: removed.removedFiles, operatorUnbound, revokedSessions },
       'Pico Home reset by local reset marker; host identity keys were removed and setup mode will mint a fresh Move-In Code.',
     );
   }
@@ -508,6 +583,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     );
   }
   reconcileClaimedHomeHostKeyCustody();
+  const persistedOperator = operators.get();
+  if (persistedOperator !== undefined
+    && !sameOperatorHomeBinding(persistedOperator.homeBinding, currentOperatorHomeBinding())) {
+    app.log.error(
+      {
+        operatorHomeBinding: persistedOperator.homeBinding ?? null,
+        currentHomeBinding: currentOperatorHomeBinding() ?? null,
+      },
+      'Foundation operator binding does not match the current Pico Home founding; operator login is disabled until explicit local reset/bootstrap.',
+    );
+  }
   reconcileHomeMembershipCredentials();
   const identityEvidenceReconciliation = store.reconcilePicoIdentityLifecycleEvidence(sodium);
   if (identityEvidenceReconciliation.droppedDelegations > 0
@@ -740,7 +826,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     if (touched.principal.kind === 'operator') {
-      return { kind: 'operator', sessionDigest };
+      if (!operatorPrincipalIsCurrent(touched.principal)) {
+        sessions.revoke(credential);
+        purgeSessionRealtimeTickets(realtimeTickets, sessionDigest);
+        terminateSessionSockets(sessionDigest);
+        return { kind: 'none' };
+      }
+
+      return { kind: 'operator', sessionDigest, principal: touched.principal };
     }
 
     const principal = touched.principal;
@@ -859,7 +952,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return unauthorized(reply, 'Authenticated Foundation session is required.');
     }
 
-    // Every remaining class needs the operator role, so the principal-less
+    if (accessClass === 'home-authority-relay') {
+      if (authority.kind === 'operator' && authority.principal.homeBinding !== undefined) {
+        return;
+      }
+      if (authority.kind === 'pico-identity' && isCurrentHomeHostPico(authority.principal)) {
+        return;
+      }
+
+      return unauthorized(reply, 'Current Pico Home authority relay session is required.');
+    }
+
+    // Every remaining class is local host infrastructure and needs the
+    // operator role, so the principal-less
     // static token cannot reach them: its ceiling is foundation-diagnostic
     // (ADR 0075).
     if (authority.kind !== 'operator') {
@@ -919,30 +1024,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // session alone does not read content, and the static token never reaches here.
   accessClasses.register('GET', '/api/memory/domains/:privacyDomain/items', 'domain-content');
   accessClasses.register('GET', '/api/memory/domains/:privacyDomain/items/:memoryItemId', 'domain-content');
-  // Relaying a signed membership credential is host administration, not Home
-  // authority: the operator can hand the host a credential the Home Host Pico
-  // signed, and can refuse to, but cannot mint one (ADR 0080 H6/H9). The
-  // member list is reader-graph metadata and stays behind the same class; the
-  // static token never reaches any of them.
-  accessClasses.register('POST', '/api/home/memberships', 'host-admin');
-  accessClasses.register('POST', '/api/home/membership-lifecycle', 'host-admin');
-  accessClasses.register('GET', '/api/home/memberships', 'host-admin');
-  accessClasses.register('POST', '/api/home/domain-read-grants', 'host-admin');
-  accessClasses.register('POST', '/api/home/domain-read-grant-lifecycle', 'host-admin');
-  accessClasses.register('GET', '/api/home/domain-read-grants', 'host-admin');
-  accessClasses.register('POST', '/api/home/share-envelope-issuance', 'host-admin');
-  accessClasses.register('POST', '/api/home/share-envelopes', 'host-admin');
-  accessClasses.register('GET', '/api/home/share-envelopes', 'host-admin');
-  // The operator may relay and inspect opaque reader-custody evidence, but the
-  // routes never expose a raw KEK, DEK or plaintext. This is host
-  // administration, not domain readership (ADR 0086).
-  accessClasses.register('POST', '/api/home/reader-custody/domains', 'host-admin');
-  accessClasses.register('GET', '/api/home/reader-custody/domains', 'host-admin');
-  accessClasses.register('POST', '/api/home/reader-custody/writer-grants', 'host-admin');
-  accessClasses.register('GET', '/api/home/reader-custody/writer-grants', 'host-admin');
-  accessClasses.register('POST', '/api/home/reader-custody/writer-grant-lifecycle', 'host-admin');
-  accessClasses.register('POST', '/api/home/reader-custody/items', 'host-admin');
-  accessClasses.register('GET', '/api/home/reader-custody/items', 'host-admin');
+  // Every Home route transports or lists signed Home-authority evidence. The
+  // local operator fallback is accepted only after exact binding to this
+  // founding; the active founding Home Host Pico may use the same relay
+  // surface. Neither session can mint authority: handlers verify the named
+  // controller/issuer signature before every state transition (ADR 0087).
+  accessClasses.register('POST', '/api/home/memberships', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/membership-lifecycle', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/memberships', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/domain-read-grants', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/domain-read-grant-lifecycle', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/domain-read-grants', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/share-envelope-issuance', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/share-envelopes', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/share-envelopes', 'home-authority-relay');
+  // The exact-bound fallback or founding Home Host Pico may relay and inspect
+  // opaque reader-custody evidence, but the routes never expose a raw KEK, DEK
+  // or plaintext. This is signed-authority relay, not readership (ADR 0086/87).
+  accessClasses.register('POST', '/api/home/reader-custody/domains', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/reader-custody/domains', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-custody/writer-grants', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/reader-custody/writer-grants', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-custody/writer-grant-lifecycle', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-custody/items', 'home-authority-relay');
+  accessClasses.register('GET', '/api/home/reader-custody/items', 'home-authority-relay');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -1083,6 +1188,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       };
 
       let claimState: PicoHomeClaimState;
+      const operatorBeforeClaim = operators.get();
+      const claimedOperatorBinding: OperatorHomeBinding = {
+        homeId: pending.founding.homeId,
+        foundingId: pending.founding.foundingId,
+        hostSigningKeyFingerprintHex: pending.founding.hostSigningKeyFingerprintHex,
+      };
+      if (operatorBeforeClaim?.homeBinding !== undefined
+        && !sameOperatorHomeBinding(operatorBeforeClaim.homeBinding, claimedOperatorBinding)) {
+        return sendNoStore(reply.code(409), {
+          error: 'Foundation operator is bound to a different Pico Home founding; local operator reset is required.',
+        });
+      }
+
       try {
         claimState = store.claimPicoHome({
           homeId: pending.founding.homeId,
@@ -1092,10 +1210,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           foundingRecord,
           claimedAt: pending.founding.foundedAt,
         });
+        if (operatorBeforeClaim !== undefined) {
+          operators.bindToHome(claimedOperatorBinding);
+        }
       } catch (error) {
         return sendNoStore(reply.code(409), { error: (error as Error).message });
       }
 
+      // A pre-claim session carried unclaimed-phase authority. Even though the
+      // binding check would reject it, revoke it explicitly so no derived
+      // realtime ticket/socket survives the authority transition.
+      const revokedSessions = sessions.revokeAll();
+      if (revokedSessions > 0) {
+        purgeAllSessionRealtimeTickets(realtimeTickets);
+        terminateAllSessionSockets();
+        appendServerEvent('auth.sessions_revoked', { revokedSessions });
+      }
       appendServerEvent('home.claimed', {});
       pendingHomeClaim = undefined;
       homeSetupNonceHex = undefined;
@@ -1435,7 +1565,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.post('/api/auth/identity-challenges', async (_request, reply) => {
     const foundingRecord = store.picoHomeFoundingRecord();
-    if (foundingRecord === undefined) {
+    if (foundingRecord === undefined || homeHostKeys === undefined) {
       return reply.code(404).send({ error: 'Pico identity sessions are not available.' });
     }
 
@@ -1520,6 +1650,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.post('/api/auth/bootstrap', async (request, reply) => {
     const body = (request.body ?? {}) as { bootstrapCode?: unknown; passphrase?: unknown };
+    const homeBinding = currentOperatorHomeBinding();
+
+    if (store.picoHomeFoundingRecord() !== undefined && homeBinding === undefined) {
+      return sendNoStore(reply.code(409), {
+        error: 'Pico Home founding or host-key custody is unavailable; operator bootstrap cannot bind safely.',
+      });
+    }
 
     // Consume the code first: a wrong code must not reach the KDF at all.
     if (!bootstrapCode.consume(body.bootstrapCode)) {
@@ -1527,7 +1664,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     try {
-      await operators.create(body.passphrase as string);
+      await operators.create(body.passphrase as string, homeBinding);
     } catch (error) {
       // The code is spent either way; a failed attempt must not leave a usable
       // one behind. Re-mint so a legitimate operator can retry from the log —
@@ -1546,7 +1683,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     appendServerEvent('auth.operator_bootstrapped', {});
     app.log.warn('Foundation operator bootstrapped.');
 
-    const session = sessions.issue();
+    const session = sessions.issue(currentOperatorPrincipal());
 
     return reply
       .code(201)
@@ -1592,8 +1729,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return unauthorized(reply, 'Foundation operator credentials are invalid.');
     }
 
+    const principal = currentOperatorPrincipal();
+    if (!operatorPrincipalIsCurrent(principal)) {
+      loginThrottle.recordFailure();
+      request.log.error(
+        {
+          operatorHomeBinding: principal.homeBinding ?? null,
+          currentHomeBinding: currentOperatorHomeBinding() ?? null,
+        },
+        'Foundation operator login refused because its Home binding is stale.',
+      );
+      return unauthorized(reply, 'Foundation operator credentials are invalid.');
+    }
+
     loginThrottle.recordSuccess();
-    const session = sessions.issue();
+    const session = sessions.issue(principal);
 
     return reply
       .code(201)

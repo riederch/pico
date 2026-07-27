@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted as an access-control threat model and scoping decision. **Gates A, B and C are all implemented.** Gates A/B: ADR 0076 mechanics (operator principal, sessions, access-class enforcement, auth audit) with retention policy CRUD and the crypto-shred trigger behind them. Gate C: ADR 0077 — the memory content read API and the domain readership seam (A7), authorized by a `mayReadDomain` evaluation distinct from the operator role. Membership, multi-operator and Pico identity remain out of scope.
+Accepted as an access-control threat model and scoping decision. **Gates A, B
+and C are implemented.** ADR 0082 adds identity-bound sessions/readership, and
+ADR 0087 implements A11: the post-claim operator is exactly Home-bound, local
+host infrastructure is separate from signed Home/domain-authority relay, and
+the founding Home Host Pico can reach that relay without making ordinary
+members administrators. Multi-operator support and production remote exposure
+remain out of scope.
 
 ## Context
 
@@ -54,7 +60,7 @@ Stated honestly: this ADR adds **no confidentiality layer**. The running process
 | Credential brute-force | Online guessing against the login surface. | Reviewed KDF, rate-limited verification (A6); failures go to bounded operational logging, never unbounded into the append-only log (A9). |
 | Audit-flooding attacker | Triggers failures to bloat the undeletable event log. | A9: attacker-triggerable failures are never persisted append-only. |
 | Direct-port client spoofing ingress headers | Sends fabricated HA user headers. | Headers never authenticate (A4; restates ADR 0041). |
-| Stale backup restore | Resurrects revoked sessions or a replaced operator credential. | Named honestly: bounded by session expiry; credential-epoch reconciliation is future work, same family as tombstone replay (ADR 0070). |
+| Stale backup restore | Restores an older operator credential or transplants one across Home state. | Sessions are never persisted. ADR 0087 rejects unbound/foreign founding bindings and requires local reset; a matching backup can still restore an older passphrase. |
 | Running process, OS root, physical disk | Everything. | Out of scope by nature (consistent with ADR 0071); at-rest protection is ADR 0071/0072. |
 
 ### The ADR 0016 questions, answered for this surface
@@ -65,12 +71,18 @@ Stated honestly: this ADR adds **no confidentiality layer**. The running process
 4. **What can a relay see?** Nothing; this surface is local-only. Sessions never traverse relays and are never Pico Link authentication.
 5. **What happens after device loss?** A lost client device holding a session is handled by per-session and all-session revocation plus bounded lifetime. Losing the *host* stays the ADR 0072 story.
 6. **What happens after relationship revocation?** Single-principal phase: not applicable. The seam for later: removing a member revokes sessions and membership, but sessions only gate the API — ciphertext access is governed by keys, and key rotation after membership change stays ADR 0031/0033 work. Session revocation must never be sold as key revocation.
-7. **How does backup restore work?** Session and credential records are host state; a restore can resurrect revoked sessions (bounded by expiry) or a replaced credential. Sessions must be cheap to lose (re-login), so excluding or invalidating them on restore is acceptable; the honest residual risk is documented rather than denied.
+7. **How does backup restore work?** Sessions are in-memory and cannot be
+   restored. The credential persists with its ADR 0087 phase/Home binding:
+   foreign or unbound state on a claimed Home fails closed, while a matching
+   backup can still restore an older passphrase.
 8. **How does deletion interact with protected payloads?** Deletion semantics are unchanged (tombstones, shred). What changes: deletion *authority* becomes principal-bound, confirmed and audited — the shred audit event (`memory.domain_shredded`) already exists and gains an attributable actor.
 
 ## Required properties
 
-- **A1 — Principal-bound authority.** Every request above `public` resolves to an explicit authority source. `domain-content` and `host-admin*` classes require an authenticated principal. A principal-less credential (the static token) reaches at most `foundation-diagnostic`.
+- **A1 — Principal-bound authority.** Every request above `public` resolves to
+  an explicit authority source. `domain-content`, `host-admin*` and
+  `home-authority-relay` require an authenticated principal. A principal-less
+  credential (the static token) reaches at most `foundation-diagnostic`.
 - **A2 — Explicit route classification.** Every HTTP/WS route carries exactly one access class, assigned when the route is introduced. An unclassified route must not be routable.
 - **A3 — Fail-closed evaluation.** Unknown session, ambiguous configuration or an authorization error denies. Ambiguity never authorizes — the access-control sibling of ADR 0074's "ambiguity never deletes".
 - **A4 — No identity from spoofable context.** IP addresses, `Origin`/`Host` headers and ingress headers never establish a principal. They may harden (origin checks stay), never authenticate.
@@ -80,7 +92,12 @@ Stated honestly: this ADR adds **no confidentiality layer**. The running process
 - **A8 — Destructive administration is confirmed and audited.** Irreversible operations (crypto-shred) require an authenticated operator, explicit confirmation semantics and a durable content-free audit record (exists: `memory.domain_shredded`). Retention policy changes are administration with deletion consequences and require the same authority class.
 - **A9 — Audit without amplification.** Low-volume, state-changing auth events (bootstrap, credential change, revocation, destructive operations) are recorded as server-synthesized, content-free append-only events (ADR 0037 style). Attacker-triggerable failures (bad logins, rate-limit hits) go to bounded operational logging and never unbounded into the append-only store.
 - **A10 — Bootstrap is local, one-time, explicit.** The first principal is established only through a protected local channel while no principal exists — the Setup Mode pattern of ADR 0027. It is never derived from `PICO_FOUNDATION_TOKEN`, never from headers, never from mere network reachability. Re-bootstrap requires an explicit local reset. Both are audited. Physical/console control of the host cannot be defended against by this layer and is not claimed to be.
-- **A11 — No parallel identity vocabulary.** The Foundation operator is a phase-scoped principal defined for succession: once the claim flow (ADR 0024/0027) creates a Home Host Pico, host-administration authority consolidates there, and the operator principal is bound to it or retired by that ADR. It must never survive as a hidden second root of authority, never become a Pico identity, and never leak into Pico Link surfaces.
+- **A11 — No parallel identity vocabulary.** The Foundation operator is a
+  phase-scoped principal defined for succession. ADR 0087 implements the
+  retained-fallback choice: after claim, its verifier and sessions are bound to
+  the exact `homeId`, `foundingId` and host signing key. It may administer local
+  infrastructure and relay signed evidence, but it never becomes the Home
+  authority, a Pico identity, a reader or a Pico Link principal.
 
 ## Decision
 
@@ -96,7 +113,9 @@ Authentication produces an opaque server-side session under A5/A6. Sessions repl
 
 ### Access classes
 
-Every route carries exactly one class (A2). Authority comes from exactly two sources: the **operator role** for `host-admin*`, and **domain readership** for `domain-content`.
+Every route carries exactly one class (A2). Authority comes from distinct
+sources: local operator access for `host-admin*`, signed Home/domain evidence
+behind `home-authority-relay`, and domain readership for `domain-content`.
 
 | Class | Authority required | Current occupants | Planned occupants |
 |---|---|---|---|
@@ -107,6 +126,7 @@ Every route carries exactly one class (A2). Authority comes from exactly two sou
 | `domain-content` | authenticated principal with domain readership | `GET /api/memory/domains/:privacyDomain/items`, `GET /api/memory/domains/:privacyDomain/items/:memoryItemId` (ADR 0077) | — |
 | `host-admin` | operator session | `DELETE /api/auth/sessions`, `PUT /api/auth/credential`, `/api/memory/retention-policies` (list/create/read/edit/revoke) | — |
 | `host-admin-destructive` | operator session + explicit confirmation + durable audit | `POST /api/memory/domains/:privacyDomain/shred` | — |
+| `home-authority-relay` | exact Home-bound operator fallback or active founding Home Host Pico session; handler still requires signed evidence | `/api/home/memberships*`, domain-read grants, share envelopes and reader-custody evidence | future signed Home/domain record families |
 
 Honest note on `POST /api/events`: the `memory.recorded` content-splitting write (ADR 0069) carries personal content *into* the host over the diagnostic class. A token holder can therefore write — and poison — memory it can never read back. That stays acceptable for the foundation phase and is recorded as a threat; once principals exist, content-writing events should become principal-attributed (the currently unverified `deviceId` gains a verifiable actor), as an additive reclassification.
 
@@ -131,7 +151,8 @@ Gate B and Gate C are independent of each other.
 This ADR does not define or implement:
 
 - login, bootstrap, session or credential mechanics (KDF parameters, cookie-vs-header transport, CSRF design, rate-limit numbers — the follow-up session ADR)
-- user accounts as a product concept, multi-operator administration or any membership credential machinery (ADR 0029/0045)
+- user accounts as a product concept or multi-operator administration;
+  membership/identity runtime is supplied by ADRs 0080/0082
 - the Move-In/claim runtime (ADR 0024/0027) or Setup Mode UX
 - the content read API runtime (designed in ADR 0077; this ADR only scopes the gate)
 - passkey/hardware-key selection, TLS, mDNS or browser trust for appliances
@@ -156,7 +177,8 @@ ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md` now
 Positive:
 
 - unblocks retention CRUD, the shred trigger and the content read API behind principled, named gates
-- one authorization vocabulary (classes + two authority sources) instead of per-surface ad-hoc decisions
+- one authorization vocabulary (classes plus local-host, signed-evidence and
+  readership authorities) instead of per-surface ad-hoc decisions
 - keeps ADR 0034 canonicalization out of the authentication trust path (opaque sessions, no signed tokens)
 - pulls the ADR 0024 administration-vs-readership boundary forward before a second principal exists
 - bounds static-token leak damage explicitly (diagnostic ceiling)
@@ -164,7 +186,9 @@ Positive:
 
 Negative:
 
-- introduces one more transitional construct (the operator principal) that the claim flow must later subsume — accepted, with A11 as the anti-backdoor rule
+- retains one local console construct after claim, now constrained by ADR 0087
+  exact binding and signed-evidence checks instead of remaining an unbounded
+  second root
 - adds bootstrap, login, reset and revocation UX burden to a local-first product
 - session state in host storage adds restore-honesty obligations (resurrection window)
 - until Gate A ships, the three blocked surfaces stay blocked; this ADR deliberately does not shortcut them
@@ -181,3 +205,8 @@ Negative:
 - Refined by ADR `0076-foundation-operator-credential-session-and-bootstrap-mechanics.md`, which specifies the credential, session, bootstrap, reset and auth-audit mechanics this ADR deferred, and which the Gate A runtime implements.
 - Refined by ADR `0077-foundation-memory-content-read-api-and-domain-readership-seam.md`, which designs Gate C: the `domain-content` read surface and the domain readership evaluation seam A7 demanded (readership as an authority distinct from the operator role, never keyed on the unverified stored `owner`/`controller`).
 - Refined by ADR `0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md`, which designs the Move-In claim ceremony the `setup-bootstrap` class reserved and makes A11 concrete as a consolidation contract: post-claim, host-administration authority is the Home Host Pico's, and the operator credential survives only as a local mechanism that never signs, never issues membership and never gains reader-custody readership.
+- Refined and implemented by ADR
+  `0087-foundation-operator-home-host-authority-consolidation.md`, which binds
+  that local mechanism to one founding, separates host infrastructure from
+  signed evidence relay, and gives the founding Home Host Pico access to the
+  relay without promoting ordinary members.

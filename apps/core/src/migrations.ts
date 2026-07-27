@@ -56,6 +56,7 @@ export interface MigrationDefinition {
 }
 
 export const picoSchemaBaselineMigrationId = '0001_initial_schema' as const;
+export const foundationOperatorHomeBindingMigrationId = '0002_foundation_operator_home_binding' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -478,6 +479,20 @@ const migrations: readonly MigrationDefinition[] = [
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(1, 'unclaimed', null, null, now, now, null, null, null);
+    },
+  },
+  {
+    id: foundationOperatorHomeBindingMigrationId,
+    requiresBackup: false,
+    up(db) {
+      // NULL is the pre-claim/unclaimed binding. A claimed binding is a
+      // canonical JSON object validated by OperatorStore. Keeping the binding
+      // beside the verifier means a copied or restored credential cannot
+      // silently float to a different Home/founding ceremony (ADR 0087).
+      db.exec(`
+        ALTER TABLE foundation_operator
+        ADD COLUMN home_binding_json TEXT NULL
+      `);
     },
   },
 ];

@@ -81,21 +81,31 @@ Extending the ADR 0075 table for the content read surface:
 
 ### Domain readership as a seam, not a role
 
-Authority for `domain-content` comes from **domain readership**, the second of the two authority sources ADR 0075 names (the first, the operator role, authorizes `host-admin*`). Readership is evaluated per request as a function of the authenticated principal and the target domain:
+Authority for `domain-content` comes from **domain readership**, distinct from
+both ADR 0087 local-host administration and signed Home/domain-authority relay.
+Readership is evaluated per request as a function of the authenticated
+principal and the target domain:
 
 > `mayReadDomain(principal, privacyDomain) → boolean`
 
-This is deliberately a *different question* from the one `host-admin` asks, answered by a *different source*, even though today both resolve through the same session:
+This is deliberately a *different question* from either administration plane,
+answered by a different source:
 
 | Class | Question | Answer source (foundation phase) |
 |---|---|---|
-| `host-admin` | Does this session's principal hold the operator role? | It is an operator session. |
-| `domain-content` | Is this session's principal a reader of this domain? | Readership policy: the sole principal reads every domain, because a single-principal instance's domains are all its own. |
+| `host-admin` | Is this current local operator allowed to control host infrastructure? | Exact current operator session. |
+| `home-authority-relay` | May this session transport signed evidence for this founding? | Exact Home-bound operator fallback or founding Home Host Pico; handler verifies the evidence authority. |
+| `domain-content` | Is this session's principal a reader of this domain? | Pre-claim sole-resident policy, or claimed-Home membership plus explicit domain grant. |
 
 The foundation-phase readership policy is "**one principal, reads all domains**" — but it is keyed on *there being a single authenticated principal that is this session*, never on the operator role and never on the stored `owner`/`controller` (C1, C2). The two evaluations must be two code paths so their present coincidence is not load-bearing:
 
-- A future **member** (ADR 0029/0045) holds an authenticated session but no operator role. On `domain-content`, the readership policy is consulted and can grant their domains; on `host-admin`, the operator check denies them. The read API narrows to their domains without a single line of the operator branch changing.
-- A future **Home Host Pico** (ADR 0024) *is* the operator role but is not the owner of a resident's private domain. It holds `host-admin*` and can shred or set retention, yet the readership policy denies it that resident's content. That is A7 realized: the host administrator administers, it does not read.
+- A **Home member** (ADR 0082) holds an authenticated session but no local
+  operator role. `domain-content` can grant an exact domain; local
+  infrastructure and ADR 0087 relay deny ordinary members.
+- The **founding Home Host Pico** can reach signed-evidence relay but is not
+  thereby a reader of a resident's private domain. Local retention/shred remain
+  the exact-bound operator fallback's host powers. That is A7 realized:
+  administration and relay do not read.
 
 The honest transition this makes explicit: introducing a second principal with its own domains **narrows** what each principal reads, and the operator does *not* retain read-all by virtue of being operator. That narrowing must be a data change (membership/readership rows), never a rewrite of an authorization branch — which is precisely why the seam is cut now, while it trivially resolves to the sole principal, rather than retrofitted when it is expensive and risky.
 

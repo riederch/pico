@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listAppliedMigrations, picoSchemaBaselineMigrationId, runMigrations } from './migrations.js';
+import {
+  foundationOperatorHomeBindingMigrationId,
+  listAppliedMigrations,
+  picoSchemaBaselineMigrationId,
+  runMigrations,
+} from './migrations.js';
 import { createSqliteBackup, restoreSqliteBackup } from './sqlite-backup.js';
 
 const tempDirs: string[] = [];
@@ -216,6 +221,10 @@ describe('restoreSqliteBackup', () => {
     expect(listAppliedMigrations(restored)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: foundationOperatorHomeBindingMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

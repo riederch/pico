@@ -15,8 +15,9 @@ import type Database from 'better-sqlite3';
  * reason verification is serialized with a bounded queue — a memory-hard KDF on
  * an unauthenticated endpoint must never become an amplifier (ADR 0076).
  *
- * Only the verifier is persisted. Sessions are in-memory (see
- * {@link SessionStore}), so no backup can resurrect a revoked one.
+ * Only the verifier and its phase/Home binding are persisted. Sessions are
+ * in-memory (see {@link SessionStore}), so no backup can resurrect a revoked
+ * one.
  */
 
 const OPERATOR_ROW_ID = 'operator';
@@ -41,12 +42,20 @@ export interface PasswordHashingSodium {
 export interface OperatorRecord {
   createdAt: string;
   updatedAt: string;
+  homeBinding?: OperatorHomeBinding;
+}
+
+export interface OperatorHomeBinding {
+  homeId: string;
+  foundingId: string;
+  hostSigningKeyFingerprintHex: string;
 }
 
 interface OperatorRow {
   credential_verifier: string;
   created_at: string;
   updated_at: string;
+  home_binding_json: string | null;
 }
 
 export class OperatorOverloadedError extends Error {
@@ -77,15 +86,16 @@ export class OperatorStore {
       return undefined;
     }
 
-    return { createdAt: row.created_at, updatedAt: row.updated_at };
+    return mapOperatorRecord(row);
   }
 
   /**
    * Establishes the first operator credential. Fails if one already exists, so
    * bootstrap cannot silently replace a live operator.
    */
-  public async create(passphrase: string): Promise<OperatorRecord> {
+  public async create(passphrase: string, homeBinding?: OperatorHomeBinding): Promise<OperatorRecord> {
     assertPassphraseShape(passphrase);
+    assertOperatorHomeBinding(homeBinding);
 
     const verifier = await this.hash(passphrase);
     const now = new Date().toISOString();
@@ -95,16 +105,62 @@ export class OperatorStore {
           operator_id,
           credential_verifier,
           created_at,
-          updated_at
-        ) VALUES (?, ?, ?, ?)
+          updated_at,
+          home_binding_json
+        ) VALUES (?, ?, ?, ?, ?)
       `)
-      .run(OPERATOR_ROW_ID, verifier, now, now);
+      .run(OPERATOR_ROW_ID, verifier, now, now, serializeHomeBinding(homeBinding));
 
     if (result.changes === 0) {
       throw new Error('Foundation operator already exists.');
     }
 
-    return { createdAt: now, updatedAt: now };
+    return {
+      createdAt: now,
+      updatedAt: now,
+      ...(homeBinding === undefined ? {} : { homeBinding: cloneHomeBinding(homeBinding) }),
+    };
+  }
+
+  /**
+   * Narrows a pre-claim credential to the exact Home founding. Repeating the
+   * same binding is idempotent; moving a credential between Homes is refused
+   * and requires the explicit local reset/bootstrap path.
+   */
+  public bindToHome(homeBinding: OperatorHomeBinding): OperatorRecord {
+    assertOperatorHomeBinding(homeBinding);
+    const current = this.get();
+    if (current === undefined) {
+      throw new Error('Foundation operator does not exist.');
+    }
+    if (current.homeBinding !== undefined && !sameHomeBinding(current.homeBinding, homeBinding)) {
+      throw new Error('Foundation operator is bound to a different Pico Home founding.');
+    }
+    if (current.homeBinding === undefined) {
+      const now = new Date().toISOString();
+      this.db
+        .prepare('UPDATE foundation_operator SET home_binding_json = ?, updated_at = ? WHERE operator_id = ?')
+        .run(serializeHomeBinding(homeBinding), now, OPERATOR_ROW_ID);
+    }
+
+    return this.get() as OperatorRecord;
+  }
+
+  /**
+   * Home reset is an explicit local-host action. It may return the surviving
+   * local credential to the unclaimed phase, but never silently rebind it to a
+   * different claimed Home.
+   */
+  public clearHomeBinding(): boolean {
+    const result = this.db
+      .prepare(`
+        UPDATE foundation_operator
+        SET home_binding_json = NULL, updated_at = ?
+        WHERE operator_id = ? AND home_binding_json IS NOT NULL
+      `)
+      .run(new Date().toISOString(), OPERATOR_ROW_ID);
+
+    return result.changes > 0;
   }
 
   /**
@@ -199,7 +255,11 @@ export class OperatorStore {
 
   private read(): OperatorRow | undefined {
     return this.db
-      .prepare('SELECT credential_verifier, created_at, updated_at FROM foundation_operator WHERE operator_id = ?')
+      .prepare(`
+        SELECT credential_verifier, created_at, updated_at, home_binding_json
+        FROM foundation_operator
+        WHERE operator_id = ?
+      `)
       .get(OPERATOR_ROW_ID) as OperatorRow | undefined;
   }
 
@@ -235,6 +295,77 @@ export class OperatorStore {
       this.queuedVerifications -= 1;
     }
   }
+}
+
+function mapOperatorRecord(row: OperatorRow): OperatorRecord {
+  const homeBinding = parseHomeBinding(row.home_binding_json);
+
+  return {
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ...(homeBinding === undefined ? {} : { homeBinding }),
+  };
+}
+
+function serializeHomeBinding(homeBinding: OperatorHomeBinding | undefined): string | null {
+  return homeBinding === undefined ? null : JSON.stringify(homeBinding);
+}
+
+function parseHomeBinding(serialized: string | null): OperatorHomeBinding | undefined {
+  if (serialized === null) {
+    return undefined;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch {
+    throw new Error('Foundation operator Home binding is malformed.');
+  }
+
+  assertOperatorHomeBinding(parsed);
+  if (parsed === undefined) {
+    throw new Error('Foundation operator Home binding is malformed.');
+  }
+  return cloneHomeBinding(parsed);
+}
+
+function assertOperatorHomeBinding(homeBinding: unknown): asserts homeBinding is OperatorHomeBinding | undefined {
+  if (homeBinding === undefined) {
+    return;
+  }
+  if (!isRecord(homeBinding)
+    || Object.keys(homeBinding).sort().join(',') !== 'foundingId,homeId,hostSigningKeyFingerprintHex'
+    || !isAsciiToken(homeBinding.homeId)
+    || !isAsciiToken(homeBinding.foundingId)
+    || !isFingerprint(homeBinding.hostSigningKeyFingerprintHex)) {
+    throw new Error('Foundation operator Home binding is invalid.');
+  }
+}
+
+function sameHomeBinding(left: OperatorHomeBinding, right: OperatorHomeBinding): boolean {
+  return left.homeId === right.homeId
+    && left.foundingId === right.foundingId
+    && left.hostSigningKeyFingerprintHex === right.hostSigningKeyFingerprintHex;
+}
+
+function cloneHomeBinding(homeBinding: OperatorHomeBinding): OperatorHomeBinding {
+  return { ...homeBinding };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isAsciiToken(value: unknown): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= 256
+    && /^[\x21-\x7e]+$/.test(value);
+}
+
+function isFingerprint(value: unknown): value is string {
+  return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
 }
 
 function isPlausiblePassphrase(passphrase: unknown): passphrase is string {

@@ -53,7 +53,10 @@ import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
-import { picoSchemaBaselineMigrationId } from './migrations.js';
+import {
+  foundationOperatorHomeBindingMigrationId,
+  picoSchemaBaselineMigrationId,
+} from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
 import { homeResetMarkerPath } from './home-setup.js';
 
@@ -224,6 +227,7 @@ describe('Pico Home Core app', () => {
         maxLamport: 0,
         migrations: [
           { id: picoSchemaBaselineMigrationId, appliedAt: expect.any(String) },
+          { id: foundationOperatorHomeBindingMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
@@ -420,6 +424,90 @@ describe('Pico Home Core app', () => {
     store.close();
   });
 
+  it('binds the operator at claim and revokes every pre-claim session', async () => {
+    const databasePath = createDatabasePath();
+    const app = await buildAppWithCapturedLog({ databasePath });
+    const bootstrapped = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: readBootstrapCode(app), passphrase: OPERATOR_PASSPHRASE },
+    });
+    const preClaimSession = bootstrapped.json().session as string;
+
+    const { claimResponse } = await claimHomeThroughSealedFlow(app);
+
+    expect((await probeSession(app, preClaimSession)).statusCode).toBe(401);
+    const postClaimSession = await login(app);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/memberships',
+      headers: { authorization: `Bearer ${postClaimSession}` },
+    })).statusCode).toBe(200);
+
+    await app.close();
+    const db = new Database(databasePath);
+    const binding = JSON.parse((db
+      .prepare('SELECT home_binding_json AS homeBindingJson FROM foundation_operator')
+      .get() as { homeBindingJson: string }).homeBindingJson) as Record<string, string>;
+    const founding = claimResponse.foundingRecord?.founding;
+    expect(binding).toEqual({
+      homeId: founding?.homeId,
+      foundingId: founding?.foundingId,
+      hostSigningKeyFingerprintHex: founding?.hostSigningKeyFingerprintHex,
+    });
+    db.close();
+  });
+
+  it('fails closed when a restored operator credential is bound to another founding', async () => {
+    const databasePath = createDatabasePath();
+    const first = await buildAppWithCapturedLog({ databasePath });
+    await claimHomeThroughSealedFlow(first);
+    await bootstrap(first);
+    await first.close();
+
+    const stale = new Database(databasePath);
+    const binding = JSON.parse((stale
+      .prepare('SELECT home_binding_json AS homeBindingJson FROM foundation_operator')
+      .get() as { homeBindingJson: string }).homeBindingJson) as Record<string, string>;
+    stale
+      .prepare('UPDATE foundation_operator SET home_binding_json = ?')
+      .run(JSON.stringify({ ...binding, foundingId: 'founding_from_another_restore' }));
+    stale.close();
+
+    const restarted = await buildAppWithCapturedLog({ databasePath });
+    expect(logLines(restarted).some((line) => line.includes('operator binding does not match'))).toBe(true);
+    expect((await restarted.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      payload: { passphrase: OPERATOR_PASSPHRASE },
+    })).statusCode).toBe(401);
+    expect((await restarted.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: 'not-surfaced', passphrase: 'replacement operator passphrase' },
+    })).statusCode).toBe(404);
+    await restarted.close();
+
+    writeFileSync(operatorResetMarkerPath(databasePath), '');
+    const recovered = await buildAppWithCapturedLog({ databasePath });
+    const rebootstrapped = await recovered.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: {
+        bootstrapCode: readBootstrapCode(recovered),
+        passphrase: 'replacement operator passphrase',
+      },
+    });
+    expect(rebootstrapped.statusCode).toBe(201);
+    expect((await recovered.inject({
+      method: 'GET',
+      url: '/api/home/memberships',
+      headers: { authorization: `Bearer ${rebootstrapped.json().session as string}` },
+    })).statusCode).toBe(200);
+
+    await recovered.close();
+  });
+
   it('expires an abandoned pending claim and reopens setup mode with a fresh Move-In Code', async () => {
     const app = await buildAppWithCapturedLog({ databasePath: createDatabasePath() });
     const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
@@ -548,8 +636,9 @@ describe('Pico Home Core app', () => {
 
   it('keeps setup mode closed when restored founding evidence has no matching host key custody', async () => {
     const databasePath = createDatabasePath();
-    const first = await buildAppWithCapturedLog({ databasePath });
+    const first = await buildAppWithCapturedLog({ databasePath, foundationToken: 'dev-token' });
     const { claimResponse } = await claimHomeThroughSealedFlow(first);
+    await bootstrap(first);
     await first.close();
 
     rmSync(join(dirname(databasePath), 'home-host-keys'), { recursive: true, force: true });
@@ -566,11 +655,24 @@ describe('Pico Home Core app', () => {
     `).run();
     stale.close();
 
-    const restarted = await buildAppWithCapturedLog({ databasePath });
+    const restarted = await buildAppWithCapturedLog({ databasePath, foundationToken: 'dev-token' });
 
     expect(hasMoveInCode(restarted)).toBe(false);
     expect((await restarted.inject({ method: 'GET', url: '/api/home/setup' })).statusCode).toBe(404);
-    expect((await restarted.inject({ method: 'GET', url: '/api/system/status' })).json().picoHome.claimState).toEqual(claimResponse.claimState);
+    expect((await restarted.inject({
+      method: 'GET',
+      url: '/api/system/status',
+      headers: { authorization: 'Bearer dev-token' },
+    })).json().picoHome.claimState).toEqual(claimResponse.claimState);
+    expect((await restarted.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      payload: { passphrase: OPERATOR_PASSPHRASE },
+    })).statusCode).toBe(401);
+    expect((await restarted.inject({
+      method: 'POST',
+      url: '/api/auth/identity-challenges',
+    })).statusCode).toBe(404);
     expect(logLines(restarted).some((line) => line.includes('host key custody is missing'))).toBe(true);
 
     await restarted.close();
@@ -664,14 +766,17 @@ describe('Pico Home Core app', () => {
     const firstSetup = (await first.inject({ method: 'GET', url: '/api/home/setup' })).json();
 
     await claimHomeThroughSealedFlow(first);
+    await bootstrap(first);
     await first.close();
 
     writeFileSync(homeResetMarkerPath(databasePath), '');
     const restarted = await buildAppWithCapturedLog({ databasePath });
     const restartedSetup = (await restarted.inject({ method: 'GET', url: '/api/home/setup' })).json();
+    const localSession = await login(restarted);
+    const localAuth = { authorization: `Bearer ${localSession}` };
 
     expect(restartedSetup.host.signingKeyFingerprintHex).not.toBe(firstSetup.host.signingKeyFingerprintHex);
-    const status = await restarted.inject({ method: 'GET', url: '/api/system/status' });
+    const status = await restarted.inject({ method: 'GET', url: '/api/system/status', headers: localAuth });
     expect(status.json().picoHome.claimState).toEqual({
       state: 'unclaimed',
       setupMode: {
@@ -680,7 +785,13 @@ describe('Pico Home Core app', () => {
       },
     });
 
-    const events = await restarted.inject({ method: 'GET', url: '/api/events' });
+    expect((await restarted.inject({
+      method: 'GET',
+      url: '/api/home/memberships',
+      headers: localAuth,
+    })).statusCode).toBe(401);
+
+    const events = await restarted.inject({ method: 'GET', url: '/api/events', headers: localAuth });
     const homeReset = (events.json().events as { type: string; payload: unknown }[])
       .filter((event) => event.type === 'home.reset');
     expect(homeReset).toHaveLength(1);
@@ -688,7 +799,12 @@ describe('Pico Home Core app', () => {
 
     await restarted.close();
     const third = await buildAppWithCapturedLog({ databasePath });
-    const thirdEvents = await third.inject({ method: 'GET', url: '/api/events' });
+    const thirdSession = await login(third);
+    const thirdEvents = await third.inject({
+      method: 'GET',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${thirdSession}` },
+    });
     expect((thirdEvents.json().events as { type: string }[]).filter((event) => event.type === 'home.reset')).toHaveLength(1);
 
     await third.close();
@@ -1721,8 +1837,9 @@ describe('Pico Home Core app', () => {
     const identitySession = identitySessionResponse.json().session as string;
     const identityAuth = { authorization: `Bearer ${identitySession}` };
 
-    // The challenge is spent, the identity session has no host-admin role, and
-    // only its explicitly granted domain is readable.
+    // The challenge is spent. The founding Home Host Pico can relay signed
+    // Home-authority evidence, but still gains content only through its
+    // explicitly granted domain.
     expect((await app.inject({
       method: 'POST',
       url: '/api/auth/identity-session',
@@ -1732,7 +1849,58 @@ describe('Pico Home Core app', () => {
       method: 'GET',
       url: '/api/home/domain-read-grants',
       headers: identityAuth,
+    })).statusCode).toBe(200);
+
+    // An ordinary active Home member has a valid identity session and may read
+    // only granted domains; it must not become a confused deputy for Home
+    // administration merely because its evidence is accepted by this host.
+    const memberIdentity = sodium.crypto_sign_keypair();
+    const memberIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: bytesToHex(memberIdentity.publicKey),
+    };
+    const memberIdentityFingerprintHex = keyRecordFingerprintHex(memberIdentityKeyRecord);
+    const memberMembership: PicoHomeMembershipSignatureInput = {
+      suite: picoIdentitySuite,
+      credentialId: 'member_confused_deputy_20260727',
+      homeId,
+      issuerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      subjectPicoIdentityFingerprintHex: memberIdentityFingerprintHex,
+      hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+      role: 'home_member',
+      scopes: ['host.use'],
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validUntil: '2027-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    const memberAccepted = await app.inject({
+      method: 'POST',
+      url: '/api/home/memberships',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeMembershipCredentialSchema,
+        membership: memberMembership,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeMembershipSignatureInput(memberMembership),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    });
+    expect(memberAccepted.statusCode).toBe(201);
+    const memberSession = await createIdentitySession(
+      app,
+      memberIdentityKeyRecord,
+      memberIdentity.privateKey,
+      'confused_deputy_20260727',
+    );
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/domain-read-grants',
+      headers: { authorization: `Bearer ${memberSession}` },
     })).statusCode).toBe(401);
+
     expect((await app.inject({
       method: 'GET',
       url: '/api/memory/domains/domain-other/items',
@@ -2260,13 +2428,14 @@ describe('Pico Home Core app', () => {
       headers: { authorization: 'Bearer dev-token' },
     })).statusCode).toBe(401);
 
+    // Before a Home exists, even the local operator has no Home authority to
+    // relay. This distinguishes local host infrastructure from Home control.
     const opaqueDomains = await app.inject({
       method: 'GET',
       url: '/api/home/reader-custody/domains',
       headers: { authorization: `Bearer ${bootstrapped.json().session as string}` },
     });
-    expect(opaqueDomains.statusCode).toBe(200);
-    expect(opaqueDomains.json()).toEqual({ domains: [] });
+    expect(opaqueDomains.statusCode).toBe(401);
     const adminWithSession = await app.inject({
       method: 'DELETE',
       url: '/api/auth/sessions',
@@ -3194,6 +3363,79 @@ async function login(app: Awaited<ReturnType<typeof buildApp>>): Promise<string>
 
 async function probeSession(app: Awaited<ReturnType<typeof buildApp>>, session: string) {
   return app.inject({ method: 'GET', url: '/api/auth/session', headers: { authorization: `Bearer ${session}` } });
+}
+
+async function createIdentitySession(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  identityKeyRecord: PicoIdentityKeyRecordSignatureInput,
+  identityPrivateKey: Uint8Array,
+  idSuffix: string,
+): Promise<string> {
+  const identityFingerprintHex = keyRecordFingerprintHex(identityKeyRecord);
+  const deviceSigning = sodium.crypto_sign_keypair();
+  const deviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: picoIdentitySuite,
+    keyRole: 'device_signing',
+    publicKeyHex: bytesToHex(deviceSigning.publicKey),
+  };
+  const deviceAgreement = sodium.crypto_box_keypair();
+  const deviceAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: picoIdentitySuite,
+    keyRole: 'device_key_agreement',
+    publicKeyHex: bytesToHex(deviceAgreement.publicKey),
+  };
+  const delegation: PicoIdentityDelegationSignatureInput = {
+    suite: picoIdentitySuite,
+    delegationId: `delegation_${idSuffix}`,
+    issuerIdentityKeyFingerprintHex: identityFingerprintHex,
+    subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(deviceSigningKeyRecord),
+    subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(deviceAgreementKeyRecord),
+    scopes: ['surface_session'],
+    validFrom: '2026-01-01T00:00:00.000Z',
+    validUntil: '2027-01-01T00:00:00.000Z',
+    lifecycleOrder: 'seq:0000000000000001',
+  };
+  const challenge = (await app.inject({
+    method: 'POST',
+    url: '/api/auth/identity-challenges',
+  })).json() as {
+    challengeId: string;
+    verifierNonceHex: string;
+    verifierContext: string;
+  };
+  const response = await app.inject({
+    method: 'POST',
+    url: '/api/auth/identity-session',
+    payload: {
+      challengeId: challenge.challengeId,
+      identityKeyRecord,
+      deviceSigningKeyRecord,
+      deviceKeyAgreementKeyRecord: deviceAgreementKeyRecord,
+      delegation: {
+        record: delegation,
+        signatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityDelegationSignatureInput(delegation),
+          identityPrivateKey,
+        )),
+      },
+      revocations: [],
+      possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+        buildPicoIdentityPossessionSignatureInput({
+          suite: picoIdentitySuite,
+          subjectKeyFingerprintHex: keyRecordFingerprintHex(deviceSigningKeyRecord),
+          verifierNonceHex: challenge.verifierNonceHex,
+          verifierContext: challenge.verifierContext,
+        }),
+        deviceSigning.privateKey,
+      )),
+    },
+  });
+
+  if (response.statusCode !== 201) {
+    throw new Error(`Identity session creation failed: ${response.body}`);
+  }
+
+  return response.json().session as string;
 }
 
 function socketMessageToString(data: unknown): string {

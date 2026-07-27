@@ -87,4 +87,24 @@ describe('SessionStore', () => {
     sessions.revoke(session.value);
     expect(sessions.digestOf(session.value)).toBeUndefined();
   });
+
+  it('snapshots the operator Home binding into the session principal', () => {
+    const sessions = new SessionStore();
+    const homeBinding = {
+      homeId: 'home_20260727',
+      foundingId: 'founding_20260727',
+      hostSigningKeyFingerprintHex: 'a'.repeat(64),
+    };
+    const session = sessions.issue({ kind: 'operator', homeBinding });
+
+    homeBinding.foundingId = 'mutated_after_issue';
+    expect(sessions.touch(session.value)?.principal).toEqual({
+      kind: 'operator',
+      homeBinding: {
+        homeId: 'home_20260727',
+        foundingId: 'founding_20260727',
+        hostSigningKeyFingerprintHex: 'a'.repeat(64),
+      },
+    });
+  });
 });

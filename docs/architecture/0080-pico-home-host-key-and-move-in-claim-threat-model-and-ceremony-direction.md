@@ -10,9 +10,10 @@ reconciliation, claim audit and reset. Gate M3 is partially implemented through
 the founding membership root, signed member credentials, host activation,
 lifecycle/eviction, validity and restore reconciliation. ADR 0082 connects
 verified membership to identity-bound sessions and explicit signed domain
-grants without making membership itself readership. Protected display/claim UX,
-broader member onboarding, continuity enforcement, operator consolidation and
-Pico Home Link compatibility remain open.
+grants without making membership itself readership. ADR 0087 implements the
+local operator/Home-Host authority consolidation. Protected display/claim UX,
+broader member onboarding, continuity enforcement and Pico Home Link
+compatibility remain open.
 
 ## Context
 
@@ -143,7 +144,7 @@ The sealed request is `crypto_box_seal` to the pinned key with binding-by-inclus
 
 The transition is atomic on the host: founding record complete, code consumed, `claimed` recorded, Setup Mode ended — or none of it. An abandoned half-ceremony leaves an unclaimed host and (at most) a restart-refreshed code; nothing chains from a half-signed founding record (H4).
 
-The founding record is signed by the claimant's **identity key**, not a device key: founding is a constitutional act, rare and maximally consequential — precisely what ADR 0029 keeps the identity key for. Ongoing host administration is then delegable to device keys under the ADR 0033 `administer_home` scope through ordinary I8 delegations.
+The founding record is signed by the claimant's **identity key**, not a device key: founding is a constitutional act, rare and maximally consequential — precisely what ADR 0029 keeps the identity key for. ADR 0087 lets the founding Home Host Pico reach local signed-evidence relay through its active identity session. A future delegated-device administration path requires an explicit signed request/delegation family; it is not inferred from `surface_session` or route reachability.
 
 ### The founding record and `homeId`
 
@@ -177,7 +178,12 @@ The A11 contract, concretely: **after the founding record exists, host-administr
 - The operator credential never signs anything, is never referenced by any record family, and never appears in any trust chain. It authorizes local API calls; authority semantics come from the Home.
 - Post-claim, the operator cannot: issue or countersign membership (no key), read reader-custody domains (ADR 0078 K1/K6 — the keys do not exist on the host), or alter founding/continuity/membership records (signed by keys it does not hold).
 - A post-claim operator reset + re-bootstrap (filesystem control) yields exactly what ADR 0076 honestly granted: host-infrastructure power — destructive locally (within Gate B confirmation semantics), never Home authority and never resident readership. Host control stays host control; it does not become identity.
-- The mechanics — which `host-admin*` routes remain operator-exercisable on a claimed Home, whether the Home Host Pico's Vault exercises administration through signed requests once transport exists, and whether the operator credential is retired entirely on claimed Homes — are Gate M3 decisions inside this contract. The contract itself is not gated: no design may give the post-claim operator more than host infrastructure.
+- ADR 0087 implements the local Gate M3 mechanics: credentials/sessions bind to
+  the exact founding; credential/session/retention/shred remain local
+  infrastructure; Home/domain routes are signed-evidence relay reachable by
+  the exact-bound fallback or active founding Home Host Pico. Ordinary members
+  and stale/unbound operators are denied. The operator can transport or
+  withhold evidence but cannot mint it.
 
 ### Audit and diagnostics
 
@@ -310,12 +316,12 @@ Protected timestamps (`foundedAt`, `validFrom`, `validUntil`, `changedAt`) carry
 
 1. **Gate M1 — Ceremony and record layouts with authoritative vectors. Done for canonical bytes.** I3 layouts and ADR 0073-style accept/reject vectors now exist for claim messages (`pico.home.claim.v1`, `pico.home.claim-response.v1`), founding record (`pico.home.founding.v1`), membership credential (`pico.home.membership.v1`), continuity statement (`pico.home.continuity.v1`) and membership lifecycle statements (`pico.home.membership-lifecycle.v1`) — consuming ADR 0079 G1 (key records, possession, delegation). The vector suite includes wrong-host pins, stale or foreign codes, cross-ceremony transplants, structurally incomplete founding inputs, issuer-less or countersignature-only credentials, continuity without the outgoing key, and role/suite swaps. The ADR 0045/0056/0057/0066 fixture fences loosen only for these authoritative bytes; placeholder fixtures remain draft-only and no runtime or security claim follows from M1 alone.
 2. **Gate M2 — Host-side runtime: Setup Mode, host-key custody, reconciliation. Partially implemented.** Host keypair generation at Setup Mode entry, separated file custody, the per-process Move-In Code, setup bundle, sealed claim/founding path, H8 boot reconciliation, distinct reset and content-free audit exist. Protected-display integration and production claim UX remain.
-3. **Gate M3 — Membership runtime and consolidation. Partially implemented.** Credential and lifecycle-statement verification, host activation, membership projection, validity/eviction and restore reconciliation drive the ADR 0077/0078 read seam through ADR 0082. K5 key-rotation coupling, continuity acceptance/member notification and operator consolidation remain.
+3. **Gate M3 — Membership runtime and consolidation. Partially implemented.** Credential and lifecycle-statement verification, host activation, membership projection, validity/eviction and restore reconciliation drive the ADR 0077/0078 read seam through ADR 0082. ADR 0087 implements operator/Home-Host consolidation for the local API. K5 key-rotation coupling and continuity acceptance/member notification remain.
 
 The M1 byte layouts are security-relevant only as reviewed signature inputs.
 Setup/founding is partial M2 runtime and signed membership/lifecycle is partial
-M3 runtime. Protected display UX, external freshness, continuity, key-rotation
-coupling and operator consolidation remain behind M2/M3.
+M3 runtime. Protected display UX, external freshness, continuity and
+key-rotation coupling remain behind M2/M3.
 
 ## Non-goals
 
@@ -340,7 +346,10 @@ This ADR does not define or implement:
 - **Whether a claimed Home raises the diagnostic bar** the way an existing operator does (ADR 0076's decided behaviour), and whether `homeId`/host fingerprint belong in `foundation-diagnostic` responses at all.
 - **Per-platform bundle channels**: what the Home Assistant add-on can display (QR in the add-on UI?), what a headless container gets, and how the appliance image shows the bundle (ADR 0027 channels, concretized per platform at Gate M2).
 - **Eviction-to-rotation coupling policy**: K5 says rotate "where future secrecy is required" — who states that requirement per domain, and what the default is for household domains.
-- **Operator end-state on claimed Homes** (Gate M3, inside the H9 contract): retained console fallback versus full retirement once Vault-exercised administration exists.
+- **Eventual operator retirement:** ADR 0087 chooses the exact-bound console
+  fallback for the current local surface. Whether deployable Vault transport
+  later permits removing it is a future operational decision and may not widen
+  its authority meanwhile.
 
 ## Consequences
 
@@ -349,7 +358,9 @@ Positive:
 - the last root ceremony of the tenancy strand is designed from the same small toolkit — sealed box, detached signatures, digests under `pico.suite.id.v1`/I3 layouts — with zero new primitives and both rejected alternatives (trust-on-first-use, PAKE) named
 - the pairing MITM is closed structurally by the display bundle: the channel ADR 0027 already requires now carries the trust root, and the network is never trusted in either direction
 - the empty-house model becomes cryptographic: `homeId` minted at founding makes "reset = new Home" structural, mutual signatures make "hosting is not owning" a record-format fact, and custody separation (H5) keeps the host from ever holding its residents
-- the operator principal gets its promised end-state (A11): a consolidation contract with hard non-capabilities, instead of an indefinite second root
+- the operator principal gets its promised current end-state (A11/ADR 0087):
+  an exact-bound console fallback and signed-evidence relay, instead of an
+  indefinite second root
 - ADR 0078 R3 now has verified membership and, through ADR 0082, a signed
   host-custody domain-grant/readership runtime; reader-custody key distribution
   remains future

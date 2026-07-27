@@ -224,10 +224,12 @@ only strict versioned records after it has:
 5. recomputed ciphertext and wrapped-DEK digests; and
 6. rejected conflicts or a revoked/expired/not-yet-valid writer.
 
-The local Foundation API exposes host-admin-only relay/list routes under
+The local Foundation API exposes ADR 0087 `home-authority-relay` routes under
 `/api/home/reader-custody/*`. These are an opaque evidence administration
-surface, not a reader API. The principal-less static token and identity sessions
-cannot reach them. There is no route that asks Core to decrypt or return
+surface, not a reader API. The exact Home-bound operator fallback or active
+founding Home Host Pico identity session can transport/list records; ordinary
+members and the principal-less static token cannot. Owner/writer signatures
+remain the authority. There is no route that asks Core to decrypt or return
 plaintext.
 
 At boot, Core re-verifies every stored domain, grant, lifecycle and item.
@@ -263,7 +265,8 @@ restore cannot silently reinterpret the domain as host custody.
 - **C4 — opaque item crypto:** fresh DEK/nonces, ADR 0073 AD, digest-bound
   device signature, Vault-only unwrap/decrypt and best-effort zeroization.
 - **C5 — separated Core path:** strict verification, conflict safety, no
-  `memory_item` reuse, no plaintext/key columns and host-admin-only local relay.
+  `memory_item` reuse, no plaintext/key columns and ADR 0087 signed-authority
+  local relay.
 - **C6 — restore/lifecycle tests:** tamper, membership loss and writer
   revocation fail closed; full repository gate remains mandatory.
 
