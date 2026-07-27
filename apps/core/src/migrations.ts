@@ -630,6 +630,98 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0020_reader_custody',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0086: a separate opaque persistence path. These tables contain
+      // owner/writer public authority, signed ciphertext packages and sealed
+      // key material only. No plaintext, raw DEK or raw domain KEK column
+      // exists, and the existing memory_item write/read path is not reused.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_reader_custody_domain (
+          domain_authority_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          host_signing_key_fingerprint_hex TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          owner_identity_key_fingerprint_hex TEXT NOT NULL,
+          owner_reader_key_fingerprint_hex TEXT NOT NULL,
+          kek_version INTEGER NOT NULL CHECK (kek_version >= 1),
+          authorized_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          domain_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL,
+          UNIQUE (home_id, privacy_domain)
+        );
+
+        CREATE TABLE IF NOT EXISTS pico_reader_custody_writer_grant (
+          writer_grant_id TEXT PRIMARY KEY,
+          domain_authority_id TEXT NOT NULL,
+          home_id TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          kek_version INTEGER NOT NULL CHECK (kek_version >= 1),
+          owner_identity_key_fingerprint_hex TEXT NOT NULL,
+          writer_identity_key_fingerprint_hex TEXT NOT NULL,
+          writer_device_signing_key_fingerprint_hex TEXT NOT NULL,
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          writer_grant_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reader_custody_writer_domain
+        ON pico_reader_custody_writer_grant (
+          domain_authority_id,
+          writer_identity_key_fingerprint_hex
+        );
+
+        CREATE TABLE IF NOT EXISTS pico_reader_custody_writer_grant_lifecycle (
+          lifecycle_id TEXT PRIMARY KEY,
+          writer_grant_id TEXT NOT NULL,
+          domain_authority_id TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status = 'revoked'),
+          reason_category TEXT NOT NULL,
+          changed_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          lifecycle_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reader_custody_writer_lifecycle
+        ON pico_reader_custody_writer_grant_lifecycle (
+          writer_grant_id,
+          lifecycle_order
+        );
+
+        CREATE TABLE IF NOT EXISTS pico_reader_custody_item (
+          package_id TEXT PRIMARY KEY,
+          domain_authority_id TEXT NOT NULL,
+          writer_grant_id TEXT NOT NULL,
+          home_id TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          memory_item_id TEXT NOT NULL,
+          content_type TEXT NOT NULL,
+          kek_version INTEGER NOT NULL CHECK (kek_version >= 1),
+          writer_identity_key_fingerprint_hex TEXT NOT NULL,
+          writer_device_signing_key_fingerprint_hex TEXT NOT NULL,
+          content_ciphertext_hex TEXT NOT NULL,
+          wrapped_dek_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          item_record_json TEXT NOT NULL,
+          received_at TEXT NOT NULL,
+          UNIQUE (domain_authority_id, memory_item_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_reader_custody_item_domain
+        ON pico_reader_custody_item (
+          domain_authority_id,
+          created_at,
+          package_id
+        );
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

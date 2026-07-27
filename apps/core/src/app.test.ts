@@ -242,6 +242,7 @@ describe('Pico Home Core app', () => {
           { id: '0017_identity_sessions_and_domain_read_grants', appliedAt: expect.any(String) },
           { id: '0018_pico_identity_reader_keys', appliedAt: expect.any(String) },
           { id: '0019_pico_share_envelopes', appliedAt: expect.any(String) },
+          { id: '0020_reader_custody', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -2260,7 +2261,19 @@ describe('Pico Home Core app', () => {
     });
     expect(adminWithToken.statusCode).toBe(401);
     expect(adminWithToken.json()).toEqual({ error: 'Foundation operator session is required.' });
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/reader-custody/domains',
+      headers: { authorization: 'Bearer dev-token' },
+    })).statusCode).toBe(401);
 
+    const opaqueDomains = await app.inject({
+      method: 'GET',
+      url: '/api/home/reader-custody/domains',
+      headers: { authorization: `Bearer ${bootstrapped.json().session as string}` },
+    });
+    expect(opaqueDomains.statusCode).toBe(200);
+    expect(opaqueDomains.json()).toEqual({ domains: [] });
     const adminWithSession = await app.inject({
       method: 'DELETE',
       url: '/api/auth/sessions',

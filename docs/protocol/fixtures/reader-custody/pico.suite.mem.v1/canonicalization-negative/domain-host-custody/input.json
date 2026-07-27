@@ -1,0 +1,17 @@
+{
+  "construction": "pico.mem.reader-domain.v1",
+  "custodyFamily": "domain",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "domainAuthorityId": "rcdom_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "domainId": "domain-journal",
+    "custodyClass": "host_custody",
+    "ownerIdentityKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "ownerReaderKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "kekVersion": 1,
+    "authorizedAt": "2026-07-27T10:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000001"
+  }
+}

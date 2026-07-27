@@ -93,11 +93,11 @@ describe('MemoryStore', () => {
     expect(() => memory.recordDomainCustodyClass('domain-bad', 'future' as never)).toThrow('custodyClass');
   });
 
-  it('blocks reader-custody content writes until reader-custody envelopes exist', () => {
+  it('keeps reader-custody content out of the host-custody memory-item path', () => {
     const memory = openMemory();
     memory.recordDomainCustodyClass('domain-hosted', 'reader_custody');
 
-    expect(() => memory.create(createInput({ privacyDomain: 'domain-hosted' }))).toThrow('reader_custody domains');
+    expect(() => memory.create(createInput({ privacyDomain: 'domain-hosted' }))).toThrow('opaque reader-custody package path');
   });
 
   it('deletes content but keeps the item as deleted and excludes it from the active list', () => {

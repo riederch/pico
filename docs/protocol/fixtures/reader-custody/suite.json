@@ -1,0 +1,30 @@
+{
+  "schema": "pico.reader-custody.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.reader-custody.pico_suite_mem_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-reader-custody-signature-input-vectors",
+  "disclaimer": "Authoritative ADR 0086 signature-input byte vectors with synthetic public fields only: no private keys, raw KEKs, raw DEKs, ciphertext claims, L4 compatibility basis and no commercial permission.",
+  "fixtures": [
+    "pico.suite.mem.v1/canonicalization-positive/domain-authority",
+    "pico.suite.mem.v1/canonicalization-positive/writer-grant",
+    "pico.suite.mem.v1/canonicalization-positive/writer-grant-revoked",
+    "pico.suite.mem.v1/canonicalization-positive/opaque-item",
+    "pico.suite.mem.v1/canonicalization-negative/domain-cross-family-label",
+    "pico.suite.mem.v1/canonicalization-negative/domain-host-custody",
+    "pico.suite.mem.v1/canonicalization-negative/writer-grant-inverted-window",
+    "pico.suite.mem.v1/canonicalization-negative/item-truncated-content-nonce"
+  ],
+  "notes": "Canonical authority and item signature inputs only. Vault and Core tests cover signing, envelope sealing, AEAD, exact binding, revocation, restore and opaque persistence."
+}

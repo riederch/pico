@@ -1,0 +1,23 @@
+{
+  "schema": "pico.reader-custody.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-custody.pico_suite_mem_v1.canonicalization-negative.domain-cross-family-label",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "family": "canonicalization-negative",
+  "custodyFamily": "domain",
+  "construction": "pico.mem.reader-domain.v1",
+  "case": "domain fields cannot be interpreted under the item label",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "cross_family_label_confusion"
+  },
+  "adr": "0086",
+  "notes": "Synthetic public fields only; no private keys, raw KEK, raw DEK or commercial permission."
+}

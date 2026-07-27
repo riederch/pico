@@ -62,6 +62,7 @@ import {
   verifyPicoHomeDomainReadGrantLifecycle,
   type PicoHomeDomainReadGrantVerificationFailure,
 } from './domain-read-grant.js';
+import { ReaderCustodyStore } from './reader-custody.js';
 
 export type AppendResult = PicoEventAppendResult;
 
@@ -2352,6 +2353,21 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db, this.memoryCrypto);
+  }
+
+  public readerCustody(
+    sodium: IdentityVerificationSodium,
+  ): ReaderCustodyStore {
+    this.ensureOpen();
+    return new ReaderCustodyStore(this.db, sodium, {
+      foundingRecord: () => this.picoHomeFoundingRecord(),
+      hasActiveMembership: (picoIdentityFingerprintHex, homeId, at) =>
+        this.hasActivePicoHomeMembership(
+          picoIdentityFingerprintHex,
+          homeId,
+          at,
+        ),
+    });
   }
 
   // Named retention policies (ADR 0074), sharing this store's connection.

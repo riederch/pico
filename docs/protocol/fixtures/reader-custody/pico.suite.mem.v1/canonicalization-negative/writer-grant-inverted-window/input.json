@@ -1,0 +1,19 @@
+{
+  "construction": "pico.mem.reader-writer-grant.v1",
+  "custodyFamily": "writerGrant",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "writerGrantId": "rcwriter_20260727_0001",
+    "domainAuthorityId": "rcdom_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "domainId": "domain-journal",
+    "kekVersion": 1,
+    "ownerIdentityKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "writerIdentityKeyFingerprintHex": "4444444444444444444444444444444444444444444444444444444444444444",
+    "writerDeviceSigningKeyFingerprintHex": "5555555555555555555555555555555555555555555555555555555555555555",
+    "validFrom": "2027-07-27T10:00:00.000Z",
+    "validUntil": "2026-07-27T10:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000002"
+  }
+}

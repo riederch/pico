@@ -1,0 +1,23 @@
+{
+  "schema": "pico.reader-custody.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-custody.pico_suite_mem_v1.canonicalization-negative.writer-grant-inverted-window",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "family": "canonicalization-negative",
+  "custodyFamily": "writerGrant",
+  "construction": "pico.mem.reader-writer-grant.v1",
+  "case": "writer validity must have a strictly later end",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_validity_bounds"
+  },
+  "adr": "0086",
+  "notes": "Synthetic public fields only; no private keys, raw KEK, raw DEK or commercial permission."
+}

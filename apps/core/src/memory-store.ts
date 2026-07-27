@@ -124,7 +124,7 @@ export class MemoryStore {
         now,
       );
       if (custodyClass === 'reader_custody') {
-        throw new Error('Cannot store memory content for reader_custody domains until reader-custody envelopes exist (ADR 0078).');
+        throw new Error('Cannot store reader_custody content in the host-custody memory_item path; use the opaque reader-custody package path (ADR 0086).');
       }
 
       let storedContent = input.content;

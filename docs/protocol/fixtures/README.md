@@ -100,6 +100,27 @@ reader-key-freshness/pico.suite.id.v1/canonicalization-negative/invalid-status/
 reader-key-freshness/pico.suite.id.v1/canonicalization-negative/inverted-window/
 ```
 
+## Current reader-custody fixtures
+
+These fixtures carry the authoritative canonical signature-input bytes for the
+ADR 0086 reader-custody domain, writer grant, writer revocation and opaque item
+families. They bind Home and host identity, the owner and exact writer device,
+the KEK version, ciphertext/wrapped-DEK digests and lifecycle context. The
+vectors contain synthetic public fields only: no private keys, raw KEKs, raw
+DEKs, real ciphertext, L4 compatibility basis or commercial permission.
+
+```text
+reader-custody/suite.json
+reader-custody/pico.suite.mem.v1/canonicalization-positive/domain-authority/
+reader-custody/pico.suite.mem.v1/canonicalization-positive/writer-grant/
+reader-custody/pico.suite.mem.v1/canonicalization-positive/writer-grant-revoked/
+reader-custody/pico.suite.mem.v1/canonicalization-positive/opaque-item/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/domain-cross-family-label/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/domain-host-custody/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/writer-grant-inverted-window/
+reader-custody/pico.suite.mem.v1/canonicalization-negative/item-truncated-content-nonce/
+```
+
 ## Current Pico Home signature-input fixtures
 
 These fixtures carry the authoritative canonical signature-input byte vectors for the `pico.suite.id.v1` Pico Home claim, claim-response, founding, membership, membership lifecycle, domain-read grant, domain-read grant lifecycle and continuity families (ADR 0080 Gate M1 and ADR 0082 S1). They include bind-difference cases for wrong-host pins, stale or foreign codes, cross-ceremony transplants and role/suite swaps, plus structural canonicalization rejects. They include no private keys or signatures and provide no L4 compatibility basis or commercial permission.

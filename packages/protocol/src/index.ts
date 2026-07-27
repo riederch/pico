@@ -390,6 +390,158 @@ export interface PicoShareEnvelopeRecord {
   createdAt: string;
 }
 
+// ADR 0086 reader-custody authority and opaque item packages. The owner
+// identity root authorizes the domain and its writers. A specifically named
+// device-signing key signs each encrypted item package. These builders only
+// freeze canonical bytes; they never grant authority by themselves.
+export const picoReaderCustodyCanonicalFamilies = [
+  'domain',
+  'writerGrant',
+  'writerGrantLifecycle',
+  'item',
+] as const;
+
+export type PicoReaderCustodyCanonicalFamily =
+  typeof picoReaderCustodyCanonicalFamilies[number];
+
+export const picoReaderCustodyCanonicalLabels = {
+  domain: 'pico.mem.reader-domain.v1',
+  writerGrant: 'pico.mem.reader-writer-grant.v1',
+  writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
+  item: 'pico.mem.reader-item.v1',
+} as const satisfies Record<PicoReaderCustodyCanonicalFamily, string>;
+
+export const picoReaderCustodyDomainRecordSchema =
+  'pico.mem.reader-domain-record.v1' as const;
+export const picoReaderCustodyWriterGrantRecordSchema =
+  'pico.mem.reader-writer-grant-record.v1' as const;
+export const picoReaderCustodyWriterGrantLifecycleRecordSchema =
+  'pico.mem.reader-writer-grant-lifecycle-record.v1' as const;
+export const picoReaderCustodyItemRecordSchema =
+  'pico.mem.reader-item-record.v1' as const;
+
+export const picoReaderCustodyWriterGrantLifecycleStatuses = [
+  'revoked',
+] as const;
+
+export type PicoReaderCustodyWriterGrantLifecycleStatus =
+  typeof picoReaderCustodyWriterGrantLifecycleStatuses[number];
+
+export const picoReaderCustodyWriterGrantRevocationReasonCategories = [
+  'writer_removed',
+  'device_retired',
+  'domain_retired',
+  'security_review',
+  'grant_reissued',
+] as const;
+
+export type PicoReaderCustodyWriterGrantRevocationReasonCategory =
+  typeof picoReaderCustodyWriterGrantRevocationReasonCategories[number];
+
+export interface PicoReaderCustodyDomainSignatureInput {
+  suite: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  custodyClass: 'reader_custody';
+  ownerIdentityKeyFingerprintHex: string;
+  ownerReaderKeyFingerprintHex: string;
+  kekVersion: number;
+  authorizedAt: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoReaderCustodyWriterGrantSignatureInput {
+  suite: string;
+  writerGrantId: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  kekVersion: number;
+  ownerIdentityKeyFingerprintHex: string;
+  writerIdentityKeyFingerprintHex: string;
+  writerDeviceSigningKeyFingerprintHex: string;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoReaderCustodyWriterGrantLifecycleSignatureInput {
+  suite: string;
+  lifecycleId: string;
+  writerGrantId: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  ownerIdentityKeyFingerprintHex: string;
+  writerIdentityKeyFingerprintHex: string;
+  writerDeviceSigningKeyFingerprintHex: string;
+  status: PicoReaderCustodyWriterGrantLifecycleStatus;
+  reasonCategory: PicoReaderCustodyWriterGrantRevocationReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoReaderCustodyItemSignatureInput {
+  suite: string;
+  packageId: string;
+  domainAuthorityId: string;
+  writerGrantId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  memoryItemId: string;
+  contentType: string;
+  kekVersion: number;
+  writerIdentityKeyFingerprintHex: string;
+  writerDeviceSigningKeyFingerprintHex: string;
+  contentNonceHex: string;
+  contentCiphertextDigestHex: string;
+  dekWrapNonceHex: string;
+  wrappedDekDigestHex: string;
+  createdAt: string;
+}
+
+export interface PicoReaderCustodyDomainRecord {
+  schema: typeof picoReaderCustodyDomainRecordSchema;
+  domain: PicoReaderCustodyDomainSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  ownerReaderKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  ownerEnvelope: PicoShareEnvelopeRecord;
+  ownerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyWriterGrantRecord {
+  schema: typeof picoReaderCustodyWriterGrantRecordSchema;
+  grant: PicoReaderCustodyWriterGrantSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  writerDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  ownerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyWriterGrantLifecycleRecord {
+  schema: typeof picoReaderCustodyWriterGrantLifecycleRecordSchema;
+  lifecycle: PicoReaderCustodyWriterGrantLifecycleSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  ownerSignatureHex: string;
+  receivedAt: string;
+}
+
+export interface PicoReaderCustodyItemRecord {
+  schema: typeof picoReaderCustodyItemRecordSchema;
+  item: PicoReaderCustodyItemSignatureInput;
+  contentCiphertextHex: string;
+  wrappedDekHex: string;
+  writerDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  writerSignatureHex: string;
+  receivedAt: string;
+}
+
 export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
 
 // ADR 0081 Gate P1 covers person-role key custody only. Host-role keys stay on
@@ -1335,6 +1487,10 @@ export const memoryContentPostures = [
 
 export type MemoryContentPosture = typeof memoryContentPostures[number];
 
+export const picoMemoryContentSuite = 'pico.suite.mem.v1' as const;
+export const picoMemoryContentAdLabel = 'pico.mem.ad.content.v1' as const;
+export const picoMemoryDekWrapAdLabel = 'pico.mem.ad.dek-wrap.v1' as const;
+
 // Reserved per-domain memory key custody classes (ADR 0078). `host_custody`
 // is the existing ADR 0071/0072 model: the Foundation host has the domain KEK
 // in its separated key store. `reader_custody` is future envelope-only hosting:
@@ -2257,6 +2413,249 @@ export function buildPicoShareEnvelopeSignatureInput(input: PicoShareEnvelopeSig
     fixedHexBytes(input.readerKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.wrapDigestHex, 32, 'invalid_wrap_digest_length'),
     asciiBytes(input.grantedAt),
+  ]);
+}
+
+export function buildPicoReaderCustodyDomainSignatureInput(
+  input: PicoReaderCustodyDomainSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'custodyClass',
+    'ownerIdentityKeyFingerprintHex',
+    'ownerReaderKeyFingerprintHex',
+    'kekVersion',
+    'authorizedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  if (input.custodyClass !== 'reader_custody') {
+    throw new Error('invalid_custody_class');
+  }
+  assertInstant(input.authorizedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.domain),
+    asciiBytes(input.suite),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    asciiBytes(input.custodyClass),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.ownerReaderKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    kekVersionBytes(input.kekVersion),
+    asciiBytes(input.authorizedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoReaderCustodyWriterGrantSignatureInput(
+  input: PicoReaderCustodyWriterGrantSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'writerGrantId',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'kekVersion',
+    'ownerIdentityKeyFingerprintHex',
+    'writerIdentityKeyFingerprintHex',
+    'writerDeviceSigningKeyFingerprintHex',
+    'validFrom',
+    'validUntil',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.writerGrantId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertInstant(input.validFrom);
+  assertInstant(input.validUntil);
+  assertLifecycleOrder(input.lifecycleOrder);
+  assertValidBounds(input.validFrom, input.validUntil);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.writerGrant),
+    asciiBytes(input.suite),
+    asciiBytes(input.writerGrantId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    kekVersionBytes(input.kekVersion),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.writerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.writerDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.validFrom),
+    asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(
+  input: PicoReaderCustodyWriterGrantLifecycleSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'lifecycleId',
+    'writerGrantId',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'ownerIdentityKeyFingerprintHex',
+    'writerIdentityKeyFingerprintHex',
+    'writerDeviceSigningKeyFingerprintHex',
+    'status',
+    'reasonCategory',
+    'changedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.lifecycleId);
+  assertAsciiToken(input.writerGrantId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertStringMember(
+    input.status,
+    picoReaderCustodyWriterGrantLifecycleStatuses,
+    'invalid_writer_grant_status',
+  );
+  assertStringMember(
+    input.reasonCategory,
+    picoReaderCustodyWriterGrantRevocationReasonCategories,
+    'invalid_reason_category',
+  );
+  assertInstant(input.changedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.writerGrantLifecycle),
+    asciiBytes(input.suite),
+    asciiBytes(input.lifecycleId),
+    asciiBytes(input.writerGrantId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    fixedHexBytes(input.ownerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.writerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.writerDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.status),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.changedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoReaderCustodyItemSignatureInput(
+  input: PicoReaderCustodyItemSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'packageId',
+    'domainAuthorityId',
+    'writerGrantId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'memoryItemId',
+    'contentType',
+    'kekVersion',
+    'writerIdentityKeyFingerprintHex',
+    'writerDeviceSigningKeyFingerprintHex',
+    'contentNonceHex',
+    'contentCiphertextDigestHex',
+    'dekWrapNonceHex',
+    'wrappedDekDigestHex',
+    'createdAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.packageId);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.writerGrantId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertAsciiToken(input.memoryItemId);
+  assertAsciiToken(input.contentType);
+  assertInstant(input.createdAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.item),
+    asciiBytes(input.suite),
+    asciiBytes(input.packageId),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.writerGrantId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.domainId),
+    asciiBytes(input.memoryItemId),
+    asciiBytes(input.contentType),
+    kekVersionBytes(input.kekVersion),
+    fixedHexBytes(input.writerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.writerDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.contentNonceHex, 24, 'invalid_nonce_length'),
+    fixedHexBytes(input.contentCiphertextDigestHex, 32, 'invalid_ciphertext_digest_length'),
+    fixedHexBytes(input.dekWrapNonceHex, 24, 'invalid_nonce_length'),
+    fixedHexBytes(input.wrappedDekDigestHex, 32, 'invalid_wrapped_dek_digest_length'),
+    asciiBytes(input.createdAt),
+  ]);
+}
+
+export function buildPicoMemoryContentAd(input: {
+  suite: string;
+  memoryItemId: string;
+  privacyDomain: string;
+  contentType: string;
+}): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'memoryItemId',
+    'privacyDomain',
+    'contentType',
+  ]);
+
+  return concatCanonicalElements([
+    asciiBytes(picoMemoryContentAdLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.memoryItemId),
+    asciiBytes(input.privacyDomain),
+    asciiBytes(input.contentType),
+  ]);
+}
+
+export function buildPicoMemoryDekWrapAd(input: {
+  suite: string;
+  keyEnvelopeId: string;
+  domainId: string;
+  memoryItemId: string;
+}): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'keyEnvelopeId',
+    'domainId',
+    'memoryItemId',
+  ]);
+
+  return concatCanonicalElements([
+    asciiBytes(picoMemoryDekWrapAdLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.keyEnvelopeId),
+    asciiBytes(input.domainId),
+    asciiBytes(input.memoryItemId),
   ]);
 }
 

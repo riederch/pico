@@ -1,0 +1,23 @@
+{
+  "construction": "pico.mem.reader-item.v1",
+  "custodyFamily": "item",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "packageId": "rcitempkg_20260727_0001",
+    "domainAuthorityId": "rcdom_20260727_0001",
+    "writerGrantId": "rcwriter_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "domainId": "domain-journal",
+    "memoryItemId": "mem_20260727_0001",
+    "contentType": "text/plain",
+    "kekVersion": 1,
+    "writerIdentityKeyFingerprintHex": "4444444444444444444444444444444444444444444444444444444444444444",
+    "writerDeviceSigningKeyFingerprintHex": "5555555555555555555555555555555555555555555555555555555555555555",
+    "contentNonceHex": "666666666666666666666666666666666666666666666666",
+    "contentCiphertextDigestHex": "7777777777777777777777777777777777777777777777777777777777777777",
+    "dekWrapNonceHex": "888888888888888888888888888888888888888888888888",
+    "wrappedDekDigestHex": "9999999999999999999999999999999999999999999999999999999999999999",
+    "createdAt": "2026-07-27T10:01:00.000Z"
+  }
+}

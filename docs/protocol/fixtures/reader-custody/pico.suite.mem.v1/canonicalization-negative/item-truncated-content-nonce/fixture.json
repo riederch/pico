@@ -1,0 +1,23 @@
+{
+  "schema": "pico.reader-custody.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-custody.pico_suite_mem_v1.canonicalization-negative.item-truncated-content-nonce",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "family": "canonicalization-negative",
+  "custodyFamily": "item",
+  "construction": "pico.mem.reader-item.v1",
+  "case": "item content nonce must be exactly 192 bits",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_nonce_length"
+  },
+  "adr": "0086",
+  "notes": "Synthetic digest fields only; no private keys, raw KEK, raw DEK, real ciphertext or commercial permission."
+}

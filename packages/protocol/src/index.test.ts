@@ -35,6 +35,11 @@ import {
   memoryContentPostures,
   memoryDomainCustodyClasses,
   memoryRetentionModes,
+  picoMemoryContentSuite,
+  picoReaderCustodyCanonicalFamilies,
+  picoReaderCustodyCanonicalLabels,
+  picoReaderCustodyWriterGrantLifecycleStatuses,
+  picoReaderCustodyWriterGrantRevocationReasonCategories,
   picoIdentityDelegationScopes,
   picoIdentityKeyRoles,
   picoIdentityRevocationReasonCategories,
@@ -77,6 +82,10 @@ import {
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoReaderCustodyDomainSignatureInput,
+  buildPicoReaderCustodyItemSignatureInput,
+  buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
+  buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   buildPicoShareWrapPayload,
   buildPicoVaultKeyfileHeaderAad,
@@ -613,6 +622,7 @@ describe('Pico protocol types', () => {
       .filter((fixturePath) => !fixturePath.startsWith('home-signature-input/'))
       .filter((fixturePath) => !fixturePath.startsWith('vault-keyfile/'))
       .filter((fixturePath) => !fixturePath.startsWith('share-envelope/'))
+      .filter((fixturePath) => !fixturePath.startsWith('reader-custody/'))
       .sort());
     expect(textFenceAfterHeading(readRepoFile('docs/protocol/fixtures/README.md'), '## Current Foundation fixtures')).toEqual([
       'suite.json',
@@ -1533,6 +1543,151 @@ describe('Pico protocol types', () => {
       }
       expect(acceptedHexByCase.has(mustDifferFrom)).toBe(true);
       expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(mustDifferFrom));
+    }
+  });
+
+  it('exports the ADR 0086 reader-custody vocabulary', () => {
+    expect(picoReaderCustodyCanonicalFamilies).toEqual([
+      'domain',
+      'writerGrant',
+      'writerGrantLifecycle',
+      'item',
+    ]);
+    expect(picoReaderCustodyCanonicalLabels).toEqual({
+      domain: 'pico.mem.reader-domain.v1',
+      writerGrant: 'pico.mem.reader-writer-grant.v1',
+      writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
+      item: 'pico.mem.reader-item.v1',
+    });
+    expect(picoReaderCustodyWriterGrantLifecycleStatuses)
+      .toEqual(['revoked']);
+    expect(picoReaderCustodyWriterGrantRevocationReasonCategories).toEqual([
+      'writer_removed',
+      'device_retired',
+      'domain_retired',
+      'security_review',
+      'grant_reissued',
+    ]);
+  });
+
+  it('keeps reader-custody authority vectors byte-exact and aligned with ADR 0086', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject(
+      'docs/protocol/fixtures/reader-custody/suite.json',
+    );
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0086-reader-custody-authority-and-opaque-storage.md',
+    ).replace(/\s+/g, '');
+
+    expect(stringField(suite, 'schema'))
+      .toBe('pico.reader-custody.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId'))
+      .toBe('pico.reader-custody.pico_suite_mem_v1');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'suite')).toBe(picoMemoryContentSuite);
+    expect(stringField(suite, 'surface')).toBe('reader-custody');
+    expect(stringArrayField(suite, 'families')).toEqual([
+      'canonicalization-positive',
+      'canonicalization-negative',
+    ]);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel'))
+      .toBe('authoritative-reader-custody-signature-input-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('no private keys');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+
+    expect([...fixturePaths].sort()).toEqual(
+      listFixtureDirectories(
+        'docs/protocol/fixtures/reader-custody',
+      ).sort(),
+    );
+    expect(textFenceAfterHeading(
+      readRepoFile('docs/protocol/fixtures/README.md'),
+      '## Current reader-custody fixtures',
+    )).toEqual([
+      'reader-custody/suite.json',
+      ...fixturePaths.map(
+        (fixturePath) => `reader-custody/${fixturePath}/`,
+      ),
+    ]);
+
+    for (const fixturePath of fixturePaths) {
+      const parts = fixturePath.split('/');
+      expect(parts.length).toBe(3);
+      const [suiteSegment, family, caseName] = parts;
+      expect(suiteSegment).toBe(picoMemoryContentSuite);
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      const base = `docs/protocol/fixtures/reader-custody/${fixturePath}`;
+      const fixture = readRepoJsonObject(`${base}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const input = readRepoJsonObject(`${base}/input.json`);
+      const expectBlock = recordField(fixture, 'expect');
+      const custodyFamily = stringField(fixture, 'custodyFamily');
+
+      expect(stringField(fixture, 'schema'))
+        .toBe('pico.reader-custody.vector');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(
+        `reader-custody.pico_suite_mem_v1.${family}.${caseName}`,
+      );
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'suite')).toBe(picoMemoryContentSuite);
+      expect(stringField(fixture, 'surface')).toBe('reader-custody');
+      expect(stringField(fixture, 'family')).toBe(family);
+      expect(stringField(fixture, 'adr')).toBe('0086');
+      expect(stringField(source, 'encoding')).toBe('fields');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(stringField(fixture, 'notes')).toContain('no private keys');
+      expect(picoReaderCustodyCanonicalFamilies).toContain(
+        custodyFamily as typeof picoReaderCustodyCanonicalFamilies[number],
+      );
+
+      const construction = picoReaderCustodyCanonicalLabels[
+        custodyFamily as keyof typeof picoReaderCustodyCanonicalLabels
+      ];
+      expect(stringField(fixture, 'construction')).toBe(construction);
+      expect(stringField(input, 'custodyFamily')).toBe(custodyFamily);
+      const inputConstruction = stringField(input, 'construction');
+      const fields = recordField(input, 'fields');
+      const build = stringField(expectBlock, 'build');
+
+      if (inputConstruction !== construction) {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'reason'))
+          .toBe('cross_family_label_confusion');
+        continue;
+      }
+
+      if (build === 'accept') {
+        const recomputed = buildPicoReaderCustodyVector(
+          custodyFamily,
+          fields,
+        );
+        const hex = Buffer.from(recomputed).toString('hex');
+        expect(hex).toBe(stringField(expectBlock, 'signatureInputHex'));
+        expect(recomputed.length)
+          .toBe(numberField(expectBlock, 'signatureInputLen'));
+        expect(adrNoWhitespace).toContain(hex);
+      } else {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'errorCategory'))
+          .toBe('canonicalization_error');
+        const reason = stringField(expectBlock, 'reason');
+        expect([
+          'cross_family_label_confusion',
+          'invalid_custody_class',
+          'invalid_nonce_length',
+          'invalid_validity_bounds',
+        ]).toContain(reason);
+        expect(() => buildPicoReaderCustodyVector(custodyFamily, fields))
+          .toThrow(reason);
+      }
     }
   });
 
@@ -3481,6 +3636,133 @@ function buildPicoShareVector(shareFamily: string, fields: Record<string, unknow
   }
 
   throw new Error(`Unexpected share family: ${shareFamily}`);
+}
+
+function buildPicoReaderCustodyVector(
+  custodyFamily: string,
+  fields: Record<string, unknown>,
+): Uint8Array {
+  if (custodyFamily === 'domain') {
+    return buildPicoReaderCustodyDomainSignatureInput({
+      suite: stringField(fields, 'suite'),
+      domainAuthorityId: stringField(fields, 'domainAuthorityId'),
+      homeId: stringField(fields, 'homeId'),
+      hostSigningKeyFingerprintHex: stringField(
+        fields,
+        'hostSigningKeyFingerprintHex',
+      ),
+      domainId: stringField(fields, 'domainId'),
+      custodyClass: stringField(fields, 'custodyClass') as 'reader_custody',
+      ownerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'ownerIdentityKeyFingerprintHex',
+      ),
+      ownerReaderKeyFingerprintHex: stringField(
+        fields,
+        'ownerReaderKeyFingerprintHex',
+      ),
+      kekVersion: numberField(fields, 'kekVersion'),
+      authorizedAt: stringField(fields, 'authorizedAt'),
+      lifecycleOrder: stringField(fields, 'lifecycleOrder'),
+    });
+  }
+
+  if (custodyFamily === 'writerGrant') {
+    return buildPicoReaderCustodyWriterGrantSignatureInput({
+      suite: stringField(fields, 'suite'),
+      writerGrantId: stringField(fields, 'writerGrantId'),
+      domainAuthorityId: stringField(fields, 'domainAuthorityId'),
+      homeId: stringField(fields, 'homeId'),
+      hostSigningKeyFingerprintHex: stringField(
+        fields,
+        'hostSigningKeyFingerprintHex',
+      ),
+      domainId: stringField(fields, 'domainId'),
+      kekVersion: numberField(fields, 'kekVersion'),
+      ownerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'ownerIdentityKeyFingerprintHex',
+      ),
+      writerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'writerIdentityKeyFingerprintHex',
+      ),
+      writerDeviceSigningKeyFingerprintHex: stringField(
+        fields,
+        'writerDeviceSigningKeyFingerprintHex',
+      ),
+      validFrom: stringField(fields, 'validFrom'),
+      validUntil: stringField(fields, 'validUntil'),
+      lifecycleOrder: stringField(fields, 'lifecycleOrder'),
+    });
+  }
+
+  if (custodyFamily === 'writerGrantLifecycle') {
+    return buildPicoReaderCustodyWriterGrantLifecycleSignatureInput({
+      suite: stringField(fields, 'suite'),
+      lifecycleId: stringField(fields, 'lifecycleId'),
+      writerGrantId: stringField(fields, 'writerGrantId'),
+      domainAuthorityId: stringField(fields, 'domainAuthorityId'),
+      homeId: stringField(fields, 'homeId'),
+      hostSigningKeyFingerprintHex: stringField(
+        fields,
+        'hostSigningKeyFingerprintHex',
+      ),
+      domainId: stringField(fields, 'domainId'),
+      ownerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'ownerIdentityKeyFingerprintHex',
+      ),
+      writerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'writerIdentityKeyFingerprintHex',
+      ),
+      writerDeviceSigningKeyFingerprintHex: stringField(
+        fields,
+        'writerDeviceSigningKeyFingerprintHex',
+      ),
+      status: stringField(fields, 'status') as typeof picoReaderCustodyWriterGrantLifecycleStatuses[number],
+      reasonCategory: stringField(fields, 'reasonCategory') as typeof picoReaderCustodyWriterGrantRevocationReasonCategories[number],
+      changedAt: stringField(fields, 'changedAt'),
+      lifecycleOrder: stringField(fields, 'lifecycleOrder'),
+    });
+  }
+
+  if (custodyFamily === 'item') {
+    return buildPicoReaderCustodyItemSignatureInput({
+      suite: stringField(fields, 'suite'),
+      packageId: stringField(fields, 'packageId'),
+      domainAuthorityId: stringField(fields, 'domainAuthorityId'),
+      writerGrantId: stringField(fields, 'writerGrantId'),
+      homeId: stringField(fields, 'homeId'),
+      hostSigningKeyFingerprintHex: stringField(
+        fields,
+        'hostSigningKeyFingerprintHex',
+      ),
+      domainId: stringField(fields, 'domainId'),
+      memoryItemId: stringField(fields, 'memoryItemId'),
+      contentType: stringField(fields, 'contentType'),
+      kekVersion: numberField(fields, 'kekVersion'),
+      writerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'writerIdentityKeyFingerprintHex',
+      ),
+      writerDeviceSigningKeyFingerprintHex: stringField(
+        fields,
+        'writerDeviceSigningKeyFingerprintHex',
+      ),
+      contentNonceHex: stringField(fields, 'contentNonceHex'),
+      contentCiphertextDigestHex: stringField(
+        fields,
+        'contentCiphertextDigestHex',
+      ),
+      dekWrapNonceHex: stringField(fields, 'dekWrapNonceHex'),
+      wrappedDekDigestHex: stringField(fields, 'wrappedDekDigestHex'),
+      createdAt: stringField(fields, 'createdAt'),
+    });
+  }
+
+  throw new Error(`Unexpected reader-custody family: ${custodyFamily}`);
 }
 
 function buildPicoHomeVector(homeFamily: string, fields: Record<string, unknown>): Uint8Array {

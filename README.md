@@ -229,11 +229,13 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0082-identity-bound-foundation-sessions-and-domain-read-grants.md`](docs/architecture/0082-identity-bound-foundation-sessions-and-domain-read-grants.md) - possession-bound Pico identity sessions and signed Home/domain read grants for claimed host-custody domains
 - [`docs/architecture/0083-reader-key-registration-and-freshness-contract.md`](docs/architecture/0083-reader-key-registration-and-freshness-contract.md) - exact delegated reader-key registration and fail-closed external freshness selection contract
 - [`docs/architecture/0084-controller-signed-host-custody-share-envelope-issuance.md`](docs/architecture/0084-controller-signed-host-custody-share-envelope-issuance.md) - two-phase externally signed host-custody KEK envelope issuance, storage and reconciliation
+- [`docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md`](docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md) - identity-root-signed reader-key freshness checkpoints and fail-closed Registry/Sync adapter
+- [`docs/architecture/0086-reader-custody-authority-and-opaque-storage.md`](docs/architecture/0086-reader-custody-authority-and-opaque-storage.md) - owner-rooted reader-custody domain/writer authority, Vault crypto and opaque Core storage
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
 - [`docs/protocol/compatibility-levels.md`](docs/protocol/compatibility-levels.md) - compatibility level definitions
-- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - conformance fixture layout and current Foundation, memory-content AD, identity signature-input/signature-verification/lifecycle, Pico Home signature-input, Vault keyfile and draft fixture suites
+- [`docs/protocol/conformance-fixtures.md`](docs/protocol/conformance-fixtures.md) - conformance fixture layout and current Foundation, memory-content AD, identity signature-input/signature-verification/lifecycle, reader-key freshness, reader-custody, Pico Home signature-input, Vault keyfile and draft fixture suites
 
 ## Design principles
 

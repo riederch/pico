@@ -1,0 +1,415 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import Database from 'better-sqlite3';
+import {
+  buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoReaderCustodyDomainSignatureInput,
+  buildPicoReaderCustodyItemSignatureInput,
+  buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
+  buildPicoReaderCustodyWriterGrantSignatureInput,
+  buildPicoShareEnvelopeSignatureInput,
+  buildPicoShareWrapPayload,
+  picoIdentitySuite,
+  picoMemoryContentSuite,
+  picoReaderCustodyDomainRecordSchema,
+  picoReaderCustodyItemRecordSchema,
+  picoReaderCustodyWriterGrantLifecycleRecordSchema,
+  picoReaderCustodyWriterGrantRecordSchema,
+  picoShareEnvelopeRecordSchema,
+  picoShareSuite,
+} from '@pico/protocol';
+import type {
+  PicoHomeFoundingRecord,
+  PicoIdentityKeyRecordSignatureInput,
+  PicoReaderCustodyDomainRecord,
+  PicoReaderCustodyItemRecord,
+  PicoReaderCustodyWriterGrantLifecycleRecord,
+  PicoReaderCustodyWriterGrantRecord,
+} from '@pico/protocol';
+import sodium from 'libsodium-wrappers-sumo';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { runMigrations } from './migrations.js';
+import { ReaderCustodyStore } from './reader-custody.js';
+
+const tempDirs: string[] = [];
+const databases: Database.Database[] = [];
+const HOME_ID = 'home_reader_custody_0001';
+const HOST_FINGERPRINT = '11'.repeat(32);
+const DOMAIN_ID = 'domain_reader_private';
+const AUTHORIZED_AT = '2026-07-27T10:00:00.000Z';
+
+interface Harness {
+  db: Database.Database;
+  store: ReaderCustodyStore;
+  activeMembers: Set<string>;
+}
+
+interface Records {
+  domain: PicoReaderCustodyDomainRecord;
+  writerGrant: PicoReaderCustodyWriterGrantRecord;
+  item: PicoReaderCustodyItemRecord;
+  identityKeypair: { publicKey: Uint8Array; privateKey: Uint8Array };
+  writerIdentityFingerprint: string;
+}
+
+beforeAll(async () => {
+  await sodium.ready;
+});
+
+afterEach(() => {
+  for (const db of databases.splice(0)) {
+    db.close();
+  }
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+function openHarness(): Harness {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-reader-custody-'));
+  tempDirs.push(dir);
+  const db = new Database(join(dir, 'pico.sqlite'));
+  databases.push(db);
+  runMigrations(db);
+  const activeMembers = new Set<string>();
+  const foundingRecord = {
+    founding: {
+      homeId: HOME_ID,
+      hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
+    },
+  } as PicoHomeFoundingRecord;
+  const store = new ReaderCustodyStore(db, sodium, {
+    foundingRecord: () => foundingRecord,
+    hasActiveMembership: (fingerprint) => activeMembers.has(fingerprint),
+  });
+  return { db, store, activeMembers };
+}
+
+function makeRecords(): Records {
+  const identityKeypair = sodium.crypto_sign_keypair();
+  const readerKeypair = sodium.crypto_box_keypair();
+  const writerKeypair = sodium.crypto_sign_keypair();
+  const identityKeyRecord = keyRecord('pico_identity', identityKeypair.publicKey);
+  const readerKeyRecord = keyRecord(
+    'device_key_agreement',
+    readerKeypair.publicKey,
+  );
+  const writerKeyRecord = keyRecord('device_signing', writerKeypair.publicKey);
+  const identityFingerprint = fingerprint(identityKeyRecord);
+  const writerIdentityFingerprint = 'aa'.repeat(32);
+  const readerFingerprint = fingerprint(readerKeyRecord);
+  const writerFingerprint = fingerprint(writerKeyRecord);
+  const domain = {
+    suite: picoMemoryContentSuite,
+    domainAuthorityId: 'reader_domain_auth_0001',
+    homeId: HOME_ID,
+    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
+    domainId: DOMAIN_ID,
+    custodyClass: 'reader_custody' as const,
+    ownerIdentityKeyFingerprintHex: identityFingerprint,
+    ownerReaderKeyFingerprintHex: readerFingerprint,
+    kekVersion: 1,
+    authorizedAt: AUTHORIZED_AT,
+    lifecycleOrder: 'seq:0000000000000001',
+  };
+  const kek = sodium.randombytes_buf(32);
+  const wrap = buildPicoShareWrapPayload({
+    suite: picoShareSuite,
+    domainId: DOMAIN_ID,
+    kekVersion: 1,
+    readerKeyFingerprintHex: readerFingerprint,
+    kekHex: Buffer.from(kek).toString('hex'),
+  });
+  const sealedWrap = sodium.crypto_box_seal(wrap, readerKeypair.publicKey);
+  const envelope = {
+    suite: picoShareSuite,
+    grantId: domain.domainAuthorityId,
+    domainId: DOMAIN_ID,
+    kekVersion: 1,
+    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
+    issuerIdentityKeyFingerprintHex: identityFingerprint,
+    readerKeyFingerprintHex: readerFingerprint,
+    wrapDigestHex: hashHex(sealedWrap),
+    grantedAt: AUTHORIZED_AT,
+  };
+  const domainRecord: PicoReaderCustodyDomainRecord = {
+    schema: picoReaderCustodyDomainRecordSchema,
+    domain,
+    ownerIdentityKeyRecord: identityKeyRecord,
+    ownerReaderKeyRecord: readerKeyRecord,
+    ownerEnvelope: {
+      schema: picoShareEnvelopeRecordSchema,
+      envelope,
+      sealedWrapHex: Buffer.from(sealedWrap).toString('hex'),
+      issuerIdentityKeyRecord: identityKeyRecord,
+      issuerSignatureHex: signHex(
+        buildPicoShareEnvelopeSignatureInput(envelope),
+        identityKeypair.privateKey,
+      ),
+      createdAt: AUTHORIZED_AT,
+    },
+    ownerSignatureHex: signHex(
+      buildPicoReaderCustodyDomainSignatureInput(domain),
+      identityKeypair.privateKey,
+    ),
+    receivedAt: AUTHORIZED_AT,
+  };
+  const grant = {
+    suite: picoMemoryContentSuite,
+    writerGrantId: 'reader_writer_grant_0001',
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: HOME_ID,
+    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
+    domainId: DOMAIN_ID,
+    kekVersion: 1,
+    ownerIdentityKeyFingerprintHex: identityFingerprint,
+    writerIdentityKeyFingerprintHex: writerIdentityFingerprint,
+    writerDeviceSigningKeyFingerprintHex: writerFingerprint,
+    validFrom: AUTHORIZED_AT,
+    validUntil: '2026-08-27T10:00:00.000Z',
+    lifecycleOrder: 'seq:0000000000000002',
+  };
+  const writerGrant: PicoReaderCustodyWriterGrantRecord = {
+    schema: picoReaderCustodyWriterGrantRecordSchema,
+    grant,
+    ownerIdentityKeyRecord: identityKeyRecord,
+    writerDeviceSigningKeyRecord: writerKeyRecord,
+    ownerSignatureHex: signHex(
+      buildPicoReaderCustodyWriterGrantSignatureInput(grant),
+      identityKeypair.privateKey,
+    ),
+    receivedAt: AUTHORIZED_AT,
+  };
+  const contentCiphertext = sodium.randombytes_buf(64);
+  const wrappedDek = sodium.randombytes_buf(48);
+  const item = {
+    suite: picoMemoryContentSuite,
+    packageId: 'reader_item_package_0001',
+    domainAuthorityId: domain.domainAuthorityId,
+    writerGrantId: grant.writerGrantId,
+    homeId: HOME_ID,
+    hostSigningKeyFingerprintHex: HOST_FINGERPRINT,
+    domainId: DOMAIN_ID,
+    memoryItemId: 'memory_reader_0001',
+    contentType: 'text/plain',
+    kekVersion: 1,
+    writerIdentityKeyFingerprintHex: writerIdentityFingerprint,
+    writerDeviceSigningKeyFingerprintHex: writerFingerprint,
+    contentNonceHex: '22'.repeat(24),
+    contentCiphertextDigestHex: hashHex(contentCiphertext),
+    dekWrapNonceHex: '33'.repeat(24),
+    wrappedDekDigestHex: hashHex(wrappedDek),
+    createdAt: '2026-07-27T10:01:00.000Z',
+  };
+  const itemRecord: PicoReaderCustodyItemRecord = {
+    schema: picoReaderCustodyItemRecordSchema,
+    item,
+    contentCiphertextHex: Buffer.from(contentCiphertext).toString('hex'),
+    wrappedDekHex: Buffer.from(wrappedDek).toString('hex'),
+    writerDeviceSigningKeyRecord: writerKeyRecord,
+    writerSignatureHex: signHex(
+      buildPicoReaderCustodyItemSignatureInput(item),
+      writerKeypair.privateKey,
+    ),
+    receivedAt: item.createdAt,
+  };
+  sodium.memzero(kek);
+  sodium.memzero(wrap);
+  return {
+    domain: domainRecord,
+    writerGrant,
+    item: itemRecord,
+    identityKeypair,
+    writerIdentityFingerprint,
+  };
+}
+
+describe('ReaderCustodyStore (ADR 0086)', () => {
+  it('stores only signed authority and opaque ciphertext on a separate path', () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    harness.activeMembers.add(
+      records.domain.domain.ownerIdentityKeyFingerprintHex,
+    );
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+
+    expect(harness.store.recordDomain(records.domain).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
+    const first = harness.store.recordItem(records.item);
+    expect(first).toMatchObject({ ok: true, inserted: true });
+    expect(harness.store.recordItem(records.item)).toMatchObject({
+      ok: true,
+      inserted: false,
+    });
+    expect(harness.store.domains()).toHaveLength(1);
+    expect(harness.store.writerGrants()).toHaveLength(1);
+    expect(harness.store.items()).toEqual([
+      expect.objectContaining({
+        memoryItemId: 'memory_reader_0001',
+        contentCiphertextHex: records.item.contentCiphertextHex,
+      }),
+    ]);
+
+    const columns = (harness.db
+      .prepare("PRAGMA table_info('pico_reader_custody_item')")
+      .all() as { name: string }[])
+      .map((column) => column.name);
+    expect(columns).not.toContain('content');
+    expect(columns).not.toContain('plaintext');
+    expect(columns).not.toContain('kek');
+    expect(columns).not.toContain('dek');
+    const storedJson = harness.db
+      .prepare(`
+        SELECT item_record_json AS itemJson
+        FROM pico_reader_custody_item
+      `)
+      .get() as { itemJson: string };
+    expect(storedJson.itemJson).not.toContain('secret');
+    expect(harness.db
+      .prepare(`
+        SELECT custody_class AS custodyClass
+        FROM memory_domain_custody
+        WHERE privacy_domain = ?
+      `)
+      .get(DOMAIN_ID)).toEqual({ custodyClass: 'reader_custody' });
+  });
+
+  it('rejects plaintext fields, cross-domain swaps and writes after owner revocation', () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    harness.activeMembers.add(
+      records.domain.domain.ownerIdentityKeyFingerprintHex,
+    );
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    expect(harness.store.recordDomain(records.domain).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
+
+    const withPlaintext = {
+      ...records.item,
+      plaintext: 'must never cross Foundation',
+    } as unknown as PicoReaderCustodyItemRecord;
+    expect(harness.store.recordItem(withPlaintext)).toEqual({
+      ok: false,
+      reason: 'invalid_record',
+    });
+
+    const crossDomain = structuredClone(records.item);
+    crossDomain.item.domainId = 'domain_reader_other';
+    expect(harness.store.recordItem(crossDomain)).toEqual({
+      ok: false,
+      reason: 'invalid_record',
+    });
+
+    const lifecycle = makeLifecycle(records);
+    expect(harness.store.recordWriterGrantLifecycle(lifecycle)).toMatchObject({
+      ok: true,
+      inserted: true,
+    });
+    expect(harness.store.recordItem(records.item)).toEqual({
+      ok: false,
+      reason: 'inactive_writer_grant',
+    });
+  });
+
+  it('drops tampered restore rows and owner domains without active membership', () => {
+    const harness = openHarness();
+    const records = makeRecords();
+    const owner = records.domain.domain.ownerIdentityKeyFingerprintHex;
+    harness.activeMembers.add(owner);
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    expect(harness.store.recordDomain(records.domain).ok).toBe(true);
+    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
+    expect(harness.store.recordItem(records.item).ok).toBe(true);
+
+    const corrupted = structuredClone(records.item);
+    corrupted.contentCiphertextHex = 'ff'.repeat(64);
+    harness.db
+      .prepare(`
+        UPDATE pico_reader_custody_item
+        SET item_record_json = ?
+        WHERE package_id = ?
+      `)
+      .run(JSON.stringify(corrupted), records.item.item.packageId);
+    expect(harness.store.reconcile()).toMatchObject({ droppedItems: 1 });
+
+    // Losing writer membership drops restored writer authority and dependent
+    // opaque items while preserving the owner's domain authority.
+    expect(harness.store.recordItem(records.item).ok).toBe(true);
+    harness.activeMembers.delete(records.writerIdentityFingerprint);
+    expect(harness.store.reconcile()).toMatchObject({
+      droppedDomains: 0,
+      droppedWriterGrants: 1,
+      droppedItems: 1,
+    });
+    expect(harness.store.domains()).toHaveLength(1);
+
+    // Recreate the dependency chain so the owner-loss cascade is exercised
+    // independently.
+    harness.activeMembers.add(records.writerIdentityFingerprint);
+    expect(harness.store.recordWriterGrant(records.writerGrant).ok).toBe(true);
+    expect(harness.store.recordItem(records.item).ok).toBe(true);
+    harness.activeMembers.delete(owner);
+    expect(harness.store.reconcile()).toMatchObject({
+      droppedDomains: 1,
+      droppedWriterGrants: 1,
+    });
+    expect(harness.store.items()).toEqual([]);
+  });
+});
+
+function makeLifecycle(records: Records): PicoReaderCustodyWriterGrantLifecycleRecord {
+  const grant = records.writerGrant.grant;
+  const lifecycle = {
+    suite: picoMemoryContentSuite,
+    lifecycleId: 'reader_writer_lifecycle_0001',
+    writerGrantId: grant.writerGrantId,
+    domainAuthorityId: grant.domainAuthorityId,
+    homeId: grant.homeId,
+    hostSigningKeyFingerprintHex: grant.hostSigningKeyFingerprintHex,
+    domainId: grant.domainId,
+    ownerIdentityKeyFingerprintHex: grant.ownerIdentityKeyFingerprintHex,
+    writerIdentityKeyFingerprintHex: grant.writerIdentityKeyFingerprintHex,
+    writerDeviceSigningKeyFingerprintHex:
+      grant.writerDeviceSigningKeyFingerprintHex,
+    status: 'revoked' as const,
+    reasonCategory: 'writer_removed' as const,
+    changedAt: '2026-07-27T10:02:00.000Z',
+    lifecycleOrder: 'seq:0000000000000003',
+  };
+  return {
+    schema: picoReaderCustodyWriterGrantLifecycleRecordSchema,
+    lifecycle,
+    ownerIdentityKeyRecord: records.domain.ownerIdentityKeyRecord,
+    ownerSignatureHex: signHex(
+      buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(lifecycle),
+      records.identityKeypair.privateKey,
+    ),
+    receivedAt: lifecycle.changedAt,
+  };
+}
+
+function keyRecord(
+  keyRole: PicoIdentityKeyRecordSignatureInput['keyRole'],
+  publicKey: Uint8Array,
+): PicoIdentityKeyRecordSignatureInput {
+  return {
+    suite: picoIdentitySuite,
+    keyRole,
+    publicKeyHex: Buffer.from(publicKey).toString('hex'),
+  };
+}
+
+function fingerprint(record: PicoIdentityKeyRecordSignatureInput): string {
+  return hashHex(buildPicoIdentityKeyRecordSignatureInput(record));
+}
+
+function hashHex(bytes: Uint8Array): string {
+  return Buffer.from(sodium.crypto_generichash(32, bytes, null)).toString('hex');
+}
+
+function signHex(input: Uint8Array, privateKey: Uint8Array): string {
+  return Buffer.from(sodium.crypto_sign_detached(input, privateKey)).toString(
+    'hex',
+  );
+}

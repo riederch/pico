@@ -61,6 +61,10 @@ import {
   type PicoIdentityRevocationSignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
+  type PicoReaderCustodyDomainRecord,
+  type PicoReaderCustodyItemRecord,
+  type PicoReaderCustodyWriterGrantLifecycleRecord,
+  type PicoReaderCustodyWriterGrantRecord,
   type PicoRealtimeTicketResponse,
   type PicoRetentionPolicyListResponse,
   type PicoRetentionPolicyResponse,
@@ -117,6 +121,7 @@ import {
   PicoShareEnvelopeIssuer,
   type PicoShareEnvelopePrepareInput,
 } from './share-envelope.js';
+import type { ReaderCustodyFailureReason } from './reader-custody.js';
 
 const SERVICE_VERSION = '0.1.7';
 const PROTOCOL_VERSION = '0.1.7';
@@ -346,6 +351,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     readerKeySelector,
     keyStore,
   );
+  const readerCustody = store.readerCustody(sodium);
   const bootstrapCode = new OperatorBootstrapCode();
   const moveInCode = new MoveInCode();
   const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
@@ -520,6 +526,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     );
   }
   reconcileShareEnvelopes();
+  const readerCustodyReconciliation = readerCustody.reconcile();
+  if (Object.values(readerCustodyReconciliation).some((count) => count > 0)) {
+    app.log.warn(
+      readerCustodyReconciliation,
+      'Reader-custody evidence failed re-verification on boot and was dropped.',
+    );
+  }
   activateHomeSetupMode();
 
   // While no operator exists, mint the per-process bootstrap code and surface it
@@ -920,6 +933,16 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('POST', '/api/home/share-envelope-issuance', 'host-admin');
   accessClasses.register('POST', '/api/home/share-envelopes', 'host-admin');
   accessClasses.register('GET', '/api/home/share-envelopes', 'host-admin');
+  // The operator may relay and inspect opaque reader-custody evidence, but the
+  // routes never expose a raw KEK, DEK or plaintext. This is host
+  // administration, not domain readership (ADR 0086).
+  accessClasses.register('POST', '/api/home/reader-custody/domains', 'host-admin');
+  accessClasses.register('GET', '/api/home/reader-custody/domains', 'host-admin');
+  accessClasses.register('POST', '/api/home/reader-custody/writer-grants', 'host-admin');
+  accessClasses.register('GET', '/api/home/reader-custody/writer-grants', 'host-admin');
+  accessClasses.register('POST', '/api/home/reader-custody/writer-grant-lifecycle', 'host-admin');
+  accessClasses.register('POST', '/api/home/reader-custody/items', 'host-admin');
+  accessClasses.register('GET', '/api/home/reader-custody/items', 'host-admin');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -1329,6 +1352,84 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     reconcileShareEnvelopes();
     return sendNoStore(reply, {
       envelopes: store.picoShareEnvelopes().map(publicPicoShareEnvelope),
+    });
+  });
+
+  app.post('/api/home/reader-custody/domains', async (request, reply) => {
+    const result = readerCustody.recordDomain(
+      (request.body ?? {}) as PicoReaderCustodyDomainRecord,
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+      domain: result.value,
+    });
+  });
+
+  app.get('/api/home/reader-custody/domains', async (_request, reply) => {
+    return sendNoStore(reply, { domains: readerCustody.domains() });
+  });
+
+  app.post('/api/home/reader-custody/writer-grants', async (request, reply) => {
+    const result = readerCustody.recordWriterGrant(
+      (request.body ?? {}) as PicoReaderCustodyWriterGrantRecord,
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+      writerGrant: result.value,
+    });
+  });
+
+  app.get('/api/home/reader-custody/writer-grants', async (_request, reply) => {
+    return sendNoStore(reply, { writerGrants: readerCustody.writerGrants() });
+  });
+
+  app.post(
+    '/api/home/reader-custody/writer-grant-lifecycle',
+    async (request, reply) => {
+      const result = readerCustody.recordWriterGrantLifecycle(
+        (request.body ?? {}) as PicoReaderCustodyWriterGrantLifecycleRecord,
+      );
+      if (!result.ok) {
+        return sendNoStore(
+          reply.code(readerCustodyFailureStatus(result.reason)),
+          { error: result.reason },
+        );
+      }
+      return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+        writerGrant: result.value,
+      });
+    },
+  );
+
+  app.post('/api/home/reader-custody/items', async (request, reply) => {
+    const result = readerCustody.recordItem(
+      (request.body ?? {}) as PicoReaderCustodyItemRecord,
+    );
+    if (!result.ok) {
+      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
+        error: result.reason,
+      });
+    }
+    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
+      item: result.value,
+    });
+  });
+
+  app.get('/api/home/reader-custody/items', async (request, reply) => {
+    const query = request.query as { domainAuthorityId?: unknown };
+    const domainAuthorityId = typeof query.domainAuthorityId === 'string'
+      ? query.domainAuthorityId
+      : undefined;
+    return sendNoStore(reply, {
+      items: readerCustody.items(domainAuthorityId),
     });
   });
 
@@ -2188,6 +2289,15 @@ function shareEnvelopeFailureStatus(reason: string): number {
   }
   if (reason === 'freshness_unavailable' || reason === 'envelope_issuance_unavailable') {
     return 503;
+  }
+  return 409;
+}
+
+function readerCustodyFailureStatus(
+  reason: ReaderCustodyFailureReason,
+): number {
+  if (reason === 'invalid_record' || reason === 'wrong_home') {
+    return 400;
   }
   return 409;
 }

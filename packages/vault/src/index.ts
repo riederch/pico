@@ -1,12 +1,28 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import {
+  buildPicoMemoryContentAd,
+  buildPicoMemoryDekWrapAd,
+  buildPicoReaderCustodyDomainSignatureInput,
+  buildPicoReaderCustodyItemSignatureInput,
+  buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
+  buildPicoReaderCustodyWriterGrantSignatureInput,
+  buildPicoShareEnvelopeSignatureInput,
+  buildPicoShareWrapPayload,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoVaultKeyfileHeaderAad,
+  picoMemoryContentSuite,
+  picoReaderCustodyCanonicalLabels,
+  picoReaderCustodyDomainRecordSchema,
+  picoReaderCustodyItemRecordSchema,
+  picoReaderCustodyWriterGrantLifecycleRecordSchema,
+  picoReaderCustodyWriterGrantRecordSchema,
   picoHomeSignatureInputLabels,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
   picoShareCanonicalLabels,
+  picoShareEnvelopeRecordSchema,
+  picoShareSuite,
   picoIdentitySuite,
   picoVaultAeadAlgorithms,
   picoVaultArgon2idModerateParams,
@@ -21,6 +37,16 @@ import type {
   PicoVaultKdfProfile,
   PicoVaultKeyfileHeaderAadInput,
   PicoVaultPersonKeyRole,
+  PicoIdentityKeyRecordSignatureInput,
+  PicoReaderCustodyDomainRecord,
+  PicoReaderCustodyDomainSignatureInput,
+  PicoReaderCustodyItemRecord,
+  PicoReaderCustodyItemSignatureInput,
+  PicoReaderCustodyWriterGrantLifecycleRecord,
+  PicoReaderCustodyWriterGrantLifecycleSignatureInput,
+  PicoReaderCustodyWriterGrantRecord,
+  PicoReaderCustodyWriterGrantSignatureInput,
+  PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 
 export const picoVaultKeyfileEnvelopeSchema = 'pico.vault.keyfile.encrypted.v1' as const;
@@ -69,12 +95,69 @@ export interface PicoVaultPathSeparationInput {
   foundationBackupPath: string;
 }
 
+export interface CreatePicoReaderCustodyDomainInput {
+  ownerIdentitySession: PicoVaultSession;
+  ownerReaderKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  kekVersion?: number;
+  authorizedAt: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface CreatePicoReaderCustodyWriterGrantInput {
+  ownerIdentitySession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  writerDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  writerGrantId: string;
+  writerIdentityKeyFingerprintHex: string;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface RevokePicoReaderCustodyWriterGrantInput {
+  ownerIdentitySession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
+  lifecycleId: string;
+  reasonCategory: PicoReaderCustodyWriterGrantLifecycleSignatureInput['reasonCategory'];
+  changedAt: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface EncryptPicoReaderCustodyItemInput {
+  readerKeyAgreementSession: PicoVaultSession;
+  writerSigningSession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
+  packageId: string;
+  memoryItemId: string;
+  contentType: string;
+  plaintext: string;
+  createdAt: string;
+  receivedAt?: string;
+}
+
+export interface DecryptPicoReaderCustodyItemInput {
+  readerKeyAgreementSession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
+  itemRecord: PicoReaderCustodyItemRecord;
+}
+
 // Minimal shape of the ready libsodium-wrappers-sumo module the Vault runtime uses.
 export interface VaultSodium {
   crypto_aead_xchacha20poly1305_ietf_KEYBYTES: number;
   crypto_aead_xchacha20poly1305_ietf_NPUBBYTES: number;
   crypto_box_PUBLICKEYBYTES: number;
   crypto_box_SECRETKEYBYTES: number;
+  crypto_box_seal(message: Uint8Array, publicKey: Uint8Array): Uint8Array;
   crypto_pwhash_ALG_ARGON2ID13: number;
   crypto_pwhash_SALTBYTES: number;
   crypto_sign_PUBLICKEYBYTES: number;
@@ -106,6 +189,11 @@ export interface VaultSodium {
   ): Uint8Array;
   crypto_sign_detached(message: Uint8Array | string, privateKey: Uint8Array): Uint8Array;
   crypto_sign_keypair(): { publicKey: Uint8Array; privateKey: Uint8Array };
+  crypto_sign_verify_detached(
+    signature: Uint8Array,
+    message: Uint8Array | string,
+    publicKey: Uint8Array,
+  ): boolean;
   memzero(bytes: Uint8Array): void;
   randombytes_buf(length: number): Uint8Array;
 }
@@ -136,8 +224,14 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     picoHomeSignatureInputLabels.founding,
     picoIdentityReaderKeyFreshnessSignatureInputLabel,
     picoShareCanonicalLabels.envelope,
+    picoReaderCustodyCanonicalLabels.domain,
+    picoReaderCustodyCanonicalLabels.writerGrant,
+    picoReaderCustodyCanonicalLabels.writerGrantLifecycle,
   ]),
-  device_signing: new Set<string>(Object.values(picoIdentitySignatureInputLabels)),
+  device_signing: new Set<string>([
+    ...Object.values(picoIdentitySignatureInputLabels),
+    picoReaderCustodyCanonicalLabels.item,
+  ]),
   device_key_agreement: new Set<string>(),
 };
 const textEncoder = new TextEncoder();
@@ -256,6 +350,371 @@ export class PicoVaultSession {
 
   #markUsed(nowMs: number): void {
     this.#lastUsedAtMs = nowMs;
+  }
+}
+
+/**
+ * Creates a reader-custody domain without ever returning or persisting its raw
+ * KEK. The fresh KEK is immediately sealed to the owner's device
+ * key-agreement key. The owner identity root separately signs the domain
+ * authority and the existing share-envelope bytes.
+ */
+export function createPicoReaderCustodyDomain(
+  sodium: VaultSodium,
+  input: CreatePicoReaderCustodyDomainInput,
+): PicoReaderCustodyDomainRecord {
+  assertSodiumConstants(sodium);
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  if (ownerMetadata.keyRole !== 'pico_identity') {
+    throw new Error('owner_identity_key_required');
+  }
+  assertKeyRecordMatchesMetadata(sodium, input.ownerReaderKeyRecord, 'device_key_agreement');
+
+  const kekVersion = input.kekVersion ?? 1;
+  const domain: PicoReaderCustodyDomainSignatureInput = {
+    suite: picoMemoryContentSuite,
+    domainAuthorityId: input.domainAuthorityId,
+    homeId: input.homeId,
+    hostSigningKeyFingerprintHex: input.hostSigningKeyFingerprintHex,
+    domainId: input.domainId,
+    custodyClass: 'reader_custody',
+    ownerIdentityKeyFingerprintHex: ownerMetadata.keyFingerprintHex,
+    ownerReaderKeyFingerprintHex: keyRecordFingerprintHex(
+      sodium,
+      'device_key_agreement',
+      hexToBytes(input.ownerReaderKeyRecord.publicKeyHex),
+    ),
+    kekVersion,
+    authorizedAt: input.authorizedAt,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+  const domainSignatureInput = buildPicoReaderCustodyDomainSignatureInput(domain);
+  const ownerSignatureHex = bytesToHex(input.ownerIdentitySession.sign(domainSignatureInput));
+  const kek = sodium.randombytes_buf(32);
+  const wrapPayload = buildPicoShareWrapPayload({
+    suite: picoShareSuite,
+    domainId: domain.domainId,
+    kekVersion,
+    readerKeyFingerprintHex: domain.ownerReaderKeyFingerprintHex,
+    kekHex: bytesToHex(kek),
+  });
+
+  try {
+    const sealedWrap = sodium.crypto_box_seal(
+      wrapPayload,
+      hexToBytes(input.ownerReaderKeyRecord.publicKeyHex),
+    );
+    const envelope = {
+      suite: picoShareSuite,
+      grantId: domain.domainAuthorityId,
+      domainId: domain.domainId,
+      kekVersion,
+      hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+      issuerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+      readerKeyFingerprintHex: domain.ownerReaderKeyFingerprintHex,
+      wrapDigestHex: bytesToHex(sodium.crypto_generichash(32, sealedWrap, null)),
+      grantedAt: domain.authorizedAt,
+    };
+    const ownerEnvelope: PicoShareEnvelopeRecord = {
+      schema: picoShareEnvelopeRecordSchema,
+      envelope,
+      sealedWrapHex: bytesToHex(sealedWrap),
+      issuerIdentityKeyRecord: keyRecordFromMetadata(ownerMetadata),
+      issuerSignatureHex: bytesToHex(
+        input.ownerIdentitySession.sign(buildPicoShareEnvelopeSignatureInput(envelope)),
+      ),
+      createdAt: input.receivedAt ?? input.authorizedAt,
+    };
+
+    return {
+      schema: picoReaderCustodyDomainRecordSchema,
+      domain,
+      ownerIdentityKeyRecord: keyRecordFromMetadata(ownerMetadata),
+      ownerReaderKeyRecord: { ...input.ownerReaderKeyRecord },
+      ownerEnvelope,
+      ownerSignatureHex,
+      receivedAt: input.receivedAt ?? input.authorizedAt,
+    };
+  } finally {
+    sodium.memzero(kek);
+    sodium.memzero(wrapPayload);
+  }
+}
+
+export function createPicoReaderCustodyWriterGrant(
+  sodium: VaultSodium,
+  input: CreatePicoReaderCustodyWriterGrantInput,
+): PicoReaderCustodyWriterGrantRecord {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  if (ownerMetadata.keyRole !== 'pico_identity'
+    || ownerMetadata.keyFingerprintHex
+      !== input.domainRecord.domain.ownerIdentityKeyFingerprintHex) {
+    throw new Error('owner_identity_key_required');
+  }
+  assertKeyRecordMatchesMetadata(
+    sodium,
+    input.writerDeviceSigningKeyRecord,
+    'device_signing',
+  );
+  const domain = input.domainRecord.domain;
+  const grant: PicoReaderCustodyWriterGrantSignatureInput = {
+    suite: picoMemoryContentSuite,
+    writerGrantId: input.writerGrantId,
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    kekVersion: domain.kekVersion,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    writerIdentityKeyFingerprintHex: input.writerIdentityKeyFingerprintHex,
+    writerDeviceSigningKeyFingerprintHex: keyRecordFingerprintHex(
+      sodium,
+      'device_signing',
+      hexToBytes(input.writerDeviceSigningKeyRecord.publicKeyHex),
+    ),
+    validFrom: input.validFrom,
+    validUntil: input.validUntil,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+
+  return {
+    schema: picoReaderCustodyWriterGrantRecordSchema,
+    grant,
+    ownerIdentityKeyRecord: keyRecordFromMetadata(ownerMetadata),
+    writerDeviceSigningKeyRecord: { ...input.writerDeviceSigningKeyRecord },
+    ownerSignatureHex: bytesToHex(
+      input.ownerIdentitySession.sign(
+        buildPicoReaderCustodyWriterGrantSignatureInput(grant),
+      ),
+    ),
+    receivedAt: input.receivedAt ?? input.validFrom,
+  };
+}
+
+export function revokePicoReaderCustodyWriterGrant(
+  sodium: VaultSodium,
+  input: RevokePicoReaderCustodyWriterGrantInput,
+): PicoReaderCustodyWriterGrantLifecycleRecord {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  assertPicoReaderCustodyWriterGrantRecord(
+    sodium,
+    input.domainRecord,
+    input.writerGrantRecord,
+  );
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  if (ownerMetadata.keyRole !== 'pico_identity'
+    || ownerMetadata.keyFingerprintHex
+      !== input.domainRecord.domain.ownerIdentityKeyFingerprintHex) {
+    throw new Error('owner_identity_key_required');
+  }
+  const domain = input.domainRecord.domain;
+  const grant = input.writerGrantRecord.grant;
+  const lifecycle: PicoReaderCustodyWriterGrantLifecycleSignatureInput = {
+    suite: picoMemoryContentSuite,
+    lifecycleId: input.lifecycleId,
+    writerGrantId: grant.writerGrantId,
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex: domain.ownerIdentityKeyFingerprintHex,
+    writerIdentityKeyFingerprintHex: grant.writerIdentityKeyFingerprintHex,
+    writerDeviceSigningKeyFingerprintHex:
+      grant.writerDeviceSigningKeyFingerprintHex,
+    status: 'revoked',
+    reasonCategory: input.reasonCategory,
+    changedAt: input.changedAt,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+
+  return {
+    schema: picoReaderCustodyWriterGrantLifecycleRecordSchema,
+    lifecycle,
+    ownerIdentityKeyRecord: keyRecordFromMetadata(ownerMetadata),
+    ownerSignatureHex: bytesToHex(
+      input.ownerIdentitySession.sign(
+        buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(lifecycle),
+      ),
+    ),
+    receivedAt: input.receivedAt ?? input.changedAt,
+  };
+}
+
+/**
+ * Companion-side encryption path for reader custody. The only persisted input
+ * carrying the domain KEK is the owner's sealed share envelope; the raw KEK
+ * and per-item DEK are zeroed best-effort before this function returns.
+ */
+export function encryptPicoReaderCustodyItem(
+  sodium: VaultSodium,
+  input: EncryptPicoReaderCustodyItemInput,
+): PicoReaderCustodyItemRecord {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  assertPicoReaderCustodyWriterGrantRecord(
+    sodium,
+    input.domainRecord,
+    input.writerGrantRecord,
+  );
+  const domain = input.domainRecord.domain;
+  const grant = input.writerGrantRecord.grant;
+  if (input.createdAt < grant.validFrom || input.createdAt >= grant.validUntil) {
+    throw new Error('writer_grant_inactive');
+  }
+
+  const writerMetadata = input.writerSigningSession.metadata();
+  if (writerMetadata.keyRole !== 'device_signing'
+    || writerMetadata.keyFingerprintHex
+      !== grant.writerDeviceSigningKeyFingerprintHex) {
+    throw new Error('writer_signing_key_mismatch');
+  }
+
+  const kek = openPicoReaderCustodyDomainKek(
+    sodium,
+    input.readerKeyAgreementSession,
+    input.domainRecord,
+  );
+  const dek = sodium.randombytes_buf(32);
+  const contentNonce = sodium.randombytes_buf(
+    sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
+  );
+  const dekWrapNonce = sodium.randombytes_buf(
+    sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
+  );
+  const plaintext = textEncoder.encode(input.plaintext);
+
+  try {
+    const contentCiphertext = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+      plaintext,
+      buildPicoMemoryContentAd({
+        suite: picoMemoryContentSuite,
+        memoryItemId: input.memoryItemId,
+        privacyDomain: domain.domainId,
+        contentType: input.contentType,
+      }),
+      null,
+      contentNonce,
+      dek,
+    );
+    const wrappedDek = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+      dek,
+      buildPicoMemoryDekWrapAd({
+        suite: picoMemoryContentSuite,
+        keyEnvelopeId: input.packageId,
+        domainId: domain.domainId,
+        memoryItemId: input.memoryItemId,
+      }),
+      null,
+      dekWrapNonce,
+      kek,
+    );
+    const item: PicoReaderCustodyItemSignatureInput = {
+      suite: picoMemoryContentSuite,
+      packageId: input.packageId,
+      domainAuthorityId: domain.domainAuthorityId,
+      writerGrantId: grant.writerGrantId,
+      homeId: domain.homeId,
+      hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+      domainId: domain.domainId,
+      memoryItemId: input.memoryItemId,
+      contentType: input.contentType,
+      kekVersion: domain.kekVersion,
+      writerIdentityKeyFingerprintHex: grant.writerIdentityKeyFingerprintHex,
+      writerDeviceSigningKeyFingerprintHex:
+        grant.writerDeviceSigningKeyFingerprintHex,
+      contentNonceHex: bytesToHex(contentNonce),
+      contentCiphertextDigestHex: bytesToHex(
+        sodium.crypto_generichash(32, contentCiphertext, null),
+      ),
+      dekWrapNonceHex: bytesToHex(dekWrapNonce),
+      wrappedDekDigestHex: bytesToHex(
+        sodium.crypto_generichash(32, wrappedDek, null),
+      ),
+      createdAt: input.createdAt,
+    };
+
+    return {
+      schema: picoReaderCustodyItemRecordSchema,
+      item,
+      contentCiphertextHex: bytesToHex(contentCiphertext),
+      wrappedDekHex: bytesToHex(wrappedDek),
+      writerDeviceSigningKeyRecord: {
+        ...input.writerGrantRecord.writerDeviceSigningKeyRecord,
+      },
+      writerSignatureHex: bytesToHex(
+        input.writerSigningSession.sign(
+          buildPicoReaderCustodyItemSignatureInput(item),
+        ),
+      ),
+      receivedAt: input.receivedAt ?? input.createdAt,
+    };
+  } finally {
+    sodium.memzero(plaintext);
+    sodium.memzero(kek);
+    sodium.memzero(dek);
+  }
+}
+
+export function decryptPicoReaderCustodyItem(
+  sodium: VaultSodium,
+  input: DecryptPicoReaderCustodyItemInput,
+): string {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  assertPicoReaderCustodyWriterGrantRecord(
+    sodium,
+    input.domainRecord,
+    input.writerGrantRecord,
+  );
+  assertPicoReaderCustodyItemRecord(
+    sodium,
+    input.domainRecord,
+    input.writerGrantRecord,
+    input.itemRecord,
+  );
+  const kek = openPicoReaderCustodyDomainKek(
+    sodium,
+    input.readerKeyAgreementSession,
+    input.domainRecord,
+  );
+  const item = input.itemRecord.item;
+  const wrappedDek = hexToBytes(input.itemRecord.wrappedDekHex);
+  let dek: Uint8Array | undefined;
+
+  try {
+    dek = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+      null,
+      wrappedDek,
+      buildPicoMemoryDekWrapAd({
+        suite: item.suite,
+        keyEnvelopeId: item.packageId,
+        domainId: item.domainId,
+        memoryItemId: item.memoryItemId,
+      }),
+      hexToBytes(item.dekWrapNonceHex),
+      kek,
+    );
+    const plaintext = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+      null,
+      hexToBytes(input.itemRecord.contentCiphertextHex),
+      buildPicoMemoryContentAd({
+        suite: item.suite,
+        memoryItemId: item.memoryItemId,
+        privacyDomain: item.domainId,
+        contentType: item.contentType,
+      }),
+      hexToBytes(item.contentNonceHex),
+      dek,
+    );
+    try {
+      return textDecoder.decode(plaintext);
+    } finally {
+      sodium.memzero(plaintext);
+    }
+  } finally {
+    sodium.memzero(kek);
+    if (dek !== undefined) {
+      sodium.memzero(dek);
+    }
   }
 }
 
@@ -421,6 +880,270 @@ export function assertVaultCustodyPathSeparation(input: PicoVaultPathSeparationI
       throw new Error('vault_path_inside_foundation_scope');
     }
   }
+}
+
+function assertPicoReaderCustodyDomainRecord(
+  sodium: VaultSodium,
+  record: PicoReaderCustodyDomainRecord,
+): void {
+  const domain = record.domain;
+  if (record.schema !== picoReaderCustodyDomainRecordSchema
+    || domain.suite !== picoMemoryContentSuite
+    || domain.custodyClass !== 'reader_custody'
+    || !isCanonicalInstant(record.receivedAt)) {
+    throw new Error('invalid_reader_custody_domain');
+  }
+  buildPicoReaderCustodyDomainSignatureInput(domain);
+  assertKeyRecordMatchesMetadata(
+    sodium,
+    record.ownerIdentityKeyRecord,
+    'pico_identity',
+  );
+  assertKeyRecordMatchesMetadata(
+    sodium,
+    record.ownerReaderKeyRecord,
+    'device_key_agreement',
+  );
+  const ownerIdentityFingerprint = keyRecordFingerprintHex(
+    sodium,
+    'pico_identity',
+    hexToBytes(record.ownerIdentityKeyRecord.publicKeyHex),
+  );
+  const ownerReaderFingerprint = keyRecordFingerprintHex(
+    sodium,
+    'device_key_agreement',
+    hexToBytes(record.ownerReaderKeyRecord.publicKeyHex),
+  );
+  const ownerEnvelope = record.ownerEnvelope;
+  const envelope = ownerEnvelope.envelope;
+  if (domain.ownerIdentityKeyFingerprintHex !== ownerIdentityFingerprint
+    || domain.ownerReaderKeyFingerprintHex !== ownerReaderFingerprint
+    || ownerEnvelope.schema !== picoShareEnvelopeRecordSchema
+    || ownerEnvelope.issuerIdentityKeyRecord.suite
+      !== record.ownerIdentityKeyRecord.suite
+    || ownerEnvelope.issuerIdentityKeyRecord.keyRole
+      !== record.ownerIdentityKeyRecord.keyRole
+    || ownerEnvelope.issuerIdentityKeyRecord.publicKeyHex
+      !== record.ownerIdentityKeyRecord.publicKeyHex
+    || envelope.suite !== picoShareSuite
+    || envelope.grantId !== domain.domainAuthorityId
+    || envelope.domainId !== domain.domainId
+    || envelope.kekVersion !== domain.kekVersion
+    || envelope.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || envelope.issuerIdentityKeyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex
+    || envelope.readerKeyFingerprintHex
+      !== domain.ownerReaderKeyFingerprintHex
+    || envelope.grantedAt !== domain.authorizedAt
+    || !isCanonicalInstant(ownerEnvelope.createdAt)) {
+    throw new Error('invalid_reader_custody_domain');
+  }
+
+  const sealedWrap = hexToBytes(ownerEnvelope.sealedWrapHex);
+  if (bytesToHex(sodium.crypto_generichash(32, sealedWrap, null))
+      !== envelope.wrapDigestHex
+    || !verifyDetached(
+      sodium,
+      record.ownerIdentityKeyRecord.publicKeyHex,
+      buildPicoReaderCustodyDomainSignatureInput(domain),
+      record.ownerSignatureHex,
+    )
+    || !verifyDetached(
+      sodium,
+      record.ownerIdentityKeyRecord.publicKeyHex,
+      buildPicoShareEnvelopeSignatureInput(envelope),
+      ownerEnvelope.issuerSignatureHex,
+    )) {
+    throw new Error('invalid_reader_custody_domain');
+  }
+}
+
+function assertPicoReaderCustodyWriterGrantRecord(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  record: PicoReaderCustodyWriterGrantRecord,
+): void {
+  const domain = domainRecord.domain;
+  const grant = record.grant;
+  if (record.schema !== picoReaderCustodyWriterGrantRecordSchema
+    || grant.suite !== picoMemoryContentSuite
+    || grant.domainAuthorityId !== domain.domainAuthorityId
+    || grant.homeId !== domain.homeId
+    || grant.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || grant.domainId !== domain.domainId
+    || grant.kekVersion !== domain.kekVersion
+    || grant.ownerIdentityKeyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex
+    || record.ownerIdentityKeyRecord.suite
+      !== domainRecord.ownerIdentityKeyRecord.suite
+    || record.ownerIdentityKeyRecord.keyRole
+      !== domainRecord.ownerIdentityKeyRecord.keyRole
+    || record.ownerIdentityKeyRecord.publicKeyHex
+      !== domainRecord.ownerIdentityKeyRecord.publicKeyHex
+    || !isCanonicalInstant(record.receivedAt)) {
+    throw new Error('invalid_reader_custody_writer_grant');
+  }
+  buildPicoReaderCustodyWriterGrantSignatureInput(grant);
+  assertKeyRecordMatchesMetadata(
+    sodium,
+    record.writerDeviceSigningKeyRecord,
+    'device_signing',
+  );
+  const writerFingerprint = keyRecordFingerprintHex(
+    sodium,
+    'device_signing',
+    hexToBytes(record.writerDeviceSigningKeyRecord.publicKeyHex),
+  );
+  if (grant.writerDeviceSigningKeyFingerprintHex !== writerFingerprint
+    || !verifyDetached(
+      sodium,
+      record.ownerIdentityKeyRecord.publicKeyHex,
+      buildPicoReaderCustodyWriterGrantSignatureInput(grant),
+      record.ownerSignatureHex,
+    )) {
+    throw new Error('invalid_reader_custody_writer_grant');
+  }
+}
+
+function assertPicoReaderCustodyItemRecord(
+  sodium: VaultSodium,
+  domainRecord: PicoReaderCustodyDomainRecord,
+  writerGrantRecord: PicoReaderCustodyWriterGrantRecord,
+  record: PicoReaderCustodyItemRecord,
+): void {
+  const domain = domainRecord.domain;
+  const grant = writerGrantRecord.grant;
+  const item = record.item;
+  if (record.schema !== picoReaderCustodyItemRecordSchema
+    || item.suite !== picoMemoryContentSuite
+    || item.domainAuthorityId !== domain.domainAuthorityId
+    || item.writerGrantId !== grant.writerGrantId
+    || item.homeId !== domain.homeId
+    || item.hostSigningKeyFingerprintHex
+      !== domain.hostSigningKeyFingerprintHex
+    || item.domainId !== domain.domainId
+    || item.kekVersion !== domain.kekVersion
+    || item.writerIdentityKeyFingerprintHex
+      !== grant.writerIdentityKeyFingerprintHex
+    || item.writerDeviceSigningKeyFingerprintHex
+      !== grant.writerDeviceSigningKeyFingerprintHex
+    || record.writerDeviceSigningKeyRecord.suite
+      !== writerGrantRecord.writerDeviceSigningKeyRecord.suite
+    || record.writerDeviceSigningKeyRecord.keyRole
+      !== writerGrantRecord.writerDeviceSigningKeyRecord.keyRole
+    || record.writerDeviceSigningKeyRecord.publicKeyHex
+      !== writerGrantRecord.writerDeviceSigningKeyRecord.publicKeyHex
+    || item.createdAt < grant.validFrom
+    || item.createdAt >= grant.validUntil
+    || !isCanonicalInstant(record.receivedAt)) {
+    throw new Error('invalid_reader_custody_item');
+  }
+  buildPicoReaderCustodyItemSignatureInput(item);
+  const contentCiphertext = hexToBytes(record.contentCiphertextHex);
+  const wrappedDek = hexToBytes(record.wrappedDekHex);
+  if (bytesToHex(sodium.crypto_generichash(32, contentCiphertext, null))
+      !== item.contentCiphertextDigestHex
+    || bytesToHex(sodium.crypto_generichash(32, wrappedDek, null))
+      !== item.wrappedDekDigestHex
+    || !verifyDetached(
+      sodium,
+      record.writerDeviceSigningKeyRecord.publicKeyHex,
+      buildPicoReaderCustodyItemSignatureInput(item),
+      record.writerSignatureHex,
+    )) {
+    throw new Error('invalid_reader_custody_item');
+  }
+}
+
+function openPicoReaderCustodyDomainKek(
+  sodium: VaultSodium,
+  readerSession: PicoVaultSession,
+  record: PicoReaderCustodyDomainRecord,
+): Uint8Array {
+  const metadata = readerSession.metadata();
+  if (metadata.keyRole !== 'device_key_agreement'
+    || metadata.keyFingerprintHex
+      !== record.domain.ownerReaderKeyFingerprintHex) {
+    throw new Error('reader_key_mismatch');
+  }
+
+  const plaintext = readerSession.unwrapSealedBox(
+    hexToBytes(record.ownerEnvelope.sealedWrapHex),
+  );
+  try {
+    const reader = new CanonicalElementReader(plaintext, 'invalid_share_wrap');
+    if (reader.readAscii() !== picoShareCanonicalLabels.wrap
+      || reader.readAscii() !== picoShareSuite
+      || reader.readAscii() !== record.domain.domainId
+      || reader.readAscii() !== String(record.domain.kekVersion)
+      || bytesToHex(reader.readBytes())
+        !== record.domain.ownerReaderKeyFingerprintHex) {
+      throw new Error('invalid_share_wrap');
+    }
+    const kek = reader.readBytes();
+    reader.assertDone();
+    if (kek.byteLength !== 32) {
+      throw new Error('invalid_share_wrap');
+    }
+    return kek;
+  } finally {
+    sodium.memzero(plaintext);
+  }
+}
+
+function assertKeyRecordMatchesMetadata(
+  sodium: VaultSodium,
+  keyRecord: PicoIdentityKeyRecordSignatureInput,
+  keyRole: PicoVaultPersonKeyRole,
+): void {
+  if (keyRecord.suite !== picoIdentitySuite || keyRecord.keyRole !== keyRole) {
+    throw new Error('invalid_key_record');
+  }
+  const publicKey = hexToBytes(keyRecord.publicKeyHex);
+  const expectedLength = keyRole === 'device_key_agreement'
+    ? sodium.crypto_box_PUBLICKEYBYTES
+    : sodium.crypto_sign_PUBLICKEYBYTES;
+  if (publicKey.byteLength !== expectedLength) {
+    throw new Error('invalid_key_record');
+  }
+  buildPicoIdentityKeyRecordSignatureInput(keyRecord);
+}
+
+function keyRecordFromMetadata(
+  metadata: PicoVaultSessionMetadata,
+): PicoIdentityKeyRecordSignatureInput {
+  return {
+    suite: metadata.suite,
+    keyRole: metadata.keyRole,
+    publicKeyHex: metadata.publicKeyHex,
+  };
+}
+
+function verifyDetached(
+  sodium: VaultSodium,
+  publicKeyHex: string,
+  signatureInput: Uint8Array,
+  signatureHex: string,
+): boolean {
+  try {
+    return sodium.crypto_sign_verify_detached(
+      hexToBytes(signatureHex),
+      signatureInput,
+      hexToBytes(publicKeyHex),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isCanonicalInstant(value: string): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString() === value;
 }
 
 function generateKeypairForRole(
@@ -679,6 +1402,45 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isWithin(child: string, parent: string): boolean {
   const rel = relative(parent, child);
   return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+}
+
+class CanonicalElementReader {
+  private offset = 0;
+
+  public constructor(
+    private readonly input: Uint8Array,
+    private readonly reason: string,
+  ) {}
+
+  public readAscii(): string {
+    return textDecoder.decode(this.readBytes());
+  }
+
+  public readBytes(): Uint8Array {
+    if (this.input.byteLength < this.offset + 4) {
+      throw new Error(this.reason);
+    }
+    const length = new DataView(
+      this.input.buffer,
+      this.input.byteOffset + this.offset,
+      this.input.byteLength - this.offset,
+    ).getUint32(0, false);
+    this.offset += 4;
+    if (length === 0 || this.input.byteLength < this.offset + length) {
+      throw new Error(this.reason);
+    }
+    const value = new Uint8Array(
+      this.input.slice(this.offset, this.offset + length),
+    );
+    this.offset += length;
+    return value;
+  }
+
+  public assertDone(): void {
+    if (this.offset !== this.input.byteLength) {
+      throw new Error(this.reason);
+    }
+  }
 }
 
 class ElementReader {

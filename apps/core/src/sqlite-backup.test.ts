@@ -290,6 +290,10 @@ describe('restoreSqliteBackup', () => {
         id: '0019_pico_share_envelopes',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0020_reader_custody',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

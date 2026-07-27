@@ -126,9 +126,9 @@ and adapter without adding a public Registry/Sync protocol.
 - Reader-key and membership metadata remain sensitive relationship data in the
   Foundation database, but contain no content, KEK, private key or session
   credential.
-- Reader-custody stays unavailable in the default runtime. ADR 0085 now
-  provides the authenticated adapter, but deployment transport and the
-  reader-custody envelope path remain absent.
+- ADR 0086 now supplies the separate owner-bootstrap reader-custody envelope
+  and opaque item path. Additional-reader distribution still depends on an
+  injected ADR 0085 freshness transport and remains unavailable by default.
 
 ## Gates
 

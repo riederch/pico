@@ -1,0 +1,23 @@
+{
+  "schema": "pico.reader-custody.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-custody.pico_suite_mem_v1.canonicalization-positive.domain-authority",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "family": "canonicalization-positive",
+  "custodyFamily": "domain",
+  "construction": "pico.mem.reader-domain.v1",
+  "case": "owner identity authorizes one reader-custody domain and owner reader key",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000197069636f2e6d656d2e7265616465722d646f6d61696e2e7631000000117069636f2e73756974652e6d656d2e7631000000137263646f6d5f32303236303732375f3030303100000012686f6d655f32303236303731385f303030310000002011111111111111111111111111111111111111111111111111111111111111110000000e646f6d61696e2d6a6f75726e616c0000000e7265616465725f637573746f6479000000202222222222222222222222222222222222222222222222222222222222222222000000203333333333333333333333333333333333333333333333333333333333333333000000013100000018323032362d30372d32375431303a30303a30302e3030305a000000147365713a30303030303030303030303030303031",
+    "signatureInputLen": 296
+  },
+  "adr": "0086",
+  "notes": "Synthetic public fields only; no private keys, raw KEK, raw DEK or commercial permission."
+}

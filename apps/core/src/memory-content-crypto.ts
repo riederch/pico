@@ -1,4 +1,9 @@
 import { randomBytes } from 'node:crypto';
+import {
+  buildPicoMemoryContentAd,
+  buildPicoMemoryDekWrapAd,
+  picoMemoryContentSuite,
+} from '@pico/protocol';
 import type { MemoryDomainCustodyClass } from '@pico/protocol';
 import type { KeyStore } from './key-store.js';
 
@@ -17,11 +22,7 @@ import type { KeyStore } from './key-store.js';
  * and the key envelope row belongs to {@link MemoryStore}.
  */
 
-export const MEMORY_CONTENT_SUITE = 'pico.suite.mem.v1';
-const CONTENT_AD_LABEL = 'pico.mem.ad.content.v1';
-const DEK_WRAP_AD_LABEL = 'pico.mem.ad.dek-wrap.v1';
-const AD_FIELD_CHARSET = /^[A-Za-z0-9._:/+-]+$/;
-const AD_FIELD_MAX_BYTES = 1024;
+export const MEMORY_CONTENT_SUITE = picoMemoryContentSuite;
 const DEK_BYTES = 32;
 
 // Minimal shape of the ready libsodium-wrappers-sumo module this class needs.
@@ -234,12 +235,7 @@ export function buildContentAd(fields: {
   privacyDomain: string;
   contentType: string;
 }): Uint8Array {
-  return buildAd(CONTENT_AD_LABEL, [
-    fields.suite,
-    fields.memoryItemId,
-    fields.privacyDomain,
-    fields.contentType,
-  ]);
+  return buildPicoMemoryContentAd(fields);
 }
 
 /** ADR 0073 DEK-wrap family: binds {suite, keyEnvelopeId, domainId, memoryItemId}. */
@@ -249,36 +245,5 @@ export function buildDekWrapAd(fields: {
   domainId: string;
   memoryItemId: string;
 }): Uint8Array {
-  return buildAd(DEK_WRAP_AD_LABEL, [
-    fields.suite,
-    fields.keyEnvelopeId,
-    fields.domainId,
-    fields.memoryItemId,
-  ]);
-}
-
-function buildAd(label: string, values: string[]): Uint8Array {
-  const parts = [adElement(label)];
-  for (const value of values) {
-    const bytes = Buffer.from(value, 'utf8');
-    if (bytes.length === 0) {
-      throw new Error('empty_field');
-    }
-    if (bytes.length > AD_FIELD_MAX_BYTES) {
-      throw new Error('field_too_long');
-    }
-    if (!AD_FIELD_CHARSET.test(value)) {
-      throw new Error('invalid_field_charset');
-    }
-    parts.push(adElement(value));
-  }
-
-  return Buffer.concat(parts);
-}
-
-function adElement(value: string): Buffer {
-  const bytes = Buffer.from(value, 'utf8');
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(bytes.length, 0);
-  return Buffer.concat([length, bytes]);
+  return buildPicoMemoryDekWrapAd(fields);
 }

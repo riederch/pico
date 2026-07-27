@@ -12,7 +12,8 @@ re-evaluates identity sessions against locally observed lifecycle state.
 ADR 0083 adds exact device key-agreement registration and an authenticated
 external freshness-source contract. ADR 0085 now adds the identity-root-signed
 checkpoint family, Vault role separation and concrete Registry/Sync adapter.
-Deployment transport and reader-custody envelope authority remain open.
+ADR 0086 adds owner-bootstrap reader-custody envelope/domain authority.
+Deployment transport, additional-reader distribution and rotation remain open.
 
 ## Context
 
