@@ -11,5 +11,13 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@pico/identity": "workspace:*",
+    "@pico/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@pico/vault": "workspace:*",
+    "libsodium-wrappers-sumo": "^0.8.4"
   }
 }

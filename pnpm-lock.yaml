@@ -73,7 +73,21 @@ importers:
         specifier: ^0.8.4
         version: 0.8.4
 
-  packages/sync: {}
+  packages/sync:
+    dependencies:
+      '@pico/identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@pico/vault':
+        specifier: workspace:*
+        version: link:../vault
+      libsodium-wrappers-sumo:
+        specifier: ^0.8.4
+        version: 0.8.4
 
   packages/vault:
     dependencies:

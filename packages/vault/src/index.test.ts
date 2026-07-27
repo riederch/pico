@@ -17,6 +17,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
+  createPicoIdentityReaderKeyFreshnessCheckpoint,
   createPicoReaderCustodyDomain,
   createPicoReaderCustodyReaderGrant,
   createPicoReaderCustodyWriterGrant,
@@ -220,15 +221,64 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       checkpoint,
       Buffer.from(identity.publicKeyHex, 'hex'),
     )).toBe(true);
+    const publishedCheckpoint =
+      createPicoIdentityReaderKeyFreshnessCheckpoint({
+        identitySession,
+        checkpointId: 'freshness_vault_published_0001',
+        homeId: 'home_vault_0001',
+        deviceSigningKeyFingerprintHex: '22'.repeat(32),
+        deviceKeyAgreementKeyFingerprintHex: '33'.repeat(32),
+        delegationId: 'delegation_vault_0001',
+        status: 'current',
+        observedThroughLifecycleOrder: 'seq:0000000000000001',
+        checkedAt: '2026-07-27T10:00:00.000Z',
+        freshUntil: '2026-07-27T10:05:00.000Z',
+      });
+    expect(publishedCheckpoint.checkpoint
+      .issuerIdentityKeyFingerprintHex)
+      .toBe(identity.keyFingerprintHex);
+    expect(sodium.crypto_sign_verify_detached(
+      Buffer.from(publishedCheckpoint.issuerSignatureHex, 'hex'),
+      buildPicoIdentityReaderKeyFreshnessSignatureInput(
+        publishedCheckpoint.checkpoint,
+      ),
+      Buffer.from(identity.publicKeyHex, 'hex'),
+    )).toBe(true);
 
     const device = createPicoVaultKeyfile(sodium, {
       keyRole: 'device_signing',
       passphrase: 'correct horse battery staple',
     });
-    expect(() => openPicoVaultKeyfile(sodium, {
+    const deviceSession = openPicoVaultKeyfile(sodium, {
       keyfile: device.keyfile,
       passphrase: 'correct horse battery staple',
-    }).sign(checkpoint)).toThrow('unknown_signature_input_label');
+    });
+    expect(() => deviceSession.sign(checkpoint))
+      .toThrow('unknown_signature_input_label');
+    expect(() => createPicoIdentityReaderKeyFreshnessCheckpoint({
+      identitySession: deviceSession,
+      checkpointId: 'freshness_vault_wrong_role',
+      homeId: 'home_vault_0001',
+      deviceSigningKeyFingerprintHex: '22'.repeat(32),
+      deviceKeyAgreementKeyFingerprintHex: '33'.repeat(32),
+      delegationId: 'delegation_vault_0001',
+      status: 'current',
+      observedThroughLifecycleOrder: 'seq:0000000000000001',
+      checkedAt: '2026-07-27T10:00:00.000Z',
+      freshUntil: '2026-07-27T10:05:00.000Z',
+    })).toThrow('pico_identity_key_required');
+    expect(() => createPicoIdentityReaderKeyFreshnessCheckpoint({
+      identitySession,
+      checkpointId: 'freshness_vault_overlong',
+      homeId: 'home_vault_0001',
+      deviceSigningKeyFingerprintHex: '22'.repeat(32),
+      deviceKeyAgreementKeyFingerprintHex: '33'.repeat(32),
+      delegationId: 'delegation_vault_0001',
+      status: 'current',
+      observedThroughLifecycleOrder: 'seq:0000000000000001',
+      checkedAt: '2026-07-27T10:00:00.000Z',
+      freshUntil: '2026-07-27T10:05:00.001Z',
+    })).toThrow('reader_key_freshness_window_too_long');
   });
 
   it('keeps a reader-custody KEK sealed while encrypting and decrypting an owner-authorized item', () => {

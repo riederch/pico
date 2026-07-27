@@ -383,6 +383,7 @@ export const picoReaderCustodyCanonicalFamilies = [
   'writerGrant',
   'writerGrantLifecycle',
   'kekRotation',
+  'syncManifest',
   'item',
 ] as const;
 
@@ -396,8 +397,14 @@ export const picoReaderCustodyCanonicalLabels = {
   writerGrant: 'pico.mem.reader-writer-grant.v1',
   writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
   kekRotation: 'pico.mem.reader-kek-rotation.v1',
+  syncManifest: 'pico.mem.reader-sync-manifest.v1',
   item: 'pico.mem.reader-item.v1',
 } as const satisfies Record<PicoReaderCustodyCanonicalFamily, string>;
+
+export const picoReaderCustodySyncRecordDigestLabel =
+  'pico.mem.reader-sync-record.v1' as const;
+export const picoReaderCustodySyncEvidenceDigestLabel =
+  'pico.mem.reader-sync-evidence.v1' as const;
 
 export const picoReaderCustodyDomainRecordSchema =
   'pico.mem.reader-domain-record.v1' as const;
@@ -413,6 +420,23 @@ export const picoReaderCustodyKekRotationRecordSchema =
   'pico.mem.reader-kek-rotation-record.v1' as const;
 export const picoReaderCustodyItemRecordSchema =
   'pico.mem.reader-item-record.v1' as const;
+export const picoReaderCustodySyncPayloadSchema =
+  'pico.mem.reader-sync-payload.v1' as const;
+export const picoReaderCustodySyncBatchRecordSchema =
+  'pico.mem.reader-sync-batch-record.v1' as const;
+
+export const picoReaderCustodySyncEvidenceFamilies = [
+  'domain',
+  'reader_grant',
+  'reader_grant_lifecycle',
+  'writer_grant',
+  'writer_grant_lifecycle',
+  'kek_rotation',
+  'item',
+] as const;
+
+export type PicoReaderCustodySyncEvidenceFamily =
+  typeof picoReaderCustodySyncEvidenceFamilies[number];
 
 export const picoReaderCustodyReaderAccessModes = [
   'from_version',
@@ -577,6 +601,32 @@ export interface PicoReaderCustodyKekRotationSignatureInput {
   lifecycleOrder: string;
 }
 
+export interface PicoReaderCustodySyncEvidenceReference {
+  family: PicoReaderCustodySyncEvidenceFamily;
+  recordId: string;
+  recordDigestHex: string;
+}
+
+export interface PicoReaderCustodySyncManifestSignatureInput {
+  suite: string;
+  syncBatchId: string;
+  routeRef: string;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  ownerIdentityKeyFingerprintHex: string;
+  readerGrantId: string;
+  readerKeyFingerprintHex: string;
+  sequence: number;
+  previousManifestDigestHex: string;
+  evidenceDigestHex: string;
+  throughKekVersion: number;
+  observedThroughLifecycleOrder: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface PicoReaderCustodyDomainRecord {
   schema: typeof picoReaderCustodyDomainRecordSchema;
   domain: PicoReaderCustodyDomainSignatureInput;
@@ -639,6 +689,36 @@ export interface PicoReaderCustodyKekRotationRecord {
   envelopes: PicoShareEnvelopeRecord[];
   ownerSignatureHex: string;
   receivedAt: string;
+}
+
+export interface PicoReaderCustodySyncPayload {
+  schema: typeof picoReaderCustodySyncPayloadSchema;
+  manifest: PicoReaderCustodySyncManifestSignatureInput;
+  ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  ownerSignatureHex: string;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
+  readerGrantLifecycleRecords:
+    PicoReaderCustodyReaderGrantLifecycleRecord[];
+  writerGrantRecords: PicoReaderCustodyWriterGrantRecord[];
+  writerGrantLifecycleRecords:
+    PicoReaderCustodyWriterGrantLifecycleRecord[];
+  rotationRecords: PicoReaderCustodyKekRotationRecord[];
+  itemRecords: PicoReaderCustodyItemRecord[];
+}
+
+/**
+ * Relay-visible transport wrapper. `routeRef` must be an opaque random
+ * mailbox reference established out of band; no Home, Pico identity, domain,
+ * grant or key fingerprint is visible outside the sealed payload.
+ */
+export interface PicoReaderCustodySyncBatchRecord {
+  schema: typeof picoReaderCustodySyncBatchRecordSchema;
+  routeRef: string;
+  syncBatchId: string;
+  sealedPayloadHex: string;
+  sealedPayloadDigestHex: string;
+  expiresAt: string;
 }
 
 export const picoVaultKeyfileFormat = 'pico.vault.keyfile.v1' as const;
@@ -2751,6 +2831,146 @@ export function buildPicoReaderCustodyKekRotationSignatureInput(
   ]);
 }
 
+/**
+ * Canonical full-record bytes used only to bind an opaque ADR 0089 sync
+ * payload. Object keys are sorted recursively; array order remains meaningful.
+ * The result is hashed by the Vault/publisher and independently by the reader.
+ */
+export function buildPicoReaderCustodySyncRecordDigestInput(
+  record: unknown,
+): Uint8Array {
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodySyncRecordDigestLabel),
+    canonicalTextEncoder.encode(canonicalJson(record)),
+  ]);
+}
+
+export function buildPicoReaderCustodySyncEvidenceDigestInput(
+  references: readonly PicoReaderCustodySyncEvidenceReference[],
+): Uint8Array {
+  if (!Array.isArray(references)
+    || references.length === 0
+    || references.length > 10_000) {
+    throw new Error('invalid_sync_evidence_set');
+  }
+  const canonical = references.map((reference) => {
+    assertExactKeys(reference as unknown as Record<string, unknown>, [
+      'family',
+      'recordId',
+      'recordDigestHex',
+    ]);
+    assertStringMember(
+      reference.family,
+      picoReaderCustodySyncEvidenceFamilies,
+      'invalid_sync_evidence_family',
+    );
+    assertAsciiToken(reference.recordId);
+    fixedHexBytes(
+      reference.recordDigestHex,
+      32,
+      'invalid_record_digest_length',
+    );
+    return { ...reference };
+  }).sort((left, right) =>
+    compareCanonicalText(left.family, right.family)
+      || compareCanonicalText(left.recordId, right.recordId));
+  if (canonical.some((reference, index) =>
+    index > 0
+    && reference.family === canonical[index - 1]?.family
+    && reference.recordId === canonical[index - 1]?.recordId)) {
+    throw new Error('duplicate_sync_evidence');
+  }
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodySyncEvidenceDigestLabel),
+    asciiBytes(String(canonical.length)),
+    ...canonical.flatMap((reference) => [
+      asciiBytes(reference.family),
+      asciiBytes(reference.recordId),
+      fixedHexBytes(
+        reference.recordDigestHex,
+        32,
+        'invalid_record_digest_length',
+      ),
+    ]),
+  ]);
+}
+
+export function buildPicoReaderCustodySyncManifestSignatureInput(
+  input: PicoReaderCustodySyncManifestSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'syncBatchId',
+    'routeRef',
+    'domainAuthorityId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'domainId',
+    'ownerIdentityKeyFingerprintHex',
+    'readerGrantId',
+    'readerKeyFingerprintHex',
+    'sequence',
+    'previousManifestDigestHex',
+    'evidenceDigestHex',
+    'throughKekVersion',
+    'observedThroughLifecycleOrder',
+    'createdAt',
+    'expiresAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.syncBatchId);
+  assertAsciiToken(input.routeRef);
+  assertAsciiToken(input.domainAuthorityId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.domainId);
+  assertLifecycleOrder(input.observedThroughLifecycleOrder);
+  assertInstant(input.createdAt);
+  assertInstant(input.expiresAt);
+  assertValidBounds(input.createdAt, input.expiresAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoReaderCustodyCanonicalLabels.syncManifest),
+    asciiBytes(input.suite),
+    asciiBytes(input.syncBatchId),
+    asciiBytes(input.routeRef),
+    asciiBytes(input.domainAuthorityId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(
+      input.hostSigningKeyFingerprintHex,
+      32,
+      'invalid_fingerprint_length',
+    ),
+    asciiBytes(input.domainId),
+    fixedHexBytes(
+      input.ownerIdentityKeyFingerprintHex,
+      32,
+      'invalid_fingerprint_length',
+    ),
+    asciiBytes(input.readerGrantId),
+    fixedHexBytes(
+      input.readerKeyFingerprintHex,
+      32,
+      'invalid_fingerprint_length',
+    ),
+    positiveSafeIntegerBytes(input.sequence, 'invalid_sync_sequence'),
+    fixedHexBytes(
+      input.previousManifestDigestHex,
+      32,
+      'invalid_previous_manifest_digest_length',
+    ),
+    fixedHexBytes(
+      input.evidenceDigestHex,
+      32,
+      'invalid_evidence_digest_length',
+    ),
+    kekVersionBytes(input.throughKekVersion),
+    asciiBytes(input.observedThroughLifecycleOrder),
+    asciiBytes(input.createdAt),
+    asciiBytes(input.expiresAt),
+  ]);
+}
+
 export function buildPicoReaderCustodyItemSignatureInput(
   input: PicoReaderCustodyItemSignatureInput,
 ): Uint8Array {
@@ -2857,6 +3077,42 @@ function kekVersionBytes(value: number): Uint8Array {
   }
 
   return asciiBytes(String(value));
+}
+
+function positiveSafeIntegerBytes(value: number, reason: string): Uint8Array {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(reason);
+  }
+  return asciiBytes(String(value));
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null) {
+    return 'null';
+  }
+  if (typeof value === 'string' || typeof value === 'boolean') {
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) {
+      throw new Error('invalid_sync_json_number');
+    }
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => canonicalJson(entry)).join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    return `{${keys.map((key) =>
+      `${JSON.stringify(key)}:${canonicalJson(record[key])}`).join(',')}}`;
+  }
+  throw new Error('invalid_sync_json_value');
+}
+
+function compareCanonicalText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function firstUnexpectedKey(record: Record<string, unknown>, allowedKeys: readonly string[]): string | undefined {

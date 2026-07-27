@@ -1,0 +1,23 @@
+{
+  "schema": "pico.reader-custody.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-custody.pico_suite_mem_v1.canonicalization-negative.reader-sync-zero-sequence",
+  "stage": "fixture_data",
+  "suite": "pico.suite.mem.v1",
+  "surface": "reader-custody",
+  "family": "canonicalization-negative",
+  "custodyFamily": "syncManifest",
+  "construction": "pico.mem.reader-sync-manifest.v1",
+  "case": "a reader sync manifest cannot start at sequence zero",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_sync_sequence"
+  },
+  "adr": "0089",
+  "notes": "Synthetic public fields only; no private keys, raw KEK, raw DEK, ciphertext or commercial permission."
+}

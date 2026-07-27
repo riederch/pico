@@ -192,13 +192,15 @@ The `reader-custody/pico.suite.mem.v1/` family is seeded: ADR
 `0086-reader-custody-authority-and-opaque-storage.md` publishes the original
 owner-domain, writer-grant, writer-revocation and opaque-item inputs; ADR
 `0088-reader-custody-multi-reader-and-kek-rotation.md` adds reader grant,
-reader revocation and KEK-rotation inputs. The directory carries one positive
-vector per family plus cross-family-label, custody-class, validity-window,
-history-mode, rotation-version/cause and nonce negatives. The vectors contain
+reader revocation and KEK-rotation inputs; ADR
+`0089-authenticated-checkpoint-and-reader-custody-sync.md` adds the exact
+reader-sync manifest. The directory carries one positive vector per family
+plus cross-family-label, custody-class, validity-window, history-mode,
+rotation-version/cause, sync-sequence and nonce negatives. The vectors contain
 no private keys, raw KEKs/DEKs or real ciphertext. A protocol test rebuilds
-every accepted vector and checks it against ADR 0086/0088; Vault/Core tests
-cover signatures, exact envelopes, AEAD, freshness, rotation debt and restore
-reconciliation.
+every accepted vector and checks it against ADR 0086/0088/0089; Vault, Sync
+and Core tests cover signatures, exact envelopes, AEAD, freshness,
+replay/rollback/fork rejection, rotation debt and restore reconciliation.
 
 The `identity-signature-verification/pico.suite.id.v1/` family is seeded: ADR `0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md` now has deterministic detached Ed25519 verification vectors for possession, delegation and revocation over the Gate G1 canonical bytes. These publish public key records and signatures only: no private keys, no storage adapter, no registry freshness, no reader membership and no compatibility certification. The `@pico/identity` test suite reads each vector and verifies accept/reject behavior through the package runtime.
 

@@ -232,6 +232,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md`](docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md) - identity-root-signed reader-key freshness checkpoints and fail-closed Registry/Sync adapter
 - [`docs/architecture/0086-reader-custody-authority-and-opaque-storage.md`](docs/architecture/0086-reader-custody-authority-and-opaque-storage.md) - owner-rooted reader-custody domain/writer authority, Vault crypto and opaque Core storage
 - [`docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md`](docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md) - exact additional readers, explicit version history and revocation-coupled KEK rotation
+- [`docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md`](docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md) - identity-root checkpoint adapters plus reader-addressed sealed evidence sync with rollback-safe projection
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

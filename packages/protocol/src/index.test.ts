@@ -37,6 +37,9 @@ import {
   picoReaderCustodyReaderAccessModes,
   picoReaderCustodyReaderGrantLifecycleStatuses,
   picoReaderCustodyReaderGrantRevocationReasonCategories,
+  picoReaderCustodySyncBatchRecordSchema,
+  picoReaderCustodySyncEvidenceFamilies,
+  picoReaderCustodySyncPayloadSchema,
   picoReaderCustodyWriterGrantLifecycleStatuses,
   picoReaderCustodyWriterGrantRevocationReasonCategories,
   picoIdentityDelegationScopes,
@@ -86,6 +89,9 @@ import {
   buildPicoReaderCustodyKekRotationSignatureInput,
   buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
   buildPicoReaderCustodyReaderGrantSignatureInput,
+  buildPicoReaderCustodySyncEvidenceDigestInput,
+  buildPicoReaderCustodySyncManifestSignatureInput,
+  buildPicoReaderCustodySyncRecordDigestInput,
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
@@ -1544,7 +1550,7 @@ describe('Pico protocol types', () => {
     }
   });
 
-  it('exports the ADR 0086/0088 reader-custody vocabulary', () => {
+  it('exports the ADR 0086/0088/0089 reader-custody vocabulary', () => {
     expect(picoReaderCustodyCanonicalFamilies).toEqual([
       'domain',
       'readerGrant',
@@ -1552,6 +1558,7 @@ describe('Pico protocol types', () => {
       'writerGrant',
       'writerGrantLifecycle',
       'kekRotation',
+      'syncManifest',
       'item',
     ]);
     expect(picoReaderCustodyCanonicalLabels).toEqual({
@@ -1561,8 +1568,22 @@ describe('Pico protocol types', () => {
       writerGrant: 'pico.mem.reader-writer-grant.v1',
       writerGrantLifecycle: 'pico.mem.reader-writer-grant-lifecycle.v1',
       kekRotation: 'pico.mem.reader-kek-rotation.v1',
+      syncManifest: 'pico.mem.reader-sync-manifest.v1',
       item: 'pico.mem.reader-item.v1',
     });
+    expect(picoReaderCustodySyncEvidenceFamilies).toEqual([
+      'domain',
+      'reader_grant',
+      'reader_grant_lifecycle',
+      'writer_grant',
+      'writer_grant_lifecycle',
+      'kek_rotation',
+      'item',
+    ]);
+    expect(picoReaderCustodySyncPayloadSchema)
+      .toBe('pico.mem.reader-sync-payload.v1');
+    expect(picoReaderCustodySyncBatchRecordSchema)
+      .toBe('pico.mem.reader-sync-batch-record.v1');
     expect(picoReaderCustodyReaderAccessModes)
       .toEqual(['from_version', 'forward_only']);
     expect(picoReaderCustodyReaderGrantLifecycleStatuses)
@@ -1585,7 +1606,43 @@ describe('Pico protocol types', () => {
     ]);
   });
 
-  it('keeps reader-custody authority vectors byte-exact and aligned with ADR 0086/0088', () => {
+  it('canonicalizes ADR 0089 record and evidence digests independently of object-key and reference order', () => {
+    const firstRecord = buildPicoReaderCustodySyncRecordDigestInput({
+      nested: { z: 2, a: 'one' },
+      value: true,
+    });
+    const reorderedRecord = buildPicoReaderCustodySyncRecordDigestInput({
+      value: true,
+      nested: { a: 'one', z: 2 },
+    });
+    expect(firstRecord).toEqual(reorderedRecord);
+
+    const references = [
+      {
+        family: 'item' as const,
+        recordId: 'package_0001',
+        recordDigestHex: '22'.repeat(32),
+      },
+      {
+        family: 'domain' as const,
+        recordId: 'domain_authority_0001',
+        recordDigestHex: '11'.repeat(32),
+      },
+    ];
+    expect(buildPicoReaderCustodySyncEvidenceDigestInput(references))
+      .toEqual(buildPicoReaderCustodySyncEvidenceDigestInput(
+        [...references].reverse(),
+      ));
+    expect(() => buildPicoReaderCustodySyncEvidenceDigestInput([
+      references[0],
+      references[0],
+    ])).toThrow('duplicate_sync_evidence');
+    expect(() => buildPicoReaderCustodySyncRecordDigestInput({
+      unsafe: 1.5,
+    })).toThrow('invalid_sync_json_number');
+  });
+
+  it('keeps reader-custody authority vectors byte-exact and aligned with ADR 0086/0088/0089', () => {
     const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
     const suite = readRepoJsonObject(
       'docs/protocol/fixtures/reader-custody/suite.json',
@@ -1597,6 +1654,9 @@ describe('Pico protocol types', () => {
       ).replace(/\s+/g, '')],
       ['0088', readRepoFile(
         'docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md',
+      ).replace(/\s+/g, '')],
+      ['0089', readRepoFile(
+        'docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md',
       ).replace(/\s+/g, '')],
     ]);
 
@@ -1707,6 +1767,7 @@ describe('Pico protocol types', () => {
           'invalid_nonce_length',
           'invalid_reader_access_mode',
           'invalid_rotation_causes',
+          'invalid_sync_sequence',
           'invalid_validity_bounds',
         ]).toContain(reason);
         expect(() => buildPicoReaderCustodyVector(custodyFamily, fields))
@@ -3839,6 +3900,43 @@ function buildPicoReaderCustodyVector(
       ),
       rotatedAt: stringField(fields, 'rotatedAt'),
       lifecycleOrder: stringField(fields, 'lifecycleOrder'),
+    });
+  }
+
+  if (custodyFamily === 'syncManifest') {
+    return buildPicoReaderCustodySyncManifestSignatureInput({
+      suite: stringField(fields, 'suite'),
+      syncBatchId: stringField(fields, 'syncBatchId'),
+      routeRef: stringField(fields, 'routeRef'),
+      domainAuthorityId: stringField(fields, 'domainAuthorityId'),
+      homeId: stringField(fields, 'homeId'),
+      hostSigningKeyFingerprintHex: stringField(
+        fields,
+        'hostSigningKeyFingerprintHex',
+      ),
+      domainId: stringField(fields, 'domainId'),
+      ownerIdentityKeyFingerprintHex: stringField(
+        fields,
+        'ownerIdentityKeyFingerprintHex',
+      ),
+      readerGrantId: stringField(fields, 'readerGrantId'),
+      readerKeyFingerprintHex: stringField(
+        fields,
+        'readerKeyFingerprintHex',
+      ),
+      sequence: numberField(fields, 'sequence'),
+      previousManifestDigestHex: stringField(
+        fields,
+        'previousManifestDigestHex',
+      ),
+      evidenceDigestHex: stringField(fields, 'evidenceDigestHex'),
+      throughKekVersion: numberField(fields, 'throughKekVersion'),
+      observedThroughLifecycleOrder: stringField(
+        fields,
+        'observedThroughLifecycleOrder',
+      ),
+      createdAt: stringField(fields, 'createdAt'),
+      expiresAt: stringField(fields, 'expiresAt'),
     });
   }
 

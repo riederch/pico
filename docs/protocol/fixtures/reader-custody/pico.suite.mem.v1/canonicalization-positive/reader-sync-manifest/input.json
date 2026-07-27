@@ -1,0 +1,23 @@
+{
+  "custodyFamily": "syncManifest",
+  "construction": "pico.mem.reader-sync-manifest.v1",
+  "fields": {
+    "suite": "pico.suite.mem.v1",
+    "syncBatchId": "sync_batch_20260727_0001",
+    "routeRef": "route_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "domainAuthorityId": "rcdom_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "domainId": "domain-journal",
+    "ownerIdentityKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "readerGrantId": "rcreader_20260727_0001",
+    "readerKeyFingerprintHex": "6666666666666666666666666666666666666666666666666666666666666666",
+    "sequence": 1,
+    "previousManifestDigestHex": "0000000000000000000000000000000000000000000000000000000000000000",
+    "evidenceDigestHex": "7777777777777777777777777777777777777777777777777777777777777777",
+    "throughKekVersion": 1,
+    "observedThroughLifecycleOrder": "seq:0000000000000003",
+    "createdAt": "2026-07-27T10:10:00.000Z",
+    "expiresAt": "2026-07-27T11:00:00.000Z"
+  }
+}

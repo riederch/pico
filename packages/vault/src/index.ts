@@ -8,11 +8,15 @@ import {
   buildPicoReaderCustodyKekRotationSignatureInput,
   buildPicoReaderCustodyReaderGrantLifecycleSignatureInput,
   buildPicoReaderCustodyReaderGrantSignatureInput,
+  buildPicoReaderCustodySyncEvidenceDigestInput,
+  buildPicoReaderCustodySyncManifestSignatureInput,
+  buildPicoReaderCustodySyncRecordDigestInput,
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   buildPicoShareWrapPayload,
   buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoVaultKeyfileHeaderAad,
   picoMemoryContentSuite,
   picoReaderCustodyCanonicalLabels,
@@ -21,9 +25,12 @@ import {
   picoReaderCustodyKekRotationRecordSchema,
   picoReaderCustodyReaderGrantLifecycleRecordSchema,
   picoReaderCustodyReaderGrantRecordSchema,
+  picoReaderCustodySyncBatchRecordSchema,
+  picoReaderCustodySyncPayloadSchema,
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
   picoHomeSignatureInputLabels,
+  picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
   picoShareCanonicalLabels,
@@ -44,6 +51,8 @@ import type {
   PicoVaultKeyfileHeaderAadInput,
   PicoVaultPersonKeyRole,
   PicoIdentityKeyRecordSignatureInput,
+  PicoIdentityReaderKeyFreshnessCheckpoint,
+  PicoIdentityReaderKeyFreshnessSignatureInput,
   PicoReaderCustodyDomainRecord,
   PicoReaderCustodyDomainSignatureInput,
   PicoReaderCustodyItemRecord,
@@ -54,6 +63,10 @@ import type {
   PicoReaderCustodyReaderGrantLifecycleSignatureInput,
   PicoReaderCustodyReaderGrantRecord,
   PicoReaderCustodyReaderGrantSignatureInput,
+  PicoReaderCustodySyncBatchRecord,
+  PicoReaderCustodySyncEvidenceReference,
+  PicoReaderCustodySyncManifestSignatureInput,
+  PicoReaderCustodySyncPayload,
   PicoReaderCustodyWriterGrantLifecycleRecord,
   PicoReaderCustodyWriterGrantLifecycleSignatureInput,
   PicoReaderCustodyWriterGrantRecord,
@@ -63,6 +76,11 @@ import type {
 
 export const picoVaultKeyfileEnvelopeSchema = 'pico.vault.keyfile.encrypted.v1' as const;
 export const picoVaultPrivateKeyPayloadLabel = 'pico.vault.private-key-payload.v1' as const;
+export const MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS = 5 * 60 * 1_000;
+export const MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES = 16 * 1024 * 1024;
+export const MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS =
+  24 * 60 * 60 * 1_000;
+export const PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX = '00'.repeat(32);
 
 export interface PicoVaultEncryptedKeyfileV1 {
   schema: typeof picoVaultKeyfileEnvelopeSchema;
@@ -213,6 +231,49 @@ export interface DecryptPicoReaderCustodyItemInput {
   itemRecord: PicoReaderCustodyItemRecord;
 }
 
+export interface CreatePicoIdentityReaderKeyFreshnessCheckpointInput {
+  identitySession: PicoVaultSession;
+  checkpointId: string;
+  homeId: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+  status: PicoIdentityReaderKeyFreshnessSignatureInput['status'];
+  observedThroughLifecycleOrder: string;
+  checkedAt: string;
+  freshUntil: string;
+}
+
+export interface CreatePicoReaderCustodySyncBatchInput {
+  ownerIdentitySession: PicoVaultSession;
+  domainRecord: PicoReaderCustodyDomainRecord;
+  readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
+  readerGrantLifecycleRecords?:
+    PicoReaderCustodyReaderGrantLifecycleRecord[];
+  writerGrantRecords?: PicoReaderCustodyWriterGrantRecord[];
+  writerGrantLifecycleRecords?:
+    PicoReaderCustodyWriterGrantLifecycleRecord[];
+  rotationRecords?: PicoReaderCustodyKekRotationRecord[];
+  itemRecords?: PicoReaderCustodyItemRecord[];
+  syncBatchId: string;
+  routeRef: string;
+  sequence: number;
+  previousManifestDigestHex: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface CreatePicoReaderCustodySyncBatchResult {
+  batchRecord: PicoReaderCustodySyncBatchRecord;
+  manifestDigestHex: string;
+}
+
+export interface OpenPicoReaderCustodySyncBatchInput {
+  readerKeyAgreementSession: PicoVaultSession;
+  batchRecord: PicoReaderCustodySyncBatchRecord;
+  evaluatedAt?: string;
+}
+
 // Minimal shape of the ready libsodium-wrappers-sumo module the Vault runtime uses.
 export interface VaultSodium {
   crypto_aead_xchacha20poly1305_ietf_KEYBYTES: number;
@@ -292,6 +353,7 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     picoReaderCustodyCanonicalLabels.writerGrant,
     picoReaderCustodyCanonicalLabels.writerGrantLifecycle,
     picoReaderCustodyCanonicalLabels.kekRotation,
+    picoReaderCustodyCanonicalLabels.syncManifest,
   ]),
   device_signing: new Set<string>([
     ...Object.values(picoIdentitySignatureInputLabels),
@@ -415,6 +477,384 @@ export class PicoVaultSession {
 
   #markUsed(nowMs: number): void {
     this.#lastUsedAtMs = nowMs;
+  }
+}
+
+export function createPicoIdentityReaderKeyFreshnessCheckpoint(
+  input: CreatePicoIdentityReaderKeyFreshnessCheckpointInput,
+): PicoIdentityReaderKeyFreshnessCheckpoint {
+  const metadata = input.identitySession.metadata();
+  if (metadata.keyRole !== 'pico_identity') {
+    throw new Error('pico_identity_key_required');
+  }
+  const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {
+    suite: picoIdentitySuite,
+    checkpointId: input.checkpointId,
+    homeId: input.homeId,
+    issuerIdentityKeyFingerprintHex: metadata.keyFingerprintHex,
+    deviceSigningKeyFingerprintHex:
+      input.deviceSigningKeyFingerprintHex,
+    deviceKeyAgreementKeyFingerprintHex:
+      input.deviceKeyAgreementKeyFingerprintHex,
+    delegationId: input.delegationId,
+    status: input.status,
+    observedThroughLifecycleOrder:
+      input.observedThroughLifecycleOrder,
+    checkedAt: input.checkedAt,
+    freshUntil: input.freshUntil,
+  };
+  const signatureInput =
+    buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint);
+  if (Date.parse(checkpoint.freshUntil) - Date.parse(checkpoint.checkedAt)
+      > MAX_PICO_IDENTITY_READER_KEY_FRESHNESS_MS) {
+    throw new Error('reader_key_freshness_window_too_long');
+  }
+  return {
+    schema: picoIdentityReaderKeyFreshnessCheckpointSchema,
+    checkpoint,
+    issuerIdentityKeyRecord: keyRecordFromMetadata(metadata),
+    issuerSignatureHex: bytesToHex(
+      input.identitySession.sign(signatureInput),
+    ),
+  };
+}
+
+export function createPicoReaderCustodySyncBatch(
+  sodium: VaultSodium,
+  input: CreatePicoReaderCustodySyncBatchInput,
+): CreatePicoReaderCustodySyncBatchResult {
+  assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
+  assertPicoReaderCustodyReaderGrantRecord(
+    sodium,
+    input.domainRecord,
+    input.readerGrantRecord,
+  );
+  const ownerMetadata = input.ownerIdentitySession.metadata();
+  const domain = input.domainRecord.domain;
+  const readerGrant = input.readerGrantRecord.grant;
+  if (ownerMetadata.keyRole !== 'pico_identity'
+    || ownerMetadata.keyFingerprintHex
+      !== domain.ownerIdentityKeyFingerprintHex) {
+    throw new Error('owner_identity_key_required');
+  }
+  if (!/^route_[A-Za-z0-9_-]{32,128}$/.test(input.routeRef)
+    || !isCanonicalInstant(input.createdAt)
+    || !isCanonicalInstant(input.expiresAt)
+    || input.createdAt >= input.expiresAt
+    || Date.parse(input.expiresAt) - Date.parse(input.createdAt)
+      > MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS
+    || input.createdAt < domain.authorizedAt
+    || input.createdAt < readerGrant.validFrom
+    || input.createdAt >= readerGrant.validUntil) {
+    throw new Error('invalid_reader_sync_manifest');
+  }
+  if (!Number.isSafeInteger(input.sequence) || input.sequence < 1
+    || (input.sequence === 1
+      && input.previousManifestDigestHex
+        !== PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX)
+    || (input.sequence > 1
+      && input.previousManifestDigestHex
+        === PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX)) {
+    throw new Error('invalid_sync_predecessor');
+  }
+
+  const rotations = validatedRotationChain(
+    sodium,
+    input.domainRecord,
+    input.rotationRecords ?? [],
+  );
+  const readerLifecycles = input.readerGrantLifecycleRecords ?? [];
+  const writerGrants = input.writerGrantRecords ?? [];
+  const writerLifecycles = input.writerGrantLifecycleRecords ?? [];
+  const items = input.itemRecords ?? [];
+  const currentKekVersion = currentReaderCustodyKekVersion(
+    input.domainRecord,
+    rotations,
+  );
+
+  for (const lifecycle of readerLifecycles) {
+    assertPicoReaderCustodyReaderGrantLifecycleRecord(
+      sodium,
+      input.domainRecord,
+      lifecycle,
+    );
+    assertReaderGrantLifecycleLink(input.readerGrantRecord, lifecycle);
+    if (lifecycle.lifecycle.changedAt < readerGrant.validFrom
+      || lifecycle.lifecycle.changedAt > input.createdAt) {
+      throw new Error('invalid_reader_custody_reader_lifecycle');
+    }
+  }
+  const writerGrantById =
+    new Map<string, PicoReaderCustodyWriterGrantRecord>();
+  for (const grant of writerGrants) {
+    assertPicoReaderCustodyWriterGrantRecord(
+      sodium,
+      input.domainRecord,
+      grant,
+      currentKekVersion,
+    );
+    if (writerGrantById.has(grant.grant.writerGrantId)) {
+      throw new Error('duplicate_writer_grant');
+    }
+    if (grant.grant.validFrom > input.createdAt) {
+      throw new Error('invalid_reader_custody_writer_grant');
+    }
+    writerGrantById.set(grant.grant.writerGrantId, grant);
+  }
+  for (const lifecycle of writerLifecycles) {
+    assertPicoReaderCustodyWriterGrantLifecycleRecord(
+      sodium,
+      input.domainRecord,
+      lifecycle,
+    );
+    const grant = writerGrantById.get(lifecycle.lifecycle.writerGrantId);
+    if (grant === undefined) {
+      throw new Error('writer_grant_evidence_missing');
+    }
+    assertWriterGrantLifecycleLink(grant, lifecycle);
+    if (lifecycle.lifecycle.changedAt < grant.grant.validFrom
+      || lifecycle.lifecycle.changedAt > input.createdAt) {
+      throw new Error('invalid_reader_custody_writer_lifecycle');
+    }
+  }
+  assertSyncRotationCauses(
+    rotations,
+    readerLifecycles,
+    writerLifecycles,
+    domain.lifecycleOrder,
+    domain.authorizedAt,
+    input.createdAt,
+  );
+  const itemPackageIds = new Set<string>();
+  const memoryItemIds = new Set<string>();
+  for (const item of items) {
+    const grant = writerGrantById.get(item.item.writerGrantId);
+    if (grant === undefined) {
+      throw new Error('writer_grant_evidence_missing');
+    }
+    if (itemPackageIds.has(item.item.packageId)
+      || memoryItemIds.has(item.item.memoryItemId)) {
+      throw new Error('duplicate_sync_item');
+    }
+    itemPackageIds.add(item.item.packageId);
+    memoryItemIds.add(item.item.memoryItemId);
+    assertPicoReaderCustodyItemRecord(
+      sodium,
+      input.domainRecord,
+      grant,
+      item,
+    );
+    if (item.item.createdAt > input.createdAt) {
+      throw new Error('invalid_reader_custody_item');
+    }
+  }
+
+  const records = syncEvidenceRecords({
+    domainRecord: input.domainRecord,
+    readerGrantRecord: input.readerGrantRecord,
+    readerGrantLifecycleRecords: readerLifecycles,
+    writerGrantRecords: writerGrants,
+    writerGrantLifecycleRecords: writerLifecycles,
+    rotationRecords: rotations,
+    itemRecords: items,
+  });
+  const references = syncEvidenceReferences(sodium, records);
+  const evidenceDigestHex = bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoReaderCustodySyncEvidenceDigestInput(references),
+    null,
+  ));
+  const observedThroughLifecycleOrder = maximumLifecycleOrder(
+    domain.lifecycleOrder,
+    readerGrant.lifecycleOrder,
+    ...readerLifecycles.map((record) => record.lifecycle.lifecycleOrder),
+    ...writerGrants.map((record) => record.grant.lifecycleOrder),
+    ...writerLifecycles.map((record) => record.lifecycle.lifecycleOrder),
+    ...rotations.map((record) => record.rotation.lifecycleOrder),
+  );
+  const manifest: PicoReaderCustodySyncManifestSignatureInput = {
+    suite: picoMemoryContentSuite,
+    syncBatchId: input.syncBatchId,
+    routeRef: input.routeRef,
+    domainAuthorityId: domain.domainAuthorityId,
+    homeId: domain.homeId,
+    hostSigningKeyFingerprintHex: domain.hostSigningKeyFingerprintHex,
+    domainId: domain.domainId,
+    ownerIdentityKeyFingerprintHex:
+      domain.ownerIdentityKeyFingerprintHex,
+    readerGrantId: readerGrant.readerGrantId,
+    readerKeyFingerprintHex: readerGrant.readerKeyFingerprintHex,
+    sequence: input.sequence,
+    previousManifestDigestHex: input.previousManifestDigestHex,
+    evidenceDigestHex,
+    throughKekVersion: currentKekVersion,
+    observedThroughLifecycleOrder,
+    createdAt: input.createdAt,
+    expiresAt: input.expiresAt,
+  };
+  const manifestInput =
+    buildPicoReaderCustodySyncManifestSignatureInput(manifest);
+  const ownerIdentityKeyRecord = keyRecordFromMetadata(ownerMetadata);
+  const payload: PicoReaderCustodySyncPayload = {
+    schema: picoReaderCustodySyncPayloadSchema,
+    manifest,
+    ownerIdentityKeyRecord,
+    ownerSignatureHex: bytesToHex(
+      input.ownerIdentitySession.sign(manifestInput),
+    ),
+    domainRecord: input.domainRecord,
+    readerGrantRecord: input.readerGrantRecord,
+    readerGrantLifecycleRecords: [...readerLifecycles],
+    writerGrantRecords: [...writerGrants],
+    writerGrantLifecycleRecords: [...writerLifecycles],
+    rotationRecords: [...rotations],
+    itemRecords: [...items],
+  };
+  const plaintext = textEncoder.encode(JSON.stringify(payload));
+  if (plaintext.byteLength > MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES) {
+    sodium.memzero(plaintext);
+    throw new Error('sync_payload_too_large');
+  }
+  try {
+    const sealedPayload = sodium.crypto_box_seal(
+      plaintext,
+      hexToBytes(input.readerGrantRecord.readerKeyRecord.publicKeyHex),
+    );
+    return {
+      batchRecord: {
+        schema: picoReaderCustodySyncBatchRecordSchema,
+        routeRef: input.routeRef,
+        syncBatchId: input.syncBatchId,
+        sealedPayloadHex: bytesToHex(sealedPayload),
+        sealedPayloadDigestHex: bytesToHex(
+          sodium.crypto_generichash(32, sealedPayload, null),
+        ),
+        expiresAt: input.expiresAt,
+      },
+      manifestDigestHex: bytesToHex(
+        sodium.crypto_generichash(32, manifestInput, null),
+      ),
+    };
+  } finally {
+    sodium.memzero(plaintext);
+  }
+}
+
+/**
+ * Opens only the reader-addressed transport layer. The owner manifest and
+ * exact evidence digest are checked here; individual domain/grant/item
+ * authority is independently projected by `@pico/sync` before any KEK unwrap.
+ */
+export function openPicoReaderCustodySyncBatch(
+  sodium: VaultSodium,
+  input: OpenPicoReaderCustodySyncBatchInput,
+): PicoReaderCustodySyncPayload {
+  assertExactKeys(input.batchRecord as unknown as Record<string, unknown>, [
+    'schema',
+    'routeRef',
+    'syncBatchId',
+    'sealedPayloadHex',
+    'sealedPayloadDigestHex',
+    'expiresAt',
+  ]);
+  const batch = input.batchRecord;
+  const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
+  const metadata = input.readerKeyAgreementSession.metadata();
+  const sealedPayload = hexToBytes(batch.sealedPayloadHex);
+  if (batch.schema !== picoReaderCustodySyncBatchRecordSchema
+    || metadata.keyRole !== 'device_key_agreement'
+    || !isCanonicalInstant(batch.expiresAt)
+    || !isCanonicalInstant(evaluatedAt)
+    || evaluatedAt >= batch.expiresAt
+    || sealedPayload.byteLength
+      > MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES + 128
+    || bytesToHex(sodium.crypto_generichash(32, sealedPayload, null))
+      !== batch.sealedPayloadDigestHex) {
+    throw new Error('invalid_reader_sync_batch');
+  }
+  const plaintext = input.readerKeyAgreementSession.unwrapSealedBox(
+    sealedPayload,
+  );
+  try {
+    if (plaintext.byteLength > MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES) {
+      throw new Error('sync_payload_too_large');
+    }
+    const parsed = JSON.parse(textDecoder.decode(plaintext)) as unknown;
+    if (!isRecord(parsed)) {
+      throw new Error('invalid_reader_sync_payload');
+    }
+    assertExactKeys(parsed, [
+      'schema',
+      'manifest',
+      'ownerIdentityKeyRecord',
+      'ownerSignatureHex',
+      'domainRecord',
+      'readerGrantRecord',
+      'readerGrantLifecycleRecords',
+      'writerGrantRecords',
+      'writerGrantLifecycleRecords',
+      'rotationRecords',
+      'itemRecords',
+    ]);
+    const payload = parsed as unknown as PicoReaderCustodySyncPayload;
+    const manifest = payload.manifest;
+    if (payload.schema !== picoReaderCustodySyncPayloadSchema
+      || !isRecord(manifest)
+      || manifest.routeRef !== batch.routeRef
+      || manifest.syncBatchId !== batch.syncBatchId
+      || manifest.expiresAt !== batch.expiresAt
+      || manifest.readerKeyFingerprintHex !== metadata.keyFingerprintHex
+      || !isRecord(payload.ownerIdentityKeyRecord)
+      || !Array.isArray(payload.readerGrantLifecycleRecords)
+      || !Array.isArray(payload.writerGrantRecords)
+      || !Array.isArray(payload.writerGrantLifecycleRecords)
+      || !Array.isArray(payload.rotationRecords)
+      || !Array.isArray(payload.itemRecords)) {
+      throw new Error('invalid_reader_sync_payload');
+    }
+    const manifestInput =
+      buildPicoReaderCustodySyncManifestSignatureInput(manifest);
+    assertKeyRecordMatchesMetadata(
+      sodium,
+      payload.ownerIdentityKeyRecord,
+      'pico_identity',
+    );
+    const ownerFingerprint = keyRecordFingerprintHex(
+      sodium,
+      'pico_identity',
+      hexToBytes(payload.ownerIdentityKeyRecord.publicKeyHex),
+    );
+    if (ownerFingerprint !== manifest.ownerIdentityKeyFingerprintHex
+      || !verifyDetached(
+        sodium,
+        payload.ownerIdentityKeyRecord.publicKeyHex,
+        manifestInput,
+        payload.ownerSignatureHex,
+      )) {
+      throw new Error('invalid_reader_sync_manifest');
+    }
+    const references = syncEvidenceReferences(
+      sodium,
+      syncEvidenceRecords(payload),
+    );
+    const evidenceDigestHex = bytesToHex(sodium.crypto_generichash(
+      32,
+      buildPicoReaderCustodySyncEvidenceDigestInput(references),
+      null,
+    ));
+    if (evidenceDigestHex !== manifest.evidenceDigestHex) {
+      throw new Error('invalid_reader_sync_evidence_digest');
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof Error
+      && (error.message.startsWith('invalid_reader_sync')
+        || error.message === 'sync_payload_too_large')) {
+      throw error;
+    }
+    throw new Error('invalid_reader_sync_payload');
+  } finally {
+    sodium.memzero(plaintext);
   }
 }
 
@@ -1943,6 +2383,189 @@ function assertPicoReaderCustodyEnvelope(
       record.issuerSignatureHex,
     )) {
     throw new Error('invalid_reader_custody_envelope');
+  }
+}
+
+interface SyncEvidenceRecord {
+  family: PicoReaderCustodySyncEvidenceReference['family'];
+  recordId: string;
+  record: unknown;
+}
+
+function syncEvidenceRecords(input: {
+  domainRecord: PicoReaderCustodyDomainRecord;
+  readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
+  readerGrantLifecycleRecords:
+    readonly PicoReaderCustodyReaderGrantLifecycleRecord[];
+  writerGrantRecords: readonly PicoReaderCustodyWriterGrantRecord[];
+  writerGrantLifecycleRecords:
+    readonly PicoReaderCustodyWriterGrantLifecycleRecord[];
+  rotationRecords: readonly PicoReaderCustodyKekRotationRecord[];
+  itemRecords: readonly PicoReaderCustodyItemRecord[];
+}): SyncEvidenceRecord[] {
+  return [
+    {
+      family: 'domain',
+      recordId: input.domainRecord.domain.domainAuthorityId,
+      record: input.domainRecord,
+    },
+    {
+      family: 'reader_grant',
+      recordId: input.readerGrantRecord.grant.readerGrantId,
+      record: input.readerGrantRecord,
+    },
+    ...input.readerGrantLifecycleRecords.map((record) => ({
+      family: 'reader_grant_lifecycle' as const,
+      recordId: record.lifecycle.lifecycleId,
+      record,
+    })),
+    ...input.writerGrantRecords.map((record) => ({
+      family: 'writer_grant' as const,
+      recordId: record.grant.writerGrantId,
+      record,
+    })),
+    ...input.writerGrantLifecycleRecords.map((record) => ({
+      family: 'writer_grant_lifecycle' as const,
+      recordId: record.lifecycle.lifecycleId,
+      record,
+    })),
+    ...input.rotationRecords.map((record) => ({
+      family: 'kek_rotation' as const,
+      recordId: record.rotation.rotationId,
+      record,
+    })),
+    ...input.itemRecords.map((record) => ({
+      family: 'item' as const,
+      recordId: record.item.packageId,
+      record,
+    })),
+  ];
+}
+
+function syncEvidenceReferences(
+  sodium: VaultSodium,
+  records: readonly SyncEvidenceRecord[],
+): PicoReaderCustodySyncEvidenceReference[] {
+  return records.map((record) => ({
+    family: record.family,
+    recordId: record.recordId,
+    recordDigestHex: bytesToHex(sodium.crypto_generichash(
+      32,
+      buildPicoReaderCustodySyncRecordDigestInput(record.record),
+      null,
+    )),
+  }));
+}
+
+function assertReaderGrantLifecycleLink(
+  grantRecord: PicoReaderCustodyReaderGrantRecord,
+  lifecycleRecord: PicoReaderCustodyReaderGrantLifecycleRecord,
+): void {
+  const grant = grantRecord.grant;
+  const lifecycle = lifecycleRecord.lifecycle;
+  if (lifecycle.readerGrantId !== grant.readerGrantId
+    || lifecycle.readerIdentityKeyFingerprintHex
+      !== grant.readerIdentityKeyFingerprintHex
+    || lifecycle.readerKeyFingerprintHex
+      !== grant.readerKeyFingerprintHex
+    || lifecycle.lifecycleOrder <= grant.lifecycleOrder) {
+    throw new Error('invalid_reader_custody_reader_lifecycle');
+  }
+}
+
+function assertWriterGrantLifecycleLink(
+  grantRecord: PicoReaderCustodyWriterGrantRecord,
+  lifecycleRecord: PicoReaderCustodyWriterGrantLifecycleRecord,
+): void {
+  const grant = grantRecord.grant;
+  const lifecycle = lifecycleRecord.lifecycle;
+  if (lifecycle.writerGrantId !== grant.writerGrantId
+    || lifecycle.writerIdentityKeyFingerprintHex
+      !== grant.writerIdentityKeyFingerprintHex
+    || lifecycle.writerDeviceSigningKeyFingerprintHex
+      !== grant.writerDeviceSigningKeyFingerprintHex
+    || lifecycle.lifecycleOrder <= grant.lifecycleOrder) {
+    throw new Error('invalid_reader_custody_writer_lifecycle');
+  }
+}
+
+function maximumLifecycleOrder(
+  first: string,
+  ...rest: string[]
+): string {
+  return rest.reduce(
+    (maximum, value) => value > maximum ? value : maximum,
+    first,
+  );
+}
+
+function assertSyncRotationCauses(
+  rotations: readonly PicoReaderCustodyKekRotationRecord[],
+  readerLifecycles:
+    readonly PicoReaderCustodyReaderGrantLifecycleRecord[],
+  writerLifecycles:
+    readonly PicoReaderCustodyWriterGrantLifecycleRecord[],
+  initialLifecycleOrder: string,
+  initialAt: string,
+  throughAt: string,
+): void {
+  const lifecycleById = new Map<string, {
+    changedAt: string;
+    lifecycleOrder: string;
+  }>();
+  for (const record of readerLifecycles) {
+    if (lifecycleById.has(record.lifecycle.lifecycleId)) {
+      throw new Error('duplicate_sync_lifecycle');
+    }
+    lifecycleById.set(record.lifecycle.lifecycleId, {
+      changedAt: record.lifecycle.changedAt,
+      lifecycleOrder: record.lifecycle.lifecycleOrder,
+    });
+  }
+  for (const record of writerLifecycles) {
+    if (lifecycleById.has(record.lifecycle.lifecycleId)) {
+      throw new Error('duplicate_sync_lifecycle');
+    }
+    lifecycleById.set(record.lifecycle.lifecycleId, {
+      changedAt: record.lifecycle.changedAt,
+      lifecycleOrder: record.lifecycle.lifecycleOrder,
+    });
+  }
+
+  const covered = new Set<string>();
+  let previousLifecycleOrder = initialLifecycleOrder;
+  let previousAt = initialAt;
+  for (const record of rotations) {
+    const rotation = record.rotation;
+    if (rotation.rotatedAt < previousAt
+      || rotation.rotatedAt > throughAt) {
+      throw new Error('invalid_sync_rotation_causes');
+    }
+    for (const [lifecycleId, evidence] of lifecycleById) {
+      if (covered.has(lifecycleId)) {
+        continue;
+      }
+      if (evidence.lifecycleOrder <= previousLifecycleOrder
+        || (evidence.lifecycleOrder < rotation.lifecycleOrder
+          && evidence.changedAt > rotation.rotatedAt)) {
+        throw new Error('invalid_sync_rotation_causes');
+      }
+    }
+    const actual = [...rotation.causeLifecycleIds].sort();
+    const required = [...lifecycleById.entries()]
+      .filter(([lifecycleId, evidence]) =>
+        !covered.has(lifecycleId)
+        && evidence.lifecycleOrder > previousLifecycleOrder
+        && evidence.lifecycleOrder < rotation.lifecycleOrder
+        && evidence.changedAt <= rotation.rotatedAt)
+      .map(([lifecycleId]) => lifecycleId)
+      .sort();
+    if (JSON.stringify(actual) !== JSON.stringify(required)) {
+      throw new Error('invalid_sync_rotation_causes');
+    }
+    actual.forEach((lifecycleId) => covered.add(lifecycleId));
+    previousLifecycleOrder = rotation.lifecycleOrder;
+    previousAt = rotation.rotatedAt;
   }
 }
 

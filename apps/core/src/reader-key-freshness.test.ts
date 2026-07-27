@@ -9,6 +9,11 @@ import {
   type PicoIdentityReaderKeyFreshnessCheckpoint,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
 } from '@pico/protocol';
+import {
+  InMemoryPicoSyncOpaqueTransport,
+  PicoSyncReaderKeyFreshnessCheckpointPublisher,
+  PicoSyncReaderKeyFreshnessCheckpointSource,
+} from '@pico/sync';
 import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -40,6 +45,45 @@ beforeAll(async () => {
 });
 
 describe('authenticated reader-key freshness adapter (ADR 0085)', () => {
+  it('accepts a Vault-compatible checkpoint through the opaque sync adapter while retaining Core authority', async () => {
+    const transport = new InMemoryPicoSyncOpaqueTransport();
+    const publisher =
+      new PicoSyncReaderKeyFreshnessCheckpointPublisher(transport);
+    const routeRef = `route_${'F'.repeat(48)}`;
+    const signal = new AbortController().signal;
+    const signed = checkpointResult().record;
+    await publisher.publish(routeRef, signed, { signal });
+    let resolvedQuery:
+      PicoIdentityReaderKeyFreshnessQuery | undefined;
+    const source = new PicoSyncReaderKeyFreshnessCheckpointSource(
+      transport,
+      (lookup) => {
+        resolvedQuery = lookup;
+        return routeRef;
+      },
+      'sync-test',
+    );
+    const adapter = new AuthenticatedPicoIdentityReaderKeyFreshnessSource(
+      sodium,
+      source,
+    );
+
+    await expect(adapter.check(query())).resolves.toMatchObject({
+      status: 'current',
+      sourceRef: `sync-test:${routeRef}`,
+      homeId: 'home_freshness_test',
+      observedThroughLifecycleOrder: 'seq:0000000000000002',
+    });
+    expect(resolvedQuery).toEqual(query());
+
+    const forged = structuredClone(signed);
+    forged.checkpoint.checkpointId = 'freshness_checkpoint_forged';
+    await publisher.publish(routeRef, forged, { signal });
+    await expect(adapter.check(query())).resolves.toEqual({
+      status: 'unavailable',
+    });
+  });
+
   it('accepts only an exact identity-root-signed current checkpoint and performs every lookup', async () => {
     const source = queuedSource([
       checkpointResult(),
