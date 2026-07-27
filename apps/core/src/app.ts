@@ -18,6 +18,8 @@ import {
   picoHomeFoundingRecordSchema,
   picoHomeSealedClaimPayloadSchema,
   buildPicoHomeMembershipSignatureInput,
+  picoHomeDomainReadGrantLifecycleRecordSchema,
+  picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
   picoIdentitySuite,
   protocolCapabilities,
@@ -52,7 +54,11 @@ import {
   type PicoHomeMembershipCredential,
   type PicoHomeMembershipIssuerStatement,
   type PicoHomeMembershipLifecycleRecord,
+  type PicoHomeDomainReadGrantLifecycleRecord,
+  type PicoHomeDomainReadGrantRecord,
+  type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
+  type PicoIdentityRevocationSignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
   type PicoRealtimeTicketResponse,
@@ -64,23 +70,30 @@ import {
 import {
   verifyPicoIdentityDetachedSignature,
   verifyPicoIdentityKeyRecordFingerprint,
+  type PicoIdentitySignedDelegation,
+  type PicoIdentitySignedRevocation,
 } from '@pico/identity';
 import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
 import { EventFactory } from './event-factory.js';
 import { EventStore, type EventCursor, type PicoHomeClaimState } from './event-store.js';
 import type { MemoryContentCursor, MemoryItem, MemoryStore } from './memory-store.js';
-import { SoleResidentReadership, type DomainReadership } from './domain-readership.js';
+import { HomeMembershipReadership, SoleResidentReadership, type DomainReadership } from './domain-readership.js';
 import { registerWebDashboard } from './static-web.js';
 import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
 import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, type AccessClass } from './access-classes.js';
 import { OperatorOverloadedError, type OperatorStore } from './operator-store.js';
-import { SessionStore } from './session-store.js';
+import { SessionStore, type SessionPrincipal } from './session-store.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { LoginThrottle } from './login-throttle.js';
 import { verifyPicoHomeMembershipAuthority } from './home-membership.js';
+import {
+  IdentitySessionChallengeStore,
+  verifyIdentitySessionProof,
+  type IdentitySessionProof,
+} from './identity-session.js';
 import { shredDomainWithAudit } from './domain-shred.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 import {
@@ -225,10 +238,17 @@ interface PendingPicoHomeClaim {
 
 type ParsedSealedPicoHomeClaimRequest = Extract<ParsedPicoHomeClaimRequest, { ok: true; kind: 'sealed' }>;
 
-// Which authority a request carries. The bearer header holds either the
-// principal-less static token or an operator session; they are resolved apart
-// so the token can never reach beyond its ceiling (ADR 0075).
-type RequestAuthority = 'operator' | 'static-token' | 'none';
+// A bearer resolves to one typed authority. In particular, an identity-bound
+// session does not inherit operator or diagnostic powers (ADR 0082).
+type RequestAuthority =
+  | { kind: 'operator'; sessionDigest: string }
+  | {
+    kind: 'pico-identity';
+    sessionDigest: string;
+    principal: Extract<SessionPrincipal, { kind: 'pico_identity' }>;
+  }
+  | { kind: 'static-token' }
+  | { kind: 'none' };
 
 export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Fail loudly on a key/backup-separation misconfiguration before opening any
@@ -293,6 +313,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const realtimeTickets = new Map<string, RealtimeTicketRecord>();
   const operators: OperatorStore = store.operators(sodium);
   const sessions = new SessionStore();
+  const identitySessionChallenges = new IdentitySessionChallengeStore();
   const bootstrapCode = new OperatorBootstrapCode();
   const moveInCode = new MoveInCode();
   const homeHostKeyStore = new HomeHostKeyStore(homeHostKeyStorePath);
@@ -300,10 +321,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   let homeSetupNonceHex: string | undefined;
   let pendingHomeClaim: PendingPicoHomeClaim | undefined;
   const accessClasses = new AccessClassRegistry();
-  // Domain readership for the `domain-content` class (ADR 0077 A7 seam). A
-  // distinct authority from the operator role; the foundation-phase default
-  // resolves to the sole principal reading every domain (ADR 0077 C1).
-  const readership: DomainReadership = config.readership ?? new SoleResidentReadership();
+  // The sole-resident policy survives only while no signed Home exists. Claiming
+  // switches the default at request time, including when claim happens in this
+  // process, so there is no restart window where operator means read-all.
+  const soleResidentReadership = new SoleResidentReadership();
+  const homeMembershipReadership = new HomeMembershipReadership(store, store);
+  const readership: DomainReadership = config.readership ?? {
+    mayRead(principal, privacyDomain) {
+      return store.picoHomeFoundingRecord() === undefined
+        ? soleResidentReadership.mayRead(principal, privacyDomain)
+        : homeMembershipReadership.mayRead(principal, privacyDomain);
+    },
+  };
 
   function appendServerEvent(type: FoundationEventType, payload: FoundationEventPayload): void {
     const event = factory.create({ deviceId: config.deviceId, type, payload });
@@ -421,6 +450,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   }
   reconcileClaimedHomeHostKeyCustody();
   reconcileHomeMembershipCredentials();
+  const identityEvidenceReconciliation = store.reconcilePicoIdentityLifecycleEvidence(sodium);
+  if (identityEvidenceReconciliation.droppedDelegations > 0
+    || identityEvidenceReconciliation.droppedRevocations > 0) {
+    app.log.warn(
+      identityEvidenceReconciliation,
+      'Pico identity lifecycle evidence failed re-verification on boot and was dropped.',
+    );
+  }
+  const grantReconciliation = store.reconcilePicoHomeDomainReadGrants(sodium);
+  if (grantReconciliation.droppedGrants > 0 || grantReconciliation.droppedLifecycleRecords > 0) {
+    app.log.warn(
+      grantReconciliation,
+      'Pico Home domain read-grant evidence failed re-verification on boot and was dropped.',
+    );
+  }
   activateHomeSetupMode();
 
   // While no operator exists, mint the per-process bootstrap code and surface it
@@ -617,14 +661,36 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    */
   function resolveAuthority(authorizationHeader: string | string[] | undefined): RequestAuthority {
     if (config.foundationToken !== undefined && isBearerTokenAuthorized(authorizationHeader, config.foundationToken)) {
-      return 'static-token';
+      return { kind: 'static-token' };
     }
 
-    if (sessions.touch(readBearerCredential(authorizationHeader)) !== undefined) {
-      return 'operator';
+    const credential = readBearerCredential(authorizationHeader);
+    const touched = sessions.touch(credential);
+    const sessionDigest = sessions.digestOf(credential);
+    if (touched === undefined || sessionDigest === undefined) {
+      return { kind: 'none' };
     }
 
-    return 'none';
+    if (touched.principal.kind === 'operator') {
+      return { kind: 'operator', sessionDigest };
+    }
+
+    const principal = touched.principal;
+    const active = store.hasActivePicoHomeMembership(principal.picoIdentityFingerprintHex)
+      && store.hasActivePicoIdentityDelegation({
+        picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+        deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+        delegationId: principal.delegationId,
+        sodium,
+      });
+    if (!active) {
+      sessions.revoke(credential);
+      purgeSessionRealtimeTickets(realtimeTickets, sessionDigest);
+      terminateSessionSockets(sessionDigest);
+      return { kind: 'none' };
+    }
+
+    return { kind: 'pico-identity', sessionDigest, principal };
   }
 
   app.addHook('onRequest', async (request, reply) => {
@@ -673,7 +739,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const authority = resolveAuthority(request.headers.authorization);
 
     if (accessClass === 'foundation-diagnostic') {
-      if (authority !== 'none') {
+      if (authority.kind === 'operator' || authority.kind === 'static-token') {
         return;
       }
 
@@ -696,14 +762,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // positive readership evaluation for the target domain. Swapping the
       // readership policy narrows what the operator reads without touching this
       // authentication gate; that is the seam a second principal plugs into.
-      if (authority !== 'operator') {
-        return unauthorized(reply, 'Foundation operator session is required.');
+      if (authority.kind !== 'operator' && authority.kind !== 'pico-identity') {
+        return unauthorized(reply, 'Authenticated Foundation session is required.');
       }
 
       const privacyDomain = (request.params as { privacyDomain?: string }).privacyDomain;
-      const sessionDigest = sessions.digestOf(readBearerCredential(request.headers.authorization)) ?? '';
 
-      if (privacyDomain === undefined || !readership.mayRead({ sessionDigest }, privacyDomain)) {
+      if (privacyDomain === undefined || !readership.mayRead({
+        sessionDigest: authority.sessionDigest,
+        ...(authority.kind === 'pico-identity'
+          ? { picoIdentityFingerprintHex: authority.principal.picoIdentityFingerprintHex }
+          : {}),
+      }, privacyDomain)) {
         // Non-enumerating denial (ADR 0077 C4): does not reveal whether the
         // domain exists or holds content.
         return sendNoStore(reply.code(404), { error: 'Not found.' });
@@ -712,10 +782,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return;
     }
 
+    if (accessClass === 'authenticated') {
+      if (authority.kind === 'operator' || authority.kind === 'pico-identity') {
+        return;
+      }
+
+      return unauthorized(reply, 'Authenticated Foundation session is required.');
+    }
+
     // Every remaining class needs the operator role, so the principal-less
     // static token cannot reach them: its ceiling is foundation-diagnostic
     // (ADR 0075).
-    if (authority !== 'operator') {
+    if (authority.kind !== 'operator') {
       return unauthorized(reply, 'Foundation operator session is required.');
     }
   });
@@ -749,6 +827,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('GET', '/api/home/setup', 'setup-bootstrap');
   accessClasses.register('POST', '/api/home/claim', 'setup-bootstrap');
   accessClasses.register('POST', '/api/auth/session', 'public');
+  accessClasses.register('POST', '/api/auth/identity-challenges', 'public');
+  accessClasses.register('POST', '/api/auth/identity-session', 'public');
   accessClasses.register('GET', '/api/auth/session', 'authenticated');
   accessClasses.register('DELETE', '/api/auth/session', 'authenticated');
   accessClasses.register('DELETE', '/api/auth/sessions', 'host-admin');
@@ -778,6 +858,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('POST', '/api/home/memberships', 'host-admin');
   accessClasses.register('POST', '/api/home/membership-lifecycle', 'host-admin');
   accessClasses.register('GET', '/api/home/memberships', 'host-admin');
+  accessClasses.register('POST', '/api/home/domain-read-grants', 'host-admin');
+  accessClasses.register('POST', '/api/home/domain-read-grant-lifecycle', 'host-admin');
+  accessClasses.register('GET', '/api/home/domain-read-grants', 'host-admin');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
@@ -1079,6 +1162,137 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, { membership: recorded.membership });
   });
 
+  app.get('/api/home/domain-read-grants', async (_request, reply) => {
+    return sendNoStore(reply, { grants: store.picoHomeDomainReadGrants() });
+  });
+
+  app.post('/api/home/domain-read-grants', async (request, reply) => {
+    let statement: Omit<PicoHomeDomainReadGrantRecord, 'createdAt'>;
+    try {
+      statement = parsePicoHomeDomainReadGrantStatement(request.body);
+    } catch (error) {
+      return sendNoStore(reply.code(400), { error: (error as Error).message });
+    }
+
+    const record: PicoHomeDomainReadGrantRecord = {
+      ...statement,
+      createdAt: new Date().toISOString(),
+    };
+    const recorded = store.recordPicoHomeDomainReadGrant({ sodium, record });
+    if (!recorded.ok) {
+      return sendNoStore(reply.code(domainReadGrantFailureStatus(recorded.reason)), { error: recorded.reason });
+    }
+
+    if (recorded.inserted) {
+      appendServerEvent('home.domain_read_granted', {
+        grantId: recorded.grant.grantId,
+        privacyDomain: recorded.grant.privacyDomain,
+        readerPicoIdentityFingerprintHex: recorded.grant.readerPicoIdentityFingerprintHex,
+      });
+    }
+
+    return sendNoStore(reply.code(recorded.inserted ? 201 : 200), { grant: recorded.grant });
+  });
+
+  app.post('/api/home/domain-read-grant-lifecycle', async (request, reply) => {
+    let statement: Omit<PicoHomeDomainReadGrantLifecycleRecord, 'createdAt'>;
+    try {
+      statement = parsePicoHomeDomainReadGrantLifecycleStatement(request.body);
+    } catch (error) {
+      return sendNoStore(reply.code(400), { error: (error as Error).message });
+    }
+
+    const record: PicoHomeDomainReadGrantLifecycleRecord = {
+      ...statement,
+      createdAt: new Date().toISOString(),
+    };
+    const recorded = store.recordPicoHomeDomainReadGrantLifecycle({ sodium, record });
+    if (!recorded.ok) {
+      return sendNoStore(reply.code(domainReadGrantFailureStatus(recorded.reason)), { error: recorded.reason });
+    }
+
+    if (recorded.inserted) {
+      appendServerEvent('home.domain_read_revoked', {
+        grantId: recorded.grant.grantId,
+        lifecycleId: record.lifecycle.lifecycleId,
+        privacyDomain: recorded.grant.privacyDomain,
+        readerPicoIdentityFingerprintHex: recorded.grant.readerPicoIdentityFingerprintHex,
+      });
+    }
+
+    return sendNoStore(reply.code(recorded.inserted ? 201 : 200), { grant: recorded.grant });
+  });
+
+  app.post('/api/auth/identity-challenges', async (_request, reply) => {
+    const foundingRecord = store.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return reply.code(404).send({ error: 'Pico identity sessions are not available.' });
+    }
+
+    const challenge = identitySessionChallenges.issue(
+      foundingRecord.founding.hostSigningKeyFingerprintHex,
+    );
+    return sendNoStore(reply.code(201), {
+      challengeId: challenge.challengeId,
+      verifierNonceHex: challenge.verifierNonceHex,
+      verifierContext: challenge.verifierContext,
+      expiresAt: new Date(challenge.expiresAtMs).toISOString(),
+    });
+  });
+
+  app.post('/api/auth/identity-session', async (request, reply) => {
+    let parsed: { challengeId: string; proof: IdentitySessionProof };
+    try {
+      parsed = parseIdentitySessionRequest(request.body);
+    } catch (error) {
+      return sendNoStore(reply.code(400), { error: (error as Error).message });
+    }
+
+    // Consume before any crypto or membership check: every attempt is one-use.
+    const challenge = identitySessionChallenges.consume(parsed.challengeId);
+    if (challenge === undefined) {
+      return unauthorized(reply, 'Pico identity session proof is invalid.');
+    }
+
+    const verified = verifyIdentitySessionProof(sodium, {
+      proof: parsed.proof,
+      challenge,
+      at: new Date().toISOString(),
+    });
+    if (!verified.ok
+      || !store.hasActivePicoHomeMembership(verified.principal.picoIdentityFingerprintHex)) {
+      return unauthorized(reply, 'Pico identity session proof is invalid.');
+    }
+
+    const recorded = store.recordPicoIdentityLifecycleEvidence({
+      sodium,
+      identityKeyRecord: parsed.proof.identityKeyRecord,
+      delegation: verified.delegation,
+      revocations: verified.revocations,
+    });
+    if (!recorded.ok
+      || !store.hasActivePicoIdentityDelegation({
+        picoIdentityFingerprintHex: verified.principal.picoIdentityFingerprintHex,
+        deviceSigningKeyFingerprintHex: verified.principal.deviceSigningKeyFingerprintHex,
+        delegationId: verified.principal.delegationId,
+        sodium,
+      })) {
+      return unauthorized(reply, 'Pico identity session proof is invalid.');
+    }
+
+    const session = sessions.issue(verified.principal);
+    return sendNoStore(reply.code(201), {
+      session: session.value,
+      expiresAt: new Date(session.expiresAtMs).toISOString(),
+      principal: {
+        kind: 'pico_identity',
+        picoIdentityFingerprintHex: verified.principal.picoIdentityFingerprintHex,
+        deviceSigningKeyFingerprintHex: verified.principal.deviceSigningKeyFingerprintHex,
+        delegationId: verified.principal.delegationId,
+      },
+    });
+  });
+
   app.post('/api/auth/bootstrap', async (request, reply) => {
     const body = (request.body ?? {}) as { bootstrapCode?: unknown; passphrase?: unknown };
 
@@ -1167,10 +1381,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const touched = sessions.touch(readBearerCredential(request.headers.authorization));
 
     if (touched === undefined) {
-      return unauthorized(reply, 'Foundation operator session is required.');
+      return unauthorized(reply, 'Authenticated Foundation session is required.');
     }
 
-    return sendNoStore(reply, { expiresAt: new Date(touched.expiresAtMs).toISOString() });
+    return sendNoStore(reply, {
+      expiresAt: new Date(touched.expiresAtMs).toISOString(),
+      principal: touched.principal,
+    });
   });
 
   app.delete('/api/auth/session', async (request, reply) => {
@@ -1818,6 +2035,22 @@ function membershipFailureStatus(reason: string): number {
   return 400;
 }
 
+function domainReadGrantFailureStatus(reason: string): number {
+  if (reason === 'invalid_issuer_signature') {
+    return 401;
+  }
+
+  if (reason === 'no_founding_record'
+    || reason === 'conflicting_record'
+    || reason === 'unknown_grant'
+    || reason === 'reader_is_not_active_member'
+    || reason === 'domain_is_not_host_custody') {
+    return 409;
+  }
+
+  return 400;
+}
+
 /**
  * The intake shape: the Home Host Pico's issuer statement, without the
  * activation half this Home has not added yet and without a `createdAt` the
@@ -1840,6 +2073,108 @@ function parsePicoHomeMembershipIssuerStatement(source: unknown): PicoHomeMember
     membership: source.membership as unknown as PicoHomeMembershipIssuerStatement['membership'],
     issuerIdentityKeyRecord: parsePicoIdentityKeyRecord(source.issuerIdentityKeyRecord),
     issuerSignatureHex: stringField(source, 'issuerSignatureHex'),
+  };
+}
+
+function parsePicoHomeDomainReadGrantStatement(
+  source: unknown,
+): Omit<PicoHomeDomainReadGrantRecord, 'createdAt'> {
+  if (!isRecord(source)
+    || !hasExactKeys(source, ['schema', 'grant', 'issuerIdentityKeyRecord', 'issuerSignatureHex'])
+    || source.schema !== picoHomeDomainReadGrantRecordSchema
+    || !isRecord(source.grant)
+    || !isRecord(source.issuerIdentityKeyRecord)
+    || !/^[0-9a-f]{128}$/.test(stringField(source, 'issuerSignatureHex'))) {
+    throw new Error('Pico Home domain read grant is invalid.');
+  }
+
+  return {
+    schema: picoHomeDomainReadGrantRecordSchema,
+    grant: source.grant as unknown as PicoHomeDomainReadGrantRecord['grant'],
+    issuerIdentityKeyRecord: parsePicoIdentityKeyRecord(source.issuerIdentityKeyRecord),
+    issuerSignatureHex: stringField(source, 'issuerSignatureHex'),
+  };
+}
+
+function parsePicoHomeDomainReadGrantLifecycleStatement(
+  source: unknown,
+): Omit<PicoHomeDomainReadGrantLifecycleRecord, 'createdAt'> {
+  if (!isRecord(source)
+    || !hasExactKeys(source, ['schema', 'lifecycle', 'issuerIdentityKeyRecord', 'issuerSignatureHex'])
+    || source.schema !== picoHomeDomainReadGrantLifecycleRecordSchema
+    || !isRecord(source.lifecycle)
+    || !isRecord(source.issuerIdentityKeyRecord)
+    || !/^[0-9a-f]{128}$/.test(stringField(source, 'issuerSignatureHex'))) {
+    throw new Error('Pico Home domain read-grant lifecycle statement is invalid.');
+  }
+
+  return {
+    schema: picoHomeDomainReadGrantLifecycleRecordSchema,
+    lifecycle: source.lifecycle as unknown as PicoHomeDomainReadGrantLifecycleRecord['lifecycle'],
+    issuerIdentityKeyRecord: parsePicoIdentityKeyRecord(source.issuerIdentityKeyRecord),
+    issuerSignatureHex: stringField(source, 'issuerSignatureHex'),
+  };
+}
+
+function parseIdentitySessionRequest(
+  source: unknown,
+): { challengeId: string; proof: IdentitySessionProof } {
+  if (!isRecord(source)
+    || !hasExactKeys(source, [
+      'challengeId',
+      'identityKeyRecord',
+      'deviceSigningKeyRecord',
+      'delegation',
+      'revocations',
+      'possessionSignatureHex',
+    ])
+    || !isNonEmptyString(source.challengeId, 256)
+    || !isRecord(source.identityKeyRecord)
+    || !isRecord(source.deviceSigningKeyRecord)
+    || !isRecord(source.delegation)
+    || !Array.isArray(source.revocations)
+    || source.revocations.length > 128
+    || !/^[0-9a-f]{128}$/.test(stringField(source, 'possessionSignatureHex'))) {
+    throw new Error('Pico identity session request is invalid.');
+  }
+
+  return {
+    challengeId: source.challengeId,
+    proof: {
+      identityKeyRecord: parsePicoIdentityKeyRecord(source.identityKeyRecord),
+      deviceSigningKeyRecord: parsePicoIdentityKeyRecord(source.deviceSigningKeyRecord),
+      delegation: parseSignedPicoIdentityDelegation(source.delegation),
+      revocations: source.revocations.map(parseSignedPicoIdentityRevocation),
+      possessionSignatureHex: stringField(source, 'possessionSignatureHex'),
+    },
+  };
+}
+
+function parseSignedPicoIdentityDelegation(source: unknown): PicoIdentitySignedDelegation {
+  if (!isRecord(source)
+    || !hasExactKeys(source, ['record', 'signatureHex'])
+    || !isRecord(source.record)
+    || !/^[0-9a-f]{128}$/.test(stringField(source, 'signatureHex'))) {
+    throw new Error('Pico identity delegation is invalid.');
+  }
+
+  return {
+    record: source.record as unknown as PicoIdentityDelegationSignatureInput,
+    signatureHex: stringField(source, 'signatureHex'),
+  };
+}
+
+function parseSignedPicoIdentityRevocation(source: unknown): PicoIdentitySignedRevocation {
+  if (!isRecord(source)
+    || !hasExactKeys(source, ['record', 'signatureHex'])
+    || !isRecord(source.record)
+    || !/^[0-9a-f]{128}$/.test(stringField(source, 'signatureHex'))) {
+    throw new Error('Pico identity revocation is invalid.');
+  }
+
+  return {
+    record: source.record as unknown as PicoIdentityRevocationSignatureInput,
+    signatureHex: stringField(source, 'signatureHex'),
   };
 }
 
@@ -2290,7 +2625,8 @@ function authorizeRealtimeConnection(
   }
 
   const credential = readBearerCredential(authorizationHeader);
-  if (sessions.touch(credential) !== undefined) {
+  const touched = sessions.touch(credential);
+  if (touched?.principal.kind === 'operator') {
     const sessionDigest = sessions.digestOf(credential);
     return { authorized: true, ...(sessionDigest === undefined ? {} : { sessionDigest }) };
   }

@@ -1,0 +1,306 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  buildPicoHomeDomainReadGrantLifecycleSignatureInput,
+  buildPicoHomeDomainReadGrantSignatureInput,
+  buildPicoIdentityKeyRecordSignatureInput,
+  picoHomeClaimResponseRecordSchema,
+  picoHomeDomainReadGrantLifecycleRecordSchema,
+  picoHomeDomainReadGrantRecordSchema,
+  picoHomeFoundingRecordSchema,
+  picoIdentitySuite,
+  type PicoHomeDomainReadGrantLifecycleRecord,
+  type PicoHomeDomainReadGrantRecord,
+  type PicoHomeFoundingRecord,
+  type PicoIdentityKeyRecordSignatureInput,
+} from '@pico/protocol';
+import sodium from 'libsodium-wrappers-sumo';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { EventStore } from './event-store.js';
+import {
+  verifyPicoHomeDomainReadGrant,
+  verifyPicoHomeDomainReadGrantLifecycle,
+} from './domain-read-grant.js';
+
+const stores: EventStore[] = [];
+const tempDirs: string[] = [];
+const HOME_ID = 'home_domain_grant_test';
+const DOMAIN = 'domain-journal';
+
+let controller: { publicKey: Uint8Array; privateKey: Uint8Array };
+let controllerKeyRecord: PicoIdentityKeyRecordSignatureInput;
+let controllerFingerprint: string;
+
+beforeAll(async () => {
+  await sodium.ready;
+  controller = sodium.crypto_sign_keypair();
+  controllerKeyRecord = {
+    suite: picoIdentitySuite,
+    keyRole: 'pico_identity',
+    publicKeyHex: bytesToHex(controller.publicKey),
+  };
+  controllerFingerprint = fingerprint(controllerKeyRecord);
+});
+
+afterEach(() => {
+  for (const store of stores.splice(0)) {
+    store.close();
+  }
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+describe('Home domain read grants (ADR 0082)', () => {
+  it('accepts only the founding Home Host Pico as controller', () => {
+    const founding = foundingRecord();
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: issueGrant(),
+      foundingRecord: founding,
+    })).toEqual({ ok: true });
+
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: issueGrant({ controllerPicoIdentityFingerprintHex: 'a'.repeat(64) }),
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'issuer_is_not_home_host_pico' });
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: issueGrant({ hostSigningKeyFingerprintHex: 'b'.repeat(64) }),
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'foreign_host_key' });
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: issueGrant({ homeId: 'home_foreign' }),
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'foreign_home' });
+  });
+
+  it('requires lifecycle statements to bind the exact grant and advance its order', () => {
+    const grant = issueGrant();
+    expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+      record: issueLifecycle(grant),
+      grantRecord: grant,
+      foundingRecord: foundingRecord(),
+    })).toEqual({ ok: true });
+
+    expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+      record: issueLifecycle(grant, { privacyDomain: 'domain-other' }),
+      grantRecord: grant,
+      foundingRecord: foundingRecord(),
+    })).toEqual({ ok: false, reason: 'grant_binding_mismatch' });
+    expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+      record: issueLifecycle(grant, { lifecycleOrder: grant.grant.lifecycleOrder }),
+      grantRecord: grant,
+      foundingRecord: foundingRecord(),
+    })).toEqual({ ok: false, reason: 'grant_binding_mismatch' });
+  });
+
+  it('authorizes only an active member, existing host-custody domain and unrevoked grant', () => {
+    const store = openClaimedStore();
+    store.memory().create({
+      memoryItemId: 'memory_domain_grant_test',
+      privacyDomain: DOMAIN,
+      owner: 'test',
+      controller: 'test',
+      contentType: 'text/plain',
+      content: 'secret',
+    });
+    const grant = issueGrant();
+
+    expect(store.recordPicoHomeDomainReadGrant({ sodium, record: grant })).toMatchObject({
+      ok: true,
+      inserted: true,
+      grant: { status: 'active' },
+    });
+    expect(store.mayReadDomain(
+      controllerFingerprint,
+      DOMAIN,
+      HOME_ID,
+      '2026-07-27T10:00:00.000Z',
+    )).toBe(true);
+    expect(store.mayReadDomain(
+      controllerFingerprint,
+      'domain-other',
+      HOME_ID,
+      '2026-07-27T10:00:00.000Z',
+    )).toBe(false);
+    expect(store.mayReadDomain(
+      controllerFingerprint,
+      DOMAIN,
+      HOME_ID,
+      '2027-01-01T00:00:00.000Z',
+    )).toBe(false);
+
+    expect(store.recordPicoHomeDomainReadGrantLifecycle({
+      sodium,
+      record: issueLifecycle(grant),
+    })).toMatchObject({ ok: true, inserted: true, grant: { status: 'revoked' } });
+    expect(store.mayReadDomain(
+      controllerFingerprint,
+      DOMAIN,
+      HOME_ID,
+      '2026-07-27T10:00:00.000Z',
+    )).toBe(false);
+  });
+
+  it('drops malformed lifecycle and grant authority during boot-style reconciliation', () => {
+    const store = openClaimedStore();
+    store.memory().create({
+      memoryItemId: 'memory_domain_grant_tamper',
+      privacyDomain: DOMAIN,
+      owner: 'test',
+      controller: 'test',
+      contentType: 'text/plain',
+      content: 'secret',
+    });
+    const grant = issueGrant();
+    expect(store.recordPicoHomeDomainReadGrant({ sodium, record: grant }).ok).toBe(true);
+    expect(store.recordPicoHomeDomainReadGrantLifecycle({
+      sodium,
+      record: issueLifecycle(grant),
+    }).ok).toBe(true);
+
+    const db = (store as unknown as {
+      db: { prepare(sql: string): { run(...args: unknown[]): void } };
+    }).db;
+    db.prepare('UPDATE pico_home_domain_read_grant_lifecycle SET lifecycle_json = ?')
+      .run('null');
+    expect(store.reconcilePicoHomeDomainReadGrants(sodium)).toEqual({
+      droppedGrants: 0,
+      droppedLifecycleRecords: 1,
+    });
+    expect(store.picoHomeDomainReadGrants(
+      '2026-07-27T10:00:00.000Z',
+    )).toMatchObject([{ status: 'active' }]);
+
+    db.prepare('UPDATE pico_home_domain_read_grant SET grant_json = ?')
+      .run('null');
+
+    expect(store.reconcilePicoHomeDomainReadGrants(sodium)).toEqual({
+      droppedGrants: 1,
+      droppedLifecycleRecords: 0,
+    });
+    expect(store.picoHomeDomainReadGrants()).toEqual([]);
+  });
+});
+
+function openClaimedStore(): EventStore {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-domain-grant-test-'));
+  tempDirs.push(dir);
+  const store = new EventStore(join(dir, 'pico.sqlite'));
+  stores.push(store);
+  const founding = foundingRecord();
+  store.claimPicoHome({
+    homeId: founding.founding.homeId,
+    hostAdminPicoId: `pico:identity:${controllerFingerprint}`,
+    hostSigningKeyFingerprintHex: founding.founding.hostSigningKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex: founding.founding.hostKeyAgreementKeyFingerprintHex,
+    foundingRecord: founding,
+  });
+  return store;
+}
+
+function issueGrant(
+  overrides: Partial<PicoHomeDomainReadGrantRecord['grant']> = {},
+): PicoHomeDomainReadGrantRecord {
+  const grant: PicoHomeDomainReadGrantRecord['grant'] = {
+    suite: picoIdentitySuite,
+    grantId: 'grant_domain_test_0001',
+    homeId: HOME_ID,
+    hostSigningKeyFingerprintHex: '1'.repeat(64),
+    privacyDomain: DOMAIN,
+    controllerPicoIdentityFingerprintHex: controllerFingerprint,
+    readerPicoIdentityFingerprintHex: controllerFingerprint,
+    validFrom: '2026-01-01T00:00:00.000Z',
+    validUntil: '2027-01-01T00:00:00.000Z',
+    lifecycleOrder: 'seq:0000000000000001',
+    ...overrides,
+  };
+  return {
+    schema: picoHomeDomainReadGrantRecordSchema,
+    grant,
+    issuerIdentityKeyRecord: controllerKeyRecord,
+    issuerSignatureHex: sign(buildPicoHomeDomainReadGrantSignatureInput(grant)),
+    createdAt: '2026-07-27T10:00:00.000Z',
+  };
+}
+
+function issueLifecycle(
+  grant: PicoHomeDomainReadGrantRecord,
+  overrides: Partial<PicoHomeDomainReadGrantLifecycleRecord['lifecycle']> = {},
+): PicoHomeDomainReadGrantLifecycleRecord {
+  const lifecycle: PicoHomeDomainReadGrantLifecycleRecord['lifecycle'] = {
+    suite: picoIdentitySuite,
+    lifecycleId: 'grant_lifecycle_domain_test_0001',
+    grantId: grant.grant.grantId,
+    homeId: grant.grant.homeId,
+    hostSigningKeyFingerprintHex: grant.grant.hostSigningKeyFingerprintHex,
+    privacyDomain: grant.grant.privacyDomain,
+    controllerPicoIdentityFingerprintHex: grant.grant.controllerPicoIdentityFingerprintHex,
+    readerPicoIdentityFingerprintHex: grant.grant.readerPicoIdentityFingerprintHex,
+    status: 'revoked',
+    reasonCategory: 'reader_removed',
+    changedAt: '2026-08-01T00:00:00.000Z',
+    lifecycleOrder: 'seq:0000000000000002',
+    ...overrides,
+  };
+  return {
+    schema: picoHomeDomainReadGrantLifecycleRecordSchema,
+    lifecycle,
+    issuerIdentityKeyRecord: controllerKeyRecord,
+    issuerSignatureHex: sign(buildPicoHomeDomainReadGrantLifecycleSignatureInput(lifecycle)),
+    createdAt: '2026-08-01T00:00:00.000Z',
+  };
+}
+
+function foundingRecord(): PicoHomeFoundingRecord {
+  return {
+    schema: picoHomeFoundingRecordSchema,
+    founding: {
+      suite: picoIdentitySuite,
+      foundingId: 'founding_domain_grant_test',
+      homeId: HOME_ID,
+      hostSigningKeyFingerprintHex: '1'.repeat(64),
+      hostKeyAgreementKeyFingerprintHex: '2'.repeat(64),
+      homeHostPicoIdentityFingerprintHex: controllerFingerprint,
+      claimantNonceHex: '3'.repeat(64),
+      hostNonceHex: '4'.repeat(64),
+      foundedAt: '2026-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    },
+    claimantIdentityKeyRecord: controllerKeyRecord,
+    claimantFoundingSignatureHex: '5'.repeat(128),
+    hostClaimResponse: {
+      schema: picoHomeClaimResponseRecordSchema,
+      claimResponse: {
+        suite: picoIdentitySuite,
+        claimId: 'claim_domain_grant_test',
+        homeId: HOME_ID,
+        hostSigningKeyFingerprintHex: '1'.repeat(64),
+        hostKeyAgreementKeyFingerprintHex: '2'.repeat(64),
+        claimantIdentityKeyFingerprintHex: controllerFingerprint,
+        claimantNonceHex: '3'.repeat(64),
+        hostNonceHex: '4'.repeat(64),
+        foundingRecordId: 'founding_domain_grant_test',
+      },
+      hostSignatureHex: '6'.repeat(128),
+    },
+    hostFoundingSignatureHex: '7'.repeat(128),
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+}
+
+function fingerprint(record: PicoIdentityKeyRecordSignatureInput): string {
+  return bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoIdentityKeyRecordSignatureInput(record),
+    null,
+  ));
+}
+
+function sign(input: Uint8Array): string {
+  return bytesToHex(sodium.crypto_sign_detached(input, controller.privateKey));
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('hex');
+}

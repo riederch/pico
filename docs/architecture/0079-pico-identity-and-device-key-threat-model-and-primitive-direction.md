@@ -2,7 +2,15 @@
 
 ## Status
 
-Accepted as the threat model and primitive direction for Pico Identity Keys and Device Keys, and as the selection of the **signature-input canonicalization method** for Pico-signed records: the suite direction `pico.suite.id.v1` (Ed25519 signing, X25519 key agreement, BLAKE2b fingerprints, all libsodium), the two-keypair device rule, labeled length-prefixed binary signature inputs (the ADR 0073 method generalized), fingerprint and possession-proof direction, per-role custody boundaries, and lifecycle lookup/reconciliation — behind three gates. **Gate G1 is implemented as additive protocol vocabulary, canonical signature-input builders and authoritative byte/fingerprint vectors. Person-role Gate G2 is discharged at the minimal runtime floor by ADR 0081 P2 and `@pico/vault`. Gate G3 is implemented as `@pico/identity`: deterministic detached signature verification for key-record fingerprints, possession proofs, delegations and revocations, plus a lifecycle projector over verified or already accepted delegation/revocation statements with authoritative verification and lookup/reconciliation vectors.** No host-role custody exists, no registry freshness or storage adapter exists, no reader-membership runtime exists and no draft fence (ADR 0051/0052/0053/0055) is loosened at runtime level. This remains the reviewed key-format and lifecycle direction those fences said must exist before anything chooses algorithms, serialization or lifecycle semantics.
+Accepted as the threat model and primitive direction for Pico Identity Keys and
+Device Keys, and as the signature-input canonicalization method for Pico-signed
+records. G1 canonical builders/vectors, minimal person-role Vault custody,
+host-role Home custody and G3 verification/lifecycle projection are
+implemented. ADR 0082 adds a narrow Foundation consumer: Core persists verified
+signing-key delegation/revocation evidence, reconciles it on boot and
+re-evaluates identity sessions against locally observed lifecycle state.
+External registry/sync freshness, device key-agreement registration and
+reader-custody envelope authority remain open.
 
 ## Context
 
@@ -98,7 +106,13 @@ The record families this ADR sets direction for — final layouts and vectors ar
 - **Possession challenge** (`pico.id.possession.v1` direction): verifier nonce, context binding (who is verifying, for what), subject key fingerprint; answered by a detached signature. Never reusable across contexts — the label and context are protected input.
 - **Revocation statement** (`pico.id.revocation.v1` direction): subject key or delegation reference, reason category, ordering context; signed by the identity key. Realizes the ADR 0052/0053 placeholders' direction. Revocation is never erasure: historical signatures stay verifiable with lifecycle state carrying the trust cut-off (ADR 0033).
 
-All three stayed inert (I8, K4-family) until custody/runtime gates existed and Gate G3 defined how lifecycle state is looked up and reconciled. The current `@pico/identity` runtime verifies detached Ed25519 signatures for possession, delegation and revocation records over the Gate G1 canonical bytes, then can project accepted delegation/revocation statements into lifecycle state. It still does not fetch registry freshness, persist records or grant membership.
+All three stayed inert (I8, K4-family) until custody/runtime gates existed and
+Gate G3 defined how lifecycle state is looked up and reconciled. The current
+`@pico/identity` runtime verifies detached Ed25519 signatures for possession,
+delegation and revocation records over the Gate G1 canonical bytes, then
+projects accepted statements into lifecycle state. ADR 0082 persists that
+evidence for identity sessions in Core; it still does not fetch external
+registry freshness or make key-agreement keys authoritative for envelopes.
 
 ### Gate G1 canonical layouts and vectors
 
@@ -294,10 +308,14 @@ Private material custody is decided per role, each in its own step, under the I7
 Nothing runtime ships before its gates; nothing at all is security-relevant before **G1**.
 
 1. **Done — Gate G1 canonical layouts and authoritative vectors.** Per-family byte layouts (key record, possession challenge, delegation, revocation) with ADR 0073-style accept/reject vectors, including negative vectors for cross-family label confusion, suite swap, role swap, field reordering, truncated-fingerprint comparison and validity/ordering violations. This gate also discharges ADR 0078's Gate R2 method question: envelope bytes use the same construction.
-2. **Gate G2 — Custody story per key role.** Host-role remains ADR 0072-pattern file custody, decided alongside the claim flow (now ADR 0080, Gate M2). Person-role custody is discharged at the minimal runtime floor by ADR 0081 P2 and `@pico/vault`: Vault-exclusive custody, `pico.vault.keyfile.v1` encrypted keyfiles, label-checked signing and key-agreement unwrap.
-3. **Done — Gate G3 signature verification, lifecycle lookup and reconciliation.** `@pico/identity` implements the local verifier for ADR 0079 G1 key-record fingerprints, possession proofs, delegations and revocations: it rebuilds the canonical bytes, checks full BLAKE2b-256 key-record fingerprint binding and verifies detached Ed25519 signatures with role fail-closed checks. It also implements the deterministic projector for verified or already accepted delegation and revocation fields: fixed-width `seq:[0-9]{16}` ordering is compared numerically, identical replica statements dedupe, conflicting statement-id reuse fails closed, lookup resolves `active`, `not_yet_valid`, `expired`, `missing_scope`, `revoked` or `unknown`, direct delegation revocation, subject device-key revocation and revocation of the issuing identity key itself stop future authority - the last one regardless of ordering, because whoever holds a stolen root can mint delegations the owner never learns about, so enumerating known delegations is not a substitute, and reconciliation across restored stale state plus fresher lifecycle records resolves toward the freshest statement. The on-disk `identity-signature-verification/pico.suite.id.v1/` and `identity-lifecycle/pico.suite.id.v1/` suites publish verification and lifecycle vectors for these cases. Storage adapters, registry freshness, reader membership and host-role custody remain separate work.
+2. **Gate G2 — Custody story per key role. Implemented at the current runtime floor.** ADR 0080 M2 supplies separated ADR 0072-pattern file custody for Home host-role keys. ADR 0081 P2 supplies Vault-exclusive person-role custody, `pico.vault.keyfile.v1` encrypted keyfiles, label-checked signing and key-agreement unwrap.
+3. **Done — Gate G3 signature verification, lifecycle lookup and reconciliation.** `@pico/identity` implements the local verifier for ADR 0079 G1 key-record fingerprints, possession proofs, delegations and revocations: it rebuilds the canonical bytes, checks full BLAKE2b-256 key-record fingerprint binding and verifies detached Ed25519 signatures with role fail-closed checks. It also implements the deterministic projector for verified or already accepted delegation and revocation fields: fixed-width `seq:[0-9]{16}` ordering is compared numerically, identical replica statements dedupe, conflicting statement-id reuse fails closed, lookup resolves `active`, `not_yet_valid`, `expired`, `missing_scope`, `revoked` or `unknown`, direct delegation revocation, subject device-key revocation and revocation of the issuing identity key itself stop future authority - the last one regardless of ordering, because whoever holds a stolen root can mint delegations the owner never learns about, so enumerating known delegations is not a substitute, and reconciliation across restored stale state plus fresher lifecycle records resolves toward the freshest statement. The on-disk `identity-signature-verification/pico.suite.id.v1/` and `identity-lifecycle/pico.suite.id.v1/` suites publish verification and lifecycle vectors for these cases. ADR 0082 adds one narrow local persistence consumer; external registry freshness and reader key-agreement registration remain separate work.
 
-After all three: runtime continues in additive steps (host-role key custody plus storage/freshness adapters), at which point ADR 0078 R1 is dischargeable only for consumers that use the verifier, consume the lifecycle projector and have reader-membership runtime. Person-role key generation and custody already exist only behind `@pico/vault`.
+After all three, runtime continues in additive consumers. Host-role custody now
+exists in ADR 0080 and ADR 0082 supplies a local signing-delegation
+storage/freshness adapter. ADR 0078 R1 remains dischargeable only after reader
+key-agreement registration and external freshness are defined. Person-role key
+generation and custody remain exclusively behind `@pico/vault`.
 
 ## Non-goals
 

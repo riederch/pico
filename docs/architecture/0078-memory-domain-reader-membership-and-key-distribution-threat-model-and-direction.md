@@ -2,7 +2,15 @@
 
 ## Status
 
-Accepted as the threat model and direction for how memory Domain Content Keys may reach readers beyond the single Foundation process: domain custody classes, the sharing unit, the wrap-suite direction, removal and rotation semantics, and the backup/shred honesty rules — all gated behind three named prerequisites. **The additive custody-class vocabulary, per-domain marker and K6 key-store guard are implemented; this widens no reader set.** Until every gate passes, the runtime keeps exactly the ADR 0071/0072 single-host model for content, and `reader_custody` remains an inert, fail-closed marker with no envelope runtime.
+Accepted as the threat model and direction for how memory Domain Content Keys
+may reach readers beyond the single Foundation process. Custody classes,
+per-domain markers and the K6 key-store guard are implemented; R2 canonical
+share-wrap/envelope bytes and vectors are complete. ADR 0082 implements the
+narrow host-custody access-control portion of R3: possession-bound identity
+sessions, verified membership, signed domain grants/revocations, reconciliation
+and content-free audit now drive the read seam. R1 external freshness/reader
+key-agreement registration and the reader-custody envelope issuance portion of
+R3 remain open, so `reader_custody` is still an inert fail-closed marker.
 
 ## Context
 
@@ -145,16 +153,17 @@ The envelope inventory is a relationship graph: which reader refs hold which dom
 
 Nothing behind these gates ships, and nothing is security-relevant before **all three** pass. Draft fixtures stay inside the ADR 0042/0054 fences — which forbid wrapped-key material entirely; the authoritative accept/reject vectors of Gate R2 are a different artifact class (synthetic keys, ADR 0073 precedent), not draft placeholders.
 
-1. **Gate R1 — Reader keys are real.** Device-held X25519 keys with a reviewed delegation and possession story (ADR 0029 Device Key role, ADR 0033 lifecycle, realization of the ADR 0055 family). Without them there is no one to wrap to, and no envelope can be issued. *Direction now exists: ADR 0079 fixes the device key-agreement key (X25519 under `pico.suite.id.v1`) and the delegation record direction, ADR 0081 P2 supplies the minimal Vault custody holder and agent-boundary unwrap for the private halves, and ADR 0079 G3 now supplies local signature verification plus lifecycle lookup/reconciliation in `@pico/identity`. The gate still needs reader-membership runtime and storage/freshness integration before reader keys are real for this surface.*
+1. **Gate R1 — Reader keys are real.** Device-held X25519 keys with a reviewed delegation and possession story (ADR 0029 Device Key role, ADR 0033 lifecycle, realization of the ADR 0055 family). Without them there is no one to wrap to, and no envelope can be issued. *ADR 0079 fixes the device key-agreement key and delegation direction, ADR 0081 P2 supplies minimal Vault custody/unwrap, and ADR 0082 supplies a narrow Core storage adapter for signing-key delegation/revocation evidence plus local monotonic freshness. The gate still needs device key-agreement registration and an external registry/sync freshness contract before a reader key is authoritative for envelope issuance.*
 2. **Gate R2 — Canonical bytes and vectors. Implemented for canonical bytes.** Canonical wrap-payload and envelope-byte layouts with authoritative accept/reject vectors (ADR 0034 discipline), including negative vectors for wrong-domain, wrong-version, wrong-reader and suite-swap presentations. *`@pico/protocol` exports the `pico.suite.share.v1` builders and `docs/protocol/fixtures/share-envelope/` publishes the authoritative vectors (see the byte-layout section above): the wrap payload sealed to the reader and the issuer-signed envelope that binds its digest. Bytes only — no sealing, signing, issuance or runtime; K4 keeps envelopes inert until R1 and R3 also pass.*
-3. **Gate R3 — Membership runtime.** Verified membership records that drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. The stored `owner`/`controller` fields remain non-authorization inputs forever (ADR 0077 C2); membership rows are the readership source the seam was cut for. *Direction now exists: ADR 0080 fixes the membership credential realization these records verify against (issuer signature by the Home Host Pico, activation countersignature by the host key, I9-ordered lifecycle statements) — the gate discharges when ADR 0080's Gates M1/M3 deliver layouts, vectors and the membership runtime.*
+3. **Gate R3 — Membership runtime. Partially implemented.** Verified membership records drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. Stored `owner`/`controller` fields remain non-authorization inputs forever. *ADR 0080 delivers signed membership/lifecycle projection; ADR 0082 delivers the claimed-home read path and Home-Host-Pico-signed grant/revoke records for existing `host_custody` domains. The gate remains open for reader-custody envelope issuance, reader key selection, delegated controllers and key-distribution/rotation coupling.*
 
 ## Implementation implications
 
 Ordered and additive:
 
 1. **Done — reserve the custody-class vocabulary** (`host_custody`, `reader_custody`) additively in the protocol package, with a per-domain storage marker defaulting to `host_custody`, plus the K6 fail-closed guard in the key store (refuse KEK files for a reader-custody domain). This is the ADR-0068-style reserve-then-build pattern and prevents drift while the gates are open. The current runtime also rejects memory content writes for `reader_custody` domains until reader-custody envelopes exist.
-2. Gate R1/R2/R3 work, each its own reviewed step in the identity/membership strand.
+2. Complete R1 reader-key/freshness work and the remaining reader-custody portion
+   of R3; R2 and the host-custody access-control slice are already implemented.
 3. Only after all gates: the wrap module (`pico.suite.share.v1`), envelope storage and issuance, rotation trigger, restore reconciliation, and — separately gated by transport ADRs — any surface that lets an envelope leave the host. Until then, the ADR 0070 rule extends naturally: no envelope leaves the host, because none exists.
 
 ## Non-goals

@@ -23,6 +23,8 @@
     "pico.suite.id.v1/canonicalization-positive/membership-home-member",
     "pico.suite.id.v1/canonicalization-positive/membership-scope-order-canonical",
     "pico.suite.id.v1/canonicalization-positive/membership-lifecycle-evicted",
+    "pico.suite.id.v1/canonicalization-positive/domain-read-grant-home-member",
+    "pico.suite.id.v1/canonicalization-positive/domain-read-grant-lifecycle-revoked",
     "pico.suite.id.v1/canonicalization-positive/continuity-host-rotation",
     "pico.suite.id.v1/canonicalization-negative/claim-suite-swap",
     "pico.suite.id.v1/canonicalization-negative/claim-wrong-host-pin",
@@ -38,8 +40,10 @@
     "pico.suite.id.v1/canonicalization-negative/membership-duplicate-scope",
     "pico.suite.id.v1/canonicalization-negative/membership-validity-inverted",
     "pico.suite.id.v1/canonicalization-negative/membership-validity-offset-form",
+    "pico.suite.id.v1/canonicalization-negative/domain-read-grant-validity-inverted",
+    "pico.suite.id.v1/canonicalization-negative/domain-read-grant-lifecycle-invalid-status",
     "pico.suite.id.v1/canonicalization-negative/continuity-without-outgoing-key",
     "pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order"
   ],
-  "notes": "Canonical byte vectors for Pico Home claim, claim-response, founding, membership, membership lifecycle and continuity records. These unlock byte-layout review only; move-in code generation, freshness, authorization and signature verification remain out of scope."
+  "notes": "Canonical byte vectors for Pico Home claim, claim-response, founding, membership, membership lifecycle, domain-read grant, domain-read grant lifecycle and continuity records. These vectors establish byte layouts only; private keys and signatures are never fixture data."
 }

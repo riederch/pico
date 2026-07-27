@@ -15,6 +15,8 @@ export const foundationEventTypes = [
   'home.reset',
   'home.membership_recorded',
   'home.membership_changed',
+  'home.domain_read_granted',
+  'home.domain_read_revoked',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -36,6 +38,8 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.reset',
   'home.membership_recorded',
   'home.membership_changed',
+  'home.domain_read_granted',
+  'home.domain_read_revoked',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -141,6 +145,10 @@ export const picoHomeMembershipCredentialSchema = 'pico.home.membership-credenti
 
 export const picoHomeMembershipLifecycleRecordSchema = 'pico.home.membership-lifecycle-record.v1' as const;
 
+export const picoHomeDomainReadGrantRecordSchema = 'pico.home.domain-read-grant-record.v1' as const;
+
+export const picoHomeDomainReadGrantLifecycleRecordSchema = 'pico.home.domain-read-grant-lifecycle-record.v1' as const;
+
 export const picoIdentitySuite = 'pico.suite.id.v1' as const;
 
 // Authoritative signature-input families for ADR 0079 Gate G1. These builders
@@ -170,6 +178,8 @@ export const picoHomeSignatureInputFamilies = [
   'founding',
   'membership',
   'membershipLifecycle',
+  'domainReadGrant',
+  'domainReadGrantLifecycle',
   'continuity',
 ] as const;
 
@@ -181,6 +191,8 @@ export const picoHomeSignatureInputLabels = {
   founding: 'pico.home.founding.v1',
   membership: 'pico.home.membership.v1',
   membershipLifecycle: 'pico.home.membership-lifecycle.v1',
+  domainReadGrant: 'pico.home.domain-read-grant.v1',
+  domainReadGrantLifecycle: 'pico.home.domain-read-grant-lifecycle.v1',
   continuity: 'pico.home.continuity.v1',
 } as const satisfies Record<PicoHomeSignatureInputFamily, string>;
 
@@ -254,6 +266,24 @@ export const picoHomeMembershipLifecycleReasonCategories = [
 
 export type PicoHomeMembershipLifecycleReasonCategory =
   typeof picoHomeMembershipLifecycleReasonCategories[number];
+
+export const picoHomeDomainReadGrantLifecycleStatuses = [
+  'revoked',
+] as const;
+
+export type PicoHomeDomainReadGrantLifecycleStatus =
+  typeof picoHomeDomainReadGrantLifecycleStatuses[number];
+
+export const picoHomeDomainReadGrantRevocationReasonCategories = [
+  'reader_removed',
+  'membership_removed',
+  'domain_retired',
+  'security_review',
+  'grant_reissued',
+] as const;
+
+export type PicoHomeDomainReadGrantRevocationReasonCategory =
+  typeof picoHomeDomainReadGrantRevocationReasonCategories[number];
 
 export const picoHomeContinuityReasonCategories = [
   'host_key_rotated',
@@ -489,6 +519,22 @@ export interface PicoHomeMembershipLifecycleRecord {
   createdAt: string;
 }
 
+export interface PicoHomeDomainReadGrantRecord {
+  schema: typeof picoHomeDomainReadGrantRecordSchema;
+  grant: PicoHomeDomainReadGrantSignatureInput;
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  issuerSignatureHex: string;
+  createdAt: string;
+}
+
+export interface PicoHomeDomainReadGrantLifecycleRecord {
+  schema: typeof picoHomeDomainReadGrantLifecycleRecordSchema;
+  lifecycle: PicoHomeDomainReadGrantLifecycleSignatureInput;
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  issuerSignatureHex: string;
+  createdAt: string;
+}
+
 export interface PicoHomeClaimResponseSignatureInput {
   suite: string;
   claimId: string;
@@ -541,6 +587,34 @@ export interface PicoHomeMembershipLifecycleSignatureInput {
   lifecycleOrder: string;
 }
 
+export interface PicoHomeDomainReadGrantSignatureInput {
+  suite: string;
+  grantId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  privacyDomain: string;
+  controllerPicoIdentityFingerprintHex: string;
+  readerPicoIdentityFingerprintHex: string;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoHomeDomainReadGrantLifecycleSignatureInput {
+  suite: string;
+  lifecycleId: string;
+  grantId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  privacyDomain: string;
+  controllerPicoIdentityFingerprintHex: string;
+  readerPicoIdentityFingerprintHex: string;
+  status: PicoHomeDomainReadGrantLifecycleStatus;
+  reasonCategory: PicoHomeDomainReadGrantRevocationReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}
+
 export interface PicoHomeContinuitySignatureInput {
   suite: string;
   continuityId: string;
@@ -581,6 +655,8 @@ export type PicoHomeSignatureInput =
   | PicoHomeFoundingSignatureInput
   | PicoHomeMembershipSignatureInput
   | PicoHomeMembershipLifecycleSignatureInput
+  | PicoHomeDomainReadGrantSignatureInput
+  | PicoHomeDomainReadGrantLifecycleSignatureInput
   | PicoHomeContinuitySignatureInput;
 
 export const realtimeMessageType = {
@@ -748,6 +824,16 @@ export interface HomeMembershipChangedPayload extends HomeMembershipRecordedPayl
   lifecycleId: string;
 }
 
+export interface HomeDomainReadGrantedPayload {
+  grantId: string;
+  privacyDomain: string;
+  readerPicoIdentityFingerprintHex: string;
+}
+
+export interface HomeDomainReadRevokedPayload extends HomeDomainReadGrantedPayload {
+  lifecycleId: string;
+}
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -764,7 +850,9 @@ export type FoundationEventPayload =
   | HomeClaimedPayload
   | HomeResetPayload
   | HomeMembershipRecordedPayload
-  | HomeMembershipChangedPayload;
+  | HomeMembershipChangedPayload
+  | HomeDomainReadGrantedPayload
+  | HomeDomainReadRevokedPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -981,6 +1069,39 @@ export function validateFoundationEventPayload(
         ...(type === 'home.membership_changed' ? { lifecycleId: payload.lifecycleId } : {}),
         subjectPicoIdentityFingerprintHex: payload.subjectPicoIdentityFingerprintHex,
         status: payload.status,
+      },
+    };
+  }
+
+  if (type === 'home.domain_read_granted' || type === 'home.domain_read_revoked') {
+    const allowed = type === 'home.domain_read_granted'
+      ? ['grantId', 'privacyDomain', 'readerPicoIdentityFingerprintHex']
+      : ['grantId', 'lifecycleId', 'privacyDomain', 'readerPicoIdentityFingerprintHex'];
+    const extraKey = firstUnexpectedKey(payload, allowed);
+    if (extraKey !== undefined) {
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
+    }
+
+    if (!isNonEmptyString(payload.grantId, 256)
+      || !isNonEmptyString(payload.privacyDomain, 256)
+      || !isNonEmptyString(payload.readerPicoIdentityFingerprintHex, 64)) {
+      return {
+        ok: false,
+        error: `${type} payload requires grantId, privacyDomain and readerPicoIdentityFingerprintHex.`,
+      };
+    }
+
+    if (type === 'home.domain_read_revoked' && !isNonEmptyString(payload.lifecycleId, 256)) {
+      return { ok: false, error: 'home.domain_read_revoked payload requires lifecycleId.' };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        grantId: payload.grantId,
+        ...(type === 'home.domain_read_revoked' ? { lifecycleId: payload.lifecycleId } : {}),
+        privacyDomain: payload.privacyDomain,
+        readerPicoIdentityFingerprintHex: payload.readerPicoIdentityFingerprintHex,
       },
     };
   }
@@ -1736,6 +1857,93 @@ export function buildPicoHomeMembershipLifecycleSignatureInput(
     asciiBytes(input.credentialId),
     fixedHexBytes(input.issuerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.subjectPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.status),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.changedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoHomeDomainReadGrantSignatureInput(
+  input: PicoHomeDomainReadGrantSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'grantId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'privacyDomain',
+    'controllerPicoIdentityFingerprintHex',
+    'readerPicoIdentityFingerprintHex',
+    'validFrom',
+    'validUntil',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.grantId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.privacyDomain);
+  assertInstant(input.validFrom);
+  assertInstant(input.validUntil);
+  assertLifecycleOrder(input.lifecycleOrder);
+  assertValidBounds(input.validFrom, input.validUntil);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.domainReadGrant),
+    asciiBytes(input.suite),
+    asciiBytes(input.grantId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.privacyDomain),
+    fixedHexBytes(input.controllerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.validFrom),
+    asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoHomeDomainReadGrantLifecycleSignatureInput(
+  input: PicoHomeDomainReadGrantLifecycleSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'lifecycleId',
+    'grantId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'privacyDomain',
+    'controllerPicoIdentityFingerprintHex',
+    'readerPicoIdentityFingerprintHex',
+    'status',
+    'reasonCategory',
+    'changedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.lifecycleId);
+  assertAsciiToken(input.grantId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.privacyDomain);
+  assertStringMember(input.status, picoHomeDomainReadGrantLifecycleStatuses, 'invalid_domain_read_grant_status');
+  assertStringMember(
+    input.reasonCategory,
+    picoHomeDomainReadGrantRevocationReasonCategories,
+    'invalid_reason_category',
+  );
+  assertInstant(input.changedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeSignatureInputLabels.domainReadGrantLifecycle),
+    asciiBytes(input.suite),
+    asciiBytes(input.lifecycleId),
+    asciiBytes(input.grantId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.privacyDomain),
+    fixedHexBytes(input.controllerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.readerPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
     asciiBytes(input.status),
     asciiBytes(input.reasonCategory),
     asciiBytes(input.changedAt),

@@ -24,10 +24,9 @@ export interface ReadershipPrincipal {
    */
   readonly sessionDigest: string;
   /**
-   * Future principal binding once sessions are tied to a verified Pico identity.
-   * The current operator session does not have one; membership-backed
-   * readership therefore fails closed unless a caller supplies a verified
-   * identity fingerprint.
+   * Verified Pico identity bound to an ADR 0082 identity session. Operator
+   * sessions deliberately do not have one, so membership-backed readership
+   * fails closed for operators.
    */
   readonly picoIdentityFingerprintHex?: string;
 }
@@ -45,11 +44,10 @@ export interface DomainReadGrantDirectory {
 }
 
 /**
- * Foundation-phase readership: one authenticated principal, which reads every
- * domain because the instance is single-principal. Not the operator role, not
- * keyed on stored ownership (ADR 0077 C1/C2). When membership arrives this is
- * replaced by a membership-backed evaluation — the read path's authority source
- * changes here, and the operator-role check is never touched.
+ * Unclaimed Foundation readership: one authenticated principal reads every
+ * domain because the instance has not established a Home authority root. Not
+ * the operator role, and not keyed on stored ownership (ADR 0077 C1/C2).
+ * Claimed Homes replace this with the membership-backed policy below.
  */
 export class SoleResidentReadership implements DomainReadership {
   public mayRead(_principal: ReadershipPrincipal, _privacyDomain: string): boolean {

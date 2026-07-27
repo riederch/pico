@@ -35,10 +35,20 @@ export interface IssuedSession {
   expiresAtMs: number;
 }
 
+export type SessionPrincipal =
+  | { readonly kind: 'operator' }
+  | {
+    readonly kind: 'pico_identity';
+    readonly picoIdentityFingerprintHex: string;
+    readonly deviceSigningKeyFingerprintHex: string;
+    readonly delegationId: string;
+  };
+
 interface SessionRecord {
   idleExpiresAtMs: number;
   absoluteExpiresAtMs: number;
   createdAtMs: number;
+  principal: SessionPrincipal;
 }
 
 export const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
@@ -63,7 +73,7 @@ export class SessionStore {
     this.now = options.now ?? Date.now;
   }
 
-  public issue(): IssuedSession {
+  public issue(principal: SessionPrincipal = { kind: 'operator' }): IssuedSession {
     this.purgeExpired();
 
     if (this.sessions.size >= this.maxSessions) {
@@ -75,7 +85,12 @@ export class SessionStore {
     const absoluteExpiresAtMs = nowMs + this.absoluteTimeoutMs;
     const idleExpiresAtMs = Math.min(nowMs + this.idleTimeoutMs, absoluteExpiresAtMs);
 
-    this.sessions.set(digest(value), { idleExpiresAtMs, absoluteExpiresAtMs, createdAtMs: nowMs });
+    this.sessions.set(digest(value), {
+      idleExpiresAtMs,
+      absoluteExpiresAtMs,
+      createdAtMs: nowMs,
+      principal: clonePrincipal(principal),
+    });
 
     return { value, expiresAtMs: idleExpiresAtMs };
   }
@@ -84,7 +99,7 @@ export class SessionStore {
    * Validates a session and extends its idle window. Returns the effective
    * expiry, or undefined when the session is unknown or expired.
    */
-  public touch(value: string | undefined): { expiresAtMs: number } | undefined {
+  public touch(value: string | undefined): { expiresAtMs: number; principal: SessionPrincipal } | undefined {
     const key = this.lookup(value);
 
     if (key === undefined) {
@@ -106,7 +121,7 @@ export class SessionStore {
 
     record.idleExpiresAtMs = Math.min(nowMs + this.idleTimeoutMs, record.absoluteExpiresAtMs);
 
-    return { expiresAtMs: record.idleExpiresAtMs };
+    return { expiresAtMs: record.idleExpiresAtMs, principal: clonePrincipal(record.principal) };
   }
 
   /** Digest of a live session, used to scope derived credentials such as tickets. */
@@ -183,6 +198,19 @@ export class SessionStore {
       this.sessions.delete(oldestKey);
     }
   }
+}
+
+function clonePrincipal(principal: SessionPrincipal): SessionPrincipal {
+  if (principal.kind === 'operator') {
+    return { kind: 'operator' };
+  }
+
+  return {
+    kind: 'pico_identity',
+    picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+    deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+    delegationId: principal.delegationId,
+  };
 }
 
 export function digest(value: string): string {

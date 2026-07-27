@@ -51,6 +51,8 @@ import {
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
   picoHomeMembershipStatuses,
+  picoHomeDomainReadGrantLifecycleStatuses,
+  picoHomeDomainReadGrantRevocationReasonCategories,
   picoHomeSignatureInputFamilies,
   picoHomeSignatureInputLabels,
   picoVaultAeadAlgorithms,
@@ -65,6 +67,8 @@ import {
   buildPicoHomeFoundingSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
   buildPicoHomeMembershipSignatureInput,
+  buildPicoHomeDomainReadGrantLifecycleSignatureInput,
+  buildPicoHomeDomainReadGrantSignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
@@ -109,6 +113,8 @@ describe('Pico protocol types', () => {
       'home.reset',
       'home.membership_recorded',
       'home.membership_changed',
+      'home.domain_read_granted',
+      'home.domain_read_revoked',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -120,6 +126,8 @@ describe('Pico protocol types', () => {
       'home.reset',
       'home.membership_recorded',
       'home.membership_changed',
+      'home.domain_read_granted',
+      'home.domain_read_revoked',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');
@@ -348,6 +356,8 @@ describe('Pico protocol types', () => {
       'founding',
       'membership',
       'membershipLifecycle',
+      'domainReadGrant',
+      'domainReadGrantLifecycle',
       'continuity',
     ]);
     expect(picoHomeSignatureInputLabels).toEqual({
@@ -356,6 +366,8 @@ describe('Pico protocol types', () => {
       founding: 'pico.home.founding.v1',
       membership: 'pico.home.membership.v1',
       membershipLifecycle: 'pico.home.membership-lifecycle.v1',
+      domainReadGrant: 'pico.home.domain-read-grant.v1',
+      domainReadGrantLifecycle: 'pico.home.domain-read-grant-lifecycle.v1',
       continuity: 'pico.home.continuity.v1',
     });
     expect(picoHomeClaimEnvelopeSchema).toBe('pico.home.claim-envelope.v1');
@@ -385,6 +397,14 @@ describe('Pico protocol types', () => {
       'host_reset',
       'membership_reissued',
       'security_review',
+    ]);
+    expect(picoHomeDomainReadGrantLifecycleStatuses).toEqual(['revoked']);
+    expect(picoHomeDomainReadGrantRevocationReasonCategories).toEqual([
+      'reader_removed',
+      'membership_removed',
+      'domain_retired',
+      'security_review',
+      'grant_reissued',
     ]);
     expect(picoHomeContinuityReasonCategories).toEqual([
       'host_key_rotated',
@@ -831,13 +851,18 @@ describe('Pico protocol types', () => {
     }
   });
 
-  it('keeps Pico Home signature-input vectors byte-exact and aligned with ADR 0080 M1', () => {
+  it('keeps Pico Home signature-input vectors byte-exact and aligned with ADR 0080/0082', () => {
     const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
     const suite = readRepoJsonObject('docs/protocol/fixtures/home-signature-input/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
-    const adrNoWhitespace = readRepoFile(
-      'docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md',
-    ).replace(/\s+/g, '');
+    const adrNoWhitespace = [
+      readRepoFile(
+        'docs/architecture/0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md',
+      ),
+      readRepoFile(
+        'docs/architecture/0082-identity-bound-foundation-sessions-and-domain-read-grants.md',
+      ),
+    ].join('\n').replace(/\s+/g, '');
 
     expect(stringField(suite, 'schema')).toBe('pico.home.signature-input.vector.suite');
     expect(numberField(suite, 'schemaVersion')).toBe(1);
@@ -893,7 +918,7 @@ describe('Pico protocol types', () => {
       expect(stringField(fixture, 'suite')).toBe(picoIdentitySuite);
       expect(stringField(fixture, 'surface')).toBe('home-signature-input');
       expect(stringField(fixture, 'family')).toBe(family);
-      expect(stringField(fixture, 'adr')).toBe('0080');
+      expect(['0080', '0082']).toContain(stringField(fixture, 'adr'));
       expect(stringField(fixture, 'case')).toBeTruthy();
       expect(stringField(fixture, 'notes')).toBeTruthy();
       expect(stringField(source, 'encoding')).toBe('fields');
@@ -945,6 +970,7 @@ describe('Pico protocol types', () => {
           'field_reordering',
           'invalid_field_charset',
           'invalid_fingerprint_length',
+          'invalid_domain_read_grant_status',
           'invalid_instant',
           'invalid_lifecycle_order',
           'invalid_membership_role',
@@ -3316,6 +3342,40 @@ function buildPicoHomeVector(homeFamily: string, fields: Record<string, unknown>
       ...stringProperty(fields, 'lifecycleOrder'),
       ...optionalFieldOrder(fields),
     } as unknown as Parameters<typeof buildPicoHomeMembershipLifecycleSignatureInput>[0]);
+  }
+
+  if (homeFamily === 'domainReadGrant') {
+    return buildPicoHomeDomainReadGrantSignatureInput({
+      ...stringProperty(fields, 'suite'),
+      ...stringProperty(fields, 'grantId'),
+      ...stringProperty(fields, 'homeId'),
+      ...stringProperty(fields, 'hostSigningKeyFingerprintHex'),
+      ...stringProperty(fields, 'privacyDomain'),
+      ...stringProperty(fields, 'controllerPicoIdentityFingerprintHex'),
+      ...stringProperty(fields, 'readerPicoIdentityFingerprintHex'),
+      ...stringProperty(fields, 'validFrom'),
+      ...stringProperty(fields, 'validUntil'),
+      ...stringProperty(fields, 'lifecycleOrder'),
+      ...optionalFieldOrder(fields),
+    } as unknown as Parameters<typeof buildPicoHomeDomainReadGrantSignatureInput>[0]);
+  }
+
+  if (homeFamily === 'domainReadGrantLifecycle') {
+    return buildPicoHomeDomainReadGrantLifecycleSignatureInput({
+      ...stringProperty(fields, 'suite'),
+      ...stringProperty(fields, 'lifecycleId'),
+      ...stringProperty(fields, 'grantId'),
+      ...stringProperty(fields, 'homeId'),
+      ...stringProperty(fields, 'hostSigningKeyFingerprintHex'),
+      ...stringProperty(fields, 'privacyDomain'),
+      ...stringProperty(fields, 'controllerPicoIdentityFingerprintHex'),
+      ...stringProperty(fields, 'readerPicoIdentityFingerprintHex'),
+      ...stringProperty(fields, 'status'),
+      ...stringProperty(fields, 'reasonCategory'),
+      ...stringProperty(fields, 'changedAt'),
+      ...stringProperty(fields, 'lifecycleOrder'),
+      ...optionalFieldOrder(fields),
+    } as unknown as Parameters<typeof buildPicoHomeDomainReadGrantLifecycleSignatureInput>[0]);
   }
 
   if (homeFamily === 'continuity') {

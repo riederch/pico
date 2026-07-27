@@ -13,18 +13,24 @@ import {
   avatarStatusColors,
   buildPicoHomeClaimResponseSignatureInput,
   buildPicoHomeClaimSignatureInput,
+  buildPicoHomeDomainReadGrantLifecycleSignatureInput,
+  buildPicoHomeDomainReadGrantSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
   buildPicoHomeMembershipSignatureInput,
   picoHomeMembershipCredentialSchema,
   picoHomeMembershipLifecycleRecordSchema,
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoIdentityDelegationSignatureInput,
+  buildPicoIdentityPossessionSignatureInput,
   deviceSeenStatuses,
   legacyToolPolicyEventTypes,
   messageCreatedRoles,
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
+  picoHomeDomainReadGrantLifecycleRecordSchema,
+  picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipScopes,
   picoHomeEventTypes,
   picoHomeSealedClaimPayloadSchema,
@@ -35,11 +41,14 @@ import {
   type PicoHomeClaimSignatureInput,
   type PicoHomeFoundingAcceptance,
   type PicoHomeFoundingSignatureInput,
+  type PicoHomeDomainReadGrantLifecycleSignatureInput,
+  type PicoHomeDomainReadGrantSignatureInput,
   type PicoHomePendingClaimResponse,
   type PicoHomeSetupResponse,
   type PicoHomeMembershipLifecycleSignatureInput,
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
+  type PicoIdentityDelegationSignatureInput,
 } from '@pico/protocol';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
@@ -230,6 +239,7 @@ describe('Pico Home Core app', () => {
           { id: '0014_pico_home_membership', appliedAt: expect.any(String) },
           { id: '0015_pico_home_founding_record_drop_claim_signature', appliedAt: expect.any(String) },
           { id: '0016_pico_home_membership_credentials', appliedAt: expect.any(String) },
+          { id: '0017_identity_sessions_and_domain_read_grants', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -1582,6 +1592,236 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  it('binds an identity session by possession and requires a signed domain grant on a claimed Home', async () => {
+    const app = await buildAppWithCapturedLog();
+    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const homeId = (claimResponse.claimState as { homeId: string }).homeId;
+    const bootstrapResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: {
+        bootstrapCode: readBootstrapCode(app),
+        passphrase: OPERATOR_PASSPHRASE,
+      },
+    });
+    const operatorSession = bootstrapResponse.json().session as string;
+    const operatorAuth = { authorization: `Bearer ${operatorSession}` };
+    const memoryItemId = await recordMemoryItem(app, operatorSession, {
+      privacyDomain: 'domain-journal',
+      content: 'Identity-bound journal entry.',
+    });
+
+    // Claiming removes the sole-resident shortcut: operator is administration,
+    // not a reader, even before another Home member exists.
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/memory/domains/domain-journal/items',
+      headers: operatorAuth,
+    })).statusCode).toBe(404);
+
+    const homeHostIdentityFingerprint = sealedClaim.claim.claimantIdentityKeyFingerprintHex;
+    const grant: PicoHomeDomainReadGrantSignatureInput = {
+      suite: picoIdentitySuite,
+      grantId: 'grant_20260727_app_0001',
+      homeId,
+      hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+      privacyDomain: 'domain-journal',
+      controllerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      readerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validUntil: '2027-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    const grantResponse = await app.inject({
+      method: 'POST',
+      url: '/api/home/domain-read-grants',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeDomainReadGrantRecordSchema,
+        grant,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeDomainReadGrantSignatureInput(grant),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    });
+    expect(grantResponse.statusCode).toBe(201);
+    expect(grantResponse.json().grant).toMatchObject({
+      grantId: grant.grantId,
+      privacyDomain: grant.privacyDomain,
+      status: 'active',
+    });
+
+    const deviceSigning = sodium.crypto_sign_keypair();
+    const deviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_signing',
+      publicKeyHex: bytesToHex(deviceSigning.publicKey),
+    };
+    const deviceSigningFingerprint = keyRecordFingerprintHex(deviceSigningKeyRecord);
+    const deviceAgreement = sodium.crypto_box_keypair();
+    const deviceAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_key_agreement',
+      publicKeyHex: bytesToHex(deviceAgreement.publicKey),
+    };
+    const delegation: PicoIdentityDelegationSignatureInput = {
+      suite: picoIdentitySuite,
+      delegationId: 'delegation_20260727_app_0001',
+      issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+      subjectSigningKeyFingerprintHex: deviceSigningFingerprint,
+      subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(deviceAgreementKeyRecord),
+      scopes: ['surface_session'],
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validUntil: '2027-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    const signedDelegation = {
+      record: delegation,
+      signatureHex: bytesToHex(sodium.crypto_sign_detached(
+        buildPicoIdentityDelegationSignatureInput(delegation),
+        sealedClaim.claimantPrivateKey,
+      )),
+    };
+
+    const challengeResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/identity-challenges',
+    });
+    expect(challengeResponse.statusCode).toBe(201);
+    const challenge = challengeResponse.json() as {
+      challengeId: string;
+      verifierNonceHex: string;
+      verifierContext: string;
+    };
+    expect(challenge.verifierContext).toBe(
+      `pico.home.surface-session.v1:${sealedClaim.claim.hostSigningKeyFingerprintHex}`,
+    );
+
+    const identitySessionRequest = {
+      challengeId: challenge.challengeId,
+      identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+      deviceSigningKeyRecord,
+      delegation: signedDelegation,
+      revocations: [],
+      possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+        buildPicoIdentityPossessionSignatureInput({
+          suite: picoIdentitySuite,
+          subjectKeyFingerprintHex: deviceSigningFingerprint,
+          verifierNonceHex: challenge.verifierNonceHex,
+          verifierContext: challenge.verifierContext,
+        }),
+        deviceSigning.privateKey,
+      )),
+    };
+    const identitySessionResponse = await app.inject({
+      method: 'POST',
+      url: '/api/auth/identity-session',
+      payload: identitySessionRequest,
+    });
+    expect(identitySessionResponse.statusCode).toBe(201);
+    const identitySession = identitySessionResponse.json().session as string;
+    const identityAuth = { authorization: `Bearer ${identitySession}` };
+
+    // The challenge is spent, the identity session has no host-admin role, and
+    // only its explicitly granted domain is readable.
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/auth/identity-session',
+      payload: identitySessionRequest,
+    })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/home/domain-read-grants',
+      headers: identityAuth,
+    })).statusCode).toBe(401);
+    expect((await app.inject({
+      method: 'GET',
+      url: '/api/memory/domains/domain-other/items',
+      headers: identityAuth,
+    })).statusCode).toBe(404);
+
+    const readable = await app.inject({
+      method: 'GET',
+      url: `/api/memory/domains/domain-journal/items/${memoryItemId}`,
+      headers: identityAuth,
+    });
+    expect(readable.statusCode).toBe(200);
+    expect(readable.json().content).toBe('Identity-bound journal entry.');
+
+    const lifecycle: PicoHomeDomainReadGrantLifecycleSignatureInput = {
+      suite: picoIdentitySuite,
+      lifecycleId: 'grant_lifecycle_20260727_app_0001',
+      grantId: grant.grantId,
+      homeId,
+      hostSigningKeyFingerprintHex: grant.hostSigningKeyFingerprintHex,
+      privacyDomain: grant.privacyDomain,
+      controllerPicoIdentityFingerprintHex: grant.controllerPicoIdentityFingerprintHex,
+      readerPicoIdentityFingerprintHex: grant.readerPicoIdentityFingerprintHex,
+      status: 'revoked',
+      reasonCategory: 'reader_removed',
+      changedAt: '2026-08-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000002',
+    };
+    const revoked = await app.inject({
+      method: 'POST',
+      url: '/api/home/domain-read-grant-lifecycle',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeDomainReadGrantLifecycleRecordSchema,
+        lifecycle,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeDomainReadGrantLifecycleSignatureInput(lifecycle),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    });
+    expect(revoked.statusCode).toBe(201);
+    expect(revoked.json().grant.status).toBe('revoked');
+    expect((await app.inject({
+      method: 'GET',
+      url: `/api/memory/domains/domain-journal/items/${memoryItemId}`,
+      headers: identityAuth,
+    })).statusCode).toBe(404);
+
+    const events = await app.inject({ method: 'GET', url: '/api/events', headers: operatorAuth });
+    const grantEvents = (events.json().events as { type: string; payload: unknown }[])
+      .filter((event) => event.type.startsWith('home.domain_read_'));
+    expect(grantEvents).toEqual([
+      {
+        type: 'home.domain_read_granted',
+        payload: {
+          grantId: grant.grantId,
+          privacyDomain: grant.privacyDomain,
+          readerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+        },
+        eventId: expect.any(String),
+        deviceId: 'test-core',
+        lamport: expect.any(Number),
+        wallTime: expect.any(String),
+        stream: 'device:test-core',
+      },
+      {
+        type: 'home.domain_read_revoked',
+        payload: {
+          grantId: grant.grantId,
+          lifecycleId: lifecycle.lifecycleId,
+          privacyDomain: grant.privacyDomain,
+          readerPicoIdentityFingerprintHex: homeHostIdentityFingerprint,
+        },
+        eventId: expect.any(String),
+        deviceId: 'test-core',
+        lamport: expect.any(Number),
+        wallTime: expect.any(String),
+        stream: 'device:test-core',
+      },
+    ]);
+
+    await app.close();
+  });
+
   it('throttles repeated failed logins without locking the operator out', async () => {
     const app = await buildAppWithCapturedLog();
     const bootstrapCode = readBootstrapCode(app);
@@ -2843,6 +3083,14 @@ function randomHex(bytes: number): string {
 
 function bytesToHex(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('hex');
+}
+
+function keyRecordFingerprintHex(keyRecord: PicoIdentityKeyRecordSignatureInput): string {
+  return bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoIdentityKeyRecordSignatureInput(keyRecord),
+    null,
+  ));
 }
 
 function hexToBytes(hex: string): Uint8Array {

@@ -278,6 +278,10 @@ describe('restoreSqliteBackup', () => {
         id: '0016_pico_home_membership_credentials',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0017_identity_sessions_and_domain_read_grants',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();

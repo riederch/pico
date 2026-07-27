@@ -24,9 +24,9 @@ export interface CoreConfig {
   logDestination?: NodeJS.WritableStream;
   /**
    * Domain readership evaluation for the `domain-content` class (ADR 0077).
-   * Defaults to the foundation-phase {@link SoleResidentReadership}. Injected in
-   * tests to prove the readership seam gates the read path independently of the
-   * operator role: an authenticated principal that is not a reader is denied.
+   * By default, unclaimed instances use the sole-resident policy and claimed
+   * Homes use membership-plus-grant readership (ADR 0082). Tests may inject a
+   * policy to prove the seam gates reads independently of the operator role.
    */
   readership?: DomainReadership;
 }

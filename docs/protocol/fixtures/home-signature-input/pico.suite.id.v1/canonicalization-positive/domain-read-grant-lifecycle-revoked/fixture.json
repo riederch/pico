@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-positive.domain-read-grant-lifecycle-revoked",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-positive",
+  "homeFamily": "domainReadGrantLifecycle",
+  "construction": "pico.home.domain-read-grant-lifecycle.v1",
+  "case": "domain read grant lifecycle revoked",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "000000287069636f2e686f6d652e646f6d61696e2d726561642d6772616e742d6c6966656379636c652e7631000000107069636f2e73756974652e69642e76310000001d6772616e745f6c6966656379636c655f32303236303732375f30303031000000136772616e745f32303236303732375f3030303100000012686f6d655f32303236303732375f303030310000002011111111111111111111111111111111111111111111111111111111111111110000000e646f6d61696e5f6a6f75726e616c000000208888888888888888888888888888888888888888888888888888888888888888000000209999999999999999999999999999999999999999999999999999999999999999000000077265766f6b65640000000e7265616465725f72656d6f76656400000018323032362d30382d30315431303a30303a30302e3030305a000000147365713a30303030303030303030303030303032",
+    "signatureInputLen": 349
+  },
+  "adr": "0082",
+  "notes": "The revocation binds the exact grant context, status, reason, server-comparable instant and higher lifecycle order. Synthetic key references only."
+}

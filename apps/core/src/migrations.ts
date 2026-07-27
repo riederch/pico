@@ -487,6 +487,88 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0017_identity_sessions_and_domain_read_grants',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0082: public signed evidence only. Opaque session credentials and
+      // private identity/device keys remain memory-only or in Pico Vault.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_identity_delegation (
+          delegation_id TEXT PRIMARY KEY,
+          issuer_pico_identity_fingerprint_hex TEXT NOT NULL,
+          subject_signing_key_fingerprint_hex TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NOT NULL,
+          delegation_json TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_identity_delegation_issuer
+        ON pico_identity_delegation (issuer_pico_identity_fingerprint_hex, lifecycle_order);
+
+        CREATE TABLE IF NOT EXISTS pico_identity_revocation (
+          revocation_id TEXT PRIMARY KEY,
+          issuer_pico_identity_fingerprint_hex TEXT NOT NULL,
+          subject_kind TEXT NOT NULL CHECK (subject_kind IN ('delegation', 'key')),
+          subject_ref TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          revocation_json TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_identity_revocation_issuer
+        ON pico_identity_revocation (issuer_pico_identity_fingerprint_hex, lifecycle_order);
+
+        CREATE TABLE IF NOT EXISTS pico_home_domain_read_grant (
+          grant_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          host_signing_key_fingerprint_hex TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          controller_pico_identity_fingerprint_hex TEXT NOT NULL,
+          reader_pico_identity_fingerprint_hex TEXT NOT NULL,
+          valid_from TEXT NOT NULL,
+          valid_until TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          grant_json TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          issuer_signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_domain_read_grant_reader
+        ON pico_home_domain_read_grant (
+          home_id,
+          reader_pico_identity_fingerprint_hex,
+          privacy_domain
+        );
+
+        CREATE TABLE IF NOT EXISTS pico_home_domain_read_grant_lifecycle (
+          lifecycle_id TEXT PRIMARY KEY,
+          grant_id TEXT NOT NULL,
+          home_id TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          reader_pico_identity_fingerprint_hex TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status = 'revoked'),
+          reason_category TEXT NOT NULL,
+          changed_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          lifecycle_json TEXT NOT NULL,
+          issuer_identity_key_record_json TEXT NOT NULL,
+          issuer_signature_hex TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_home_domain_read_grant_lifecycle_grant
+        ON pico_home_domain_read_grant_lifecycle (grant_id, lifecycle_order);
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

@@ -1,0 +1,18 @@
+{
+  "homeFamily": "domainReadGrantLifecycle",
+  "construction": "pico.home.domain-read-grant-lifecycle.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "lifecycleId": "grant_lifecycle_20260727_0001",
+    "grantId": "grant_20260727_0001",
+    "homeId": "home_20260727_0001",
+    "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "privacyDomain": "domain_journal",
+    "controllerPicoIdentityFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
+    "readerPicoIdentityFingerprintHex": "9999999999999999999999999999999999999999999999999999999999999999",
+    "status": "active",
+    "reasonCategory": "reader_removed",
+    "changedAt": "2026-08-01T10:00:00.000Z",
+    "lifecycleOrder": "seq:0000000000000002"
+  }
+}

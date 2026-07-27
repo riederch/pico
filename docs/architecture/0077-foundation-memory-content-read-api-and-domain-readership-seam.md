@@ -2,7 +2,16 @@
 
 ## Status
 
-Accepted as the ADR 0075 **Gate C** design and **now implemented**: the memory content read API and the domain readership evaluation seam (A7). Runtime: the `DomainReadership` seam (`apps/core/src/domain-readership.ts`, foundation-phase `SoleResidentReadership`) evaluated in the `onRequest` hook for the `domain-content` class, the read routes `GET /api/memory/domains/:privacyDomain/items[/:memoryItemId]` (cursor-paged via `MemoryStore.listInDomainPage`, reusing the store's content resolution unchanged), and the two implementation traps closed and test-bound. Both traps are proven: a test injects a readership that denies a domain and shows an operator session is refused there (the operator branch does not override readership), and the static token is refused at its `foundation-diagnostic` ceiling.
+Accepted as the ADR 0075 **Gate C** design and **implemented**: the memory
+content read API and domain-readership evaluation seam (A7). Unclaimed
+development instances use `SoleResidentReadership`; after a signed founding
+record exists, ADR 0082 switches the default to `HomeMembershipReadership`,
+requiring an identity-bound session, active Home membership and an active
+signed grant for the exact domain. The read routes remain
+`GET /api/memory/domains/:privacyDomain/items[/:memoryItemId]`, cursor-paged via
+`MemoryStore.listInDomainPage`. Operator authority never overrides readership,
+stored owner/controller fields never authorize, and the static token remains at
+its `foundation-diagnostic` ceiling.
 
 ## Context
 

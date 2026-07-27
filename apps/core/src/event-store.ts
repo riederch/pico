@@ -11,8 +11,13 @@ import type {
   PicoHomeMembershipStatus,
   PicoHomeMembershipCredential,
   PicoHomeMembershipLifecycleRecord,
+  PicoHomeDomainReadGrantLifecycleRecord,
+  PicoHomeDomainReadGrantRecord,
+  PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
 import {
+  picoHomeDomainReadGrantLifecycleRecordSchema,
+  picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
   payloadPostures,
   picoHomeClaimResponseRecordSchema,
@@ -37,9 +42,19 @@ import {
   verifyPicoHomeMembershipLifecycleRecord,
   type PicoHomeMembershipVerificationFailure,
 } from './home-membership.js';
-import type { IdentityVerificationSodium } from '@pico/identity';
+import {
+  createVerifiedPicoIdentityLifecycleIndex,
+  type IdentityVerificationSodium,
+  type PicoIdentitySignedDelegation,
+  type PicoIdentitySignedRevocation,
+} from '@pico/identity';
 import type { MemoryContentCrypto } from './memory-content-crypto.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
+import {
+  verifyPicoHomeDomainReadGrant,
+  verifyPicoHomeDomainReadGrantLifecycle,
+  type PicoHomeDomainReadGrantVerificationFailure,
+} from './domain-read-grant.js';
 
 export type AppendResult = PicoEventAppendResult;
 
@@ -122,6 +137,34 @@ export interface PicoHomeMembershipCredentialReconciliationResult {
 export type PicoHomeMembershipRecordResult =
   | { ok: true; membership: PicoHomeMembership }
   | { ok: false; reason: PicoHomeMembershipVerificationFailure | 'no_founding_record' | 'conflicting_record' };
+
+export type PicoIdentityLifecycleEvidenceRecordResult =
+  | { ok: true }
+  | { ok: false; reason: 'conflicting_record' | 'invalid_identity_lifecycle_evidence' };
+
+export interface PicoHomeDomainReadGrantView {
+  grantId: string;
+  homeId: string;
+  privacyDomain: string;
+  controllerPicoIdentityFingerprintHex: string;
+  readerPicoIdentityFingerprintHex: string;
+  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  createdAt: string;
+}
+
+export type PicoHomeDomainReadGrantRecordResult =
+  | { ok: true; inserted: boolean; grant: PicoHomeDomainReadGrantView }
+  | {
+    ok: false;
+    reason: PicoHomeDomainReadGrantVerificationFailure
+      | 'no_founding_record'
+      | 'conflicting_record'
+      | 'reader_is_not_active_member'
+      | 'domain_is_not_host_custody';
+  };
 
 export interface EventStoreOpenOptions {
   backupDirectory?: string;
@@ -483,6 +526,19 @@ export class EventStore {
 
       if (tableExists(this.db, 'pico_home_membership')) {
         this.db.prepare('DELETE FROM pico_home_membership').run();
+      }
+
+      if (tableExists(this.db, 'pico_identity_revocation')) {
+        this.db.prepare('DELETE FROM pico_identity_revocation').run();
+      }
+      if (tableExists(this.db, 'pico_identity_delegation')) {
+        this.db.prepare('DELETE FROM pico_identity_delegation').run();
+      }
+      if (tableExists(this.db, 'pico_home_domain_read_grant_lifecycle')) {
+        this.db.prepare('DELETE FROM pico_home_domain_read_grant_lifecycle').run();
+      }
+      if (tableExists(this.db, 'pico_home_domain_read_grant')) {
+        this.db.prepare('DELETE FROM pico_home_domain_read_grant').run();
       }
     });
 
@@ -926,6 +982,662 @@ export class EventStore {
     };
   }
 
+  /**
+   * Persists only lifecycle statements whose identity signatures verify. A
+   * later login may add revocations, but can never remove an already observed
+   * one; conflicts on a stable statement id fail closed.
+   */
+  public recordPicoIdentityLifecycleEvidence(params: {
+    identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    delegation: PicoIdentitySignedDelegation;
+    revocations: readonly PicoIdentitySignedRevocation[];
+    sodium: IdentityVerificationSodium;
+    recordedAt?: string;
+  }): PicoIdentityLifecycleEvidenceRecordResult {
+    this.ensureOpen();
+
+    try {
+      createVerifiedPicoIdentityLifecycleIndex(params.sodium, {
+        issuerIdentityKeyRecord: params.identityKeyRecord,
+        signedDelegations: [params.delegation],
+        signedRevocations: params.revocations,
+      });
+    } catch {
+      return { ok: false, reason: 'invalid_identity_lifecycle_evidence' };
+    }
+
+    const issuerFingerprint = params.delegation.record.issuerIdentityKeyFingerprintHex;
+    if (params.revocations.some((entry) => entry.record.issuerIdentityKeyFingerprintHex !== issuerFingerprint)) {
+      return { ok: false, reason: 'invalid_identity_lifecycle_evidence' };
+    }
+
+    const identityKeyJson = serializePayload(params.identityKeyRecord);
+    const delegationJson = serializePayload(params.delegation.record);
+    const existingDelegation = this.db
+      .prepare(`
+        SELECT delegation_json AS recordJson,
+               issuer_identity_key_record_json AS keyJson,
+               signature_hex AS signatureHex
+        FROM pico_identity_delegation
+        WHERE delegation_id = ?
+      `)
+      .get(params.delegation.record.delegationId) as SignedEvidenceRow | undefined;
+    if (existingDelegation !== undefined
+      && (existingDelegation.recordJson !== delegationJson
+        || existingDelegation.keyJson !== identityKeyJson
+        || existingDelegation.signatureHex !== params.delegation.signatureHex)) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    for (const signed of params.revocations) {
+      const existing = this.db
+        .prepare(`
+          SELECT revocation_json AS recordJson,
+                 issuer_identity_key_record_json AS keyJson,
+                 signature_hex AS signatureHex
+          FROM pico_identity_revocation
+          WHERE revocation_id = ?
+        `)
+        .get(signed.record.revocationId) as SignedEvidenceRow | undefined;
+      if (existing !== undefined
+        && (existing.recordJson !== serializePayload(signed.record)
+          || existing.keyJson !== identityKeyJson
+          || existing.signatureHex !== signed.signatureHex)) {
+        return { ok: false, reason: 'conflicting_record' };
+      }
+    }
+
+    const recordedAt = params.recordedAt ?? new Date().toISOString();
+    const write = this.db.transaction(() => {
+      const delegation = params.delegation.record;
+      this.db
+        .prepare(`
+          INSERT INTO pico_identity_delegation (
+            delegation_id,
+            issuer_pico_identity_fingerprint_hex,
+            subject_signing_key_fingerprint_hex,
+            lifecycle_order,
+            valid_from,
+            valid_until,
+            delegation_json,
+            issuer_identity_key_record_json,
+            signature_hex,
+            created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(delegation_id) DO NOTHING
+        `)
+        .run(
+          delegation.delegationId,
+          delegation.issuerIdentityKeyFingerprintHex,
+          delegation.subjectSigningKeyFingerprintHex,
+          delegation.lifecycleOrder,
+          delegation.validFrom,
+          delegation.validUntil,
+          delegationJson,
+          identityKeyJson,
+          params.delegation.signatureHex,
+          recordedAt,
+        );
+
+      for (const signed of params.revocations) {
+        const revocation = signed.record;
+        this.db
+          .prepare(`
+            INSERT INTO pico_identity_revocation (
+              revocation_id,
+              issuer_pico_identity_fingerprint_hex,
+              subject_kind,
+              subject_ref,
+              lifecycle_order,
+              revocation_json,
+              issuer_identity_key_record_json,
+              signature_hex,
+              created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(revocation_id) DO NOTHING
+          `)
+          .run(
+            revocation.revocationId,
+            revocation.issuerIdentityKeyFingerprintHex,
+            revocation.subjectKind,
+            revocation.subjectRef,
+            revocation.lifecycleOrder,
+            serializePayload(revocation),
+            identityKeyJson,
+            signed.signatureHex,
+            recordedAt,
+          );
+      }
+    });
+    write();
+
+    return { ok: true };
+  }
+
+  public hasActivePicoIdentityDelegation(params: {
+    picoIdentityFingerprintHex: string;
+    deviceSigningKeyFingerprintHex: string;
+    delegationId: string;
+    sodium: IdentityVerificationSodium;
+    at?: string;
+  }): boolean {
+    this.ensureOpen();
+
+    const row = this.db
+      .prepare(`
+        SELECT delegation_json AS recordJson,
+               issuer_identity_key_record_json AS keyJson,
+               signature_hex AS signatureHex
+        FROM pico_identity_delegation
+        WHERE delegation_id = ?
+          AND issuer_pico_identity_fingerprint_hex = ?
+          AND subject_signing_key_fingerprint_hex = ?
+      `)
+      .get(
+        params.delegationId,
+        params.picoIdentityFingerprintHex,
+        params.deviceSigningKeyFingerprintHex,
+      ) as SignedEvidenceRow | undefined;
+    if (row === undefined) {
+      return false;
+    }
+
+    try {
+      const identityKeyRecord = JSON.parse(row.keyJson) as PicoIdentityKeyRecordSignatureInput;
+      const signedDelegation: PicoIdentitySignedDelegation = {
+        record: JSON.parse(row.recordJson) as PicoIdentitySignedDelegation['record'],
+        signatureHex: row.signatureHex,
+      };
+      const signedRevocations = this.picoIdentitySignedRevocations(params.picoIdentityFingerprintHex);
+      const index = createVerifiedPicoIdentityLifecycleIndex(params.sodium, {
+        issuerIdentityKeyRecord: identityKeyRecord,
+        signedDelegations: [signedDelegation],
+        signedRevocations,
+      });
+
+      return index.lookupDelegation(params.delegationId, {
+        at: params.at ?? new Date().toISOString(),
+        requiredScopes: ['surface_session'],
+      }).status === 'active';
+    } catch {
+      return false;
+    }
+  }
+
+  public reconcilePicoIdentityLifecycleEvidence(
+    sodium: IdentityVerificationSodium,
+  ): { droppedDelegations: number; droppedRevocations: number } {
+    this.ensureOpen();
+    const issuers = this.db
+      .prepare(`
+        SELECT DISTINCT issuer_pico_identity_fingerprint_hex AS issuer
+        FROM pico_identity_delegation
+        ORDER BY issuer
+      `)
+      .all()
+      .map((row) => (row as { issuer: string }).issuer);
+    let droppedDelegations = 0;
+    let droppedRevocations = 0;
+
+    const reconcile = this.db.transaction(() => {
+      for (const issuer of issuers) {
+        const rows = this.db
+          .prepare(`
+            SELECT delegation_json AS recordJson,
+                   issuer_identity_key_record_json AS keyJson,
+                   signature_hex AS signatureHex
+            FROM pico_identity_delegation
+            WHERE issuer_pico_identity_fingerprint_hex = ?
+            ORDER BY lifecycle_order ASC, delegation_id ASC
+          `)
+          .all(issuer) as SignedEvidenceRow[];
+        if (rows.length === 0) {
+          continue;
+        }
+
+        try {
+          const identityKeyRecord = JSON.parse(rows[0]!.keyJson) as PicoIdentityKeyRecordSignatureInput;
+          const signedDelegations = rows.map((row) => ({
+            record: JSON.parse(row.recordJson) as PicoIdentitySignedDelegation['record'],
+            signatureHex: row.signatureHex,
+          }));
+          createVerifiedPicoIdentityLifecycleIndex(sodium, {
+            issuerIdentityKeyRecord: identityKeyRecord,
+            signedDelegations,
+            signedRevocations: this.picoIdentitySignedRevocations(issuer),
+          });
+        } catch {
+          droppedRevocations += this.db
+            .prepare('DELETE FROM pico_identity_revocation WHERE issuer_pico_identity_fingerprint_hex = ?')
+            .run(issuer).changes;
+          droppedDelegations += this.db
+            .prepare('DELETE FROM pico_identity_delegation WHERE issuer_pico_identity_fingerprint_hex = ?')
+            .run(issuer).changes;
+        }
+      }
+
+      // No accepted delegation means no locally anchored identity evidence.
+      droppedRevocations += this.db
+        .prepare(`
+          DELETE FROM pico_identity_revocation
+          WHERE issuer_pico_identity_fingerprint_hex NOT IN (
+            SELECT DISTINCT issuer_pico_identity_fingerprint_hex
+            FROM pico_identity_delegation
+          )
+        `)
+        .run().changes;
+    });
+    reconcile();
+
+    return { droppedDelegations, droppedRevocations };
+  }
+
+  public recordPicoHomeDomainReadGrant(params: {
+    sodium: IdentityVerificationSodium;
+    record: PicoHomeDomainReadGrantRecord;
+  }): PicoHomeDomainReadGrantRecordResult {
+    this.ensureOpen();
+    const foundingRecord = this.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { ok: false, reason: 'no_founding_record' };
+    }
+
+    const verification = verifyPicoHomeDomainReadGrant(params.sodium, {
+      record: params.record,
+      foundingRecord,
+    });
+    if (!verification.ok) {
+      return { ok: false, reason: verification.reason };
+    }
+
+    const grant = params.record.grant;
+    if (!this.hasActivePicoHomeMembership(
+      grant.readerPicoIdentityFingerprintHex,
+      grant.homeId,
+    )) {
+      return { ok: false, reason: 'reader_is_not_active_member' };
+    }
+    if (!this.isExistingHostCustodyDomain(grant.privacyDomain)) {
+      return { ok: false, reason: 'domain_is_not_host_custody' };
+    }
+
+    const grantJson = serializePayload(grant);
+    const keyJson = serializePayload(params.record.issuerIdentityKeyRecord);
+    const existing = this.db
+      .prepare(`
+        SELECT grant_json AS recordJson,
+               issuer_identity_key_record_json AS keyJson,
+               issuer_signature_hex AS signatureHex
+        FROM pico_home_domain_read_grant
+        WHERE grant_id = ?
+      `)
+      .get(grant.grantId) as SignedEvidenceRow | undefined;
+    if (existing !== undefined
+      && (existing.recordJson !== grantJson
+        || existing.keyJson !== keyJson
+        || existing.signatureHex !== params.record.issuerSignatureHex)) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    const inserted = this.db
+      .prepare(`
+        INSERT INTO pico_home_domain_read_grant (
+          grant_id,
+          home_id,
+          host_signing_key_fingerprint_hex,
+          privacy_domain,
+          controller_pico_identity_fingerprint_hex,
+          reader_pico_identity_fingerprint_hex,
+          valid_from,
+          valid_until,
+          lifecycle_order,
+          grant_json,
+          issuer_identity_key_record_json,
+          issuer_signature_hex,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(grant_id) DO NOTHING
+      `)
+      .run(
+        grant.grantId,
+        grant.homeId,
+        grant.hostSigningKeyFingerprintHex,
+        grant.privacyDomain,
+        grant.controllerPicoIdentityFingerprintHex,
+        grant.readerPicoIdentityFingerprintHex,
+        grant.validFrom,
+        grant.validUntil,
+        grant.lifecycleOrder,
+        grantJson,
+        keyJson,
+        params.record.issuerSignatureHex,
+        params.record.createdAt,
+      ).changes === 1;
+
+    return { ok: true, inserted, grant: this.picoHomeDomainReadGrantView(grant.grantId) };
+  }
+
+  public recordPicoHomeDomainReadGrantLifecycle(params: {
+    sodium: IdentityVerificationSodium;
+    record: PicoHomeDomainReadGrantLifecycleRecord;
+  }): PicoHomeDomainReadGrantRecordResult {
+    this.ensureOpen();
+    const foundingRecord = this.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { ok: false, reason: 'no_founding_record' };
+    }
+
+    const grantRecord = this.picoHomeDomainReadGrantRecord(params.record.lifecycle.grantId);
+    if (grantRecord === undefined) {
+      return { ok: false, reason: 'unknown_grant' };
+    }
+
+    const verification = verifyPicoHomeDomainReadGrantLifecycle(params.sodium, {
+      record: params.record,
+      grantRecord,
+      foundingRecord,
+    });
+    if (!verification.ok) {
+      return { ok: false, reason: verification.reason };
+    }
+
+    const lifecycle = params.record.lifecycle;
+    const lifecycleJson = serializePayload(lifecycle);
+    const keyJson = serializePayload(params.record.issuerIdentityKeyRecord);
+    const existing = this.db
+      .prepare(`
+        SELECT lifecycle_json AS recordJson,
+               issuer_identity_key_record_json AS keyJson,
+               issuer_signature_hex AS signatureHex
+        FROM pico_home_domain_read_grant_lifecycle
+        WHERE lifecycle_id = ?
+      `)
+      .get(lifecycle.lifecycleId) as SignedEvidenceRow | undefined;
+    if (existing !== undefined
+      && (existing.recordJson !== lifecycleJson
+        || existing.keyJson !== keyJson
+        || existing.signatureHex !== params.record.issuerSignatureHex)) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    const inserted = this.db
+      .prepare(`
+        INSERT INTO pico_home_domain_read_grant_lifecycle (
+          lifecycle_id,
+          grant_id,
+          home_id,
+          privacy_domain,
+          reader_pico_identity_fingerprint_hex,
+          status,
+          reason_category,
+          changed_at,
+          lifecycle_order,
+          lifecycle_json,
+          issuer_identity_key_record_json,
+          issuer_signature_hex,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(lifecycle_id) DO NOTHING
+      `)
+      .run(
+        lifecycle.lifecycleId,
+        lifecycle.grantId,
+        lifecycle.homeId,
+        lifecycle.privacyDomain,
+        lifecycle.readerPicoIdentityFingerprintHex,
+        lifecycle.status,
+        lifecycle.reasonCategory,
+        lifecycle.changedAt,
+        lifecycle.lifecycleOrder,
+        lifecycleJson,
+        keyJson,
+        params.record.issuerSignatureHex,
+        params.record.createdAt,
+      ).changes === 1;
+
+    return { ok: true, inserted, grant: this.picoHomeDomainReadGrantView(lifecycle.grantId) };
+  }
+
+  public picoHomeDomainReadGrants(at: string = new Date().toISOString()): PicoHomeDomainReadGrantView[] {
+    this.ensureOpen();
+    return this.db
+      .prepare('SELECT grant_id AS grantId FROM pico_home_domain_read_grant ORDER BY grant_id')
+      .all()
+      .map((row) => this.picoHomeDomainReadGrantView((row as { grantId: string }).grantId, at));
+  }
+
+  public mayReadDomain(
+    picoIdentityFingerprintHex: string,
+    privacyDomain: string,
+    homeId?: string,
+    at: string = new Date().toISOString(),
+  ): boolean {
+    this.ensureOpen();
+    const scopedHomeId = homeId ?? this.picoHomeClaimState().homeId ?? undefined;
+    if (scopedHomeId === undefined) {
+      return false;
+    }
+
+    const grantIds = this.db
+      .prepare(`
+        SELECT grant_id AS grantId
+        FROM pico_home_domain_read_grant
+        WHERE home_id = ?
+          AND reader_pico_identity_fingerprint_hex = ?
+          AND privacy_domain = ?
+      `)
+      .all(scopedHomeId, picoIdentityFingerprintHex, privacyDomain)
+      .map((row) => (row as { grantId: string }).grantId);
+
+    return grantIds.some((grantId) => this.picoHomeDomainReadGrantView(grantId, at).status === 'active');
+  }
+
+  public reconcilePicoHomeDomainReadGrants(
+    sodium: IdentityVerificationSodium,
+  ): { droppedGrants: number; droppedLifecycleRecords: number } {
+    this.ensureOpen();
+    const foundingRecord = this.picoHomeFoundingRecord();
+    let droppedGrants = 0;
+    let droppedLifecycleRecords = 0;
+
+    const reconcile = this.db.transaction(() => {
+      const grantIds = this.db
+        .prepare('SELECT grant_id AS grantId FROM pico_home_domain_read_grant ORDER BY grant_id')
+        .all()
+        .map((row) => (row as { grantId: string }).grantId);
+
+      for (const grantId of grantIds) {
+        let grantRecord: PicoHomeDomainReadGrantRecord | undefined;
+        try {
+          const candidate = this.picoHomeDomainReadGrantRecord(grantId);
+          if (foundingRecord !== undefined
+            && candidate !== undefined
+            && verifyPicoHomeDomainReadGrant(sodium, {
+              record: candidate,
+              foundingRecord,
+            }).ok) {
+            grantRecord = candidate;
+          }
+        } catch {
+          grantRecord = undefined;
+        }
+        if (foundingRecord === undefined
+          || grantRecord === undefined) {
+          droppedLifecycleRecords += this.db
+            .prepare('DELETE FROM pico_home_domain_read_grant_lifecycle WHERE grant_id = ?')
+            .run(grantId).changes;
+          droppedGrants += this.db
+            .prepare('DELETE FROM pico_home_domain_read_grant WHERE grant_id = ?')
+            .run(grantId).changes;
+          continue;
+        }
+
+        const lifecycleIds = this.db
+          .prepare(`
+            SELECT lifecycle_id AS lifecycleId
+            FROM pico_home_domain_read_grant_lifecycle
+            WHERE grant_id = ?
+          `)
+          .all(grantId)
+          .map((row) => (row as { lifecycleId: string }).lifecycleId);
+        for (const lifecycleId of lifecycleIds) {
+          let lifecycleValid = false;
+          try {
+            const record = this.picoHomeDomainReadGrantLifecycleRecord(lifecycleId);
+            lifecycleValid = record !== undefined
+              && verifyPicoHomeDomainReadGrantLifecycle(sodium, {
+                record,
+                grantRecord,
+                foundingRecord,
+              }).ok;
+          } catch {
+            lifecycleValid = false;
+          }
+          if (!lifecycleValid) {
+            droppedLifecycleRecords += this.db
+              .prepare('DELETE FROM pico_home_domain_read_grant_lifecycle WHERE lifecycle_id = ?')
+              .run(lifecycleId).changes;
+          }
+        }
+      }
+    });
+    reconcile();
+
+    return { droppedGrants, droppedLifecycleRecords };
+  }
+
+  private picoIdentitySignedRevocations(
+    issuerPicoIdentityFingerprintHex: string,
+  ): PicoIdentitySignedRevocation[] {
+    return this.db
+      .prepare(`
+        SELECT revocation_json AS recordJson, signature_hex AS signatureHex
+        FROM pico_identity_revocation
+        WHERE issuer_pico_identity_fingerprint_hex = ?
+        ORDER BY lifecycle_order ASC, revocation_id ASC
+      `)
+      .all(issuerPicoIdentityFingerprintHex)
+      .map((row) => {
+        const signed = row as { recordJson: string; signatureHex: string };
+        return {
+          record: JSON.parse(signed.recordJson) as PicoIdentitySignedRevocation['record'],
+          signatureHex: signed.signatureHex,
+        };
+      });
+  }
+
+  private isExistingHostCustodyDomain(privacyDomain: string): boolean {
+    const row = this.db
+      .prepare(`
+        SELECT custody_class AS custodyClass
+        FROM memory_domain_custody
+        WHERE privacy_domain = ?
+      `)
+      .get(privacyDomain) as { custodyClass: string } | undefined;
+
+    return row?.custodyClass === 'host_custody';
+  }
+
+  private picoHomeDomainReadGrantRecord(grantId: string): PicoHomeDomainReadGrantRecord | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT grant_json AS grantJson,
+               issuer_identity_key_record_json AS issuerIdentityKeyRecordJson,
+               issuer_signature_hex AS issuerSignatureHex,
+               created_at AS createdAt
+        FROM pico_home_domain_read_grant
+        WHERE grant_id = ?
+      `)
+      .get(grantId) as DomainReadGrantRecordRow | undefined;
+
+    if (row === undefined) {
+      return undefined;
+    }
+
+    return {
+      schema: picoHomeDomainReadGrantRecordSchema,
+      grant: JSON.parse(row.grantJson) as PicoHomeDomainReadGrantRecord['grant'],
+      issuerIdentityKeyRecord: JSON.parse(row.issuerIdentityKeyRecordJson) as PicoHomeDomainReadGrantRecord['issuerIdentityKeyRecord'],
+      issuerSignatureHex: row.issuerSignatureHex,
+      createdAt: row.createdAt,
+    };
+  }
+
+  private picoHomeDomainReadGrantLifecycleRecord(
+    lifecycleId: string,
+  ): PicoHomeDomainReadGrantLifecycleRecord | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT lifecycle_json AS lifecycleJson,
+               issuer_identity_key_record_json AS issuerIdentityKeyRecordJson,
+               issuer_signature_hex AS issuerSignatureHex,
+               created_at AS createdAt
+        FROM pico_home_domain_read_grant_lifecycle
+        WHERE lifecycle_id = ?
+      `)
+      .get(lifecycleId) as DomainReadGrantLifecycleRecordRow | undefined;
+
+    if (row === undefined) {
+      return undefined;
+    }
+
+    return {
+      schema: picoHomeDomainReadGrantLifecycleRecordSchema,
+      lifecycle: JSON.parse(row.lifecycleJson) as PicoHomeDomainReadGrantLifecycleRecord['lifecycle'],
+      issuerIdentityKeyRecord: JSON.parse(row.issuerIdentityKeyRecordJson) as PicoHomeDomainReadGrantLifecycleRecord['issuerIdentityKeyRecord'],
+      issuerSignatureHex: row.issuerSignatureHex,
+      createdAt: row.createdAt,
+    };
+  }
+
+  private picoHomeDomainReadGrantView(
+    grantId: string,
+    at: string = new Date().toISOString(),
+  ): PicoHomeDomainReadGrantView {
+    const row = this.db
+      .prepare(`
+        SELECT
+          grant_id AS grantId,
+          home_id AS homeId,
+          privacy_domain AS privacyDomain,
+          controller_pico_identity_fingerprint_hex AS controllerPicoIdentityFingerprintHex,
+          reader_pico_identity_fingerprint_hex AS readerPicoIdentityFingerprintHex,
+          valid_from AS validFrom,
+          valid_until AS validUntil,
+          lifecycle_order AS lifecycleOrder,
+          created_at AS createdAt
+        FROM pico_home_domain_read_grant
+        WHERE grant_id = ?
+      `)
+      .get(grantId) as DomainReadGrantViewRow | undefined;
+    if (row === undefined) {
+      throw new Error('Pico Home domain read grant is missing.');
+    }
+
+    const lifecycle = this.db
+      .prepare(`
+        SELECT lifecycle_order AS lifecycleOrder
+        FROM pico_home_domain_read_grant_lifecycle
+        WHERE grant_id = ?
+        ORDER BY lifecycle_order DESC, lifecycle_id DESC
+        LIMIT 1
+      `)
+      .get(grantId) as { lifecycleOrder: string } | undefined;
+
+    let status: PicoHomeDomainReadGrantView['status'];
+    if (lifecycle !== undefined && lifecycle.lifecycleOrder > row.lifecycleOrder) {
+      status = 'revoked';
+    } else if (at < row.validFrom) {
+      status = 'not_yet_valid';
+    } else if (at >= row.validUntil) {
+      status = 'expired';
+    } else {
+      status = 'active';
+    }
+
+    return { ...row, status };
+  }
+
   private dropPicoHomeMembershipCredential(credentialId: string): void {
     this.db.prepare('DELETE FROM pico_home_membership_lifecycle WHERE credential_id = ?').run(credentialId);
     this.db.prepare('DELETE FROM pico_home_membership_credential WHERE credential_id = ?').run(credentialId);
@@ -1285,6 +1997,38 @@ interface PicoHomeMembershipCredentialRow {
   issuer_signature_hex: string;
   host_activation_signature_hex: string;
   created_at: string;
+}
+
+interface SignedEvidenceRow {
+  recordJson: string;
+  keyJson: string;
+  signatureHex: string;
+}
+
+interface DomainReadGrantRecordRow {
+  grantJson: string;
+  issuerIdentityKeyRecordJson: string;
+  issuerSignatureHex: string;
+  createdAt: string;
+}
+
+interface DomainReadGrantLifecycleRecordRow {
+  lifecycleJson: string;
+  issuerIdentityKeyRecordJson: string;
+  issuerSignatureHex: string;
+  createdAt: string;
+}
+
+interface DomainReadGrantViewRow {
+  grantId: string;
+  homeId: string;
+  privacyDomain: string;
+  controllerPicoIdentityFingerprintHex: string;
+  readerPicoIdentityFingerprintHex: string;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  createdAt: string;
 }
 
 interface PicoHomeMembershipRow {

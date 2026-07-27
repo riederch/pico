@@ -84,7 +84,7 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-in
 
 ## Current Pico Home signature-input fixtures
 
-These fixtures carry the authoritative canonical signature-input byte vectors for the `pico.suite.id.v1` Pico Home claim, claim-response, founding, membership, membership lifecycle and continuity families (ADR 0080 Gate M1). They include bind-difference cases for wrong-host pins, stale or foreign codes, cross-ceremony transplants and role/suite swaps, plus structural canonicalization rejects. They include no private keys, signatures, verification runtime, Setup Mode, claim endpoint, membership runtime, L4 compatibility basis or commercial permission.
+These fixtures carry the authoritative canonical signature-input byte vectors for the `pico.suite.id.v1` Pico Home claim, claim-response, founding, membership, membership lifecycle, domain-read grant, domain-read grant lifecycle and continuity families (ADR 0080 Gate M1 and ADR 0082 S1). They include bind-difference cases for wrong-host pins, stale or foreign codes, cross-ceremony transplants and role/suite swaps, plus structural canonicalization rejects. They include no private keys or signatures and provide no L4 compatibility basis or commercial permission.
 
 ```text
 home-signature-input/suite.json
@@ -94,6 +94,8 @@ home-signature-input/pico.suite.id.v1/canonicalization-positive/founding-record/
 home-signature-input/pico.suite.id.v1/canonicalization-positive/membership-home-member/
 home-signature-input/pico.suite.id.v1/canonicalization-positive/membership-scope-order-canonical/
 home-signature-input/pico.suite.id.v1/canonicalization-positive/membership-lifecycle-evicted/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/domain-read-grant-home-member/
+home-signature-input/pico.suite.id.v1/canonicalization-positive/domain-read-grant-lifecycle-revoked/
 home-signature-input/pico.suite.id.v1/canonicalization-positive/continuity-host-rotation/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-suite-swap/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/claim-wrong-host-pin/
@@ -109,6 +111,8 @@ home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-unkno
 home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-duplicate-scope/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-validity-inverted/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/membership-validity-offset-form/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/domain-read-grant-validity-inverted/
+home-signature-input/pico.suite.id.v1/canonicalization-negative/domain-read-grant-lifecycle-invalid-status/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-without-outgoing-key/
 home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order/
 ```

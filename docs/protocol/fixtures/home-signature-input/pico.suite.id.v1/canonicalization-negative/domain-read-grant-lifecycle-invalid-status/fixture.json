@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-negative.domain-read-grant-lifecycle-invalid-status",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-negative",
+  "homeFamily": "domainReadGrantLifecycle",
+  "construction": "pico.home.domain-read-grant-lifecycle.v1",
+  "case": "domain read grant lifecycle invalid status",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_domain_read_grant_status"
+  },
+  "adr": "0082",
+  "notes": "This lifecycle family is revocation-only; a later grant is a new signed grant, never an unsigned reactivation."
+}

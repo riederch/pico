@@ -1,0 +1,23 @@
+{
+  "schema": "pico.home.signature-input.vector",
+  "schemaVersion": 1,
+  "fixtureId": "home-signature-input.pico_suite_id_v1.canonicalization-positive.domain-read-grant-home-member",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-signature-input",
+  "family": "canonicalization-positive",
+  "homeFamily": "domainReadGrant",
+  "construction": "pico.home.domain-read-grant.v1",
+  "case": "domain read grant home member",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "0000001e7069636f2e686f6d652e646f6d61696e2d726561642d6772616e742e7631000000107069636f2e73756974652e69642e7631000000136772616e745f32303236303732375f3030303100000012686f6d655f32303236303732375f303030310000002011111111111111111111111111111111111111111111111111111111111111110000000e646f6d61696e5f6a6f75726e616c00000020888888888888888888888888888888888888888888888888888888888888888800000020999999999999999999999999999999999999999999999999999999999999999900000018323032362d30372d32375431303a30303a30302e3030305a00000018323032362d31302d32375431303a30303a30302e3030305a000000147365713a30303030303030303030303030303031",
+    "signatureInputLen": 305
+  },
+  "adr": "0082",
+  "notes": "The grant binds Home, host instance, domain, Home Host Pico controller, reader, validity and lifecycle order. Synthetic key references only."
+}

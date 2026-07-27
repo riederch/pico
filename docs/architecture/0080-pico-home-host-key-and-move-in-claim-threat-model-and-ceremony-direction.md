@@ -2,7 +2,17 @@
 
 ## Status
 
-Accepted as the threat model and ceremony direction for claiming an Empty Pico Home: the Pico Home Host Key under `pico.suite.id.v1` (ADR 0079, key roles `home_host_signing` and `home_host_key_agreement`), the Move-In claim ceremony whose pairing trust comes from the ADR 0027 protected display channel instead of trust-on-first-use or a password-authenticated key exchange, the mutually signed **founding record** that mints the Home identity, the Home Membership Credential realization direction (issuer signature by the Home Host Pico, activation countersignature by the host key), Home continuity rules, and the ADR 0075 A11 consolidation contract for the Foundation operator — behind a precondition and three gates. **Gate M1 is implemented for canonical signature-input bytes**: `@pico/protocol` exports pure builders and `docs/protocol/fixtures/home-signature-input/` publishes authoritative accept/reject vectors. **Gate M2 is partially implemented**: Setup Mode, host-key custody, per-process Move-In Code, setup nonce, sealed claim-envelope open, Claimant identity-key fingerprint/signature verification, host-signed claim response, claimant founding acceptance verification, current founding-record persistence, boot restore-reconciliation, claim audit and home reset exist. **Gate M3 has a first narrow runtime slice**: the founding record projects the Home Host Pico's active membership root into `pico_home_membership`, restores it after stale backups, and the `DomainReadership` seam has a membership-backed policy that still requires explicit domain grants. Still missing: protected display UX, signed member credentials, membership lifecycle/eviction, operator consolidation and Pico Home Link compatibility.
+Accepted as the threat model and ceremony direction for claiming an Empty Pico
+Home. Gate M1 canonical bytes are implemented. Gate M2 is partially
+implemented through Setup Mode, separated host-key custody, sealed two-step
+claim/founding acceptance, durable mutually signed founding evidence, boot
+reconciliation, claim audit and reset. Gate M3 is partially implemented through
+the founding membership root, signed member credentials, host activation,
+lifecycle/eviction, validity and restore reconciliation. ADR 0082 connects
+verified membership to identity-bound sessions and explicit signed domain
+grants without making membership itself readership. Protected display/claim UX,
+broader member onboarding, continuity enforcement, operator consolidation and
+Pico Home Link compatibility remain open.
 
 ## Context
 
@@ -10,13 +20,25 @@ This is the last root ceremony of the tenancy strand without a reviewed design. 
 
 ADR 0079 removed the shared bottleneck: the suite (`pico.suite.id.v1`), the signature-input method (I3, labeled length-prefixed binary layouts), possession proofs (I6), delegation/lifecycle statements (I8/I9) and per-role custody floors (I7, G2) now exist as direction. ADR 0078 defined how Domain Content Keys reach readers and gated its membership runtime (R3) on exactly the verified membership records this ADR designs. What remains open is the ceremony itself: how an Empty Pico Home and a first Pico establish mutual trust over an untrusted local network, what record makes the result durable, and how the transitional operator principal dissolves into it.
 
-The runtime today has `pico_home_claim_state` (migration `0004`, states `unclaimed`/`claimed`, a `hostAdminPicoId` column), one current `pico_home_founding_record` (migration `0013`), a current `pico_home_membership` projection table (migration `0014`), Home host-key custody, setup-bundle and claim APIs. It can move from `unclaimed` to `claimed` through either a legacy local body or the two-step sealed claim plus founding acceptance flow. The sealed path persists a mutually signed founding record and projects the Home Host Pico's active `home_host` membership root from that evidence. On boot, founding evidence reconciles stale claim-state and membership-projection rows; the app verifies stored founding signatures against claimant public key material and matching host-key custody before considering host keys usable. Missing or mismatched host-key custody keeps Setup Mode closed. Signed member credentials, lifecycle records and member onboarding still do not exist.
+The runtime today has durable claim/founding state, a current membership
+projection, separated Home host-key custody, setup-bundle and claim APIs. The
+sealed two-step path persists mutually signed founding evidence and projects the
+Home Host Pico's active `home_host` membership root. Signed member credentials
+and ordered lifecycle statements are verified, host-activated, persisted and
+reconciled on boot. ADR 0082 adds locally persisted identity lifecycle evidence
+and signed domain grants consumed by the claimed-home read path. Invitation
+transport, broader onboarding and external lifecycle freshness still do not
+exist.
 
 ## Scope
 
 Covers: the Pico Home Host Key (creation trigger, roles, custody direction), Setup Mode as a security state, the Move-In Code's mechanics, the claim ceremony (authentication in both directions, message posture, freshness), the founding record and Home identity, the membership credential realization direction including eviction, Home continuity across rotation/migration/reset, operator consolidation (A11), and claim audit.
 
-Does not cover: invitation transport and UX for later members, remote or Pico-Link claim (the local surface only; ADR 0030 remote boundary unchanged), relationship trust between Picos, recovery (ADR 0033 boundary unchanged), person-identity custody (the dedicated ADR 0079 G2 demands), residency storage policy, Home-to-Home federation, or any runtime. One host carries one Home; multi-host Homes are a non-goal here.
+Does not cover: invitation transport and UX for later members, remote or
+Pico-Link claim (the local surface only; ADR 0030 remote boundary unchanged),
+relationship trust between Picos, recovery (ADR 0033 boundary unchanged),
+person-identity custody, residency storage policy, Home-to-Home federation or
+multi-host Homes.
 
 ## Threat model
 
@@ -287,16 +309,19 @@ Protected timestamps (`foundedAt`, `validFrom`, `validUntil`, `changedAt`) carry
 **Precondition — a Pico Vault custody story.** The claimant signs the founding record with a person-role identity key, and ADR 0079 G2 forbids creating person-role private keys on the Foundation host. Therefore the claim runtime cannot exist before a dedicated person-identity custody ADR and a Vault-side holder of those keys exist. *The custody ADR exists, and ADR 0081 P2 now supplies the minimal `@pico/vault` holder.* The tempting shortcut — generating the claimant identity on the host "just for the demo" — is exactly the accretion ADR 0079 G2 forbids, and it would invert the entire tenancy model at its root: the house would own its first resident. The claim path still waits for M1/M2/M3; the Empty Pico Home cannot be claimed by moving person keys onto the host.
 
 1. **Gate M1 — Ceremony and record layouts with authoritative vectors. Done for canonical bytes.** I3 layouts and ADR 0073-style accept/reject vectors now exist for claim messages (`pico.home.claim.v1`, `pico.home.claim-response.v1`), founding record (`pico.home.founding.v1`), membership credential (`pico.home.membership.v1`), continuity statement (`pico.home.continuity.v1`) and membership lifecycle statements (`pico.home.membership-lifecycle.v1`) — consuming ADR 0079 G1 (key records, possession, delegation). The vector suite includes wrong-host pins, stale or foreign codes, cross-ceremony transplants, structurally incomplete founding inputs, issuer-less or countersignature-only credentials, continuity without the outgoing key, and role/suite swaps. The ADR 0045/0056/0057/0066 fixture fences loosen only for these authoritative bytes; placeholder fixtures remain draft-only and no runtime or security claim follows from M1 alone.
-2. **Gate M2 — Host-side runtime: Setup Mode, host-key custody, reconciliation.** Host keypair generation at Setup Mode entry; host-role file custody with ADR 0072 semantics and a key-namespace separation that puts host identity keys outside the domain-KEK blast radius; the per-process Move-In Code and claim bundle on a per-platform protected channel; the claim endpoint under `setup-bootstrap`; the H8 boot reconciliation between claim state and custody; the home-reset marker distinct from the operator reset; `home.claimed`/`home.reset` audit. This gate discharges ADR 0079 G2 for the host role.
-3. **Gate M3 — Membership runtime and consolidation.** Credential and lifecycle-statement verification driving residency enforcement and the ADR 0077/0078 seams (supplying what R3 consumes), eviction with K5 rotation coupling, continuity acceptance and member notification, and the concrete operator-consolidation mechanics inside the H9 contract.
+2. **Gate M2 — Host-side runtime: Setup Mode, host-key custody, reconciliation. Partially implemented.** Host keypair generation at Setup Mode entry, separated file custody, the per-process Move-In Code, setup bundle, sealed claim/founding path, H8 boot reconciliation, distinct reset and content-free audit exist. Protected-display integration and production claim UX remain.
+3. **Gate M3 — Membership runtime and consolidation. Partially implemented.** Credential and lifecycle-statement verification, host activation, membership projection, validity/eviction and restore reconciliation drive the ADR 0077/0078 read seam through ADR 0082. K5 key-rotation coupling, continuity acceptance/member notification and operator consolidation remain.
 
-The M1 byte layouts are security-relevant only as reviewed signature inputs. Setup Mode, host-key custody, signatures, freshness, sealed transport and the first restore reconciliation are now partial M2 runtime; protected display UX, membership enforcement and operator consolidation remain behind M2/M3. The gates otherwise deliberately mirror ADR 0078/0079 so the three strands converge instead of racing.
+The M1 byte layouts are security-relevant only as reviewed signature inputs.
+Setup/founding is partial M2 runtime and signed membership/lifecycle is partial
+M3 runtime. Protected display UX, external freshness, continuity, key-rotation
+coupling and operator consolidation remain behind M2/M3.
 
 ## Non-goals
 
 This ADR does not define or implement:
 
-- any runtime beyond the current local setup/founding/restore and founding-root membership-projection slices; signed member credentials, member onboarding, eviction and continuity enforcement remain absent
+- member invitation transport/UX and onboarding beyond relaying an already signed credential
 - invitation transport, invitation UX or member onboarding beyond the credential direction
 - remote claim, Pico Link claim, relay registration or any transport (ADR 0028/0030 boundaries unchanged)
 - person-identity custody (the dedicated ADR that the precondition demands)
@@ -325,12 +350,16 @@ Positive:
 - the pairing MITM is closed structurally by the display bundle: the channel ADR 0027 already requires now carries the trust root, and the network is never trusted in either direction
 - the empty-house model becomes cryptographic: `homeId` minted at founding makes "reset = new Home" structural, mutual signatures make "hosting is not owning" a record-format fact, and custody separation (H5) keeps the host from ever holding its residents
 - the operator principal gets its promised end-state (A11): a consolidation contract with hard non-capabilities, instead of an indefinite second root
-- ADR 0078 R3 now has its first runtime input — a restored founding-root membership projection and membership-backed readership policy — while signed member credentials and domain grants remain future, and ADR 0079 G2's host-role custody gets its concrete discharge point (Gate M2)
+- ADR 0078 R3 now has verified membership and, through ADR 0082, a signed
+  host-custody domain-grant/readership runtime; reader-custody key distribution
+  remains future
 - every fixture fence stays intact, and the precondition makes the worst shortcut (host-generated claimant identity) impossible to take quietly
 
 Negative:
 
-- the claim runtime is far away: a person-custody ADR, ADR 0079 G1, and Gates M1–M3 all stand before it — accepted, as in ADR 0078/0079: the alternative is improvising the constitutional record of the whole tenancy model
+- the remaining claim work is product and platform hardening rather than a
+  missing cryptographic root, but protected-display validation is still
+  release-blocking for production claims
 - the display-bundle requirement constrains minimal setups; the typed-code path stays unresolved rather than quietly weakened
 - per-process codes mean a mid-setup restart re-pairs from the display — the ADR 0076 trade accepted again for the same reason (restart proves local control)
 - an unplanned host death without a continuity statement is a lost Home under H7; honest, and recovery work is explicitly deferred rather than promised
