@@ -6,29 +6,29 @@
 | --- | --- |
 | Letzte Aktualisierung | 2026-07-27 |
 | Analysierter Branch | main |
-| Analysierter Commit | e84ca6c20c038d033fecea3f589c32c0758b48bf |
+| Analysierter Commit | c7cf9fb53570bce11a4ef05fe88d514858addb6d |
 | Hinweis | Alle Prozentangaben sind Schätzungen auf Basis des Repository-Stands. |
 
 ## Gesamtstatus
 
-- Geschätzter Gesamtfortschritt: ca. 51 %.
-- Aktueller Entwicklungsschwerpunkt: Reader-Custody-Owner-/Write-Authority und ein Companion-seitig verschlüsselter Datenpfad, der Raw-KEKs und Klartext strukturell aus Foundation fernhält.
-- Wichtigste Fortschritte: Die controller-signierte Host-Custody-Envelope-Issuance samt Storage/Reconciliation sowie identity-root-signierte, höchstens fünf Minuten gültige Reader-Key-Freshness-Checkpoints und deren fail-closed Registry-/Sync-Adapter sind implementiert.
-- Wichtigste offene Arbeiten: echter Reader-Custody-Vault-/Companion-Pfad, deployment-spezifischer Checkpoint-Publisher/-Transport, Operator-Konsolidierung, Pico Link/Relay, Vault IPC und Companion-UX.
-- Relevante Risiken: Ohne injizierten Checkpoint-Transport bleibt die fertige Host-Custody-Issuance absichtlich `freshness_unavailable`; der heutige Foundation-Memory-Write-Pfad nimmt Klartext an und darf nicht für Reader Custody wiederverwendet werden; Protected Display und die reale Home-Assistant-Installation sind weiterhin nicht praktisch validiert.
+- Geschätzter Gesamtfortschritt: ca. 54 %.
+- Aktueller Entwicklungsschwerpunkt: Die Reader-Custody- und Home-Authority-Grenzen sind für den ersten Owner-/Writer-Slice geschlossen; als Nächstes fehlen zusätzliche Reader und versionierte KEK-Rotation.
+- Wichtigste Fortschritte: ADR 0086 hält Reader-Custody-Klartext und Raw-KEKs aus Foundation heraus. ADR 0087 bindet den lokalen Operator exakt an Home, Founding und Host-Key-Custody und trennt lokale Host-Administration von signierter Home-Authority.
+- Wichtigste offene Arbeiten: Multi-Reader-Envelopes und KEK-Rotation, Checkpoint-/Envelope-Transport, Vault-Daemon/IPC, Pico Link sowie Companion-, Recovery- und Installations-UX.
+- Relevante Risiken: Ohne externen Checkpoint-Publisher bleibt Reader-Key-Freshness absichtlich nicht verfügbar; Reader-Custody besitzt noch keine sichere Rotation nach Revocation; Protected Display und die reale Home-Assistant-Installation sind weiterhin nicht praktisch validiert.
 
 ## Fortschritt der Pico-Hauptkomponenten
 
 | Pico-Komponente | Fortschritt | Status | Aktueller Stand | Wichtigster nächster Schritt |
 | --------------- | ----------: | ------ | --------------- | ---------------------------- |
-| Pico Core<br>Lokaler Foundation-Service für APIs, Events, Memory und Home-Betrieb. | 76 % | In Arbeit | Zusätzlich zu Foundation, Auth, Memory und Home-Authority existieren nun controller-signierte Host-Custody-Share-Envelopes und ein Core-eigener signaturprüfender Freshness-Adapter. | Getrennten opaken Reader-Custody-Ciphertext-Ingestion-/Storage-Pfad entwerfen und bauen. |
-| Pico Surfaces<br>Benutzeroberflächen für Diagnose, Companion-Interaktion und Alltagsflows. | 38 % | Teilweise implementiert | Das Foundation Web Dashboard bedient lokale Diagnose-, Auth- und Memory-Flows. | Zur ersten clientnahen Companion-Oberfläche ausbauen. |
-| Pico Protocol<br>Gemeinsame Typen, kanonische Bytes und Kompatibilitätsgrenzen. | 71 % | In Arbeit | Identity-, Home-, Vault-, Share-v1- und Reader-Key-Freshness-Bytes einschließlich positiver und negativer Vektoren sind testgebunden. | Owner-signierte Reader-Custody-Domain-/Item-Pakete kanonisch definieren. |
-| Pico Sync<br>Grundlage für Replikation, Versionierung und Konfliktabgleich. | 30 % | Teilweise implementiert | Lamport-Clock und Version-Vector-Helfer sind vorhanden. | Replikationsprotokoll und reale Client-/Vault-Synchronisation bauen. |
-| Pico Identity<br>Identitäts-, Key- und Signaturprüfung für Picos und Devices. | 64 % | In Arbeit | Lifecycle-Evidence, Device-Key-Bindungen und identity-root-signierte Current/Revoked-Freshness-Checkpoints werden verifiziert; lokale Evidence ersetzt nie die externe Abfrage. | Reader-Custody-Owner-/Writer-Authority und später Recovery ergänzen. |
-| Pico Vault<br>Lokale Schlüssel-Custody für Person-/Device-Keys und Signaturen. | 56 % | Teilweise implementiert | Encrypted-Keyfile-Runtime kann nun zusätzlich Share-Envelopes und Freshness-Checkpoints ausschließlich mit der `pico_identity`-Rolle signieren. | Reader-Custody-Domain-KEKs und Item-Verschlüsselung im Vault/Companion halten; danach Daemon/IPC ergänzen. |
-| Pico Home<br>Lokale Host-Instanz, die Picos aufnimmt, betreibt und verwaltet. | 72 % | In Arbeit | Der Authority-Slice umfasst Founding, Membership, Domain Grants, Reader Keys, signierte Host-Custody-Envelopes und verifizierte externe Freshness. | Reader-Custody-Ciphertext hosten, ohne Klartext- oder KEK-Autorität zu erhalten. |
-| Pico Link<br>Geplanter Transport für sichere Kommunikation zwischen Picos und Homes. | 14 % | Konzipiert | Architektur und draft-only Fixtures sind vorhanden, aber keine Transport- oder Relay-Runtime. | Minimales Transport-/Envelope-Runtime erst nach Sicherheitsgates starten. |
+| Pico Core<br>Lokaler Foundation-Service für APIs, Events, Memory und Home-Betrieb. | 80 % | In Arbeit | Core persistiert und prüft opake Reader-Custody-Evidence und Ciphertext-Pakete; Operator-Sessions sind founding-genau gebunden und Home-Routen als signierte Authority-Relays klassifiziert. | Versionierte Multi-Reader-Envelopes und KEK-Rotation prüfen, speichern und reconciliieren. |
+| Pico Surfaces<br>Benutzeroberflächen für Diagnose, Companion-Interaktion und Alltagsflows. | 38 % | Teilweise implementiert | Das Foundation Web Dashboard bedient lokale Diagnose-, Auth- und Memory-Flows. | Nach stabiler Reader-/Rotationssemantik eine erste Companion-nahe Oberfläche bauen. |
+| Pico Protocol<br>Gemeinsame Typen, kanonische Bytes und Kompatibilitätsgrenzen. | 74 % | In Arbeit | Identity-, Home-, Vault-, Share-v1- und Reader-Custody-Familien sind mit autoritativen Vektoren testgebunden. | Zusätzliche Reader, versionierte KEK-Envelopes und Rotation kanonisch definieren. |
+| Pico Sync<br>Grundlage für Replikation, Versionierung und Konfliktabgleich. | 30 % | Teilweise implementiert | Lamport-Clock und Version-Vector-Helfer sind vorhanden. | Authentisierten Checkpoint-/Envelope-Transport und reale Client-/Vault-Synchronisation bauen. |
+| Pico Identity<br>Identitäts-, Key- und Signaturprüfung für Picos und Devices. | 66 % | In Arbeit | Lifecycle-Evidence, Reader-Key-Freshness sowie Owner-/Writer-Authority werden signatur- und bindungsgenau geprüft. | Zusätzliche Reader, Rotation und Recovery-Evidence ergänzen. |
+| Pico Vault<br>Lokale Schlüssel-Custody für Person-/Device-Keys und Signaturen. | 62 % | In Arbeit | Vault erzeugt und unwrappt Reader-Custody-KEKs transient und verschlüsselt Items mit separaten DEKs, ohne Foundation Schlüsselmaterial zu geben. | Versionierte KEKs an mehrere Reader ausgeben und nach Revocation rotieren; danach Daemon/IPC ergänzen. |
+| Pico Home<br>Lokale Host-Instanz, die Picos aufnimmt, betreibt und verwaltet. | 77 % | In Arbeit | Founding, Membership, Grants, Reader Keys, opake Reader-Custody und founding-genaue Operator-/Relay-Grenzen sind implementiert. | Owner-signierte Multi-Reader- und Rotations-Evidence als opakes Authority-Relay hosten. |
+| Pico Link<br>Geplanter Transport für sichere Kommunikation zwischen Picos und Homes. | 14 % | Konzipiert | Architektur und draft-only Fixtures sind vorhanden, aber keine Transport- oder Relay-Runtime. | Minimale Transport-/Envelope-Runtime erst nach den Reader-Rotationsgates starten. |
 
 ## Pico Core
 
@@ -36,13 +36,13 @@ Lokaler Foundation-Service für APIs, Events, Memory, Auth und Pico-Home-Betrieb
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Architektur | 78 % | In Arbeit | Core besitzt klare Store-, Home-Authority-, Session-, Domain-Grant-, Reader-Key-, Freshness- und Share-Envelope-Grenzen. |
-| Kernfunktionen | 76 % | In Arbeit | Zusätzlich zu Events, Memory und Home-Lifecycle funktionieren zweiphasige Host-Custody-Envelope-Issuance, Signaturfinalisierung und Reconciliation lokal. |
-| Datenhaltung | 82 % | In Arbeit | 19 Migrationen decken Events, Memory, Keys, Authority-Evidence, Reader-Key-Projektionen und konfliktfreie signierte Share-Envelopes ab. |
-| Schnittstellen | 74 % | In Arbeit | Lokale APIs umfassen nun zusätzlich host-admin-klassifizierte Prepare-/Finalize-/List-Flows für Share-Envelopes; es gibt bewusst keinen Reader-Transport. |
-| Sicherheit und Berechtigungen | 82 % | In Arbeit | Controller- und Freshness-Signaturen, exakte Key-/Grant-Bindung, zweifache Authority-Prüfung, Timeout und bounded Anti-Rollback sind fail-closed implementiert. |
-| Tests | 93 % | Weitgehend fertig | Core hat eine breite Unit-, Crypto-, Restore- und API-Testbasis mit 263 Tests. |
-| Installation und Betrieb | 61 % | Teilweise implementiert | Zweistufiges Image ohne Build-Werkzeuge und ohne lokale Daten, CI-Smokes, Add-on-Metadaten, Host-Key-Backup-Ausschluss und restore-geschlossener Boot existieren, reale HA-Validierung bleibt offen. |
+| Architektur | 83 % | In Arbeit | Store-, Session-, Home-Authority-, Reader-Custody- und Relay-Grenzen sind explizit und fail-closed getrennt. |
+| Kernfunktionen | 81 % | In Arbeit | Events, Memory, Home-Lifecycle, signierte Share-Envelopes und opake Reader-Custody-Domain-/Writer-/Item-Flows funktionieren lokal. |
+| Datenhaltung | 86 % | In Arbeit | Die unveröffentlichte Historie ist in `0001_initial_schema` konsolidiert; `0002` ergänzt die additive Operator-Home-Bindung. |
+| Schnittstellen | 79 % | In Arbeit | Lokale APIs unterscheiden Host-Infrastruktur von `home-authority-relay`; Reader-Transport existiert bewusst noch nicht. |
+| Sicherheit und Berechtigungen | 88 % | In Arbeit | Exakte Founding-/Host-Key-/Session-Bindung, signierte Authorities, Freshness, Revocation und opake Custody sind fail-closed testgebunden. |
+| Tests | 95 % | Weitgehend fertig | Core hat 271 Unit-, Crypto-, Restore-, Authority- und API-Tests. |
+| Installation und Betrieb | 61 % | Teilweise implementiert | Zweistufiges Image, CI-Smokes, Add-on-Metadaten, Backup-Ausschlüsse und restore-geschlossener Boot existieren; reale HA-Validierung bleibt offen. |
 
 ## Pico Surfaces
 
@@ -58,15 +58,15 @@ Benutzeroberflächen für Diagnose, Companion-Interaktion und Alltagsflows.
 
 ## Pico Protocol
 
-Gemeinsames Paket für Protocol-Typen, canonical bytes und Kompatibilitätsgrenzen.
+Gemeinsames Paket für Protocol-Typen, kanonische Bytes und Kompatibilitätsgrenzen.
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Foundation-Typen | 80 % | In Arbeit | Event-, Payload-, Realtime-, Claim-, Membership-, Lifecycle-, Domain-Grant-, Share-Envelope- und Freshness-Typen sind Runtime-Exports. |
-| Kanonische Bytes und Vektoren | 87 % | Weitgehend fertig | Memory-AD, Identity, Home, Vault, `pico.suite.share.v1` und Reader-Key-Freshness besitzen autoritative positive und negative Vektoren. |
+| Foundation-Typen | 82 % | In Arbeit | Event-, Identity-, Home-, Share-, Freshness- und Reader-Custody-Typen sind Runtime-Exports. |
+| Kanonische Bytes und Vektoren | 90 % | Weitgehend fertig | Memory-AD, Identity, Home, Vault, Share-v1 und vier Reader-Custody-Familien besitzen autoritative positive und negative Vektoren. |
 | Draft-Fixtures | 35 % | Konzipiert | Pico Link, Pico Home Link und Model Delegation besitzen draft-only Fixtures ohne Runtime- oder Kompatibilitätsanspruch. |
-| Validierung und Conformance | 64 % | In Arbeit | Protocol-Tests binden Runtime-Exports, ADR-Bytes, Docs und alle autoritativen Fixture-Suiten; ein eigenständiger Conformance-Runner fehlt. |
-| Tests | 86 % | Weitgehend fertig | Protocol hat 47 Tests für Exportlisten, Payloads, Validierung und Fixture-Bytegleichheit. |
+| Validierung und Conformance | 68 % | In Arbeit | Protocol-Tests binden Runtime-Exports, ADR-Bytes, Docs und Fixture-Suiten; ein eigenständiger Conformance-Runner fehlt. |
+| Tests | 88 % | Weitgehend fertig | Protocol hat 46 Runner-Tests für Exportlisten, Payloads, Validierung und Fixture-Bytegleichheit. |
 
 ## Pico Sync
 
@@ -85,11 +85,11 @@ Identitäts- und Signaturbausteine für Pico-, Device- und Lifecycle-Authority.
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Architektur | 74 % | In Arbeit | Key-Rollen, Delegation, Revocation, Lifecycle, Reader-Key-Bindung und identity-root-signierte externe Freshness sind abgegrenzt. |
-| Kernfunktionen | 72 % | In Arbeit | Zusätzlich zu Fingerprints, Possession und Lifecycle-Projektion werden kanonische Reader-Key-Freshness-Signaturen geprüft. |
-| Sicherheit und Berechtigungen | 72 % | In Arbeit | Exakte Home-/Identity-/Device-/Delegation-Bindung, fünf Minuten Gültigkeit, Revocation und Rollback-Grenzen sind implementiert. |
-| Integration mit anderen Pico-Komponenten | 67 % | In Arbeit | Core/Home nutzen Identity-Evidence für Sessions, Readership, Reader-Key-Auswahl und zweiphasige Envelope-Issuance. |
-| Tests | 84 % | Weitgehend fertig | Identity hat 17 Tests plus autoritative Signature-/Lifecycle-/Freshness-Fixtures; Core ergänzt Transport-, Restore- und Negativfälle. |
+| Architektur | 77 % | In Arbeit | Key-Rollen, Delegation, Revocation, Lifecycle, Reader-Key-Freshness und Reader-Custody-Owner-/Writer-Authority sind abgegrenzt. |
+| Kernfunktionen | 75 % | In Arbeit | Fingerprints, Possession, Lifecycle, Freshness sowie Owner-/Writer-Signaturen werden kanonisch geprüft. |
+| Sicherheit und Berechtigungen | 77 % | In Arbeit | Exakte Home-/Identity-/Device-/Delegation-Bindung, Gültigkeit, Revocation und Rollback-Grenzen sind implementiert. |
+| Integration mit anderen Pico-Komponenten | 72 % | In Arbeit | Core, Home und Vault nutzen Identity-Evidence für Sessions, Readership, Reader-Custody und Envelope-Issuance. |
+| Tests | 86 % | Weitgehend fertig | Identity hat 17 Tests plus autoritative Signature-, Lifecycle- und Freshness-Fixtures; Core ergänzt Integrations- und Negativfälle. |
 
 ## Pico Vault
 
@@ -97,12 +97,12 @@ Lokale Key-Custody-Runtime für Person- und Device-Keys.
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Kernfunktionen | 70 % | In Arbeit | Vault kann Person-Keyfiles erzeugen/öffnen, rollenbegrenzt signieren, Claim-, Share-Envelope- und Freshness-Familien bedienen, Sealed Boxes öffnen und verschlüsselt exportieren. |
-| Datenhaltung | 52 % | Teilweise implementiert | Keyfiles sind verschlüsselt, KDF-Parameter begrenzt und Datei-/Pfadschutz getestet, aber noch kein dauerhafter Vault-Dienst. |
-| Sicherheit und Berechtigungen | 68 % | In Arbeit | Argon2id, XChaCha20-Poly1305, Rollen-/Label-Checks, Identity-root-only Envelope/Freshness-Signaturen, Auto-Lock, Zeroization und Pfadtrennung sind vorhanden. |
-| Integration mit anderen Pico-Komponenten | 45 % | Teilweise implementiert | Vault kann Claim-, Envelope- und Freshness-Ceremonies kryptographisch bedienen, ist aber noch nicht als Daemon/IPC integriert. |
+| Kernfunktionen | 78 % | In Arbeit | Vault erzeugt/öffnet Keyfiles, signiert rollenbegrenzt, verwaltet transiente Reader-Custody-KEKs und verschlüsselt Items mit frischen DEKs und Nonces. |
+| Datenhaltung | 55 % | Teilweise implementiert | Keyfiles sind verschlüsselt und Pfade geschützt; dauerhafter Vault-Dienst und versionierte Multi-Reader-Custody fehlen. |
+| Sicherheit und Berechtigungen | 76 % | In Arbeit | Argon2id, XChaCha20-Poly1305, Rollen-/Label-Checks, Sealed Boxes, Auto-Lock, Zeroization und strikte Custody-Grenzen sind vorhanden. |
+| Integration mit anderen Pico-Komponenten | 55 % | Teilweise implementiert | Vault bedient Claim-, Envelope-, Freshness- und Reader-Custody-Ceremonies kryptographisch, aber noch nicht als Daemon/IPC. |
 | Installation und Betrieb | 10 % | Konzipiert | Platform-Keystore, Daemon/IPC, Recovery und Approval-UX fehlen. |
-| Tests | 82 % | Weitgehend fertig | Vault hat 10 Real-Crypto-Tests für Keyfile, Rollen, Envelope-/Freshness-Signaturen, KDF-Grenzen, Locking und Pfadtrennung. |
+| Tests | 88 % | Weitgehend fertig | Vault hat 11 Real-Crypto-Tests für Keyfiles, Rollen, Envelopes, Freshness, Reader-Custody, Locking und Pfadtrennung. |
 
 ## Pico Home
 
@@ -110,13 +110,13 @@ Lokale Host-Instanz für Claim, Mitgliedschaft, Betrieb und Verwaltung eines Pic
 
 | Bereich | Fortschritt | Status | Kurzbeschreibung |
 | --- | ---: | --- | --- |
-| Architektur | 77 % | In Arbeit | Home Host, Claim/Founding, Membership, Domain Grants, Reader Keys, externe Freshness und Controller-Envelope-Authority sind abgegrenzt. |
-| Kernfunktionen | 76 % | In Arbeit | Zusätzlich zu Home-Lifecycle und Domain Readership funktionieren Host-Custody-Envelope-Vorbereitung, Vault-Signaturfinalisierung und Reconciliation. |
-| Schnittstellen | 72 % | In Arbeit | Claim-, Membership-, Grant-, Identity-Session- und host-admin-geschützte Envelope-Flows existieren als klassifizierte lokale APIs. |
-| Datenhaltung | 78 % | In Arbeit | Authority-Evidence, Reader-Key-Projektionen und signierte Share-Envelopes werden konfliktfrei persistiert und nach Boot/Lifecycle/Shred reconciled. |
-| Sicherheit und Berechtigungen | 82 % | In Arbeit | Reads und Envelope-Issuance verlangen getrennte aktive Authorities; Operator, Home Host, Identity, Reader und Registry-/Sync-Transport bleiben getrennt. |
-| Tests | 90 % | Weitgehend fertig | Core deckt Home-Ceremonies, Envelope-Tamper, Authority, Freshness, Revocation, Restore, Cross-Key-Swaps und Read-Denials ab. |
-| Installation und Betrieb | 48 % | Teilweise implementiert | Host-Key-Pfad, Backup-Ausschluss, restore-geschlossener Boot und Reset-Marker existieren, echte First-Boot-/HA-Validierung fehlt. |
+| Architektur | 84 % | In Arbeit | Home Host, Claim/Founding, Membership, Grants, Reader-Custody sowie lokale Operator- und signierte Relay-Authority sind abgegrenzt. |
+| Kernfunktionen | 82 % | In Arbeit | Home-Lifecycle, Share-Envelopes, opake Reader-Custody und founding-genaue Operator-Bindung funktionieren lokal. |
+| Schnittstellen | 80 % | In Arbeit | Home-Routen verlangen ein autorisiertes Relay; Handler prüfen weiterhin Controller-, Owner- oder Writer-Signaturen als eigentliche Authority. |
+| Datenhaltung | 83 % | In Arbeit | Authority-Evidence, Reader-Projektionen, opake Custody-Datensätze und Operator-Home-Bindung werden persistiert und reconciliert. |
+| Sicherheit und Berechtigungen | 90 % | In Arbeit | Operator, Home Host, Identity, Reader und Registry bleiben getrennt; Claim, Reset, Restore und fehlende Host-Key-Custody schließen fail-closed. |
+| Tests | 95 % | Weitgehend fertig | Core deckt Home-Ceremonies, Confused Deputy, Binding, Tamper, Revocation, Restore, Reset und Cross-Key-Swaps ab. |
+| Installation und Betrieb | 50 % | Teilweise implementiert | Host-Key-Pfad, Backup-Ausschluss, restore-geschlossener Boot und Reset-Marker existieren; echte First-Boot-/HA-Validierung fehlt. |
 
 ## Pico Link
 
@@ -132,27 +132,27 @@ Geplanter Transport für sichere Kommunikation zwischen Picos, Homes und Relays.
 
 ## Architekturentscheidungen und ADRs
 
-- Es gibt 85 nummerierte ADRs sowie eine Implementation-Status-Matrix.
-- Wichtige getroffene Entscheidungen betreffen Foundation-Grenzen, lokale Authentifizierung, Memory-Verschlüsselung, Identity/Vault-Custody, Home Authority, Domain Readership und Reader-Key-/Envelope-Gates.
-- Viele ADRs laufen der Implementierung voraus: Pico Link, Relay, Pico Rules, Action Runner, Action History, Companion-UX und große Home-Mitgliedschaftsflüsse sind überwiegend konzipiert.
-- ADR 0080 M2/M3 besitzen Claim/Founding sowie signierte Membership-Credential-, Activation- und Lifecycle/Eviction-Runtime; ADR 0082 schließt Identity Sessions und Domain Read Grants, ADR 0083 die Reader-Key-Registrierung, ADR 0084 die Host-Custody-Envelope-Runtime und ADR 0085 die authentisierte Freshness-Prüfung.
-- Die ADRs sind hilfreich für Richtung und Sicherheitsreihenfolge, gelten aber nicht als Nachweis fertiger Produktfunktionen.
+- Es gibt 87 nummerierte ADRs sowie eine Implementation-Status-Matrix.
+- Wichtige Entscheidungen betreffen Foundation-Grenzen, lokale Authentifizierung, Memory-Verschlüsselung, Identity/Vault-Custody, Home Authority, Domain Readership und Reader-Custody.
+- ADR 0086 implementiert einen owner-rooted Reader-Custody-Slice mit transientem KEK, exakter Writer-Authority und opaken Item-Paketen.
+- ADR 0087 bindet Operator-Credentials und Sessions exakt an Founding und Host-Key-Custody; lokale Host-Infrastruktur bleibt von signierter Home-Governance getrennt.
+- Viele Produkt- und Transport-ADRs laufen der Implementierung voraus: Pico Link, Relay, Rules, Action Runner, Companion-UX und große Home-Mitgliedschaftsflüsse sind überwiegend konzipiert.
 
 ## Änderungen seit der letzten Aktualisierung
 
-- ADR 0084 implementiert die zweiphasige Host-Custody-Envelope-Issuance: Core sealed den bestehenden KEK zum exakten Reader Key, ein externer Identity-Vault signiert, Finalisierung prüft alle Authorities erneut.
-- Signierte `pico.share.envelope-record.v1`-Datensätze sind konfliktfrei, idempotent, boot-/lifecycle-/shred-reconciled und nur über `host-admin` sichtbar.
-- ADR 0085 definiert kanonische identity-root-signierte Current/Revoked-Freshness-Checkpoints; Registry/Sync transportiert sie, erhält aber keine Identity-Authority.
-- Core erzwingt exakte Home-/Identity-/Device-/Delegation-Bindung, maximal fünf Minuten Gültigkeit, fünf Sekunden Lookup-Timeout, bounded Anti-Rollback und kein stale-while-error.
-- Der vollständige Gate besteht mit 382 Tests: Core 263, Protocol 47, Web 34, Identity 17, Sync 11 und Vault 10.
+- ADR 0086 ergänzt owner-signierte Domain-/Writer-Authority, versionierte kanonische Bytes und einen vollständig opaken Reader-Custody-Ingestion-/Storage-Pfad.
+- Vault hält Reader-Custody-KEKs transient, sealed sie zum Owner Reader Key und verschlüsselt jedes Item mit frischem DEK und Nonces.
+- ADR 0087 bindet Operator und Session exakt an Home, Founding und Host-Signing-Key; Claim, Restore, Home Reset und fehlende Key-Custody sind fail-closed.
+- Home-Governance-Routen sind jetzt `home-authority-relay`: nur der exakt gebundene Operator oder die aktive Home-Host-Pico-Identität darf signierte Authority weiterreichen; gewöhnliche Mitglieder werden abgewiesen.
+- Die Pre-Release-Migrationen sind auf `0001` plus additive `0002` konsolidiert; der vollständige Gate besteht mit 390 Tests: Core 271, Protocol 46, Web 34, Identity 17, Sync 11 und Vault 11.
 
 ## Nächste Schwerpunkte
 
-1. In ADR 0086 die owner-signierte Reader-Custody-Domain-/Write-Authority und kanonische verschlüsselte Item-Pakete festlegen.
-2. Den Vault-/Companion-Pfad für Reader-Custody-Domain-KEKs, Item-Verschlüsselung und owner-signierte Share-Envelopes bauen.
-3. Einen getrennten Core-Pfad zur Ingestion und Speicherung opaker Reader-Custody-Ciphertext-Pakete bauen, ohne Klartext oder Raw-KEK im Foundation-Prozess.
-4. Foundation Operator unter Home-Host-Pico-Autorität konsolidieren, ohne eine zweite Root-Autorität zu erzeugen.
-5. Checkpoint-/Envelope-Transport, Vault IPC, Protected-Display-/Setup-UX, Home-Assistant-First-Boot und anschließend Pico Link praktisch validieren.
+1. In ADR 0088 zusätzliche Reader, exakte Envelope-Authority und versionierte KEK-Rotation nach Revocation festlegen.
+2. Vault und Core für KEK `n+1`, Envelopes der verbleibenden Reader und fail-closed Restore-/Rollback-Reconciliation erweitern.
+3. Deployment-spezifischen Freshness-/Envelope-Transport und danach reader-seitige Synchronisation implementieren.
+4. Vault-Daemon/IPC, Platform-Keystore, Approval-/Recovery-UX sowie Protected-Display-/Home-Assistant-First-Boot praktisch validieren.
+5. Pico Link erst auf den stabilen signierten Authority- und Custody-Grenzen aufbauen.
 
 Empfehlung für den nächsten Block:
 
