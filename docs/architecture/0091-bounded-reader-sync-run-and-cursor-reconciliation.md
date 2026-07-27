@@ -88,11 +88,11 @@ The consumer must therefore be idempotent by a stable signed identifier such as
 manifest digest, sync batch id or item/envelope reference. An exception from
 the consumer stops the run and preserves the old page cursor.
 
-An unacknowledged exact batch that expires during a long outage cannot be
-re-exposed from the Relay and fails closed. A later contiguous full-evidence
-batch may restore liveness, but this ADR does not claim a durable local payload
-inbox or guarantee that every earlier item is repeated. Such an inbox is a
-separate future storage decision.
+ADR 0092 adds the required one-batch sealed pending inbox. A crash after the
+floor commit can therefore reverify and redeliver that exact operation after
+transport expiry, but only when pending batch, signed floor and atomically
+stored verification instant agree. A staged but not yet applied expired batch
+still fails closed.
 
 ### Failure and retry contract
 
@@ -127,7 +127,8 @@ single-writer coordination.
   limits, stale cursor, duplicates, gap, fork, expiry, Vault/consumer failure,
   mid-page crash, Abort and overlapping runs are test-bound.
 - **S11.6 — honest scope: Done.** No completeness, background automation,
-  durable payload inbox, public Relay or Pico Link compatibility is claimed.
+  public Relay or Pico Link compatibility is claimed; ADR 0092 separately
+  supplies the bounded local pending inbox.
 
 ## Consequences
 
@@ -144,8 +145,9 @@ Negative and residual:
 - consumers must provide durable idempotency;
 - a separate runner instance or process can still race unless deployment
   enforces the ADR 0090 single-writer contract;
-- long-outage expiry can lose availability for an unacknowledged exact payload
-  because no local durable payload inbox exists;
+- ADR 0092 removes Relay-retention dependence for the one staged operation,
+  while consumers still require idempotency and transport omission remains
+  possible;
 - transport omission and an empty page remain indistinguishable.
 
 ## Non-goals
@@ -153,7 +155,7 @@ Negative and residual:
 - automatic polling, retries, scheduling or rotation execution;
 - public Relay, Registry or Foundation Reader-download endpoints;
 - network transport selection or final Pico Link wire semantics;
-- durable local storage of sealed batches or decrypted projection payloads;
+- decrypted projection payload storage;
 - automatic KEK unwrap, item decryption or non-idempotent side effects;
 - Vault daemon/IPC, platform keystore, recovery or companion UX.
 
@@ -164,3 +166,4 @@ Negative and residual:
 - [ADR 0088](0088-reader-custody-multi-reader-and-kek-rotation.md)
 - [ADR 0089](0089-authenticated-checkpoint-and-reader-custody-sync.md)
 - [ADR 0090](0090-durable-reader-sync-floor-and-crash-safe-apply.md)
+- [ADR 0092](0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md)

@@ -29,6 +29,7 @@ Reader to genesis.
 - a positive local revision used for stale-writer detection;
 - the complete out-of-band Reader pins from ADR 0089;
 - the last fully verified signed-manifest floor;
+- the canonical instant at which that floor was last fully verified;
 - a nullable opaque transport cursor.
 
 The signed-manifest floor is the only sync-progress authority. It binds route,
@@ -36,6 +37,11 @@ batch, positive sequence, manifest digest, KEK/lifecycle maxima and creation
 time. A cursor is an operational pagination hint: it can move independently,
 be lost or be replaced without lowering, advancing or authenticating the
 floor. The state contains no private key, raw KEK, DEK or plaintext.
+
+ADR 0092 consolidates `verifiedAt` into the still-undeployed v1 state. It is
+committed atomically with a new floor and may advance only when the exact floor
+is cryptographically reverified. It enables narrowly bound pending recovery
+after transport expiry; it is not a general stale-data exception.
 
 The first durable floor must be sequence 1. Later writes retain the exact floor
 or advance by exactly one sequence with nondecreasing KEK, lifecycle and
@@ -109,7 +115,8 @@ or trusted continuity service. This ADR makes no stronger claim.
 ## Gates
 
 - **S10.1 — explicit authority state: Done.** Versioned strict state separates
-  pins, signed floor, local revision and untrusted cursor.
+  pins, signed floor, verification instant, local revision and untrusted
+  cursor.
 - **S10.2 — durable reference store: Done.** Private bounded file handling,
   atomic replace and file/directory durability boundaries are implemented.
 - **S10.3 — ordered apply: Done.** Batch open and full projection precede the
@@ -137,8 +144,8 @@ Negative and residual:
 - deployments must choose and exclusively own a private state directory;
 - same-account state tampering is a denial-of-service risk, and matching old
   backup rollback remains possible without an external anchor;
-- ADR 0091 supplies an explicit bounded page runner, but no automatic sync
-  scheduler or durable local payload inbox.
+- ADR 0091 supplies an explicit bounded page runner and ADR 0092 supplies its
+  one-batch sealed pending inbox; neither adds an automatic sync scheduler.
 
 ## Non-goals
 
@@ -157,3 +164,4 @@ Negative and residual:
 - [ADR 0088](0088-reader-custody-multi-reader-and-kek-rotation.md)
 - [ADR 0089](0089-authenticated-checkpoint-and-reader-custody-sync.md)
 - [ADR 0091](0091-bounded-reader-sync-run-and-cursor-reconciliation.md)
+- [ADR 0092](0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md)

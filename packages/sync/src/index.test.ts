@@ -6,6 +6,7 @@ import {
   rmSync,
   statSync,
   symlinkSync,
+  truncateSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -38,20 +39,25 @@ import {
 import {
   InMemoryPicoSyncOpaqueTransport,
   LamportClock,
+  MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES,
   PicoReaderCustodySyncBatchPublisher,
   PicoReaderCustodySyncBatchSource,
   PicoReaderCustodySyncClient,
+  PicoReaderCustodySyncFilePendingStore,
   PicoReaderCustodySyncFileStateStore,
   PicoReaderCustodySyncProjector,
   PicoReaderCustodySyncRunner,
   mergeVersionVector,
   picoReaderCustodySyncClientStateSchema,
+  picoReaderCustodySyncPendingRecordSchema,
   updateVersionVector,
   type PicoReaderCustodySyncBatchReader,
   type PicoReaderCustodySyncClientApplyResult,
   type PicoReaderCustodySyncClientState,
   type PicoReaderCustodySyncClientStateStore,
   type PicoReaderCustodySyncPins,
+  type PicoReaderCustodySyncPendingRecord,
+  type PicoReaderCustodySyncPendingStore,
   type PicoReaderCustodySyncRunClient,
   type PicoSyncOpaqueTransport,
 } from './index.js';
@@ -191,6 +197,17 @@ describe('reader-custody sync client state (ADR 0090)', () => {
     );
     symlinkSync(targetPath, statePath);
     expect(() => store.load()).toThrow('reader_sync_state_unreadable');
+
+    rmSync(statePath);
+    writeFileSync(
+      statePath,
+      JSON.stringify(readerSyncClientState(1, 1)),
+      { mode: 0o600 },
+    );
+    chmodSync(join(statePath, '..'), 0o755);
+    expect(() => store.load()).toThrow(
+      'reader_sync_state_directory_permissions',
+    );
   });
 
   it('allows cursor movement but rejects floor rollback, gaps, forks and scope swaps', () => {
@@ -222,6 +239,11 @@ describe('reader-custody sync client state (ADR 0090)', () => {
     expect(() => store.commit({
       ...state2,
       revision: 3,
+      verifiedAt: state1.verifiedAt,
+    }, 2)).toThrow('reader_sync_state_verified_at_rollback');
+    expect(() => store.commit({
+      ...state2,
+      revision: 3,
       pins: {
         ...state2.pins,
         homeId: 'home_reader_sync_swapped',
@@ -239,6 +261,198 @@ describe('reader-custody sync client state (ADR 0090)', () => {
     };
     store.commit(cursorOnly, 2);
     expect(store.load()).toEqual(cursorOnly);
+  });
+});
+
+describe('durable reader-custody pending inbox (ADR 0092)', () => {
+  it('stages exactly one private sealed batch and acknowledges it durably', () => {
+    const pendingPath = createReaderSyncPendingPath();
+    const store = new PicoReaderCustodySyncFilePendingStore(pendingPath);
+    const pending = readerSyncPendingRecord(1);
+
+    expect(store.stage(pending)).toEqual({ inserted: true });
+    expect(store.stage(pending)).toEqual({ inserted: false });
+    expect(store.load()).toEqual(pending);
+    expect(statSync(pendingPath).mode & 0o777).toBe(0o600);
+    expect(readFileSync(pendingPath, 'utf8')).not.toContain('plaintext');
+    expect(() => store.stage({
+      ...pending,
+      batchRecord: runnerBatchRecord(2),
+    })).toThrow('reader_sync_pending_conflict');
+    expect(() => store.acknowledge({
+      ...pending,
+      stagedAt: '2026-07-27T10:31:00.000Z',
+    })).toThrow('reader_sync_pending_ack_mismatch');
+
+    expect(store.acknowledge(pending)).toEqual({ removed: true });
+    expect(store.load()).toBeUndefined();
+    expect(store.acknowledge(pending)).toEqual({ removed: false });
+  });
+
+  it('rejects truncated, oversized, permissive, symlink and expired pending state', () => {
+    const pendingPath = createReaderSyncPendingPath();
+    const store = new PicoReaderCustodySyncFilePendingStore(pendingPath);
+
+    writeFileSync(pendingPath, '{"schema":', { mode: 0o600 });
+    expect(() => store.load()).toThrow('invalid_reader_sync_pending');
+
+    truncateSync(
+      pendingPath,
+      MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES + 1,
+    );
+    expect(() => store.load()).toThrow(
+      'invalid_reader_sync_pending_file',
+    );
+
+    writeFileSync(
+      pendingPath,
+      JSON.stringify(readerSyncPendingRecord(1)),
+    );
+    chmodSync(pendingPath, 0o644);
+    expect(() => store.load()).toThrow(
+      'invalid_reader_sync_pending_file',
+    );
+
+    rmSync(pendingPath);
+    const targetPath = join(pendingPath, '..', 'pending-target.json');
+    writeFileSync(
+      targetPath,
+      JSON.stringify(readerSyncPendingRecord(1)),
+      { mode: 0o600 },
+    );
+    symlinkSync(targetPath, pendingPath);
+    expect(() => store.load()).toThrow(
+      'reader_sync_pending_unreadable',
+    );
+
+    rmSync(pendingPath);
+    writeFileSync(
+      pendingPath,
+      JSON.stringify(readerSyncPendingRecord(1)),
+      { mode: 0o600 },
+    );
+    chmodSync(join(pendingPath, '..'), 0o755);
+    expect(() => store.load()).toThrow(
+      'reader_sync_state_directory_permissions',
+    );
+
+    chmodSync(join(pendingPath, '..'), 0o700);
+    rmSync(pendingPath);
+    expect(() => store.stage({
+      ...readerSyncPendingRecord(1),
+      stagedAt: '2026-07-27T11:00:00.000Z',
+    })).toThrow('reader_sync_pending_expired_at_stage');
+  });
+
+  it('keeps pending and floor recoverable across stage, consumer and ack failures', async () => {
+    const batch = runnerBatchRecord(1);
+    const source: PicoReaderCustodySyncBatchReader = {
+      read: async () => ({
+        batches: [batch],
+        nextCursor: 'cursor:0000000000000001',
+        hasMore: false,
+      }),
+    };
+
+    const diskFull = createFakeRunnerClient();
+    const diskFullPending: PicoReaderCustodySyncPendingStore = {
+      load: () => undefined,
+      stage: () => {
+        throw new Error('simulated_pending_disk_full');
+      },
+      acknowledge: () => ({ removed: false }),
+    };
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      diskFull.client,
+      diskFullPending,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+    }, { signal: new AbortController().signal }))
+      .rejects.toThrow('simulated_pending_disk_full');
+    expect(diskFull.getState()).toBeUndefined();
+
+    const beforeFloorPending = createMemoryPendingStore();
+    const beforeFloor = createFakeRunnerClient({ throwSequence: 1 });
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      beforeFloor.client,
+      beforeFloorPending,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+    }, { signal: new AbortController().signal }))
+      .rejects.toThrow('simulated_vault_open_failure');
+    expect(beforeFloor.getState()).toBeUndefined();
+    expect(beforeFloorPending.load()?.batchRecord.syncBatchId)
+      .toBe(batch.syncBatchId);
+
+    const recovered = createFakeRunnerClient();
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      recovered.client,
+      beforeFloorPending,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+      maxBatches: 2,
+    }, { signal: new AbortController().signal })).resolves.toMatchObject({
+      ok: true,
+      status: 'source_drained',
+      counters: {
+        insertedBatches: 1,
+        obsoleteBatches: 1,
+      },
+    });
+    expect(beforeFloorPending.load()).toBeUndefined();
+
+    const ackBase = createMemoryPendingStore();
+    const ackFailure: PicoReaderCustodySyncPendingStore = {
+      load: () => ackBase.load(),
+      stage: (pending) => ackBase.stage(pending),
+      acknowledge: () => {
+        throw new Error('simulated_pending_ack_failure');
+      },
+    };
+    const afterConsumer = createFakeRunnerClient();
+    let deliveries = 0;
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      afterConsumer.client,
+      ackFailure,
+      () => {
+        deliveries += 1;
+      },
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+    }, { signal: new AbortController().signal }))
+      .rejects.toThrow('simulated_pending_ack_failure');
+    expect(deliveries).toBe(1);
+    expect(afterConsumer.getState()?.floor.sequence).toBe(1);
+    expect(ackBase.load()?.batchRecord.syncBatchId)
+      .toBe(batch.syncBatchId);
+
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      afterConsumer.client,
+      ackBase,
+      () => {
+        deliveries += 1;
+      },
+    ).run({
+      evaluatedAt: '2026-07-27T10:30:00.000Z',
+      maxBatches: 2,
+    }, { signal: new AbortController().signal })).resolves.toMatchObject({
+      ok: true,
+      status: 'source_drained',
+      counters: {
+        replayedBatches: 1,
+        obsoleteBatches: 1,
+      },
+    });
+    expect(deliveries).toBe(2);
+    expect(ackBase.load()).toBeUndefined();
   });
 });
 
@@ -265,6 +479,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
     const runner = new PicoReaderCustodySyncRunner(
       source,
       client,
+      createMemoryPendingStore(),
       (projection) => {
         delivered.push(projection.value.floor.sequence);
       },
@@ -324,9 +539,11 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
       }),
     };
     let crashOnce = true;
+    const pendingStore = createMemoryPendingStore();
     const firstRunner = new PicoReaderCustodySyncRunner(
       source,
       client,
+      pendingStore,
       (projection) => {
         if (projection.value.floor.sequence === 2 && crashOnce) {
           crashOnce = false;
@@ -351,6 +568,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
     const restartedRunner = new PicoReaderCustodySyncRunner(
       source,
       client,
+      pendingStore,
       (projection) => {
         delivered.push(projection.value.floor.sequence);
       },
@@ -359,17 +577,17 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
       evaluatedAt: '2026-07-27T10:30:00.000Z',
       pageSize: 3,
       maxPages: 1,
-      maxBatches: 3,
+      maxBatches: 4,
     }, { signal: new AbortController().signal })).resolves.toMatchObject({
       ok: true,
       status: 'source_drained',
       endCursor: 'cursor:0000000000000003',
       counters: {
-        batchesRead: 3,
+        batchesRead: 4,
         projectionsDelivered: 2,
         insertedBatches: 1,
         replayedBatches: 1,
-        obsoleteBatches: 1,
+        obsoleteBatches: 2,
       },
     });
     expect(delivered).toEqual([2, 3]);
@@ -392,6 +610,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
     const failedRunner = new PicoReaderCustodySyncRunner(
       source,
       projectionFailure.client,
+      createMemoryPendingStore(),
       () => undefined,
     );
     await expect(failedRunner.run({
@@ -414,6 +633,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
     await expect(new PicoReaderCustodySyncRunner(
       source,
       openFailure.client,
+      createMemoryPendingStore(),
       () => undefined,
     ).run({
       evaluatedAt: '2026-07-27T10:30:00.000Z',
@@ -429,6 +649,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
     await expect(new PicoReaderCustodySyncRunner(
       source,
       aborted.client,
+      createMemoryPendingStore(),
       () => {
         abortController.abort();
       },
@@ -450,7 +671,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
         nextCursor: 'cursor:0000000000000001-fork',
         hasMore: false,
       }),
-    }, forked.client, () => undefined).run({
+    }, forked.client, createMemoryPendingStore(), () => undefined).run({
       evaluatedAt: '2026-07-27T10:30:00.000Z',
     }, { signal: new AbortController().signal })).resolves.toMatchObject({
       ok: false,
@@ -458,23 +679,17 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
       endCursor: null,
     });
 
-    const expired = createFakeRunnerClient({
-      rejectSequence: 1,
-      rejection: { ok: false, reason: 'expired' },
-    });
+    const expired = createFakeRunnerClient();
     await expect(new PicoReaderCustodySyncRunner({
       read: async () => ({
         batches: [batch1],
         nextCursor: 'cursor:0000000000000001-expired',
         hasMore: false,
       }),
-    }, expired.client, () => undefined).run({
+    }, expired.client, createMemoryPendingStore(), () => undefined).run({
       evaluatedAt: batch1.expiresAt,
-    }, { signal: new AbortController().signal })).resolves.toMatchObject({
-      ok: false,
-      reason: 'expired',
-      endCursor: null,
-    });
+    }, { signal: new AbortController().signal }))
+      .rejects.toThrow('reader_sync_pending_expired_at_stage');
   });
 
   it('rejects stalled pages, overlapping runs and invalid work bounds', async () => {
@@ -492,6 +707,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
     const runner = new PicoReaderCustodySyncRunner(
       source,
       client,
+      createMemoryPendingStore(),
       () => undefined,
     );
     const activeRun = runner.run({
@@ -519,7 +735,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
         nextCursor: 'cursor:0000000000000001',
         hasMore: true,
       }),
-    }, client, () => undefined);
+    }, client, createMemoryPendingStore(), () => undefined);
     await expect(stalledRunner.run({
       evaluatedAt: '2026-07-27T10:30:00.000Z',
     }, { signal: new AbortController().signal }))
@@ -532,7 +748,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
         nextCursor: 'cursor:0000000000000002',
         hasMore: false,
       }),
-    }, client, () => undefined).run({
+    }, client, createMemoryPendingStore(), () => undefined).run({
       evaluatedAt: '2026-07-27T10:30:00.000Z',
     }, { signal: new AbortController().signal }))
       .rejects.toThrow('invalid_reader_sync_page');
@@ -787,6 +1003,19 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       inserted: false,
       state: { revision: 1, floor: { sequence: 1 } },
     });
+    expect(createDurableClient(durableStateStore).apply({
+      batchRecord: batch1.batchRecord,
+      evaluatedAt: '2026-07-27T10:12:00.000Z',
+      transportCursor: 'cursor:0000000000000001',
+    })).toMatchObject({
+      ok: true,
+      inserted: false,
+      state: {
+        revision: 2,
+        floor: { sequence: 1 },
+        verifiedAt: '2026-07-27T10:12:00.000Z',
+      },
+    });
 
     const projector = new PicoReaderCustodySyncProjector(sodium, pins);
     expect(projector.accept(
@@ -948,10 +1177,14 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
     const runStateStore = new PicoReaderCustodySyncFileStateStore(
       createReaderSyncStatePath(),
     );
+    const runPendingStore = new PicoReaderCustodySyncFilePendingStore(
+      join(runStateStore.path, '..', 'pending.json'),
+    );
     const runDeliveries: number[] = [];
     const boundedRunner = new PicoReaderCustodySyncRunner(
       source,
       createDurableClient(runStateStore),
+      runPendingStore,
       (projection) => {
         runDeliveries.push(projection.value.floor.sequence);
       },
@@ -992,10 +1225,15 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
     const midPageStateStore = new PicoReaderCustodySyncFileStateStore(
       createReaderSyncStatePath(),
     );
+    const midPagePendingStore =
+      new PicoReaderCustodySyncFilePendingStore(
+        join(midPageStateStore.path, '..', 'pending.json'),
+      );
     let failMidPageOnce = true;
     const midPageRunner = new PicoReaderCustodySyncRunner(
       source,
       createDurableClient(midPageStateStore),
+      midPagePendingStore,
       (projection) => {
         if (projection.value.floor.sequence === 2 && failMidPageOnce) {
           failMidPageOnce = false;
@@ -1019,6 +1257,7 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
     await expect(new PicoReaderCustodySyncRunner(
       source,
       createDurableClient(midPageStateStore),
+      midPagePendingStore,
       (projection) => {
         resumedDeliveries.push(projection.value.floor.sequence);
       },
@@ -1026,7 +1265,7 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       evaluatedAt: '2026-07-27T10:46:00.000Z',
       pageSize: 3,
       maxPages: 1,
-      maxBatches: 3,
+      maxBatches: 4,
     }, { signal })).resolves.toMatchObject({
       ok: true,
       status: 'source_drained',
@@ -1034,10 +1273,162 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       counters: {
         insertedBatches: 1,
         replayedBatches: 1,
-        obsoleteBatches: 1,
+        obsoleteBatches: 2,
       },
     });
     expect(resumedDeliveries).toEqual([2, 3]);
+
+    const expiryStateStore = new PicoReaderCustodySyncFileStateStore(
+      createReaderSyncStatePath(),
+    );
+    const expiryPendingStore =
+      new PicoReaderCustodySyncFilePendingStore(
+        join(expiryStateStore.path, '..', 'pending.json'),
+      );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      createDurableClient(expiryStateStore),
+      expiryPendingStore,
+      () => {
+        throw new Error('simulated_crash_before_pending_ack');
+      },
+    ).run({
+      evaluatedAt: '2026-07-27T10:11:00.000Z',
+      pageSize: 1,
+      maxPages: 1,
+      maxBatches: 1,
+    }, { signal })).rejects.toThrow(
+      'simulated_crash_before_pending_ack',
+    );
+    expect(expiryStateStore.load()?.floor.sequence).toBe(1);
+    const originalPending = expiryPendingStore.load()!;
+    const mismatchedVerifiedAtPending = {
+      ...originalPending,
+      stagedAt: '2026-07-27T10:12:00.000Z',
+    };
+    writeFileSync(
+      expiryPendingStore.path,
+      `${JSON.stringify(mismatchedVerifiedAtPending)}\n`,
+    );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      createDurableClient(expiryStateStore),
+      expiryPendingStore,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T12:00:00.000Z',
+      pageSize: 1,
+      maxPages: 1,
+      maxBatches: 1,
+    }, { signal })).rejects.toThrow('invalid_reader_sync_batch');
+    expect(expiryPendingStore.load())
+      .toEqual(mismatchedVerifiedAtPending);
+
+    const sealedPayloadHex =
+      originalPending.batchRecord.sealedPayloadHex;
+    const tamperedPending = {
+      ...originalPending,
+      batchRecord: {
+        ...originalPending.batchRecord,
+        sealedPayloadHex:
+          `${sealedPayloadHex.startsWith('00') ? '01' : '00'}`
+          + sealedPayloadHex.slice(2),
+      },
+    };
+    writeFileSync(
+      expiryPendingStore.path,
+      `${JSON.stringify(tamperedPending)}\n`,
+    );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      createDurableClient(expiryStateStore),
+      expiryPendingStore,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T12:00:00.000Z',
+      pageSize: 1,
+      maxPages: 1,
+      maxBatches: 1,
+    }, { signal })).rejects.toThrow('invalid_reader_sync_batch');
+    expect(expiryPendingStore.load()).toEqual(tamperedPending);
+
+    writeFileSync(
+      expiryPendingStore.path,
+      `${JSON.stringify(originalPending)}\n`,
+    );
+    const expiredReplayDeliveries: number[] = [];
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      createDurableClient(expiryStateStore),
+      expiryPendingStore,
+      (projection) => {
+        expiredReplayDeliveries.push(
+          projection.value.floor.sequence,
+        );
+      },
+    ).run({
+      evaluatedAt: '2026-07-27T12:00:00.000Z',
+      pageSize: 1,
+      maxPages: 1,
+      maxBatches: 2,
+    }, { signal })).resolves.toMatchObject({
+      ok: true,
+      status: 'source_drained',
+      counters: {
+        replayedBatches: 1,
+        projectionsDelivered: 1,
+      },
+    });
+    expect(expiredReplayDeliveries).toEqual([1]);
+    expect(expiryPendingStore.load()).toBeUndefined();
+
+    const unverifiedExpiryStateStore =
+      new PicoReaderCustodySyncFileStateStore(
+        createReaderSyncStatePath(),
+      );
+    const unverifiedExpiryPendingStore =
+      new PicoReaderCustodySyncFilePendingStore(
+        join(unverifiedExpiryStateStore.path, '..', 'pending.json'),
+      );
+    const failBeforeApplyClient = new PicoReaderCustodySyncClient(
+      sodium,
+      pins,
+      unverifiedExpiryStateStore,
+      () => {
+        throw new Error('simulated_crash_before_apply');
+      },
+    );
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      failBeforeApplyClient,
+      unverifiedExpiryPendingStore,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T10:11:00.000Z',
+      pageSize: 1,
+      maxPages: 1,
+      maxBatches: 1,
+    }, { signal })).rejects.toThrow('simulated_crash_before_apply');
+    expect(unverifiedExpiryStateStore.load()).toBeUndefined();
+    const unverifiedPending =
+      unverifiedExpiryPendingStore.load();
+    expect(unverifiedPending?.batchRecord.syncBatchId)
+      .toBe(batch1.batchRecord.syncBatchId);
+
+    await expect(new PicoReaderCustodySyncRunner(
+      source,
+      createDurableClient(unverifiedExpiryStateStore),
+      unverifiedExpiryPendingStore,
+      () => undefined,
+    ).run({
+      evaluatedAt: '2026-07-27T12:00:00.000Z',
+      pageSize: 1,
+      maxPages: 1,
+      maxBatches: 1,
+    }, { signal })).rejects.toThrow('invalid_reader_sync_batch');
+    expect(unverifiedExpiryStateStore.load()).toBeUndefined();
+    expect(unverifiedExpiryPendingStore.load())
+      .toEqual(unverifiedPending);
 
     const crashAfterCommitStore: PicoReaderCustodySyncClientStateStore = {
       load: () => durableStateStore.load(),
@@ -1191,6 +1582,29 @@ function createReaderSyncStatePath(): string {
   return join(directory, 'state.json');
 }
 
+function createReaderSyncPendingPath(): string {
+  const directory = mkdtempSync(
+    join(tmpdir(), 'pico-reader-sync-pending-'),
+  );
+  temporaryDirectories.push(directory);
+  return join(directory, 'pending.json');
+}
+
+function readerSyncPendingRecord(
+  sequence: number,
+): PicoReaderCustodySyncPendingRecord {
+  return {
+    schema: picoReaderCustodySyncPendingRecordSchema,
+    schemaVersion: 1,
+    pins: readerSyncClientPins(),
+    stagedAt: '2026-07-27T10:30:00.000Z',
+    baseFloor: sequence === 1
+      ? null
+      : readerSyncClientState(sequence - 1, sequence - 1).floor,
+    batchRecord: runnerBatchRecord(sequence),
+  };
+}
+
 function runnerBatchRecord(
   sequence: number,
   suffix = '',
@@ -1203,6 +1617,35 @@ function runnerBatchRecord(
     sealedPayloadHex: '00',
     sealedPayloadDigestHex: '11'.repeat(32),
     expiresAt: '2026-07-27T11:00:00.000Z',
+  };
+}
+
+function createMemoryPendingStore(): PicoReaderCustodySyncPendingStore {
+  let pending: PicoReaderCustodySyncPendingRecord | undefined;
+  return {
+    load: () => pending === undefined
+      ? undefined
+      : structuredClone(pending),
+    stage: (nextPending) => {
+      if (pending !== undefined) {
+        if (JSON.stringify(pending) === JSON.stringify(nextPending)) {
+          return { inserted: false };
+        }
+        throw new Error('reader_sync_pending_conflict');
+      }
+      pending = structuredClone(nextPending);
+      return { inserted: true };
+    },
+    acknowledge: (expected) => {
+      if (pending === undefined) {
+        return { removed: false };
+      }
+      if (JSON.stringify(pending) !== JSON.stringify(expected)) {
+        throw new Error('reader_sync_pending_ack_mismatch');
+      }
+      pending = undefined;
+      return { removed: true };
+    },
   };
 }
 
@@ -1220,6 +1663,7 @@ function createFakeRunnerClient(options: {
     : structuredClone(options.initialState);
   const client: PicoReaderCustodySyncRunClient = {
     routeRef: () => `route_${'A'.repeat(48)}`,
+    syncPins: () => readerSyncClientPins(),
     state: () => state === undefined ? undefined : structuredClone(state),
     commitTransportCursor: (transportCursor) => {
       if (state === undefined) {
@@ -1234,7 +1678,7 @@ function createFakeRunnerClient(options: {
       };
       return structuredClone(state);
     },
-    apply: ({ batchRecord }) => {
+    apply: ({ batchRecord, evaluatedAt }) => {
       const sequence = runnerBatchSequence(batchRecord);
       if (sequence === options.throwSequence) {
         throw new Error('simulated_vault_open_failure');
@@ -1267,8 +1711,17 @@ function createFakeRunnerClient(options: {
           (state?.revision ?? 0) + 1,
           sequence,
         );
+        nextState.verifiedAt =
+          evaluatedAt ?? nextState.verifiedAt;
         nextState.transportCursor = state?.transportCursor ?? null;
         state = nextState;
+      } else if (evaluatedAt !== undefined
+        && state!.verifiedAt !== evaluatedAt) {
+        state = {
+          ...state!,
+          revision: state!.revision + 1,
+          verifiedAt: evaluatedAt,
+        };
       }
       const currentState = state!;
       return {
@@ -1338,6 +1791,8 @@ function readerSyncClientState(
       createdAt:
         `2026-07-27T10:${String(sequence).padStart(2, '0')}:00.000Z`,
     },
+    verifiedAt:
+      `2026-07-27T10:${String(sequence + 10).padStart(2, '0')}:00.000Z`,
     transportCursor: `cursor:${String(sequence).padStart(16, '0')}`,
   };
 }

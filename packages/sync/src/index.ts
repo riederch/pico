@@ -237,9 +237,10 @@ implements PicoSyncOpaqueTransport {
         record.sequence > afterSequence
         && input.evaluatedAt < record.expiresAt);
     const page = available.slice(0, input.limit);
+    const nextCursor = page.at(-1)?.cursor;
     return {
       records: page.map(cloneOpaqueRecord),
-      nextCursor: page.at(-1)?.cursor,
+      ...(nextCursor === undefined ? {} : { nextCursor }),
       hasMore: available.length > page.length,
     };
   }
@@ -437,7 +438,9 @@ implements PicoReaderCustodySyncBatchReader {
     });
     return {
       batches,
-      nextCursor: page.nextCursor,
+      ...(page.nextCursor === undefined
+        ? {}
+        : { nextCursor: page.nextCursor }),
       hasMore: page.hasMore,
     };
   }
@@ -595,6 +598,12 @@ export class PicoReaderCustodySyncProjector {
 export const picoReaderCustodySyncClientStateSchema =
   'pico.sync.reader-custody-client-state.v1' as const;
 export const MAX_PICO_READER_CUSTODY_SYNC_CLIENT_STATE_BYTES = 64 * 1024;
+export const picoReaderCustodySyncPendingRecordSchema =
+  'pico.sync.reader-custody-pending.v1' as const;
+export const MAX_PICO_READER_CUSTODY_SYNC_SEALED_PAYLOAD_BYTES =
+  (16 * 1024 * 1024) + 128;
+export const MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES =
+  MAX_PICO_SYNC_OPAQUE_PAYLOAD_BYTES + (64 * 1024);
 
 export interface PicoReaderCustodySyncClientState {
   schema: typeof picoReaderCustodySyncClientStateSchema;
@@ -602,6 +611,7 @@ export interface PicoReaderCustodySyncClientState {
   revision: number;
   pins: PicoReaderCustodySyncPins;
   floor: PicoReaderCustodySyncFloor;
+  verifiedAt: string;
   transportCursor: string | null;
 }
 
@@ -611,6 +621,25 @@ export interface PicoReaderCustodySyncClientStateStore {
     state: PicoReaderCustodySyncClientState,
     expectedRevision: number | undefined,
   ): void;
+}
+
+export interface PicoReaderCustodySyncPendingRecord {
+  schema: typeof picoReaderCustodySyncPendingRecordSchema;
+  schemaVersion: 1;
+  pins: PicoReaderCustodySyncPins;
+  stagedAt: string;
+  baseFloor: PicoReaderCustodySyncFloor | null;
+  batchRecord: PicoReaderCustodySyncBatchRecord;
+}
+
+export interface PicoReaderCustodySyncPendingStore {
+  load(): PicoReaderCustodySyncPendingRecord | undefined;
+  stage(
+    pending: PicoReaderCustodySyncPendingRecord,
+  ): { inserted: boolean };
+  acknowledge(
+    expected: PicoReaderCustodySyncPendingRecord,
+  ): { removed: boolean };
 }
 
 export class PicoReaderCustodySyncFileStateStore
@@ -639,6 +668,7 @@ implements PicoReaderCustodySyncClientStateStore {
     }
 
     try {
+      assertPrivateReaderSyncStateDirectory(dirname(this.path));
       const stats = fstatSync(fileDescriptor);
       if (!stats.isFile()
         || (stats.mode & 0o777) !== 0o600
@@ -716,6 +746,141 @@ implements PicoReaderCustodySyncClientStateStore {
   }
 }
 
+export class PicoReaderCustodySyncFilePendingStore
+implements PicoReaderCustodySyncPendingStore {
+  public readonly path: string;
+
+  public constructor(path: string) {
+    if (typeof path !== 'string' || path.length < 1) {
+      throw new Error('invalid_reader_sync_pending_path');
+    }
+    this.path = resolve(path);
+  }
+
+  public load(): PicoReaderCustodySyncPendingRecord | undefined {
+    let fileDescriptor: number;
+    try {
+      fileDescriptor = openSync(
+        this.path,
+        fsConstants.O_RDONLY | noFollowFlag(),
+      );
+    } catch (error) {
+      if (isFileSystemError(error, 'ENOENT')) {
+        return undefined;
+      }
+      throw new Error('reader_sync_pending_unreadable', { cause: error });
+    }
+
+    try {
+      assertPrivateReaderSyncStateDirectory(dirname(this.path));
+      const stats = fstatSync(fileDescriptor);
+      if (!stats.isFile()
+        || (stats.mode & 0o777) !== 0o600
+        || stats.size < 1
+        || stats.size > MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES) {
+        throw new Error('invalid_reader_sync_pending_file');
+      }
+      return parseReaderSyncPendingRecord(
+        readFileSync(fileDescriptor, 'utf8'),
+      );
+    } finally {
+      closeSync(fileDescriptor);
+    }
+  }
+
+  public stage(
+    pending: PicoReaderCustodySyncPendingRecord,
+  ): { inserted: boolean } {
+    const nextPending = cloneReaderSyncPendingRecord(pending);
+    assertReaderSyncPendingRecord(nextPending);
+    const currentPending = this.load();
+    if (currentPending !== undefined) {
+      if (readerSyncPendingRecordsEqual(currentPending, nextPending)) {
+        return { inserted: false };
+      }
+      throw new Error('reader_sync_pending_conflict');
+    }
+
+    const serialized = `${JSON.stringify(nextPending)}\n`;
+    if (Buffer.byteLength(serialized, 'utf8')
+      > MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES) {
+      throw new Error('reader_sync_pending_too_large');
+    }
+
+    const parentPath = dirname(this.path);
+    mkdirSync(parentPath, { recursive: true, mode: 0o700 });
+    assertPrivateReaderSyncStateDirectory(parentPath);
+
+    const temporaryPath =
+      `${this.path}.${process.pid}.${randomUUID()}.tmp`;
+    let temporaryFileDescriptor: number | undefined;
+    try {
+      temporaryFileDescriptor = openSync(
+        temporaryPath,
+        fsConstants.O_CREAT
+          | fsConstants.O_EXCL
+          | fsConstants.O_WRONLY
+          | noFollowFlag(),
+        0o600,
+      );
+      writeFileSync(temporaryFileDescriptor, serialized, {
+        encoding: 'utf8',
+      });
+      fsyncSync(temporaryFileDescriptor);
+      closeSync(temporaryFileDescriptor);
+      temporaryFileDescriptor = undefined;
+
+      renameSync(temporaryPath, this.path);
+      fsyncDirectory(parentPath);
+      return { inserted: true };
+    } catch (error) {
+      if (temporaryFileDescriptor !== undefined) {
+        closeSync(temporaryFileDescriptor);
+      }
+      try {
+        unlinkSync(temporaryPath);
+      } catch (cleanupError) {
+        if (!isFileSystemError(cleanupError, 'ENOENT')) {
+          throw new Error('reader_sync_pending_cleanup_failed', {
+            cause: cleanupError,
+          });
+        }
+      }
+      throw error;
+    }
+  }
+
+  public acknowledge(
+    expected: PicoReaderCustodySyncPendingRecord,
+  ): { removed: boolean } {
+    const expectedPending = cloneReaderSyncPendingRecord(expected);
+    assertReaderSyncPendingRecord(expectedPending);
+    const currentPending = this.load();
+    if (currentPending === undefined) {
+      return { removed: false };
+    }
+    if (!readerSyncPendingRecordsEqual(
+      currentPending,
+      expectedPending,
+    )) {
+      throw new Error('reader_sync_pending_ack_mismatch');
+    }
+
+    const parentPath = dirname(this.path);
+    assertPrivateReaderSyncStateDirectory(parentPath);
+    try {
+      unlinkSync(this.path);
+    } catch (error) {
+      if (isFileSystemError(error, 'ENOENT')) {
+        return { removed: false };
+      }
+      throw error;
+    }
+    fsyncDirectory(parentPath);
+    return { removed: true };
+  }
+}
+
 export interface PicoReaderCustodySyncPayloadOpener {
   (input: {
     batchRecord: PicoReaderCustodySyncBatchRecord;
@@ -737,6 +902,7 @@ export type PicoReaderCustodySyncClientApplyResult =
 
 export interface PicoReaderCustodySyncRunClient {
   routeRef(): string;
+  syncPins(): PicoReaderCustodySyncPins;
   state(): PicoReaderCustodySyncClientState | undefined;
   commitTransportCursor(
     transportCursor: string | null,
@@ -761,6 +927,10 @@ implements PicoReaderCustodySyncRunClient {
 
   public routeRef(): string {
     return this.pins.routeRef;
+  }
+
+  public syncPins(): PicoReaderCustodySyncPins {
+    return { ...this.pins };
   }
 
   public state(): PicoReaderCustodySyncClientState | undefined {
@@ -835,10 +1005,12 @@ implements PicoReaderCustodySyncRunClient {
       revision: (currentState?.revision ?? 0) + 1,
       pins: { ...this.pins },
       floor: { ...projected.value.floor },
+      verifiedAt: evaluatedAt,
       transportCursor,
     };
     if (currentState !== undefined
       && readerSyncFloorsEqual(currentState.floor, nextState.floor)
+      && currentState.verifiedAt === nextState.verifiedAt
       && currentState.transportCursor === nextState.transportCursor) {
       return {
         ok: true,
@@ -904,6 +1076,7 @@ export class PicoReaderCustodySyncRunner {
   public constructor(
     private readonly source: PicoReaderCustodySyncBatchReader,
     private readonly client: PicoReaderCustodySyncRunClient,
+    private readonly pendingStore: PicoReaderCustodySyncPendingStore,
     private readonly consumeProjection: PicoReaderCustodySyncProjectionConsumer,
   ) {}
 
@@ -951,6 +1124,47 @@ export class PicoReaderCustodySyncRunner {
         replayedBatches: 0,
         obsoleteBatches: 0,
       };
+      let acknowledgedPendingBatch:
+        PicoReaderCustodySyncBatchRecord | undefined;
+
+      const resumedPending = this.pendingStore.load();
+      if (resumedPending !== undefined) {
+        counters.batchesRead += 1;
+        const projected = await this.#processPending(
+          resumedPending,
+          evaluatedAt,
+          options,
+        );
+        if (!projected.ok) {
+          if (projected.reason === 'rollback') {
+            counters.obsoleteBatches += 1;
+            acknowledgedPendingBatch = {
+              ...resumedPending.batchRecord,
+            };
+          } else {
+            return {
+              ok: false,
+              reason: projected.reason,
+              failedSyncBatchId:
+                resumedPending.batchRecord.syncBatchId,
+              startCursor,
+              endCursor,
+              sourceHasMore: true,
+              counters: { ...counters },
+            };
+          }
+        } else {
+          acknowledgedPendingBatch = {
+            ...resumedPending.batchRecord,
+          };
+          counters.projectionsDelivered += 1;
+          if (projected.inserted) {
+            counters.insertedBatches += 1;
+          } else {
+            counters.replayedBatches += 1;
+          }
+        }
+      }
 
       while (counters.pagesRead < maxPages
         && counters.batchesRead < maxBatches) {
@@ -986,10 +1200,29 @@ export class PicoReaderCustodySyncRunner {
         for (const batchRecord of page.batches) {
           throwIfAborted(options.signal);
           counters.batchesRead += 1;
-          const projected = this.client.apply({
+          if (acknowledgedPendingBatch !== undefined
+            && readerSyncBatchRecordsEqual(
+              acknowledgedPendingBatch,
+              batchRecord,
+            )) {
+            counters.obsoleteBatches += 1;
+            acknowledgedPendingBatch = undefined;
+            continue;
+          }
+          const pending: PicoReaderCustodySyncPendingRecord = {
+            schema: picoReaderCustodySyncPendingRecordSchema,
+            schemaVersion: 1,
+            pins: this.client.syncPins(),
+            stagedAt: evaluatedAt,
+            baseFloor: this.client.state()?.floor ?? null,
             batchRecord,
+          };
+          this.pendingStore.stage(pending);
+          const projected = await this.#processPending(
+            pending,
             evaluatedAt,
-          });
+            options,
+          );
           if (!projected.ok) {
             if (projected.reason === 'rollback') {
               counters.obsoleteBatches += 1;
@@ -1006,8 +1239,6 @@ export class PicoReaderCustodySyncRunner {
             };
           }
 
-          await this.consumeProjection(projected, options);
-          throwIfAborted(options.signal);
           counters.projectionsDelivered += 1;
           if (projected.inserted) {
             counters.insertedBatches += 1;
@@ -1042,6 +1273,52 @@ export class PicoReaderCustodySyncRunner {
     } finally {
       this.#running = false;
     }
+  }
+
+  async #processPending(
+    pending: PicoReaderCustodySyncPendingRecord,
+    evaluatedAt: string,
+    options: { signal: AbortSignal },
+  ): Promise<PicoReaderCustodySyncClientApplyResult> {
+    assertReaderSyncPendingRecord(pending);
+    if (!readerSyncPinsEqual(pending.pins, this.client.syncPins())) {
+      throw new Error('reader_sync_pending_scope_mismatch');
+    }
+    throwIfAborted(options.signal);
+
+    const currentState = this.client.state();
+    const exactDurableReplay = currentState !== undefined
+      && pendingMatchesDurableState(pending, currentState);
+    if (!exactDurableReplay && evaluatedAt < pending.stagedAt) {
+      throw new Error('reader_sync_clock_rollback');
+    }
+    const projected = this.client.apply({
+      batchRecord: pending.batchRecord,
+      evaluatedAt: exactDurableReplay
+        ? pending.stagedAt
+        : evaluatedAt,
+    });
+    if (!projected.ok) {
+      if (projected.reason === 'rollback') {
+        this.pendingStore.acknowledge(pending);
+      }
+      return projected;
+    }
+
+    if (exactDurableReplay
+      && (projected.inserted
+        || currentState === undefined
+        || !readerSyncFloorsEqual(
+          projected.value.floor,
+          currentState.floor,
+        ))) {
+      throw new Error('reader_sync_pending_floor_mismatch');
+    }
+
+    await this.consumeProjection(projected, options);
+    throwIfAborted(options.signal);
+    this.pendingStore.acknowledge(pending);
+    return projected;
   }
 }
 
@@ -2036,6 +2313,102 @@ function parseReaderSyncClientState(
   return cloneReaderSyncClientState(parsed);
 }
 
+function parseReaderSyncPendingRecord(
+  serialized: string,
+): PicoReaderCustodySyncPendingRecord {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized) as unknown;
+  } catch (error) {
+    throw new Error('invalid_reader_sync_pending', { cause: error });
+  }
+  assertReaderSyncPendingRecord(parsed);
+  return cloneReaderSyncPendingRecord(parsed);
+}
+
+function assertReaderSyncPendingRecord(
+  pending: unknown,
+): asserts pending is PicoReaderCustodySyncPendingRecord {
+  if (!isUnknownRecord(pending)
+    || !hasExactKeys(pending, [
+      'schema',
+      'schemaVersion',
+      'pins',
+      'stagedAt',
+      'baseFloor',
+      'batchRecord',
+    ])
+    || pending.schema !== picoReaderCustodySyncPendingRecordSchema
+    || pending.schemaVersion !== 1
+    || typeof pending.stagedAt !== 'string'
+    || !isUnknownRecord(pending.pins)
+    || !hasExactKeys(pending.pins, [
+      'routeRef',
+      'domainAuthorityId',
+      'homeId',
+      'hostSigningKeyFingerprintHex',
+      'domainId',
+      'ownerIdentityKeyFingerprintHex',
+      'readerGrantId',
+      'readerIdentityKeyFingerprintHex',
+      'readerKeyFingerprintHex',
+    ])
+    || (pending.baseFloor !== null
+      && (!isUnknownRecord(pending.baseFloor)
+        || !hasExactKeys(pending.baseFloor, [
+          'routeRef',
+          'syncBatchId',
+          'sequence',
+          'manifestDigestHex',
+          'throughKekVersion',
+          'observedThroughLifecycleOrder',
+          'createdAt',
+        ])))
+    || !isUnknownRecord(pending.batchRecord)
+    || !hasExactKeys(pending.batchRecord, [
+      'schema',
+      'routeRef',
+      'syncBatchId',
+      'sealedPayloadHex',
+      'sealedPayloadDigestHex',
+      'expiresAt',
+    ])) {
+    throw new Error('invalid_reader_sync_pending');
+  }
+
+  const pins = pending.pins as unknown as PicoReaderCustodySyncPins;
+  const baseFloor = pending.baseFloor as
+    PicoReaderCustodySyncFloor | null;
+  const batch =
+    pending.batchRecord as unknown as PicoReaderCustodySyncBatchRecord;
+  assertSyncPins(pins);
+  assertCanonicalInstant(pending.stagedAt);
+  if (baseFloor !== null) {
+    assertSyncFloor(baseFloor);
+    if (baseFloor.routeRef !== pins.routeRef) {
+      throw new Error('reader_sync_pending_scope_mismatch');
+    }
+  }
+  if (batch.schema !== picoReaderCustodySyncBatchRecordSchema
+    || typeof batch.routeRef !== 'string'
+    || batch.routeRef !== pins.routeRef
+    || typeof batch.syncBatchId !== 'string'
+    || typeof batch.sealedPayloadHex !== 'string'
+    || typeof batch.sealedPayloadDigestHex !== 'string'
+    || typeof batch.expiresAt !== 'string'
+    || !isCanonicalHex(batch.sealedPayloadHex)
+    || batch.sealedPayloadHex.length / 2
+      > MAX_PICO_READER_CUSTODY_SYNC_SEALED_PAYLOAD_BYTES) {
+    throw new Error('invalid_reader_sync_pending');
+  }
+  assertAsciiReference(batch.syncBatchId);
+  assertDigest(batch.sealedPayloadDigestHex);
+  assertCanonicalInstant(batch.expiresAt);
+  if (pending.stagedAt >= batch.expiresAt) {
+    throw new Error('reader_sync_pending_expired_at_stage');
+  }
+}
+
 function assertReaderSyncClientState(
   state: unknown,
 ): asserts state is PicoReaderCustodySyncClientState {
@@ -2046,6 +2419,7 @@ function assertReaderSyncClientState(
       'revision',
       'pins',
       'floor',
+      'verifiedAt',
       'transportCursor',
     ])
     || state.schema !== picoReaderCustodySyncClientStateSchema
@@ -2071,9 +2445,10 @@ function assertReaderSyncClientState(
       'sequence',
       'manifestDigestHex',
       'throughKekVersion',
-      'observedThroughLifecycleOrder',
-      'createdAt',
-    ])
+        'observedThroughLifecycleOrder',
+        'createdAt',
+      ])
+    || typeof state.verifiedAt !== 'string'
     || (state.transportCursor !== null
       && typeof state.transportCursor !== 'string')) {
     throw new Error('invalid_reader_sync_state');
@@ -2083,8 +2458,12 @@ function assertReaderSyncClientState(
   const floor = state.floor as unknown as PicoReaderCustodySyncFloor;
   assertSyncPins(pins);
   assertSyncFloor(floor);
+  assertCanonicalInstant(state.verifiedAt);
   if (floor.routeRef !== pins.routeRef) {
     throw new Error('reader_sync_state_scope_mismatch');
+  }
+  if (state.verifiedAt < floor.createdAt) {
+    throw new Error('invalid_reader_sync_state_verified_at');
   }
   if (typeof state.transportCursor === 'string') {
     assertTransportCursor(state.transportCursor);
@@ -2114,6 +2493,9 @@ function assertReaderSyncStateTransition(
 
   const currentFloor = currentState.floor;
   const nextFloor = nextState.floor;
+  if (nextState.verifiedAt < currentState.verifiedAt) {
+    throw new Error('reader_sync_state_verified_at_rollback');
+  }
   if (nextFloor.sequence === currentFloor.sequence) {
     if (!readerSyncFloorsEqual(currentFloor, nextFloor)) {
       throw new Error('reader_sync_state_floor_fork');
@@ -2141,8 +2523,73 @@ function cloneReaderSyncClientState(
     revision: state.revision,
     pins: { ...state.pins },
     floor: { ...state.floor },
+    verifiedAt: state.verifiedAt,
     transportCursor: state.transportCursor,
   };
+}
+
+function cloneReaderSyncPendingRecord(
+  pending: PicoReaderCustodySyncPendingRecord,
+): PicoReaderCustodySyncPendingRecord {
+  return {
+    schema: picoReaderCustodySyncPendingRecordSchema,
+    schemaVersion: 1,
+    pins: { ...pending.pins },
+    stagedAt: pending.stagedAt,
+    baseFloor:
+      pending.baseFloor === null ? null : { ...pending.baseFloor },
+    batchRecord: { ...pending.batchRecord },
+  };
+}
+
+function readerSyncPendingRecordsEqual(
+  left: PicoReaderCustodySyncPendingRecord,
+  right: PicoReaderCustodySyncPendingRecord,
+): boolean {
+  return readerSyncPinsEqual(left.pins, right.pins)
+    && left.stagedAt === right.stagedAt
+    && ((left.baseFloor === null && right.baseFloor === null)
+      || (left.baseFloor !== null
+        && right.baseFloor !== null
+        && readerSyncFloorsEqual(left.baseFloor, right.baseFloor)))
+    && left.batchRecord.schema === right.batchRecord.schema
+    && left.batchRecord.routeRef === right.batchRecord.routeRef
+    && left.batchRecord.syncBatchId === right.batchRecord.syncBatchId
+    && left.batchRecord.sealedPayloadHex
+      === right.batchRecord.sealedPayloadHex
+    && left.batchRecord.sealedPayloadDigestHex
+      === right.batchRecord.sealedPayloadDigestHex
+    && left.batchRecord.expiresAt === right.batchRecord.expiresAt;
+}
+
+function readerSyncBatchRecordsEqual(
+  left: PicoReaderCustodySyncBatchRecord,
+  right: PicoReaderCustodySyncBatchRecord,
+): boolean {
+  return left.schema === right.schema
+    && left.routeRef === right.routeRef
+    && left.syncBatchId === right.syncBatchId
+    && left.sealedPayloadHex === right.sealedPayloadHex
+    && left.sealedPayloadDigestHex === right.sealedPayloadDigestHex
+    && left.expiresAt === right.expiresAt;
+}
+
+function pendingMatchesDurableState(
+  pending: PicoReaderCustodySyncPendingRecord,
+  state: PicoReaderCustodySyncClientState,
+): boolean {
+  const floor = state.floor;
+  if (pending.batchRecord.routeRef !== floor.routeRef
+    || pending.batchRecord.syncBatchId !== floor.syncBatchId
+    || pending.stagedAt !== state.verifiedAt) {
+    return false;
+  }
+  if (pending.baseFloor === null) {
+    return floor.sequence === 1;
+  }
+  return readerSyncFloorsEqual(pending.baseFloor, floor)
+    || (floor.routeRef === pending.baseFloor.routeRef
+      && floor.sequence === pending.baseFloor.sequence + 1);
 }
 
 function readerSyncPinsEqual(
