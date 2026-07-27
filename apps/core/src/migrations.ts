@@ -569,6 +569,34 @@ const migrations: readonly MigrationDefinition[] = [
       `);
     },
   },
+  {
+    id: '0018_pico_identity_reader_keys',
+    requiresBackup: false,
+    up(db) {
+      // ADR 0083: this is public reader-key material bound to an already
+      // verified identity delegation and the Home membership observed at
+      // registration time. Freshness checkpoints are deliberately not stored:
+      // only an authenticated registry/sync adapter may assert them.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS pico_identity_reader_key (
+          delegation_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          device_signing_key_fingerprint_hex TEXT NOT NULL,
+          device_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          device_key_agreement_key_record_json TEXT NOT NULL,
+          registered_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pico_identity_reader_key_identity
+        ON pico_identity_reader_key (
+          home_id,
+          pico_identity_fingerprint_hex,
+          device_key_agreement_key_fingerprint_hex
+        );
+      `);
+    },
+  },
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

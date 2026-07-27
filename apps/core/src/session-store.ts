@@ -41,6 +41,7 @@ export type SessionPrincipal =
     readonly kind: 'pico_identity';
     readonly picoIdentityFingerprintHex: string;
     readonly deviceSigningKeyFingerprintHex: string;
+    readonly deviceKeyAgreementKeyFingerprintHex: string;
     readonly delegationId: string;
   };
 
@@ -209,6 +210,7 @@ function clonePrincipal(principal: SessionPrincipal): SessionPrincipal {
     kind: 'pico_identity',
     picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
     deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+    deviceKeyAgreementKeyFingerprintHex: principal.deviceKeyAgreementKeyFingerprintHex,
     delegationId: principal.delegationId,
   };
 }

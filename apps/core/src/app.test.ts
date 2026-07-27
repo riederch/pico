@@ -240,6 +240,7 @@ describe('Pico Home Core app', () => {
           { id: '0015_pico_home_founding_record_drop_claim_signature', appliedAt: expect.any(String) },
           { id: '0016_pico_home_membership_credentials', appliedAt: expect.any(String) },
           { id: '0017_identity_sessions_and_domain_read_grants', appliedAt: expect.any(String) },
+          { id: '0018_pico_identity_reader_keys', appliedAt: expect.any(String) },
         ],
       },
     });
@@ -1703,6 +1704,7 @@ describe('Pico Home Core app', () => {
       challengeId: challenge.challengeId,
       identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
       deviceSigningKeyRecord,
+      deviceKeyAgreementKeyRecord: deviceAgreementKeyRecord,
       delegation: signedDelegation,
       revocations: [],
       possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(

@@ -20,19 +20,25 @@ import { EventStore } from './event-store.js';
 
 let identity: { publicKey: Uint8Array; privateKey: Uint8Array };
 let device: { publicKey: Uint8Array; privateKey: Uint8Array };
+let deviceAgreement: { publicKey: Uint8Array; privateKey: Uint8Array };
 let identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
 let deviceKeyRecord: PicoIdentityKeyRecordSignatureInput;
+let deviceAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
 let identityFingerprint: string;
 let deviceFingerprint: string;
+let deviceAgreementFingerprint: string;
 
 beforeAll(async () => {
   await sodium.ready;
   identity = sodium.crypto_sign_keypair();
   device = sodium.crypto_sign_keypair();
+  deviceAgreement = sodium.crypto_box_keypair();
   identityKeyRecord = keyRecord('pico_identity', identity.publicKey);
   deviceKeyRecord = keyRecord('device_signing', device.publicKey);
+  deviceAgreementKeyRecord = keyRecord('device_key_agreement', deviceAgreement.publicKey);
   identityFingerprint = fingerprint(identityKeyRecord);
   deviceFingerprint = fingerprint(deviceKeyRecord);
+  deviceAgreementFingerprint = fingerprint(deviceAgreementKeyRecord);
 });
 
 describe('identity-bound Foundation sessions (ADR 0082)', () => {
@@ -70,9 +76,35 @@ describe('identity-bound Foundation sessions (ADR 0082)', () => {
         kind: 'pico_identity',
         picoIdentityFingerprintHex: identityFingerprint,
         deviceSigningKeyFingerprintHex: deviceFingerprint,
+        deviceKeyAgreementKeyFingerprintHex: deviceAgreementFingerprint,
         delegationId: 'delegation_identity_session_0001',
       },
     });
+  });
+
+  it('rejects a cross-device key-agreement record and key-role confusion', () => {
+    const challenge = fixedChallenge();
+    const swapped = signedProof(challenge);
+    swapped.deviceKeyAgreementKeyRecord = keyRecord(
+      'device_key_agreement',
+      sodium.crypto_box_keypair().publicKey,
+    );
+    expect(verifyIdentitySessionProof(sodium, {
+      proof: swapped,
+      challenge,
+      at: '2026-07-27T10:00:00.000Z',
+    })).toEqual({ ok: false, reason: 'invalid_device_key_agreement_key' });
+
+    const confused = signedProof(challenge);
+    confused.deviceKeyAgreementKeyRecord = {
+      ...deviceAgreementKeyRecord,
+      keyRole: 'device_signing',
+    };
+    expect(verifyIdentitySessionProof(sodium, {
+      proof: confused,
+      challenge,
+      at: '2026-07-27T10:00:00.000Z',
+    })).toEqual({ ok: false, reason: 'invalid_device_key_agreement_key' });
   });
 
   it('rejects a valid device signature over a foreign verifier context', () => {
@@ -114,7 +146,7 @@ describe('identity-bound Foundation sessions (ADR 0082)', () => {
     })).toEqual({ ok: false, reason: 'inactive_surface_session_delegation' });
   });
 
-  it('persists monotonic lifecycle evidence and invalidates an existing delegation', () => {
+  it('persists and reconciles monotonic lifecycle evidence', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pico-identity-evidence-test-'));
     const store = new EventStore(join(dir, 'pico.sqlite'));
     try {
@@ -125,13 +157,11 @@ describe('identity-bound Foundation sessions (ADR 0082)', () => {
         delegation: proof.delegation,
         revocations: [],
       })).toEqual({ ok: true });
-      expect(store.hasActivePicoIdentityDelegation({
-        picoIdentityFingerprintHex: identityFingerprint,
-        deviceSigningKeyFingerprintHex: deviceFingerprint,
-        delegationId: proof.delegation.record.delegationId,
-        sodium,
-        at: '2026-07-27T10:00:00.000Z',
-      })).toBe(true);
+      expect(store.reconcilePicoIdentityLifecycleEvidence(sodium)).toEqual({
+        droppedDelegations: 0,
+        droppedRevocations: 0,
+        droppedReaderKeys: 0,
+      });
 
       const revocation: PicoIdentityRevocationSignatureInput = {
         suite: picoIdentitySuite,
@@ -152,13 +182,11 @@ describe('identity-bound Foundation sessions (ADR 0082)', () => {
           signatureHex: sign(buildPicoIdentityRevocationSignatureInput(revocation), identity.privateKey),
         }],
       })).toEqual({ ok: true });
-      expect(store.hasActivePicoIdentityDelegation({
-        picoIdentityFingerprintHex: identityFingerprint,
-        deviceSigningKeyFingerprintHex: deviceFingerprint,
-        delegationId: proof.delegation.record.delegationId,
-        sodium,
-        at: '2026-07-27T10:02:00.000Z',
-      })).toBe(false);
+      expect(store.reconcilePicoIdentityLifecycleEvidence(sodium)).toEqual({
+        droppedDelegations: 0,
+        droppedRevocations: 0,
+        droppedReaderKeys: 0,
+      });
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
@@ -181,7 +209,7 @@ function signedProof(challenge: IdentitySessionChallenge): IdentitySessionProof 
     delegationId: 'delegation_identity_session_0001',
     issuerIdentityKeyFingerprintHex: identityFingerprint,
     subjectSigningKeyFingerprintHex: deviceFingerprint,
-    subjectKeyAgreementKeyFingerprintHex: 'b'.repeat(64),
+    subjectKeyAgreementKeyFingerprintHex: deviceAgreementFingerprint,
     scopes: ['surface_session'],
     validFrom: '2026-01-01T00:00:00.000Z',
     validUntil: '2027-01-01T00:00:00.000Z',
@@ -197,6 +225,7 @@ function signedProof(challenge: IdentitySessionChallenge): IdentitySessionProof 
   return {
     identityKeyRecord,
     deviceSigningKeyRecord: deviceKeyRecord,
+    deviceKeyAgreementKeyRecord: deviceAgreementKeyRecord,
     delegation: {
       record: delegation,
       signatureHex: sign(buildPicoIdentityDelegationSignatureInput(delegation), identity.privateKey),

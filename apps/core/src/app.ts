@@ -452,7 +452,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   reconcileHomeMembershipCredentials();
   const identityEvidenceReconciliation = store.reconcilePicoIdentityLifecycleEvidence(sodium);
   if (identityEvidenceReconciliation.droppedDelegations > 0
-    || identityEvidenceReconciliation.droppedRevocations > 0) {
+    || identityEvidenceReconciliation.droppedRevocations > 0
+    || identityEvidenceReconciliation.droppedReaderKeys > 0) {
     app.log.warn(
       identityEvidenceReconciliation,
       'Pico identity lifecycle evidence failed re-verification on boot and was dropped.',
@@ -680,6 +681,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       && store.hasActivePicoIdentityDelegation({
         picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
         deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: principal.deviceKeyAgreementKeyFingerprintHex,
         delegationId: principal.delegationId,
         sodium,
       });
@@ -1270,10 +1272,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       delegation: verified.delegation,
       revocations: verified.revocations,
     });
+    const registered = recorded.ok
+      ? store.registerPicoIdentityReaderKey({
+        sodium,
+        picoIdentityFingerprintHex: verified.principal.picoIdentityFingerprintHex,
+        deviceSigningKeyFingerprintHex: verified.principal.deviceSigningKeyFingerprintHex,
+        delegationId: verified.principal.delegationId,
+        deviceKeyAgreementKeyRecord: parsed.proof.deviceKeyAgreementKeyRecord,
+      })
+      : recorded;
     if (!recorded.ok
+      || !registered.ok
       || !store.hasActivePicoIdentityDelegation({
         picoIdentityFingerprintHex: verified.principal.picoIdentityFingerprintHex,
         deviceSigningKeyFingerprintHex: verified.principal.deviceSigningKeyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: verified.principal.deviceKeyAgreementKeyFingerprintHex,
         delegationId: verified.principal.delegationId,
         sodium,
       })) {
@@ -1288,6 +1301,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         kind: 'pico_identity',
         picoIdentityFingerprintHex: verified.principal.picoIdentityFingerprintHex,
         deviceSigningKeyFingerprintHex: verified.principal.deviceSigningKeyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: verified.principal.deviceKeyAgreementKeyFingerprintHex,
         delegationId: verified.principal.delegationId,
       },
     });
@@ -2124,6 +2138,7 @@ function parseIdentitySessionRequest(
       'challengeId',
       'identityKeyRecord',
       'deviceSigningKeyRecord',
+      'deviceKeyAgreementKeyRecord',
       'delegation',
       'revocations',
       'possessionSignatureHex',
@@ -2131,6 +2146,7 @@ function parseIdentitySessionRequest(
     || !isNonEmptyString(source.challengeId, 256)
     || !isRecord(source.identityKeyRecord)
     || !isRecord(source.deviceSigningKeyRecord)
+    || !isRecord(source.deviceKeyAgreementKeyRecord)
     || !isRecord(source.delegation)
     || !Array.isArray(source.revocations)
     || source.revocations.length > 128
@@ -2143,6 +2159,7 @@ function parseIdentitySessionRequest(
     proof: {
       identityKeyRecord: parsePicoIdentityKeyRecord(source.identityKeyRecord),
       deviceSigningKeyRecord: parsePicoIdentityKeyRecord(source.deviceSigningKeyRecord),
+      deviceKeyAgreementKeyRecord: parsePicoIdentityKeyRecord(source.deviceKeyAgreementKeyRecord),
       delegation: parseSignedPicoIdentityDelegation(source.delegation),
       revocations: source.revocations.map(parseSignedPicoIdentityRevocation),
       possessionSignatureHex: stringField(source, 'possessionSignatureHex'),

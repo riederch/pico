@@ -30,6 +30,7 @@ export interface IdentitySessionChallenge {
 export interface IdentitySessionProof {
   identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   deviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  deviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
   delegation: PicoIdentitySignedDelegation;
   revocations: PicoIdentitySignedRevocation[];
   possessionSignatureHex: string;
@@ -38,6 +39,7 @@ export interface IdentitySessionProof {
 export type IdentitySessionProofFailure =
   | 'invalid_identity_key'
   | 'invalid_device_signing_key'
+  | 'invalid_device_key_agreement_key'
   | 'delegation_subject_mismatch'
   | 'inactive_surface_session_delegation'
   | 'invalid_identity_lifecycle_evidence'
@@ -135,6 +137,7 @@ export function verifyIdentitySessionProof(
   const delegation: PicoIdentityDelegationSignatureInput = proof.delegation.record;
   const identityFingerprint = delegation.issuerIdentityKeyFingerprintHex;
   const deviceSigningFingerprint = delegation.subjectSigningKeyFingerprintHex;
+  const deviceKeyAgreementFingerprint = delegation.subjectKeyAgreementKeyFingerprintHex;
 
   try {
     if (proof.identityKeyRecord.suite !== picoIdentitySuite
@@ -155,8 +158,18 @@ export function verifyIdentitySessionProof(
       return { ok: false, reason: 'invalid_device_signing_key' };
     }
 
+    if (proof.deviceKeyAgreementKeyRecord.suite !== picoIdentitySuite
+      || proof.deviceKeyAgreementKeyRecord.keyRole !== 'device_key_agreement'
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: proof.deviceKeyAgreementKeyRecord,
+        expectedFingerprintHex: deviceKeyAgreementFingerprint,
+      })) {
+      return { ok: false, reason: 'invalid_device_key_agreement_key' };
+    }
+
     if (delegation.issuerIdentityKeyFingerprintHex !== identityFingerprint
-      || delegation.subjectSigningKeyFingerprintHex !== deviceSigningFingerprint) {
+      || delegation.subjectSigningKeyFingerprintHex !== deviceSigningFingerprint
+      || delegation.subjectKeyAgreementKeyFingerprintHex !== deviceKeyAgreementFingerprint) {
       return { ok: false, reason: 'delegation_subject_mismatch' };
     }
 
@@ -205,6 +218,7 @@ export function verifyIdentitySessionProof(
       kind: 'pico_identity',
       picoIdentityFingerprintHex: identityFingerprint,
       deviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+      deviceKeyAgreementKeyFingerprintHex: deviceKeyAgreementFingerprint,
       delegationId: delegation.delegationId,
     },
     delegation: proof.delegation,

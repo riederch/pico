@@ -94,6 +94,8 @@ The server verifies:
 Successful sessions remain random opaque bearer values held only in memory.
 Their server-side record carries a typed identity principal. It is not a signed
 or self-contained token, and restart ends it exactly like an operator session.
+ADR 0083 tightens this request with the actual delegated
+`device_key_agreement` public record and stores its verified binding.
 
 Every use of an identity session re-evaluates current membership and the stored
 delegation/revocation set. Expiry, eviction, revocation, missing evidence or

@@ -19,6 +19,7 @@ import {
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
+  picoIdentitySuite,
   payloadPostures,
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingRecordSchema,
@@ -44,6 +45,7 @@ import {
 } from './home-membership.js';
 import {
   createVerifiedPicoIdentityLifecycleIndex,
+  verifyPicoIdentityKeyRecordFingerprint,
   type IdentityVerificationSodium,
   type PicoIdentitySignedDelegation,
   type PicoIdentitySignedRevocation,
@@ -141,6 +143,29 @@ export type PicoHomeMembershipRecordResult =
 export type PicoIdentityLifecycleEvidenceRecordResult =
   | { ok: true }
   | { ok: false; reason: 'conflicting_record' | 'invalid_identity_lifecycle_evidence' };
+
+export type PicoIdentityReaderKeyRegistrationResult =
+  | { ok: true; inserted: boolean }
+  | {
+    ok: false;
+    reason:
+      | 'identity_is_not_active_member'
+      | 'invalid_reader_key'
+      | 'inactive_reader_delegation'
+      | 'conflicting_record';
+  };
+
+export interface PicoIdentityReaderKeyCandidate {
+  homeId: string;
+  picoIdentityFingerprintHex: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  deviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  delegationId: string;
+  delegationLifecycleOrder: string;
+  locallyObservedThroughLifecycleOrder: string;
+  validUntil: string;
+}
 
 export interface PicoHomeDomainReadGrantView {
   grantId: string;
@@ -530,6 +555,9 @@ export class EventStore {
 
       if (tableExists(this.db, 'pico_identity_revocation')) {
         this.db.prepare('DELETE FROM pico_identity_revocation').run();
+      }
+      if (tableExists(this.db, 'pico_identity_reader_key')) {
+        this.db.prepare('DELETE FROM pico_identity_reader_key').run();
       }
       if (tableExists(this.db, 'pico_identity_delegation')) {
         this.db.prepare('DELETE FROM pico_identity_delegation').run();
@@ -1114,46 +1142,153 @@ export class EventStore {
     return { ok: true };
   }
 
+  /**
+   * Registers the public X25519 reader key that the signed device delegation
+   * names. Registration is a local, durable projection; it does not assert
+   * registry freshness and cannot by itself authorize envelope issuance.
+   */
+  public registerPicoIdentityReaderKey(params: {
+    picoIdentityFingerprintHex: string;
+    deviceSigningKeyFingerprintHex: string;
+    delegationId: string;
+    deviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    sodium: IdentityVerificationSodium;
+    at?: string;
+    registeredAt?: string;
+  }): PicoIdentityReaderKeyRegistrationResult {
+    this.ensureOpen();
+    const homeId = this.picoHomeClaimState().homeId ?? undefined;
+    const at = params.at ?? new Date().toISOString();
+    if (homeId === undefined
+      || !this.hasActivePicoHomeMembership(params.picoIdentityFingerprintHex, homeId, at)) {
+      return { ok: false, reason: 'identity_is_not_active_member' };
+    }
+
+    const lifecycle = this.picoIdentityLifecycleIndex(
+      params.sodium,
+      params.picoIdentityFingerprintHex,
+    );
+    if (lifecycle === undefined) {
+      return { ok: false, reason: 'inactive_reader_delegation' };
+    }
+
+    const active = lifecycle.lookupDelegation(params.delegationId, {
+      at,
+      requiredScopes: ['surface_session'],
+    });
+    if (active.status !== 'active'
+      || active.delegation === undefined
+      || active.delegation.issuerIdentityKeyFingerprintHex !== params.picoIdentityFingerprintHex
+      || active.delegation.subjectSigningKeyFingerprintHex !== params.deviceSigningKeyFingerprintHex) {
+      return { ok: false, reason: 'inactive_reader_delegation' };
+    }
+
+    const keyFingerprint = active.delegation.subjectKeyAgreementKeyFingerprintHex;
+    try {
+      if (params.deviceKeyAgreementKeyRecord.suite !== picoIdentitySuite
+        || params.deviceKeyAgreementKeyRecord.keyRole !== 'device_key_agreement'
+        || !verifyPicoIdentityKeyRecordFingerprint(params.sodium, {
+          keyRecord: params.deviceKeyAgreementKeyRecord,
+          expectedFingerprintHex: keyFingerprint,
+        })) {
+        return { ok: false, reason: 'invalid_reader_key' };
+      }
+    } catch {
+      return { ok: false, reason: 'invalid_reader_key' };
+    }
+
+    const keyJson = serializePayload(params.deviceKeyAgreementKeyRecord);
+    const existing = this.db
+      .prepare(`
+        SELECT home_id AS homeId,
+               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               device_signing_key_fingerprint_hex AS deviceSigningKeyFingerprintHex,
+               device_key_agreement_key_fingerprint_hex AS deviceKeyAgreementKeyFingerprintHex,
+               device_key_agreement_key_record_json AS keyJson
+        FROM pico_identity_reader_key
+        WHERE delegation_id = ?
+      `)
+      .get(params.delegationId) as PicoIdentityReaderKeyRow | undefined;
+    if (existing !== undefined
+      && (existing.homeId !== homeId
+        || existing.picoIdentityFingerprintHex !== params.picoIdentityFingerprintHex
+        || existing.deviceSigningKeyFingerprintHex !== params.deviceSigningKeyFingerprintHex
+        || existing.deviceKeyAgreementKeyFingerprintHex !== keyFingerprint
+        || existing.keyJson !== keyJson)) {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    const inserted = this.db
+      .prepare(`
+        INSERT INTO pico_identity_reader_key (
+          delegation_id,
+          home_id,
+          pico_identity_fingerprint_hex,
+          device_signing_key_fingerprint_hex,
+          device_key_agreement_key_fingerprint_hex,
+          device_key_agreement_key_record_json,
+          registered_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(delegation_id) DO NOTHING
+      `)
+      .run(
+        params.delegationId,
+        homeId,
+        params.picoIdentityFingerprintHex,
+        params.deviceSigningKeyFingerprintHex,
+        keyFingerprint,
+        keyJson,
+        params.registeredAt ?? at,
+      ).changes === 1;
+
+    return { ok: true, inserted };
+  }
+
   public hasActivePicoIdentityDelegation(params: {
     picoIdentityFingerprintHex: string;
     deviceSigningKeyFingerprintHex: string;
+    deviceKeyAgreementKeyFingerprintHex: string;
     delegationId: string;
     sodium: IdentityVerificationSodium;
     at?: string;
   }): boolean {
     this.ensureOpen();
 
-    const row = this.db
+    const readerKey = this.db
       .prepare(`
-        SELECT delegation_json AS recordJson,
-               issuer_identity_key_record_json AS keyJson,
-               signature_hex AS signatureHex
-        FROM pico_identity_delegation
+        SELECT device_key_agreement_key_record_json AS keyJson
+        FROM pico_identity_reader_key
         WHERE delegation_id = ?
-          AND issuer_pico_identity_fingerprint_hex = ?
-          AND subject_signing_key_fingerprint_hex = ?
+          AND pico_identity_fingerprint_hex = ?
+          AND device_signing_key_fingerprint_hex = ?
+          AND device_key_agreement_key_fingerprint_hex = ?
       `)
       .get(
         params.delegationId,
         params.picoIdentityFingerprintHex,
         params.deviceSigningKeyFingerprintHex,
-      ) as SignedEvidenceRow | undefined;
-    if (row === undefined) {
+        params.deviceKeyAgreementKeyFingerprintHex,
+      ) as { keyJson: string } | undefined;
+    if (readerKey === undefined) {
       return false;
     }
 
     try {
-      const identityKeyRecord = JSON.parse(row.keyJson) as PicoIdentityKeyRecordSignatureInput;
-      const signedDelegation: PicoIdentitySignedDelegation = {
-        record: JSON.parse(row.recordJson) as PicoIdentitySignedDelegation['record'],
-        signatureHex: row.signatureHex,
-      };
-      const signedRevocations = this.picoIdentitySignedRevocations(params.picoIdentityFingerprintHex);
-      const index = createVerifiedPicoIdentityLifecycleIndex(params.sodium, {
-        issuerIdentityKeyRecord: identityKeyRecord,
-        signedDelegations: [signedDelegation],
-        signedRevocations,
-      });
+      const keyRecord = JSON.parse(readerKey.keyJson) as PicoIdentityKeyRecordSignatureInput;
+      if (keyRecord.keyRole !== 'device_key_agreement'
+        || !verifyPicoIdentityKeyRecordFingerprint(params.sodium, {
+          keyRecord,
+          expectedFingerprintHex: params.deviceKeyAgreementKeyFingerprintHex,
+        })) {
+        return false;
+      }
+      const index = this.picoIdentityLifecycleIndex(
+        params.sodium,
+        params.picoIdentityFingerprintHex,
+      );
+      if (index === undefined) {
+        return false;
+      }
 
       return index.lookupDelegation(params.delegationId, {
         at: params.at ?? new Date().toISOString(),
@@ -1164,9 +1299,103 @@ export class EventStore {
     }
   }
 
+  /**
+   * Resolves one exact reader key for the future envelope issuer. This only
+   * proves locally stored membership/lifecycle/key evidence. The caller must
+   * still apply the ADR 0083 external freshness contract.
+   */
+  public picoIdentityReaderKeyCandidate(params: {
+    homeId: string;
+    picoIdentityFingerprintHex: string;
+    delegationId: string;
+    deviceKeyAgreementKeyFingerprintHex: string;
+    sodium: IdentityVerificationSodium;
+    at?: string;
+  }): PicoIdentityReaderKeyCandidate | undefined {
+    this.ensureOpen();
+    const at = params.at ?? new Date().toISOString();
+    if (this.picoHomeClaimState().homeId !== params.homeId
+      || !this.hasActivePicoHomeMembership(
+        params.picoIdentityFingerprintHex,
+        params.homeId,
+        at,
+      )) {
+      return undefined;
+    }
+
+    const row = this.db
+      .prepare(`
+        SELECT delegation_id AS delegationId,
+               home_id AS homeId,
+               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               device_signing_key_fingerprint_hex AS deviceSigningKeyFingerprintHex,
+               device_key_agreement_key_fingerprint_hex AS deviceKeyAgreementKeyFingerprintHex,
+               device_key_agreement_key_record_json AS keyJson
+        FROM pico_identity_reader_key
+        WHERE delegation_id = ?
+          AND home_id = ?
+          AND pico_identity_fingerprint_hex = ?
+          AND device_key_agreement_key_fingerprint_hex = ?
+      `)
+      .get(
+        params.delegationId,
+        params.homeId,
+        params.picoIdentityFingerprintHex,
+        params.deviceKeyAgreementKeyFingerprintHex,
+      ) as PicoIdentityReaderKeyRow | undefined;
+    if (row === undefined) {
+      return undefined;
+    }
+
+    try {
+      const keyRecord = JSON.parse(row.keyJson) as PicoIdentityKeyRecordSignatureInput;
+      if (keyRecord.suite !== picoIdentitySuite
+        || keyRecord.keyRole !== 'device_key_agreement'
+        || !verifyPicoIdentityKeyRecordFingerprint(params.sodium, {
+          keyRecord,
+          expectedFingerprintHex: row.deviceKeyAgreementKeyFingerprintHex,
+        })) {
+        return undefined;
+      }
+
+      const lifecycle = this.picoIdentityLifecycleIndex(
+        params.sodium,
+        params.picoIdentityFingerprintHex,
+      );
+      if (lifecycle === undefined) {
+        return undefined;
+      }
+      const active = lifecycle.lookupDelegation(params.delegationId, {
+        at,
+        requiredScopes: ['decrypt_domain', 'receive_key_envelope'],
+      });
+      if (active.status !== 'active'
+        || active.delegation === undefined
+        || active.delegation.subjectSigningKeyFingerprintHex !== row.deviceSigningKeyFingerprintHex
+        || active.delegation.subjectKeyAgreementKeyFingerprintHex !== row.deviceKeyAgreementKeyFingerprintHex) {
+        return undefined;
+      }
+
+      return {
+        homeId: row.homeId,
+        picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+        deviceSigningKeyFingerprintHex: row.deviceSigningKeyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: row.deviceKeyAgreementKeyFingerprintHex,
+        deviceKeyAgreementKeyRecord: keyRecord,
+        delegationId: row.delegationId,
+        delegationLifecycleOrder: active.delegation.lifecycleOrder,
+        locallyObservedThroughLifecycleOrder:
+          active.freshestLifecycleOrder ?? active.delegation.lifecycleOrder,
+        validUntil: active.delegation.validUntil,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
   public reconcilePicoIdentityLifecycleEvidence(
     sodium: IdentityVerificationSodium,
-  ): { droppedDelegations: number; droppedRevocations: number } {
+  ): { droppedDelegations: number; droppedRevocations: number; droppedReaderKeys: number } {
     this.ensureOpen();
     const issuers = this.db
       .prepare(`
@@ -1178,6 +1407,7 @@ export class EventStore {
       .map((row) => (row as { issuer: string }).issuer);
     let droppedDelegations = 0;
     let droppedRevocations = 0;
+    let droppedReaderKeys = 0;
 
     const reconcile = this.db.transaction(() => {
       for (const issuer of issuers) {
@@ -1207,6 +1437,9 @@ export class EventStore {
             signedRevocations: this.picoIdentitySignedRevocations(issuer),
           });
         } catch {
+          droppedReaderKeys += this.db
+            .prepare('DELETE FROM pico_identity_reader_key WHERE pico_identity_fingerprint_hex = ?')
+            .run(issuer).changes;
           droppedRevocations += this.db
             .prepare('DELETE FROM pico_identity_revocation WHERE issuer_pico_identity_fingerprint_hex = ?')
             .run(issuer).changes;
@@ -1226,10 +1459,39 @@ export class EventStore {
           )
         `)
         .run().changes;
+
+      droppedReaderKeys += this.db
+        .prepare(`
+          DELETE FROM pico_identity_reader_key
+          WHERE delegation_id NOT IN (
+            SELECT delegation_id FROM pico_identity_delegation
+          )
+        `)
+        .run().changes;
+
+      const readerKeys = this.db
+        .prepare(`
+          SELECT delegation_id AS delegationId,
+                 home_id AS homeId,
+                 pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+                 device_signing_key_fingerprint_hex AS deviceSigningKeyFingerprintHex,
+                 device_key_agreement_key_fingerprint_hex AS deviceKeyAgreementKeyFingerprintHex,
+                 device_key_agreement_key_record_json AS keyJson
+          FROM pico_identity_reader_key
+          ORDER BY delegation_id
+        `)
+        .all() as PicoIdentityReaderKeyRow[];
+      for (const readerKey of readerKeys) {
+        if (!this.isStructurallyValidPicoIdentityReaderKey(readerKey, sodium)) {
+          droppedReaderKeys += this.db
+            .prepare('DELETE FROM pico_identity_reader_key WHERE delegation_id = ?')
+            .run(readerKey.delegationId).changes;
+        }
+      }
     });
     reconcile();
 
-    return { droppedDelegations, droppedRevocations };
+    return { droppedDelegations, droppedRevocations, droppedReaderKeys };
   }
 
   public recordPicoHomeDomainReadGrant(params: {
@@ -1524,6 +1786,80 @@ export class EventStore {
           signatureHex: signed.signatureHex,
         };
       });
+  }
+
+  private picoIdentityLifecycleIndex(
+    sodium: IdentityVerificationSodium,
+    issuerPicoIdentityFingerprintHex: string,
+  ) {
+    const rows = this.db
+      .prepare(`
+        SELECT delegation_json AS recordJson,
+               issuer_identity_key_record_json AS keyJson,
+               signature_hex AS signatureHex
+        FROM pico_identity_delegation
+        WHERE issuer_pico_identity_fingerprint_hex = ?
+        ORDER BY lifecycle_order ASC, delegation_id ASC
+      `)
+      .all(issuerPicoIdentityFingerprintHex) as SignedEvidenceRow[];
+    if (rows.length === 0) {
+      return undefined;
+    }
+
+    try {
+      const issuerIdentityKeyRecord = JSON.parse(rows[0]!.keyJson) as PicoIdentityKeyRecordSignatureInput;
+      return createVerifiedPicoIdentityLifecycleIndex(sodium, {
+        issuerIdentityKeyRecord,
+        signedDelegations: rows.map((row) => ({
+          record: JSON.parse(row.recordJson) as PicoIdentitySignedDelegation['record'],
+          signatureHex: row.signatureHex,
+        })),
+        signedRevocations: this.picoIdentitySignedRevocations(issuerPicoIdentityFingerprintHex),
+      });
+    } catch {
+      return undefined;
+    }
+  }
+
+  private isStructurallyValidPicoIdentityReaderKey(
+    readerKey: PicoIdentityReaderKeyRow,
+    sodium: IdentityVerificationSodium,
+  ): boolean {
+    try {
+      if (this.picoHomeClaimState().homeId !== readerKey.homeId
+        || !this.hasActivePicoHomeMembership(
+          readerKey.picoIdentityFingerprintHex,
+          readerKey.homeId,
+        )) {
+        return false;
+      }
+
+      const keyRecord = JSON.parse(readerKey.keyJson) as PicoIdentityKeyRecordSignatureInput;
+      if (keyRecord.suite !== picoIdentitySuite
+        || keyRecord.keyRole !== 'device_key_agreement'
+        || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+          keyRecord,
+          expectedFingerprintHex: readerKey.deviceKeyAgreementKeyFingerprintHex,
+        })) {
+        return false;
+      }
+
+      const lifecycle = this.picoIdentityLifecycleIndex(
+        sodium,
+        readerKey.picoIdentityFingerprintHex,
+      );
+      const delegation = lifecycle
+        ?.snapshot()
+        .delegations
+        .find((entry) => entry.delegationId === readerKey.delegationId);
+      return delegation !== undefined
+        && delegation.issuerIdentityKeyFingerprintHex === readerKey.picoIdentityFingerprintHex
+        && delegation.subjectSigningKeyFingerprintHex === readerKey.deviceSigningKeyFingerprintHex
+        && delegation.subjectKeyAgreementKeyFingerprintHex
+          === readerKey.deviceKeyAgreementKeyFingerprintHex;
+    } catch {
+      return false;
+    }
   }
 
   private isExistingHostCustodyDomain(privacyDomain: string): boolean {
@@ -2003,6 +2339,15 @@ interface SignedEvidenceRow {
   recordJson: string;
   keyJson: string;
   signatureHex: string;
+}
+
+interface PicoIdentityReaderKeyRow {
+  delegationId: string;
+  homeId: string;
+  picoIdentityFingerprintHex: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  keyJson: string;
 }
 
 interface DomainReadGrantRecordRow {

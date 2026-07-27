@@ -282,6 +282,10 @@ describe('restoreSqliteBackup', () => {
         id: '0017_identity_sessions_and_domain_read_grants',
         appliedAt: expect.any(String),
       },
+      {
+        id: '0018_pico_identity_reader_keys',
+        appliedAt: expect.any(String),
+      },
     ]);
 
     restored.close();
