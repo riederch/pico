@@ -1,3 +1,18 @@
+import { randomUUID } from 'node:crypto';
+import {
+  closeSync,
+  constants as fsConstants,
+  fstatSync,
+  fsyncSync,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import {
   verifyPicoIdentityDetachedSignature,
   verifyPicoIdentityKeyRecordFingerprint,
@@ -541,6 +556,223 @@ export class PicoReaderCustodySyncProjector {
       ok: true,
       inserted: true,
       value: cloneProjectionView(this.#lastView),
+    };
+  }
+}
+
+export const picoReaderCustodySyncClientStateSchema =
+  'pico.sync.reader-custody-client-state.v1' as const;
+export const MAX_PICO_READER_CUSTODY_SYNC_CLIENT_STATE_BYTES = 64 * 1024;
+
+export interface PicoReaderCustodySyncClientState {
+  schema: typeof picoReaderCustodySyncClientStateSchema;
+  schemaVersion: 1;
+  revision: number;
+  pins: PicoReaderCustodySyncPins;
+  floor: PicoReaderCustodySyncFloor;
+  transportCursor: string | null;
+}
+
+export interface PicoReaderCustodySyncClientStateStore {
+  load(): PicoReaderCustodySyncClientState | undefined;
+  commit(
+    state: PicoReaderCustodySyncClientState,
+    expectedRevision: number | undefined,
+  ): void;
+}
+
+export class PicoReaderCustodySyncFileStateStore
+implements PicoReaderCustodySyncClientStateStore {
+  public readonly path: string;
+
+  public constructor(path: string) {
+    if (typeof path !== 'string' || path.length < 1) {
+      throw new Error('invalid_reader_sync_state_path');
+    }
+    this.path = resolve(path);
+  }
+
+  public load(): PicoReaderCustodySyncClientState | undefined {
+    let fileDescriptor: number;
+    try {
+      fileDescriptor = openSync(
+        this.path,
+        fsConstants.O_RDONLY | noFollowFlag(),
+      );
+    } catch (error) {
+      if (isFileSystemError(error, 'ENOENT')) {
+        return undefined;
+      }
+      throw new Error('reader_sync_state_unreadable', { cause: error });
+    }
+
+    try {
+      const stats = fstatSync(fileDescriptor);
+      if (!stats.isFile()
+        || (stats.mode & 0o777) !== 0o600
+        || stats.size < 1
+        || stats.size > MAX_PICO_READER_CUSTODY_SYNC_CLIENT_STATE_BYTES) {
+        throw new Error('invalid_reader_sync_state_file');
+      }
+      return parseReaderSyncClientState(
+        readFileSync(fileDescriptor, 'utf8'),
+      );
+    } finally {
+      closeSync(fileDescriptor);
+    }
+  }
+
+  public commit(
+    state: PicoReaderCustodySyncClientState,
+    expectedRevision: number | undefined,
+  ): void {
+    const nextState = cloneReaderSyncClientState(state);
+    assertReaderSyncClientState(nextState);
+    const currentState = this.load();
+    assertReaderSyncStateTransition(
+      currentState,
+      nextState,
+      expectedRevision,
+    );
+
+    const serialized = `${JSON.stringify(nextState)}\n`;
+    if (Buffer.byteLength(serialized, 'utf8')
+      > MAX_PICO_READER_CUSTODY_SYNC_CLIENT_STATE_BYTES) {
+      throw new Error('reader_sync_state_too_large');
+    }
+
+    const parentPath = dirname(this.path);
+    mkdirSync(parentPath, { recursive: true, mode: 0o700 });
+    assertPrivateReaderSyncStateDirectory(parentPath);
+
+    const temporaryPath =
+      `${this.path}.${process.pid}.${randomUUID()}.tmp`;
+    let temporaryFileDescriptor: number | undefined;
+    try {
+      temporaryFileDescriptor = openSync(
+        temporaryPath,
+        fsConstants.O_CREAT
+          | fsConstants.O_EXCL
+          | fsConstants.O_WRONLY
+          | noFollowFlag(),
+        0o600,
+      );
+      writeFileSync(temporaryFileDescriptor, serialized, {
+        encoding: 'utf8',
+      });
+      fsyncSync(temporaryFileDescriptor);
+      closeSync(temporaryFileDescriptor);
+      temporaryFileDescriptor = undefined;
+
+      renameSync(temporaryPath, this.path);
+      fsyncDirectory(parentPath);
+    } catch (error) {
+      if (temporaryFileDescriptor !== undefined) {
+        closeSync(temporaryFileDescriptor);
+      }
+      try {
+        unlinkSync(temporaryPath);
+      } catch (cleanupError) {
+        if (!isFileSystemError(cleanupError, 'ENOENT')) {
+          throw new Error('reader_sync_state_cleanup_failed', {
+            cause: cleanupError,
+          });
+        }
+      }
+      throw error;
+    }
+  }
+}
+
+export interface PicoReaderCustodySyncPayloadOpener {
+  (input: {
+    batchRecord: PicoReaderCustodySyncBatchRecord;
+    evaluatedAt: string;
+  }): PicoReaderCustodySyncPayload;
+}
+
+export type PicoReaderCustodySyncClientApplyResult =
+  | {
+    ok: true;
+    inserted: boolean;
+    payload: PicoReaderCustodySyncPayload;
+    value: PicoReaderCustodySyncProjectionView;
+    state: PicoReaderCustodySyncClientState;
+  }
+  | { ok: false; reason: PicoReaderCustodySyncProjectionFailure };
+
+export class PicoReaderCustodySyncClient {
+  public constructor(
+    private readonly sodium: IdentityVerificationSodium,
+    private readonly pins: PicoReaderCustodySyncPins,
+    private readonly stateStore: PicoReaderCustodySyncClientStateStore,
+    private readonly openPayload: PicoReaderCustodySyncPayloadOpener,
+  ) {
+    assertSyncPins(pins);
+  }
+
+  public apply(input: {
+    batchRecord: PicoReaderCustodySyncBatchRecord;
+    evaluatedAt?: string;
+    transportCursor?: string;
+  }): PicoReaderCustodySyncClientApplyResult {
+    const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
+    assertCanonicalInstant(evaluatedAt);
+    if (input.transportCursor !== undefined) {
+      assertTransportCursor(input.transportCursor);
+    }
+
+    const currentState = this.stateStore.load();
+    if (currentState !== undefined) {
+      assertReaderSyncClientState(currentState);
+      if (!readerSyncPinsEqual(currentState.pins, this.pins)) {
+        throw new Error('reader_sync_state_scope_mismatch');
+      }
+    }
+
+    const payload = this.openPayload({
+      batchRecord: input.batchRecord,
+      evaluatedAt,
+    });
+    const projector = new PicoReaderCustodySyncProjector(
+      this.sodium,
+      this.pins,
+      currentState?.floor,
+    );
+    const projected = projector.accept(payload, evaluatedAt);
+    if (!projected.ok) {
+      return projected;
+    }
+
+    const transportCursor =
+      input.transportCursor ?? currentState?.transportCursor ?? null;
+    const nextState: PicoReaderCustodySyncClientState = {
+      schema: picoReaderCustodySyncClientStateSchema,
+      schemaVersion: 1,
+      revision: (currentState?.revision ?? 0) + 1,
+      pins: { ...this.pins },
+      floor: { ...projected.value.floor },
+      transportCursor,
+    };
+    if (currentState !== undefined
+      && readerSyncFloorsEqual(currentState.floor, nextState.floor)
+      && currentState.transportCursor === nextState.transportCursor) {
+      return {
+        ok: true,
+        inserted: false,
+        payload,
+        value: cloneProjectionView(projected.value),
+        state: cloneReaderSyncClientState(currentState),
+      };
+    }
+
+    this.stateStore.commit(nextState, currentState?.revision);
+    return {
+      ok: true,
+      inserted: projected.inserted,
+      payload,
+      value: cloneProjectionView(projected.value),
+      state: cloneReaderSyncClientState(nextState),
     };
   }
 }
@@ -1521,6 +1753,201 @@ function assertSyncFloor(floor: PicoReaderCustodySyncFloor): void {
   assertDigest(floor.manifestDigestHex);
   assertLifecycleOrder(floor.observedThroughLifecycleOrder);
   assertCanonicalInstant(floor.createdAt);
+}
+
+function parseReaderSyncClientState(
+  serialized: string,
+): PicoReaderCustodySyncClientState {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized) as unknown;
+  } catch (error) {
+    throw new Error('invalid_reader_sync_state', { cause: error });
+  }
+  assertReaderSyncClientState(parsed);
+  return cloneReaderSyncClientState(parsed);
+}
+
+function assertReaderSyncClientState(
+  state: unknown,
+): asserts state is PicoReaderCustodySyncClientState {
+  if (!isUnknownRecord(state)
+    || !hasExactKeys(state, [
+      'schema',
+      'schemaVersion',
+      'revision',
+      'pins',
+      'floor',
+      'transportCursor',
+    ])
+    || state.schema !== picoReaderCustodySyncClientStateSchema
+    || state.schemaVersion !== 1
+    || !Number.isSafeInteger(state.revision)
+    || (state.revision as number) < 1
+    || !isUnknownRecord(state.pins)
+    || !hasExactKeys(state.pins, [
+      'routeRef',
+      'domainAuthorityId',
+      'homeId',
+      'hostSigningKeyFingerprintHex',
+      'domainId',
+      'ownerIdentityKeyFingerprintHex',
+      'readerGrantId',
+      'readerIdentityKeyFingerprintHex',
+      'readerKeyFingerprintHex',
+    ])
+    || !isUnknownRecord(state.floor)
+    || !hasExactKeys(state.floor, [
+      'routeRef',
+      'syncBatchId',
+      'sequence',
+      'manifestDigestHex',
+      'throughKekVersion',
+      'observedThroughLifecycleOrder',
+      'createdAt',
+    ])
+    || (state.transportCursor !== null
+      && typeof state.transportCursor !== 'string')) {
+    throw new Error('invalid_reader_sync_state');
+  }
+
+  const pins = state.pins as unknown as PicoReaderCustodySyncPins;
+  const floor = state.floor as unknown as PicoReaderCustodySyncFloor;
+  assertSyncPins(pins);
+  assertSyncFloor(floor);
+  if (floor.routeRef !== pins.routeRef) {
+    throw new Error('reader_sync_state_scope_mismatch');
+  }
+  if (typeof state.transportCursor === 'string') {
+    assertTransportCursor(state.transportCursor);
+  }
+}
+
+function assertReaderSyncStateTransition(
+  currentState: PicoReaderCustodySyncClientState | undefined,
+  nextState: PicoReaderCustodySyncClientState,
+  expectedRevision: number | undefined,
+): void {
+  if (currentState?.revision !== expectedRevision) {
+    throw new Error('reader_sync_state_stale_revision');
+  }
+  if (nextState.revision !== (currentState?.revision ?? 0) + 1) {
+    throw new Error('invalid_reader_sync_state_revision');
+  }
+  if (currentState === undefined) {
+    if (nextState.floor.sequence !== 1) {
+      throw new Error('invalid_reader_sync_state_initial_floor');
+    }
+    return;
+  }
+  if (!readerSyncPinsEqual(currentState.pins, nextState.pins)) {
+    throw new Error('reader_sync_state_scope_mismatch');
+  }
+
+  const currentFloor = currentState.floor;
+  const nextFloor = nextState.floor;
+  if (nextFloor.sequence === currentFloor.sequence) {
+    if (!readerSyncFloorsEqual(currentFloor, nextFloor)) {
+      throw new Error('reader_sync_state_floor_fork');
+    }
+    return;
+  }
+  if (nextFloor.sequence !== currentFloor.sequence + 1) {
+    throw new Error('reader_sync_state_floor_not_contiguous');
+  }
+  if (nextFloor.routeRef !== currentFloor.routeRef
+    || nextFloor.throughKekVersion < currentFloor.throughKekVersion
+    || nextFloor.observedThroughLifecycleOrder
+      < currentFloor.observedThroughLifecycleOrder
+    || nextFloor.createdAt < currentFloor.createdAt) {
+    throw new Error('reader_sync_state_floor_rollback');
+  }
+}
+
+function cloneReaderSyncClientState(
+  state: PicoReaderCustodySyncClientState,
+): PicoReaderCustodySyncClientState {
+  return {
+    schema: picoReaderCustodySyncClientStateSchema,
+    schemaVersion: 1,
+    revision: state.revision,
+    pins: { ...state.pins },
+    floor: { ...state.floor },
+    transportCursor: state.transportCursor,
+  };
+}
+
+function readerSyncPinsEqual(
+  left: PicoReaderCustodySyncPins,
+  right: PicoReaderCustodySyncPins,
+): boolean {
+  return left.routeRef === right.routeRef
+    && left.domainAuthorityId === right.domainAuthorityId
+    && left.homeId === right.homeId
+    && left.hostSigningKeyFingerprintHex
+      === right.hostSigningKeyFingerprintHex
+    && left.domainId === right.domainId
+    && left.ownerIdentityKeyFingerprintHex
+      === right.ownerIdentityKeyFingerprintHex
+    && left.readerGrantId === right.readerGrantId
+    && left.readerIdentityKeyFingerprintHex
+      === right.readerIdentityKeyFingerprintHex
+    && left.readerKeyFingerprintHex === right.readerKeyFingerprintHex;
+}
+
+function readerSyncFloorsEqual(
+  left: PicoReaderCustodySyncFloor,
+  right: PicoReaderCustodySyncFloor,
+): boolean {
+  return left.routeRef === right.routeRef
+    && left.syncBatchId === right.syncBatchId
+    && left.sequence === right.sequence
+    && left.manifestDigestHex === right.manifestDigestHex
+    && left.throughKekVersion === right.throughKekVersion
+    && left.observedThroughLifecycleOrder
+      === right.observedThroughLifecycleOrder
+    && left.createdAt === right.createdAt;
+}
+
+function assertTransportCursor(value: string): void {
+  if (!/^[\x21-\x7e]{1,256}$/.test(value)) {
+    throw new Error('invalid_reader_sync_transport_cursor');
+  }
+}
+
+function assertPrivateReaderSyncStateDirectory(path: string): void {
+  const stats = lstatSync(path);
+  if (!stats.isDirectory()
+    || stats.isSymbolicLink()
+    || (stats.mode & 0o777) !== 0o700) {
+    throw new Error('reader_sync_state_directory_permissions');
+  }
+}
+
+function fsyncDirectory(path: string): void {
+  const fileDescriptor = openSync(
+    path,
+    fsConstants.O_RDONLY | directoryFlag(),
+  );
+  try {
+    fsyncSync(fileDescriptor);
+  } finally {
+    closeSync(fileDescriptor);
+  }
+}
+
+function noFollowFlag(): number {
+  return fsConstants.O_NOFOLLOW ?? 0;
+}
+
+function directoryFlag(): number {
+  return fsConstants.O_DIRECTORY ?? 0;
+}
+
+function isFileSystemError(error: unknown, code: string): boolean {
+  return error instanceof Error
+    && 'code' in error
+    && error.code === code;
 }
 
 function assertRouteRef(value: string): void {

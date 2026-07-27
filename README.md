@@ -231,8 +231,10 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0084-controller-signed-host-custody-share-envelope-issuance.md`](docs/architecture/0084-controller-signed-host-custody-share-envelope-issuance.md) - two-phase externally signed host-custody KEK envelope issuance, storage and reconciliation
 - [`docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md`](docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md) - identity-root-signed reader-key freshness checkpoints and fail-closed Registry/Sync adapter
 - [`docs/architecture/0086-reader-custody-authority-and-opaque-storage.md`](docs/architecture/0086-reader-custody-authority-and-opaque-storage.md) - owner-rooted reader-custody domain/writer authority, Vault crypto and opaque Core storage
+- [`docs/architecture/0087-foundation-operator-home-host-authority-consolidation.md`](docs/architecture/0087-foundation-operator-home-host-authority-consolidation.md) - founding-exact Foundation Operator binding and separation of local infrastructure from signed Home authority
 - [`docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md`](docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md) - exact additional readers, explicit version history and revocation-coupled KEK rotation
 - [`docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md`](docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md) - identity-root checkpoint adapters plus reader-addressed sealed evidence sync with rollback-safe projection
+- [`docs/architecture/0090-durable-reader-sync-floor-and-crash-safe-apply.md`](docs/architecture/0090-durable-reader-sync-floor-and-crash-safe-apply.md) - private durable Reader floor plus verify-persist-expose ordering across restarts and crashes
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

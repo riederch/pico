@@ -1,3 +1,15 @@
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { picoIdentitySuite } from '@pico/protocol';
 import {
   createPicoReaderCustodyDomain,
@@ -12,19 +24,39 @@ import {
   rotatePicoReaderCustodyDomain,
 } from '@pico/vault';
 import sodium from 'libsodium-wrappers-sumo';
-import { beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+} from 'vitest';
 import {
   InMemoryPicoSyncOpaqueTransport,
   LamportClock,
   PicoReaderCustodySyncBatchPublisher,
   PicoReaderCustodySyncBatchSource,
+  PicoReaderCustodySyncClient,
+  PicoReaderCustodySyncFileStateStore,
   PicoReaderCustodySyncProjector,
   mergeVersionVector,
+  picoReaderCustodySyncClientStateSchema,
   updateVersionVector,
+  type PicoReaderCustodySyncClientState,
+  type PicoReaderCustodySyncClientStateStore,
+  type PicoReaderCustodySyncPins,
 } from './index.js';
+
+const temporaryDirectories: string[] = [];
 
 beforeAll(async () => {
   await sodium.ready;
+});
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 describe('LamportClock', () => {
@@ -101,6 +133,103 @@ describe('VersionVector helpers', () => {
     expect(() => mergeVersionVector({}, { phone: -1 })).toThrow();
     expect(() => mergeVersionVector({}, { phone: 1.5 })).toThrow();
     expect(() => updateVersionVector({ phone: Number.MAX_SAFE_INTEGER + 1 }, 'phone', 1)).toThrow();
+  });
+});
+
+describe('reader-custody sync client state (ADR 0090)', () => {
+  it('persists a private bounded state with atomic revision checks', () => {
+    const statePath = createReaderSyncStatePath();
+    const store = new PicoReaderCustodySyncFileStateStore(statePath);
+    const state1 = readerSyncClientState(1, 1);
+
+    store.commit(state1, undefined);
+
+    expect(store.load()).toEqual(state1);
+    expect(statSync(statePath).mode & 0o777).toBe(0o600);
+    expect(readdirSync(join(statePath, '..'))).toEqual(['state.json']);
+    expect(readFileSync(statePath, 'utf8')).not.toContain('plaintext');
+    expect(() => store.commit({
+      ...state1,
+      revision: 2,
+      transportCursor: 'cursor:0000000000000002',
+    }, undefined)).toThrow('reader_sync_state_stale_revision');
+
+    const state2 = readerSyncClientState(2, 2);
+    store.commit(state2, 1);
+    expect(store.load()).toEqual(state2);
+  });
+
+  it('rejects malformed, oversized, permissive and symlink state files', () => {
+    const statePath = createReaderSyncStatePath();
+    const store = new PicoReaderCustodySyncFileStateStore(statePath);
+
+    writeFileSync(statePath, '{"schema":', { mode: 0o600 });
+    expect(() => store.load()).toThrow('invalid_reader_sync_state');
+
+    writeFileSync(statePath, 'x'.repeat((64 * 1024) + 1));
+    expect(() => store.load()).toThrow('invalid_reader_sync_state_file');
+
+    writeFileSync(statePath, JSON.stringify(readerSyncClientState(1, 1)));
+    chmodSync(statePath, 0o644);
+    expect(() => store.load()).toThrow('invalid_reader_sync_state_file');
+
+    rmSync(statePath);
+    const targetPath = join(statePath, '..', 'target.json');
+    writeFileSync(
+      targetPath,
+      JSON.stringify(readerSyncClientState(1, 1)),
+      { mode: 0o600 },
+    );
+    symlinkSync(targetPath, statePath);
+    expect(() => store.load()).toThrow('reader_sync_state_unreadable');
+  });
+
+  it('allows cursor movement but rejects floor rollback, gaps, forks and scope swaps', () => {
+    const statePath = createReaderSyncStatePath();
+    const store = new PicoReaderCustodySyncFileStateStore(statePath);
+    const state1 = readerSyncClientState(1, 1);
+    const state2 = readerSyncClientState(2, 2);
+    store.commit(state1, undefined);
+    store.commit(state2, 1);
+
+    expect(() => store.commit({
+      ...state2,
+      revision: 3,
+      floor: { ...state2.floor, sequence: 1 },
+    }, 2)).toThrow('reader_sync_state_floor_not_contiguous');
+    expect(() => store.commit({
+      ...state2,
+      revision: 3,
+      floor: { ...state2.floor, sequence: 4 },
+    }, 2)).toThrow('reader_sync_state_floor_not_contiguous');
+    expect(() => store.commit({
+      ...state2,
+      revision: 3,
+      floor: {
+        ...state2.floor,
+        manifestDigestHex: 'ef'.repeat(32),
+      },
+    }, 2)).toThrow('reader_sync_state_floor_fork');
+    expect(() => store.commit({
+      ...state2,
+      revision: 3,
+      pins: {
+        ...state2.pins,
+        homeId: 'home_reader_sync_swapped',
+      },
+      floor: {
+        ...state2.floor,
+        routeRef: `route_${'B'.repeat(48)}`,
+      },
+    }, 2)).toThrow('reader_sync_state_scope_mismatch');
+
+    const cursorOnly = {
+      ...state2,
+      revision: 3,
+      transportCursor: 'cursor:0000000000000001',
+    };
+    store.commit(cursorOnly, 2);
+    expect(store.load()).toEqual(cursorOnly);
   });
 });
 
@@ -280,6 +409,53 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       readerKeyFingerprintHex:
         readerGrantRecord.grant.readerKeyFingerprintHex,
     };
+    const durableStatePath = createReaderSyncStatePath();
+    const durableStateStore =
+      new PicoReaderCustodySyncFileStateStore(durableStatePath);
+    const createDurableClient = (
+      stateStore: PicoReaderCustodySyncClientStateStore,
+    ) => new PicoReaderCustodySyncClient(
+      sodium,
+      pins,
+      stateStore,
+      ({ batchRecord, evaluatedAt }) =>
+        openPicoReaderCustodySyncBatch(sodium, {
+          readerKeyAgreementSession: readerAgreementSession,
+          batchRecord,
+          evaluatedAt,
+        }),
+    );
+    const durableClient = createDurableClient(durableStateStore);
+    expect(durableClient.apply({
+      batchRecord: batch1.batchRecord,
+      evaluatedAt: '2026-07-27T10:11:00.000Z',
+      transportCursor: 'cursor:0000000000000001',
+    })).toMatchObject({
+      ok: true,
+      inserted: true,
+      state: {
+        revision: 1,
+        floor: { sequence: 1 },
+        transportCursor: 'cursor:0000000000000001',
+      },
+      value: {
+        readerEnvelopeVersions: [1],
+        itemPackageIds: ['reader_sync_package_0001'],
+      },
+    });
+    expect(statSync(durableStatePath).mode & 0o777).toBe(0o600);
+    expect(readFileSync(durableStatePath, 'utf8'))
+      .not.toContain('transport must never receive this plaintext');
+    expect(createDurableClient(durableStateStore).apply({
+      batchRecord: batch1.batchRecord,
+      evaluatedAt: '2026-07-27T10:11:00.000Z',
+      transportCursor: 'cursor:0000000000000001',
+    })).toMatchObject({
+      ok: true,
+      inserted: false,
+      state: { revision: 1, floor: { sequence: 1 } },
+    });
+
     const projector = new PicoReaderCustodySyncProjector(sodium, pins);
     expect(projector.accept(
       payload1,
@@ -321,6 +497,41 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       payload2,
       '2026-07-27T10:21:00.000Z',
     )).toMatchObject({ ok: true, inserted: true });
+
+    const crashBeforeCommitStore: PicoReaderCustodySyncClientStateStore = {
+      load: () => durableStateStore.load(),
+      commit: () => {
+        throw new Error('simulated_crash_before_commit');
+      },
+    };
+    expect(() => createDurableClient(crashBeforeCommitStore).apply({
+      batchRecord: batch2.batchRecord,
+      evaluatedAt: '2026-07-27T10:21:00.000Z',
+      transportCursor: 'cursor:0000000000000002',
+    })).toThrow('simulated_crash_before_commit');
+    expect(durableStateStore.load()?.floor.sequence).toBe(1);
+    expect(createDurableClient(durableStateStore).apply({
+      batchRecord: batch2.batchRecord,
+      evaluatedAt: '2026-07-27T10:21:00.000Z',
+      transportCursor: 'cursor:0000000000000002',
+    })).toMatchObject({
+      ok: true,
+      inserted: true,
+      state: { floor: { sequence: 2 } },
+    });
+
+    const stateBeforeCursorSwap = durableStateStore.load()!;
+    durableStateStore.commit({
+      ...stateBeforeCursorSwap,
+      revision: stateBeforeCursorSwap.revision + 1,
+      transportCursor: 'cursor:0000000000000001',
+    }, stateBeforeCursorSwap.revision);
+    expect(createDurableClient(durableStateStore).apply({
+      batchRecord: batch1.batchRecord,
+      evaluatedAt: '2026-07-27T10:21:00.000Z',
+      transportCursor: 'cursor:0000000000000002',
+    })).toEqual({ ok: false, reason: 'rollback' });
+
     expect(projector.accept(
       payload1,
       '2026-07-27T10:21:00.000Z',
@@ -397,6 +608,33 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
         readerEnvelopeVersions: [1],
       },
     });
+
+    const crashAfterCommitStore: PicoReaderCustodySyncClientStateStore = {
+      load: () => durableStateStore.load(),
+      commit: (state, expectedRevision) => {
+        durableStateStore.commit(state, expectedRevision);
+        throw new Error('simulated_crash_after_commit');
+      },
+    };
+    expect(() => createDurableClient(crashAfterCommitStore).apply({
+      batchRecord: batch3.batchRecord,
+      evaluatedAt: '2026-07-27T10:46:00.000Z',
+      transportCursor: 'cursor:0000000000000003',
+    })).toThrow('simulated_crash_after_commit');
+    expect(durableStateStore.load()).toMatchObject({
+      floor: { sequence: 3 },
+      transportCursor: 'cursor:0000000000000003',
+    });
+    expect(createDurableClient(durableStateStore).apply({
+      batchRecord: batch3.batchRecord,
+      evaluatedAt: '2026-07-27T10:46:00.000Z',
+      transportCursor: 'cursor:0000000000000003',
+    })).toMatchObject({
+      ok: true,
+      inserted: false,
+      state: { floor: { sequence: 3 } },
+    });
+
     const restoredProjector = new PicoReaderCustodySyncProjector(
       sodium,
       pins,
@@ -483,6 +721,24 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       '2026-07-27T10:21:00.000Z',
     )).toEqual({ ok: false, reason: 'fork' });
 
+    const forkStateStore = new PicoReaderCustodySyncFileStateStore(
+      createReaderSyncStatePath(),
+    );
+    const forkDurableClient = createDurableClient(forkStateStore);
+    expect(forkDurableClient.apply({
+      batchRecord: batch1.batchRecord,
+      evaluatedAt: '2026-07-27T10:11:00.000Z',
+    })).toMatchObject({ ok: true, inserted: true });
+    expect(forkDurableClient.apply({
+      batchRecord: batch2.batchRecord,
+      evaluatedAt: '2026-07-27T10:21:00.000Z',
+    })).toMatchObject({ ok: true, inserted: true });
+    expect(createDurableClient(forkStateStore).apply({
+      batchRecord: forkBatch.batchRecord,
+      evaluatedAt: '2026-07-27T10:21:00.000Z',
+    })).toEqual({ ok: false, reason: 'fork' });
+    expect(forkStateStore.load()?.floor.sequence).toBe(2);
+
     const tamperedPayload = structuredClone(payload1);
     tamperedPayload.itemRecords[0]!.item.contentType = 'text/markdown';
     expect(new PicoReaderCustodySyncProjector(sodium, pins).accept(
@@ -498,3 +754,47 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
     )).toEqual({ ok: false, reason: 'wrong_scope' });
   }, 30_000);
 });
+
+function createReaderSyncStatePath(): string {
+  const directory = mkdtempSync(join(tmpdir(), 'pico-reader-sync-state-'));
+  temporaryDirectories.push(directory);
+  return join(directory, 'state.json');
+}
+
+function readerSyncClientPins(): PicoReaderCustodySyncPins {
+  return {
+    routeRef: `route_${'A'.repeat(48)}`,
+    domainAuthorityId: 'reader_sync_domain_authority_0001',
+    homeId: 'home_reader_sync_0001',
+    hostSigningKeyFingerprintHex: '11'.repeat(32),
+    domainId: 'reader_sync_domain_0001',
+    ownerIdentityKeyFingerprintHex: '22'.repeat(32),
+    readerGrantId: 'reader_sync_reader_grant_0001',
+    readerIdentityKeyFingerprintHex: '44'.repeat(32),
+    readerKeyFingerprintHex: '66'.repeat(32),
+  };
+}
+
+function readerSyncClientState(
+  revision: number,
+  sequence: number,
+): PicoReaderCustodySyncClientState {
+  return {
+    schema: picoReaderCustodySyncClientStateSchema,
+    schemaVersion: 1,
+    revision,
+    pins: readerSyncClientPins(),
+    floor: {
+      routeRef: `route_${'A'.repeat(48)}`,
+      syncBatchId: `reader_sync_batch_${String(sequence).padStart(4, '0')}`,
+      sequence,
+      manifestDigestHex: sequence.toString(16).padStart(2, '0').repeat(32),
+      throughKekVersion: sequence,
+      observedThroughLifecycleOrder:
+        `seq:${String(sequence).padStart(16, '0')}`,
+      createdAt:
+        `2026-07-27T10:${String(sequence).padStart(2, '0')}:00.000Z`,
+    },
+    transportCursor: `cursor:${String(sequence).padStart(16, '0')}`,
+  };
+}

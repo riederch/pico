@@ -152,7 +152,8 @@ Negative and residual:
 
 - random routes must be securely provisioned and rotated by a future product
   ceremony;
-- clients must durably retain their last verified manifest floor;
+- clients must use the ADR 0090 durable apply boundary, or an equivalent
+  platform store, before using newly projected envelope/item references;
 - checkpoint contents are authenticated but not encrypted by this generic
   adapter;
 - no network transport, public Relay, automatic scheduler or production
@@ -177,3 +178,4 @@ Negative and residual:
 - [ADR 0083](0083-reader-key-registration-and-freshness-contract.md)
 - [ADR 0085](0085-authenticated-reader-key-freshness-checkpoints.md)
 - [ADR 0088](0088-reader-custody-multi-reader-and-kek-rotation.md)
+- [ADR 0090](0090-durable-reader-sync-floor-and-crash-safe-apply.md)
