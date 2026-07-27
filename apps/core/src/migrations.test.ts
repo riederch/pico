@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { describeMigrationState, listAppliedMigrations, listMigrationAuditRecords, runMigrations } from './migrations.js';
+import {
+  describeMigrationState,
+  listAppliedMigrations,
+  listMigrationAuditRecords,
+  picoSchemaBaselineMigrationId,
+  runMigrations,
+} from './migrations.js';
 
 const tempDirs: string[] = [];
 
@@ -27,83 +33,7 @@ describe('database migrations', () => {
       appliedMigrationIds: [],
       pendingMigrations: [
         {
-          id: '0001_event_store',
-          requiresBackup: false,
-        },
-        {
-          id: '0002_schema_migration_audit',
-          requiresBackup: false,
-        },
-        {
-          id: '0003_schema_migration_audit_errors',
-          requiresBackup: false,
-        },
-        {
-          id: '0004_pico_home_claim_state',
-          requiresBackup: false,
-        },
-        {
-          id: '0005_event_payload_posture',
-          requiresBackup: false,
-        },
-        {
-          id: '0006_memory_item_store',
-          requiresBackup: false,
-        },
-        {
-          id: '0007_memory_item_content_posture',
-          requiresBackup: false,
-        },
-        {
-          id: '0008_memory_key_envelope',
-          requiresBackup: false,
-        },
-        {
-          id: '0009_memory_retention_policy',
-          requiresBackup: false,
-        },
-        {
-          id: '0010_foundation_operator',
-          requiresBackup: false,
-        },
-        {
-          id: '0011_memory_domain_custody',
-          requiresBackup: false,
-        },
-        {
-          id: '0012_pico_home_claim_metadata',
-          requiresBackup: false,
-        },
-        {
-          id: '0013_pico_home_founding_record',
-          requiresBackup: false,
-        },
-        {
-          id: '0014_pico_home_membership',
-          requiresBackup: false,
-        },
-        {
-          id: '0015_pico_home_founding_record_drop_claim_signature',
-          requiresBackup: false,
-        },
-        {
-          id: '0016_pico_home_membership_credentials',
-          requiresBackup: false,
-        },
-        {
-          id: '0017_identity_sessions_and_domain_read_grants',
-          requiresBackup: false,
-        },
-        {
-          id: '0018_pico_identity_reader_keys',
-          requiresBackup: false,
-        },
-        {
-          id: '0019_pico_share_envelopes',
-          requiresBackup: false,
-        },
-        {
-          id: '0020_reader_custody',
+          id: picoSchemaBaselineMigrationId,
           requiresBackup: false,
         },
       ],
@@ -120,7 +50,7 @@ describe('database migrations', () => {
     db.close();
   });
 
-  it('applies the event store migration', () => {
+  it('applies the consolidated initial schema', () => {
     const db = new Database(createDatabasePath());
 
     runMigrations(db);
@@ -144,83 +74,7 @@ describe('database migrations', () => {
     expect(tables).toContain('pico_reader_custody_item');
     expect(listAppliedMigrations(db)).toEqual([
       {
-        id: '0001_event_store',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0002_schema_migration_audit',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0003_schema_migration_audit_errors',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0004_pico_home_claim_state',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0005_event_payload_posture',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0006_memory_item_store',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0007_memory_item_content_posture',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0008_memory_key_envelope',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0009_memory_retention_policy',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0010_foundation_operator',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0011_memory_domain_custody',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0012_pico_home_claim_metadata',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0013_pico_home_founding_record',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0014_pico_home_membership',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0015_pico_home_founding_record_drop_claim_signature',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0016_pico_home_membership_credentials',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0017_identity_sessions_and_domain_read_grants',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0018_pico_identity_reader_keys',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0019_pico_share_envelopes',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0020_reader_custody',
+        id: picoSchemaBaselineMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -228,40 +82,28 @@ describe('database migrations', () => {
     db.close();
   });
 
-  it('drops the unverifiable claimant claim signature from an existing founding record', () => {
+  it('contains only the final founding and content columns', () => {
     const db = new Database(createDatabasePath());
 
     runMigrations(db);
-    // Rebuild the pre-0015 shape and fill it, so the migration is exercised
-    // against a database that really carries the column rather than a fresh one.
-    db.exec('ALTER TABLE pico_home_founding_record ADD COLUMN claimant_claim_signature_hex TEXT NULL;');
-    db.prepare("DELETE FROM schema_migration WHERE id = '0015_pico_home_founding_record_drop_claim_signature'").run();
-    db
-      .prepare(`
-        INSERT INTO pico_home_founding_record (
-          id, schema, founding_id, home_id, claim_id,
-          home_host_pico_identity_fingerprint_hex,
-          host_signing_key_fingerprint_hex, host_key_agreement_key_fingerprint_hex,
-          founded_at, lifecycle_order, claim_response_json, founding_json,
-          claimant_identity_key_record_json, claimant_claim_signature_hex,
-          claimant_founding_signature_hex, host_claim_response_signature_hex,
-          host_founding_signature_hex, created_at
-        ) VALUES (1, 'pico.home.founding-record.v1', 'founding_1', 'home_1', 'claim_1',
-          ?, ?, ?, '2026-07-18T09:00:00.000Z', 'seq:0000000000000001', '{}', '{}', '{}', ?, ?, ?, ?,
-          '2026-07-18T09:00:00.000Z')
-      `)
-      .run('8'.repeat(64), '1'.repeat(64), '2'.repeat(64), '7'.repeat(128), '9'.repeat(128), '4'.repeat(128), '5'.repeat(128));
 
-    runMigrations(db);
-
-    const columns = db
+    const foundingColumns = db
       .prepare('PRAGMA table_info(pico_home_founding_record)')
       .all()
       .map((row) => (row as { name: string }).name);
-    expect(columns).not.toContain('claimant_claim_signature_hex');
-    expect(columns).toContain('claimant_founding_signature_hex');
-    expect(db.prepare('SELECT founding_id FROM pico_home_founding_record WHERE id = 1').get())
-      .toEqual({ founding_id: 'founding_1' });
+    const eventColumns = db
+      .prepare('PRAGMA table_info(pico_event)')
+      .all()
+      .map((row) => (row as { name: string }).name);
+    const memoryColumns = db
+      .prepare('PRAGMA table_info(memory_item)')
+      .all()
+      .map((row) => (row as { name: string }).name);
+
+    expect(foundingColumns).not.toContain('claimant_claim_signature_hex');
+    expect(foundingColumns).toContain('claimant_founding_signature_hex');
+    expect(eventColumns).toContain('payload_posture');
+    expect(memoryColumns).toEqual(expect.arrayContaining(['content_posture', 'key_envelope_ref']));
 
     db.close();
   });
@@ -337,33 +179,12 @@ describe('database migrations', () => {
     runMigrations(db);
 
     expect(describeMigrationState(db)).toEqual({
-      appliedMigrationIds: [
-        '0001_event_store',
-        '0002_schema_migration_audit',
-        '0003_schema_migration_audit_errors',
-        '0004_pico_home_claim_state',
-        '0005_event_payload_posture',
-        '0006_memory_item_store',
-        '0007_memory_item_content_posture',
-        '0008_memory_key_envelope',
-        '0009_memory_retention_policy',
-        '0010_foundation_operator',
-        '0011_memory_domain_custody',
-        '0012_pico_home_claim_metadata',
-        '0013_pico_home_founding_record',
-        '0014_pico_home_membership',
-        '0015_pico_home_founding_record_drop_claim_signature',
-        '0016_pico_home_membership_credentials',
-        '0017_identity_sessions_and_domain_read_grants',
-        '0018_pico_identity_reader_keys',
-        '0019_pico_share_envelopes',
-        '0020_reader_custody',
-      ],
+      appliedMigrationIds: [picoSchemaBaselineMigrationId],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(20);
+    expect(listAppliedMigrations(db)).toHaveLength(1);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -373,7 +194,7 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(20);
+    expect(listAppliedMigrations(db)).toHaveLength(1);
 
     db.close();
   });
@@ -412,7 +233,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(20);
+    expect(listAppliedMigrations(db)).toHaveLength(1);
 
     db.close();
   });
@@ -422,56 +243,14 @@ describe('database migrations', () => {
 
     const result = runMigrations(db);
 
-    expect(result.appliedMigrationIds).toEqual([
-      '0001_event_store',
-      '0002_schema_migration_audit',
-      '0003_schema_migration_audit_errors',
-      '0004_pico_home_claim_state',
-      '0005_event_payload_posture',
-      '0006_memory_item_store',
-      '0007_memory_item_content_posture',
-      '0008_memory_key_envelope',
-      '0009_memory_retention_policy',
-      '0010_foundation_operator',
-      '0011_memory_domain_custody',
-      '0012_pico_home_claim_metadata',
-      '0013_pico_home_founding_record',
-      '0014_pico_home_membership',
-      '0015_pico_home_founding_record_drop_claim_signature',
-      '0016_pico_home_membership_credentials',
-      '0017_identity_sessions_and_domain_read_grants',
-      '0018_pico_identity_reader_keys',
-      '0019_pico_share_envelopes',
-      '0020_reader_custody',
-    ]);
+    expect(result.appliedMigrationIds).toEqual([picoSchemaBaselineMigrationId]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
         id: 1,
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         status: 'applied',
-        migrationIds: [
-          '0001_event_store',
-          '0002_schema_migration_audit',
-          '0003_schema_migration_audit_errors',
-          '0004_pico_home_claim_state',
-          '0005_event_payload_posture',
-          '0006_memory_item_store',
-          '0007_memory_item_content_posture',
-          '0008_memory_key_envelope',
-          '0009_memory_retention_policy',
-          '0010_foundation_operator',
-          '0011_memory_domain_custody',
-          '0012_pico_home_claim_metadata',
-          '0013_pico_home_founding_record',
-          '0014_pico_home_membership',
-          '0015_pico_home_founding_record_drop_claim_signature',
-          '0016_pico_home_membership_credentials',
-          '0017_identity_sessions_and_domain_read_grants',
-          '0018_pico_identity_reader_keys',
-          '0019_pico_share_envelopes',
-          '0020_reader_custody',
-        ],
+        migrationIds: [picoSchemaBaselineMigrationId],
       },
     ]);
 
@@ -482,27 +261,6 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     db.exec(`
-      CREATE TABLE schema_migration (
-        id TEXT PRIMARY KEY,
-        applied_at TEXT NOT NULL
-      );
-
-      INSERT INTO schema_migration (id, applied_at)
-      VALUES ('0001_event_store', '2026-07-04T00:00:00.000Z');
-
-      CREATE TABLE pico_event (
-        event_id TEXT PRIMARY KEY,
-        device_id TEXT NOT NULL,
-        session_id TEXT NULL,
-        lamport INTEGER NOT NULL,
-        wall_time TEXT NOT NULL,
-        type TEXT NOT NULL,
-        stream TEXT NOT NULL,
-        payload_json TEXT NOT NULL,
-        signature TEXT NULL,
-        created_at TEXT NOT NULL
-      );
-
       CREATE TABLE schema_migration_audit (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at TEXT NOT NULL,
@@ -518,10 +276,19 @@ describe('database migrations', () => {
       END;
     `);
 
-    expect(() => runMigrations(db)).toThrow('schema migration audit insert blocked');
-    expect(listAppliedMigrations(db).map((migration) => migration.id)).toEqual([
-      '0001_event_store',
-    ]);
+    expect(() => runMigrations(db, {
+      migrationDefinitions: [
+        {
+          id: '0001_test_pending',
+          requiresBackup: false,
+          up(database) {
+            database.exec('CREATE TABLE test_pending (id TEXT PRIMARY KEY);');
+          },
+        },
+      ],
+    })).toThrow('schema migration audit insert blocked');
+    expect(listAppliedMigrations(db)).toEqual([]);
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'test_pending'").get()).toBeUndefined();
     expect(listMigrationAuditRecords(db)).toEqual([]);
 
     db.close();
@@ -531,41 +298,19 @@ describe('database migrations', () => {
     const db = new Database(createDatabasePath());
 
     runMigrations(db);
-    db.prepare('DELETE FROM schema_migration WHERE id = ?').run('0003_schema_migration_audit_errors');
+    db.prepare('DELETE FROM schema_migration WHERE id = ?').run(picoSchemaBaselineMigrationId);
     db.prepare('DELETE FROM schema_migration_audit').run();
 
-    expect(() => runMigrations(db)).toThrow(/error_message/);
-    expect(listAppliedMigrations(db).map((migration) => migration.id)).toEqual([
-      '0001_event_store',
-      '0002_schema_migration_audit',
-      '0004_pico_home_claim_state',
-      '0005_event_payload_posture',
-      '0006_memory_item_store',
-      '0007_memory_item_content_posture',
-      '0008_memory_key_envelope',
-      '0009_memory_retention_policy',
-      '0010_foundation_operator',
-      '0011_memory_domain_custody',
-      '0012_pico_home_claim_metadata',
-      '0013_pico_home_founding_record',
-      '0014_pico_home_membership',
-      '0015_pico_home_founding_record_drop_claim_signature',
-      '0016_pico_home_membership_credentials',
-      '0017_identity_sessions_and_domain_read_grants',
-      '0018_pico_identity_reader_keys',
-      '0019_pico_share_envelopes',
-      '0020_reader_custody',
-    ]);
+    expect(() => runMigrations(db)).toThrow(/schema_migration_audit already exists/);
+    expect(listAppliedMigrations(db)).toEqual([]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
         id: 2,
         startedAt: expect.any(String),
         finishedAt: expect.any(String),
         status: 'failed',
-        migrationIds: [
-          '0003_schema_migration_audit_errors',
-        ],
-        errorMessage: expect.stringContaining('error_message'),
+        migrationIds: [picoSchemaBaselineMigrationId],
+        errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },
     ]);
 

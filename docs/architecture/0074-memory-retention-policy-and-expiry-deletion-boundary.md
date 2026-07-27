@@ -8,7 +8,7 @@ Accepted as the retention model and expiry-deletion boundary for the memory stor
 
 ADR 0014 places deleteable and sensitive content behind references, privacy domains, retention policy and encryption boundaries, and lists retention policy among the fields a future memory store should track.
 
-ADR 0068 reserves `retentionPolicyRef` on the memory item ("names a retention policy; this ADR does not implement a retention engine") and lists "Add retention-policy and deletion enforcement" as its implementation step 4 — before its encryption step 5. The `memory_item.retention_policy_ref` column exists (migration `0006`) and is unused.
+ADR 0068 reserves `retentionPolicyRef` on the memory item ("names a retention policy; this ADR does not implement a retention engine") and lists "Add retention-policy and deletion enforcement" as its implementation step 4 — before its encryption step 5. The baseline `memory_item.retention_policy_ref` column exists and is unused.
 
 ADR 0070 orders protection before content exposure and lists "a protected content read API and retention enforcement" in its post-encryption step 5. That leaves an ordering tension with ADR 0068 step 4 that this ADR resolves explicitly (see "Ordering").
 
@@ -129,7 +129,7 @@ This ADR does not define or implement:
 Additive steps, in order:
 
 1. Reserve the retention-mode vocabulary (`keep_until_deleted`, `delete_after_max_age`) in `@pico/protocol`, doc-bound like `payloadPostures` and `memoryContentPostures`. **Done: `memoryRetentionModes`.**
-2. Add retention-policy storage with validation and wire `retentionPolicyRef` at item creation; resolution = item ref → system default (domain defaults wait for a domain registry). Policies are inspectable, editable and revocable from the start (ADR 0037). **Done: `memory_retention_policy` table (migration `0009`), `RetentionPolicyStore` CRUD + validation (day-granular `maxAgeDays`); `MemoryStore.create` accepts `retentionPolicyRef`.**
+2. Add retention-policy storage with validation and wire `retentionPolicyRef` at item creation; resolution = item ref → system default (domain defaults wait for a domain registry). Policies are inspectable, editable and revocable from the start (ADR 0037). **Done: baseline `memory_retention_policy` table, `RetentionPolicyStore` CRUD + validation (day-granular `maxAgeDays`); `MemoryStore.create` accepts `retentionPolicyRef`.**
 3. Implement the retention sweep under the enforcement contract above: deletion-only, idempotent, batch-bounded, fail-safe, tombstones with policy references; runs on open and periodically. May land before encryption (see "Ordering"). **Done: `RetentionSweeper` expires aged `delete_after_max_age` items by appending a `memory.tombstone` event (reason `retention:<id>`) and enforcing the tombstone; runs on boot and hourly in `buildApp`. It reads no content and decrypts nothing.**
 4. Add domain-default policy binding once a privacy-domain registry exists. **Deferred.**
 5. After encryption and crypto-shredding ship: revisit retention claims (backup unreadability of expired content) and consider domain-wide expiry as a KEK-shred trigger — a domain whose items are all expired and deleted becomes a shred candidate, never an automatic shred. **Deferred.**

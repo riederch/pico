@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { listAppliedMigrations, runMigrations } from './migrations.js';
+import { listAppliedMigrations, picoSchemaBaselineMigrationId, runMigrations } from './migrations.js';
 import { createSqliteBackup, restoreSqliteBackup } from './sqlite-backup.js';
 
 const tempDirs: string[] = [];
@@ -215,83 +215,7 @@ describe('restoreSqliteBackup', () => {
     ]);
     expect(listAppliedMigrations(restored)).toEqual([
       {
-        id: '0001_event_store',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0002_schema_migration_audit',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0003_schema_migration_audit_errors',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0004_pico_home_claim_state',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0005_event_payload_posture',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0006_memory_item_store',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0007_memory_item_content_posture',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0008_memory_key_envelope',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0009_memory_retention_policy',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0010_foundation_operator',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0011_memory_domain_custody',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0012_pico_home_claim_metadata',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0013_pico_home_founding_record',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0014_pico_home_membership',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0015_pico_home_founding_record_drop_claim_signature',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0016_pico_home_membership_credentials',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0017_identity_sessions_and_domain_read_grants',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0018_pico_identity_reader_keys',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0019_pico_share_envelopes',
-        appliedAt: expect.any(String),
-      },
-      {
-        id: '0020_reader_custody',
+        id: picoSchemaBaselineMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

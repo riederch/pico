@@ -109,9 +109,9 @@ request/proof response. This is a fail-closed security change in the
 pre-compatibility Foundation API. Opaque sessions are memory-only, so no
 pre-upgrade session survives a process restart.
 
-Migration `0018_pico_identity_reader_keys` is additive and needs no backup
-rewrite. Existing delegation rows do not automatically become reader keys;
-the device must present the actual public record in a new session.
+The `pico_identity_reader_key` table is part of the consolidated
+`0001_initial_schema` baseline. Delegation rows do not automatically become
+reader keys; the device must present the actual public record in a new session.
 
 This ADR introduced no new cryptographic wire bytes or fixture family. ADR
 0085 subsequently selects the internal identity-root-signed checkpoint bytes

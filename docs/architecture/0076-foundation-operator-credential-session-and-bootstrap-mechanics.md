@@ -155,7 +155,7 @@ Failure responses follow the existing posture: `401` with `WWW-Authenticate` for
 
 Gate A checklist, now built:
 
-1. **Done** — `OperatorStore` (`apps/core/src/operator-store.ts`): Argon2id verifier at interactive limits in `foundation_operator` (migration `0010`), serialized verification with a bounded queue, passphrase change requiring the current one.
+1. **Done** — `OperatorStore` (`apps/core/src/operator-store.ts`): Argon2id verifier at interactive limits in the baseline `foundation_operator` table, serialized verification with a bounded queue, passphrase change requiring the current one.
 2. **Done** — `SessionStore` (`apps/core/src/session-store.ts`): digest-keyed, sliding idle + absolute expiry, per-session and global revocation, count cap with oldest-first eviction, purge. Never persisted.
 3. **Done** — `OperatorBootstrapCode` (`apps/core/src/operator-bootstrap.ts`): per-process code on the host log, single use, gated on operator absence.
 4. **Done** — one-shot local reset marker (`<data>/operator-reset`), consumed at boot, audited.

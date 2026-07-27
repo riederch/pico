@@ -125,7 +125,7 @@ These remain future work behind their own ADRs and milestones.
 Additive runtime steps, in order:
 
 1. Reserve `payloadPostures` and `PayloadPosture` in `@pico/protocol` and bind them to `docs/protocol/public-surfaces.md` with a test. (Done.)
-2. Accept an optional `payloadPosture` on the `PicoEvent` envelope and default it to `inline_operational`, without changing stored JSON for existing events. (Done: `payloadPosture` is an optional `PicoEvent` field, persisted in a nullable `pico_event.payload_posture` column via migration `0005_event_payload_posture`; an absent value round-trips as absent and is treated as `inline_operational`.)
+2. Accept an optional `payloadPosture` on the `PicoEvent` envelope and default it to `inline_operational`, without changing stored JSON for existing events. (Done: `payloadPosture` is an optional `PicoEvent` field, persisted in the nullable `pico_event.payload_posture` baseline column; an absent value round-trips as absent and is treated as `inline_operational`.)
 3. Restrict `POST /api/events` to writable postures (`inline_operational`, `inline_test`) and reject reserved postures until reference targets exist. (Done: `writablePayloadPostures` in `@pico/protocol`; `POST /api/events` returns 400 for unknown or reserved postures.)
 4. Define a reference-target shape and a deleteable memory store behind their own ADR. (Pending.)
 5. Add a Foundation tombstone event type once the deleteable store and reference targets exist. (Pending.)

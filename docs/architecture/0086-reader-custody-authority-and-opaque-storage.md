@@ -212,8 +212,8 @@ idempotency/conflicts, membership loss, revocation and restore reconciliation.
 
 ### Core storage and local relay
 
-Migration `0020_reader_custody` creates four separate tables for domain,
-writer, lifecycle and item records. No reader-custody record enters
+The consolidated `0001_initial_schema` baseline creates four separate tables
+for domain, writer, lifecycle and item records. No reader-custody record enters
 `memory_item`; no table has a plaintext, raw KEK or raw DEK column. Core accepts
 only strict versioned records after it has:
 

@@ -54,6 +54,7 @@ import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
+import { picoSchemaBaselineMigrationId } from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
 import { homeResetMarkerPath } from './home-setup.js';
 
@@ -223,26 +224,7 @@ describe('Pico Home Core app', () => {
       database: {
         maxLamport: 0,
         migrations: [
-          { id: '0001_event_store', appliedAt: expect.any(String) },
-          { id: '0002_schema_migration_audit', appliedAt: expect.any(String) },
-          { id: '0003_schema_migration_audit_errors', appliedAt: expect.any(String) },
-          { id: '0004_pico_home_claim_state', appliedAt: expect.any(String) },
-          { id: '0005_event_payload_posture', appliedAt: expect.any(String) },
-          { id: '0006_memory_item_store', appliedAt: expect.any(String) },
-          { id: '0007_memory_item_content_posture', appliedAt: expect.any(String) },
-          { id: '0008_memory_key_envelope', appliedAt: expect.any(String) },
-          { id: '0009_memory_retention_policy', appliedAt: expect.any(String) },
-          { id: '0010_foundation_operator', appliedAt: expect.any(String) },
-          { id: '0011_memory_domain_custody', appliedAt: expect.any(String) },
-          { id: '0012_pico_home_claim_metadata', appliedAt: expect.any(String) },
-          { id: '0013_pico_home_founding_record', appliedAt: expect.any(String) },
-          { id: '0014_pico_home_membership', appliedAt: expect.any(String) },
-          { id: '0015_pico_home_founding_record_drop_claim_signature', appliedAt: expect.any(String) },
-          { id: '0016_pico_home_membership_credentials', appliedAt: expect.any(String) },
-          { id: '0017_identity_sessions_and_domain_read_grants', appliedAt: expect.any(String) },
-          { id: '0018_pico_identity_reader_keys', appliedAt: expect.any(String) },
-          { id: '0019_pico_share_envelopes', appliedAt: expect.any(String) },
-          { id: '0020_reader_custody', appliedAt: expect.any(String) },
+          { id: picoSchemaBaselineMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });

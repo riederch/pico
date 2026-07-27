@@ -23,7 +23,7 @@ ADR 0071's security-relevance gate requires, before any implementation may claim
 
 ADR 0072 realizes the key-storage design (gate point 2). ADR 0032 defines the `algorithmSuite` and key-envelope schema family whose first concrete suite value is `pico.suite.mem.v1`.
 
-The memory store already carries the relevant columns (migration `0006`/`0007`): `memory_item_id`, `privacy_domain`, `content_type`, `content_posture` (`plaintext_foundation` | `domain_encrypted`) and `key_envelope_ref`. This ADR binds the AD to those existing identifiers.
+The consolidated schema baseline already carries the relevant memory-store columns: `memory_item_id`, `privacy_domain`, `content_type`, `content_posture` (`plaintext_foundation` | `domain_encrypted`) and `key_envelope_ref`. This ADR binds the AD to those existing identifiers.
 
 ## Scope
 

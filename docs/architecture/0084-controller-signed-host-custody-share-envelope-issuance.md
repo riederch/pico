@@ -67,7 +67,8 @@ anything. A changed or unavailable authority fails closed.
 
 ### Durable record and idempotency
 
-Migration `0019_pico_share_envelopes` stores only controller-authenticated
+The `pico_share_envelope` table in the consolidated
+`0001_initial_schema` baseline stores only controller-authenticated
 `pico.share.envelope-record.v1` records. Each row contains:
 
 - issuance, grant and delegation references;

@@ -104,15 +104,18 @@ Current migration classifications:
 
 | Migration | Backup required | Reason |
 |---|---:|---|
-| `0001_event_store` | No | Creates the initial foundation event store tables and indexes. |
-| `0002_schema_migration_audit` | No | Creates an additive migration audit table and index without rewriting existing data. |
-| `0003_schema_migration_audit_errors` | No | Adds nullable migration failure diagnostics to the migration audit table. |
-| `0004_pico_home_claim_state` | No | Creates an internal additive Pico Home claim-state skeleton with an initial unclaimed row. |
+| `0001_initial_schema` | No | Creates the complete initial schema on a fresh database. |
+
+The unreleased development chain previously numbered `0001` through `0020`
+was consolidated into this baseline before any Pico database was deployed.
+Databases carrying those retired development IDs are intentionally unsupported
+and must be recreated. Future schema changes are appended as migrations and
+remain subject to this backup contract.
 
 ## Current limitation
 
 Pico can create and restore SQLite backup files through explicit helper calls, and the restore path is covered by tests.
 
-The default runtime now performs automatic backup creation before backup-requiring startup migrations. The current `0.1.7` migrations are additive and do not require a backup, so normal fresh startup does not create a backup file.
+The default runtime now performs automatic backup creation before backup-requiring startup migrations. The current `0.1.7` baseline creates only a fresh database and does not require a backup, so normal fresh startup does not create a backup file.
 
 The runtime does not perform automatic restore or rollback during startup. Production rollback behaviour must be added before Pico stores production personal data.
