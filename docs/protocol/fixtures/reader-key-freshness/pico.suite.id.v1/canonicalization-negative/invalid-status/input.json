@@ -1,0 +1,16 @@
+{
+  "construction": "pico.id.reader-key-freshness.v1",
+  "fields": {
+    "suite": "pico.suite.id.v1",
+    "checkpointId": "freshness_20260727_0001",
+    "homeId": "home_20260718_0001",
+    "issuerIdentityKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+    "deviceSigningKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+    "deviceKeyAgreementKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+    "delegationId": "del_01hzx8m9q4rt5v",
+    "status": "active",
+    "observedThroughLifecycleOrder": "seq:0000000000000002",
+    "checkedAt": "2026-07-27T10:00:00.000Z",
+    "freshUntil": "2026-07-27T10:05:00.000Z"
+  }
+}

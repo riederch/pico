@@ -4,8 +4,9 @@
 
 Accepted and implemented for ADR 0078 Gate R1. This ADR closes the public
 reader-key binding and pre-issuance freshness seam. It does not wrap domain
-KEKs, issue or store envelopes, add a registry transport, or expose key
-selection over HTTP.
+KEKs, issue or store envelopes, add a public registry transport, or expose key
+selection over HTTP. ADR 0085 subsequently implements the signed-checkpoint
+adapter behind this seam.
 
 ## Context
 
@@ -112,9 +113,9 @@ Migration `0018_pico_identity_reader_keys` is additive and needs no backup
 rewrite. Existing delegation rows do not automatically become reader keys;
 the device must present the actual public record in a new session.
 
-No new cryptographic wire bytes or fixture family is introduced. The
-freshness source is an internal adapter contract until a registry/sync
-protocol with authenticated checkpoint bytes is selected.
+This ADR introduced no new cryptographic wire bytes or fixture family. ADR
+0085 subsequently selects the internal identity-root-signed checkpoint bytes
+and adapter without adding a public Registry/Sync protocol.
 
 ## Consequences
 
@@ -125,8 +126,9 @@ protocol with authenticated checkpoint bytes is selected.
 - Reader-key and membership metadata remain sensitive relationship data in the
   Foundation database, but contain no content, KEK, private key or session
   credential.
-- Reader-custody stays unavailable in the default runtime until an
-  authenticated freshness adapter and the next envelope-issuance slice exist.
+- Reader-custody stays unavailable in the default runtime. ADR 0085 now
+  provides the authenticated adapter, but deployment transport and the
+  reader-custody envelope path remain absent.
 
 ## Gates
 
@@ -148,3 +150,4 @@ protocol with authenticated checkpoint bytes is selected.
 - [ADR 0079](0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md)
 - [ADR 0082](0082-identity-bound-foundation-sessions-and-domain-read-grants.md)
 - [ADR 0033](0033-key-lifecycle-rotation-revocation-and-recovery.md)
+- [ADR 0085](0085-authenticated-reader-key-freshness-checkpoints.md)

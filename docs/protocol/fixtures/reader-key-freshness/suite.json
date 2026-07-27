@@ -1,0 +1,27 @@
+{
+  "schema": "pico.identity.reader-key-freshness.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.identity-reader-key-freshness.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "reader-key-freshness",
+  "families": [
+    "canonicalization-positive",
+    "canonicalization-negative"
+  ],
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-reader-key-freshness-vectors",
+  "disclaimer": "Authoritative identity-root signature-input byte vectors for ADR 0085. No private keys, no registry transport, no HTTP freshness assertion, no L4 compatibility basis and no commercial permission.",
+  "fixtures": [
+    "pico.suite.id.v1/canonicalization-positive/current-reader-binding",
+    "pico.suite.id.v1/canonicalization-positive/revoked-reader-binding",
+    "pico.suite.id.v1/canonicalization-negative/cross-family-label",
+    "pico.suite.id.v1/canonicalization-negative/invalid-status",
+    "pico.suite.id.v1/canonicalization-negative/inverted-window"
+  ],
+  "notes": "Canonical checkpoint bytes only. Runtime signature, binding, freshness and anti-rollback verification live in the ADR 0085 Core adapter."
+}

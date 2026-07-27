@@ -82,6 +82,24 @@ identity-signature-input/pico.suite.id.v1/canonicalization-negative/revocation-i
 identity-signature-input/pico.suite.id.v1/canonicalization-negative/keyrecord-invalid-public-key-length/
 ```
 
+## Current reader-key freshness fixtures
+
+These fixtures carry the authoritative canonical signature-input byte vectors
+for ADR 0085 identity-root-signed reader-key freshness checkpoints. They bind
+the exact Home, identity, device signing key, device key-agreement key,
+delegation, status, lifecycle order and five-minute-capable validity window.
+They contain no private keys, no Registry/Sync transport, no HTTP freshness
+assertion, no L4 compatibility basis and no commercial permission.
+
+```text
+reader-key-freshness/suite.json
+reader-key-freshness/pico.suite.id.v1/canonicalization-positive/current-reader-binding/
+reader-key-freshness/pico.suite.id.v1/canonicalization-positive/revoked-reader-binding/
+reader-key-freshness/pico.suite.id.v1/canonicalization-negative/cross-family-label/
+reader-key-freshness/pico.suite.id.v1/canonicalization-negative/invalid-status/
+reader-key-freshness/pico.suite.id.v1/canonicalization-negative/inverted-window/
+```
+
 ## Current Pico Home signature-input fixtures
 
 These fixtures carry the authoritative canonical signature-input byte vectors for the `pico.suite.id.v1` Pico Home claim, claim-response, founding, membership, membership lifecycle, domain-read grant, domain-read grant lifecycle and continuity families (ADR 0080 Gate M1 and ADR 0082 S1). They include bind-difference cases for wrong-host pins, stale or foreign codes, cross-ceremony transplants and role/suite swaps, plus structural canonicalization rejects. They include no private keys or signatures and provide no L4 compatibility basis or commercial permission.

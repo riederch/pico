@@ -2,6 +2,7 @@ import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   picoIdentityDelegationScopes,
   picoIdentitySuite,
@@ -11,6 +12,7 @@ import type {
   PicoIdentityDelegationSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
   PicoIdentityPossessionSignatureInput,
+  PicoIdentityReaderKeyFreshnessSignatureInput,
   PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
 
@@ -76,6 +78,12 @@ export interface PicoIdentityDelegationVerificationInput {
 export interface PicoIdentityRevocationVerificationInput {
   issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   revocation: PicoIdentityRevocationSignatureInput;
+  signatureHex: string;
+}
+
+export interface PicoIdentityReaderKeyFreshnessVerificationInput {
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput;
   signatureHex: string;
 }
 
@@ -450,6 +458,28 @@ export function verifyPicoIdentityRevocationSignature(
   if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
     keyRecord: input.issuerIdentityKeyRecord,
     expectedFingerprintHex: revocation.issuerIdentityKeyFingerprintHex,
+  })) {
+    return false;
+  }
+
+  return verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: input.issuerIdentityKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: input.signatureHex,
+  });
+}
+
+export function verifyPicoIdentityReaderKeyFreshnessSignature(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityReaderKeyFreshnessVerificationInput,
+): boolean {
+  assertIdentityIssuerKeyRecord(input.issuerIdentityKeyRecord);
+  const signatureInput = buildPicoIdentityReaderKeyFreshnessSignatureInput({
+    ...input.checkpoint,
+  });
+  if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+    keyRecord: input.issuerIdentityKeyRecord,
+    expectedFingerprintHex: input.checkpoint.issuerIdentityKeyFingerprintHex,
   })) {
     return false;
   }

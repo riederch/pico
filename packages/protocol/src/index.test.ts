@@ -38,6 +38,9 @@ import {
   picoIdentityDelegationScopes,
   picoIdentityKeyRoles,
   picoIdentityRevocationReasonCategories,
+  picoIdentityReaderKeyFreshnessCheckpointSchema,
+  picoIdentityReaderKeyFreshnessSignatureInputLabel,
+  picoIdentityReaderKeyFreshnessStatuses,
   picoIdentitySignatureInputFamilies,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
@@ -72,6 +75,7 @@ import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   buildPicoShareWrapPayload,
@@ -387,6 +391,17 @@ describe('Pico protocol types', () => {
     ]);
   });
 
+  it('exports the ADR 0085 identity reader-key freshness vocabulary', () => {
+    expect(picoIdentityReaderKeyFreshnessSignatureInputLabel)
+      .toBe('pico.id.reader-key-freshness.v1');
+    expect(picoIdentityReaderKeyFreshnessCheckpointSchema)
+      .toBe('pico.identity.reader-key-freshness-checkpoint.v1');
+    expect(picoIdentityReaderKeyFreshnessStatuses).toEqual([
+      'current',
+      'revoked',
+    ]);
+  });
+
   it('exports ADR 0080 Pico Home signature-input vocabulary', () => {
     expect(picoHomeSignatureInputFamilies).toEqual([
       'claim',
@@ -592,6 +607,7 @@ describe('Pico protocol types', () => {
       .filter((fixturePath) => !fixturePath.startsWith('model-delegation/draft/'))
       .filter((fixturePath) => !fixturePath.startsWith('memory-content-ad/'))
       .filter((fixturePath) => !fixturePath.startsWith('identity-signature-input/'))
+      .filter((fixturePath) => !fixturePath.startsWith('reader-key-freshness/'))
       .filter((fixturePath) => !fixturePath.startsWith('identity-signature-verification/'))
       .filter((fixturePath) => !fixturePath.startsWith('identity-lifecycle/'))
       .filter((fixturePath) => !fixturePath.startsWith('home-signature-input/'))
@@ -886,6 +902,140 @@ describe('Pico protocol types', () => {
         expect(acceptedHexByCase.has(mustMatch)).toBe(true);
         expect(acceptedHexByCase.get(caseName)).toBe(acceptedHexByCase.get(mustMatch));
       }
+    }
+  });
+
+  it('keeps identity reader-key freshness vectors byte-exact and aligned with ADR 0085', () => {
+    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const suite = readRepoJsonObject(
+      'docs/protocol/fixtures/reader-key-freshness/suite.json',
+    );
+    const fixturePaths = stringArrayField(suite, 'fixtures');
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0085-authenticated-reader-key-freshness-checkpoints.md',
+    ).replace(/\s+/g, '');
+
+    expect(stringField(suite, 'schema'))
+      .toBe('pico.identity.reader-key-freshness.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteId'))
+      .toBe('pico.identity-reader-key-freshness.pico_suite_id_v1');
+    expect(stringField(suite, 'suiteVersion')).toBe(currentVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'suite')).toBe(picoIdentitySuite);
+    expect(stringField(suite, 'surface')).toBe('reader-key-freshness');
+    expect(stringArrayField(suite, 'families')).toEqual([
+      'canonicalization-positive',
+      'canonicalization-negative',
+    ]);
+    const runner = recordField(suite, 'runner');
+    expect(booleanField(runner, 'required')).toBe(false);
+    expect(stringField(runner, 'status')).toBe('none');
+    expect(stringField(suite, 'compatibilityLevel'))
+      .toBe('authoritative-reader-key-freshness-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('no registry transport');
+    expect(stringField(suite, 'disclaimer')).toContain('no commercial permission');
+
+    expect([...fixturePaths].sort()).toEqual(
+      listFixtureDirectories(
+        'docs/protocol/fixtures/reader-key-freshness',
+      ).sort(),
+    );
+    expect(textFenceAfterHeading(
+      readRepoFile('docs/protocol/fixtures/README.md'),
+      '## Current reader-key freshness fixtures',
+    )).toEqual([
+      'reader-key-freshness/suite.json',
+      ...fixturePaths.map(
+        (fixturePath) => `reader-key-freshness/${fixturePath}/`,
+      ),
+    ]);
+
+    const acceptedHexByCase = new Map<string, string>();
+    const relationships: Array<{
+      caseName: string;
+      mustDifferFrom?: string;
+    }> = [];
+
+    for (const fixturePath of fixturePaths) {
+      const parts = fixturePath.split('/');
+      expect(parts.length).toBe(3);
+      const [suiteSegment, family, caseName] = parts;
+      expect(suiteSegment).toBe(picoIdentitySuite);
+      expect(stringArrayField(suite, 'families')).toContain(family);
+
+      const base =
+        `docs/protocol/fixtures/reader-key-freshness/${fixturePath}`;
+      const fixture = readRepoJsonObject(`${base}/fixture.json`);
+      const source = recordField(fixture, 'source');
+      const input = readRepoJsonObject(`${base}/input.json`);
+      const expectBlock = recordField(fixture, 'expect');
+
+      expect(stringField(fixture, 'schema'))
+        .toBe('pico.identity.reader-key-freshness.vector');
+      expect(numberField(fixture, 'schemaVersion')).toBe(1);
+      expect(stringField(fixture, 'fixtureId')).toBe(
+        `reader-key-freshness.pico_suite_id_v1.${family}.${caseName}`,
+      );
+      expect(stringField(fixture, 'stage')).toBe('fixture_data');
+      expect(stringField(fixture, 'suite')).toBe(picoIdentitySuite);
+      expect(stringField(fixture, 'surface')).toBe('reader-key-freshness');
+      expect(stringField(fixture, 'family')).toBe(family);
+      expect(stringField(fixture, 'adr')).toBe('0085');
+      expect(stringField(fixture, 'construction'))
+        .toBe(picoIdentityReaderKeyFreshnessSignatureInputLabel);
+      expect(stringField(source, 'encoding')).toBe('fields');
+      expect(stringField(source, 'file')).toBe('input.json');
+      expect(stringField(fixture, 'notes')).toBeTruthy();
+
+      const inputConstruction = stringField(input, 'construction');
+      const fields = recordField(input, 'fields');
+      const build = stringField(expectBlock, 'build');
+      if (inputConstruction
+          !== picoIdentityReaderKeyFreshnessSignatureInputLabel) {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'reason'))
+          .toBe('cross_family_label_confusion');
+        continue;
+      }
+
+      if (build === 'accept') {
+        const recomputed = buildPicoIdentityReaderKeyFreshnessVector(fields);
+        const hex = Buffer.from(recomputed).toString('hex');
+        expect(hex).toBe(stringField(expectBlock, 'signatureInputHex'));
+        expect(recomputed.length)
+          .toBe(numberField(expectBlock, 'signatureInputLen'));
+        expect(adrNoWhitespace).toContain(hex);
+        acceptedHexByCase.set(caseName, hex);
+        relationships.push({
+          caseName,
+          mustDifferFrom: optionalStringField(
+            expectBlock,
+            'mustDifferFrom',
+          ),
+        });
+      } else {
+        expect(build).toBe('reject');
+        expect(stringField(expectBlock, 'errorCategory'))
+          .toBe('canonicalization_error');
+        const reason = stringField(expectBlock, 'reason');
+        expect([
+          'cross_family_label_confusion',
+          'invalid_reader_key_freshness_status',
+          'invalid_validity_bounds',
+        ]).toContain(reason);
+        expect(() => buildPicoIdentityReaderKeyFreshnessVector(fields))
+          .toThrow(reason);
+      }
+    }
+
+    for (const { caseName, mustDifferFrom } of relationships) {
+      if (mustDifferFrom === undefined) {
+        continue;
+      }
+      expect(acceptedHexByCase.has(mustDifferFrom)).toBe(true);
+      expect(acceptedHexByCase.get(caseName))
+        .not.toBe(acceptedHexByCase.get(mustDifferFrom));
     }
   });
 
@@ -3271,6 +3421,36 @@ function buildPicoIdentityVector(identityFamily: string, fields: Record<string, 
   }
 
   throw new Error(`Unexpected identity signature-input family: ${identityFamily}`);
+}
+
+function buildPicoIdentityReaderKeyFreshnessVector(
+  fields: Record<string, unknown>,
+): Uint8Array {
+  return buildPicoIdentityReaderKeyFreshnessSignatureInput({
+    suite: stringField(fields, 'suite'),
+    checkpointId: stringField(fields, 'checkpointId'),
+    homeId: stringField(fields, 'homeId'),
+    issuerIdentityKeyFingerprintHex: stringField(
+      fields,
+      'issuerIdentityKeyFingerprintHex',
+    ),
+    deviceSigningKeyFingerprintHex: stringField(
+      fields,
+      'deviceSigningKeyFingerprintHex',
+    ),
+    deviceKeyAgreementKeyFingerprintHex: stringField(
+      fields,
+      'deviceKeyAgreementKeyFingerprintHex',
+    ),
+    delegationId: stringField(fields, 'delegationId'),
+    status: stringField(fields, 'status') as typeof picoIdentityReaderKeyFreshnessStatuses[number],
+    observedThroughLifecycleOrder: stringField(
+      fields,
+      'observedThroughLifecycleOrder',
+    ),
+    checkedAt: stringField(fields, 'checkedAt'),
+    freshUntil: stringField(fields, 'freshUntil'),
+  });
 }
 
 function buildPicoShareVector(shareFamily: string, fields: Record<string, unknown>): Uint8Array {

@@ -1,7 +1,9 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DomainReadership } from './domain-readership.js';
-import type { PicoIdentityReaderKeyFreshnessSource } from './reader-key.js';
+import type {
+  PicoIdentityReaderKeyFreshnessCheckpointSource,
+} from './reader-key-freshness.js';
 
 export interface CoreConfig {
   host: string;
@@ -31,12 +33,13 @@ export interface CoreConfig {
    */
   readership?: DomainReadership;
   /**
-   * Authenticated registry/sync freshness adapter used only for reader-key
-   * selection immediately before share-envelope preparation/finalization.
-   * Production configuration deliberately has no environment-backed shortcut;
-   * absent an injected authenticated adapter, issuance fails closed.
+   * Registry/Sync transport used only for reader-key selection immediately
+   * before share-envelope preparation/finalization. Core always wraps it in
+   * ADR 0085 signature, binding and anti-rollback verification, so callers
+   * cannot inject a bare `current` answer. There is deliberately no
+   * environment-backed shortcut; absence fails closed.
    */
-  readerKeyFreshnessSource?: PicoIdentityReaderKeyFreshnessSource;
+  readerKeyFreshnessCheckpointSource?: PicoIdentityReaderKeyFreshnessCheckpointSource;
 }
 
 type Environment = Record<string, string | undefined>;

@@ -4,8 +4,9 @@
 
 Accepted and implemented for existing `host_custody` domains. This ADR
 completes the narrow ADR 0078 host-custody envelope-issuance/storage slice.
-Production issuance remains fail-closed until a concrete authenticated
-`PicoIdentityReaderKeyFreshnessSource` is injected. Reader-custody KEKs,
+ADR 0085 subsequently implements the concrete authenticated
+`PicoIdentityReaderKeyFreshnessSource`; production issuance remains fail-closed
+until a deployment injects its checkpoint transport. Reader-custody KEKs,
 envelope transport and automatic rotation are not implemented.
 
 ## Context
@@ -118,9 +119,9 @@ claiming that they can still be rotated or reissued.
   for host-custody KEKs without becoming Pico identity authority.
 - An operator may relay or withhold a ceremony but cannot mint a valid
   envelope.
-- Preparation and finalization both depend on authenticated external freshness;
-  the default production configuration therefore returns
-  `freshness_unavailable`.
+- Preparation and finalization both depend on authenticated external freshness.
+  ADR 0085 now verifies identity-root-signed checkpoints, while the default
+  configuration without transport still returns `freshness_unavailable`.
 - A signed envelope survives restart and exact retries, while unsigned pending
   work does not.
 - Removing local authority or shredding the KEK removes stored envelopes
@@ -145,7 +146,8 @@ claiming that they can still be rotated or reissued.
 
 This ADR does not define:
 
-- a registry or sync transport that supplies authenticated freshness;
+- a public Registry/Sync transport (ADR 0085 later defines only its internal
+  signed-checkpoint adapter seam);
 - reader-custody KEK creation, custody, sealing or rotation;
 - delegated controller chains;
 - automatic issuance for every KEK version or rotation coupling;
@@ -159,3 +161,4 @@ This ADR does not define:
 - [ADR 0081](0081-pico-vault-person-role-key-custody-threat-model-and-direction.md)
 - [ADR 0082](0082-identity-bound-foundation-sessions-and-domain-read-grants.md)
 - [ADR 0083](0083-reader-key-registration-and-freshness-contract.md)
+- [ADR 0085](0085-authenticated-reader-key-freshness-checkpoints.md)

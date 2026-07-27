@@ -111,6 +111,9 @@ import {
 } from './home-setup.js';
 import { PicoIdentityReaderKeySelector } from './reader-key.js';
 import {
+  AuthenticatedPicoIdentityReaderKeyFreshnessSource,
+} from './reader-key-freshness.js';
+import {
   PicoShareEnvelopeIssuer,
   type PicoShareEnvelopePrepareInput,
 } from './share-envelope.js';
@@ -330,7 +333,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const readerKeySelector = new PicoIdentityReaderKeySelector(
     store,
     sodium,
-    config.readerKeyFreshnessSource,
+    config.readerKeyFreshnessCheckpointSource === undefined
+      ? undefined
+      : new AuthenticatedPicoIdentityReaderKeyFreshnessSource(
+        sodium,
+        config.readerKeyFreshnessCheckpointSource,
+      ),
   );
   const shareEnvelopeIssuer = new PicoShareEnvelopeIssuer(
     store,

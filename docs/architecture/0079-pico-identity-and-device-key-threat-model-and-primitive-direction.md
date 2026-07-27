@@ -10,8 +10,9 @@ implemented. ADR 0082 adds a narrow Foundation consumer: Core persists verified
 signing-key delegation/revocation evidence, reconciles it on boot and
 re-evaluates identity sessions against locally observed lifecycle state.
 ADR 0083 adds exact device key-agreement registration and an authenticated
-external freshness-source contract. A concrete registry/sync adapter and
-reader-custody envelope authority remain open.
+external freshness-source contract. ADR 0085 now adds the identity-root-signed
+checkpoint family, Vault role separation and concrete Registry/Sync adapter.
+Deployment transport and reader-custody envelope authority remain open.
 
 ## Context
 
@@ -112,10 +113,10 @@ Gate G3 defined how lifecycle state is looked up and reconciled. The current
 `@pico/identity` runtime verifies detached Ed25519 signatures for possession,
 delegation and revocation records over the Gate G1 canonical bytes, then
 projects accepted statements into lifecycle state. ADR 0082 persists that
-evidence for identity sessions in Core; it still does not fetch external
-registry freshness. ADR 0083 subsequently makes exact key-agreement records
-selectable only through a bounded authenticated freshness adapter, whose
-default remains unavailable.
+evidence for identity sessions in Core. ADR 0083 subsequently makes exact
+key-agreement records selectable only through a bounded authenticated freshness
+adapter. ADR 0085 implements that adapter over identity-root-signed checkpoints;
+its transport default remains unavailable.
 
 ### Gate G1 canonical layouts and vectors
 
@@ -312,7 +313,7 @@ Nothing runtime ships before its gates; nothing at all is security-relevant befo
 
 1. **Done — Gate G1 canonical layouts and authoritative vectors.** Per-family byte layouts (key record, possession challenge, delegation, revocation) with ADR 0073-style accept/reject vectors, including negative vectors for cross-family label confusion, suite swap, role swap, field reordering, truncated-fingerprint comparison and validity/ordering violations. This gate also discharges ADR 0078's Gate R2 method question: envelope bytes use the same construction.
 2. **Gate G2 — Custody story per key role. Implemented at the current runtime floor.** ADR 0080 M2 supplies separated ADR 0072-pattern file custody for Home host-role keys. ADR 0081 P2 supplies Vault-exclusive person-role custody, `pico.vault.keyfile.v1` encrypted keyfiles, label-checked signing and key-agreement unwrap.
-3. **Done — Gate G3 signature verification, lifecycle lookup and reconciliation.** `@pico/identity` implements the local verifier for ADR 0079 G1 key-record fingerprints, possession proofs, delegations and revocations: it rebuilds the canonical bytes, checks full BLAKE2b-256 key-record fingerprint binding and verifies detached Ed25519 signatures with role fail-closed checks. It also implements the deterministic projector for verified or already accepted delegation and revocation fields: fixed-width `seq:[0-9]{16}` ordering is compared numerically, identical replica statements dedupe, conflicting statement-id reuse fails closed, lookup resolves `active`, `not_yet_valid`, `expired`, `missing_scope`, `revoked` or `unknown`, direct delegation revocation, subject device-key revocation and revocation of the issuing identity key itself stop future authority - the last one regardless of ordering, because whoever holds a stolen root can mint delegations the owner never learns about, so enumerating known delegations is not a substitute, and reconciliation across restored stale state plus fresher lifecycle records resolves toward the freshest statement. The on-disk `identity-signature-verification/pico.suite.id.v1/` and `identity-lifecycle/pico.suite.id.v1/` suites publish verification and lifecycle vectors for these cases. ADR 0082 adds the local signed-evidence consumer; ADR 0083 adds exact reader-key registration and the external freshness-source boundary.
+3. **Done — Gate G3 signature verification, lifecycle lookup and reconciliation.** `@pico/identity` implements the local verifier for ADR 0079 G1 key-record fingerprints, possession proofs, delegations and revocations: it rebuilds the canonical bytes, checks full BLAKE2b-256 key-record fingerprint binding and verifies detached Ed25519 signatures with role fail-closed checks. It also implements the deterministic projector for verified or already accepted delegation and revocation fields: fixed-width `seq:[0-9]{16}` ordering is compared numerically, identical replica statements dedupe, conflicting statement-id reuse fails closed, lookup resolves `active`, `not_yet_valid`, `expired`, `missing_scope`, `revoked` or `unknown`, direct delegation revocation, subject device-key revocation and revocation of the issuing identity key itself stop future authority - the last one regardless of ordering, because whoever holds a stolen root can mint delegations the owner never learns about, so enumerating known delegations is not a substitute, and reconciliation across restored stale state plus fresher lifecycle records resolves toward the freshest statement. The on-disk `identity-signature-verification/pico.suite.id.v1/` and `identity-lifecycle/pico.suite.id.v1/` suites publish verification and lifecycle vectors for these cases. ADR 0082 adds the local signed-evidence consumer; ADR 0083 adds exact reader-key registration and the external freshness-source boundary; ADR 0085 adds the identity-root-signed checkpoint verifier and vectors.
 
 After all three, runtime continues in additive consumers. Host-role custody now
 exists in ADR 0080, ADR 0082 supplies local signed-lifecycle persistence, and
@@ -320,6 +321,8 @@ ADR 0083 completes ADR 0078 R1's reader-key/freshness contract. Person-role key
 generation and custody remain exclusively behind `@pico/vault`; ADR 0084
 consumes that Vault boundary for external controller signing without copying
 the identity key into Foundation.
+ADR 0085 uses the same role boundary for identity-root-only freshness signing
+and verifies the resulting checkpoints in Core.
 
 ## Non-goals
 
@@ -333,7 +336,9 @@ This ADR does not define or implement:
 - signed event segments or manifests (ADR 0032 families — future consumers of the I3 method)
 - passkey/hardware-backed identity (a future suite, per I2)
 - post-quantum selection (see open questions)
-- any change to the Foundation auth layer (ADR 0075/0076) or to draft fixture fences (ADR 0051/0052/0053/0055 stay exactly as strict)
+- any change to the Foundation auth layer (ADR 0075/0076). ADR 0085 later
+  loosens the ADR 0053 fence only for its separate signed reader-key checkpoint,
+  not for the general draft registry record
 
 ## Open questions
 

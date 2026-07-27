@@ -1,0 +1,22 @@
+{
+  "schema": "pico.identity.reader-key-freshness.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-key-freshness.pico_suite_id_v1.canonicalization-positive.current-reader-binding",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "reader-key-freshness",
+  "family": "canonicalization-positive",
+  "construction": "pico.id.reader-key-freshness.v1",
+  "case": "identity root asserts one exact reader binding current for five minutes",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "accept",
+    "signatureInputHex": "0000001f7069636f2e69642e7265616465722d6b65792d66726573686e6573732e7631000000107069636f2e73756974652e69642e76310000001766726573686e6573735f32303236303732375f3030303100000012686f6d655f32303236303731385f303030310000002011111111111111111111111111111111111111111111111111111111111111110000002022222222222222222222222222222222222222222222222222222222222222220000002033333333333333333333333333333333333333333333333333333333333333330000001264656c5f3031687a78386d397134727435760000000763757272656e74000000147365713a3030303030303030303030303030303200000018323032362d30372d32375431303a30303a30302e3030305a00000018323032362d30372d32375431303a30353a30302e3030305a",
+    "signatureInputLen": 325
+  },
+  "adr": "0085",
+  "notes": "Binds Home, identity, both device keys, delegation, lifecycle order and bounded time. No registry response field can replace these signed bytes."
+}

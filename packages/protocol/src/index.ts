@@ -173,6 +173,24 @@ export const picoIdentitySignatureInputLabels = {
   revocation: 'pico.id.revocation.v1',
 } as const satisfies Record<PicoIdentitySignatureInputFamily, string>;
 
+// ADR 0085 freshness checkpoints deliberately remain outside the generic
+// device-signable identity families above. Only the owning `pico_identity`
+// root may sign this label; Registry/Sync transports the record but gains no
+// authority to create one.
+export const picoIdentityReaderKeyFreshnessSignatureInputLabel =
+  'pico.id.reader-key-freshness.v1' as const;
+
+export const picoIdentityReaderKeyFreshnessCheckpointSchema =
+  'pico.identity.reader-key-freshness-checkpoint.v1' as const;
+
+export const picoIdentityReaderKeyFreshnessStatuses = [
+  'current',
+  'revoked',
+] as const;
+
+export type PicoIdentityReaderKeyFreshnessStatus =
+  typeof picoIdentityReaderKeyFreshnessStatuses[number];
+
 // Authoritative signature-input families for ADR 0080 Gate M1. These builders
 // assemble bytes only; they do not generate move-in codes, sign, verify, persist
 // records or authorize membership transitions.
@@ -453,6 +471,32 @@ export interface PicoIdentityRevocationSignatureInput {
   reasonCategory: PicoIdentityRevocationReasonCategory;
   revokedAt: string;
   lifecycleOrder: string;
+}
+
+export interface PicoIdentityReaderKeyFreshnessSignatureInput {
+  suite: string;
+  checkpointId: string;
+  homeId: string;
+  issuerIdentityKeyFingerprintHex: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+  status: PicoIdentityReaderKeyFreshnessStatus;
+  observedThroughLifecycleOrder: string;
+  checkedAt: string;
+  freshUntil: string;
+}
+
+/**
+ * Short-lived identity-root statement transported by a Registry/Sync lookup.
+ * `sourceRef` is intentionally absent: transport metadata is useful for
+ * diagnostics but never part of the identity authority or freshness proof.
+ */
+export interface PicoIdentityReaderKeyFreshnessCheckpoint {
+  schema: typeof picoIdentityReaderKeyFreshnessCheckpointSchema;
+  checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput;
+  issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  issuerSignatureHex: string;
 }
 
 export interface PicoHomeClaimSignatureInput {
@@ -1770,6 +1814,52 @@ export function buildPicoIdentityRevocationSignatureInput(
     asciiBytes(input.reasonCategory),
     asciiBytes(input.revokedAt),
     asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
+  input: PicoIdentityReaderKeyFreshnessSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'checkpointId',
+    'homeId',
+    'issuerIdentityKeyFingerprintHex',
+    'deviceSigningKeyFingerprintHex',
+    'deviceKeyAgreementKeyFingerprintHex',
+    'delegationId',
+    'status',
+    'observedThroughLifecycleOrder',
+    'checkedAt',
+    'freshUntil',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.checkpointId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.delegationId);
+  assertStringMember(
+    input.status,
+    picoIdentityReaderKeyFreshnessStatuses,
+    'invalid_reader_key_freshness_status',
+  );
+  assertLifecycleOrder(input.observedThroughLifecycleOrder);
+  assertInstant(input.checkedAt);
+  assertInstant(input.freshUntil);
+  assertValidBounds(input.checkedAt, input.freshUntil);
+
+  return concatCanonicalElements([
+    asciiBytes(picoIdentityReaderKeyFreshnessSignatureInputLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.checkpointId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.issuerIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.deviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.deviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.delegationId),
+    asciiBytes(input.status),
+    asciiBytes(input.observedThroughLifecycleOrder),
+    asciiBytes(input.checkedAt),
+    asciiBytes(input.freshUntil),
   ]);
 }
 

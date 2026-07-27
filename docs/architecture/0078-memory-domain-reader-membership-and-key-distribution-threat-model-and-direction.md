@@ -9,18 +9,21 @@ share-wrap/envelope bytes and vectors are complete. ADR 0082 implements the
 narrow host-custody access-control portion of R3: possession-bound identity
 sessions, verified membership, signed domain grants/revocations, reconciliation
 and content-free audit now drive the read seam. ADR 0083 completes R1's exact
-reader-key registration and external freshness-source contract. A concrete
-authenticated source is still absent. ADR 0084 implements controller-signed
-sealing, storage, reconciliation and audit for existing host-custody KEK
-versions. The separate reader-custody issuance portion of R3 remains open, so
-`reader_custody` is still an inert fail-closed marker.
+reader-key registration and external freshness-source contract. ADR 0085 now
+implements its identity-root-signed checkpoint bytes and authenticated
+Registry/Sync adapter; deployments still fail closed until a transport is
+injected. ADR 0084 implements controller-signed sealing, storage,
+reconciliation and audit for existing host-custody KEK versions. The separate
+reader-custody issuance portion of R3 remains open, so `reader_custody` is still
+an inert fail-closed marker.
 
 ## Context
 
 What exists is one side of a seam. The at-rest layer is real: per-domain KEKs in a separated file store (ADR 0072, R6), per-item DEKs wrapped under the KEK (ADR 0071 R2) with canonical AD binding (ADR 0073), crypto-shred with a durable audit event. The access layer is real: operator sessions and fail-closed access classes (ADR 0075/0076), and the Gate C read API whose `domain-content` authority is a readership evaluation deliberately distinct from the operator role (ADR 0077, realizing A7). That evaluation's foundation-phase policy — the sole principal reads every domain — is a stub with a declared successor: membership.
 
-The host-custody cryptographic counterpart now exists under ADR 0084, but it
-remains fail-closed without an authenticated freshness adapter and exposes no
+The host-custody cryptographic counterpart now exists under ADR 0084, and ADR
+0085 supplies its authenticated freshness adapter. The default still fails
+closed without deployment-specific checkpoint transport and exposes no
 reader-facing transport. The reader-custody counterpart is still missing.
 ADR 0071 answered the ADR 0016 questions for a single host and said plainly:
 "nothing in this ADR widens the reader set." ADR 0031 lists what must exist
@@ -164,20 +167,20 @@ The envelope inventory is a relationship graph: which reader refs hold which dom
 
 Nothing behind these gates ships, and nothing is security-relevant before **all three** pass. Draft fixtures stay inside the ADR 0042/0054 fences — which forbid wrapped-key material entirely; the authoritative accept/reject vectors of Gate R2 are a different artifact class (synthetic keys, ADR 0073 precedent), not draft placeholders.
 
-1. **Gate R1 — Reader keys are real. Implemented as a fail-closed pre-issuance authority contract.** Device-held X25519 keys with a reviewed delegation and possession story (ADR 0029 Device Key role, ADR 0033 lifecycle, realization of the ADR 0055 family). Without them there is no one to wrap to, and no envelope can be issued. *ADR 0079 fixes the device key-agreement key and delegation direction, ADR 0081 P2 supplies minimal Vault custody/unwrap, ADR 0082 supplies signed lifecycle persistence, and ADR 0083 verifies/persists the exact key record and requires an authenticated bounded registry/sync freshness result for selection. Its default source is unavailable, so no envelope path can confuse local evidence with global freshness.*
+1. **Gate R1 — Reader keys are real. Implemented as a fail-closed pre-issuance authority contract.** Device-held X25519 keys with a reviewed delegation and possession story (ADR 0029 Device Key role, ADR 0033 lifecycle, realization of the ADR 0055 family). Without them there is no one to wrap to, and no envelope can be issued. *ADR 0079 fixes the device key-agreement key and delegation direction, ADR 0081 P2 supplies minimal Vault custody/unwrap, ADR 0082 supplies signed lifecycle persistence, ADR 0083 verifies/persists the exact key record, and ADR 0085 verifies identity-root-signed bounded Registry/Sync checkpoints. Its default transport is unavailable, so no envelope path can confuse local evidence with external freshness.*
 2. **Gate R2 — Canonical bytes and vectors. Implemented.** Canonical wrap-payload and envelope-byte layouts with authoritative accept/reject vectors (ADR 0034 discipline), including negative vectors for wrong-domain, wrong-version, wrong-reader and suite-swap presentations. *`@pico/protocol` exports the `pico.suite.share.v1` builders and `docs/protocol/fixtures/share-envelope/` publishes the authoritative vectors (see the byte-layout section above). ADR 0084 consumes those unchanged bytes for the narrow host-custody issuance runtime.*
-3. **Gate R3 — Membership runtime. Implemented for existing host-custody KEK versions; reader custody remains open.** Verified membership records drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. Stored `owner`/`controller` fields remain non-authorization inputs forever. *ADR 0080 delivers signed membership/lifecycle projection; ADR 0082 delivers the claimed-home read path and Home-Host-Pico-signed grant/revoke records for existing `host_custody` domains; ADR 0083 supplies fail-closed reader-key selection; ADR 0084 supplies controller-signed sealing, storage and reconciliation. The runtime still requires an authenticated freshness adapter and remains open for reader-custody envelope issuance, delegated controllers and key-distribution/rotation coupling.*
+3. **Gate R3 — Membership runtime. Implemented for existing host-custody KEK versions; reader custody remains open.** Verified membership records drive both envelope issuance and the ADR 0077 `mayReadDomain` seam, with content-free grant/removal audit. Stored `owner`/`controller` fields remain non-authorization inputs forever. *ADR 0080 delivers signed membership/lifecycle projection; ADR 0082 delivers the claimed-home read path and Home-Host-Pico-signed grant/revoke records for existing `host_custody` domains; ADR 0083 supplies fail-closed reader-key selection; ADR 0084 supplies controller-signed sealing, storage and reconciliation; ADR 0085 supplies authenticated freshness verification. The runtime remains open for reader-custody envelope issuance, delegated controllers and key-distribution/rotation coupling.*
 
 ## Implementation implications
 
 Ordered and additive:
 
 1. **Done — reserve the custody-class vocabulary** (`host_custody`, `reader_custody`) additively in the protocol package, with a per-domain storage marker defaulting to `host_custody`, plus the K6 fail-closed guard in the key store (refuse KEK files for a reader-custody domain). This is the ADR-0068-style reserve-then-build pattern and prevents drift while the gates are open. The current runtime also rejects memory content writes for `reader_custody` domains until reader-custody envelopes exist.
-2. **Done — complete R1 reader-key/freshness work** (ADR 0083).
+2. **Done — complete R1 reader-key/freshness work** (ADRs 0083 and 0085).
 3. **Done for host custody — implement controller-signed wrap, issuance,
    storage and reconciliation** (ADR 0084). Production issuance remains
-   fail-closed without an authenticated freshness adapter, and no reader-facing
-   transport exists.
+   fail-closed without an injected ADR 0085 checkpoint transport, and no
+   reader-facing transport exists.
 4. **Open — build the separate reader-custody Vault/Companion data path,
    rotation coupling and, behind transport ADRs, reader distribution.** This
    cannot reuse Foundation raw-KEK handling because K6 forbids the host from
@@ -234,3 +237,6 @@ Negative:
 - Plugs into **ADR 0075/0077**: membership rows (Gate R3) are the declared successor of the foundation-phase readership policy on the API path and the issuance authority on the envelope path; A7 ("administration is not readership") and C2 (stored `owner`/`controller` never authorize) carry over unchanged.
 - Preserves the **ADR 0070** ordering: protection before exposure — no envelope leaves the host before the gates pass, and shred claims never exceed what key destruction actually reaches (K9).
 - Follows the **ADR 0034** discipline via Gate R2: canonical bytes and published vectors before any signature or envelope carries security meaning.
+- Uses **ADR 0085** for the external reader-key freshness proof: the owning
+  identity root signs the exact short-lived binding; Registry/Sync transports
+  it without becoming identity or domain-key authority.

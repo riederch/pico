@@ -7,6 +7,7 @@ import {
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   picoIdentitySuite,
   picoVaultKeyfileFormat,
@@ -182,6 +183,44 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       keyfile: device.keyfile,
       passphrase: 'correct horse battery staple',
     }).sign(envelope)).toThrow('unknown_signature_input_label');
+  });
+
+  it('lets only the Pico identity root sign reader-key freshness', () => {
+    const identity = createPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: 'correct horse battery staple',
+    });
+    const checkpoint = buildPicoIdentityReaderKeyFreshnessSignatureInput({
+      suite: picoIdentitySuite,
+      checkpointId: 'freshness_vault_0001',
+      homeId: 'home_vault_0001',
+      issuerIdentityKeyFingerprintHex: identity.keyFingerprintHex,
+      deviceSigningKeyFingerprintHex: '22'.repeat(32),
+      deviceKeyAgreementKeyFingerprintHex: '33'.repeat(32),
+      delegationId: 'delegation_vault_0001',
+      status: 'current',
+      observedThroughLifecycleOrder: 'seq:0000000000000001',
+      checkedAt: '2026-07-27T10:00:00.000Z',
+      freshUntil: '2026-07-27T10:05:00.000Z',
+    });
+    const identitySession = openPicoVaultKeyfile(sodium, {
+      keyfile: identity.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    expect(sodium.crypto_sign_verify_detached(
+      identitySession.sign(checkpoint),
+      checkpoint,
+      Buffer.from(identity.publicKeyHex, 'hex'),
+    )).toBe(true);
+
+    const device = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_signing',
+      passphrase: 'correct horse battery staple',
+    });
+    expect(() => openPicoVaultKeyfile(sodium, {
+      keyfile: device.keyfile,
+      passphrase: 'correct horse battery staple',
+    }).sign(checkpoint)).toThrow('unknown_signature_input_label');
   });
 
   it('rejects wrong passphrases, tampered headers and truncated ciphertext', () => {

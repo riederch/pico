@@ -1,0 +1,22 @@
+{
+  "schema": "pico.identity.reader-key-freshness.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-key-freshness.pico_suite_id_v1.canonicalization-negative.cross-family-label",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "reader-key-freshness",
+  "family": "canonicalization-negative",
+  "construction": "pico.id.reader-key-freshness.v1",
+  "case": "revocation-family bytes cannot be relabeled as a freshness checkpoint",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "cross_family_label_confusion"
+  },
+  "adr": "0085",
+  "notes": "The dedicated label remains identity-root-only and cannot be substituted by another signed identity family."
+}

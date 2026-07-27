@@ -8,11 +8,13 @@ import type {
   PicoIdentityDelegationScope,
   PicoIdentityDelegationSignatureInput,
   PicoIdentityPossessionSignatureInput,
+  PicoIdentityReaderKeyFreshnessSignatureInput,
   PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
 import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   picoIdentitySuite,
 } from '@pico/protocol';
@@ -28,6 +30,7 @@ import {
   verifyPicoIdentityDetachedSignature,
   verifyPicoIdentityKeyRecordFingerprint,
   verifyPicoIdentityPossessionSignature,
+  verifyPicoIdentityReaderKeyFreshnessSignature,
   verifyPicoIdentityRevocationSignature,
 } from './index.js';
 
@@ -505,6 +508,53 @@ describe('Pico identity signature verification runtime', () => {
         },
       },
     });
+  });
+
+  it('verifies reader-key freshness checkpoints only under the exact identity root', () => {
+    const identity = signingFixture('pico_identity', 0x11);
+    const wrongIdentity = signingFixture('pico_identity', 0x12);
+    const deviceSigningIssuer = signingFixture('device_signing', 0x22);
+    const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {
+      suite: picoIdentitySuite,
+      checkpointId: 'freshness_identity_test_0001',
+      homeId: 'home_identity_test',
+      issuerIdentityKeyFingerprintHex: identity.fingerprintHex,
+      deviceSigningKeyFingerprintHex: signingFingerprint,
+      deviceKeyAgreementKeyFingerprintHex: agreementFingerprint,
+      delegationId: 'del_01hzx8m9q4rt5v',
+      status: 'current',
+      observedThroughLifecycleOrder: 'seq:0000000000000002',
+      checkedAt: '2026-07-27T10:00:00.000Z',
+      freshUntil: '2026-07-27T10:05:00.000Z',
+    };
+    const signatureHex = signHex(
+      buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint),
+      identity.privateKey,
+    );
+
+    expect(verifyPicoIdentityReaderKeyFreshnessSignature(testSodium, {
+      issuerIdentityKeyRecord: identity.keyRecord,
+      checkpoint,
+      signatureHex,
+    })).toBe(true);
+    expect(verifyPicoIdentityReaderKeyFreshnessSignature(testSodium, {
+      issuerIdentityKeyRecord: wrongIdentity.keyRecord,
+      checkpoint,
+      signatureHex,
+    })).toBe(false);
+    expect(verifyPicoIdentityReaderKeyFreshnessSignature(testSodium, {
+      issuerIdentityKeyRecord: identity.keyRecord,
+      checkpoint: {
+        ...checkpoint,
+        deviceKeyAgreementKeyFingerprintHex: '44'.repeat(32),
+      },
+      signatureHex,
+    })).toBe(false);
+    expect(() => verifyPicoIdentityReaderKeyFreshnessSignature(testSodium, {
+      issuerIdentityKeyRecord: deviceSigningIssuer.keyRecord,
+      checkpoint,
+      signatureHex,
+    })).toThrow('invalid_issuer_key_role');
   });
 
   it('fails closed for tampered signatures, mismatched issuer fingerprints and wrong issuer roles', () => {

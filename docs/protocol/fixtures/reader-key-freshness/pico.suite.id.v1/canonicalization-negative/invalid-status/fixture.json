@@ -1,0 +1,22 @@
+{
+  "schema": "pico.identity.reader-key-freshness.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-key-freshness.pico_suite_id_v1.canonicalization-negative.invalid-status",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "reader-key-freshness",
+  "family": "canonicalization-negative",
+  "construction": "pico.id.reader-key-freshness.v1",
+  "case": "an unbounded active synonym is rejected",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_reader_key_freshness_status"
+  },
+  "adr": "0085",
+  "notes": "Only current and revoked are encoded; transport status words cannot expand the authority vocabulary."
+}

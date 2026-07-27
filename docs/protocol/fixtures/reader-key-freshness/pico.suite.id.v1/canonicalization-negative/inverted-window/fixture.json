@@ -1,0 +1,22 @@
+{
+  "schema": "pico.identity.reader-key-freshness.vector",
+  "schemaVersion": 1,
+  "fixtureId": "reader-key-freshness.pico_suite_id_v1.canonicalization-negative.inverted-window",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "reader-key-freshness",
+  "family": "canonicalization-negative",
+  "construction": "pico.id.reader-key-freshness.v1",
+  "case": "freshness validity end cannot precede its check instant",
+  "source": {
+    "encoding": "fields",
+    "file": "input.json"
+  },
+  "expect": {
+    "build": "reject",
+    "errorCategory": "canonicalization_error",
+    "reason": "invalid_validity_bounds"
+  },
+  "adr": "0085",
+  "notes": "Runtime additionally caps every accepted window to five minutes and rejects future or expired checkpoints."
+}
