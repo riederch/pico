@@ -235,6 +235,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md`](docs/architecture/0088-reader-custody-multi-reader-and-kek-rotation.md) - exact additional readers, explicit version history and revocation-coupled KEK rotation
 - [`docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md`](docs/architecture/0089-authenticated-checkpoint-and-reader-custody-sync.md) - identity-root checkpoint adapters plus reader-addressed sealed evidence sync with rollback-safe projection
 - [`docs/architecture/0090-durable-reader-sync-floor-and-crash-safe-apply.md`](docs/architecture/0090-durable-reader-sync-floor-and-crash-safe-apply.md) - private durable Reader floor plus verify-persist-expose ordering across restarts and crashes
+- [`docs/architecture/0091-bounded-reader-sync-run-and-cursor-reconciliation.md`](docs/architecture/0091-bounded-reader-sync-run-and-cursor-reconciliation.md) - bounded explicit Reader page runs with at-least-once projection delivery and untrusted-cursor reconciliation
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

@@ -137,7 +137,8 @@ Negative and residual:
 - deployments must choose and exclusively own a private state directory;
 - same-account state tampering is a denial-of-service risk, and matching old
   backup rollback remains possible without an external anchor;
-- the client is an explicit apply primitive, not an automatic sync scheduler.
+- ADR 0091 supplies an explicit bounded page runner, but no automatic sync
+  scheduler or durable local payload inbox.
 
 ## Non-goals
 
@@ -155,3 +156,4 @@ Negative and residual:
 - [ADR 0081](0081-pico-vault-person-role-key-custody-threat-model-and-direction.md)
 - [ADR 0088](0088-reader-custody-multi-reader-and-kek-rotation.md)
 - [ADR 0089](0089-authenticated-checkpoint-and-reader-custody-sync.md)
+- [ADR 0091](0091-bounded-reader-sync-run-and-cursor-reconciliation.md)
