@@ -614,6 +614,7 @@ export const MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_RECORDS =
   1_000;
 export const MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES =
   256 * 1024 * 1024;
+export const MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES = 1_000;
 
 export interface PicoReaderCustodySyncClientState {
   schema: typeof picoReaderCustodySyncClientStateSchema;
@@ -710,6 +711,42 @@ export interface PicoReaderCustodySyncItemDecryptor {
 
 export interface PicoReaderCustodySyncItemPlaintextConsumer {
   (plaintext: string): void;
+}
+
+/**
+ * Opaque process-local selection identity. Construction alone grants no
+ * access; a catalog accepts only object identities it issued itself.
+ */
+export class PicoReaderCustodySyncItemSelection {
+  public constructor() {
+    Object.freeze(this);
+  }
+}
+
+export interface PicoReaderCustodySyncItemDescriptor {
+  selection: PicoReaderCustodySyncItemSelection;
+  memoryItemId: string;
+  contentType: string;
+  createdAt: string;
+}
+
+export interface PicoReaderCustodySyncPresentedItem {
+  memoryItemId: string;
+  contentType: string;
+  createdAt: string;
+  plaintext: string;
+}
+
+export interface PicoReaderCustodySyncItemCatalogConsumer {
+  (items: readonly PicoReaderCustodySyncItemDescriptor[]): void;
+}
+
+export interface PicoReaderCustodySyncItemPresentationPort {
+  (item: Readonly<PicoReaderCustodySyncPresentedItem>): void;
+}
+
+export interface PicoReaderCustodySyncItemCatalogOptions {
+  maxEntries?: number;
 }
 
 export interface PicoReaderCustodySyncProjectionMaterializationStore {
@@ -1275,7 +1312,7 @@ export class PicoReaderCustodySyncItemAccess {
     options: { signal: AbortSignal },
   ): void {
     try {
-      assertAsciiReference(packageId);
+      assertReaderSyncItemToken(packageId);
     } catch {
       throw new Error('invalid_reader_sync_item_package_id');
     }
@@ -1338,6 +1375,182 @@ export class PicoReaderCustodySyncItemAccess {
       plaintext = undefined;
       this.#active = false;
     }
+  }
+}
+
+interface ReaderSyncItemSelectionBinding {
+  packageId: string;
+  state: PicoReaderCustodySyncClientState;
+  descriptor: Omit<PicoReaderCustodySyncItemDescriptor, 'selection'>;
+}
+
+/**
+ * Ephemeral current-head catalog and local synchronous presentation boundary.
+ * Selection objects are process-local identities and contain no enumerable
+ * package, scope or state data.
+ */
+export class PicoReaderCustodySyncItemCatalog {
+  readonly #pins: PicoReaderCustodySyncPins;
+
+  readonly #selections =
+    new WeakMap<PicoReaderCustodySyncItemSelection,
+    ReaderSyncItemSelectionBinding>();
+
+  readonly #maxEntries: number;
+
+  #active = false;
+
+  public constructor(
+    private readonly restoreSource:
+      PicoReaderCustodySyncProjectionRestoreSource,
+    pins: PicoReaderCustodySyncPins,
+    private readonly stateSource:
+      Pick<PicoReaderCustodySyncClientStateStore, 'load'>,
+    private readonly openPayload: PicoReaderCustodySyncPayloadOpener,
+    private readonly decryptItem: PicoReaderCustodySyncItemDecryptor,
+    options: PicoReaderCustodySyncItemCatalogOptions = {},
+  ) {
+    assertSyncPins(pins);
+    const maxEntries = options.maxEntries
+      ?? MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES;
+    if (!Number.isSafeInteger(maxEntries)
+      || maxEntries < 1
+      || maxEntries
+        > MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES) {
+      throw new Error('invalid_reader_sync_item_catalog_limit');
+    }
+    this.#pins = { ...pins };
+    this.#maxEntries = maxEntries;
+  }
+
+  public list(
+    consumeCatalog: PicoReaderCustodySyncItemCatalogConsumer,
+    options: { signal: AbortSignal },
+  ): void {
+    if (typeof consumeCatalog !== 'function') {
+      throw new Error('invalid_reader_sync_item_catalog_consumer');
+    }
+    throwIfAborted(options.signal);
+    if (this.#active) {
+      throw new Error('reader_sync_item_catalog_in_progress');
+    }
+
+    this.#active = true;
+    try {
+      const state = this.#loadCurrentState();
+      const restored = this.restoreSource.restore(
+        this.#pins,
+        state,
+        this.openPayload,
+      );
+      throwIfAborted(options.signal);
+      const catalogItems = collectReaderSyncCurrentCatalogItems(
+        restored,
+        this.#pins,
+        state,
+        this.#maxEntries,
+      );
+      assertReaderSyncItemCatalogStateUnchanged(
+        state,
+        this.stateSource.load(),
+      );
+
+      const descriptors = catalogItems.map((itemRecord) => {
+        const selection = new PicoReaderCustodySyncItemSelection();
+        const descriptorMetadata = {
+          memoryItemId: itemRecord.item.memoryItemId,
+          contentType: itemRecord.item.contentType,
+          createdAt: itemRecord.item.createdAt,
+        };
+        this.#selections.set(selection, {
+          packageId: itemRecord.item.packageId,
+          state: cloneReaderSyncClientState(state),
+          descriptor: { ...descriptorMetadata },
+        });
+        return Object.freeze({
+          selection,
+          ...descriptorMetadata,
+        });
+      });
+      const consumerResult: unknown = consumeCatalog(
+        Object.freeze(descriptors),
+      );
+      if (isPromiseLike(consumerResult)) {
+        throw new Error(
+          'reader_sync_item_catalog_consumer_must_be_synchronous',
+        );
+      }
+      throwIfAborted(options.signal);
+    } finally {
+      this.#active = false;
+    }
+  }
+
+  public present(
+    selection: PicoReaderCustodySyncItemSelection,
+    presentItem: PicoReaderCustodySyncItemPresentationPort,
+    options: { signal: AbortSignal },
+  ): void {
+    if (typeof presentItem !== 'function') {
+      throw new Error('invalid_reader_sync_item_presentation_port');
+    }
+    throwIfAborted(options.signal);
+    if (this.#active) {
+      throw new Error('reader_sync_item_catalog_in_progress');
+    }
+
+    this.#active = true;
+    try {
+      const binding = this.#selections.get(selection);
+      if (binding === undefined) {
+        throw new Error('invalid_reader_sync_item_selection');
+      }
+      assertReaderSyncItemSelectionCurrent(
+        binding.state,
+        this.stateSource.load(),
+      );
+      const selectionBoundStateSource = {
+        load: () => {
+          const state = this.stateSource.load();
+          assertReaderSyncItemSelectionCurrent(binding.state, state);
+          return state!;
+        },
+      };
+      new PicoReaderCustodySyncItemAccess(
+        this.restoreSource,
+        this.#pins,
+        selectionBoundStateSource,
+        this.openPayload,
+        this.decryptItem,
+      ).access(
+        binding.packageId,
+        (plaintext) => {
+          const presentation = Object.freeze({
+            ...binding.descriptor,
+            plaintext,
+          });
+          const presentationResult: unknown =
+            presentItem(presentation);
+          return presentationResult as void;
+        },
+        options,
+      );
+    } finally {
+      this.#active = false;
+    }
+  }
+
+  #loadCurrentState(): PicoReaderCustodySyncClientState {
+    const loadedState = this.stateSource.load();
+    if (loadedState === undefined) {
+      throw new Error('reader_sync_item_catalog_state_missing');
+    }
+    assertReaderSyncClientState(loadedState);
+    const state = cloneReaderSyncClientState(loadedState);
+    if (!readerSyncPinsEqual(state.pins, this.#pins)) {
+      throw new Error('reader_sync_item_catalog_scope_mismatch');
+    }
+    return state;
   }
 }
 
@@ -3210,16 +3423,12 @@ function selectReaderSyncItemDecryptionEvidence(
   state: PicoReaderCustodySyncClientState,
   packageId: string,
 ): PicoReaderCustodySyncItemDecryptionEvidence {
-  const head = restored.at(-1);
-  if (head === undefined
-    || !readerSyncFloorsEqual(head.value.floor, state.floor)
-    || head.receipt.routeRef !== pins.routeRef
-    || head.receipt.sequence !== state.floor.sequence
-    || head.receipt.syncBatchId !== state.floor.syncBatchId
-    || head.receipt.manifestDigestHex
-      !== state.floor.manifestDigestHex) {
-    throw new Error('reader_sync_item_access_state_mismatch');
-  }
+  const head = assertReaderSyncRestoredHead(
+    restored,
+    pins,
+    state,
+    'reader_sync_item_access_state_mismatch',
+  );
 
   const historicalMatches: PicoReaderCustodyItemRecord[] = [];
   for (const projection of restored) {
@@ -3253,6 +3462,124 @@ function selectReaderSyncItemDecryptionEvidence(
   )) {
     throw new Error('reader_sync_item_evidence_fork');
   }
+  const writerGrantRecord = resolveReaderSyncItemWriterEvidence(
+    head,
+    pins,
+    itemRecord,
+  );
+  const writerGrant = writerGrantRecord.grant;
+
+  return {
+    receipt: cloneReaderSyncProjectionReceipt(head.receipt),
+    domainRecord: structuredClone(head.payload.domainRecord),
+    readerGrantRecord:
+      structuredClone(head.payload.readerGrantRecord),
+    readerGrantLifecycleRecords:
+      structuredClone(head.payload.readerGrantLifecycleRecords),
+    writerGrantRecord: structuredClone(writerGrantRecord),
+    writerGrantLifecycleRecords: structuredClone(
+      head.payload.writerGrantLifecycleRecords.filter(
+        (record) =>
+          record.lifecycle.writerGrantId === writerGrant.writerGrantId,
+      ),
+    ),
+    rotationRecords: structuredClone(head.payload.rotationRecords),
+    itemRecord: structuredClone(itemRecord),
+  };
+}
+
+function collectReaderSyncCurrentCatalogItems(
+  restored: readonly PicoReaderCustodySyncRestoredProjection[],
+  pins: PicoReaderCustodySyncPins,
+  state: PicoReaderCustodySyncClientState,
+  maxEntries: number,
+): PicoReaderCustodyItemRecord[] {
+  const head = assertReaderSyncRestoredHead(
+    restored,
+    pins,
+    state,
+    'reader_sync_item_catalog_state_mismatch',
+  );
+  if (head.payload.itemRecords.length > maxEntries) {
+    throw new Error('reader_sync_item_catalog_limit_exceeded');
+  }
+
+  const currentByPackageId =
+    new Map<string, PicoReaderCustodyItemRecord>();
+  const memoryItemIds = new Set<string>();
+  for (const itemRecord of head.payload.itemRecords) {
+    const item = itemRecord.item;
+    if (currentByPackageId.has(item.packageId)
+      || memoryItemIds.has(item.memoryItemId)) {
+      throw new Error('reader_sync_item_catalog_ambiguous');
+    }
+    try {
+      assertReaderSyncItemToken(item.packageId);
+      assertReaderSyncItemToken(item.memoryItemId);
+      assertReaderSyncItemToken(item.contentType);
+      assertCanonicalInstant(item.createdAt);
+    } catch (error) {
+      throw new Error('invalid_reader_sync_item_catalog_evidence', {
+        cause: error,
+      });
+    }
+    currentByPackageId.set(item.packageId, itemRecord);
+    memoryItemIds.add(item.memoryItemId);
+  }
+  const currentPackageIds = [...currentByPackageId.keys()].sort();
+  if (!sameJson(currentPackageIds, head.value.itemPackageIds)) {
+    throw new Error('reader_sync_item_catalog_ambiguous');
+  }
+
+  for (const projection of restored) {
+    const seenPackageIds = new Set<string>();
+    for (const itemRecord of projection.payload.itemRecords) {
+      const packageId = itemRecord.item.packageId;
+      if (seenPackageIds.has(packageId)) {
+        throw new Error('reader_sync_item_catalog_ambiguous');
+      }
+      seenPackageIds.add(packageId);
+      const current = currentByPackageId.get(packageId);
+      if (current !== undefined && !sameJson(current, itemRecord)) {
+        throw new Error('reader_sync_item_catalog_evidence_fork');
+      }
+    }
+  }
+
+  const items = [...currentByPackageId.values()];
+  for (const itemRecord of items) {
+    resolveReaderSyncItemWriterEvidence(head, pins, itemRecord);
+  }
+  return items.sort((left, right) =>
+    left.item.createdAt.localeCompare(right.item.createdAt)
+      || left.item.memoryItemId.localeCompare(right.item.memoryItemId)
+      || left.item.packageId.localeCompare(right.item.packageId));
+}
+
+function assertReaderSyncRestoredHead(
+  restored: readonly PicoReaderCustodySyncRestoredProjection[],
+  pins: PicoReaderCustodySyncPins,
+  state: PicoReaderCustodySyncClientState,
+  errorCode: string,
+): PicoReaderCustodySyncRestoredProjection {
+  const head = restored.at(-1);
+  if (head === undefined
+    || !readerSyncFloorsEqual(head.value.floor, state.floor)
+    || head.receipt.routeRef !== pins.routeRef
+    || head.receipt.sequence !== state.floor.sequence
+    || head.receipt.syncBatchId !== state.floor.syncBatchId
+    || head.receipt.manifestDigestHex
+      !== state.floor.manifestDigestHex) {
+    throw new Error(errorCode);
+  }
+  return head;
+}
+
+function resolveReaderSyncItemWriterEvidence(
+  head: PicoReaderCustodySyncRestoredProjection,
+  pins: PicoReaderCustodySyncPins,
+  itemRecord: PicoReaderCustodyItemRecord,
+): PicoReaderCustodyWriterGrantRecord {
   const writerGrantRecords = head.payload.writerGrantRecords.filter(
     (record) =>
       record.grant.writerGrantId === itemRecord.item.writerGrantId,
@@ -3301,24 +3628,7 @@ function selectReaderSyncItemDecryptionEvidence(
     || !head.value.readerEnvelopeVersions.includes(item.kekVersion)) {
     throw new Error('invalid_reader_sync_item_evidence');
   }
-
-  return {
-    receipt: cloneReaderSyncProjectionReceipt(head.receipt),
-    domainRecord: structuredClone(head.payload.domainRecord),
-    readerGrantRecord:
-      structuredClone(head.payload.readerGrantRecord),
-    readerGrantLifecycleRecords:
-      structuredClone(head.payload.readerGrantLifecycleRecords),
-    writerGrantRecord: structuredClone(writerGrantRecord),
-    writerGrantLifecycleRecords: structuredClone(
-      head.payload.writerGrantLifecycleRecords.filter(
-        (record) =>
-          record.lifecycle.writerGrantId === writerGrant.writerGrantId,
-      ),
-    ),
-    rotationRecords: structuredClone(head.payload.rotationRecords),
-    itemRecord: structuredClone(itemRecord),
-  };
+  return writerGrantRecord;
 }
 
 function assertReaderSyncItemAccessStateUnchanged(
@@ -3331,6 +3641,44 @@ function assertReaderSyncItemAccessStateUnchanged(
   assertReaderSyncClientState(actual);
   if (!readerSyncClientStatesEqual(expected, actual)) {
     throw new Error('reader_sync_item_access_state_changed');
+  }
+}
+
+function assertReaderSyncItemCatalogStateUnchanged(
+  expected: PicoReaderCustodySyncClientState,
+  actual: PicoReaderCustodySyncClientState | undefined,
+): void {
+  if (actual === undefined) {
+    throw new Error('reader_sync_item_catalog_state_missing');
+  }
+  try {
+    assertReaderSyncClientState(actual);
+  } catch (error) {
+    throw new Error('reader_sync_item_catalog_state_changed', {
+      cause: error,
+    });
+  }
+  if (!readerSyncClientStatesEqual(expected, actual)) {
+    throw new Error('reader_sync_item_catalog_state_changed');
+  }
+}
+
+function assertReaderSyncItemSelectionCurrent(
+  expected: PicoReaderCustodySyncClientState,
+  actual: PicoReaderCustodySyncClientState | undefined,
+): void {
+  if (actual === undefined) {
+    throw new Error('reader_sync_item_selection_stale');
+  }
+  try {
+    assertReaderSyncClientState(actual);
+  } catch (error) {
+    throw new Error('reader_sync_item_selection_stale', {
+      cause: error,
+    });
+  }
+  if (!readerSyncClientStatesEqual(expected, actual)) {
+    throw new Error('reader_sync_item_selection_stale');
   }
 }
 
@@ -3672,6 +4020,12 @@ function assertRouteRef(value: string): void {
 function assertAsciiReference(value: string): void {
   if (!/^[A-Za-z0-9._:/+-]{1,256}$/.test(value)) {
     throw new Error('invalid_sync_reference');
+  }
+}
+
+function assertReaderSyncItemToken(value: string): void {
+  if (!/^[A-Za-z0-9._:/+-]{1,1024}$/.test(value)) {
+    throw new Error('invalid_reader_sync_item_token');
   }
 }
 

@@ -45,6 +45,7 @@ import {
 import {
   InMemoryPicoSyncOpaqueTransport,
   LamportClock,
+  MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES,
   MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES,
   MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES,
   PicoReaderCustodySyncBatchPublisher,
@@ -53,6 +54,8 @@ import {
   PicoReaderCustodySyncFilePendingStore,
   PicoReaderCustodySyncFileStateStore,
   PicoReaderCustodySyncItemAccess,
+  PicoReaderCustodySyncItemCatalog,
+  PicoReaderCustodySyncItemSelection,
   PicoReaderCustodySyncProjector,
   PicoReaderCustodySyncProtectedProjectionFileStore,
   PicoReaderCustodySyncRunner,
@@ -70,6 +73,8 @@ import {
   type PicoReaderCustodySyncClientState,
   type PicoReaderCustodySyncClientStateStore,
   type PicoReaderCustodySyncItemDecryptionEvidence,
+  type PicoReaderCustodySyncItemDescriptor,
+  type PicoReaderCustodySyncPresentedItem,
   type PicoReaderCustodySyncPins,
   type PicoReaderCustodySyncPendingRecord,
   type PicoReaderCustodySyncPendingStore,
@@ -1176,8 +1181,8 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
   });
 });
 
-describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
-  it('keeps transport sealed and exposes one current item through the synchronous Vault boundary', async () => {
+describe('authenticated reader sync and local presentation (ADRs 0089/0094/0095)', () => {
+  it('keeps transport sealed and presents one current item through the synchronous Vault boundary', async () => {
     const ownerIdentity = createPicoVaultKeyfile(sodium, {
       keyRole: 'pico_identity',
       passphrase: 'owner identity passphrase',
@@ -1940,6 +1945,165 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
     expect(forwardPlaintext)
       .toBe('transport must never receive this plaintext');
 
+    const itemCatalog = new PicoReaderCustodySyncItemCatalog(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      openMaterializedProjection,
+      decryptMaterializedItem,
+    );
+    let catalogDescriptors:
+      readonly PicoReaderCustodySyncItemDescriptor[] = [];
+    let listReentrancyRejected = false;
+    itemCatalog.list((items) => {
+      catalogDescriptors = items;
+      expect(() => itemCatalog.present(
+        items[0]!.selection,
+        () => undefined,
+        { signal },
+      )).toThrow('reader_sync_item_catalog_in_progress');
+      listReentrancyRejected = true;
+    }, { signal });
+    expect(listReentrancyRejected).toBe(true);
+    expect(catalogDescriptors).toHaveLength(1);
+    expect(Object.keys(catalogDescriptors[0]!).sort()).toEqual([
+      'contentType',
+      'createdAt',
+      'memoryItemId',
+      'selection',
+    ]);
+    expect(catalogDescriptors[0]).toMatchObject({
+      memoryItemId: 'reader_sync_memory_0001',
+      contentType: 'text/plain',
+      createdAt: '2026-07-27T10:03:00.000Z',
+    });
+    expect(Object.isFrozen(catalogDescriptors)).toBe(true);
+    expect(Object.isFrozen(catalogDescriptors[0])).toBe(true);
+    expect(Object.keys(catalogDescriptors[0]!.selection)).toEqual([]);
+    expect(JSON.stringify(catalogDescriptors[0]!.selection)).toBe('{}');
+
+    let presentedItem: PicoReaderCustodySyncPresentedItem | undefined;
+    let presentationWasFrozen = false;
+    itemCatalog.present(
+      catalogDescriptors[0]!.selection,
+      (item) => {
+        presentationWasFrozen = Object.isFrozen(item);
+        presentedItem = { ...item };
+      },
+      { signal },
+    );
+    expect(presentationWasFrozen).toBe(true);
+    expect(presentedItem).toEqual({
+      memoryItemId: 'reader_sync_memory_0001',
+      contentType: 'text/plain',
+      createdAt: '2026-07-27T10:03:00.000Z',
+      plaintext: 'transport must never receive this plaintext',
+    });
+    let presentationReentrancyRejected = false;
+    itemCatalog.present(
+      catalogDescriptors[0]!.selection,
+      () => {
+        expect(() => itemCatalog.present(
+          catalogDescriptors[0]!.selection,
+          () => undefined,
+          { signal },
+        )).toThrow('reader_sync_item_catalog_in_progress');
+        presentationReentrancyRejected = true;
+      },
+      { signal },
+    );
+    expect(presentationReentrancyRejected).toBe(true);
+    expect(() => itemCatalog.list(
+      async () => undefined,
+      { signal },
+    )).toThrow(
+      'reader_sync_item_catalog_consumer_must_be_synchronous',
+    );
+    expect(() => itemCatalog.present(
+      catalogDescriptors[0]!.selection,
+      async () => undefined,
+      { signal },
+    )).toThrow(
+      'reader_sync_item_plaintext_consumer_must_be_synchronous',
+    );
+    expect(() => itemCatalog.present(
+      new PicoReaderCustodySyncItemSelection(),
+      () => undefined,
+      { signal },
+    )).toThrow('invalid_reader_sync_item_selection');
+    const forwardCatalog = new PicoReaderCustodySyncItemCatalog(
+      forwardArchiveStore,
+      forwardPins,
+      forwardStateStore,
+      openForwardProjection,
+      (evidence) => decryptPicoReaderCustodyItem(sodium, {
+        readerKeyAgreementSession: wrongAgreementSession,
+        domainRecord: evidence.domainRecord,
+        rotationRecords: evidence.rotationRecords,
+        readerGrantRecord: evidence.readerGrantRecord,
+        writerGrantRecord: evidence.writerGrantRecord,
+        itemRecord: evidence.itemRecord,
+      }),
+    );
+    let forwardCatalogSelection:
+      PicoReaderCustodySyncItemSelection | undefined;
+    forwardCatalog.list((items) => {
+      forwardCatalogSelection = items[0]!.selection;
+    }, { signal });
+    let forwardPresentedPlaintext: string | undefined;
+    forwardCatalog.present(
+      forwardCatalogSelection!,
+      (item) => {
+        forwardPresentedPlaintext = item.plaintext;
+      },
+      { signal },
+    );
+    expect(forwardPresentedPlaintext)
+      .toBe('transport must never receive this plaintext');
+    expect(() => forwardCatalog.present(
+      catalogDescriptors[0]!.selection,
+      () => undefined,
+      { signal },
+    )).toThrow('invalid_reader_sync_item_selection');
+
+    const catalogAbortController = new AbortController();
+    catalogAbortController.abort();
+    expect(() => itemCatalog.list(
+      () => undefined,
+      { signal: catalogAbortController.signal },
+    )).toThrow('sync_transport_aborted');
+    expect(() => itemCatalog.present(
+      catalogDescriptors[0]!.selection,
+      () => undefined,
+      { signal: catalogAbortController.signal },
+    )).toThrow('sync_transport_aborted');
+    const presentationAbortController = new AbortController();
+    const abortingCatalog = new PicoReaderCustodySyncItemCatalog(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      openMaterializedProjection,
+      (evidence) => {
+        const plaintext = decryptMaterializedItem(evidence);
+        presentationAbortController.abort();
+        return plaintext;
+      },
+    );
+    let abortingCatalogSelection:
+      PicoReaderCustodySyncItemSelection | undefined;
+    abortingCatalog.list((items) => {
+      abortingCatalogSelection = items[0]!.selection;
+    }, { signal: presentationAbortController.signal });
+    let abortedPresentationDelivered = false;
+    expect(() => abortingCatalog.present(
+      abortingCatalogSelection!,
+      () => {
+        abortedPresentationDelivered = true;
+      },
+      { signal: presentationAbortController.signal },
+    )).toThrow('sync_transport_aborted');
+    expect(abortedPresentationDelivered).toBe(false);
+
     let nestedAccessRejected = false;
     itemAccess.access(
       'reader_sync_package_0001',
@@ -2020,6 +2184,17 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
         openMaterializedProjection,
         decryptMaterializedItem,
       );
+    const catalogFrom = (
+      projections: typeof restoredProjections,
+      options: { maxEntries?: number } = {},
+    ) => new PicoReaderCustodySyncItemCatalog(
+      restoredSource(projections),
+      pins,
+      currentStateSource,
+      openMaterializedProjection,
+      decryptMaterializedItem,
+      options,
+    );
 
     const staleProjections = structuredClone(restoredProjections);
     staleProjections.at(-1)!.payload.itemRecords = [];
@@ -2029,6 +2204,12 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
       () => undefined,
       { signal },
     )).toThrow('reader_sync_item_evidence_stale');
+    let emptyCatalog:
+      readonly PicoReaderCustodySyncItemDescriptor[] | undefined;
+    catalogFrom(staleProjections).list((items) => {
+      emptyCatalog = items;
+    }, { signal });
+    expect(emptyCatalog).toEqual([]);
 
     const forkedProjections = structuredClone(restoredProjections);
     forkedProjections.at(-1)!.payload.itemRecords[0]!
@@ -2038,6 +2219,10 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
       () => undefined,
       { signal },
     )).toThrow('reader_sync_item_evidence_fork');
+    expect(() => catalogFrom(forkedProjections).list(
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_catalog_evidence_fork');
 
     const ambiguousProjections = structuredClone(restoredProjections);
     ambiguousProjections.at(-1)!.payload.itemRecords.push(
@@ -2050,6 +2235,10 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
       () => undefined,
       { signal },
     )).toThrow('reader_sync_item_evidence_ambiguous');
+    expect(() => catalogFrom(ambiguousProjections).list(
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_catalog_ambiguous');
 
     const crossWriterProjections = structuredClone(restoredProjections);
     for (const projection of crossWriterProjections) {
@@ -2058,6 +2247,10 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
     }
     expect(() => accessFrom(crossWriterProjections).access(
       'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_writer_evidence_ambiguous');
+    expect(() => catalogFrom(crossWriterProjections).list(
       () => undefined,
       { signal },
     )).toThrow('reader_sync_item_writer_evidence_ambiguous');
@@ -2070,6 +2263,150 @@ describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
       () => undefined,
       { signal },
     )).toThrow('invalid_reader_sync_item_evidence');
+    expect(() => catalogFrom(crossDomainProjections).list(
+      () => undefined,
+      { signal },
+    )).toThrow('invalid_reader_sync_item_evidence');
+
+    const oversizedCatalogProjections =
+      structuredClone(restoredProjections);
+    const oversizedHead = oversizedCatalogProjections.at(-1)!;
+    const secondItem = structuredClone(
+      oversizedHead.payload.itemRecords[0]!,
+    );
+    secondItem.item.packageId = 'reader_sync_package_0002';
+    secondItem.item.memoryItemId = 'reader_sync_memory_0002';
+    oversizedHead.payload.itemRecords.push(secondItem);
+    oversizedHead.value.itemPackageIds.push(
+      secondItem.item.packageId,
+    );
+    oversizedHead.value.itemPackageIds.sort();
+    expect(() => catalogFrom(
+      oversizedCatalogProjections,
+      { maxEntries: 1 },
+    ).list(
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_catalog_limit_exceeded');
+    expect(() => catalogFrom(
+      restoredProjections,
+      { maxEntries: 0 },
+    )).toThrow('invalid_reader_sync_item_catalog_limit');
+    expect(() => catalogFrom(
+      restoredProjections,
+      {
+        maxEntries:
+          MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES + 1,
+      },
+    )).toThrow('invalid_reader_sync_item_catalog_limit');
+
+    let catalogStateChanged = false;
+    const catalogChangingStateSource = {
+      load: () => {
+        const state = structuredClone(materializedState);
+        if (catalogStateChanged) {
+          state.revision += 1;
+        }
+        return state;
+      },
+    };
+    let changedCatalogDelivered = false;
+    expect(() => new PicoReaderCustodySyncItemCatalog(
+      {
+        restore: () => {
+          catalogStateChanged = true;
+          return structuredClone(restoredProjections);
+        },
+      },
+      pins,
+      catalogChangingStateSource,
+      openMaterializedProjection,
+      decryptMaterializedItem,
+    ).list(
+      () => {
+        changedCatalogDelivered = true;
+      },
+      { signal },
+    )).toThrow('reader_sync_item_catalog_state_changed');
+    expect(changedCatalogDelivered).toBe(false);
+
+    let selectionState = structuredClone(materializedState);
+    const staleSelectionCatalog = new PicoReaderCustodySyncItemCatalog(
+      restoredSource(restoredProjections),
+      pins,
+      { load: () => structuredClone(selectionState) },
+      openMaterializedProjection,
+      decryptMaterializedItem,
+    );
+    let staleSelection:
+      PicoReaderCustodySyncItemSelection | undefined;
+    staleSelectionCatalog.list((items) => {
+      staleSelection = items[0]!.selection;
+    }, { signal });
+    selectionState = {
+      ...selectionState,
+      revision: selectionState.revision + 1,
+    };
+    let staleSelectionPresented = false;
+    expect(() => staleSelectionCatalog.present(
+      staleSelection!,
+      () => {
+        staleSelectionPresented = true;
+      },
+      { signal },
+    )).toThrow('reader_sync_item_selection_stale');
+    expect(staleSelectionPresented).toBe(false);
+
+    let raceMode = false;
+    let raceStateLoads = 0;
+    let raceDecryptCalled = false;
+    const racingSelectionCatalog =
+      new PicoReaderCustodySyncItemCatalog(
+        restoredSource(restoredProjections),
+        pins,
+        {
+          load: () => {
+            const state = structuredClone(materializedState);
+            if (raceMode) {
+              raceStateLoads += 1;
+              if (raceStateLoads > 1) {
+                state.revision += 1;
+              }
+            }
+            return state;
+          },
+        },
+        openMaterializedProjection,
+        (evidence) => {
+          raceDecryptCalled = true;
+          return decryptMaterializedItem(evidence);
+        },
+      );
+    let racingSelection:
+      PicoReaderCustodySyncItemSelection | undefined;
+    racingSelectionCatalog.list((items) => {
+      racingSelection = items[0]!.selection;
+    }, { signal });
+    raceMode = true;
+    expect(() => racingSelectionCatalog.present(
+      racingSelection!,
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_selection_stale');
+    expect(raceDecryptCalled).toBe(false);
+
+    const crossScopeState = structuredClone(materializedState);
+    crossScopeState.pins.domainId = 'reader_sync_domain_cross_scope';
+    expect(() => new PicoReaderCustodySyncItemCatalog(
+      restoredSource(restoredProjections),
+      pins,
+      { load: () => structuredClone(crossScopeState) },
+      openMaterializedProjection,
+      decryptMaterializedItem,
+    ).list(
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_catalog_scope_mismatch');
 
     let accessStateChanged = false;
     const changingStateSource = {

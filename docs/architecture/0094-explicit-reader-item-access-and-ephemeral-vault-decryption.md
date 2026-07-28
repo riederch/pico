@@ -175,7 +175,8 @@ Positive:
 Negative and residual:
 
 - each access reopens and reprojects the complete bounded ADR 0093 archive;
-- the API requires an explicit package id and supplies no searchable catalog;
+- the API requires an explicit package id; ADR 0095 supplies a separate
+  ephemeral current-head catalog without changing this boundary;
 - JavaScript string plaintext cannot be zeroized after decoding;
 - synchronous process-local locking does not coordinate multiple processes;
 - a fully matching old state/archive backup still needs an external monotonic
@@ -199,3 +200,4 @@ Negative and residual:
 - [ADR 0089](0089-authenticated-checkpoint-and-reader-custody-sync.md)
 - [ADR 0090](0090-durable-reader-sync-floor-and-crash-safe-apply.md)
 - [ADR 0093](0093-private-durable-reader-projection-archive-and-idempotent-receipts.md)
+- [ADR 0095](0095-ephemeral-reader-item-catalog-and-local-presentation-handoff.md)

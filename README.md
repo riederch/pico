@@ -239,6 +239,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md`](docs/architecture/0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md) - private one-batch Reader inbox with floor-bound expiry recovery and durable projection acknowledgement
 - [`docs/architecture/0093-private-durable-reader-projection-archive-and-idempotent-receipts.md`](docs/architecture/0093-private-durable-reader-projection-archive-and-idempotent-receipts.md) - bounded private archive for Reader-sealed projections, idempotent receipts and full cryptographic restore
 - [`docs/architecture/0094-explicit-reader-item-access-and-ephemeral-vault-decryption.md`](docs/architecture/0094-explicit-reader-item-access-and-ephemeral-vault-decryption.md) - current-head single-item selection with exact evidence coupling and synchronous ephemeral Vault decryption
+- [`docs/architecture/0095-ephemeral-reader-item-catalog-and-local-presentation-handoff.md`](docs/architecture/0095-ephemeral-reader-item-catalog-and-local-presentation-handoff.md) - bounded current-head catalog with process-local state-bound selections and synchronous local presentation
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces
