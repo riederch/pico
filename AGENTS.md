@@ -52,9 +52,12 @@ Projekteinstellung und wird bei jedem neuen Block neu bewertet.
   mechanischer Doku-Nachzug und kleine Reviews.
 - Codex `gpt-5.6-sol + xhigh`: paketuebergreifende Implementierung,
   Security-/Authority-Grenzen, Architektur und lange autonome Ketten.
-- Claude Code `Opus 4.8 + high/xhigh`: normale Runtime- und Konzeptarbeit.
+- Claude Code `Sonnet 5 + high`: klar begrenzte Runtime-Arbeit, Tests und
+  mechanischer Doku-Nachzug.
+- Claude Code `Opus 5 + high/xhigh`: normale Runtime- und Konzeptarbeit,
+  paketuebergreifende Implementierung entlang eines entschiedenen Vertrags.
 - Claude Code `Fable 5 + xhigh/max`: echte Architektur-Forks und besonders
-  heikle Security-/Crypto-Entscheidungen.
+  heikle Security-/Crypto-Entscheidungen. Fable 5 steht ueber Opus 5.
 
 Hoehere Codex-Stufen als `xhigh` sind derzeit keine Pico-Projektstufen.
 Orchestrierung oder Multi-Agent-Workflows nur nach ausdruecklichem Opt-in des
