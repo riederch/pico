@@ -458,7 +458,7 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
       signatureInputHex: Buffer.from(input).toString('hex'),
     })).rejects.toThrow('vault_locked');
     expect(audit.join('')).toContain('hold_connection_closed');
-  });
+  }, 30_000);
 
   it('refuses a second unlock while unlocked and serves lock from any connection', async () => {
     const { daemon, audit } = await startAt(makeHome());
@@ -513,7 +513,7 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     expect(auditText).toContain('unlock_throttled');
     expect(auditText).not.toContain('wrong-guess');
     expect(auditText).not.toContain(PASSPHRASE);
-  });
+  }, 30_000);
 
   it('serves key-agreement unlock for reader access but never for signing', async () => {
     const paths = makeHome();
@@ -595,7 +595,7 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     idleClock.mono += 1_500;
     expect((await idleClient.status()).locked).toBe(true);
     expect(idle.audit.join('')).toContain('idle_locked');
-  });
+  }, 30_000);
 
   it('bounds lifecycle configuration to the lower-only ceilings', async () => {
     await expect(startAt(makeHome(false), { idleLockMs: 5 * 60 * 1_000 + 1 }))

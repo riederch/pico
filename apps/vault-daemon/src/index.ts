@@ -25,6 +25,10 @@ export type {
   PicoVaultDaemonApprovalRequestDescriptor,
   PicoVaultDaemonApprovalWaitRequest,
   PicoVaultDaemonApprovalWaitResult,
+  PicoVaultDaemonCeremonyCreateDomainRequest,
+  PicoVaultDaemonCeremonyCreateDomainResult,
+  PicoVaultDaemonCeremonyRotateDomainRequest,
+  PicoVaultDaemonCeremonyRotateDomainResult,
   PicoVaultDaemonErrorResponse,
   PicoVaultDaemonHelloRequest,
   PicoVaultDaemonHelloResult,
@@ -50,6 +54,7 @@ export type {
   PicoVaultDaemonStatusResult,
   PicoVaultDaemonUnlockRequest,
   PicoVaultDaemonUnlockResult,
+  PicoVaultDaemonUnlockedSessionDescriptor,
 } from './protocol.js';
 export {
   defaultMonotonicNowMs,

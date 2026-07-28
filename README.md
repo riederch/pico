@@ -246,6 +246,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0098-reader-access-lease-over-the-vault-daemon.md`](docs/architecture/0098-reader-access-lease-over-the-vault-daemon.md) - bounded reader-access lease over the Vault daemon, keeping reader private keys out of consumer processes
 - [`docs/architecture/0099-hold-channel-approval-for-authority-creating-signatures.md`](docs/architecture/0099-hold-channel-approval-for-authority-creating-signatures.md) - per-request approval for signatures that create new authority, decided by the person on the terminal holding the unlock
 - [`docs/architecture/0100-identity-ceremony-signing-over-the-vault-daemon.md`](docs/architecture/0100-identity-ceremony-signing-over-the-vault-daemon.md) - ceremony signing over the Vault daemon, so the identity root key no longer lives in the processes that build records
+- [`docs/architecture/0101-daemon-side-kek-ceremony-families-and-ceremony-approval.md`](docs/architecture/0101-daemon-side-kek-ceremony-families-and-ceremony-approval.md) - domain creation and KEK rotation executed inside the Vault daemon under one approval each, with fresh KEKs born inside the boundary
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

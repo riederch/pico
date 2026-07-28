@@ -208,12 +208,21 @@ async function runApprovalLoop(client: PicoVaultDaemonClient): Promise<void> {
     }
 
     const pending = waited.pending;
+    const summaryLines = pending.summary === undefined
+      ? ''
+      : Object.entries(pending.summary)
+        .map(([key, value]) => `  ${key.padEnd(11)} ${String(value)}\n`)
+        .join('');
+    const isCeremony = pending.label.startsWith('pico.vault.daemon.ceremony.');
     process.stderr.write(
       `\nApproval requested\n`
       + `  family      ${pending.label}\n`
       + `  key         ${pending.keyRole} ${pending.keyFingerprintHex}\n`
       + `  digest      ${pending.signatureInputDigestHex}\n`
-      + `  authorizes  exactly one signature over these bytes\n`,
+      + summaryLines
+      + (isCeremony
+        ? `  authorizes  exactly one ceremony over exactly this request\n`
+        : `  authorizes  exactly one signature over these bytes\n`),
     );
     let answer = '';
     try {

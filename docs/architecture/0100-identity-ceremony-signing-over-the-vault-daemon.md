@@ -212,11 +212,12 @@ KEK path whole.
   reader path, a denial that fails the ceremony with `approval_denied`, and
   a signer refused against a locked daemon.
 - **C5 - Future (each its own decision):** daemon-side KEK ceremony
-  families with one-approval-per-ceremony input-digest binding; more than
-  one concurrently unlocked session per daemon, which those families will
-  force; migration of the Foundation-side ceremony callers as their
-  deployment shapes appear; everything ADR 0097 Gate D7 and ADR 0099 P7
-  already list.
+  families with one-approval-per-ceremony input-digest binding — **ADR
+  0101 discharges this for the root-only half** (domain creation and
+  rotation); more than one concurrently unlocked session per daemon, which
+  the remaining two-role ceremonies will force; migration of the
+  Foundation-side ceremony callers as their deployment shapes appear;
+  everything ADR 0097 Gate D7 and ADR 0099 P7 already list.
 
 ## Non-goals
 

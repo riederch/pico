@@ -8,6 +8,10 @@ import {
   PicoVaultDaemonFrameDecoder,
   type PicoVaultDaemonApprovalDecideResult,
   type PicoVaultDaemonApprovalWaitResult,
+  type PicoVaultDaemonCeremonyCreateDomainRequest,
+  type PicoVaultDaemonCeremonyCreateDomainResult,
+  type PicoVaultDaemonCeremonyRotateDomainRequest,
+  type PicoVaultDaemonCeremonyRotateDomainResult,
   type PicoVaultDaemonHelloResult,
   type PicoVaultDaemonLockResult,
   type PicoVaultDaemonSignResult,
@@ -31,6 +35,12 @@ export interface PicoVaultDaemonClient {
     signatureInputDigestHex: string;
     approved: boolean;
   }): Promise<PicoVaultDaemonApprovalDecideResult>;
+  ceremonyCreateDomain(
+    input: Omit<PicoVaultDaemonCeremonyCreateDomainRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonCeremonyCreateDomainResult>;
+  ceremonyRotateDomain(
+    input: Omit<PicoVaultDaemonCeremonyRotateDomainRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonCeremonyRotateDomainResult>;
   close(): Promise<void>;
 }
 
@@ -149,6 +159,14 @@ export async function connectPicoVaultDaemonClient(
       signatureInputDigestHex: decideInput.signatureInputDigestHex,
       approved: decideInput.approved,
     }) as unknown as PicoVaultDaemonApprovalDecideResult,
+    ceremonyCreateDomain: async (ceremonyInput) => await request({
+      family: picoVaultDaemonRequestFamilies.ceremonyCreateDomain,
+      ...ceremonyInput,
+    }) as unknown as PicoVaultDaemonCeremonyCreateDomainResult,
+    ceremonyRotateDomain: async (ceremonyInput) => await request({
+      family: picoVaultDaemonRequestFamilies.ceremonyRotateDomain,
+      ...ceremonyInput,
+    }) as unknown as PicoVaultDaemonCeremonyRotateDomainResult,
     close: async () => {
       if (closed) {
         return;

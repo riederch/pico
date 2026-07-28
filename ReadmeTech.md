@@ -67,6 +67,7 @@ Implemented or prepared:
 - bounded reader-access lease over that daemon, so the Reader path runs without the reader's private key in the consumer process (ADR 0098)
 - per-request approval for authority-creating signatures, decided on the terminal that holds the unlock and bound to the exact bytes (ADR 0099)
 - ceremony signing over that daemon through a structural detached signer, so the identity root key stays out of the processes that build records; key-agreement operations remain local by design (ADR 0100)
+- domain creation and KEK rotation executed inside the daemon under one input-digest-bound approval each, so fresh KEKs are born inside the boundary and a rotation costs one decision instead of one per reader (ADR 0101)
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state and canonical product action terminology
 - WebSocket endpoint for event streaming

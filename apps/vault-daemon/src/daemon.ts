@@ -4,10 +4,12 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
+  createPicoReaderCustodyDomain,
   createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
   picoVaultCanSignLabel,
   readPicoVaultKeyfile,
+  rotatePicoReaderCustodyDomain,
   type PicoVaultEncryptedKeyfileV1,
   type PicoVaultReaderCustodySyncAccessSession,
   type PicoVaultReaderCustodySyncItemEvidence,
@@ -97,9 +99,11 @@ interface ConnectionState {
 }
 
 /**
- * One approval authorizes exactly one signature. It is bound to the requesting
+ * One approval authorizes exactly one action - a single signature (ADR 0099)
+ * or a single ceremony execution (ADR 0101). It is bound to the requesting
  * connection, that connection's request id and the digest of the exact bytes -
- * never to a time window (ADR 0099).
+ * never to a time window. `run` performs the approved action and writes the
+ * consumer's response; the deny paths never call it.
  */
 interface PendingApproval {
   approvalId: string;
@@ -107,10 +111,11 @@ interface PendingApproval {
   keyRole: PicoVaultPersonKeyRole;
   keyFingerprintHex: string;
   signatureInputDigestHex: string;
-  signatureInput: Uint8Array;
+  summary?: Record<string, string | number>;
   consumerSocket: Socket;
   consumerRequestId: string;
   timer: NodeJS.Timeout;
+  run: () => void;
 }
 
 interface UnlockedState {
@@ -485,6 +490,51 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleApprovalDecide(socket, request);
         return;
       }
+      case picoVaultDaemonRequestFamilies.ceremonyCreateDomain: {
+        this.#handleCeremony(socket, frame, request, {
+          summary: { domainId: request.domainId, homeId: request.homeId },
+          execute: (session) => ({
+            domainRecord: createPicoReaderCustodyDomain(this.#sodium, {
+              ownerIdentitySession: session,
+              ownerReaderKeyRecord: request.ownerReaderKeyRecord as never,
+              domainAuthorityId: request.domainAuthorityId,
+              homeId: request.homeId,
+              hostSigningKeyFingerprintHex: request.hostSigningKeyFingerprintHex,
+              domainId: request.domainId,
+              ...(request.kekVersion === undefined ? {} : { kekVersion: request.kekVersion }),
+              authorizedAt: request.authorizedAt,
+              lifecycleOrder: request.lifecycleOrder,
+              ...(request.receivedAt === undefined ? {} : { receivedAt: request.receivedAt }),
+            }) as unknown as Record<string, unknown>,
+          }),
+        });
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.ceremonyRotateDomain: {
+        this.#handleCeremony(socket, frame, request, {
+          summary: {
+            domainId: String((request.domainRecord as { domain?: { domainId?: unknown } })
+              .domain?.domainId ?? ''),
+            remainingReaders: request.remainingReaderGrantRecords.length,
+            rotationId: request.rotationId,
+          },
+          execute: (session) => ({
+            rotationRecord: rotatePicoReaderCustodyDomain(this.#sodium, {
+              ownerIdentitySession: session,
+              domainRecord: request.domainRecord as never,
+              rotationRecords: request.rotationRecords as never,
+              readerGrantLifecycleRecords: request.readerGrantLifecycleRecords as never,
+              writerGrantLifecycleRecords: request.writerGrantLifecycleRecords as never,
+              remainingReaderGrantRecords: request.remainingReaderGrantRecords as never,
+              rotationId: request.rotationId,
+              rotatedAt: request.rotatedAt,
+              lifecycleOrder: request.lifecycleOrder,
+              ...(request.receivedAt === undefined ? {} : { receivedAt: request.receivedAt }),
+            }) as unknown as Record<string, unknown>,
+          }),
+        });
+        return;
+      }
       case picoVaultDaemonRequestFamilies.readerAccessOpen: {
         this.#handleReaderAccessOpen(socket, state, request);
         return;
@@ -566,6 +616,111 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       return;
     }
 
+    this.#parkApproval({
+      label,
+      digestHex: Buffer.from(
+        this.#sodium.crypto_generichash(32, signatureInput, null),
+      ).toString('hex'),
+      consumerSocket: socket,
+      consumerRequestId: request.requestId,
+      waiter,
+      run: () => {
+        this.#completeSign(socket, request.requestId, signatureInput);
+      },
+    });
+  }
+
+  /**
+   * ADR 0101: one ceremony, one approval, bound to the digest of the exact
+   * frame bytes (request id included). On approval the ceremony executes
+   * against the daemon's own unlocked identity session - every internal
+   * signature and the fresh KEK stay inside the boundary.
+   */
+  #handleCeremony(
+    socket: Socket,
+    frame: Buffer,
+    request: { family: string; requestId: string },
+    ceremony: {
+      summary: Record<string, string | number>;
+      execute: (session: PicoVaultSession) => Record<string, unknown>;
+    },
+  ): void {
+    const unlocked = this.#unlocked;
+    if (unlocked === null) {
+      this.#respondError(socket, request.requestId, 'vault_locked');
+      return;
+    }
+    if (unlocked.keyRole !== 'pico_identity') {
+      this.#audit('ceremony_requested', {
+        outcome: 'error',
+        reason: 'ceremony_key_role_mismatch',
+        label: request.family,
+      });
+      this.#respondError(socket, request.requestId, 'ceremony_key_role_mismatch');
+      return;
+    }
+    if (this.#pendingApproval !== null) {
+      this.#respondError(socket, request.requestId, 'approval_pending');
+      return;
+    }
+    const waiter = this.#approvalWaiter();
+    if (waiter === null) {
+      this.#audit('ceremony_requested', {
+        outcome: 'error',
+        reason: 'approval_unavailable',
+        label: request.family,
+      });
+      this.#respondError(socket, request.requestId, 'approval_unavailable');
+      return;
+    }
+
+    this.#audit('ceremony_requested', { outcome: 'ok', label: request.family });
+    this.#parkApproval({
+      label: request.family,
+      digestHex: Buffer.from(
+        this.#sodium.crypto_generichash(32, Uint8Array.from(frame), null),
+      ).toString('hex'),
+      summary: ceremony.summary,
+      consumerSocket: socket,
+      consumerRequestId: request.requestId,
+      waiter,
+      run: () => {
+        const current = this.#unlocked;
+        if (current === null) {
+          this.#respondError(socket, request.requestId, 'vault_locked');
+          return;
+        }
+        try {
+          const result = ceremony.execute(current.session);
+          this.#audit('ceremony_completed', { outcome: 'ok', label: request.family });
+          this.#respondOk(socket, request.requestId, result);
+        } catch (error) {
+          const reason = reasonOf(error, 'ceremony_failed');
+          this.#audit('ceremony_completed', {
+            outcome: 'error',
+            reason,
+            label: request.family,
+          });
+          this.#respondError(socket, request.requestId, reason);
+        }
+      },
+    });
+  }
+
+  #parkApproval(input: {
+    label: string;
+    digestHex: string;
+    summary?: Record<string, string | number>;
+    consumerSocket: Socket;
+    consumerRequestId: string;
+    waiter: { socket: Socket; state: ConnectionState; requestId: string };
+    run: () => void;
+  }): void {
+    const unlocked = this.#unlocked;
+    if (unlocked === null) {
+      this.#respondError(input.consumerSocket, input.consumerRequestId, 'vault_locked');
+      return;
+    }
     const timer = setTimeout(() => {
       this.#denyApproval('approval_timeout');
     }, this.#approvalWindowMs);
@@ -574,25 +729,24 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       approvalId: Buffer.from(
         this.#sodium.randombytes_buf(PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS / 2),
       ).toString('hex'),
-      label,
+      label: input.label,
       keyRole: unlocked.keyRole,
       keyFingerprintHex: unlocked.keyFingerprintHex,
-      signatureInputDigestHex: Buffer.from(
-        this.#sodium.crypto_generichash(32, signatureInput, null),
-      ).toString('hex'),
-      signatureInput,
-      consumerSocket: socket,
-      consumerRequestId: request.requestId,
+      signatureInputDigestHex: input.digestHex,
+      ...(input.summary === undefined ? {} : { summary: input.summary }),
+      consumerSocket: input.consumerSocket,
+      consumerRequestId: input.consumerRequestId,
       timer,
+      run: input.run,
     };
     this.#audit('approval_requested', {
       outcome: 'ok',
-      label,
+      label: input.label,
       keyRole: unlocked.keyRole,
       keyFingerprintHex: unlocked.keyFingerprintHex,
     });
-    this.#clearApprovalWait(waiter.state);
-    this.#respondOk(waiter.socket, waiter.requestId, {
+    this.#clearApprovalWait(input.waiter.state);
+    this.#respondOk(input.waiter.socket, input.waiter.requestId, {
       pending: this.#approvalDescriptor(this.#pendingApproval),
     });
   }
@@ -690,7 +844,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       label: pending.label,
     });
     if (request.approved) {
-      this.#completeSign(pending.consumerSocket, pending.consumerRequestId, pending.signatureInput);
+      pending.run();
     } else {
       this.#respondError(pending.consumerSocket, pending.consumerRequestId, 'approval_denied');
     }
@@ -717,6 +871,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       keyFingerprintHex: pending.keyFingerprintHex,
       signatureInputDigestHex: pending.signatureInputDigestHex,
       expiresInMs: this.#approvalWindowMs,
+      ...(pending.summary === undefined ? {} : { summary: pending.summary }),
     };
   }
 

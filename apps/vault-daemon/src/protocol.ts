@@ -22,6 +22,8 @@ export const picoVaultDaemonRequestFamilies = {
   readerAccessClose: 'pico.vault.daemon.reader-access.close.v1',
   approvalWait: 'pico.vault.daemon.approval.wait.v1',
   approvalDecide: 'pico.vault.daemon.approval.decide.v1',
+  ceremonyCreateDomain: 'pico.vault.daemon.ceremony.create-domain.v1',
+  ceremonyRotateDomain: 'pico.vault.daemon.ceremony.rotate-domain.v1',
 } as const;
 
 /**
@@ -141,6 +143,40 @@ export interface PicoVaultDaemonReaderAccessDecryptItemRequest {
   itemRecord: Record<string, unknown>;
 }
 
+/**
+ * ADR 0101 ceremony requests. Scalars are validated structurally; embedded
+ * records stay opaque because `@pico/vault` is the single authority that
+ * verifies them. The approval digest covers the exact frame bytes, so every
+ * field below is bound whether or not the wire inspects it.
+ */
+export interface PicoVaultDaemonCeremonyCreateDomainRequest {
+  family: typeof picoVaultDaemonRequestFamilies.ceremonyCreateDomain;
+  requestId: string;
+  ownerReaderKeyRecord: Record<string, unknown>;
+  domainAuthorityId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  domainId: string;
+  kekVersion?: number;
+  authorizedAt: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface PicoVaultDaemonCeremonyRotateDomainRequest {
+  family: typeof picoVaultDaemonRequestFamilies.ceremonyRotateDomain;
+  requestId: string;
+  domainRecord: Record<string, unknown>;
+  rotationRecords: Record<string, unknown>[];
+  readerGrantLifecycleRecords: Record<string, unknown>[];
+  writerGrantLifecycleRecords: Record<string, unknown>[];
+  remainingReaderGrantRecords: Record<string, unknown>[];
+  rotationId: string;
+  rotatedAt: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
 export interface PicoVaultDaemonApprovalWaitRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalWait;
   requestId: string;
@@ -166,7 +202,9 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonReaderAccessOpenPayloadRequest
   | PicoVaultDaemonReaderAccessDecryptItemRequest
   | PicoVaultDaemonApprovalWaitRequest
-  | PicoVaultDaemonApprovalDecideRequest;
+  | PicoVaultDaemonApprovalDecideRequest
+  | PicoVaultDaemonCeremonyCreateDomainRequest
+  | PicoVaultDaemonCeremonyRotateDomainRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -250,6 +288,20 @@ export interface PicoVaultDaemonApprovalRequestDescriptor {
   keyFingerprintHex: string;
   signatureInputDigestHex: string;
   expiresInMs: number;
+  /**
+   * ADR 0101: verbatim scalar echo from a ceremony request (already covered
+   * by the digest) - input echo, never interpretation. Absent for plain
+   * signature approvals.
+   */
+  summary?: Record<string, string | number>;
+}
+
+export interface PicoVaultDaemonCeremonyCreateDomainResult {
+  domainRecord: Record<string, unknown>;
+}
+
+export interface PicoVaultDaemonCeremonyRotateDomainResult {
+  rotationRecord: Record<string, unknown>;
 }
 
 export interface PicoVaultDaemonApprovalWaitResult {
@@ -478,6 +530,63 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         itemRecord: requireRecord(parsed, 'itemRecord'),
       };
     }
+    case picoVaultDaemonRequestFamilies.ceremonyCreateDomain: {
+      assertExactKeysWithOptional(
+        parsed,
+        [
+          'family', 'requestId', 'ownerReaderKeyRecord', 'domainAuthorityId',
+          'homeId', 'hostSigningKeyFingerprintHex', 'domainId', 'authorizedAt',
+          'lifecycleOrder',
+        ],
+        ['kekVersion', 'receivedAt'],
+      );
+      const kekVersion = parsed.kekVersion;
+      if (kekVersion !== undefined && (!Number.isSafeInteger(kekVersion) || (kekVersion as number) < 1)) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.ceremonyCreateDomain,
+        requestId,
+        ownerReaderKeyRecord: requireRecord(parsed, 'ownerReaderKeyRecord'),
+        domainAuthorityId: requireBoundedString(parsed, 'domainAuthorityId'),
+        homeId: requireBoundedString(parsed, 'homeId'),
+        hostSigningKeyFingerprintHex: requireFingerprintHex(parsed, 'hostSigningKeyFingerprintHex'),
+        domainId: requireBoundedString(parsed, 'domainId'),
+        ...(kekVersion === undefined ? {} : { kekVersion: kekVersion as number }),
+        authorizedAt: requireBoundedString(parsed, 'authorizedAt'),
+        lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
+        ...(parsed.receivedAt === undefined
+          ? {}
+          : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.ceremonyRotateDomain: {
+      assertExactKeysWithOptional(
+        parsed,
+        [
+          'family', 'requestId', 'domainRecord', 'rotationRecords',
+          'readerGrantLifecycleRecords', 'writerGrantLifecycleRecords',
+          'remainingReaderGrantRecords', 'rotationId', 'rotatedAt',
+          'lifecycleOrder',
+        ],
+        ['receivedAt'],
+      );
+      return {
+        family: picoVaultDaemonRequestFamilies.ceremonyRotateDomain,
+        requestId,
+        domainRecord: requireRecord(parsed, 'domainRecord'),
+        rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
+        readerGrantLifecycleRecords: requireRecordArray(parsed, 'readerGrantLifecycleRecords'),
+        writerGrantLifecycleRecords: requireRecordArray(parsed, 'writerGrantLifecycleRecords'),
+        remainingReaderGrantRecords: requireRecordArray(parsed, 'remainingReaderGrantRecords'),
+        rotationId: requireBoundedString(parsed, 'rotationId'),
+        rotatedAt: requireBoundedString(parsed, 'rotatedAt'),
+        lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
+        ...(parsed.receivedAt === undefined
+          ? {}
+          : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
+      };
+    }
     case picoVaultDaemonRequestFamilies.approvalWait: {
       assertExactKeys(parsed, ['family', 'requestId']);
       return { family: picoVaultDaemonRequestFamilies.approvalWait, requestId };
@@ -619,6 +728,29 @@ function assertExactKeys(record: Record<string, unknown>, keys: readonly string[
   if (actual.length !== keys.length || !keys.every((key) => Object.hasOwn(record, key))) {
     throw new Error('invalid_request');
   }
+}
+
+function assertExactKeysWithOptional(
+  record: Record<string, unknown>,
+  required: readonly string[],
+  optional: readonly string[],
+): void {
+  if (!required.every((key) => Object.hasOwn(record, key))) {
+    throw new Error('invalid_request');
+  }
+  for (const key of Object.keys(record)) {
+    if (!required.includes(key) && !optional.includes(key)) {
+      throw new Error('invalid_request');
+    }
+  }
+}
+
+function requireBoundedString(parsed: Record<string, unknown>, key: string): string {
+  const value = parsed[key];
+  if (typeof value !== 'string' || value.length === 0 || value.length > 1024) {
+    throw new Error('invalid_request');
+  }
+  return value;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
