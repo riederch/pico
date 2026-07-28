@@ -71,7 +71,7 @@ transit during unlock, and the authority to obtain signatures at all.
 | Attacker | Capability | Posture |
 |---|---|---|
 | Other local OS users | Can see the filesystem and try to connect. | Structurally excluded: the socket lives in a `0700` run directory under the `0700` Vault home; pathname sockets are connect-authorized by directory permissions, which the OS enforces. Abstract-namespace sockets are forbidden because they bypass exactly this. |
-| Compromised same-user local consumer | Can connect, speak the protocol, submit requests while a session is unlocked, guess passphrases through the unlock family, and flood connections or frames. | Bounded, not solved (the ADR 0081 endpoint honesty). It can never read keys or the passphrase back, never exports key material, and can only request label-checked families the Vault already recognizes; unlock guessing meets Argon2id cost plus daemon throttling and audit; frames, connection counts and in-flight requests are capped. During an unlock window it can request signatures within recognized families — per-request approval is the named later tightening, above this floor. |
+| Compromised same-user local consumer | Can connect, speak the protocol, submit requests while a session is unlocked, guess passphrases through the unlock family, and flood connections or frames. | Bounded, not solved (the ADR 0081 endpoint honesty). It can never read keys or the passphrase back, never exports key material, and can only request label-checked families the Vault already recognizes; unlock guessing meets Argon2id cost plus daemon throttling and audit; frames, connection counts and in-flight requests are capped. During an unlock window it can request signatures within recognized families — per-request approval is the named later tightening, above this floor, and ADR 0099 now implements it for the authority-creating families. |
 | Malware with the person's uid reading daemon memory | ptrace, /proc/pid/mem, core dumps. | Endpoint compromise wins — stated. The daemon narrows exposure to one process instead of every consumer, and sessions are bounded (idle, duration, suspend, hold) so the window is short, but a GC runtime still cannot promise erasure (ADR 0081 V7 limits restated). |
 | Foundation host process or backup sweep | Reads Foundation data and backup scopes. | Structurally void: startup refuses a Vault home (keyfiles and socket) inside the Foundation data or backup scope via `assertVaultCustodyPathSeparation` — V1's disjoint-paths rule executed at boot, not policied. |
 | Keyfile thief | Steals disk or synced directory. | ADR 0081 posture unchanged: keyfiles are Argon2id/XChaCha20-Poly1305 encrypted; the socket is not a secret; nothing session-shaped is ever persisted. |
@@ -278,7 +278,9 @@ not evidence.
   the wire contract toward a public surface. **ADR 0098 discharges the
   reader-sync part**: it adds the reader-access lease families, supplies
   the first real consumer and lifts the `device_key_agreement`
-  `key_role_not_served` refusal recorded above.
+  `key_role_not_served` refusal recorded above. **ADR 0099 discharges
+  per-request approval** for the authority-creating families and enforces
+  the one-request-in-flight rule this contract always implied.
 
 ## Non-goals
 

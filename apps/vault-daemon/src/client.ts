@@ -6,6 +6,8 @@ import {
   picoVaultDaemonProtocolVersion,
   picoVaultDaemonRequestFamilies,
   PicoVaultDaemonFrameDecoder,
+  type PicoVaultDaemonApprovalDecideResult,
+  type PicoVaultDaemonApprovalWaitResult,
   type PicoVaultDaemonHelloResult,
   type PicoVaultDaemonLockResult,
   type PicoVaultDaemonSignResult,
@@ -23,6 +25,12 @@ export interface PicoVaultDaemonClient {
   }): Promise<PicoVaultDaemonUnlockResult>;
   lock(): Promise<PicoVaultDaemonLockResult>;
   sign(input: { signatureInputHex: string }): Promise<PicoVaultDaemonSignResult>;
+  approvalWait(): Promise<PicoVaultDaemonApprovalWaitResult>;
+  approvalDecide(input: {
+    approvalId: string;
+    signatureInputDigestHex: string;
+    approved: boolean;
+  }): Promise<PicoVaultDaemonApprovalDecideResult>;
   close(): Promise<void>;
 }
 
@@ -132,6 +140,15 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.sign,
       signatureInputHex: signInput.signatureInputHex,
     }) as unknown as PicoVaultDaemonSignResult,
+    approvalWait: async () => await request({
+      family: picoVaultDaemonRequestFamilies.approvalWait,
+    }) as unknown as PicoVaultDaemonApprovalWaitResult,
+    approvalDecide: async (decideInput) => await request({
+      family: picoVaultDaemonRequestFamilies.approvalDecide,
+      approvalId: decideInput.approvalId,
+      signatureInputDigestHex: decideInput.signatureInputDigestHex,
+      approved: decideInput.approved,
+    }) as unknown as PicoVaultDaemonApprovalDecideResult,
     close: async () => {
       if (closed) {
         return;

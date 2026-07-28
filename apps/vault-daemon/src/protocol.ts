@@ -20,7 +20,27 @@ export const picoVaultDaemonRequestFamilies = {
   readerAccessOpenPayload: 'pico.vault.daemon.reader-access.open-payload.v1',
   readerAccessDecryptItem: 'pico.vault.daemon.reader-access.decrypt-item.v1',
   readerAccessClose: 'pico.vault.daemon.reader-access.close.v1',
+  approvalWait: 'pico.vault.daemon.approval.wait.v1',
+  approvalDecide: 'pico.vault.daemon.approval.decide.v1',
 } as const;
+
+/**
+ * ADR 0099 gating policy. Approval guards the creation of new signed
+ * authority; these four families are the operational high-frequency ones that
+ * prove possession or carry routine traffic and create nothing that outlives
+ * the call. The list is closed: every other signable label - including any
+ * family added later - requires approval, so the default is to ask.
+ */
+export const picoVaultDaemonApprovalExemptLabels: ReadonlySet<string> = new Set([
+  'pico.id.possession.v1',
+  'pico.id.reader-key-freshness.v1',
+  'pico.mem.reader-sync-manifest.v1',
+  'pico.mem.reader-item.v1',
+]);
+
+export function picoVaultDaemonSignatureNeedsApproval(label: string): boolean {
+  return !picoVaultDaemonApprovalExemptLabels.has(label);
+}
 
 export const picoVaultDaemonResponseFamily = 'pico.vault.daemon.response.v1' as const;
 
@@ -37,6 +57,10 @@ export const MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES =
   3 * MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES;
 
 export const PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS = 5 * 60 * 1_000;
+
+export const PICO_VAULT_DAEMON_APPROVAL_WINDOW_MS = 60 * 1_000;
+export const PICO_VAULT_DAEMON_APPROVAL_WAIT_MS = 30 * 1_000;
+export const PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS = 32;
 export const MAX_PICO_VAULT_DAEMON_SIGNATURE_INPUT_HEX_CHARS = 64 * 1024;
 export const MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS = 1024;
 export const MAX_PICO_VAULT_DAEMON_REQUEST_ID_CHARS = 64;
@@ -117,6 +141,19 @@ export interface PicoVaultDaemonReaderAccessDecryptItemRequest {
   itemRecord: Record<string, unknown>;
 }
 
+export interface PicoVaultDaemonApprovalWaitRequest {
+  family: typeof picoVaultDaemonRequestFamilies.approvalWait;
+  requestId: string;
+}
+
+export interface PicoVaultDaemonApprovalDecideRequest {
+  family: typeof picoVaultDaemonRequestFamilies.approvalDecide;
+  requestId: string;
+  approvalId: string;
+  signatureInputDigestHex: string;
+  approved: boolean;
+}
+
 export type PicoVaultDaemonRequest =
   | PicoVaultDaemonHelloRequest
   | PicoVaultDaemonStatusRequest
@@ -127,7 +164,9 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonReaderAccessIsLockedRequest
   | PicoVaultDaemonReaderAccessCloseRequest
   | PicoVaultDaemonReaderAccessOpenPayloadRequest
-  | PicoVaultDaemonReaderAccessDecryptItemRequest;
+  | PicoVaultDaemonReaderAccessDecryptItemRequest
+  | PicoVaultDaemonApprovalWaitRequest
+  | PicoVaultDaemonApprovalDecideRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -185,6 +224,28 @@ export interface PicoVaultDaemonReaderAccessOpenPayloadResult {
 
 export interface PicoVaultDaemonReaderAccessDecryptItemResult {
   plaintext: string;
+}
+
+/**
+ * What the person is shown. It is deliberately the family label, the key it
+ * would be signed with and the digest that binds the decision - not a rendered
+ * statement of the record, which no renderer exists for yet (ADR 0099).
+ */
+export interface PicoVaultDaemonApprovalRequestDescriptor {
+  approvalId: string;
+  label: string;
+  keyRole: PicoVaultPersonKeyRole;
+  keyFingerprintHex: string;
+  signatureInputDigestHex: string;
+  expiresInMs: number;
+}
+
+export interface PicoVaultDaemonApprovalWaitResult {
+  pending: PicoVaultDaemonApprovalRequestDescriptor | null;
+}
+
+export interface PicoVaultDaemonApprovalDecideResult {
+  recorded: true;
 }
 
 export interface PicoVaultDaemonOkResponse {
@@ -403,6 +464,37 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         writerGrantRecord: requireRecord(parsed, 'writerGrantRecord'),
         rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
         itemRecord: requireRecord(parsed, 'itemRecord'),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.approvalWait: {
+      assertExactKeys(parsed, ['family', 'requestId']);
+      return { family: picoVaultDaemonRequestFamilies.approvalWait, requestId };
+    }
+    case picoVaultDaemonRequestFamilies.approvalDecide: {
+      assertExactKeys(parsed, [
+        'family',
+        'requestId',
+        'approvalId',
+        'signatureInputDigestHex',
+        'approved',
+      ]);
+      const approvalId = parsed.approvalId;
+      if (
+        typeof approvalId !== 'string'
+        || approvalId.length !== PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS
+        || !lowercaseHexPattern.test(approvalId)
+      ) {
+        throw new Error('invalid_request');
+      }
+      if (typeof parsed.approved !== 'boolean') {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.approvalDecide,
+        requestId,
+        approvalId,
+        signatureInputDigestHex: requireFingerprintHex(parsed, 'signatureInputDigestHex'),
+        approved: parsed.approved,
       };
     }
     default:

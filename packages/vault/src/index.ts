@@ -392,6 +392,19 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 const canonicalHexPattern = /^[0-9a-f]+$/;
 
+/**
+ * Read-only view of the V4 catalog above, so a caller outside this module can
+ * refuse an input this Vault would never sign without having to try. It is a
+ * predicate rather than the sets themselves: the catalog stays unmodifiable,
+ * and `sign` remains the authority that actually enforces it.
+ */
+export function picoVaultCanSignLabel(
+  keyRole: PicoVaultPersonKeyRole,
+  label: string,
+): boolean {
+  return signableLabelsByKeyRole[keyRole]?.has(label) ?? false;
+}
+
 export class PicoVaultSession {
   readonly #sodium: VaultSodium;
 

@@ -1,0 +1,468 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { createConnection, type Socket } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoIdentityPossessionSignatureInput,
+  picoIdentitySuite,
+} from '@pico/protocol';
+import {
+  createPicoVaultKeyfile,
+  writePicoVaultKeyfile,
+  type CreatePicoVaultKeyfileResult,
+} from '@pico/vault';
+import sodium from 'libsodium-wrappers-sumo';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  connectPicoVaultDaemonClient,
+  encodePicoVaultDaemonFrame,
+  parsePicoVaultDaemonResponse,
+  picoVaultDaemonProtocolVersion,
+  picoVaultDaemonRequestFamilies,
+  picoVaultDaemonSignatureNeedsApproval,
+  startPicoVaultDaemon,
+  PicoVaultDaemonFrameDecoder,
+  type PicoVaultDaemonApprovalRequestDescriptor,
+  type PicoVaultDaemonClient,
+  type PicoVaultDaemonOptions,
+  type PicoVaultDaemon,
+  type PicoVaultDaemonResponse,
+} from './index.js';
+
+const PASSPHRASE = 'correct horse battery staple';
+
+const temporaryDirectories: string[] = [];
+const daemons: PicoVaultDaemon[] = [];
+const clients: PicoVaultDaemonClient[] = [];
+const rawSockets: Socket[] = [];
+
+let identityFixture: CreatePicoVaultKeyfileResult;
+
+beforeAll(async () => {
+  await sodium.ready;
+  identityFixture = createPicoVaultKeyfile(sodium, {
+    keyRole: 'pico_identity',
+    passphrase: PASSPHRASE,
+  });
+}, 30_000);
+
+afterEach(async () => {
+  for (const socket of rawSockets.splice(0)) {
+    socket.destroy();
+  }
+  for (const client of clients.splice(0)) {
+    await client.close();
+  }
+  for (const daemon of daemons.splice(0)) {
+    await daemon.close();
+  }
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+function tempDir(prefix: string): string {
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  temporaryDirectories.push(directory);
+  return directory;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, ms);
+  });
+}
+
+async function startDaemon(
+  overrides: Partial<PicoVaultDaemonOptions> = {},
+): Promise<{ daemon: PicoVaultDaemon; audit: string[] }> {
+  const home = tempDir('pico-ap-');
+  writePicoVaultKeyfile(
+    join(home, 'keyfiles', `pico_identity-${identityFixture.keyFingerprintHex}.json`),
+    identityFixture.keyfile,
+  );
+  const audit: string[] = [];
+  const daemon = await startPicoVaultDaemon({
+    sodium,
+    vaultHomePath: home,
+    foundationDataPath: tempDir('pico-ap-data-'),
+    foundationBackupPath: tempDir('pico-ap-backup-'),
+    auditSink: (line) => {
+      audit.push(line);
+    },
+    ...overrides,
+  });
+  daemons.push(daemon);
+  return { daemon, audit };
+}
+
+async function openClient(daemon: PicoVaultDaemon): Promise<PicoVaultDaemonClient> {
+  const client = await connectPicoVaultDaemonClient({ socketPath: daemon.socketPath });
+  clients.push(client);
+  await client.hello();
+  return client;
+}
+
+async function holdUnlock(daemon: PicoVaultDaemon): Promise<PicoVaultDaemonClient> {
+  const client = await openClient(daemon);
+  await client.unlock({
+    keyRole: 'pico_identity',
+    keyFingerprintHex: identityFixture.keyFingerprintHex,
+    passphrase: PASSPHRASE,
+  });
+  return client;
+}
+
+/**
+ * `pico.id.keyrecord.v1` is signable by an identity key and is not on the
+ * exempt list, so it is the smallest genuinely gated input available.
+ */
+function gatedInputHex(): string {
+  return Buffer.from(buildPicoIdentityKeyRecordSignatureInput({
+    suite: picoIdentitySuite,
+    keyRole: 'pico_identity',
+    publicKeyHex: identityFixture.publicKeyHex,
+  })).toString('hex');
+}
+
+function exemptInputHex(): string {
+  return Buffer.from(buildPicoIdentityPossessionSignatureInput({
+    suite: picoIdentitySuite,
+    subjectKeyFingerprintHex: identityFixture.keyFingerprintHex,
+    verifierNonceHex: '11'.repeat(32),
+    verifierContext: 'pico.test.approval',
+  })).toString('hex');
+}
+
+function digestOfHex(inputHex: string): string {
+  return Buffer.from(
+    sodium.crypto_generichash(32, Uint8Array.from(Buffer.from(inputHex, 'hex')), null),
+  ).toString('hex');
+}
+
+/**
+ * Parks an `approval.wait` and resolves once the daemon has answered it. The
+ * caller must give the daemon a moment to park the request before triggering a
+ * gated signature, which is what `sleep` after this call is for.
+ */
+function startApprovalWait(
+  client: PicoVaultDaemonClient,
+): Promise<PicoVaultDaemonApprovalRequestDescriptor | null> {
+  return client.approvalWait().then((result) => result.pending);
+}
+
+type Settled<T> = { ok: true; value: T } | { ok: false; reason: string };
+
+/**
+ * Attaches handlers at creation time. A parked signature rejects while the test
+ * is awaiting something else, and a handler attached a statement later would
+ * arrive after Node has already flagged the rejection as unhandled.
+ */
+function settle<T>(promise: Promise<T>): Promise<Settled<T>> {
+  return promise.then(
+    (value) => ({ ok: true as const, value }),
+    (error: unknown) => ({
+      ok: false as const,
+      reason: error instanceof Error ? error.message : String(error),
+    }),
+  );
+}
+
+interface RawConnection {
+  send(payload: Record<string, unknown>): void;
+  nextResponse(): Promise<PicoVaultDaemonResponse>;
+}
+
+async function rawConnect(socketPath: string): Promise<RawConnection> {
+  const socket = createConnection(socketPath);
+  rawSockets.push(socket);
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    socket.once('connect', resolvePromise);
+    socket.once('error', rejectPromise);
+  });
+  const decoder = new PicoVaultDaemonFrameDecoder();
+  const responses: PicoVaultDaemonResponse[] = [];
+  const waiters: ((response: PicoVaultDaemonResponse) => void)[] = [];
+  socket.on('error', () => {
+    socket.destroy();
+  });
+  socket.on('data', (chunk) => {
+    for (const frame of decoder.feed(chunk)) {
+      const response = parsePicoVaultDaemonResponse(frame);
+      const waiter = waiters.shift();
+      if (waiter === undefined) {
+        responses.push(response);
+      } else {
+        waiter(response);
+      }
+    }
+  });
+  return {
+    send: (payload) => {
+      socket.write(encodePicoVaultDaemonFrame(payload));
+    },
+    nextResponse: async () => {
+      const buffered = responses.shift();
+      if (buffered !== undefined) {
+        return buffered;
+      }
+      return await new Promise<PicoVaultDaemonResponse>((resolvePromise) => {
+        waiters.push(resolvePromise);
+      });
+    },
+  };
+}
+
+function expectReason(response: PicoVaultDaemonResponse, reason: string): void {
+  expect(response.ok).toBe(false);
+  if (!response.ok) {
+    expect(response.reason).toBe(reason);
+  }
+}
+
+describe('Approval gating policy (ADR 0099 P3)', () => {
+  it('exempts exactly the four operational families and gates everything else', () => {
+    for (const label of [
+      'pico.id.possession.v1',
+      'pico.id.reader-key-freshness.v1',
+      'pico.mem.reader-sync-manifest.v1',
+      'pico.mem.reader-item.v1',
+    ]) {
+      expect(picoVaultDaemonSignatureNeedsApproval(label)).toBe(false);
+    }
+    for (const label of [
+      'pico.id.keyrecord.v1',
+      'pico.id.delegation.v1',
+      'pico.id.revocation.v1',
+      'pico.home.claim.v1',
+      'pico.home.founding.v1',
+      'pico.mem.reader-domain.v1',
+      'pico.mem.reader-grant.v1',
+      'pico.mem.reader-kek-rotation.v1',
+      'pico.share.envelope.v1',
+      'pico.some.family.added.later.v1',
+    ]) {
+      expect(picoVaultDaemonSignatureNeedsApproval(label)).toBe(true);
+    }
+  });
+
+  it('signs an exempt family without ever raising an approval', async () => {
+    const { daemon, audit } = await startDaemon();
+    await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    const signed = await consumer.sign({ signatureInputHex: exemptInputHex() });
+    expect(signed.keyRole).toBe('pico_identity');
+    expect(audit.join('')).not.toContain('approval_requested');
+  }, 30_000);
+
+  it('refuses an unsignable label before asking the person to decide', async () => {
+    const { daemon, audit } = await startDaemon({ approvalWaitMs: 300 });
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+
+    const unknown = Buffer.alloc(4 + 13);
+    unknown.writeUInt32BE(13, 0);
+    unknown.write('pico.evil.v1', 4, 'ascii');
+    await expect(consumer.sign({
+      signatureInputHex: unknown.toString('hex'),
+    })).rejects.toThrow('unknown_signature_input_label');
+
+    expect(audit.join('')).not.toContain('approval_requested');
+    expect(await waiting).toBeNull();
+  }, 30_000);
+});
+
+describe('Approval decision binding (ADR 0099 P2/P4)', () => {
+  it('parks a gated signature until the holder approves the exact bytes', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+
+    const inputHex = gatedInputHex();
+    const signing = settle(consumer.sign({ signatureInputHex: inputHex }));
+    const pending = await waiting;
+    expect(pending).not.toBeNull();
+    expect(pending!.label).toBe('pico.id.keyrecord.v1');
+    expect(pending!.keyRole).toBe('pico_identity');
+    expect(pending!.keyFingerprintHex).toBe(identityFixture.keyFingerprintHex);
+    expect(pending!.signatureInputDigestHex).toBe(digestOfHex(inputHex));
+
+    expect(await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: true,
+    })).toEqual({ recorded: true });
+
+    const settled = await signing;
+    expect(settled.ok).toBe(true);
+    const signed = (settled as { ok: true; value: { signatureHex: string } }).value;
+    expect(sodium.crypto_sign_verify_detached(
+      Uint8Array.from(Buffer.from(signed.signatureHex, 'hex')),
+      Uint8Array.from(Buffer.from(inputHex, 'hex')),
+      Uint8Array.from(Buffer.from(identityFixture.publicKeyHex, 'hex')),
+    )).toBe(true);
+    expect(audit.join('')).toContain('"event":"approval_decided","outcome":"ok","approved":true');
+  }, 30_000);
+
+  it('denies on an explicit no and on a digest that does not match', async () => {
+    const { daemon } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    const pending = await waiting;
+
+    await expect(hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: 'ab'.repeat(32),
+      approved: true,
+    })).rejects.toThrow('approval_digest_mismatch');
+
+    expect(await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: false,
+    })).toEqual({ recorded: true });
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
+  }, 30_000);
+
+  it('denies when the approval window elapses', async () => {
+    const { daemon, audit } = await startDaemon({ approvalWindowMs: 120 });
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    await waiting;
+
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
+    expect(audit.join('')).toContain('"cause":"approval_timeout"');
+  }, 30_000);
+
+  it('refuses a second gated request while one approval is pending', async () => {
+    const { daemon } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const first = await openClient(daemon);
+    const second = await openClient(daemon);
+
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+    const signing = settle(first.sign({ signatureInputHex: gatedInputHex() }));
+    const pending = await waiting;
+
+    await expect(second.sign({
+      signatureInputHex: gatedInputHex(),
+    })).rejects.toThrow('approval_pending');
+
+    await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: false,
+    });
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
+  }, 30_000);
+});
+
+describe('Approval channel authority (ADR 0099 P4/P5)', () => {
+  it('refuses a gated signature when nobody is watching the channel', async () => {
+    const { daemon, audit } = await startDaemon();
+    await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    await expect(consumer.sign({
+      signatureInputHex: gatedInputHex(),
+    })).rejects.toThrow('approval_unavailable');
+    expect(audit.join('')).toContain('approval_unavailable');
+  }, 30_000);
+
+  it('refuses waiting and deciding from a connection that does not hold the unlock', async () => {
+    const { daemon } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    await expect(consumer.approvalWait()).rejects.toThrow('approval_wait_forbidden');
+
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    const pending = await waiting;
+
+    // A third connection: the requesting one already has its parked signature
+    // in flight, so the refusal has to come from the daemon, not from a local
+    // client-side guard.
+    const bystander = await openClient(daemon);
+    await expect(bystander.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: true,
+    })).rejects.toThrow('approval_decision_forbidden');
+
+    await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: false,
+    });
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
+  }, 30_000);
+
+  it('denies a pending approval when the hold connection disappears', async () => {
+    const { daemon } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    await waiting;
+
+    await hold.close();
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
+    await expect(consumer.status()).resolves.toMatchObject({ locked: true });
+  }, 30_000);
+
+  it('rejects a second request sent while a parked response is outstanding', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const waiting = startApprovalWait(hold);
+    await sleep(50);
+
+    const raw = await rawConnect(daemon.socketPath);
+    raw.send({
+      family: picoVaultDaemonRequestFamilies.hello,
+      requestId: 'r1',
+      protocolVersion: picoVaultDaemonProtocolVersion,
+    });
+    expect((await raw.nextResponse()).ok).toBe(true);
+
+    raw.send({
+      family: picoVaultDaemonRequestFamilies.sign,
+      requestId: 'r2',
+      signatureInputHex: gatedInputHex(),
+    });
+    expect(await waiting).not.toBeNull();
+
+    raw.send({ family: picoVaultDaemonRequestFamilies.status, requestId: 'r3' });
+    expectReason(await raw.nextResponse(), 'request_in_flight');
+
+    // Losing the requesting connection discards its pending approval rather
+    // than leaving the person to answer into nothing.
+    await sleep(100);
+    expect(audit.join('')).toContain('approval_discarded');
+  }, 30_000);
+
+  it('bounds approval durations to their lower-only ceilings', async () => {
+    await expect(startDaemon({ approvalWindowMs: 60 * 1_000 + 1 }))
+      .rejects.toThrow('invalid_approval_window_ms');
+    await expect(startDaemon({ approvalWaitMs: 30 * 1_000 + 1 }))
+      .rejects.toThrow('invalid_approval_wait_ms');
+  }, 30_000);
+});

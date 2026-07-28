@@ -134,6 +134,88 @@ async function readPassphrase(prompt: string): Promise<string> {
   });
 }
 
+async function readLine(prompt: string): Promise<string> {
+  process.stderr.write(prompt);
+  const stdin = process.stdin;
+  return await new Promise<string>((resolvePromise, rejectPromise) => {
+    let buffered = '';
+    const onData = (chunk: Buffer): void => {
+      buffered += chunk.toString('utf8');
+      const newlineIndex = buffered.indexOf('\n');
+      if (newlineIndex >= 0) {
+        stdin.off('data', onData);
+        stdin.pause();
+        resolvePromise(buffered.slice(0, newlineIndex).replace(/\r$/, '').trim());
+      }
+    };
+    stdin.on('data', onData);
+    stdin.once('end', () => {
+      rejectPromise(new Error('missing_approval_input'));
+    });
+    stdin.resume();
+  });
+}
+
+/**
+ * The ADR 0099 approval channel. The person is shown the family, the key and
+ * the digest that binds the decision - deliberately not a rendered statement of
+ * the record, because no renderer exists yet and an informal one would be worse
+ * than none. Anything other than an explicit yes denies.
+ */
+async function runApprovalLoop(client: PicoVaultDaemonClient): Promise<void> {
+  let stopping = false;
+  const stop = (): void => {
+    stopping = true;
+    void client.close();
+  };
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, stop);
+  }
+
+  while (!stopping) {
+    let waited;
+    try {
+      waited = await client.approvalWait();
+    } catch {
+      return;
+    }
+    if (stopping) {
+      return;
+    }
+    if (waited.pending === null) {
+      continue;
+    }
+
+    const pending = waited.pending;
+    process.stderr.write(
+      `\nApproval requested\n`
+      + `  family      ${pending.label}\n`
+      + `  key         ${pending.keyRole} ${pending.keyFingerprintHex}\n`
+      + `  digest      ${pending.signatureInputDigestHex}\n`
+      + `  authorizes  exactly one signature over these bytes\n`,
+    );
+    let answer = '';
+    try {
+      answer = await readLine('Approve? [y/N] ');
+    } catch {
+      answer = '';
+    }
+    const approved = answer.toLowerCase() === 'y' || answer.toLowerCase() === 'yes';
+    try {
+      await client.approvalDecide({
+        approvalId: pending.approvalId,
+        signatureInputDigestHex: pending.signatureInputDigestHex,
+        approved,
+      });
+      process.stderr.write(approved ? 'Approved.\n' : 'Denied.\n');
+    } catch (error) {
+      process.stderr.write(
+        `Decision not recorded: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+    }
+  }
+}
+
 async function withClient<T>(
   vaultHomePath: string,
   operation: (client: PicoVaultDaemonClient) => Promise<T>,
@@ -236,14 +318,11 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
         const passphrase = await readPassphrase(`Passphrase for ${keyRole} ${keyFingerprintHex}: `);
         const session = await client.unlock({ keyRole, keyFingerprintHex, passphrase });
         process.stdout.write(`${JSON.stringify(session)}\n`);
-        process.stderr.write('Vault unlocked. The session locks when this command exits (Ctrl-C).\n');
-        await new Promise<void>((resolvePromise) => {
-          for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-            process.once(signal, () => {
-              resolvePromise();
-            });
-          }
-        });
+        process.stderr.write(
+          'Vault unlocked. This terminal is the approval channel for '
+          + 'authority-creating signatures; the session locks when it exits (Ctrl-C).\n',
+        );
+        await runApprovalLoop(client);
       } finally {
         await client.close();
       }

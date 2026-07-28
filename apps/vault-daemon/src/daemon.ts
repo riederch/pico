@@ -6,6 +6,7 @@ import {
   assertVaultCustodyPathSeparation,
   createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
+  picoVaultCanSignLabel,
   readPicoVaultKeyfile,
   type PicoVaultEncryptedKeyfileV1,
   type PicoVaultReaderCustodySyncAccessSession,
@@ -23,12 +24,20 @@ import {
   picoVaultDaemonProtocolVersion,
   picoVaultDaemonRequestFamilies,
   picoVaultDaemonResponseFamily,
+  picoVaultDaemonSignatureNeedsApproval,
   MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
   MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES,
+  PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS,
+  PICO_VAULT_DAEMON_APPROVAL_WAIT_MS,
+  PICO_VAULT_DAEMON_APPROVAL_WINDOW_MS,
   PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS,
   PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS,
   PicoVaultDaemonFrameDecoder,
+  type PicoVaultDaemonApprovalDecideRequest,
+  type PicoVaultDaemonApprovalRequestDescriptor,
+  type PicoVaultDaemonApprovalWaitRequest,
   type PicoVaultDaemonKeyfileDescriptor,
+  type PicoVaultDaemonSignRequest,
   type PicoVaultDaemonReaderAccessDecryptItemRequest,
   type PicoVaultDaemonReaderAccessOpenPayloadRequest,
   type PicoVaultDaemonReaderAccessOpenRequest,
@@ -58,6 +67,8 @@ export interface PicoVaultDaemonOptions {
   foundationBackupPath: string;
   idleLockMs?: number;
   maxUnlockDurationMs?: number;
+  approvalWindowMs?: number;
+  approvalWaitMs?: number;
   wallNowMs?: () => number;
   monotonicNowMs?: () => number;
   auditSink?: (line: string) => void;
@@ -74,6 +85,32 @@ interface ConnectionState {
   decoder: PicoVaultDaemonFrameDecoder;
   helloDone: boolean;
   helloTimer: NodeJS.Timeout;
+  /**
+   * ADR 0099 makes the one-request-in-flight rule load-bearing: a parked
+   * `approval.wait` or a parked gated `sign` leaves a response outstanding
+   * across reads, so a second request arriving meanwhile must be refused
+   * rather than processed alongside it.
+   */
+  inFlight: boolean;
+  approvalWaitRequestId: string | null;
+  approvalWaitTimer: NodeJS.Timeout | null;
+}
+
+/**
+ * One approval authorizes exactly one signature. It is bound to the requesting
+ * connection, that connection's request id and the digest of the exact bytes -
+ * never to a time window (ADR 0099).
+ */
+interface PendingApproval {
+  approvalId: string;
+  label: string;
+  keyRole: PicoVaultPersonKeyRole;
+  keyFingerprintHex: string;
+  signatureInputDigestHex: string;
+  signatureInput: Uint8Array;
+  consumerSocket: Socket;
+  consumerRequestId: string;
+  timer: NodeJS.Timeout;
 }
 
 interface UnlockedState {
@@ -125,6 +162,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
 
   readonly #maxUnlockDurationMs: number;
 
+  readonly #approvalWindowMs: number;
+
+  readonly #approvalWaitMs: number;
+
   readonly #wallNowMs: () => number;
 
   readonly #monotonicNowMs: () => number;
@@ -151,6 +192,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
    */
   #readerAccessConnection: Socket | null = null;
 
+  #pendingApproval: PendingApproval | null = null;
+
   #lastSweepWallMs: number;
 
   #lastSweepMonoMs: number;
@@ -171,6 +214,16 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       options.maxUnlockDurationMs,
       PICO_VAULT_DAEMON_MAX_UNLOCK_DURATION_CEILING_MS,
       'invalid_max_unlock_duration_ms',
+    );
+    this.#approvalWindowMs = boundedDurationMs(
+      options.approvalWindowMs,
+      PICO_VAULT_DAEMON_APPROVAL_WINDOW_MS,
+      'invalid_approval_window_ms',
+    );
+    this.#approvalWaitMs = boundedDurationMs(
+      options.approvalWaitMs,
+      PICO_VAULT_DAEMON_APPROVAL_WAIT_MS,
+      'invalid_approval_wait_ms',
     );
     this.#wallNowMs = options.wallNowMs ?? Date.now;
     this.#monotonicNowMs = options.monotonicNowMs ?? defaultMonotonicNowMs;
@@ -221,6 +274,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       clearInterval(this.#sweepTimer);
       this.#sweepTimer = null;
     }
+    this.#denyApproval('daemon_shutdown');
     this.#closeLease('daemon_shutdown');
     this.#lockNow('daemon_shutdown');
     for (const socket of this.#connections.keys()) {
@@ -303,6 +357,9 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       helloTimer: setTimeout(() => {
         socket.destroy();
       }, HELLO_TIMEOUT_MS),
+      inFlight: false,
+      approvalWaitRequestId: null,
+      approvalWaitTimer: null,
     };
     state.helloTimer.unref();
     this.#connections.set(socket, state);
@@ -312,7 +369,11 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     });
     socket.once('close', () => {
       clearTimeout(state.helloTimer);
+      this.#clearApprovalWait(state);
       this.#connections.delete(socket);
+      if (this.#pendingApproval !== null && this.#pendingApproval.consumerSocket === socket) {
+        this.#discardApproval('approval_consumer_closed');
+      }
       if (this.#lease !== null && this.#lease.connection === socket) {
         this.#closeLease('lease_connection_closed');
       }
@@ -336,6 +397,11 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         return;
       }
       for (const frame of frames) {
+        if (state.inFlight) {
+          this.#protocolViolation(socket, '', 'request_in_flight');
+          return;
+        }
+        state.inFlight = true;
         this.#handleFrame(socket, state, frame);
       }
     });
@@ -404,34 +470,15 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         return;
       }
       case picoVaultDaemonRequestFamilies.sign: {
-        const unlocked = this.#unlocked;
-        if (unlocked === null) {
-          this.#respondError(socket, request.requestId, 'vault_locked');
-          return;
-        }
-        try {
-          const signature = unlocked.session.sign(
-            Uint8Array.from(Buffer.from(request.signatureInputHex, 'hex')),
-            { nowMs: this.#wallNowMs() },
-          );
-          this.#audit('sign', {
-            outcome: 'ok',
-            keyRole: unlocked.keyRole,
-            keyFingerprintHex: unlocked.keyFingerprintHex,
-          });
-          this.#respondOk(socket, request.requestId, {
-            signatureHex: Buffer.from(signature).toString('hex'),
-            keyRole: unlocked.keyRole,
-            keyFingerprintHex: unlocked.keyFingerprintHex,
-          });
-        } catch (error) {
-          const reason = reasonOf(error, 'invalid_signature_input');
-          if (reason === 'vault_locked') {
-            this.#lockNow('idle_locked');
-          }
-          this.#audit('sign', { outcome: 'error', reason });
-          this.#respondError(socket, request.requestId, reason);
-        }
+        this.#handleSign(socket, request);
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.approvalWait: {
+        this.#handleApprovalWait(socket, state, request);
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.approvalDecide: {
+        this.#handleApprovalDecide(socket, request);
         return;
       }
       case picoVaultDaemonRequestFamilies.readerAccessOpen: {
@@ -464,6 +511,238 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         return;
       }
     }
+  }
+
+  #handleSign(socket: Socket, request: PicoVaultDaemonSignRequest): void {
+    const unlocked = this.#unlocked;
+    if (unlocked === null) {
+      this.#respondError(socket, request.requestId, 'vault_locked');
+      return;
+    }
+    if (unlocked.keyRole === 'device_key_agreement') {
+      this.#respondError(socket, request.requestId, 'key_role_cannot_sign');
+      return;
+    }
+    const signatureInput = Uint8Array.from(Buffer.from(request.signatureInputHex, 'hex'));
+
+    // Classification only. The Vault still enforces its own role-scoped label
+    // set when it signs, so a disagreement here can refuse but never widen.
+    // Refusing an unsignable label here matters for approval: the person must
+    // never be asked to decide on bytes that would be rejected anyway.
+    let label: string;
+    try {
+      label = firstCanonicalElementAscii(signatureInput);
+    } catch {
+      this.#audit('sign', { outcome: 'error', reason: 'unknown_signature_input_label' });
+      this.#respondError(socket, request.requestId, 'unknown_signature_input_label');
+      return;
+    }
+    if (!picoVaultCanSignLabel(unlocked.keyRole, label)) {
+      this.#audit('sign', { outcome: 'error', reason: 'unknown_signature_input_label' });
+      this.#respondError(socket, request.requestId, 'unknown_signature_input_label');
+      return;
+    }
+
+    if (!picoVaultDaemonSignatureNeedsApproval(label)) {
+      this.#completeSign(socket, request.requestId, signatureInput);
+      return;
+    }
+    if (this.#pendingApproval !== null) {
+      this.#respondError(socket, request.requestId, 'approval_pending');
+      return;
+    }
+    const waiter = this.#approvalWaiter();
+    if (waiter === null) {
+      this.#audit('approval_requested', {
+        outcome: 'error',
+        reason: 'approval_unavailable',
+        label,
+      });
+      this.#respondError(socket, request.requestId, 'approval_unavailable');
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.#denyApproval('approval_timeout');
+    }, this.#approvalWindowMs);
+    timer.unref();
+    this.#pendingApproval = {
+      approvalId: Buffer.from(
+        this.#sodium.randombytes_buf(PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS / 2),
+      ).toString('hex'),
+      label,
+      keyRole: unlocked.keyRole,
+      keyFingerprintHex: unlocked.keyFingerprintHex,
+      signatureInputDigestHex: Buffer.from(
+        this.#sodium.crypto_generichash(32, signatureInput, null),
+      ).toString('hex'),
+      signatureInput,
+      consumerSocket: socket,
+      consumerRequestId: request.requestId,
+      timer,
+    };
+    this.#audit('approval_requested', {
+      outcome: 'ok',
+      label,
+      keyRole: unlocked.keyRole,
+      keyFingerprintHex: unlocked.keyFingerprintHex,
+    });
+    this.#clearApprovalWait(waiter.state);
+    this.#respondOk(waiter.socket, waiter.requestId, {
+      pending: this.#approvalDescriptor(this.#pendingApproval),
+    });
+  }
+
+  #completeSign(socket: Socket, requestId: string, signatureInput: Uint8Array): void {
+    this.#sweep();
+    const unlocked = this.#unlocked;
+    if (unlocked === null) {
+      this.#audit('sign', { outcome: 'error', reason: 'vault_locked' });
+      this.#respondError(socket, requestId, 'vault_locked');
+      return;
+    }
+    try {
+      const signature = unlocked.session.sign(signatureInput, { nowMs: this.#wallNowMs() });
+      this.#audit('sign', {
+        outcome: 'ok',
+        keyRole: unlocked.keyRole,
+        keyFingerprintHex: unlocked.keyFingerprintHex,
+      });
+      this.#respondOk(socket, requestId, {
+        signatureHex: Buffer.from(signature).toString('hex'),
+        keyRole: unlocked.keyRole,
+        keyFingerprintHex: unlocked.keyFingerprintHex,
+      });
+    } catch (error) {
+      const reason = reasonOf(error, 'invalid_signature_input');
+      if (reason === 'vault_locked') {
+        this.#lockNow('idle_locked');
+      }
+      this.#audit('sign', { outcome: 'error', reason });
+      this.#respondError(socket, requestId, reason);
+    }
+  }
+
+  #handleApprovalWait(
+    socket: Socket,
+    state: ConnectionState,
+    request: PicoVaultDaemonApprovalWaitRequest,
+  ): void {
+    const unlocked = this.#unlocked;
+    if (unlocked === null || unlocked.holdSocket !== socket) {
+      this.#respondError(socket, request.requestId, 'approval_wait_forbidden');
+      return;
+    }
+    const pending = this.#pendingApproval;
+    if (pending !== null) {
+      this.#respondOk(socket, request.requestId, {
+        pending: this.#approvalDescriptor(pending),
+      });
+      return;
+    }
+
+    state.approvalWaitRequestId = request.requestId;
+    state.approvalWaitTimer = setTimeout(() => {
+      const parkedRequestId = state.approvalWaitRequestId;
+      this.#clearApprovalWait(state);
+      if (parkedRequestId !== null) {
+        this.#respondOk(socket, parkedRequestId, { pending: null });
+      }
+    }, this.#approvalWaitMs);
+    state.approvalWaitTimer.unref();
+  }
+
+  #handleApprovalDecide(
+    socket: Socket,
+    request: PicoVaultDaemonApprovalDecideRequest,
+  ): void {
+    const unlocked = this.#unlocked;
+    if (unlocked === null || unlocked.holdSocket !== socket) {
+      // Only the connection holding the unlock decides, so a compromised
+      // consumer cannot approve its own request.
+      this.#respondError(socket, request.requestId, 'approval_decision_forbidden');
+      return;
+    }
+    const pending = this.#pendingApproval;
+    if (pending === null || pending.approvalId !== request.approvalId) {
+      this.#respondError(socket, request.requestId, 'unknown_approval');
+      return;
+    }
+    if (pending.signatureInputDigestHex !== request.signatureInputDigestHex) {
+      this.#audit('approval_decided', {
+        outcome: 'error',
+        reason: 'approval_digest_mismatch',
+        label: pending.label,
+      });
+      this.#respondError(socket, request.requestId, 'approval_digest_mismatch');
+      return;
+    }
+
+    clearTimeout(pending.timer);
+    this.#pendingApproval = null;
+    this.#audit('approval_decided', {
+      outcome: 'ok',
+      approved: request.approved,
+      label: pending.label,
+    });
+    if (request.approved) {
+      this.#completeSign(pending.consumerSocket, pending.consumerRequestId, pending.signatureInput);
+    } else {
+      this.#respondError(pending.consumerSocket, pending.consumerRequestId, 'approval_denied');
+    }
+    this.#respondOk(socket, request.requestId, { recorded: true });
+  }
+
+  #approvalWaiter(): { socket: Socket; state: ConnectionState; requestId: string } | null {
+    const unlocked = this.#unlocked;
+    if (unlocked === null) {
+      return null;
+    }
+    const state = this.#connections.get(unlocked.holdSocket);
+    if (state === undefined || state.approvalWaitRequestId === null) {
+      return null;
+    }
+    return { socket: unlocked.holdSocket, state, requestId: state.approvalWaitRequestId };
+  }
+
+  #approvalDescriptor(pending: PendingApproval): PicoVaultDaemonApprovalRequestDescriptor {
+    return {
+      approvalId: pending.approvalId,
+      label: pending.label,
+      keyRole: pending.keyRole,
+      keyFingerprintHex: pending.keyFingerprintHex,
+      signatureInputDigestHex: pending.signatureInputDigestHex,
+      expiresInMs: this.#approvalWindowMs,
+    };
+  }
+
+  #clearApprovalWait(state: ConnectionState): void {
+    if (state.approvalWaitTimer !== null) {
+      clearTimeout(state.approvalWaitTimer);
+      state.approvalWaitTimer = null;
+    }
+    state.approvalWaitRequestId = null;
+  }
+
+  #denyApproval(cause: string): void {
+    const pending = this.#pendingApproval;
+    if (pending === null) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.#pendingApproval = null;
+    this.#audit('approval_denied', { cause, label: pending.label });
+    this.#respondError(pending.consumerSocket, pending.consumerRequestId, 'approval_denied');
+  }
+
+  #discardApproval(cause: string): void {
+    const pending = this.#pendingApproval;
+    if (pending === null) {
+      return;
+    }
+    clearTimeout(pending.timer);
+    this.#pendingApproval = null;
+    this.#audit('approval_discarded', { cause, label: pending.label });
   }
 
   #handleReaderAccessOpen(
@@ -817,6 +1096,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   }
 
   #lockNow(cause: string): void {
+    this.#denyApproval(cause);
     this.#closeLease(cause);
     const unlocked = this.#unlocked;
     if (unlocked === null) {
@@ -848,6 +1128,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     result: Record<string, unknown>,
     maxFrameBytes: number = MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
   ): void {
+    this.#clearInFlight(socket);
     let frame: Buffer;
     try {
       frame = encodePicoVaultDaemonFrame({
@@ -864,6 +1145,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   }
 
   #respondError(socket: Socket, requestId: string, reason: string): void {
+    this.#clearInFlight(socket);
     socket.write(encodePicoVaultDaemonFrame({
       family: picoVaultDaemonResponseFamily,
       requestId,
@@ -877,6 +1159,13 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     this.#respondError(socket, requestId, reason);
     socket.end();
     socket.destroySoon();
+  }
+
+  #clearInFlight(socket: Socket): void {
+    const state = this.#connections.get(socket);
+    if (state !== undefined) {
+      state.inFlight = false;
+    }
   }
 
   #audit(event: string, fields: Record<string, string | number | boolean>): void {
@@ -912,6 +1201,26 @@ function isWithinOrEqual(candidate: string, scope: string): boolean {
   }
   const relativePath = relative(scope, candidate);
   return relativePath !== '' && !relativePath.startsWith('..') && !isAbsolute(relativePath);
+}
+
+/**
+ * Reads the versioned family label an ADR 0079 I3 signature input starts with:
+ * `U32BE(len) || bytes`. Used to classify a request for ADR 0099 gating before
+ * the Vault is asked to sign anything.
+ */
+function firstCanonicalElementAscii(input: Uint8Array): string {
+  if (input.byteLength < 4) {
+    throw new Error('unknown_signature_input_label');
+  }
+  const length = new DataView(input.buffer, input.byteOffset, input.byteLength).getUint32(0, false);
+  if (length === 0 || length > 128 || input.byteLength < 4 + length) {
+    throw new Error('unknown_signature_input_label');
+  }
+  const label = Buffer.from(input.subarray(4, 4 + length)).toString('latin1');
+  if (!/^[\x21-\x7e]+$/.test(label)) {
+    throw new Error('unknown_signature_input_label');
+  }
+  return label;
 }
 
 function messageOf(error: unknown): string {

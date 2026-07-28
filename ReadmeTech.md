@@ -65,6 +65,7 @@ Implemented or prepared:
 - minimal `@pico/vault` keyfile runtime for person-role custody tests
 - first `@pico/vault-daemon` local Vault process slice: private Unix-socket boundary, named request families and hold-bound unlock/lock lifecycle (ADR 0097, Linux first)
 - bounded reader-access lease over that daemon, so the Reader path runs without the reader's private key in the consumer process (ADR 0098)
+- per-request approval for authority-creating signatures, decided on the terminal that holds the unlock and bound to the exact bytes (ADR 0099)
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state and canonical product action terminology
 - WebSocket endpoint for event streaming
@@ -266,7 +267,7 @@ Details are documented in:
 .
 ├── apps
 │   ├── core              # Fastify backend service
-│   ├── vault-daemon      # local Pico Vault daemon, CLI and reader-access lease (ADR 0097/0098)
+│   ├── vault-daemon      # local Pico Vault daemon, CLI, reader-access lease and approval (ADR 0097-0099)
 │   └── web               # foundation diagnostics dashboard
 ├── docker
 │   └── core.Dockerfile   # Pico Home Core container image
