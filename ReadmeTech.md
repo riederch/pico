@@ -66,6 +66,7 @@ Implemented or prepared:
 - first `@pico/vault-daemon` local Vault process slice: private Unix-socket boundary, named request families and hold-bound unlock/lock lifecycle (ADR 0097, Linux first)
 - bounded reader-access lease over that daemon, so the Reader path runs without the reader's private key in the consumer process (ADR 0098)
 - per-request approval for authority-creating signatures, decided on the terminal that holds the unlock and bound to the exact bytes (ADR 0099)
+- ceremony signing over that daemon through a structural detached signer, so the identity root key stays out of the processes that build records; key-agreement operations remain local by design (ADR 0100)
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state and canonical product action terminology
 - WebSocket endpoint for event streaming

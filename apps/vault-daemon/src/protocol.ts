@@ -179,9 +179,21 @@ export interface PicoVaultDaemonHelloResult {
   locked: boolean;
 }
 
+/**
+ * ADR 0100: while a session is unlocked, status also publishes its public key
+ * (the ADR 0079 public surface) so a ceremony signer can embed real key
+ * records without a private-key holder in its own process. Locked keyfiles
+ * cannot reveal it - the public key sits inside the encrypted payload.
+ */
+export interface PicoVaultDaemonUnlockedSessionDescriptor {
+  keyRole: PicoVaultPersonKeyRole;
+  keyFingerprintHex: string;
+  publicKeyHex: string;
+}
+
 export interface PicoVaultDaemonStatusResult {
   locked: boolean;
-  session: PicoVaultDaemonKeyfileDescriptor | null;
+  session: PicoVaultDaemonUnlockedSessionDescriptor | null;
   keyfiles: PicoVaultDaemonKeyfileDescriptor[];
 }
 

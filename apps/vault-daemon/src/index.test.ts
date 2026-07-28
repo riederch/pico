@@ -437,6 +437,7 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     expect(status.session).toEqual({
       keyRole: 'pico_identity',
       keyFingerprintHex: identityFixture.keyFingerprintHex,
+      publicKeyHex: identityFixture.publicKeyHex,
     });
 
     const input = possessionInput();

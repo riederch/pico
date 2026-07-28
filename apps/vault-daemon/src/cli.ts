@@ -134,18 +134,39 @@ async function readPassphrase(prompt: string): Promise<string> {
   });
 }
 
+/**
+ * Whatever arrives past the newline stays for the next prompt. A person who
+ * pastes ahead, or a script that queues answers, must not have input silently
+ * dropped between two sequential reads.
+ */
+let bufferedStdin = '';
+
+function takeBufferedLine(): string | undefined {
+  const newlineIndex = bufferedStdin.indexOf('\n');
+  if (newlineIndex < 0) {
+    return undefined;
+  }
+  const line = bufferedStdin.slice(0, newlineIndex);
+  bufferedStdin = bufferedStdin.slice(newlineIndex + 1);
+  return line.replace(/\r$/, '').trim();
+}
+
 async function readLine(prompt: string): Promise<string> {
   process.stderr.write(prompt);
+  const alreadyBuffered = takeBufferedLine();
+  if (alreadyBuffered !== undefined) {
+    return alreadyBuffered;
+  }
+
   const stdin = process.stdin;
   return await new Promise<string>((resolvePromise, rejectPromise) => {
-    let buffered = '';
     const onData = (chunk: Buffer): void => {
-      buffered += chunk.toString('utf8');
-      const newlineIndex = buffered.indexOf('\n');
-      if (newlineIndex >= 0) {
+      bufferedStdin += chunk.toString('utf8');
+      const line = takeBufferedLine();
+      if (line !== undefined) {
         stdin.off('data', onData);
         stdin.pause();
-        resolvePromise(buffered.slice(0, newlineIndex).replace(/\r$/, '').trim());
+        resolvePromise(line);
       }
     };
     stdin.on('data', onData);

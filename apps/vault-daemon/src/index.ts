@@ -65,6 +65,11 @@ export {
   createPicoVaultDaemonReaderAccessUnlockPort,
   openPicoVaultDaemonReaderAccessSession,
 } from './reader-access.js';
+export { createPicoVaultDaemonCeremonySigner } from './ceremony-signer.js';
+export type {
+  CreatePicoVaultDaemonCeremonySignerInput,
+  PicoVaultDaemonCeremonySigner,
+} from './ceremony-signer.js';
 export type {
   OpenPicoVaultDaemonReaderAccessInput,
   PicoVaultDaemonReaderAccessSession,

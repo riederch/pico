@@ -174,7 +174,7 @@ The v1 request families:
 | Family | Purpose | Result crosses the boundary |
 |---|---|---|
 | `pico.vault.daemon.hello.v1` | mandatory first request; exact `protocolVersion: 1` match | protocol version, daemon version, lock state |
-| `pico.vault.daemon.status.v1` | public inventory | lock state plus per-keyfile role and fingerprint (public header metadata; the public key sits inside the encrypted payload and returns only with unlock and sign results) |
+| `pico.vault.daemon.status.v1` | public inventory | lock state plus per-keyfile role and fingerprint (public header metadata); while a session is unlocked, its public key as well (ADR 0100) - a locked keyfile cannot reveal it, the public key sits inside the encrypted payload |
 | `pico.vault.daemon.unlock.v1` | explicit person-initiated unlock of one role keyfile; binds the session to this connection | public session metadata and the effective idle/duration bounds |
 | `pico.vault.daemon.lock.v1` | explicit lock, allowed from any connection | confirmation |
 | `pico.vault.daemon.sign.v1` | detached signature over canonical labeled bytes, allowed from any connection while unlocked | the signature and public signer metadata |

@@ -455,7 +455,11 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
           locked: unlocked === null,
           session: unlocked === null
             ? null
-            : { keyRole: unlocked.keyRole, keyFingerprintHex: unlocked.keyFingerprintHex },
+            : {
+              keyRole: unlocked.keyRole,
+              keyFingerprintHex: unlocked.keyFingerprintHex,
+              publicKeyHex: unlocked.publicKeyHex,
+            },
           keyfiles,
         });
         return;

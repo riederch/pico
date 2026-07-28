@@ -119,6 +119,18 @@ export interface PicoVaultSessionUseOptions {
   nowMs?: number;
 }
 
+/**
+ * ADR 0100 seam: everything a ceremony needs from a signing key, and nothing
+ * else. `PicoVaultSession` satisfies it structurally; `@pico/vault-daemon`
+ * supplies it over the local socket. It deliberately excludes unwrap, lock and
+ * export - a detached signer signs, and the V4 label discipline is enforced by
+ * whichever implementation stands behind it.
+ */
+export interface PicoVaultDetachedSigner {
+  metadata(): PicoVaultSessionMetadata;
+  sign(signatureInput: Uint8Array): Uint8Array;
+}
+
 export interface PicoVaultPathSeparationInput {
   vaultKeyfilePath: string;
   foundationDataPath: string;
@@ -126,7 +138,7 @@ export interface PicoVaultPathSeparationInput {
 }
 
 export interface CreatePicoReaderCustodyDomainInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   ownerReaderKeyRecord: PicoIdentityKeyRecordSignatureInput;
   domainAuthorityId: string;
   homeId: string;
@@ -139,7 +151,7 @@ export interface CreatePicoReaderCustodyDomainInput {
 }
 
 export interface CreatePicoReaderCustodyWriterGrantInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   domainRecord: PicoReaderCustodyDomainRecord;
   rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   writerDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
@@ -152,7 +164,7 @@ export interface CreatePicoReaderCustodyWriterGrantInput {
 }
 
 export interface CreatePicoReaderCustodyReaderGrantInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   ownerReaderKeyAgreementSession: PicoVaultSession;
   domainRecord: PicoReaderCustodyDomainRecord;
   rotationRecords?: PicoReaderCustodyKekRotationRecord[];
@@ -170,7 +182,7 @@ export interface CreatePicoReaderCustodyReaderGrantInput {
 }
 
 export interface RevokePicoReaderCustodyReaderGrantInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   domainRecord: PicoReaderCustodyDomainRecord;
   readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
   lifecycleId: string;
@@ -182,7 +194,7 @@ export interface RevokePicoReaderCustodyReaderGrantInput {
 }
 
 export interface RotatePicoReaderCustodyDomainInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   domainRecord: PicoReaderCustodyDomainRecord;
   rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   readerGrantLifecycleRecords?:
@@ -197,7 +209,7 @@ export interface RotatePicoReaderCustodyDomainInput {
 }
 
 export interface RevokePicoReaderCustodyWriterGrantInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   domainRecord: PicoReaderCustodyDomainRecord;
   rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
@@ -210,7 +222,7 @@ export interface RevokePicoReaderCustodyWriterGrantInput {
 
 export interface EncryptPicoReaderCustodyItemInput {
   readerKeyAgreementSession: PicoVaultSession;
-  writerSigningSession: PicoVaultSession;
+  writerSigningSession: PicoVaultDetachedSigner;
   domainRecord: PicoReaderCustodyDomainRecord;
   rotationRecords?: PicoReaderCustodyKekRotationRecord[];
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
@@ -233,7 +245,7 @@ export interface DecryptPicoReaderCustodyItemInput {
 }
 
 export interface CreatePicoIdentityReaderKeyFreshnessCheckpointInput {
-  identitySession: PicoVaultSession;
+  identitySession: PicoVaultDetachedSigner;
   checkpointId: string;
   homeId: string;
   deviceSigningKeyFingerprintHex: string;
@@ -246,7 +258,7 @@ export interface CreatePicoIdentityReaderKeyFreshnessCheckpointInput {
 }
 
 export interface CreatePicoReaderCustodySyncBatchInput {
-  ownerIdentitySession: PicoVaultSession;
+  ownerIdentitySession: PicoVaultDetachedSigner;
   domainRecord: PicoReaderCustodyDomainRecord;
   readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
   readerGrantLifecycleRecords?:
@@ -2224,7 +2236,7 @@ function assertPicoReaderCustodyItemRecord(
 function createPicoReaderCustodyEnvelope(
   sodium: VaultSodium,
   input: {
-    ownerIdentitySession: PicoVaultSession;
+    ownerIdentitySession: PicoVaultDetachedSigner;
     ownerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
     grantId: string;
     domain: PicoReaderCustodyDomainSignatureInput;
