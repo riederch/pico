@@ -171,6 +171,7 @@ function ownerReaderKeyRecord(): { suite: string; keyRole: string; publicKeyHex:
 
 function createDomainInput(domainId: string): Record<string, unknown> {
   return {
+    signerKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
     ownerReaderKeyRecord: ownerReaderKeyRecord(),
     domainAuthorityId: `cf_domain_authority_${domainId}`,
     homeId: 'home_ceremony_family_0001',
@@ -379,6 +380,7 @@ describe('Daemon-side KEK ceremony families (ADR 0101 K2/K3/K4)', () => {
     const waiting = startApprovalWait(hold);
     await sleep(50);
     const rotating = consumer.ceremonyRotateDomain({
+      signerKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
       domainRecord: domainRecord as unknown as Record<string, unknown>,
       rotationRecords: [],
       readerGrantLifecycleRecords: [revocationRecord as unknown as Record<string, unknown>],
@@ -445,8 +447,10 @@ describe('Daemon-side KEK ceremony families (ADR 0101 K2/K3/K4)', () => {
       'owner agreement passphrase',
     );
     const wrongRoleConsumer = await openClient(wrongRole.daemon);
-    await expect(wrongRoleConsumer.ceremonyCreateDomain(createDomainInput('role') as never))
-      .rejects.toThrow('ceremony_key_role_mismatch');
+    await expect(wrongRoleConsumer.ceremonyCreateDomain({
+      ...createDomainInput('role'),
+      signerKeyFingerprintHex: ownerAgreement.keyFingerprintHex,
+    } as never)).rejects.toThrow('ceremony_key_role_mismatch');
   }, 60_000);
 
   it('binds the ceremony approval to the exact request frame bytes', async () => {

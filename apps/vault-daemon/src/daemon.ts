@@ -5,6 +5,7 @@ import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
   createPicoReaderCustodyDomain,
+  createPicoReaderCustodyReaderGrant,
   createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
   picoVaultCanSignLabel,
@@ -56,6 +57,7 @@ const SUSPEND_GAP_MS = 45_000;
 const SWEEP_INTERVAL_MS = 15_000;
 const HELLO_TIMEOUT_MS = 5_000;
 const MAX_CONNECTIONS = 16;
+const MAX_UNLOCKED_SESSIONS = 4;
 const UNLOCK_FAILURE_LIMIT = 5;
 const UNLOCK_FAILURE_WINDOW_MS = 60_000;
 const SOCKET_PROBE_TIMEOUT_MS = 250;
@@ -114,6 +116,8 @@ interface PendingApproval {
   summary?: Record<string, string | number>;
   consumerSocket: Socket;
   consumerRequestId: string;
+  signerKeyFingerprintHex: string;
+  signerHoldSocket: Socket;
   timer: NodeJS.Timeout;
   run: () => void;
 }
@@ -185,7 +189,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
 
   #sweepTimer: NodeJS.Timeout | null = null;
 
-  #unlocked: UnlockedState | null = null;
+  /**
+   * ADR 0102: sessions keyed by fingerprint rather than role, because one
+   * person is frequently both domain owner and reader on the same machine and
+   * therefore needs two distinct `device_key_agreement` keys at once.
+   */
+  readonly #unlockedSessions = new Map<string, UnlockedState>();
 
   #lease: ReaderAccessLease | null = null;
 
@@ -281,7 +290,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     }
     this.#denyApproval('daemon_shutdown');
     this.#closeLease('daemon_shutdown');
-    this.#lockNow('daemon_shutdown');
+    this.#lockAllSessions('daemon_shutdown');
     for (const socket of this.#connections.keys()) {
       socket.destroy();
     }
@@ -385,8 +394,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       if (this.#readerAccessConnection === socket) {
         this.#readerAccessConnection = null;
       }
-      if (this.#unlocked !== null && this.#unlocked.holdSocket === socket) {
-        this.#lockNow('hold_connection_closed');
+      for (const [keyFingerprintHex, unlocked] of [...this.#unlockedSessions]) {
+        if (unlocked.holdSocket === socket) {
+          this.#lockSession(keyFingerprintHex, 'hold_connection_closed');
+        }
       }
     });
     socket.on('data', (chunk) => {
@@ -443,7 +454,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#respondOk(socket, request.requestId, {
           protocolVersion: picoVaultDaemonProtocolVersion,
           daemonVersion: DAEMON_VERSION,
-          locked: this.#unlocked === null,
+          locked: this.#unlockedSessions.size === 0,
         });
         return;
       }
@@ -455,16 +466,14 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
           this.#respondError(socket, request.requestId, reasonOf(error, 'invalid_keyfile_envelope'));
           return;
         }
-        const unlocked = this.#unlocked;
+        const sessions = [...this.#unlockedSessions.values()].map((unlocked) => ({
+          keyRole: unlocked.keyRole,
+          keyFingerprintHex: unlocked.keyFingerprintHex,
+          publicKeyHex: unlocked.publicKeyHex,
+        }));
         this.#respondOk(socket, request.requestId, {
-          locked: unlocked === null,
-          session: unlocked === null
-            ? null
-            : {
-              keyRole: unlocked.keyRole,
-              keyFingerprintHex: unlocked.keyFingerprintHex,
-              publicKeyHex: unlocked.publicKeyHex,
-            },
+          locked: sessions.length === 0,
+          sessions,
           keyfiles,
         });
         return;
@@ -474,7 +483,9 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         return;
       }
       case picoVaultDaemonRequestFamilies.lock: {
-        this.#lockNow('explicit_lock');
+        // Locking is never privileged and stays coarse on purpose: any
+        // connection may end every session at once as a safety valve.
+        this.#lockAllSessions('explicit_lock');
         this.#respondOk(socket, request.requestId, { locked: true });
         return;
       }
@@ -535,6 +546,41 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         });
         return;
       }
+      case picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant: {
+        this.#handleCeremony(socket, frame, request, {
+          summary: {
+            domainId: String((request.domainRecord as { domain?: { domainId?: unknown } })
+              .domain?.domainId ?? ''),
+            readerGrantId: request.readerGrantId,
+            accessMode: request.accessMode,
+            historicalVersions: request.rotationRecords.length,
+          },
+          requires: [{
+            keyFingerprintHex: request.agreementKeyFingerprintHex,
+            keyRole: 'device_key_agreement',
+          }],
+          execute: (session, required) => ({
+            readerGrantRecord: createPicoReaderCustodyReaderGrant(this.#sodium, {
+              ownerIdentitySession: session,
+              ownerReaderKeyAgreementSession: required[0] as PicoVaultSession,
+              domainRecord: request.domainRecord as never,
+              rotationRecords: request.rotationRecords as never,
+              readerKeyRecord: request.readerKeyRecord as never,
+              readerGrantId: request.readerGrantId,
+              readerIdentityKeyFingerprintHex: request.readerIdentityKeyFingerprintHex,
+              readerDeviceSigningKeyFingerprintHex: request.readerDeviceSigningKeyFingerprintHex,
+              readerDelegationId: request.readerDelegationId,
+              accessMode: request.accessMode as never,
+              firstKekVersion: request.firstKekVersion,
+              validFrom: request.validFrom,
+              validUntil: request.validUntil,
+              lifecycleOrder: request.lifecycleOrder,
+              ...(request.receivedAt === undefined ? {} : { receivedAt: request.receivedAt }),
+            }) as unknown as Record<string, unknown>,
+          }),
+        });
+        return;
+      }
       case picoVaultDaemonRequestFamilies.readerAccessOpen: {
         this.#handleReaderAccessOpen(socket, state, request);
         return;
@@ -568,9 +614,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   }
 
   #handleSign(socket: Socket, request: PicoVaultDaemonSignRequest): void {
-    const unlocked = this.#unlocked;
+    const unlocked = this.#requireUnlocked(
+      socket,
+      request.requestId,
+      request.keyFingerprintHex,
+    );
     if (unlocked === null) {
-      this.#respondError(socket, request.requestId, 'vault_locked');
       return;
     }
     if (unlocked.keyRole === 'device_key_agreement') {
@@ -598,14 +647,14 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     }
 
     if (!picoVaultDaemonSignatureNeedsApproval(label)) {
-      this.#completeSign(socket, request.requestId, signatureInput);
+      this.#completeSign(socket, request.requestId, unlocked.keyFingerprintHex, signatureInput);
       return;
     }
     if (this.#pendingApproval !== null) {
       this.#respondError(socket, request.requestId, 'approval_pending');
       return;
     }
-    const waiter = this.#approvalWaiter();
+    const waiter = this.#approvalWaiter(unlocked);
     if (waiter === null) {
       this.#audit('approval_requested', {
         outcome: 'error',
@@ -623,9 +672,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       ).toString('hex'),
       consumerSocket: socket,
       consumerRequestId: request.requestId,
+      signer: unlocked,
       waiter,
       run: () => {
-        this.#completeSign(socket, request.requestId, signatureInput);
+        this.#completeSign(socket, request.requestId, unlocked.keyFingerprintHex, signatureInput);
       },
     });
   }
@@ -639,15 +689,25 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   #handleCeremony(
     socket: Socket,
     frame: Buffer,
-    request: { family: string; requestId: string },
+    request: { family: string; requestId: string; signerKeyFingerprintHex: string },
     ceremony: {
       summary: Record<string, string | number>;
-      execute: (session: PicoVaultSession) => Record<string, unknown>;
+      /** Extra sessions this ceremony needs; resolved and role-checked before
+       * the person is asked, so an approval is never raised for a ceremony
+       * that cannot run. */
+      requires?: { keyFingerprintHex: string; keyRole: PicoVaultPersonKeyRole }[];
+      execute: (
+        signer: PicoVaultSession,
+        required: PicoVaultSession[],
+      ) => Record<string, unknown>;
     },
   ): void {
-    const unlocked = this.#unlocked;
+    const unlocked = this.#requireUnlocked(
+      socket,
+      request.requestId,
+      request.signerKeyFingerprintHex,
+    );
     if (unlocked === null) {
-      this.#respondError(socket, request.requestId, 'vault_locked');
       return;
     }
     if (unlocked.keyRole !== 'pico_identity') {
@@ -659,11 +719,27 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'ceremony_key_role_mismatch');
       return;
     }
+    const requiredFingerprints = (ceremony.requires ?? []).map((required) => {
+      const session = this.#unlockedSessions.get(required.keyFingerprintHex);
+      if (session === undefined || session.keyRole !== required.keyRole) {
+        return null;
+      }
+      return required.keyFingerprintHex;
+    });
+    if (requiredFingerprints.some((fingerprint) => fingerprint === null)) {
+      this.#audit('ceremony_requested', {
+        outcome: 'error',
+        reason: 'unknown_unlocked_key',
+        label: request.family,
+      });
+      this.#respondError(socket, request.requestId, 'unknown_unlocked_key');
+      return;
+    }
     if (this.#pendingApproval !== null) {
       this.#respondError(socket, request.requestId, 'approval_pending');
       return;
     }
-    const waiter = this.#approvalWaiter();
+    const waiter = this.#approvalWaiter(unlocked);
     if (waiter === null) {
       this.#audit('ceremony_requested', {
         outcome: 'error',
@@ -683,15 +759,22 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       summary: ceremony.summary,
       consumerSocket: socket,
       consumerRequestId: request.requestId,
+      signer: unlocked,
       waiter,
       run: () => {
-        const current = this.#unlocked;
-        if (current === null) {
+        const current = this.#unlockedSessions.get(request.signerKeyFingerprintHex);
+        const required = requiredFingerprints.map(
+          (fingerprint) => this.#unlockedSessions.get(fingerprint as string),
+        );
+        if (current === undefined || required.some((session) => session === undefined)) {
           this.#respondError(socket, request.requestId, 'vault_locked');
           return;
         }
         try {
-          const result = ceremony.execute(current.session);
+          const result = ceremony.execute(
+            current.session,
+            required.map((session) => (session as UnlockedState).session),
+          );
           this.#audit('ceremony_completed', { outcome: 'ok', label: request.family });
           this.#respondOk(socket, request.requestId, result);
         } catch (error) {
@@ -713,14 +796,11 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     summary?: Record<string, string | number>;
     consumerSocket: Socket;
     consumerRequestId: string;
+    signer: UnlockedState;
     waiter: { socket: Socket; state: ConnectionState; requestId: string };
     run: () => void;
   }): void {
-    const unlocked = this.#unlocked;
-    if (unlocked === null) {
-      this.#respondError(input.consumerSocket, input.consumerRequestId, 'vault_locked');
-      return;
-    }
+    const unlocked = input.signer;
     const timer = setTimeout(() => {
       this.#denyApproval('approval_timeout');
     }, this.#approvalWindowMs);
@@ -736,6 +816,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       ...(input.summary === undefined ? {} : { summary: input.summary }),
       consumerSocket: input.consumerSocket,
       consumerRequestId: input.consumerRequestId,
+      signerKeyFingerprintHex: unlocked.keyFingerprintHex,
+      signerHoldSocket: unlocked.holdSocket,
       timer,
       run: input.run,
     };
@@ -751,10 +833,15 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     });
   }
 
-  #completeSign(socket: Socket, requestId: string, signatureInput: Uint8Array): void {
+  #completeSign(
+    socket: Socket,
+    requestId: string,
+    keyFingerprintHex: string,
+    signatureInput: Uint8Array,
+  ): void {
     this.#sweep();
-    const unlocked = this.#unlocked;
-    if (unlocked === null) {
+    const unlocked = this.#unlockedSessions.get(keyFingerprintHex);
+    if (unlocked === undefined) {
       this.#audit('sign', { outcome: 'error', reason: 'vault_locked' });
       this.#respondError(socket, requestId, 'vault_locked');
       return;
@@ -774,7 +861,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     } catch (error) {
       const reason = reasonOf(error, 'invalid_signature_input');
       if (reason === 'vault_locked') {
-        this.#lockNow('idle_locked');
+        this.#lockSession(unlocked.keyFingerprintHex, 'idle_locked');
       }
       this.#audit('sign', { outcome: 'error', reason });
       this.#respondError(socket, requestId, reason);
@@ -786,13 +873,14 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     state: ConnectionState,
     request: PicoVaultDaemonApprovalWaitRequest,
   ): void {
-    const unlocked = this.#unlocked;
-    if (unlocked === null || unlocked.holdSocket !== socket) {
+    // Any hold connection may wait; an approval is routed to the hold
+    // connection of the session whose key would create the authority.
+    if (this.#sessionHeldBy(socket) === null) {
       this.#respondError(socket, request.requestId, 'approval_wait_forbidden');
       return;
     }
     const pending = this.#pendingApproval;
-    if (pending !== null) {
+    if (pending !== null && pending.signerHoldSocket === socket) {
       this.#respondOk(socket, request.requestId, {
         pending: this.#approvalDescriptor(pending),
       });
@@ -814,14 +902,13 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     socket: Socket,
     request: PicoVaultDaemonApprovalDecideRequest,
   ): void {
-    const unlocked = this.#unlocked;
-    if (unlocked === null || unlocked.holdSocket !== socket) {
-      // Only the connection holding the unlock decides, so a compromised
-      // consumer cannot approve its own request.
+    const pending = this.#pendingApproval;
+    // Only the holder of the signing key decides what that key creates, so
+    // neither a consumer nor another key's holder can approve this.
+    if (pending !== null && pending.signerHoldSocket !== socket) {
       this.#respondError(socket, request.requestId, 'approval_decision_forbidden');
       return;
     }
-    const pending = this.#pendingApproval;
     if (pending === null || pending.approvalId !== request.approvalId) {
       this.#respondError(socket, request.requestId, 'unknown_approval');
       return;
@@ -851,16 +938,46 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     this.#respondOk(socket, request.requestId, { recorded: true });
   }
 
-  #approvalWaiter(): { socket: Socket; state: ConnectionState; requestId: string } | null {
-    const unlocked = this.#unlocked;
-    if (unlocked === null) {
-      return null;
-    }
-    const state = this.#connections.get(unlocked.holdSocket);
+  #approvalWaiter(
+    signer: UnlockedState,
+  ): { socket: Socket; state: ConnectionState; requestId: string } | null {
+    const state = this.#connections.get(signer.holdSocket);
     if (state === undefined || state.approvalWaitRequestId === null) {
       return null;
     }
-    return { socket: unlocked.holdSocket, state, requestId: state.approvalWaitRequestId };
+    return { socket: signer.holdSocket, state, requestId: state.approvalWaitRequestId };
+  }
+
+  #sessionHeldBy(socket: Socket): UnlockedState | null {
+    for (const unlocked of this.#unlockedSessions.values()) {
+      if (unlocked.holdSocket === socket) {
+        return unlocked;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Explicit key selection (ADR 0102 M2): an unknown or locked fingerprint
+   * fails rather than falling back to whatever happens to be unlocked.
+   */
+  #requireUnlocked(
+    socket: Socket,
+    requestId: string,
+    keyFingerprintHex: string,
+  ): UnlockedState | null {
+    const unlocked = this.#unlockedSessions.get(keyFingerprintHex);
+    if (unlocked === undefined) {
+      // "Nothing is unlocked" and "that key is not among the unlocked ones"
+      // are different facts, and consumers act differently on them.
+      this.#respondError(
+        socket,
+        requestId,
+        this.#unlockedSessions.size === 0 ? 'vault_locked' : 'unknown_unlocked_key',
+      );
+      return null;
+    }
+    return unlocked;
   }
 
   #approvalDescriptor(pending: PendingApproval): PicoVaultDaemonApprovalRequestDescriptor {
@@ -913,9 +1030,20 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'reader_access_lease_active');
       return;
     }
-    const unlocked = this.#unlocked;
-    if (unlocked === null) {
-      this.#respondError(socket, request.requestId, 'vault_locked');
+    const unlocked = this.#unlockedSessions.get(request.readerKeyFingerprintHex);
+    if (unlocked === undefined) {
+      // Nothing unlocked is the ADR 0096 "unavailable" path the adapter turns
+      // into `undefined`; a key that is simply not the pinned one stays a
+      // security signal and throws.
+      if (this.#unlockedSessions.size === 0) {
+        this.#respondError(socket, request.requestId, 'vault_locked');
+        return;
+      }
+      this.#audit('reader_access_open', {
+        outcome: 'error',
+        reason: 'reader_access_key_fingerprint_mismatch',
+      });
+      this.#respondError(socket, request.requestId, 'reader_access_key_fingerprint_mismatch');
       return;
     }
     if (unlocked.keyRole !== 'device_key_agreement') {
@@ -927,17 +1055,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'reader_access_key_role_mismatch');
       return;
     }
-    if (unlocked.keyFingerprintHex !== request.readerKeyFingerprintHex) {
-      this.#audit('reader_access_open', {
-        outcome: 'error',
-        reason: 'reader_access_key_fingerprint_mismatch',
-        keyFingerprintHex: unlocked.keyFingerprintHex,
-      });
-      this.#respondError(socket, request.requestId, 'reader_access_key_fingerprint_mismatch');
-      return;
-    }
     if (unlocked.session.isLocked({ nowMs: this.#wallNowMs() })) {
-      this.#lockNow('idle_locked');
+      this.#lockSession(unlocked.keyFingerprintHex, 'idle_locked');
       this.#respondError(socket, request.requestId, 'vault_locked');
       return;
     }
@@ -1072,12 +1191,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#closeLease('lease_expired');
       return 'reader_access_lease_expired';
     }
-    if (this.#unlocked === null) {
+    if (!this.#unlockedSessions.has(lease.keyFingerprintHex)) {
       this.#closeLease('vault_locked');
       return 'vault_locked';
     }
     if (lease.accessSession.isLocked({ nowMs: this.#wallNowMs() })) {
-      this.#lockNow('idle_locked');
+      this.#lockSession(lease.keyFingerprintHex, 'idle_locked');
       this.#closeLease('vault_locked');
       return 'vault_locked';
     }
@@ -1108,8 +1227,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   }
 
   #handleUnlock(socket: Socket, request: PicoVaultDaemonUnlockRequest): void {
-    if (this.#unlocked !== null) {
+    if (this.#unlockedSessions.has(request.keyFingerprintHex)) {
       this.#respondError(socket, request.requestId, 'already_unlocked');
+      return;
+    }
+    if (this.#unlockedSessions.size >= MAX_UNLOCKED_SESSIONS) {
+      this.#respondError(socket, request.requestId, 'too_many_unlocked_sessions');
       return;
     }
     if (this.#isUnlockThrottled()) {
@@ -1155,7 +1278,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     }
 
     const metadata = session.metadata();
-    this.#unlocked = {
+    this.#unlockedSessions.set(metadata.keyFingerprintHex, {
       session,
       holdSocket: socket,
       keyRole: metadata.keyRole,
@@ -1163,7 +1286,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       publicKeyHex: metadata.publicKeyHex,
       openedAtWallMs: wallMs,
       openedAtMonoMs: this.#monotonicNowMs(),
-    };
+    });
     this.#audit('unlock', {
       outcome: 'ok',
       keyRole: metadata.keyRole,
@@ -1219,27 +1342,27 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#closeLease('lease_expired');
     }
 
-    const unlocked = this.#unlocked;
-    if (unlocked === null) {
-      return;
-    }
     if (rolledBack) {
-      this.#lockNow('clock_rollback');
+      this.#lockAllSessions('clock_rollback');
       return;
     }
     if (suspended) {
-      this.#lockNow('suspend_detected');
+      this.#lockAllSessions('suspend_detected');
       return;
     }
-    if (
-      monoMs - unlocked.openedAtMonoMs > this.#maxUnlockDurationMs
-      || wallMs - unlocked.openedAtWallMs > this.#maxUnlockDurationMs
-    ) {
-      this.#lockNow('unlock_expired');
-      return;
-    }
-    if (unlocked.session.isLocked({ nowMs: wallMs })) {
-      this.#lockNow('idle_locked');
+    // Idle and duration are per session: each was opened at its own instant
+    // by its own act, so each expires on its own schedule.
+    for (const [keyFingerprintHex, unlocked] of [...this.#unlockedSessions]) {
+      if (
+        monoMs - unlocked.openedAtMonoMs > this.#maxUnlockDurationMs
+        || wallMs - unlocked.openedAtWallMs > this.#maxUnlockDurationMs
+      ) {
+        this.#lockSession(keyFingerprintHex, 'unlock_expired');
+        continue;
+      }
+      if (unlocked.session.isLocked({ nowMs: wallMs })) {
+        this.#lockSession(keyFingerprintHex, 'idle_locked');
+      }
     }
   }
 
@@ -1254,14 +1377,26 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     return this.#unlockFailuresMonoMs.length >= UNLOCK_FAILURE_LIMIT;
   }
 
-  #lockNow(cause: string): void {
-    this.#denyApproval(cause);
-    this.#closeLease(cause);
-    const unlocked = this.#unlocked;
-    if (unlocked === null) {
+  /** Locks every session at once, for causes that are properties of the
+   * machine rather than of one key: suspend, clock rollback, shutdown. */
+  #lockAllSessions(cause: string): void {
+    for (const keyFingerprintHex of [...this.#unlockedSessions.keys()]) {
+      this.#lockSession(keyFingerprintHex, cause);
+    }
+  }
+
+  #lockSession(keyFingerprintHex: string, cause: string): void {
+    const unlocked = this.#unlockedSessions.get(keyFingerprintHex);
+    if (unlocked === undefined) {
       return;
     }
-    this.#unlocked = null;
+    this.#unlockedSessions.delete(keyFingerprintHex);
+    if (this.#pendingApproval?.signerKeyFingerprintHex === keyFingerprintHex) {
+      this.#denyApproval(cause);
+    }
+    if (this.#lease?.keyFingerprintHex === keyFingerprintHex) {
+      this.#closeLease(cause);
+    }
     try {
       unlocked.session.lock();
     } catch {

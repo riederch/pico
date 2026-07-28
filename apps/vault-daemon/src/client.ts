@@ -10,6 +10,8 @@ import {
   type PicoVaultDaemonApprovalWaitResult,
   type PicoVaultDaemonCeremonyCreateDomainRequest,
   type PicoVaultDaemonCeremonyCreateDomainResult,
+  type PicoVaultDaemonCeremonyCreateReaderGrantRequest,
+  type PicoVaultDaemonCeremonyCreateReaderGrantResult,
   type PicoVaultDaemonCeremonyRotateDomainRequest,
   type PicoVaultDaemonCeremonyRotateDomainResult,
   type PicoVaultDaemonHelloResult,
@@ -28,7 +30,10 @@ export interface PicoVaultDaemonClient {
     passphrase: string;
   }): Promise<PicoVaultDaemonUnlockResult>;
   lock(): Promise<PicoVaultDaemonLockResult>;
-  sign(input: { signatureInputHex: string }): Promise<PicoVaultDaemonSignResult>;
+  sign(input: {
+    keyFingerprintHex: string;
+    signatureInputHex: string;
+  }): Promise<PicoVaultDaemonSignResult>;
   approvalWait(): Promise<PicoVaultDaemonApprovalWaitResult>;
   approvalDecide(input: {
     approvalId: string;
@@ -41,6 +46,9 @@ export interface PicoVaultDaemonClient {
   ceremonyRotateDomain(
     input: Omit<PicoVaultDaemonCeremonyRotateDomainRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyRotateDomainResult>;
+  ceremonyCreateReaderGrant(
+    input: Omit<PicoVaultDaemonCeremonyCreateReaderGrantRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonCeremonyCreateReaderGrantResult>;
   close(): Promise<void>;
 }
 
@@ -148,6 +156,7 @@ export async function connectPicoVaultDaemonClient(
     }) as unknown as PicoVaultDaemonLockResult,
     sign: async (signInput) => await request({
       family: picoVaultDaemonRequestFamilies.sign,
+      keyFingerprintHex: signInput.keyFingerprintHex,
       signatureInputHex: signInput.signatureInputHex,
     }) as unknown as PicoVaultDaemonSignResult,
     approvalWait: async () => await request({
@@ -167,6 +176,10 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.ceremonyRotateDomain,
       ...ceremonyInput,
     }) as unknown as PicoVaultDaemonCeremonyRotateDomainResult,
+    ceremonyCreateReaderGrant: async (ceremonyInput) => await request({
+      family: picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant,
+      ...ceremonyInput,
+    }) as unknown as PicoVaultDaemonCeremonyCreateReaderGrantResult,
     close: async () => {
       if (closed) {
         return;

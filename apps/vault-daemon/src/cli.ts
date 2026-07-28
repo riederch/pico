@@ -22,7 +22,7 @@ const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
   status: ['vault-home'],
   unlock: ['vault-home', 'role', 'fingerprint'],
   lock: ['vault-home'],
-  sign: ['vault-home', 'input-hex'],
+  sign: ['vault-home', 'fingerprint', 'input-hex'],
 };
 
 export interface PicoVaultCliInvocation {
@@ -323,10 +323,14 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
     }
     case 'sign': {
       const signatureInputHex = invocation.flags.get('input-hex');
-      if (signatureInputHex === undefined) {
+      const keyFingerprintHex = invocation.flags.get('fingerprint');
+      if (signatureInputHex === undefined || keyFingerprintHex === undefined) {
         throw new Error('invalid_cli_flag');
       }
-      const signed = await withClient(vaultHomePath, async (client) => await client.sign({ signatureInputHex }));
+      const signed = await withClient(vaultHomePath, async (client) => await client.sign({
+        keyFingerprintHex,
+        signatureInputHex,
+      }));
       process.stdout.write(`${JSON.stringify(signed)}\n`);
       return;
     }

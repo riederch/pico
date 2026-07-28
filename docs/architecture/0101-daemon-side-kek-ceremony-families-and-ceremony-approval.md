@@ -155,8 +155,10 @@ outcome-carrying failures) from plain signatures, content-free as always.
   and the audit distinguishing ceremony from signature approvals.
 - **K5 - Future (each its own decision):** the multi-session unlock
   lifecycle and, on top of it, reader-grant and item-encryption ceremony
-  families; migration of `apps/core` ceremony callers; everything ADR 0097
-  D7, 0099 P7 and 0100 C5 already list.
+  families — **ADR 0102 discharges the lifecycle and the reader grant**,
+  leaving item encryption deferred with its own reasoning; migration of
+  `apps/core` ceremony callers; everything ADR 0097 D7, 0099 P7 and 0100 C5
+  already list.
 
 ## Non-goals
 

@@ -68,6 +68,7 @@ Implemented or prepared:
 - per-request approval for authority-creating signatures, decided on the terminal that holds the unlock and bound to the exact bytes (ADR 0099)
 - ceremony signing over that daemon through a structural detached signer, so the identity root key stays out of the processes that build records; key-agreement operations remain local by design (ADR 0100)
 - domain creation and KEK rotation executed inside the daemon under one input-digest-bound approval each, so fresh KEKs are born inside the boundary and a rotation costs one decision instead of one per reader (ADR 0101)
+- several keys unlocked concurrently, each held and locked by its own terminal, with every key use naming its key; reader grants then run daemon-side under a single approval (ADR 0102)
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state and canonical product action terminology
 - WebSocket endpoint for event streaming

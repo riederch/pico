@@ -58,15 +58,16 @@ export function createPicoVaultDaemonCeremonySigner(
   let metadata: PicoVaultSessionMetadata;
   try {
     const status = transport.request({ family: picoVaultDaemonRequestFamilies.status });
-    const session = status.session;
-    if (session === null || typeof session !== 'object' || Array.isArray(session)) {
+    const sessions = status.sessions;
+    if (!Array.isArray(sessions) || sessions.length === 0) {
       throw new Error('vault_locked');
     }
-    const descriptor = session as Record<string, unknown>;
-    if (
-      descriptor.keyRole !== input.keyRole
-      || descriptor.keyFingerprintHex !== input.keyFingerprintHex
-    ) {
+    // ADR 0102: select by fingerprint rather than accepting whichever session
+    // happens to be open, so a signer never silently binds to another key.
+    const descriptor = (sessions as Record<string, unknown>[]).find(
+      (candidate) => candidate.keyFingerprintHex === input.keyFingerprintHex,
+    );
+    if (descriptor === undefined || descriptor.keyRole !== input.keyRole) {
       throw new Error('ceremony_signer_key_mismatch');
     }
     const publicKeyHex = descriptor.publicKeyHex;
@@ -89,6 +90,7 @@ export function createPicoVaultDaemonCeremonySigner(
     sign: (signatureInput) => {
       const result = transport.request({
         family: picoVaultDaemonRequestFamilies.sign,
+        keyFingerprintHex: metadata.keyFingerprintHex,
         signatureInputHex: Buffer.from(signatureInput).toString('hex'),
       });
       // The echoed identity is rechecked per response: a signer created for

@@ -203,10 +203,12 @@ silently — the daemon holds no passphrase, no derived unlock secret and no
 session state across restarts (ADR 0081 V10 applied to the process).
 
 At most one session is unlocked per daemon at a time (`already_unlocked`
-otherwise), and every unlocked session is **hold-bound**: it belongs to the
-connection that unlocked it, and the daemon locks immediately when that
-connection closes — closing the terminal is locking, a control the person
-can see and touch. While the hold connection lives, other same-uid
+otherwise) — **ADR 0102 raises this to a bounded set keyed by fingerprint**,
+one hold connection each, so that two-role ceremonies become possible; every
+rule below is preserved per session. Every unlocked session is
+**hold-bound**: it belongs to the connection that unlocked it, and the daemon
+locks immediately when that connection closes — closing the terminal is
+locking, a control the person can see and touch. While the hold connection lives, other same-uid
 connections may use `sign` (that is the consumer story) and may always
 `lock`; locking is never privileged.
 

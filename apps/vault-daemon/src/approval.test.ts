@@ -252,7 +252,7 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     await holdUnlock(daemon);
     const consumer = await openClient(daemon);
 
-    const signed = await consumer.sign({ signatureInputHex: exemptInputHex() });
+    const signed = await consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: exemptInputHex() });
     expect(signed.keyRole).toBe('pico_identity');
     expect(audit.join('')).not.toContain('approval_requested');
   }, 30_000);
@@ -268,6 +268,7 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     unknown.writeUInt32BE(13, 0);
     unknown.write('pico.evil.v1', 4, 'ascii');
     await expect(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
       signatureInputHex: unknown.toString('hex'),
     })).rejects.toThrow('unknown_signature_input_label');
 
@@ -285,7 +286,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     await sleep(50);
 
     const inputHex = gatedInputHex();
-    const signing = settle(consumer.sign({ signatureInputHex: inputHex }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: inputHex }));
     const pending = await waiting;
     expect(pending).not.toBeNull();
     expect(pending!.label).toBe('pico.id.keyrecord.v1');
@@ -317,7 +318,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
 
     const waiting = startApprovalWait(hold);
     await sleep(50);
-    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     const pending = await waiting;
 
     await expect(hold.approvalDecide({
@@ -341,7 +342,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
 
     const waiting = startApprovalWait(hold);
     await sleep(50);
-    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     await waiting;
 
     expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
@@ -356,10 +357,11 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
 
     const waiting = startApprovalWait(hold);
     await sleep(50);
-    const signing = settle(first.sign({ signatureInputHex: gatedInputHex() }));
+    const signing = settle(first.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     const pending = await waiting;
 
     await expect(second.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
       signatureInputHex: gatedInputHex(),
     })).rejects.toThrow('approval_pending');
 
@@ -379,6 +381,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
     const consumer = await openClient(daemon);
 
     await expect(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
       signatureInputHex: gatedInputHex(),
     })).rejects.toThrow('approval_unavailable');
     expect(audit.join('')).toContain('approval_unavailable');
@@ -393,7 +396,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
 
     const waiting = startApprovalWait(hold);
     await sleep(50);
-    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     const pending = await waiting;
 
     // A third connection: the requesting one already has its parked signature
@@ -421,7 +424,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
 
     const waiting = startApprovalWait(hold);
     await sleep(50);
-    const signing = settle(consumer.sign({ signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     await waiting;
 
     await hold.close();
@@ -446,6 +449,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
     raw.send({
       family: picoVaultDaemonRequestFamilies.sign,
       requestId: 'r2',
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
       signatureInputHex: gatedInputHex(),
     });
     expect(await waiting).not.toBeNull();

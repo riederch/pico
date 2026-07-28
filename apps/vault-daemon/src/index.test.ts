@@ -434,14 +434,14 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     const consumer = await openClient(daemon);
     const status = await consumer.status();
     expect(status.locked).toBe(false);
-    expect(status.session).toEqual({
+    expect(status.sessions).toEqual([{
       keyRole: 'pico_identity',
       keyFingerprintHex: identityFixture.keyFingerprintHex,
       publicKeyHex: identityFixture.publicKeyHex,
-    });
+    }]);
 
     const input = possessionInput();
-    const signed = await consumer.sign({ signatureInputHex: Buffer.from(input).toString('hex') });
+    const signed = await consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: Buffer.from(input).toString('hex') });
     expect(sodium.crypto_sign_verify_detached(
       Uint8Array.from(Buffer.from(signed.signatureHex, 'hex')),
       input,
@@ -449,12 +449,14 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     )).toBe(true);
 
     await expect(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
       signatureInputHex: canonicalElement('pico.evil.v1').toString('hex'),
     })).rejects.toThrow('unknown_signature_input_label');
 
     await holder.close();
     await waitFor(async () => (await consumer.status()).locked);
     await expect(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
       signatureInputHex: Buffer.from(input).toString('hex'),
     })).rejects.toThrow('vault_locked');
     expect(audit.join('')).toContain('hold_connection_closed');
@@ -528,8 +530,15 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     });
     expect(unlocked.keyRole).toBe('device_key_agreement');
     await expect(client.sign({
+      keyFingerprintHex: readerFixture.keyFingerprintHex,
       signatureInputHex: Buffer.from(possessionInput()).toString('hex'),
     })).rejects.toThrow('key_role_cannot_sign');
+    // The identity keyfile exists but is not unlocked, and naming it must not
+    // fall back to the agreement session that is.
+    await expect(client.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      signatureInputHex: Buffer.from(possessionInput()).toString('hex'),
+    })).rejects.toThrow('unknown_unlocked_key');
   });
 
   it('refuses unknown keyfiles without touching the throttle', async () => {

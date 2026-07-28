@@ -24,6 +24,7 @@ export const picoVaultDaemonRequestFamilies = {
   approvalDecide: 'pico.vault.daemon.approval.decide.v1',
   ceremonyCreateDomain: 'pico.vault.daemon.ceremony.create-domain.v1',
   ceremonyRotateDomain: 'pico.vault.daemon.ceremony.rotate-domain.v1',
+  ceremonyCreateReaderGrant: 'pico.vault.daemon.ceremony.create-reader-grant.v1',
 } as const;
 
 /**
@@ -102,6 +103,12 @@ export interface PicoVaultDaemonLockRequest {
 export interface PicoVaultDaemonSignRequest {
   family: typeof picoVaultDaemonRequestFamilies.sign;
   requestId: string;
+  /**
+   * ADR 0102: required. With several sessions unlocked there is no such thing
+   * as "the" unlocked key, and guessing one would be a silent-wrong-key
+   * hazard, so the request names the key it wants.
+   */
+  keyFingerprintHex: string;
   signatureInputHex: string;
 }
 
@@ -152,6 +159,7 @@ export interface PicoVaultDaemonReaderAccessDecryptItemRequest {
 export interface PicoVaultDaemonCeremonyCreateDomainRequest {
   family: typeof picoVaultDaemonRequestFamilies.ceremonyCreateDomain;
   requestId: string;
+  signerKeyFingerprintHex: string;
   ownerReaderKeyRecord: Record<string, unknown>;
   domainAuthorityId: string;
   homeId: string;
@@ -166,6 +174,7 @@ export interface PicoVaultDaemonCeremonyCreateDomainRequest {
 export interface PicoVaultDaemonCeremonyRotateDomainRequest {
   family: typeof picoVaultDaemonRequestFamilies.ceremonyRotateDomain;
   requestId: string;
+  signerKeyFingerprintHex: string;
   domainRecord: Record<string, unknown>;
   rotationRecords: Record<string, unknown>[];
   readerGrantLifecycleRecords: Record<string, unknown>[];
@@ -175,6 +184,35 @@ export interface PicoVaultDaemonCeremonyRotateDomainRequest {
   rotatedAt: string;
   lifecycleOrder: string;
   receivedAt?: string;
+}
+
+/**
+ * ADR 0102: the first two-role ceremony. The signer creates the authority and
+ * its holder approves; the agreement key only unwraps and re-seals KEKs its
+ * owner already holds, which ADR 0099 deliberately does not gate.
+ */
+export interface PicoVaultDaemonCeremonyCreateReaderGrantRequest {
+  family: typeof picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant;
+  requestId: string;
+  signerKeyFingerprintHex: string;
+  agreementKeyFingerprintHex: string;
+  domainRecord: Record<string, unknown>;
+  rotationRecords: Record<string, unknown>[];
+  readerKeyRecord: Record<string, unknown>;
+  readerGrantId: string;
+  readerIdentityKeyFingerprintHex: string;
+  readerDeviceSigningKeyFingerprintHex: string;
+  readerDelegationId: string;
+  accessMode: string;
+  firstKekVersion: number;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+  receivedAt?: string;
+}
+
+export interface PicoVaultDaemonCeremonyCreateReaderGrantResult {
+  readerGrantRecord: Record<string, unknown>;
 }
 
 export interface PicoVaultDaemonApprovalWaitRequest {
@@ -204,7 +242,8 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonApprovalWaitRequest
   | PicoVaultDaemonApprovalDecideRequest
   | PicoVaultDaemonCeremonyCreateDomainRequest
-  | PicoVaultDaemonCeremonyRotateDomainRequest;
+  | PicoVaultDaemonCeremonyRotateDomainRequest
+  | PicoVaultDaemonCeremonyCreateReaderGrantRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -231,7 +270,7 @@ export interface PicoVaultDaemonUnlockedSessionDescriptor {
 
 export interface PicoVaultDaemonStatusResult {
   locked: boolean;
-  session: PicoVaultDaemonUnlockedSessionDescriptor | null;
+  sessions: PicoVaultDaemonUnlockedSessionDescriptor[];
   keyfiles: PicoVaultDaemonKeyfileDescriptor[];
 }
 
@@ -445,7 +484,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.sign: {
-      assertExactKeys(parsed, ['family', 'requestId', 'signatureInputHex']);
+      assertExactKeys(parsed, ['family', 'requestId', 'keyFingerprintHex', 'signatureInputHex']);
       const signatureInputHex = parsed.signatureInputHex;
       if (
         typeof signatureInputHex !== 'string'
@@ -455,7 +494,12 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       ) {
         throw new Error('invalid_request');
       }
-      return { family: picoVaultDaemonRequestFamilies.sign, requestId, signatureInputHex };
+      return {
+        family: picoVaultDaemonRequestFamilies.sign,
+        requestId,
+        keyFingerprintHex: requireFingerprintHex(parsed, 'keyFingerprintHex'),
+        signatureInputHex,
+      };
     }
     case picoVaultDaemonRequestFamilies.readerAccessOpen: {
       assertExactKeys(parsed, ['family', 'requestId', 'readerKeyFingerprintHex', 'maxDurationMs']);
@@ -534,7 +578,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       assertExactKeysWithOptional(
         parsed,
         [
-          'family', 'requestId', 'ownerReaderKeyRecord', 'domainAuthorityId',
+          'family', 'requestId', 'signerKeyFingerprintHex', 'ownerReaderKeyRecord', 'domainAuthorityId',
           'homeId', 'hostSigningKeyFingerprintHex', 'domainId', 'authorizedAt',
           'lifecycleOrder',
         ],
@@ -547,6 +591,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       return {
         family: picoVaultDaemonRequestFamilies.ceremonyCreateDomain,
         requestId,
+        signerKeyFingerprintHex: requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
         ownerReaderKeyRecord: requireRecord(parsed, 'ownerReaderKeyRecord'),
         domainAuthorityId: requireBoundedString(parsed, 'domainAuthorityId'),
         homeId: requireBoundedString(parsed, 'homeId'),
@@ -564,7 +609,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       assertExactKeysWithOptional(
         parsed,
         [
-          'family', 'requestId', 'domainRecord', 'rotationRecords',
+          'family', 'requestId', 'signerKeyFingerprintHex', 'domainRecord', 'rotationRecords',
           'readerGrantLifecycleRecords', 'writerGrantLifecycleRecords',
           'remainingReaderGrantRecords', 'rotationId', 'rotatedAt',
           'lifecycleOrder',
@@ -574,6 +619,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       return {
         family: picoVaultDaemonRequestFamilies.ceremonyRotateDomain,
         requestId,
+        signerKeyFingerprintHex: requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
         domainRecord: requireRecord(parsed, 'domainRecord'),
         rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
         readerGrantLifecycleRecords: requireRecordArray(parsed, 'readerGrantLifecycleRecords'),
@@ -581,6 +627,47 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         remainingReaderGrantRecords: requireRecordArray(parsed, 'remainingReaderGrantRecords'),
         rotationId: requireBoundedString(parsed, 'rotationId'),
         rotatedAt: requireBoundedString(parsed, 'rotatedAt'),
+        lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
+        ...(parsed.receivedAt === undefined
+          ? {}
+          : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant: {
+      assertExactKeysWithOptional(
+        parsed,
+        [
+          'family', 'requestId', 'signerKeyFingerprintHex',
+          'agreementKeyFingerprintHex', 'domainRecord', 'rotationRecords',
+          'readerKeyRecord', 'readerGrantId', 'readerIdentityKeyFingerprintHex',
+          'readerDeviceSigningKeyFingerprintHex', 'readerDelegationId',
+          'accessMode', 'firstKekVersion', 'validFrom', 'validUntil',
+          'lifecycleOrder',
+        ],
+        ['receivedAt'],
+      );
+      const firstKekVersion = parsed.firstKekVersion;
+      if (!Number.isSafeInteger(firstKekVersion) || (firstKekVersion as number) < 1) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant,
+        requestId,
+        signerKeyFingerprintHex: requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
+        agreementKeyFingerprintHex: requireFingerprintHex(parsed, 'agreementKeyFingerprintHex'),
+        domainRecord: requireRecord(parsed, 'domainRecord'),
+        rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
+        readerKeyRecord: requireRecord(parsed, 'readerKeyRecord'),
+        readerGrantId: requireBoundedString(parsed, 'readerGrantId'),
+        readerIdentityKeyFingerprintHex:
+          requireFingerprintHex(parsed, 'readerIdentityKeyFingerprintHex'),
+        readerDeviceSigningKeyFingerprintHex:
+          requireFingerprintHex(parsed, 'readerDeviceSigningKeyFingerprintHex'),
+        readerDelegationId: requireBoundedString(parsed, 'readerDelegationId'),
+        accessMode: requireBoundedString(parsed, 'accessMode'),
+        firstKekVersion: firstKekVersion as number,
+        validFrom: requireBoundedString(parsed, 'validFrom'),
+        validUntil: requireBoundedString(parsed, 'validUntil'),
         lifecycleOrder: requireBoundedString(parsed, 'lifecycleOrder'),
         ...(parsed.receivedAt === undefined
           ? {}
