@@ -7,8 +7,11 @@ export {
   picoVaultDaemonResponseFamily,
   MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
   MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS,
+  MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES,
   MAX_PICO_VAULT_DAEMON_REQUEST_ID_CHARS,
   MAX_PICO_VAULT_DAEMON_SIGNATURE_INPUT_HEX_CHARS,
+  PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS,
+  PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS,
   PicoVaultDaemonFrameDecoder,
 } from './protocol.js';
 export type {
@@ -19,6 +22,16 @@ export type {
   PicoVaultDaemonLockRequest,
   PicoVaultDaemonLockResult,
   PicoVaultDaemonOkResponse,
+  PicoVaultDaemonReaderAccessCloseRequest,
+  PicoVaultDaemonReaderAccessCloseResult,
+  PicoVaultDaemonReaderAccessDecryptItemRequest,
+  PicoVaultDaemonReaderAccessDecryptItemResult,
+  PicoVaultDaemonReaderAccessIsLockedRequest,
+  PicoVaultDaemonReaderAccessIsLockedResult,
+  PicoVaultDaemonReaderAccessOpenPayloadRequest,
+  PicoVaultDaemonReaderAccessOpenPayloadResult,
+  PicoVaultDaemonReaderAccessOpenRequest,
+  PicoVaultDaemonReaderAccessOpenResult,
   PicoVaultDaemonRequest,
   PicoVaultDaemonResponse,
   PicoVaultDaemonSignRequest,
@@ -37,5 +50,17 @@ export {
 export type { PicoVaultDaemon, PicoVaultDaemonOptions } from './daemon.js';
 export { connectPicoVaultDaemonClient } from './client.js';
 export type { PicoVaultDaemonClient } from './client.js';
+export {
+  connectPicoVaultDaemonSyncTransport,
+  createPicoVaultDaemonReaderAccessUnlockPort,
+  openPicoVaultDaemonReaderAccessSession,
+} from './reader-access.js';
+export type {
+  OpenPicoVaultDaemonReaderAccessInput,
+  PicoVaultDaemonReaderAccessSession,
+  PicoVaultDaemonReaderAccessUnlockInput,
+  PicoVaultDaemonSyncTransport,
+  PicoVaultDaemonSyncTransportOptions,
+} from './reader-access.js';
 export { parsePicoVaultCliArguments, runPicoVaultCli } from './cli.js';
 export type { PicoVaultCliInvocation } from './cli.js';

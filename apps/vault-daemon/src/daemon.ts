@@ -4,21 +4,34 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
+  createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
   readPicoVaultKeyfile,
   type PicoVaultEncryptedKeyfileV1,
+  type PicoVaultReaderCustodySyncAccessSession,
+  type PicoVaultReaderCustodySyncItemEvidence,
   type PicoVaultSession,
   type VaultSodium,
 } from '@pico/vault';
-import type { PicoVaultPersonKeyRole } from '@pico/protocol';
+import type {
+  PicoReaderCustodySyncBatchRecord,
+  PicoVaultPersonKeyRole,
+} from '@pico/protocol';
 import {
   encodePicoVaultDaemonFrame,
   parsePicoVaultDaemonRequest,
   picoVaultDaemonProtocolVersion,
   picoVaultDaemonRequestFamilies,
   picoVaultDaemonResponseFamily,
+  MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
+  MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES,
+  PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS,
+  PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS,
   PicoVaultDaemonFrameDecoder,
   type PicoVaultDaemonKeyfileDescriptor,
+  type PicoVaultDaemonReaderAccessDecryptItemRequest,
+  type PicoVaultDaemonReaderAccessOpenPayloadRequest,
+  type PicoVaultDaemonReaderAccessOpenRequest,
   type PicoVaultDaemonRequest,
   type PicoVaultDaemonUnlockRequest,
 } from './protocol.js';
@@ -73,6 +86,22 @@ interface UnlockedState {
   openedAtMonoMs: number;
 }
 
+/**
+ * ADR 0098 per-run capability over the person's already unlocked session.
+ * Closing a lease ends the run's capability; it deliberately does not lock the
+ * session, because the unlock window belongs to the person's hold connection
+ * and not to whichever consumer happened to lease from it.
+ */
+interface ReaderAccessLease {
+  leaseId: string;
+  connection: Socket;
+  accessSession: PicoVaultReaderCustodySyncAccessSession;
+  keyRole: PicoVaultPersonKeyRole;
+  keyFingerprintHex: string;
+  openedAtMonoMs: number;
+  maxDurationMs: number;
+}
+
 export function defaultMonotonicNowMs(): number {
   return Number(process.hrtime.bigint() / 1_000_000n);
 }
@@ -111,6 +140,16 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   #sweepTimer: NodeJS.Timeout | null = null;
 
   #unlocked: UnlockedState | null = null;
+
+  #lease: ReaderAccessLease | null = null;
+
+  /**
+   * At most one connection at a time carries the raised ADR 0098 frame budget.
+   * It keeps the budget after its lease ends, so a consumer whose lease died
+   * between deciding to send and sending still gets a named error instead of an
+   * oversized-frame disconnect.
+   */
+  #readerAccessConnection: Socket | null = null;
 
   #lastSweepWallMs: number;
 
@@ -182,6 +221,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       clearInterval(this.#sweepTimer);
       this.#sweepTimer = null;
     }
+    this.#closeLease('daemon_shutdown');
     this.#lockNow('daemon_shutdown');
     for (const socket of this.#connections.keys()) {
       socket.destroy();
@@ -273,6 +313,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     socket.once('close', () => {
       clearTimeout(state.helloTimer);
       this.#connections.delete(socket);
+      if (this.#lease !== null && this.#lease.connection === socket) {
+        this.#closeLease('lease_connection_closed');
+      }
+      if (this.#readerAccessConnection === socket) {
+        this.#readerAccessConnection = null;
+      }
       if (this.#unlocked !== null && this.#unlocked.holdSocket === socket) {
         this.#lockNow('hold_connection_closed');
       }
@@ -388,7 +434,239 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         }
         return;
       }
+      case picoVaultDaemonRequestFamilies.readerAccessOpen: {
+        this.#handleReaderAccessOpen(socket, state, request);
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.readerAccessIsLocked: {
+        // An unknown, foreign, closed or dead lease reports locked rather than
+        // failing: ADR 0096 verifies closure through this call, and an error
+        // here would masquerade as a lock failure for a lease that did close.
+        const lease = this.#resolveLease(socket, request.leaseId);
+        this.#respondOk(socket, request.requestId, {
+          locked: lease === null || this.#leaseFailure(lease) !== null,
+        });
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.readerAccessClose: {
+        if (this.#resolveLease(socket, request.leaseId) !== null) {
+          this.#closeLease('explicit_close');
+        }
+        this.#respondOk(socket, request.requestId, { closed: true });
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.readerAccessOpenPayload: {
+        this.#handleReaderAccessOpenPayload(socket, request);
+        return;
+      }
+      case picoVaultDaemonRequestFamilies.readerAccessDecryptItem: {
+        this.#handleReaderAccessDecryptItem(socket, request);
+        return;
+      }
     }
+  }
+
+  #handleReaderAccessOpen(
+    socket: Socket,
+    state: ConnectionState,
+    request: PicoVaultDaemonReaderAccessOpenRequest,
+  ): void {
+    if (this.#lease !== null) {
+      this.#respondError(socket, request.requestId, 'reader_access_lease_active');
+      return;
+    }
+    const unlocked = this.#unlocked;
+    if (unlocked === null) {
+      this.#respondError(socket, request.requestId, 'vault_locked');
+      return;
+    }
+    if (unlocked.keyRole !== 'device_key_agreement') {
+      this.#audit('reader_access_open', {
+        outcome: 'error',
+        reason: 'reader_access_key_role_mismatch',
+        keyRole: unlocked.keyRole,
+      });
+      this.#respondError(socket, request.requestId, 'reader_access_key_role_mismatch');
+      return;
+    }
+    if (unlocked.keyFingerprintHex !== request.readerKeyFingerprintHex) {
+      this.#audit('reader_access_open', {
+        outcome: 'error',
+        reason: 'reader_access_key_fingerprint_mismatch',
+        keyFingerprintHex: unlocked.keyFingerprintHex,
+      });
+      this.#respondError(socket, request.requestId, 'reader_access_key_fingerprint_mismatch');
+      return;
+    }
+    if (unlocked.session.isLocked({ nowMs: this.#wallNowMs() })) {
+      this.#lockNow('idle_locked');
+      this.#respondError(socket, request.requestId, 'vault_locked');
+      return;
+    }
+
+    const maxDurationMs = Math.min(
+      request.maxDurationMs,
+      PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS,
+    );
+    this.#lease = {
+      leaseId: Buffer.from(
+        this.#sodium.randombytes_buf(PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS / 2),
+      ).toString('hex'),
+      connection: socket,
+      accessSession: createPicoVaultReaderCustodySyncAccessSession(
+        this.#sodium,
+        unlocked.session,
+      ),
+      keyRole: unlocked.keyRole,
+      keyFingerprintHex: unlocked.keyFingerprintHex,
+      openedAtMonoMs: this.#monotonicNowMs(),
+      maxDurationMs,
+    };
+    this.#grantReaderAccessFrameBudget(socket, state);
+    this.#audit('reader_access_open', {
+      outcome: 'ok',
+      keyRole: unlocked.keyRole,
+      keyFingerprintHex: unlocked.keyFingerprintHex,
+      maxDurationMs,
+    });
+    this.#respondOk(socket, request.requestId, {
+      leaseId: this.#lease.leaseId,
+      keyRole: unlocked.keyRole,
+      keyFingerprintHex: unlocked.keyFingerprintHex,
+      maxDurationMs,
+    });
+  }
+
+  #handleReaderAccessOpenPayload(
+    socket: Socket,
+    request: PicoVaultDaemonReaderAccessOpenPayloadRequest,
+  ): void {
+    const lease = this.#useLease(socket, request);
+    if (lease === null) {
+      return;
+    }
+    try {
+      // The wire cannot know these bytes are a valid batch; the Vault library is
+      // the authority that verifies the manifest, scope and evidence.
+      const payload = lease.accessSession.openPayload({
+        batchRecord: request.batchRecord as unknown as PicoReaderCustodySyncBatchRecord,
+        evaluatedAt: request.evaluatedAt,
+      });
+      this.#audit('reader_access_open_payload', { outcome: 'ok' });
+      this.#respondOk(
+        socket,
+        request.requestId,
+        { payload: payload as unknown as Record<string, unknown> },
+        MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES,
+      );
+    } catch (error) {
+      const reason = reasonOf(error, 'reader_access_open_payload_failed');
+      this.#audit('reader_access_open_payload', { outcome: 'error', reason });
+      this.#respondError(socket, request.requestId, reason);
+    }
+  }
+
+  #handleReaderAccessDecryptItem(
+    socket: Socket,
+    request: PicoVaultDaemonReaderAccessDecryptItemRequest,
+  ): void {
+    const lease = this.#useLease(socket, request);
+    if (lease === null) {
+      return;
+    }
+    try {
+      const plaintext = lease.accessSession.decryptItem({
+        domainRecord: request.domainRecord,
+        readerGrantRecord: request.readerGrantRecord,
+        writerGrantRecord: request.writerGrantRecord,
+        rotationRecords: request.rotationRecords,
+        itemRecord: request.itemRecord,
+      } as unknown as PicoVaultReaderCustodySyncItemEvidence);
+      // Plaintext is a crypto result on its way out; it is never audited,
+      // logged or retained here (ADR 0098).
+      this.#audit('reader_access_decrypt_item', { outcome: 'ok' });
+      this.#respondOk(
+        socket,
+        request.requestId,
+        { plaintext },
+        MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES,
+      );
+    } catch (error) {
+      const reason = reasonOf(error, 'reader_access_decrypt_item_failed');
+      this.#audit('reader_access_decrypt_item', { outcome: 'error', reason });
+      this.#respondError(socket, request.requestId, reason);
+    }
+  }
+
+  #useLease(
+    socket: Socket,
+    request: { requestId: string; leaseId: string },
+  ): ReaderAccessLease | null {
+    const lease = this.#resolveLease(socket, request.leaseId);
+    if (lease === null) {
+      this.#respondError(socket, request.requestId, 'reader_access_lease_required');
+      return null;
+    }
+    const failure = this.#leaseFailure(lease);
+    if (failure !== null) {
+      this.#respondError(socket, request.requestId, failure);
+      return null;
+    }
+    return lease;
+  }
+
+  #resolveLease(socket: Socket, leaseId: string): ReaderAccessLease | null {
+    const lease = this.#lease;
+    if (lease === null || lease.leaseId !== leaseId || lease.connection !== socket) {
+      return null;
+    }
+    return lease;
+  }
+
+  /**
+   * Returns the reason this lease can no longer be used, or null when it is
+   * usable. The successful path also pins the Vault key-use instant to the
+   * daemon's own clock, so a client-supplied instant can never extend a
+   * capability - which is why no instant crosses the wire at all.
+   */
+  #leaseFailure(lease: ReaderAccessLease): string | null {
+    if (this.#monotonicNowMs() - lease.openedAtMonoMs > lease.maxDurationMs) {
+      this.#closeLease('lease_expired');
+      return 'reader_access_lease_expired';
+    }
+    if (this.#unlocked === null) {
+      this.#closeLease('vault_locked');
+      return 'vault_locked';
+    }
+    if (lease.accessSession.isLocked({ nowMs: this.#wallNowMs() })) {
+      this.#lockNow('idle_locked');
+      this.#closeLease('vault_locked');
+      return 'vault_locked';
+    }
+    return null;
+  }
+
+  #grantReaderAccessFrameBudget(socket: Socket, state: ConnectionState): void {
+    const previous = this.#readerAccessConnection;
+    if (previous !== null && previous !== socket) {
+      this.#connections.get(previous)?.decoder.setMaxFrameBytes(
+        MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
+      );
+    }
+    this.#readerAccessConnection = socket;
+    state.decoder.setMaxFrameBytes(MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES);
+  }
+
+  #closeLease(cause: string): void {
+    const lease = this.#lease;
+    if (lease === null) {
+      return;
+    }
+    this.#lease = null;
+    this.#audit('reader_access_lease_closed', {
+      cause,
+      keyFingerprintHex: lease.keyFingerprintHex,
+    });
   }
 
   #handleUnlock(socket: Socket, request: PicoVaultDaemonUnlockRequest): void {
@@ -401,11 +679,6 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'unlock_throttled');
       return;
     }
-    if (request.keyRole === 'device_key_agreement') {
-      this.#respondError(socket, request.requestId, 'key_role_not_served');
-      return;
-    }
-
     let keyfile: PicoVaultEncryptedKeyfileV1 | undefined;
     try {
       keyfile = this.#listKeyfiles().find(
@@ -503,6 +776,11 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     this.#lastSweepWallMs = Math.max(this.#lastSweepWallMs, wallMs);
     this.#lastSweepMonoMs = monoMs;
 
+    const lease = this.#lease;
+    if (lease !== null && monoMs - lease.openedAtMonoMs > lease.maxDurationMs) {
+      this.#closeLease('lease_expired');
+    }
+
     const unlocked = this.#unlocked;
     if (unlocked === null) {
       return;
@@ -539,6 +817,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   }
 
   #lockNow(cause: string): void {
+    this.#closeLease(cause);
     const unlocked = this.#unlocked;
     if (unlocked === null) {
       return;
@@ -563,13 +842,25 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     });
   }
 
-  #respondOk(socket: Socket, requestId: string, result: Record<string, unknown>): void {
-    socket.write(encodePicoVaultDaemonFrame({
-      family: picoVaultDaemonResponseFamily,
-      requestId,
-      ok: true,
-      result,
-    }));
+  #respondOk(
+    socket: Socket,
+    requestId: string,
+    result: Record<string, unknown>,
+    maxFrameBytes: number = MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
+  ): void {
+    let frame: Buffer;
+    try {
+      frame = encodePicoVaultDaemonFrame({
+        family: picoVaultDaemonResponseFamily,
+        requestId,
+        ok: true,
+        result,
+      }, maxFrameBytes);
+    } catch (error) {
+      this.#respondError(socket, requestId, reasonOf(error, 'frame_too_large'));
+      return;
+    }
+    socket.write(frame);
   }
 
   #respondError(socket: Socket, requestId: string, reason: string): void {

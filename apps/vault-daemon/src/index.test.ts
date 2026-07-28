@@ -41,11 +41,16 @@ const daemons: PicoVaultDaemon[] = [];
 const clients: PicoVaultDaemonClient[] = [];
 
 let identityFixture: CreatePicoVaultKeyfileResult;
+let readerFixture: CreatePicoVaultKeyfileResult;
 
 beforeAll(async () => {
   await sodium.ready;
   identityFixture = createPicoVaultKeyfile(sodium, {
     keyRole: 'pico_identity',
+    passphrase: PASSPHRASE,
+  });
+  readerFixture = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_key_agreement',
     passphrase: PASSPHRASE,
   });
 });
@@ -92,6 +97,13 @@ function makeHome(seedIdentityKeyfile = true): TestHome {
     foundationDataPath: tempDir('pico-fd-'),
     foundationBackupPath: tempDir('pico-fb-'),
   };
+}
+
+function seedReaderKeyfile(paths: TestHome): void {
+  writePicoVaultKeyfile(
+    join(paths.home, 'keyfiles', `device_key_agreement-${readerFixture.keyFingerprintHex}.json`),
+    readerFixture.keyfile,
+  );
 }
 
 async function startAt(
@@ -502,15 +514,26 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     expect(auditText).not.toContain(PASSPHRASE);
   });
 
-  it('refuses unservable roles and unknown keyfiles without touching the throttle', async () => {
-    const { daemon } = await startAt(makeHome());
+  it('serves key-agreement unlock for reader access but never for signing', async () => {
+    const paths = makeHome();
+    seedReaderKeyfile(paths);
+    const { daemon } = await startAt(paths);
     const client = await openClient(daemon);
 
-    await expect(client.unlock({
+    const unlocked = await client.unlock({
       keyRole: 'device_key_agreement',
-      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      keyFingerprintHex: readerFixture.keyFingerprintHex,
       passphrase: PASSPHRASE,
-    })).rejects.toThrow('key_role_not_served');
+    });
+    expect(unlocked.keyRole).toBe('device_key_agreement');
+    await expect(client.sign({
+      signatureInputHex: Buffer.from(possessionInput()).toString('hex'),
+    })).rejects.toThrow('key_role_cannot_sign');
+  });
+
+  it('refuses unknown keyfiles without touching the throttle', async () => {
+    const { daemon } = await startAt(makeHome());
+    const client = await openClient(daemon);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
       await expect(client.unlock({

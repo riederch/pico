@@ -243,6 +243,7 @@ The avatar communicates state and risk. For example:
 - [`docs/architecture/0095-ephemeral-reader-item-catalog-and-local-presentation-handoff.md`](docs/architecture/0095-ephemeral-reader-item-catalog-and-local-presentation-handoff.md) - bounded current-head catalog with process-local state-bound selections and synchronous local presentation
 - [`docs/architecture/0096-reader-access-session-and-vault-lock-lifecycle.md`](docs/architecture/0096-reader-access-session-and-vault-lock-lifecycle.md) - one-shot Reader catalog/presentation access with exact Vault-role binding, bounded monotonic lifetime and verified final locking
 - [`docs/architecture/0097-deployable-vault-process-and-local-ipc-authority-boundary.md`](docs/architecture/0097-deployable-vault-process-and-local-ipc-authority-boundary.md) - first Vault product form (CLI plus local daemon, Linux first) with a private Unix-socket boundary, named request families and a hold-bound explicit unlock/lock lifecycle
+- [`docs/architecture/0098-reader-access-lease-over-the-vault-daemon.md`](docs/architecture/0098-reader-access-lease-over-the-vault-daemon.md) - bounded reader-access lease over the Vault daemon, keeping reader private keys out of consumer processes
 - [`docs/release/versioning.md`](docs/release/versioning.md) - release/versioning checklist
 - [`docs/release/documentation-consistency.md`](docs/release/documentation-consistency.md) - README and concept consistency rules
 - [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md) - public compatibility surfaces

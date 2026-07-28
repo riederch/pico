@@ -9,7 +9,10 @@ kein Statusdokument, keine Architekturentscheidung und kein Ersatz fuer
 Pico ist ein pnpm-/TypeScript-Monorepo. Aktuelle Workspace-Pakete:
 
 - `apps/core` - Fastify-/SQLite-Foundation-Service
-- `apps/vault-daemon` - erster lokaler Vault-Daemon plus CLI (ADR 0097)
+- `apps/vault-daemon` - lokaler Vault-Daemon, CLI und Reader-Access-Lease
+  (ADR 0097/0098). Die ADR-0098-E2E-Tests starten den gebauten
+  `dist/cli.js` als Kindprozess, weil die synchrone Bridge den aufrufenden
+  Thread blockiert; ein `pretest`-Build erzwingt das passende `dist/`.
 - `apps/web` - frameworkfreier Foundation-Webclient
 - `packages/protocol` - gemeinsame Runtime-Typen und canonical-byte Builder
 - `packages/sync` - Lamport-/Version-Vector-Grundlagen

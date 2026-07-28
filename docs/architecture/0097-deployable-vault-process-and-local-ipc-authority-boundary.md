@@ -270,12 +270,15 @@ not evidence.
   rollback locking, throttling, label-check pass-through, signature
   verification, restart-locked and passphrase-free audit.
 - **D7 — Future (each its own decision):** `SO_PEERCRED` audit enrichment
-  and per-client authority via a vetted native binding; unwrap and
-  reader-sync families over the same contract with ADR 0096 integration;
-  per-request approval; ADR 0081 Gate P3 platform-keystore unlock behind
-  the same seam; macOS verification and Windows named-pipe transport;
-  packaging/autostart units; client-library extraction; any promotion of
-  the wire contract toward a public surface.
+  and per-client authority via a vetted native binding; per-request
+  approval; ADR 0081 Gate P3 platform-keystore unlock behind the same
+  seam; macOS verification and Windows named-pipe transport;
+  packaging/autostart units; migration of the remaining ceremonies (claim,
+  checkpoint publication, envelope issuance, rotation); any promotion of
+  the wire contract toward a public surface. **ADR 0098 discharges the
+  reader-sync part**: it adds the reader-access lease families, supplies
+  the first real consumer and lifts the `device_key_agreement`
+  `key_role_not_served` refusal recorded above.
 
 ## Non-goals
 

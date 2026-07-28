@@ -1,4 +1,5 @@
 import { picoVaultPersonKeyRoles, type PicoVaultPersonKeyRole } from '@pico/protocol';
+import { MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES } from '@pico/vault';
 
 /**
  * ADR 0097 local wire contract. This is a private contract between the Vault
@@ -14,19 +15,39 @@ export const picoVaultDaemonRequestFamilies = {
   unlock: 'pico.vault.daemon.unlock.v1',
   lock: 'pico.vault.daemon.lock.v1',
   sign: 'pico.vault.daemon.sign.v1',
+  readerAccessOpen: 'pico.vault.daemon.reader-access.open.v1',
+  readerAccessIsLocked: 'pico.vault.daemon.reader-access.is-locked.v1',
+  readerAccessOpenPayload: 'pico.vault.daemon.reader-access.open-payload.v1',
+  readerAccessDecryptItem: 'pico.vault.daemon.reader-access.decrypt-item.v1',
+  readerAccessClose: 'pico.vault.daemon.reader-access.close.v1',
 } as const;
 
 export const picoVaultDaemonResponseFamily = 'pico.vault.daemon.response.v1' as const;
 
 export const MAX_PICO_VAULT_DAEMON_FRAME_BYTES = 128 * 1024;
+
+/**
+ * ADR 0098 lease-scoped budget. A sealed ADR 0089 batch is capped at
+ * `MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES`; carrying it hex-encoded
+ * doubles it, and the opened payload plus the JSON envelope needs headroom on
+ * top. Only a connection that already holds a lease may send or receive this
+ * much - everything else stays at the control-family cap.
+ */
+export const MAX_PICO_VAULT_DAEMON_READER_ACCESS_FRAME_BYTES =
+  3 * MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES;
+
+export const PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS = 5 * 60 * 1_000;
 export const MAX_PICO_VAULT_DAEMON_SIGNATURE_INPUT_HEX_CHARS = 64 * 1024;
 export const MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS = 1024;
 export const MAX_PICO_VAULT_DAEMON_REQUEST_ID_CHARS = 64;
+
+export const PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS = 32;
 
 const FRAME_LENGTH_PREFIX_BYTES = 4;
 const requestIdPattern = /^[A-Za-z0-9_-]+$/;
 const lowercaseHexPattern = /^(?:[0-9a-f]{2})+$/;
 const KEY_FINGERPRINT_HEX_CHARS = 64;
+const MAX_PICO_VAULT_DAEMON_INSTANT_CHARS = 64;
 
 export interface PicoVaultDaemonHelloRequest {
   family: typeof picoVaultDaemonRequestFamilies.hello;
@@ -58,12 +79,55 @@ export interface PicoVaultDaemonSignRequest {
   signatureInputHex: string;
 }
 
+export interface PicoVaultDaemonReaderAccessOpenRequest {
+  family: typeof picoVaultDaemonRequestFamilies.readerAccessOpen;
+  requestId: string;
+  readerKeyFingerprintHex: string;
+  maxDurationMs: number;
+}
+
+export interface PicoVaultDaemonReaderAccessIsLockedRequest {
+  family: typeof picoVaultDaemonRequestFamilies.readerAccessIsLocked;
+  requestId: string;
+  leaseId: string;
+}
+
+export interface PicoVaultDaemonReaderAccessCloseRequest {
+  family: typeof picoVaultDaemonRequestFamilies.readerAccessClose;
+  requestId: string;
+  leaseId: string;
+}
+
+export interface PicoVaultDaemonReaderAccessOpenPayloadRequest {
+  family: typeof picoVaultDaemonRequestFamilies.readerAccessOpenPayload;
+  requestId: string;
+  leaseId: string;
+  batchRecord: Record<string, unknown>;
+  evaluatedAt: string;
+}
+
+export interface PicoVaultDaemonReaderAccessDecryptItemRequest {
+  family: typeof picoVaultDaemonRequestFamilies.readerAccessDecryptItem;
+  requestId: string;
+  leaseId: string;
+  domainRecord: Record<string, unknown>;
+  readerGrantRecord: Record<string, unknown>;
+  writerGrantRecord: Record<string, unknown>;
+  rotationRecords: Record<string, unknown>[];
+  itemRecord: Record<string, unknown>;
+}
+
 export type PicoVaultDaemonRequest =
   | PicoVaultDaemonHelloRequest
   | PicoVaultDaemonStatusRequest
   | PicoVaultDaemonUnlockRequest
   | PicoVaultDaemonLockRequest
-  | PicoVaultDaemonSignRequest;
+  | PicoVaultDaemonSignRequest
+  | PicoVaultDaemonReaderAccessOpenRequest
+  | PicoVaultDaemonReaderAccessIsLockedRequest
+  | PicoVaultDaemonReaderAccessCloseRequest
+  | PicoVaultDaemonReaderAccessOpenPayloadRequest
+  | PicoVaultDaemonReaderAccessDecryptItemRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -100,6 +164,29 @@ export interface PicoVaultDaemonSignResult {
   keyFingerprintHex: string;
 }
 
+export interface PicoVaultDaemonReaderAccessOpenResult {
+  leaseId: string;
+  keyRole: PicoVaultPersonKeyRole;
+  keyFingerprintHex: string;
+  maxDurationMs: number;
+}
+
+export interface PicoVaultDaemonReaderAccessIsLockedResult {
+  locked: boolean;
+}
+
+export interface PicoVaultDaemonReaderAccessCloseResult {
+  closed: true;
+}
+
+export interface PicoVaultDaemonReaderAccessOpenPayloadResult {
+  payload: Record<string, unknown>;
+}
+
+export interface PicoVaultDaemonReaderAccessDecryptItemResult {
+  plaintext: string;
+}
+
 export interface PicoVaultDaemonOkResponse {
   family: typeof picoVaultDaemonResponseFamily;
   requestId: string;
@@ -116,9 +203,12 @@ export interface PicoVaultDaemonErrorResponse {
 
 export type PicoVaultDaemonResponse = PicoVaultDaemonOkResponse | PicoVaultDaemonErrorResponse;
 
-export function encodePicoVaultDaemonFrame(payload: Record<string, unknown>): Buffer {
+export function encodePicoVaultDaemonFrame(
+  payload: Record<string, unknown>,
+  maxFrameBytes: number = MAX_PICO_VAULT_DAEMON_FRAME_BYTES,
+): Buffer {
   const body = Buffer.from(JSON.stringify(payload), 'utf8');
-  if (body.byteLength > MAX_PICO_VAULT_DAEMON_FRAME_BYTES) {
+  if (body.byteLength > maxFrameBytes) {
     throw new Error('frame_too_large');
   }
   const frame = Buffer.allocUnsafe(FRAME_LENGTH_PREFIX_BYTES + body.byteLength);
@@ -128,12 +218,26 @@ export function encodePicoVaultDaemonFrame(payload: Record<string, unknown>): Bu
 }
 
 /**
- * Incremental frame decoder. The declared length is checked against the frame
+ * Incremental frame decoder. The declared length is checked against the current
  * cap before any body bytes are buffered, so an oversized declaration fails
- * immediately instead of allocating.
+ * immediately instead of allocating. The cap is per connection and mutable:
+ * ADR 0098 raises it only while that connection holds a reader-access lease.
  */
 export class PicoVaultDaemonFrameDecoder {
   #buffered: Buffer = Buffer.alloc(0);
+
+  #maxFrameBytes: number;
+
+  public constructor(maxFrameBytes: number = MAX_PICO_VAULT_DAEMON_FRAME_BYTES) {
+    this.#maxFrameBytes = maxFrameBytes;
+  }
+
+  public setMaxFrameBytes(maxFrameBytes: number): void {
+    if (!Number.isSafeInteger(maxFrameBytes) || maxFrameBytes < 1) {
+      throw new Error('invalid_max_frame_bytes');
+    }
+    this.#maxFrameBytes = maxFrameBytes;
+  }
 
   public feed(chunk: Buffer): Buffer[] {
     this.#buffered = this.#buffered.byteLength === 0 ? chunk : Buffer.concat([this.#buffered, chunk]);
@@ -144,7 +248,7 @@ export class PicoVaultDaemonFrameDecoder {
         return frames;
       }
       const bodyLength = this.#buffered.readUInt32BE(0);
-      if (bodyLength === 0 || bodyLength > MAX_PICO_VAULT_DAEMON_FRAME_BYTES) {
+      if (bodyLength === 0 || bodyLength > this.#maxFrameBytes) {
         throw new Error('frame_too_large');
       }
       if (this.#buffered.byteLength < FRAME_LENGTH_PREFIX_BYTES + bodyLength) {
@@ -228,6 +332,79 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       }
       return { family: picoVaultDaemonRequestFamilies.sign, requestId, signatureInputHex };
     }
+    case picoVaultDaemonRequestFamilies.readerAccessOpen: {
+      assertExactKeys(parsed, ['family', 'requestId', 'readerKeyFingerprintHex', 'maxDurationMs']);
+      const maxDurationMs = parsed.maxDurationMs;
+      if (
+        !Number.isSafeInteger(maxDurationMs)
+        || (maxDurationMs as number) < 1
+        || (maxDurationMs as number) > PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS
+      ) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.readerAccessOpen,
+        requestId,
+        readerKeyFingerprintHex: requireFingerprintHex(parsed, 'readerKeyFingerprintHex'),
+        maxDurationMs: maxDurationMs as number,
+      };
+    }
+    case picoVaultDaemonRequestFamilies.readerAccessIsLocked: {
+      assertExactKeys(parsed, ['family', 'requestId', 'leaseId']);
+      return {
+        family: picoVaultDaemonRequestFamilies.readerAccessIsLocked,
+        requestId,
+        leaseId: requireLeaseId(parsed),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.readerAccessClose: {
+      assertExactKeys(parsed, ['family', 'requestId', 'leaseId']);
+      return {
+        family: picoVaultDaemonRequestFamilies.readerAccessClose,
+        requestId,
+        leaseId: requireLeaseId(parsed),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.readerAccessOpenPayload: {
+      assertExactKeys(parsed, ['family', 'requestId', 'leaseId', 'batchRecord', 'evaluatedAt']);
+      const evaluatedAt = parsed.evaluatedAt;
+      if (
+        typeof evaluatedAt !== 'string'
+        || evaluatedAt.length === 0
+        || evaluatedAt.length > MAX_PICO_VAULT_DAEMON_INSTANT_CHARS
+      ) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.readerAccessOpenPayload,
+        requestId,
+        leaseId: requireLeaseId(parsed),
+        batchRecord: requireRecord(parsed, 'batchRecord'),
+        evaluatedAt,
+      };
+    }
+    case picoVaultDaemonRequestFamilies.readerAccessDecryptItem: {
+      assertExactKeys(parsed, [
+        'family',
+        'requestId',
+        'leaseId',
+        'domainRecord',
+        'readerGrantRecord',
+        'writerGrantRecord',
+        'rotationRecords',
+        'itemRecord',
+      ]);
+      return {
+        family: picoVaultDaemonRequestFamilies.readerAccessDecryptItem,
+        requestId,
+        leaseId: requireLeaseId(parsed),
+        domainRecord: requireRecord(parsed, 'domainRecord'),
+        readerGrantRecord: requireRecord(parsed, 'readerGrantRecord'),
+        writerGrantRecord: requireRecord(parsed, 'writerGrantRecord'),
+        rotationRecords: requireRecordArray(parsed, 'rotationRecords'),
+        itemRecord: requireRecord(parsed, 'itemRecord'),
+      };
+    }
     default:
       throw new Error('unknown_request_family');
   }
@@ -285,6 +462,52 @@ function parseRequestId(parsed: Record<string, unknown>): string {
     throw new Error('invalid_request');
   }
   return requestId;
+}
+
+/**
+ * Structural wire checks only. Record contents stay unvalidated here on
+ * purpose: `@pico/vault` is the single authority that verifies signatures,
+ * scope and lifecycle, and a second validator at the socket would be a second
+ * place to disagree with it.
+ */
+function requireRecord(parsed: Record<string, unknown>, key: string): Record<string, unknown> {
+  const value = parsed[key];
+  if (!isRecord(value)) {
+    throw new Error('invalid_request');
+  }
+  return value;
+}
+
+function requireRecordArray(parsed: Record<string, unknown>, key: string): Record<string, unknown>[] {
+  const value = parsed[key];
+  if (!Array.isArray(value) || !value.every((entry) => isRecord(entry))) {
+    throw new Error('invalid_request');
+  }
+  return value as Record<string, unknown>[];
+}
+
+function requireFingerprintHex(parsed: Record<string, unknown>, key: string): string {
+  const value = parsed[key];
+  if (
+    typeof value !== 'string'
+    || value.length !== KEY_FINGERPRINT_HEX_CHARS
+    || !lowercaseHexPattern.test(value)
+  ) {
+    throw new Error('invalid_request');
+  }
+  return value;
+}
+
+function requireLeaseId(parsed: Record<string, unknown>): string {
+  const value = parsed.leaseId;
+  if (
+    typeof value !== 'string'
+    || value.length !== PICO_VAULT_DAEMON_LEASE_ID_HEX_CHARS
+    || !lowercaseHexPattern.test(value)
+  ) {
+    throw new Error('invalid_request');
+  }
+  return value;
 }
 
 function assertExactKeys(record: Record<string, unknown>, keys: readonly string[]): void {

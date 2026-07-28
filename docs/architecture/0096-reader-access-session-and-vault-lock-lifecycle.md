@@ -10,6 +10,12 @@ locks the Vault session on every exit path. It is not an unlock user
 interface, daemon, IPC protocol, platform-keystore integration or background
 worker.
 
+ADR 0098 later supplies the deployable provider this ADR deliberately left
+open: the unlock port is implemented by a bounded lease over the ADR 0097
+Vault daemon, with this lifecycle unchanged. One difference is named there
+rather than hidden here — over the daemon, the mandatory `lock()` closes the
+run's lease instead of locking the person's own unlock window.
+
 ## Context
 
 ADR 0095 deliberately accepts externally supplied payload-open and
@@ -191,3 +197,4 @@ Negative and residual:
 - [ADR 0093](0093-private-durable-reader-projection-archive-and-idempotent-receipts.md)
 - [ADR 0094](0094-explicit-reader-item-access-and-ephemeral-vault-decryption.md)
 - [ADR 0095](0095-ephemeral-reader-item-catalog-and-local-presentation-handoff.md)
+- [ADR 0098](0098-reader-access-lease-over-the-vault-daemon.md)
