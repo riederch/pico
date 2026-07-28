@@ -169,6 +169,16 @@ async function startApproverProcess(
   // sequential reads cannot consume each other's input.
   child.stdin!.write(`${answer}\n`.repeat(8));
 
+  // "Vault unlocked." only proves the unlock returned; the CLI still has to
+  // reach its approval loop and land a wait on the daemon. Starting a gated
+  // ceremony in that gap makes the daemon fail closed with
+  // `approval_unavailable` - correct behaviour, and a flaky test. Wait for the
+  // daemon's own record that this connection is now an approval channel.
+  await waitFor(
+    () => daemon.stderr().includes('"event":"approval_watch_started"'),
+    'approval_watch_started',
+  );
+
   return {
     approvals: () => stderr.split('Approve? [y/N]').length - 1,
     stderr: () => stderr,

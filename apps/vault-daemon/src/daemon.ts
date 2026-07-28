@@ -98,6 +98,12 @@ interface ConnectionState {
   inFlight: boolean;
   approvalWaitRequestId: string | null;
   approvalWaitTimer: NodeJS.Timeout | null;
+  /**
+   * Whether this connection has already been audited as an approval channel.
+   * The long poll repeats for as long as the terminal is open, so the audit
+   * records the transition once rather than every poll.
+   */
+  approvalWatchAudited: boolean;
 }
 
 /**
@@ -374,6 +380,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       inFlight: false,
       approvalWaitRequestId: null,
       approvalWaitTimer: null,
+      approvalWatchAudited: false,
     };
     state.helloTimer.unref();
     this.#connections.set(socket, state);
@@ -875,9 +882,22 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   ): void {
     // Any hold connection may wait; an approval is routed to the hold
     // connection of the session whose key would create the authority.
-    if (this.#sessionHeldBy(socket) === null) {
+    const held = this.#sessionHeldBy(socket);
+    if (held === null) {
       this.#respondError(socket, request.requestId, 'approval_wait_forbidden');
       return;
+    }
+    // A terminal becomes an approval channel when its first wait arrives, and
+    // a gated signature fails closed as `approval_unavailable` while none is
+    // watching. Auditing that transition is what makes an unavailable
+    // approval diagnosable after the fact; the flag keeps the repeating long
+    // poll from turning one standing terminal into a stream of records.
+    if (!state.approvalWatchAudited) {
+      state.approvalWatchAudited = true;
+      this.#audit('approval_watch_started', {
+        keyFingerprintHex: held.keyFingerprintHex,
+        keyRole: held.keyRole,
+      });
     }
     const pending = this.#pendingApproval;
     if (pending !== null && pending.signerHoldSocket === socket) {
