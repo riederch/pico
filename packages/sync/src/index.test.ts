@@ -26,10 +26,12 @@ import {
   createPicoReaderCustodySyncBatch,
   createPicoReaderCustodyWriterGrant,
   createPicoVaultKeyfile,
+  decryptPicoReaderCustodyItem,
   encryptPicoReaderCustodyItem,
   openPicoReaderCustodySyncBatch,
   openPicoVaultKeyfile,
   revokePicoReaderCustodyReaderGrant,
+  revokePicoReaderCustodyWriterGrant,
   rotatePicoReaderCustodyDomain,
 } from '@pico/vault';
 import sodium from 'libsodium-wrappers-sumo';
@@ -50,6 +52,7 @@ import {
   PicoReaderCustodySyncClient,
   PicoReaderCustodySyncFilePendingStore,
   PicoReaderCustodySyncFileStateStore,
+  PicoReaderCustodySyncItemAccess,
   PicoReaderCustodySyncProjector,
   PicoReaderCustodySyncProtectedProjectionFileStore,
   PicoReaderCustodySyncRunner,
@@ -66,6 +69,7 @@ import {
   type PicoReaderCustodySyncClientApplyResult,
   type PicoReaderCustodySyncClientState,
   type PicoReaderCustodySyncClientStateStore,
+  type PicoReaderCustodySyncItemDecryptionEvidence,
   type PicoReaderCustodySyncPins,
   type PicoReaderCustodySyncPendingRecord,
   type PicoReaderCustodySyncPendingStore,
@@ -1172,8 +1176,8 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
   });
 });
 
-describe('authenticated reader-custody sync (ADR 0089)', () => {
-  it('relays only a sealed batch and rejects wrong readers, tampering, rollback, gaps, forks and cross-scope projection', async () => {
+describe('authenticated reader sync and item access (ADRs 0089/0094)', () => {
+  it('keeps transport sealed and exposes one current item through the synchronous Vault boundary', async () => {
     const ownerIdentity = createPicoVaultKeyfile(sodium, {
       keyRole: 'pico_identity',
       passphrase: 'owner identity passphrase',
@@ -1264,6 +1268,26 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       validUntil: '2027-07-27T10:00:00.000Z',
       lifecycleOrder: 'seq:0000000000000003',
     });
+    const forwardReaderGrantRecord =
+      createPicoReaderCustodyReaderGrant(sodium, {
+        ownerIdentitySession,
+        ownerReaderKeyAgreementSession: ownerAgreementSession,
+        domainRecord,
+        readerKeyRecord: {
+          suite: picoIdentitySuite,
+          keyRole: 'device_key_agreement',
+          publicKeyHex: wrongAgreement.publicKeyHex,
+        },
+        readerGrantId: 'reader_sync_reader_grant_forward_0001',
+        readerIdentityKeyFingerprintHex: '77'.repeat(32),
+        readerDeviceSigningKeyFingerprintHex: '88'.repeat(32),
+        readerDelegationId: 'reader_sync_delegation_forward_0001',
+        accessMode: 'forward_only',
+        firstKekVersion: 1,
+        validFrom: '2026-07-27T10:00:00.000Z',
+        validUntil: '2027-07-27T10:00:00.000Z',
+        lifecycleOrder: 'seq:0000000000000004',
+      });
     const itemRecord = encryptPicoReaderCustodyItem(sodium, {
       readerKeyAgreementSession: ownerAgreementSession,
       writerSigningSession,
@@ -1276,6 +1300,20 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       createdAt: '2026-07-27T10:03:00.000Z',
     });
     const routeRef = `route_${'A'.repeat(48)}`;
+    const forwardRouteRef = `route_${'F'.repeat(48)}`;
+    const forwardBatch = createPicoReaderCustodySyncBatch(sodium, {
+      ownerIdentitySession,
+      domainRecord,
+      readerGrantRecord: forwardReaderGrantRecord,
+      writerGrantRecords: [writerGrantRecord],
+      itemRecords: [itemRecord],
+      syncBatchId: 'reader_sync_forward_batch_0001',
+      routeRef: forwardRouteRef,
+      sequence: 1,
+      previousManifestDigestHex: '00'.repeat(32),
+      createdAt: '2026-07-27T10:09:00.000Z',
+      expiresAt: '2026-07-27T11:00:00.000Z',
+    });
     const batch1 = createPicoReaderCustodySyncBatch(sodium, {
       ownerIdentitySession,
       domainRecord,
@@ -1519,15 +1557,85 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       lifecycleId: 'reader_sync_reader_lifecycle_0001',
       reasonCategory: 'reader_removed',
       changedAt: '2026-07-27T10:40:00.000Z',
-      lifecycleOrder: 'seq:0000000000000004',
+      lifecycleOrder: 'seq:0000000000000005',
     });
     const rotation2 = rotatePicoReaderCustodyDomain(sodium, {
       ownerIdentitySession,
       domainRecord,
       readerGrantLifecycleRecords: [readerRevoked],
+      remainingReaderGrantRecords: [forwardReaderGrantRecord],
       rotationId: 'reader_sync_rotation_0002',
       rotatedAt: '2026-07-27T10:41:00.000Z',
-      lifecycleOrder: 'seq:0000000000000005',
+      lifecycleOrder: 'seq:0000000000000006',
+    });
+    const writerGrantV2 = createPicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession,
+      domainRecord,
+      rotationRecords: [rotation2],
+      writerDeviceSigningKeyRecord: writerSigningKeyRecord,
+      writerGrantId: 'reader_sync_writer_grant_0002',
+      writerIdentityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      validFrom: '2026-07-27T10:41:30.000Z',
+      validUntil: '2027-07-27T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    });
+    const itemV2WithoutReaderEnvelope =
+      encryptPicoReaderCustodyItem(sodium, {
+        readerKeyAgreementSession: ownerAgreementSession,
+        writerSigningSession,
+        domainRecord,
+        rotationRecords: [rotation2],
+        writerGrantRecord: writerGrantV2,
+        packageId: 'reader_sync_package_0002',
+        memoryItemId: 'reader_sync_memory_0002',
+        contentType: 'text/plain',
+        plaintext: 'revoked reader must not receive version two',
+        createdAt: '2026-07-27T10:42:00.000Z',
+      });
+    const missingVersionBatch = createPicoReaderCustodySyncBatch(sodium, {
+      ownerIdentitySession,
+      domainRecord,
+      readerGrantRecord,
+      readerGrantLifecycleRecords: [readerRevoked],
+      writerGrantRecords: [writerGrantV2],
+      rotationRecords: [rotation2],
+      itemRecords: [itemV2WithoutReaderEnvelope],
+      syncBatchId: 'reader_sync_batch_missing_version',
+      routeRef,
+      sequence: 3,
+      previousManifestDigestHex: batch2.manifestDigestHex,
+      createdAt: '2026-07-27T10:42:15.000Z',
+      expiresAt: '2026-07-27T11:00:00.000Z',
+    });
+    const missingVersionPayload = openPicoReaderCustodySyncBatch(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      batchRecord: missingVersionBatch.batchRecord,
+      evaluatedAt: '2026-07-27T10:42:20.000Z',
+    });
+    expect(projector.accept(
+      missingVersionPayload,
+      '2026-07-27T10:42:20.000Z',
+    )).toEqual({ ok: false, reason: 'invalid_payload' });
+
+    const writerRevoked = revokePicoReaderCustodyWriterGrant(sodium, {
+      ownerIdentitySession,
+      domainRecord,
+      rotationRecords: [rotation2],
+      writerGrantRecord,
+      lifecycleId: 'reader_sync_writer_lifecycle_0001',
+      reasonCategory: 'writer_removed',
+      changedAt: '2026-07-27T10:42:30.000Z',
+      lifecycleOrder: 'seq:0000000000000008',
+    });
+    const rotation3 = rotatePicoReaderCustodyDomain(sodium, {
+      ownerIdentitySession,
+      domainRecord,
+      rotationRecords: [rotation2],
+      writerGrantLifecycleRecords: [writerRevoked],
+      remainingReaderGrantRecords: [forwardReaderGrantRecord],
+      rotationId: 'reader_sync_rotation_0003',
+      rotatedAt: '2026-07-27T10:43:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
     });
     const batch3 = createPicoReaderCustodySyncBatch(sodium, {
       ownerIdentitySession,
@@ -1535,7 +1643,8 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
       readerGrantRecord,
       readerGrantLifecycleRecords: [readerRevoked],
       writerGrantRecords: [writerGrantRecord],
-      rotationRecords: [rotation2],
+      writerGrantLifecycleRecords: [writerRevoked],
+      rotationRecords: [rotation2, rotation3],
       itemRecords: [itemRecord],
       syncBatchId: 'reader_sync_batch_0003',
       routeRef,
@@ -1679,8 +1788,328 @@ describe('authenticated reader-custody sync (ADR 0089)', () => {
         itemPackageIds: ['reader_sync_package_0001'],
       },
     ]);
+    const openMaterializedProjection = ({
+      batchRecord,
+      evaluatedAt,
+    }: {
+      batchRecord: PicoReaderCustodySyncBatchRecord;
+      evaluatedAt: string;
+    }) => openPicoReaderCustodySyncBatch(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      batchRecord,
+      evaluatedAt,
+    });
+    const decryptMaterializedItem = (
+      evidence: PicoReaderCustodySyncItemDecryptionEvidence,
+    ) => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: readerAgreementSession,
+      domainRecord: evidence.domainRecord,
+      rotationRecords: evidence.rotationRecords,
+      readerGrantRecord: evidence.readerGrantRecord,
+      writerGrantRecord: evidence.writerGrantRecord,
+      itemRecord: evidence.itemRecord,
+    });
+    const evidenceSummaries: Array<{
+      sequence: number;
+      readerLifecycles: number;
+      writerLifecycles: number;
+      rotations: number;
+      kekVersion: number;
+    }> = [];
+    const itemAccess = new PicoReaderCustodySyncItemAccess(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      openMaterializedProjection,
+      (evidence) => {
+        evidenceSummaries.push({
+          sequence: evidence.receipt.sequence,
+          readerLifecycles:
+            evidence.readerGrantLifecycleRecords.length,
+          writerLifecycles:
+            evidence.writerGrantLifecycleRecords.length,
+          rotations: evidence.rotationRecords.length,
+          kekVersion: evidence.itemRecord.item.kekVersion,
+        });
+        return decryptMaterializedItem(evidence);
+      },
+    );
+    let accessedPlaintext: string | undefined;
+    itemAccess.access(
+      'reader_sync_package_0001',
+      (plaintext) => {
+        accessedPlaintext = plaintext;
+      },
+      { signal },
+    );
+    expect(accessedPlaintext)
+      .toBe('transport must never receive this plaintext');
+    expect(evidenceSummaries).toEqual([{
+      sequence: 3,
+      readerLifecycles: 1,
+      writerLifecycles: 1,
+      rotations: 2,
+      kekVersion: 1,
+    }]);
+
+    const forwardPins = {
+      routeRef: forwardRouteRef,
+      domainAuthorityId: domainRecord.domain.domainAuthorityId,
+      homeId: domainRecord.domain.homeId,
+      hostSigningKeyFingerprintHex:
+        domainRecord.domain.hostSigningKeyFingerprintHex,
+      domainId: domainRecord.domain.domainId,
+      ownerIdentityKeyFingerprintHex:
+        domainRecord.domain.ownerIdentityKeyFingerprintHex,
+      readerGrantId:
+        forwardReaderGrantRecord.grant.readerGrantId,
+      readerIdentityKeyFingerprintHex:
+        forwardReaderGrantRecord.grant.readerIdentityKeyFingerprintHex,
+      readerKeyFingerprintHex:
+        forwardReaderGrantRecord.grant.readerKeyFingerprintHex,
+    };
+    const forwardStateStore = new PicoReaderCustodySyncFileStateStore(
+      createReaderSyncStatePath(),
+    );
+    const openForwardProjection = ({
+      batchRecord,
+      evaluatedAt,
+    }: {
+      batchRecord: PicoReaderCustodySyncBatchRecord;
+      evaluatedAt: string;
+    }) => openPicoReaderCustodySyncBatch(sodium, {
+      readerKeyAgreementSession: wrongAgreementSession,
+      batchRecord,
+      evaluatedAt,
+    });
+    const forwardProjection = new PicoReaderCustodySyncClient(
+      sodium,
+      forwardPins,
+      forwardStateStore,
+      openForwardProjection,
+    ).apply({
+      batchRecord: forwardBatch.batchRecord,
+      evaluatedAt: '2026-07-27T10:10:00.000Z',
+      transportCursor: 'cursor:0000000000000001',
+    });
+    expect(forwardProjection).toMatchObject({
+      ok: true,
+      inserted: true,
+      value: {
+        readerEnvelopeVersions: [1],
+        itemPackageIds: ['reader_sync_package_0001'],
+      },
+    });
+    if (!forwardProjection.ok) {
+      throw new Error('expected_forward_projection');
+    }
+    const forwardArchiveStore =
+      new PicoReaderCustodySyncProtectedProjectionFileStore(
+        sodium,
+        join(forwardStateStore.path, '..', 'forward-projections.json'),
+        forwardRouteRef,
+      );
+    forwardArchiveStore.materialize(forwardProjection);
+    let forwardPlaintext: string | undefined;
+    let forwardAccessMode: string | undefined;
+    new PicoReaderCustodySyncItemAccess(
+      forwardArchiveStore,
+      forwardPins,
+      forwardStateStore,
+      openForwardProjection,
+      (evidence) => {
+        forwardAccessMode =
+          evidence.readerGrantRecord.grant.accessMode;
+        return decryptPicoReaderCustodyItem(sodium, {
+          readerKeyAgreementSession: wrongAgreementSession,
+          domainRecord: evidence.domainRecord,
+          rotationRecords: evidence.rotationRecords,
+          readerGrantRecord: evidence.readerGrantRecord,
+          writerGrantRecord: evidence.writerGrantRecord,
+          itemRecord: evidence.itemRecord,
+        });
+      },
+    ).access(
+      'reader_sync_package_0001',
+      (plaintext) => {
+        forwardPlaintext = plaintext;
+      },
+      { signal },
+    );
+    expect(forwardAccessMode).toBe('forward_only');
+    expect(forwardPlaintext)
+      .toBe('transport must never receive this plaintext');
+
+    let nestedAccessRejected = false;
+    itemAccess.access(
+      'reader_sync_package_0001',
+      () => {
+        expect(() => itemAccess.access(
+          'reader_sync_package_0001',
+          () => undefined,
+          { signal },
+        )).toThrow('reader_sync_item_access_in_progress');
+        nestedAccessRejected = true;
+      },
+      { signal },
+    );
+    expect(nestedAccessRejected).toBe(true);
+    expect(() => itemAccess.access(
+      'reader_sync_package_0001',
+      async () => undefined,
+      { signal },
+    )).toThrow(
+      'reader_sync_item_plaintext_consumer_must_be_synchronous',
+    );
+
+    const decryptAbortController = new AbortController();
+    let abortedPlaintextDelivered = false;
+    const abortingAccess = new PicoReaderCustodySyncItemAccess(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      openMaterializedProjection,
+      (evidence) => {
+        const plaintext = decryptMaterializedItem(evidence);
+        decryptAbortController.abort();
+        return plaintext;
+      },
+    );
+    expect(() => abortingAccess.access(
+      'reader_sync_package_0001',
+      () => {
+        abortedPlaintextDelivered = true;
+      },
+      { signal: decryptAbortController.signal },
+    )).toThrow('sync_transport_aborted');
+    expect(abortedPlaintextDelivered).toBe(false);
+
+    const wrongReaderAccess = new PicoReaderCustodySyncItemAccess(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      openMaterializedProjection,
+      (evidence) => decryptPicoReaderCustodyItem(sodium, {
+        readerKeyAgreementSession: wrongAgreementSession,
+        domainRecord: evidence.domainRecord,
+        rotationRecords: evidence.rotationRecords,
+        readerGrantRecord: evidence.readerGrantRecord,
+        writerGrantRecord: evidence.writerGrantRecord,
+        itemRecord: evidence.itemRecord,
+      }),
+    );
+    expect(() => wrongReaderAccess.access(
+      'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_key_mismatch');
+
+    const restoredSource = (
+      projections: typeof restoredProjections,
+    ) => ({
+      restore: () => structuredClone(projections),
+    });
+    const currentStateSource = {
+      load: () => structuredClone(materializedState),
+    };
+    const accessFrom = (projections: typeof restoredProjections) =>
+      new PicoReaderCustodySyncItemAccess(
+        restoredSource(projections),
+        pins,
+        currentStateSource,
+        openMaterializedProjection,
+        decryptMaterializedItem,
+      );
+
+    const staleProjections = structuredClone(restoredProjections);
+    staleProjections.at(-1)!.payload.itemRecords = [];
+    staleProjections.at(-1)!.value.itemPackageIds = [];
+    expect(() => accessFrom(staleProjections).access(
+      'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_evidence_stale');
+
+    const forkedProjections = structuredClone(restoredProjections);
+    forkedProjections.at(-1)!.payload.itemRecords[0]!
+      .item.contentType = 'text/markdown';
+    expect(() => accessFrom(forkedProjections).access(
+      'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_evidence_fork');
+
+    const ambiguousProjections = structuredClone(restoredProjections);
+    ambiguousProjections.at(-1)!.payload.itemRecords.push(
+      structuredClone(
+        ambiguousProjections.at(-1)!.payload.itemRecords[0]!,
+      ),
+    );
+    expect(() => accessFrom(ambiguousProjections).access(
+      'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_evidence_ambiguous');
+
+    const crossWriterProjections = structuredClone(restoredProjections);
+    for (const projection of crossWriterProjections) {
+      projection.payload.itemRecords[0]!.item.writerGrantId =
+        'reader_sync_writer_grant_cross_scope';
+    }
+    expect(() => accessFrom(crossWriterProjections).access(
+      'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_writer_evidence_ambiguous');
+
+    const crossDomainProjections = structuredClone(restoredProjections);
+    crossDomainProjections.at(-1)!.payload.domainRecord.domain.domainId =
+      'reader_sync_domain_cross_scope';
+    expect(() => accessFrom(crossDomainProjections).access(
+      'reader_sync_package_0001',
+      () => undefined,
+      { signal },
+    )).toThrow('invalid_reader_sync_item_evidence');
+
+    let accessStateChanged = false;
+    const changingStateSource = {
+      load: () => {
+        const state = structuredClone(materializedState);
+        if (accessStateChanged) {
+          state.revision += 1;
+        }
+        return state;
+      },
+    };
+    let changedStatePlaintextDelivered = false;
+    expect(() => new PicoReaderCustodySyncItemAccess(
+      restoredSource(restoredProjections),
+      pins,
+      changingStateSource,
+      openMaterializedProjection,
+      (evidence) => {
+        const plaintext = decryptMaterializedItem(evidence);
+        accessStateChanged = true;
+        return plaintext;
+      },
+    ).access(
+      'reader_sync_package_0001',
+      () => {
+        changedStatePlaintextDelivered = true;
+      },
+      { signal },
+    )).toThrow('reader_sync_item_access_state_changed');
+    expect(changedStatePlaintextDelivered).toBe(false);
+
+    expect(() => itemAccess.access(
+      'reader_sync_package_missing',
+      () => undefined,
+      { signal },
+    )).toThrow('reader_sync_item_not_found');
     expect(readFileSync(materializedArchiveStore.path, 'utf8'))
       .not.toContain(domainRecord.domain.homeId);
+    expect(readFileSync(materializedArchiveStore.path, 'utf8'))
+      .not.toContain('transport must never receive this plaintext');
     expect(() => materializedArchiveStore.restore(
       pins,
       {

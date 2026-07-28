@@ -181,7 +181,8 @@ Negative and residual:
 - one writer, matching-backup rollback and same-account denial-of-service
   limits remain;
 - item selection, KEK unwrap, content decryption and plaintext exposure policy
-  are not supplied by this archive.
+  are not supplied by this archive; ADR 0094 adds that separate explicit
+  boundary.
 
 ## Non-goals
 
@@ -201,3 +202,4 @@ Negative and residual:
 - [ADR 0090](0090-durable-reader-sync-floor-and-crash-safe-apply.md)
 - [ADR 0091](0091-bounded-reader-sync-run-and-cursor-reconciliation.md)
 - [ADR 0092](0092-durable-reader-sync-pending-inbox-and-projection-acknowledgement.md)
+- [ADR 0094](0094-explicit-reader-item-access-and-ephemeral-vault-decryption.md)
