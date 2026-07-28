@@ -229,6 +229,7 @@ export interface DecryptPicoReaderCustodyItemInput {
   readerGrantRecord?: PicoReaderCustodyReaderGrantRecord;
   writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
   itemRecord: PicoReaderCustodyItemRecord;
+  nowMs?: number;
 }
 
 export interface CreatePicoIdentityReaderKeyFreshnessCheckpointInput {
@@ -272,6 +273,32 @@ export interface OpenPicoReaderCustodySyncBatchInput {
   readerKeyAgreementSession: PicoVaultSession;
   batchRecord: PicoReaderCustodySyncBatchRecord;
   evaluatedAt?: string;
+  nowMs?: number;
+}
+
+export interface PicoVaultReaderCustodySyncItemEvidence {
+  domainRecord: PicoReaderCustodyDomainRecord;
+  readerGrantRecord: PicoReaderCustodyReaderGrantRecord;
+  writerGrantRecord: PicoReaderCustodyWriterGrantRecord;
+  rotationRecords: PicoReaderCustodyKekRotationRecord[];
+  itemRecord: PicoReaderCustodyItemRecord;
+}
+
+/**
+ * Structurally implements the narrow @pico/sync access-session capability
+ * without making Vault depend on Sync.
+ */
+export interface PicoVaultReaderCustodySyncAccessSession {
+  metadata(): PicoVaultSessionMetadata;
+  isLocked(options: { nowMs: number }): boolean;
+  lock(): void;
+  openPayload(input: {
+    batchRecord: PicoReaderCustodySyncBatchRecord;
+    evaluatedAt: string;
+  }): PicoReaderCustodySyncPayload;
+  decryptItem(
+    evidence: PicoVaultReaderCustodySyncItemEvidence,
+  ): string;
 }
 
 // Minimal shape of the ready libsodium-wrappers-sumo module the Vault runtime uses.
@@ -478,6 +505,42 @@ export class PicoVaultSession {
   #markUsed(nowMs: number): void {
     this.#lastUsedAtMs = nowMs;
   }
+}
+
+export function createPicoVaultReaderCustodySyncAccessSession(
+  sodium: VaultSodium,
+  session: PicoVaultSession,
+): PicoVaultReaderCustodySyncAccessSession {
+  let nowMs: number | undefined;
+  return Object.freeze({
+    metadata: () => session.metadata(),
+    isLocked: (options: { nowMs: number }) => {
+      const locked = session.isLocked(options);
+      nowMs = options.nowMs;
+      return locked;
+    },
+    lock: () => session.lock(),
+    openPayload: (input: {
+      batchRecord: PicoReaderCustodySyncBatchRecord;
+      evaluatedAt: string;
+    }) => openPicoReaderCustodySyncBatch(sodium, {
+      readerKeyAgreementSession: session,
+      batchRecord: input.batchRecord,
+      evaluatedAt: input.evaluatedAt,
+      nowMs,
+    }),
+    decryptItem: (
+      evidence: PicoVaultReaderCustodySyncItemEvidence,
+    ) => decryptPicoReaderCustodyItem(sodium, {
+      readerKeyAgreementSession: session,
+      domainRecord: evidence.domainRecord,
+      rotationRecords: evidence.rotationRecords,
+      readerGrantRecord: evidence.readerGrantRecord,
+      writerGrantRecord: evidence.writerGrantRecord,
+      itemRecord: evidence.itemRecord,
+      nowMs,
+    }),
+  });
 }
 
 export function createPicoIdentityReaderKeyFreshnessCheckpoint(
@@ -749,6 +812,7 @@ export function openPicoReaderCustodySyncBatch(
   sodium: VaultSodium,
   input: OpenPicoReaderCustodySyncBatchInput,
 ): PicoReaderCustodySyncPayload {
+  assertOptionalTimestampMs(input.nowMs);
   assertExactKeys(input.batchRecord as unknown as Record<string, unknown>, [
     'schema',
     'routeRef',
@@ -774,6 +838,7 @@ export function openPicoReaderCustodySyncBatch(
   }
   const plaintext = input.readerKeyAgreementSession.unwrapSealedBox(
     sealedPayload,
+    { nowMs: input.nowMs },
   );
   try {
     if (plaintext.byteLength > MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES) {
@@ -1499,6 +1564,7 @@ export function decryptPicoReaderCustodyItem(
   sodium: VaultSodium,
   input: DecryptPicoReaderCustodyItemInput,
 ): string {
+  assertOptionalTimestampMs(input.nowMs);
   assertPicoReaderCustodyDomainRecord(sodium, input.domainRecord);
   const rotations = validatedRotationChain(
     sodium,
@@ -1540,6 +1606,7 @@ export function decryptPicoReaderCustodyItem(
     input.itemRecord.item.kekVersion,
     metadata.keyFingerprintHex,
     envelope,
+    { nowMs: input.nowMs },
   );
   const item = input.itemRecord.item;
   const wrappedDek = hexToBytes(input.itemRecord.wrappedDekHex);
@@ -2207,6 +2274,7 @@ function openPicoReaderCustodyKekFromEnvelope(
   kekVersion: number,
   readerKeyFingerprintHex: string,
   envelope: PicoShareEnvelopeRecord,
+  options: PicoVaultSessionUseOptions = {},
 ): Uint8Array {
   const metadata = readerSession.metadata();
   if (metadata.keyRole !== 'device_key_agreement'
@@ -2219,6 +2287,7 @@ function openPicoReaderCustodyKekFromEnvelope(
   }
   const plaintext = readerSession.unwrapSealedBox(
     hexToBytes(envelope.sealedWrapHex),
+    options,
   );
   try {
     const reader = new CanonicalElementReader(plaintext, 'invalid_share_wrap');

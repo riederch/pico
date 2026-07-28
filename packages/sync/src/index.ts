@@ -615,6 +615,8 @@ export const MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_RECORDS =
 export const MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES =
   256 * 1024 * 1024;
 export const MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES = 1_000;
+export const MAX_PICO_READER_CUSTODY_SYNC_ACCESS_SESSION_MS =
+  5 * 60 * 1_000;
 
 export interface PicoReaderCustodySyncClientState {
   schema: typeof picoReaderCustodySyncClientStateSchema;
@@ -747,6 +749,57 @@ export interface PicoReaderCustodySyncItemPresentationPort {
 
 export interface PicoReaderCustodySyncItemCatalogOptions {
   maxEntries?: number;
+}
+
+export interface PicoReaderCustodySyncAccessSessionClock {
+  nowMs(): number;
+}
+
+export interface PicoReaderCustodySyncAccessSessionMetadata {
+  keyRole: string;
+  keyFingerprintHex: string;
+}
+
+/**
+ * Narrow capability adapter over one already opened Vault session. The
+ * implementation owns passphrase handling and private-key custody; Sync sees
+ * only public metadata, bounded use capabilities and the mandatory lock.
+ */
+export interface PicoReaderCustodySyncUnlockedAccessSession {
+  metadata(): PicoReaderCustodySyncAccessSessionMetadata;
+  isLocked(options: { nowMs: number }): boolean;
+  lock(): void;
+  openPayload: PicoReaderCustodySyncPayloadOpener;
+  decryptItem: PicoReaderCustodySyncItemDecryptor;
+}
+
+export interface PicoReaderCustodySyncAccessSessionUnlockInput {
+  readerKeyFingerprintHex: string;
+  openedAtMs: number;
+  maxDurationMs: number;
+}
+
+export interface PicoReaderCustodySyncAccessSessionUnlockPort {
+  (
+    input: Readonly<PicoReaderCustodySyncAccessSessionUnlockInput>,
+    options: { signal: AbortSignal },
+  ): PicoReaderCustodySyncUnlockedAccessSession | undefined;
+}
+
+export interface PicoReaderCustodySyncItemSelector {
+  (
+    items: readonly PicoReaderCustodySyncItemDescriptor[],
+  ): PicoReaderCustodySyncItemSelection | undefined;
+}
+
+export interface PicoReaderCustodySyncAccessSessionRequest {
+  selectItem: PicoReaderCustodySyncItemSelector;
+  presentItem?: PicoReaderCustodySyncItemPresentationPort;
+}
+
+export interface PicoReaderCustodySyncAccessSessionOptions {
+  maxDurationMs?: number;
+  maxCatalogEntries?: number;
 }
 
 export interface PicoReaderCustodySyncProjectionMaterializationStore {
@@ -1551,6 +1604,209 @@ export class PicoReaderCustodySyncItemCatalog {
       throw new Error('reader_sync_item_catalog_scope_mismatch');
     }
     return state;
+  }
+}
+
+/**
+ * One-shot Reader access lifetime. It acquires exactly one narrow Vault
+ * capability, binds its public role/fingerprint before restore, lists once,
+ * optionally presents exactly one selected item and locks in every exit path.
+ */
+export class PicoReaderCustodySyncAccessSession {
+  readonly #pins: PicoReaderCustodySyncPins;
+
+  readonly #maxDurationMs: number;
+
+  readonly #maxCatalogEntries: number;
+
+  #active = false;
+
+  public constructor(
+    private readonly restoreSource:
+      PicoReaderCustodySyncProjectionRestoreSource,
+    pins: PicoReaderCustodySyncPins,
+    private readonly stateSource:
+      Pick<PicoReaderCustodySyncClientStateStore, 'load'>,
+    private readonly clock: PicoReaderCustodySyncAccessSessionClock,
+    private readonly unlockSession:
+      PicoReaderCustodySyncAccessSessionUnlockPort,
+    options: PicoReaderCustodySyncAccessSessionOptions = {},
+  ) {
+    assertSyncPins(pins);
+    if (typeof clock !== 'object'
+      || clock === null
+      || typeof clock.nowMs !== 'function') {
+      throw new Error('invalid_reader_sync_access_session_clock');
+    }
+    if (typeof unlockSession !== 'function') {
+      throw new Error('invalid_reader_sync_access_session_unlock_port');
+    }
+    const maxDurationMs = options.maxDurationMs
+      ?? MAX_PICO_READER_CUSTODY_SYNC_ACCESS_SESSION_MS;
+    if (!Number.isSafeInteger(maxDurationMs)
+      || maxDurationMs < 1
+      || maxDurationMs
+        > MAX_PICO_READER_CUSTODY_SYNC_ACCESS_SESSION_MS) {
+      throw new Error('invalid_reader_sync_access_session_duration');
+    }
+    const maxCatalogEntries = options.maxCatalogEntries
+      ?? MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES;
+    if (!Number.isSafeInteger(maxCatalogEntries)
+      || maxCatalogEntries < 1
+      || maxCatalogEntries
+        > MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES) {
+      throw new Error('invalid_reader_sync_item_catalog_limit');
+    }
+    this.#pins = { ...pins };
+    this.#maxDurationMs = maxDurationMs;
+    this.#maxCatalogEntries = maxCatalogEntries;
+  }
+
+  public run(
+    request: PicoReaderCustodySyncAccessSessionRequest,
+    options: { signal: AbortSignal },
+  ): void {
+    if (typeof request !== 'object'
+      || request === null
+      || typeof request.selectItem !== 'function') {
+      throw new Error('invalid_reader_sync_access_session_selector');
+    }
+    if (request.presentItem !== undefined
+      && typeof request.presentItem !== 'function') {
+      throw new Error('invalid_reader_sync_item_presentation_port');
+    }
+    throwIfAborted(options.signal);
+    if (this.#active) {
+      throw new Error('reader_sync_access_session_in_progress');
+    }
+
+    this.#active = true;
+    let session:
+      PicoReaderCustodySyncUnlockedAccessSession | undefined;
+    let lastNowMs: number | undefined;
+    try {
+      const openedAtMs = this.#readNow();
+      lastNowMs = openedAtMs;
+      const unlockedResult: unknown = this.unlockSession(
+        Object.freeze({
+          readerKeyFingerprintHex:
+            this.#pins.readerKeyFingerprintHex,
+          openedAtMs,
+          maxDurationMs: this.#maxDurationMs,
+        }),
+        options,
+      );
+      if (isPromiseLike(unlockedResult)) {
+        throw new Error(
+          'reader_sync_access_session_unlock_must_be_synchronous',
+        );
+      }
+      if (unlockedResult === undefined) {
+        throw new Error('reader_sync_access_session_unavailable');
+      }
+      session = assertReaderSyncUnlockedAccessSession(unlockedResult);
+
+      const metadata = session.metadata();
+      if (!isUnknownRecord(metadata)
+        || typeof metadata.keyRole !== 'string'
+        || typeof metadata.keyFingerprintHex !== 'string') {
+        throw new Error(
+          'invalid_reader_sync_access_session_metadata',
+        );
+      }
+      if (metadata.keyRole !== 'device_key_agreement') {
+        throw new Error(
+          'reader_sync_access_session_key_role_mismatch',
+        );
+      }
+      if (metadata.keyFingerprintHex
+        !== this.#pins.readerKeyFingerprintHex) {
+        throw new Error(
+          'reader_sync_access_session_key_fingerprint_mismatch',
+        );
+      }
+
+      const assertUsable = (): void => {
+        throwIfAborted(options.signal);
+        const nowMs = this.#readNow(lastNowMs);
+        lastNowMs = nowMs;
+        if (nowMs - openedAtMs > this.#maxDurationMs) {
+          throw new Error('reader_sync_access_session_expired');
+        }
+        const locked = session!.isLocked({ nowMs });
+        if (typeof locked !== 'boolean') {
+          throw new Error(
+            'invalid_reader_sync_access_session_lock_state',
+          );
+        }
+        if (locked) {
+          throw new Error('reader_sync_access_session_locked');
+        }
+        throwIfAborted(options.signal);
+      };
+
+      assertUsable();
+      const catalog = new PicoReaderCustodySyncItemCatalog(
+        this.restoreSource,
+        this.#pins,
+        this.stateSource,
+        session.openPayload,
+        session.decryptItem,
+        { maxEntries: this.#maxCatalogEntries },
+      );
+      let selected:
+        PicoReaderCustodySyncItemSelection | undefined;
+      catalog.list((items) => {
+        const selectionResult: unknown =
+          request.selectItem(items);
+        if (isPromiseLike(selectionResult)) {
+          throw new Error(
+            'reader_sync_access_session_selector_must_be_synchronous',
+          );
+        }
+        selected = selectionResult as
+          PicoReaderCustodySyncItemSelection | undefined;
+      }, options);
+      assertUsable();
+
+      if ((selected === undefined)
+        !== (request.presentItem === undefined)) {
+        throw new Error(
+          'reader_sync_access_session_presentation_mismatch',
+        );
+      }
+      if (selected !== undefined
+        && request.presentItem !== undefined) {
+        assertUsable();
+        catalog.present(
+          selected,
+          request.presentItem,
+          options,
+        );
+        assertUsable();
+      }
+    } finally {
+      try {
+        if (session !== undefined) {
+          lockReaderSyncAccessSession(session, lastNowMs!);
+        }
+      } finally {
+        this.#active = false;
+      }
+    }
+  }
+
+  #readNow(previousNowMs?: number): number {
+    const nowMs = this.clock.nowMs();
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
+      throw new Error('invalid_reader_sync_access_session_now');
+    }
+    if (previousNowMs !== undefined && nowMs < previousNowMs) {
+      throw new Error(
+        'reader_sync_access_session_clock_rollback',
+      );
+    }
+    return nowMs;
   }
 }
 
@@ -4161,6 +4417,42 @@ function sameJson(left: unknown, right: unknown): boolean {
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return isUnknownRecord(value)
     && typeof value.then === 'function';
+}
+
+function assertReaderSyncUnlockedAccessSession(
+  value: unknown,
+): PicoReaderCustodySyncUnlockedAccessSession {
+  if (!isRuntimeRecord(value)) {
+    throw new Error('invalid_reader_sync_unlocked_access_session');
+  }
+  const candidate = value as Partial<
+    PicoReaderCustodySyncUnlockedAccessSession
+  >;
+  if (typeof candidate.metadata !== 'function'
+    || typeof candidate.isLocked !== 'function'
+    || typeof candidate.lock !== 'function'
+    || typeof candidate.openPayload !== 'function'
+    || typeof candidate.decryptItem !== 'function') {
+    throw new Error('invalid_reader_sync_unlocked_access_session');
+  }
+  return candidate as PicoReaderCustodySyncUnlockedAccessSession;
+}
+
+function lockReaderSyncAccessSession(
+  session: PicoReaderCustodySyncUnlockedAccessSession,
+  nowMs: number,
+): void {
+  try {
+    session.lock();
+    if (session.isLocked({ nowMs }) !== true) {
+      throw new Error('vault_session_remained_unlocked');
+    }
+  } catch (error) {
+    throw new Error(
+      'reader_sync_access_session_lock_failed',
+      { cause: error },
+    );
+  }
 }
 
 function failReaderSync(

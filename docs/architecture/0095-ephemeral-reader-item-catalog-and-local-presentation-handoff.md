@@ -179,6 +179,10 @@ Negative and residual:
 - the API supplies no pagination, search, labels, previews or UI;
 - process-local identity and checks do not coordinate multiple processes.
 
+ADR 0096 supplies the one-shot Vault-session lifecycle around this primitive:
+it binds the Reader key before listing, permits at most one presentation and
+locks the session after every outcome.
+
 ## Non-goals
 
 - durable catalog, metadata database, cache, search index or pagination;
@@ -198,3 +202,4 @@ Negative and residual:
 - [ADR 0090](0090-durable-reader-sync-floor-and-crash-safe-apply.md)
 - [ADR 0093](0093-private-durable-reader-projection-archive-and-idempotent-receipts.md)
 - [ADR 0094](0094-explicit-reader-item-access-and-ephemeral-vault-decryption.md)
+- [ADR 0096](0096-reader-access-session-and-vault-lock-lifecycle.md)

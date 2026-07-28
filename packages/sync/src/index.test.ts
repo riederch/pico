@@ -25,6 +25,7 @@ import {
   createPicoReaderCustodyReaderGrant,
   createPicoReaderCustodySyncBatch,
   createPicoReaderCustodyWriterGrant,
+  createPicoVaultReaderCustodySyncAccessSession,
   createPicoVaultKeyfile,
   decryptPicoReaderCustodyItem,
   encryptPicoReaderCustodyItem,
@@ -45,11 +46,13 @@ import {
 import {
   InMemoryPicoSyncOpaqueTransport,
   LamportClock,
+  MAX_PICO_READER_CUSTODY_SYNC_ACCESS_SESSION_MS,
   MAX_PICO_READER_CUSTODY_SYNC_ITEM_CATALOG_ENTRIES,
   MAX_PICO_READER_CUSTODY_SYNC_PENDING_RECORD_BYTES,
   MAX_PICO_READER_CUSTODY_SYNC_PROTECTED_PROJECTION_ARCHIVE_BYTES,
   PicoReaderCustodySyncBatchPublisher,
   PicoReaderCustodySyncBatchSource,
+  PicoReaderCustodySyncAccessSession,
   PicoReaderCustodySyncClient,
   PicoReaderCustodySyncFilePendingStore,
   PicoReaderCustodySyncFileStateStore,
@@ -68,6 +71,7 @@ import {
   picoReaderCustodySyncProtectedProjectionRecordSchema,
   updateVersionVector,
   type PicoReaderCustodySyncBatchReader,
+  type PicoReaderCustodySyncAccessSessionUnlockPort,
   type PicoReaderCustodySyncClientApplySuccess,
   type PicoReaderCustodySyncClientApplyResult,
   type PicoReaderCustodySyncClientState,
@@ -1181,7 +1185,7 @@ describe('bounded reader-custody sync runs (ADR 0091)', () => {
   });
 });
 
-describe('authenticated reader sync and local presentation (ADRs 0089/0094/0095)', () => {
+describe('authenticated reader sync and local presentation (ADRs 0089/0094/0095/0096)', () => {
   it('keeps transport sealed and presents one current item through the synchronous Vault boundary', async () => {
     const ownerIdentity = createPicoVaultKeyfile(sodium, {
       keyRole: 'pico_identity',
@@ -2065,6 +2069,485 @@ describe('authenticated reader sync and local presentation (ADRs 0089/0094/0095)
       () => undefined,
       { signal },
     )).toThrow('invalid_reader_sync_item_selection');
+
+    let accessNowMs = 1_000;
+    let accessUnlockCalls = 0;
+    let lastAccessVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    const unlockAccessSession:
+      PicoReaderCustodySyncAccessSessionUnlockPort = (input) => {
+        const {
+          readerKeyFingerprintHex,
+          openedAtMs,
+          maxDurationMs,
+        } = input;
+        accessUnlockCalls += 1;
+        expect(Object.isFrozen(input)).toBe(true);
+        expect(Object.keys(input).sort()).toEqual([
+          'maxDurationMs',
+          'openedAtMs',
+          'readerKeyFingerprintHex',
+        ]);
+        expect(readerKeyFingerprintHex)
+          .toBe(pins.readerKeyFingerprintHex);
+        expect(openedAtMs).toBe(accessNowMs);
+        expect(maxDurationMs).toBe(50);
+        lastAccessVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          autoLockAfterMs: 25,
+          nowMs: openedAtMs,
+        });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          lastAccessVaultSession,
+        );
+      };
+    const accessSession = new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      unlockAccessSession,
+      { maxDurationMs: 50 },
+    );
+    let oneShotPresentation:
+      PicoReaderCustodySyncPresentedItem | undefined;
+    accessSession.run({
+      selectItem: (items) => {
+        expect(Object.isFrozen(items)).toBe(true);
+        return items[0]!.selection;
+      },
+      presentItem: (item) => {
+        oneShotPresentation = { ...item };
+      },
+    }, { signal });
+    expect(oneShotPresentation).toEqual({
+      memoryItemId: 'reader_sync_memory_0001',
+      contentType: 'text/plain',
+      createdAt: '2026-07-27T10:03:00.000Z',
+      plaintext: 'transport must never receive this plaintext',
+    });
+    expect(accessUnlockCalls).toBe(1);
+    expect(lastAccessVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    let asyncSelectorVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      ({ openedAtMs }) => {
+        asyncSelectorVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          nowMs: openedAtMs,
+        });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          asyncSelectorVaultSession,
+        );
+      },
+    ).run({
+      selectItem: (() => Promise.resolve(undefined)) as unknown as
+        (items: readonly PicoReaderCustodySyncItemDescriptor[]) =>
+          PicoReaderCustodySyncItemSelection | undefined,
+    }, { signal })).toThrow(
+      'reader_sync_access_session_selector_must_be_synchronous',
+    );
+    expect(asyncSelectorVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    let nestedSessionRejected = false;
+    accessSession.run({
+      selectItem: () => {
+        expect(() => accessSession.run({
+          selectItem: () => undefined,
+        }, { signal })).toThrow(
+          'reader_sync_access_session_in_progress',
+        );
+        nestedSessionRejected = true;
+        return undefined;
+      },
+    }, { signal });
+    expect(nestedSessionRejected).toBe(true);
+    expect(accessUnlockCalls).toBe(2);
+    expect(lastAccessVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    const wrongRoleVaultSession = openPicoVaultKeyfile(sodium, {
+      keyfile: writerSigning.keyfile,
+      passphrase: 'writer signing passphrase',
+      nowMs: accessNowMs,
+    });
+    let wrongRoleUnlockCalls = 0;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      () => {
+        wrongRoleUnlockCalls += 1;
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          wrongRoleVaultSession,
+        );
+      },
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow(
+      'reader_sync_access_session_key_role_mismatch',
+    );
+    expect(wrongRoleUnlockCalls).toBe(1);
+    expect(wrongRoleVaultSession.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    const wrongFingerprintVaultSession = openPicoVaultKeyfile(
+      sodium,
+      {
+        keyfile: wrongAgreement.keyfile,
+        passphrase: 'wrong agreement passphrase',
+        nowMs: accessNowMs,
+      },
+    );
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      () => createPicoVaultReaderCustodySyncAccessSession(
+        sodium,
+        wrongFingerprintVaultSession,
+      ),
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow(
+      'reader_sync_access_session_key_fingerprint_mismatch',
+    );
+    expect(wrongFingerprintVaultSession.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    const initiallyLockedVaultSession = openPicoVaultKeyfile(
+      sodium,
+      {
+        keyfile: readerAgreement.keyfile,
+        passphrase: 'reader agreement passphrase',
+        nowMs: accessNowMs,
+      },
+    );
+    initiallyLockedVaultSession.lock();
+    let lockedUnlockCalls = 0;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      () => {
+        lockedUnlockCalls += 1;
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          initiallyLockedVaultSession,
+        );
+      },
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow('reader_sync_access_session_locked');
+    expect(lockedUnlockCalls).toBe(1);
+
+    let expiringNowMs = 2_000;
+    let expiredVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => expiringNowMs },
+      ({ openedAtMs }) => {
+        expiredVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          nowMs: openedAtMs,
+        });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          expiredVaultSession,
+        );
+      },
+      { maxDurationMs: 10 },
+    ).run({
+      selectItem: () => {
+        expiringNowMs += 11;
+        return undefined;
+      },
+    }, { signal })).toThrow('reader_sync_access_session_expired');
+    expect(expiredVaultSession!.isLocked({
+      nowMs: expiringNowMs,
+    })).toBe(true);
+
+    let idleNowMs = 3_000;
+    let idleVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => idleNowMs },
+      ({ openedAtMs }) => {
+        idleVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          autoLockAfterMs: 5,
+          nowMs: openedAtMs,
+        });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          idleVaultSession,
+        );
+      },
+      { maxDurationMs: 10 },
+    ).run({
+      selectItem: () => {
+        idleNowMs += 6;
+        return undefined;
+      },
+    }, { signal })).toThrow('reader_sync_access_session_locked');
+    expect(idleVaultSession!.isLocked({
+      nowMs: idleNowMs,
+    })).toBe(true);
+
+    const rollbackClockValues = [4_000, 3_999];
+    let rollbackClockIndex = 0;
+    let rollbackVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      {
+        nowMs: () =>
+          rollbackClockValues[rollbackClockIndex++]!,
+      },
+      ({ openedAtMs }) => {
+        rollbackVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          nowMs: openedAtMs,
+        });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          rollbackVaultSession,
+        );
+      },
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow(
+      'reader_sync_access_session_clock_rollback',
+    );
+    expect(rollbackVaultSession!.isLocked({
+      nowMs: rollbackClockValues[0]!,
+    })).toBe(true);
+
+    const sessionAbortController = new AbortController();
+    let abortedVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      ({ openedAtMs }) => {
+        abortedVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          nowMs: openedAtMs,
+        });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          abortedVaultSession,
+        );
+      },
+    ).run({
+      selectItem: (items) => {
+        sessionAbortController.abort();
+        return items[0]!.selection;
+      },
+      presentItem: () => undefined,
+    }, { signal: sessionAbortController.signal })).toThrow(
+      'sync_transport_aborted',
+    );
+    expect(abortedVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    let decryptFailureVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      ({ openedAtMs }) => {
+        decryptFailureVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          nowMs: openedAtMs,
+        });
+        const adapter =
+          createPicoVaultReaderCustodySyncAccessSession(
+            sodium,
+            decryptFailureVaultSession,
+          );
+        return {
+          ...adapter,
+          decryptItem: () => {
+            throw new Error('simulated_reader_decrypt_failure');
+          },
+        };
+      },
+    ).run({
+      selectItem: (items) => items[0]!.selection,
+      presentItem: () => undefined,
+    }, { signal })).toThrow('simulated_reader_decrypt_failure');
+    expect(decryptFailureVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    let presentationFailureVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      ({ openedAtMs }) => {
+        presentationFailureVaultSession =
+          openPicoVaultKeyfile(sodium, {
+            keyfile: readerAgreement.keyfile,
+            passphrase: 'reader agreement passphrase',
+            nowMs: openedAtMs,
+          });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          presentationFailureVaultSession,
+        );
+      },
+    ).run({
+      selectItem: (items) => items[0]!.selection,
+      presentItem: () => {
+        throw new Error('simulated_presentation_failure');
+      },
+    }, { signal })).toThrow('simulated_presentation_failure');
+    expect(presentationFailureVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    let selectionRaceState = structuredClone(materializedState);
+    let selectionRaceVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      {
+        restore: () => structuredClone(restoredProjections),
+      },
+      pins,
+      {
+        load: () => structuredClone(selectionRaceState),
+      },
+      { nowMs: () => accessNowMs },
+      ({ openedAtMs }) => {
+        selectionRaceVaultSession =
+          openPicoVaultKeyfile(sodium, {
+            keyfile: readerAgreement.keyfile,
+            passphrase: 'reader agreement passphrase',
+            nowMs: openedAtMs,
+          });
+        return createPicoVaultReaderCustodySyncAccessSession(
+          sodium,
+          selectionRaceVaultSession,
+        );
+      },
+    ).run({
+      selectItem: (items) => {
+        selectionRaceState = {
+          ...selectionRaceState,
+          revision: selectionRaceState.revision + 1,
+        };
+        return items[0]!.selection;
+      },
+      presentItem: () => undefined,
+    }, { signal })).toThrow('reader_sync_item_selection_stale');
+    expect(selectionRaceVaultSession!.isLocked({
+      nowMs: accessNowMs,
+    })).toBe(true);
+
+    let lockFailureVaultSession:
+      ReturnType<typeof openPicoVaultKeyfile> | undefined;
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      ({ openedAtMs }) => {
+        lockFailureVaultSession = openPicoVaultKeyfile(sodium, {
+          keyfile: readerAgreement.keyfile,
+          passphrase: 'reader agreement passphrase',
+          nowMs: openedAtMs,
+        });
+        const adapter =
+          createPicoVaultReaderCustodySyncAccessSession(
+            sodium,
+            lockFailureVaultSession,
+          );
+        return {
+          ...adapter,
+          lock: () => undefined,
+        };
+      },
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow(
+      'reader_sync_access_session_lock_failed',
+    );
+    lockFailureVaultSession!.lock();
+
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      () => undefined,
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow('reader_sync_access_session_unavailable');
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      (() => Promise.resolve(undefined)) as unknown as
+        PicoReaderCustodySyncAccessSessionUnlockPort,
+    ).run({
+      selectItem: () => undefined,
+    }, { signal })).toThrow(
+      'reader_sync_access_session_unlock_must_be_synchronous',
+    );
+    expect(() => new PicoReaderCustodySyncAccessSession(
+      materializedArchiveStore,
+      pins,
+      materializedStateStore,
+      { nowMs: () => accessNowMs },
+      unlockAccessSession,
+      {
+        maxDurationMs:
+          MAX_PICO_READER_CUSTODY_SYNC_ACCESS_SESSION_MS + 1,
+      },
+    )).toThrow('invalid_reader_sync_access_session_duration');
 
     const catalogAbortController = new AbortController();
     catalogAbortController.abort();

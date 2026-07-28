@@ -21,6 +21,7 @@ import {
   createPicoReaderCustodyDomain,
   createPicoReaderCustodyReaderGrant,
   createPicoReaderCustodyWriterGrant,
+  createPicoVaultReaderCustodySyncAccessSession,
   createPicoVaultKeyfile,
   decryptPicoReaderCustodyItem,
   encryptPicoReaderCustodyItem,
@@ -700,6 +701,42 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       passphrase: 'correct horse battery staple',
       autoLockAfterMs: Number.NaN,
     })).toThrow('invalid_auto_lock_after_ms');
+  });
+
+  it('exposes a narrow time-bound Reader access capability over one session', () => {
+    const created = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_key_agreement',
+      passphrase: 'correct horse battery staple',
+    });
+    const session = openPicoVaultKeyfile(sodium, {
+      keyfile: created.keyfile,
+      passphrase: 'correct horse battery staple',
+      autoLockAfterMs: 5,
+      nowMs: 100,
+    });
+    const access =
+      createPicoVaultReaderCustodySyncAccessSession(
+        sodium,
+        session,
+      );
+
+    expect(Object.isFrozen(access)).toBe(true);
+    expect(access.metadata()).toMatchObject({
+      keyRole: 'device_key_agreement',
+      keyFingerprintHex: created.keyFingerprintHex,
+    });
+    expect(Object.keys(access).sort()).toEqual([
+      'decryptItem',
+      'isLocked',
+      'lock',
+      'metadata',
+      'openPayload',
+    ]);
+    expect(JSON.stringify(access)).toBe('{}');
+    expect(access.isLocked({ nowMs: 105 })).toBe(false);
+    expect(access.isLocked({ nowMs: 106 })).toBe(true);
+    access.lock();
+    expect(session.isLocked({ nowMs: 106 })).toBe(true);
   });
 
   it('unwraps sealed boxes only with a key-agreement keyfile', () => {
