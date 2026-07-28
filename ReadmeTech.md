@@ -63,6 +63,7 @@ Implemented or prepared:
 - Lamport clock and version-vector helpers
 - minimal `@pico/identity` signature verification and lifecycle runtime for identity/device-key statements
 - minimal `@pico/vault` keyfile runtime for person-role custody tests
+- first `@pico/vault-daemon` local Vault process slice: private Unix-socket boundary, named request families and hold-bound unlock/lock lifecycle (ADR 0097, Linux first)
 - migration runner and backup-before-migration contract
 - shared protocol package for events, avatar state and canonical product action terminology
 - WebSocket endpoint for event streaming
@@ -264,6 +265,7 @@ Details are documented in:
 .
 ├── apps
 │   ├── core              # Fastify backend service
+│   ├── vault-daemon      # first local Pico Vault daemon and CLI (ADR 0097)
 │   └── web               # foundation diagnostics dashboard
 ├── docker
 │   └── core.Dockerfile   # Pico Home Core container image

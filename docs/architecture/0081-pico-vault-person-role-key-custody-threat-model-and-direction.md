@@ -199,9 +199,9 @@ This ADR does not define or implement:
 
 - **Passphrase policy and UX**: minimum-strength guidance, zxcvbn-style feedback, and how the creation flow teaches the loss rule without terrifying people — Vault runtime work above the custody floor.
 - **Auto-lock defaults** (V7): idle thresholds, lock-on-suspend, lock-on-screen-lock — per platform/product runtime, and alongside Gate P3 where platform keystores are involved.
-- **Local consumer transport** for the agent boundary (unix socket permissions, peer credentials, per-app authorization) — future daemon/product work, with the V4/V10 rules fixed here.
+- **Local consumer transport** for the agent boundary (unix socket permissions, peer credentials, per-app authorization) — ADR 0097 fixes the first process contract (private pathname Unix socket, named request families, hold-bound unlock); `SO_PEERCRED` per-client authority remains its Gate D7.
 - **Paper/offline backup of the *encrypted* export** (printed QR of ciphertext with the passphrase held separately) — allowed in principle by V8; encoding and UX undecided.
-- **Whether the first Vault ships as CLI, daemon or app**, and on which platform first — product sequencing, not custody.
+- **Whether the first Vault ships as CLI, daemon or app**, and on which platform first — decided in ADR 0097: CLI plus local daemon, Linux first, macOS as the second POSIX target; native shells and mobile delegated devices are sequenced behind the same daemon contract.
 - **Argon2id parameter defaults over time**: when moderate stops being enough, and how rewrite-on-unlock upgrades interact with exports that were made under older parameters.
 
 ## Consequences

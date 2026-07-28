@@ -9,6 +9,7 @@ kein Statusdokument, keine Architekturentscheidung und kein Ersatz fuer
 Pico ist ein pnpm-/TypeScript-Monorepo. Aktuelle Workspace-Pakete:
 
 - `apps/core` - Fastify-/SQLite-Foundation-Service
+- `apps/vault-daemon` - erster lokaler Vault-Daemon plus CLI (ADR 0097)
 - `apps/web` - frameworkfreier Foundation-Webclient
 - `packages/protocol` - gemeinsame Runtime-Typen und canonical-byte Builder
 - `packages/sync` - Lamport-/Version-Vector-Grundlagen
@@ -62,6 +63,7 @@ npx pnpm@9.0.0 --filter @pico/core test -- app.test.ts
 npx pnpm@9.0.0 --filter @pico/protocol test
 npx pnpm@9.0.0 --filter @pico/identity test
 npx pnpm@9.0.0 --filter @pico/vault test
+npx pnpm@9.0.0 --filter @pico/vault-daemon test
 npx pnpm@9.0.0 --filter @pico/web test
 ```
 

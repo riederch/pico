@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const packageFiles = [
   'apps/core/package.json',
+  'apps/vault-daemon/package.json',
   'apps/web/package.json',
   'packages/identity/package.json',
   'packages/protocol/package.json',
@@ -26,6 +27,7 @@ for (const packageFile of packageFiles) {
 
 assertVersion(matchRequired('pico_core/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_core/config.yaml version');
 assertVersion(matchRequired('apps/core/src/app.ts', /const SERVICE_VERSION = '([^']+)'/, 'service version'), 'apps/core/src/app.ts SERVICE_VERSION');
+assertVersion(matchRequired('apps/vault-daemon/src/daemon.ts', /const DAEMON_VERSION = '([^']+)'/, 'vault daemon version'), 'apps/vault-daemon/src/daemon.ts DAEMON_VERSION');
 assertVersion(matchRequired('apps/core/src/app.ts', /const PROTOCOL_VERSION = '([^']+)'/, 'protocol version'), 'apps/core/src/app.ts PROTOCOL_VERSION');
 assertVersion(currentVersionFence('README.md'), 'README.md current version');
 assertVersion(currentVersionFence('ReadmeTech.md'), 'ReadmeTech.md current version');
