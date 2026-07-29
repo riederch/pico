@@ -25,6 +25,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 const CLI = join(import.meta.dirname, '..', 'dist', 'cli.js');
 const CORE = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
 const IDENTITY_PASSPHRASE = 'claim ceremony identity passphrase';
+const SIGNING_PASSPHRASE = 'claim ceremony signing passphrase';
 const AGREEMENT_PASSPHRASE = 'claim ceremony agreement passphrase';
 const READER_PASSPHRASE = 'reader vault passphrase';
 
@@ -32,6 +33,7 @@ const temporaryDirectories: string[] = [];
 const childProcesses: ChildProcess[] = [];
 
 let ownerIdentity: CreatePicoVaultKeyfileResult;
+let ownerSigning: CreatePicoVaultKeyfileResult;
 let ownerAgreement: CreatePicoVaultKeyfileResult;
 let readerIdentity: CreatePicoVaultKeyfileResult;
 let readerSigning: CreatePicoVaultKeyfileResult;
@@ -42,6 +44,10 @@ beforeAll(async () => {
   ownerIdentity = createPicoVaultKeyfile(sodium, {
     keyRole: 'pico_identity',
     passphrase: IDENTITY_PASSPHRASE,
+  });
+  ownerSigning = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_signing',
+    passphrase: SIGNING_PASSPHRASE,
   });
   ownerAgreement = createPicoVaultKeyfile(sodium, {
     keyRole: 'device_key_agreement',
@@ -92,7 +98,9 @@ interface RunningCore {
   baseUrl: string;
   moveInCode: string;
   hostSigningKeyFingerprintHex: string;
+  hostSigningPublicKeyHex: string;
   hostKeyAgreementKeyFingerprintHex: string;
+  hostKeyAgreementPublicKeyHex: string;
   log: () => string;
 }
 
@@ -164,7 +172,9 @@ async function startCore(): Promise<RunningCore> {
     baseUrl: `http://127.0.0.1:${port}`,
     moveInCode: String(claim.picoHomeMoveInCode),
     hostSigningKeyFingerprintHex: String(claim.hostSigningKeyFingerprintHex),
+    hostSigningPublicKeyHex: String(claim.hostSigningPublicKeyHex),
     hostKeyAgreementKeyFingerprintHex: String(claim.hostKeyAgreementKeyFingerprintHex),
+    hostKeyAgreementPublicKeyHex: String(claim.hostKeyAgreementPublicKeyHex),
     log: () => output,
   };
 }
@@ -179,6 +189,10 @@ async function startDaemon(): Promise<RunningDaemon> {
   writePicoVaultKeyfile(
     join(vaultHomePath, 'keyfiles', `pico_identity-${ownerIdentity.keyFingerprintHex}.json`),
     ownerIdentity.keyfile,
+  );
+  writePicoVaultKeyfile(
+    join(vaultHomePath, 'keyfiles', `device_signing-${ownerSigning.keyFingerprintHex}.json`),
+    ownerSigning.keyfile,
   );
   writePicoVaultKeyfile(
     join(vaultHomePath, 'keyfiles', `device_key_agreement-${ownerAgreement.keyFingerprintHex}.json`),
@@ -342,6 +356,96 @@ function runCeremony(
   });
 }
 
+function runLinkCeremony(
+  daemon: RunningDaemon,
+  core: RunningCore,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [
+    CLI, 'ceremony', 'claim-home',
+    '--vault-home', daemon.vaultHomePath,
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--core-url', core.baseUrl,
+    '--move-in-code', core.moveInCode,
+    '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+    '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+    '--transport', 'link',
+    '--link-signing-fingerprint', ownerSigning.keyFingerprintHex,
+    '--link-agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+    '--link-delegation-id', 'delegation_pre_authority_claim_0001',
+    '--host-signing-public-key', core.hostSigningPublicKeyHex,
+    '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
+  child.stdout!.on('data', (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+
+  return new Promise((resolvePromise) => {
+    child.once('exit', (code) => {
+      resolvePromise({ code, stdout, stderr });
+    });
+  });
+}
+
+function runDaemonCli(
+  daemon: RunningDaemon,
+  args: string[],
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [
+    CLI,
+    ...args,
+    '--vault-home', daemon.vaultHomePath,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
+  child.stdout!.on('data', (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  return new Promise((resolvePromise) => {
+    child.once('exit', (code) => {
+      resolvePromise({ code, stdout, stderr });
+    });
+  });
+}
+
+function runCreateDomainOverLink(
+  daemon: RunningDaemon,
+  core: RunningCore,
+  domainId: string,
+  delegationId: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return runDaemonCli(daemon, [
+    'ceremony', 'create-domain',
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+    '--core-url', core.baseUrl,
+    '--domain-id', domainId,
+    '--transport', 'link',
+    '--link-signing-fingerprint', ownerSigning.keyFingerprintHex,
+    '--link-agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+    '--link-delegation-id', delegationId,
+    '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+    '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+    '--host-signing-public-key', core.hostSigningPublicKeyHex,
+    '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
+  ]);
+}
+
 function runCreateDomain(
   daemon: RunningDaemon,
   core: RunningCore,
@@ -498,6 +602,30 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       .picoHome.claimState.state).toBe('claimed');
   }, 120_000);
 
+  it('founds a Home through signed Pico Link requests without a bearer session', async () => {
+    const core = await startCore();
+    const daemon = await startDaemon();
+    const identityApprover = await startApprover(daemon);
+    const signingApprover = await startApprover(
+      daemon,
+      ownerSigning,
+      'device_signing',
+      SIGNING_PASSPHRASE,
+    );
+    const run = await runLinkCeremony(daemon, core);
+    expect(run.code).toBe(0);
+    expect(JSON.parse(run.stdout)).toMatchObject({
+      claimState: { state: 'claimed' },
+    });
+    expect(core.log()).toContain('/api/home/link');
+
+    // The claim and founding records create authority and remain approval
+    // gated. The three outer Link requests only authenticate short-lived
+    // operations, so the delegated device key is never asked for approval.
+    expect(identityApprover.approvals()).toBe(2);
+    expect(signingApprover.approvals()).toBe(0);
+  }, 120_000);
+
   it('creates a reader-custody domain in the Home it just founded', async () => {
     const core = await startCore();
     const daemon = await startDaemon();
@@ -562,6 +690,49 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(rotation.stderr).toContain('invalid_rotation_causes');
     // The person was still asked: the daemon signed before the Foundation
     // judged, which is the order the approval boundary requires.
+    expect(identityApprover.approvals()).toBe(4);
+  }, 180_000);
+
+  it('delivers an authorized domain ceremony through Pico Link without a Foundation session', async () => {
+    const core = await startCore();
+    const daemon = await startDaemon();
+    const identityApprover = await startApprover(daemon);
+    await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
+
+    expect((await runCeremony(daemon, core)).code).toBe(0);
+
+    const delegated = await runDaemonCli(daemon, [
+      'ceremony', 'delegate-device',
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--signing-fingerprint', ownerSigning.keyFingerprintHex,
+      '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+      '--valid-until', '2027-07-29T00:00:00.000Z',
+    ]);
+    expect(delegated.code).toBe(0);
+    const delegationId = (JSON.parse(delegated.stdout) as {
+      record: { delegationId: string };
+    }).record.delegationId;
+    const delegationPath = join(tempDir('pico-owner-link-'), 'delegation.json');
+    writeFileSync(delegationPath, delegated.stdout, 'utf8');
+
+    const opened = await runDaemonCli(daemon, [
+      'ceremony', 'open-identity-session',
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--signing-fingerprint', ownerSigning.keyFingerprintHex,
+      '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+      '--core-url', core.baseUrl,
+      '--delegation', delegationPath,
+    ]);
+    expect(opened.code).toBe(0);
+
+    const domain = await runCreateDomainOverLink(daemon, core, 'link_domain', delegationId);
+    expect(domain.code, domain.stderr).toBe(0);
+    expect(JSON.stringify(JSON.parse(domain.stdout).accepted)).toContain('link_domain');
+    expect(core.log()).toContain('/api/home/link');
+
+    // Two founding approvals, one delegation and one domain authority. The
+    // identity session proof and both outer Link requests are operational.
     expect(identityApprover.approvals()).toBe(4);
   }, 180_000);
 

@@ -66,6 +66,17 @@ export type { PicoVaultDaemon, PicoVaultDaemonOptions } from './daemon.js';
 export { connectPicoVaultDaemonClient } from './client.js';
 export type { PicoVaultDaemonClient } from './client.js';
 export {
+  createPicoLinkDirectClient,
+  MAX_PICO_LINK_DIRECT_CLIENT_RESPONSE_CHARS,
+  PICO_LINK_DIRECT_CLIENT_REQUEST_LIFETIME_MS,
+} from './link-direct-client.js';
+export type {
+  CreatePicoLinkDirectClientInput,
+  PicoLinkDirectClient,
+  PicoLinkDirectHostPin,
+  PicoLinkDirectSender,
+} from './link-direct-client.js';
+export {
   connectPicoVaultDaemonSyncTransport,
   createPicoVaultDaemonReaderAccessUnlockPort,
   openPicoVaultDaemonReaderAccessSession,

@@ -23,6 +23,9 @@ import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  buildPicoLinkDirectRequestSignatureInput,
+  buildPicoLinkDirectResponseSignatureInput,
   deviceSeenStatuses,
   messageCreatedRoles,
   picoHomeClaimEnvelopeSchema,
@@ -34,6 +37,10 @@ import {
   picoHomeEventTypes,
   picoHomeSealedClaimPayloadSchema,
   picoIdentitySuite,
+  picoIdentityReaderKeyFreshnessCheckpointSchema,
+  picoLinkDirectPayloadDigestHex,
+  picoLinkDirectRequestEnvelopeSchema,
+  picoLinkDirectResponseEnvelopeSchema,
   protocolCapabilities,
   realtimeMessageType,
   type PicoHomeClaimResponse,
@@ -48,6 +55,9 @@ import {
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityDelegationSignatureInput,
+  type PicoIdentityReaderKeyFreshnessSignatureInput,
+  type PicoLinkDirectOperation,
+  type PicoLinkDirectResponseSignatureInput,
 } from '@pico/protocol';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
@@ -1708,7 +1718,7 @@ describe('Pico Home Core app', () => {
 
   it('binds an identity session by possession and requires a signed domain grant on a claimed Home', async () => {
     const app = await buildAppWithCapturedLog();
-    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const { setup, sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
     const homeId = (claimResponse.claimState as { homeId: string }).homeId;
     const bootstrapResponse = await app.inject({
       method: 'POST',
@@ -1838,6 +1848,117 @@ describe('Pico Home Core app', () => {
     expect(identitySessionResponse.statusCode).toBe(201);
     const identitySession = identitySessionResponse.json().session as string;
     const identityAuth = { authorization: `Bearer ${identitySession}` };
+
+    const linkRequest = async (
+      operation: PicoLinkDirectOperation,
+      args: Record<string, unknown>,
+    ): Promise<{
+      response: PicoLinkDirectResponseSignatureInput;
+      result: Record<string, unknown>;
+    }> => {
+      const replyKey = sodium.crypto_box_keypair();
+      const createdAtMs = Date.now();
+      const request = {
+        suite: picoIdentitySuite,
+        requestId: `linkreq_${randomHex(16)}`,
+        operation,
+        hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+        senderIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+        senderDeviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+        senderDeviceKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(
+          deviceAgreementKeyRecord,
+        ),
+        senderDelegationId: delegation.delegationId,
+        replyPublicKeyHex: bytesToHex(replyKey.publicKey),
+        argumentsDigestHex: picoLinkDirectPayloadDigestHex(sodium, args),
+        createdAt: new Date(createdAtMs).toISOString(),
+        expiresAt: new Date(createdAtMs + 30_000).toISOString(),
+      };
+      const envelope = {
+        schema: picoLinkDirectRequestEnvelopeSchema,
+        sealedRequestHex: bytesToHex(sodium.crypto_box_seal(
+          Buffer.from(JSON.stringify({
+            schema: picoLinkDirectRequestEnvelopeSchema,
+            request,
+            senderIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+            senderDeviceSigningKeyRecord: deviceSigningKeyRecord,
+            arguments: args,
+            senderSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+              buildPicoLinkDirectRequestSignatureInput(request),
+              deviceSigning.privateKey,
+            )),
+          }), 'utf8'),
+          hexToBytes(setup.host.keyAgreementPublicKeyHex),
+        )),
+      };
+      const linked = await app.inject({
+        method: 'POST',
+        url: '/api/home/link',
+        payload: envelope,
+      });
+      expect(linked.statusCode).toBe(200);
+      const responseEnvelope = linked.json() as {
+        schema: string;
+        sealedResponseHex: string;
+      };
+      expect(responseEnvelope.schema).toBe(picoLinkDirectResponseEnvelopeSchema);
+      const opened = JSON.parse(new TextDecoder().decode(sodium.crypto_box_seal_open(
+        hexToBytes(responseEnvelope.sealedResponseHex),
+        replyKey.publicKey,
+        replyKey.privateKey,
+      ))) as {
+        response: PicoLinkDirectResponseSignatureInput;
+        result: Record<string, unknown>;
+        hostSignatureHex: string;
+      };
+      expect(opened.response.requestId).toBe(request.requestId);
+      expect(opened.response.resultDigestHex)
+        .toBe(picoLinkDirectPayloadDigestHex(sodium, opened.result));
+      expect(sodium.crypto_sign_verify_detached(
+        hexToBytes(opened.hostSignatureHex),
+        buildPicoLinkDirectResponseSignatureInput(opened.response),
+        hexToBytes(setup.host.signingPublicKeyHex),
+      )).toBe(true);
+      return opened;
+    };
+
+    const linkedStatus = await linkRequest('home.authority.list', {
+      resource: 'home_state',
+    });
+    expect(linkedStatus.response.outcome).toBe('ok');
+    expect(linkedStatus.result).toMatchObject({
+      statusCode: 200,
+      claimState: { state: 'claimed', homeId },
+    });
+
+    const checkedAtMs = Date.now();
+    const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {
+      suite: picoIdentitySuite,
+      checkpointId: 'checkpoint_link_app_0001',
+      homeId,
+      issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+      deviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+      deviceKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(deviceAgreementKeyRecord),
+      delegationId: delegation.delegationId,
+      status: 'current',
+      observedThroughLifecycleOrder: delegation.lifecycleOrder,
+      checkedAt: new Date(checkedAtMs).toISOString(),
+      freshUntil: new Date(checkedAtMs + 4 * 60_000).toISOString(),
+    };
+    const linkedCheckpoint = await linkRequest('home.authority.submit', {
+      resource: 'reader_key_freshness_checkpoint',
+      record: {
+        schema: picoIdentityReaderKeyFreshnessCheckpointSchema,
+        checkpoint,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    });
+    expect(linkedCheckpoint.response.outcome).toBe('ok');
+    expect(linkedCheckpoint.result).toEqual({ statusCode: 202, accepted: true });
 
     // The challenge is spent. The founding Home Host Pico can relay signed
     // Home-authority evidence, but still gains content only through its

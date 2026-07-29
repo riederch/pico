@@ -278,6 +278,11 @@ interface PendingPicoHomeClaim {
 
 type ParsedSealedPicoHomeClaimRequest = Extract<ParsedPicoHomeClaimRequest, { ok: true; kind: 'sealed' }>;
 
+interface FoundationOperationResult {
+  statusCode: number;
+  body: Record<string, unknown>;
+}
+
 // A bearer resolves to one typed authority. In particular, an identity-bound
 // session does not inherit operator or diagnostic powers (ADR 0082).
 type RequestAuthority =
@@ -548,7 +553,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         picoHomeMoveInCode: code,
         claimEndpoint: '/api/home/claim',
         hostSetupNonceHex: homeSetupNonceHex,
+        hostSigningPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
         hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        hostKeyAgreementPublicKeyHex: homeHostKeys.publicBundle.keyAgreementPublicKeyHex,
         hostKeyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
       },
       'Pico Home is unclaimed. The Move-In Code is valid for this process only and must be read from this local host channel.',
@@ -1136,8 +1143,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, response);
   });
 
-  app.get('/api/system/status', async (_request, reply) => {
-    const response: PicoSystemStatusResponse = {
+  function readSystemStatus(): PicoSystemStatusResponse {
+    return {
       service: 'pico-home-core',
       version: SERVICE_VERSION,
       protocolVersion: PROTOCOL_VERSION,
@@ -1151,9 +1158,207 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         migrations: store.appliedMigrations(),
       },
     };
+  }
 
-    return sendNoStore(reply, response);
+  app.get('/api/system/status', async (_request, reply) => {
+    return sendNoStore(reply, readSystemStatus());
   });
+
+  function recordHomeMembership(body: unknown): FoundationOperationResult {
+    if (homeHostKeys === undefined) {
+      return { statusCode: 409, body: { error: 'Pico Home host keys are unavailable.' } };
+    }
+
+    const foundingRecord = store.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { statusCode: 409, body: { error: 'no_founding_record' } };
+    }
+
+    let issuerStatement: PicoHomeMembershipIssuerStatement;
+    try {
+      issuerStatement = parsePicoHomeMembershipIssuerStatement(body);
+    } catch (error) {
+      return { statusCode: 400, body: { error: (error as Error).message } };
+    }
+
+    const authority = verifyPicoHomeMembershipAuthority(sodium, {
+      credential: issuerStatement,
+      foundingRecord,
+    });
+    if (!authority.ok) {
+      return {
+        statusCode: membershipFailureStatus(authority.reason),
+        body: { error: authority.reason },
+      };
+    }
+
+    const credential: PicoHomeMembershipCredential = {
+      ...issuerStatement,
+      hostActivationSignatureHex: homeHostKeyStore.signWithHostSigningKey(
+        sodium,
+        buildPicoHomeMembershipSignatureInput(issuerStatement.membership),
+      ),
+      createdAt: new Date().toISOString(),
+    };
+    const recorded = store.recordPicoHomeMembershipCredential({
+      sodium,
+      credential,
+      hostSigningPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+    });
+    if (!recorded.ok) {
+      return {
+        statusCode: membershipFailureStatus(recorded.reason),
+        body: { error: recorded.reason },
+      };
+    }
+
+    appendServerEvent('home.membership_recorded', {
+      credentialId: recorded.membership.sourceRef,
+      subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
+      status: recorded.membership.status,
+    });
+    return {
+      statusCode: 201,
+      body: { membership: recorded.membership as unknown as Record<string, unknown> },
+    };
+  }
+
+  function publishReaderKeyFreshnessCheckpoint(body: unknown): FoundationOperationResult {
+    if (!isRecord(body)
+      || body.schema !== picoIdentityReaderKeyFreshnessCheckpointSchema
+      || !isRecord(body.checkpoint)
+      || !isRecord(body.issuerIdentityKeyRecord)
+      || typeof body.issuerSignatureHex !== 'string') {
+      return {
+        statusCode: 400,
+        body: { error: 'Invalid reader-key freshness checkpoint.' },
+      };
+    }
+
+    try {
+      buildPicoIdentityReaderKeyFreshnessSignatureInput(
+        body.checkpoint as unknown as PicoIdentityReaderKeyFreshnessSignatureInput,
+      );
+    } catch {
+      return {
+        statusCode: 400,
+        body: { error: 'Invalid reader-key freshness checkpoint.' },
+      };
+    }
+
+    freshnessInbox.publish(body as unknown as PicoIdentityReaderKeyFreshnessCheckpoint);
+    return { statusCode: 202, body: { accepted: true } };
+  }
+
+  function recordReaderCustodyDomain(body: unknown): FoundationOperationResult {
+    const result = readerCustody.recordDomain(body as PicoReaderCustodyDomainRecord);
+    if (!result.ok) {
+      return {
+        statusCode: readerCustodyFailureStatus(result.reason),
+        body: { error: result.reason },
+      };
+    }
+    return {
+      statusCode: result.inserted ? 201 : 200,
+      body: { domain: result.value as unknown as Record<string, unknown> },
+    };
+  }
+
+  async function recordReaderCustodyReaderGrant(
+    body: unknown,
+  ): Promise<FoundationOperationResult> {
+    const result = await readerCustody.recordReaderGrant(
+      body as PicoReaderCustodyReaderGrantRecord,
+    );
+    if (!result.ok) {
+      return {
+        statusCode: readerCustodyFailureStatus(result.reason),
+        body: { error: result.reason },
+      };
+    }
+    return {
+      statusCode: result.inserted ? 201 : 200,
+      body: { readerGrant: result.value as unknown as Record<string, unknown> },
+    };
+  }
+
+  function recordReaderCustodyKekRotation(body: unknown): FoundationOperationResult {
+    const result = readerCustody.recordKekRotation(body as PicoReaderCustodyKekRotationRecord);
+    if (!result.ok) {
+      return {
+        statusCode: readerCustodyFailureStatus(result.reason),
+        body: { error: result.reason },
+      };
+    }
+    return {
+      statusCode: result.inserted ? 201 : 200,
+      body: { rotation: result.value as unknown as Record<string, unknown> },
+    };
+  }
+
+  async function executeHomeAuthoritySubmit(
+    args: Record<string, unknown>,
+  ): Promise<FoundationOperationResult> {
+    if (typeof args.resource !== 'string'
+      || !isRecord(args.record)
+      || !hasExactKeys(args, ['resource', 'record'])) {
+      return { statusCode: 400, body: { error: 'invalid_authority_submit_arguments' } };
+    }
+
+    switch (args.resource) {
+      case 'membership':
+        return recordHomeMembership(args.record);
+      case 'reader_key_freshness_checkpoint':
+        return publishReaderKeyFreshnessCheckpoint(args.record);
+      case 'reader_custody_domain':
+        return recordReaderCustodyDomain(args.record);
+      case 'reader_custody_reader_grant':
+        return await recordReaderCustodyReaderGrant(args.record);
+      case 'reader_custody_kek_rotation':
+        return recordReaderCustodyKekRotation(args.record);
+      default:
+        return { statusCode: 400, body: { error: 'unknown_authority_resource' } };
+    }
+  }
+
+  function executeHomeAuthorityList(
+    args: Record<string, unknown>,
+  ): FoundationOperationResult {
+    if (typeof args.resource !== 'string' || !hasExactKeys(args, ['resource'])) {
+      return { statusCode: 400, body: { error: 'invalid_authority_list_arguments' } };
+    }
+    switch (args.resource) {
+      case 'home_state':
+        return {
+          statusCode: 200,
+          body: {
+            claimState: toPicoHomeClaimStateResponse(
+              store.picoHomeClaimState(),
+              moveInCode.isPending(),
+            ) as unknown as Record<string, unknown>,
+          },
+        };
+      case 'reader_custody_domains':
+        return {
+          statusCode: 200,
+          body: { domains: readerCustody.domains() },
+        };
+      default:
+        return { statusCode: 400, body: { error: 'unknown_authority_resource' } };
+    }
+  }
+
+  function toLinkExecution(result: FoundationOperationResult): PicoLinkDirectExecution {
+    return {
+      outcome: result.statusCode >= 200 && result.statusCode < 300
+        ? 'ok'
+        : 'foundation_rejected',
+      result: {
+        statusCode: result.statusCode,
+        ...result.body,
+      },
+    };
+  }
 
   /**
    * ADR 0107 D2. The only route reachable without a session, and the only one
@@ -1175,14 +1380,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             ? { outcome: 'setup_mode_inactive', result: {} }
             : { outcome: 'ok', result: setup as unknown as Record<string, unknown> };
         }
-        case 'home.claim.submit':
+        case 'home.claim.submit': {
+          return toLinkExecution(executeHomeClaim(args));
+        }
         case 'home.authority.submit': {
-          // Both write, and both need the existing route handlers split so the
-          // link and the local route share one implementation rather than
-          // growing a second one. Until that split exists the operation is
-          // declared and refused rather than half-served: a signed refusal is
-          // honest, a duplicate write path would not be.
-          return { outcome: 'operation_not_available_over_link', result: {} };
+          if (principal === undefined
+            || !isCurrentHomeHostPico({
+              kind: 'pico_identity',
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+              deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+              deviceKeyAgreementKeyFingerprintHex: principal.deviceKeyAgreementKeyFingerprintHex,
+              delegationId: principal.delegationId,
+            })) {
+            return { outcome: 'sender_is_not_home_authority', result: {} };
+          }
+          return toLinkExecution(await executeHomeAuthoritySubmit(args));
         }
         case 'home.authority.list': {
           // Both require a Home-bound principal. `home-authority-relay` accepts
@@ -1198,7 +1410,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             })) {
             return { outcome: 'sender_is_not_home_authority', result: {} };
           }
-          return { outcome: 'ok', result: { domains: readerCustody.domains() } };
+          return toLinkExecution(executeHomeAuthorityList(args));
         }
         default: {
           return { outcome: 'unknown_operation', result: {} };
@@ -1266,12 +1478,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, response);
   });
 
-  app.post('/api/home/claim', async (request, reply) => {
-    const body = (request.body ?? {}) as Record<string, unknown>;
+  function executeHomeClaim(body: Record<string, unknown>): FoundationOperationResult {
     const livePendingClaim = currentPendingHomeClaim();
 
     if (homeHostKeys === undefined || homeSetupNonceHex === undefined || (!moveInCode.isPending() && livePendingClaim === undefined)) {
-      return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
+      return { statusCode: 409, body: { error: 'Pico Home setup mode is not active.' } };
     }
 
     const claimRequest = readPicoHomeClaimRequest(body, {
@@ -1280,28 +1491,34 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       homeSetupNonceHex,
     });
     if (!claimRequest.ok) {
-      return sendNoStore(reply.code(claimRequest.statusCode), { error: claimRequest.error });
+      return { statusCode: claimRequest.statusCode, body: { error: claimRequest.error } };
     }
 
     if (claimRequest.kind === 'foundingAcceptance') {
       const pending = livePendingClaim;
       if (pending === undefined) {
-        return sendNoStore(reply.code(409), { error: 'No Pico Home claim is pending founding acceptance.' });
+        return {
+          statusCode: 409,
+          body: { error: 'No Pico Home claim is pending founding acceptance.' },
+        };
       }
 
       // Every rejected acceptance counts, so guessing a founding signature is
       // as bounded as guessing the Move-In Code.
-      const rejectAcceptance = (statusCode: number, error: string): FastifyReply => {
+      const rejectAcceptance = (statusCode: number, error: string): FoundationOperationResult => {
         pending.attempts += 1;
 
         if (pending.attempts >= MAX_PENDING_HOME_CLAIM_ATTEMPTS) {
           discardPendingHomeClaim('attempts_exhausted');
-          return sendNoStore(reply.code(429), {
-            error: 'Pico Home founding acceptance is exhausted; setup mode reopened with a fresh Move-In Code.',
-          });
+          return {
+            statusCode: 429,
+            body: {
+              error: 'Pico Home founding acceptance is exhausted; setup mode reopened with a fresh Move-In Code.',
+            },
+          };
         }
 
-        return sendNoStore(reply.code(statusCode), { error });
+        return { statusCode, body: { error } };
       };
 
       if (
@@ -1346,9 +1563,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       };
       if (operatorBeforeClaim?.homeBinding !== undefined
         && !sameOperatorHomeBinding(operatorBeforeClaim.homeBinding, claimedOperatorBinding)) {
-        return sendNoStore(reply.code(409), {
-          error: 'Foundation operator is bound to a different Pico Home founding; local operator reset is required.',
-        });
+        return {
+          statusCode: 409,
+          body: {
+            error: 'Foundation operator is bound to a different Pico Home founding; local operator reset is required.',
+          },
+        };
       }
 
       try {
@@ -1364,7 +1584,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           operators.bindToHome(claimedOperatorBinding);
         }
       } catch (error) {
-        return sendNoStore(reply.code(409), { error: (error as Error).message });
+        return { statusCode: 409, body: { error: (error as Error).message } };
       }
 
       // A pre-claim session carried unclaimed-phase authority. Even though the
@@ -1396,24 +1616,33 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         foundingRecord,
       };
 
-      return reply.code(201).header('Cache-Control', 'no-store').send(response);
+      return {
+        statusCode: 201,
+        body: response as unknown as Record<string, unknown>,
+      };
     }
 
     if (livePendingClaim !== undefined) {
-      return sendNoStore(reply.code(409), { error: 'A Pico Home claim is pending founding acceptance.' });
+      return {
+        statusCode: 409,
+        body: { error: 'A Pico Home claim is pending founding acceptance.' },
+      };
     }
 
     if (!moveInCode.isPending()) {
-      return sendNoStore(reply.code(409), { error: 'Pico Home setup mode is not active.' });
+      return { statusCode: 409, body: { error: 'Pico Home setup mode is not active.' } };
     }
 
     const code = moveInCode.consume(claimRequest.moveInCode);
     if (!code.ok) {
-      return sendNoStore(reply.code(code.exhausted ? 429 : 401), {
-        error: code.exhausted
-          ? 'Move-In Code is exhausted; restart the Pico Home process to mint a fresh code.'
-          : 'Move-In Code is invalid.',
-      });
+      return {
+        statusCode: code.exhausted ? 429 : 401,
+        body: {
+          error: code.exhausted
+            ? 'Move-In Code is exhausted; restart the Pico Home process to mint a fresh code.'
+            : 'Move-In Code is invalid.',
+        },
+      };
     }
 
     const pending = createPendingPicoHomeClaim({
@@ -1439,7 +1668,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       },
     };
 
-    return reply.code(202).header('Cache-Control', 'no-store').send(response);
+    return {
+      statusCode: 202,
+      body: response as unknown as Record<string, unknown>,
+    };
+  }
+
+  app.post('/api/home/claim', async (request, reply) => {
+    const result = executeHomeClaim((request.body ?? {}) as Record<string, unknown>);
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.get('/api/home/memberships', async (_request, reply) => {
@@ -1447,63 +1684,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.post('/api/home/memberships', async (request, reply) => {
-    if (homeHostKeys === undefined) {
-      return sendNoStore(reply.code(409), { error: 'Pico Home host keys are unavailable.' });
-    }
-
-    const foundingRecord = store.picoHomeFoundingRecord();
-    if (foundingRecord === undefined) {
-      return sendNoStore(reply.code(409), { error: 'no_founding_record' });
-    }
-
-    let issuerStatement: PicoHomeMembershipIssuerStatement;
-    try {
-      issuerStatement = parsePicoHomeMembershipIssuerStatement(request.body);
-    } catch (error) {
-      return sendNoStore(reply.code(400), { error: (error as Error).message });
-    }
-
-    // The host countersigns only what already carries the Home Host Pico's
-    // authority: activation is an acknowledgment, so activating an unverified
-    // statement would be signing garbage (ADR 0080 H6). The store verifies both
-    // halves again before it writes anything - a few hundred microseconds to
-    // keep "nothing unverified is stored" true of the store on its own.
-    const authority = verifyPicoHomeMembershipAuthority(sodium, {
-      credential: issuerStatement,
-      foundingRecord,
-    });
-    if (!authority.ok) {
-      return sendNoStore(reply.code(membershipFailureStatus(authority.reason)), { error: authority.reason });
-    }
-
-    const credential: PicoHomeMembershipCredential = {
-      ...issuerStatement,
-      hostActivationSignatureHex: homeHostKeyStore.signWithHostSigningKey(
-        sodium,
-        buildPicoHomeMembershipSignatureInput(issuerStatement.membership),
-      ),
-      // Host-stamped: the record is this Home's, and client clocks are not an
-      // input to anything here.
-      createdAt: new Date().toISOString(),
-    };
-
-    const recorded = store.recordPicoHomeMembershipCredential({
-      sodium,
-      credential,
-      hostSigningPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
-    });
-
-    if (!recorded.ok) {
-      return sendNoStore(reply.code(membershipFailureStatus(recorded.reason)), { error: recorded.reason });
-    }
-
-    appendServerEvent('home.membership_recorded', {
-      credentialId: recorded.membership.sourceRef,
-      subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
-      status: recorded.membership.status,
-    });
-
-    return reply.code(201).header('Cache-Control', 'no-store').send({ membership: recorded.membership });
+    const result = recordHomeMembership(request.body);
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.post('/api/home/membership-lifecycle', async (request, reply) => {
@@ -1601,27 +1783,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * be judged.
    */
   app.post('/api/home/reader-key-freshness-checkpoints', async (request, reply) => {
-    const body = request.body;
-    if (!isRecord(body)
-      || body.schema !== picoIdentityReaderKeyFreshnessCheckpointSchema
-      || !isRecord(body.checkpoint)
-      || !isRecord(body.issuerIdentityKeyRecord)
-      || typeof body.issuerSignatureHex !== 'string') {
-      return sendNoStore(reply.code(400), { error: 'Invalid reader-key freshness checkpoint.' });
-    }
-
-    try {
-      // Canonical bytes must build before this is stored: a malformed
-      // checkpoint is rejected at the door rather than at every later lookup.
-      buildPicoIdentityReaderKeyFreshnessSignatureInput(
-        body.checkpoint as unknown as PicoIdentityReaderKeyFreshnessSignatureInput,
-      );
-    } catch {
-      return sendNoStore(reply.code(400), { error: 'Invalid reader-key freshness checkpoint.' });
-    }
-
-    freshnessInbox.publish(body as unknown as PicoIdentityReaderKeyFreshnessCheckpoint);
-    return sendNoStore(reply.code(202), { accepted: true });
+    const result = publishReaderKeyFreshnessCheckpoint(request.body);
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.post('/api/home/share-envelope-issuance', async (request, reply) => {
@@ -1671,17 +1834,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.post('/api/home/reader-custody/domains', async (request, reply) => {
-    const result = readerCustody.recordDomain(
-      (request.body ?? {}) as PicoReaderCustodyDomainRecord,
-    );
-    if (!result.ok) {
-      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
-        error: result.reason,
-      });
-    }
-    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
-      domain: result.value,
-    });
+    const result = recordReaderCustodyDomain(request.body ?? {});
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.get('/api/home/reader-custody/domains', async (_request, reply) => {
@@ -1689,17 +1843,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.post('/api/home/reader-custody/reader-grants', async (request, reply) => {
-    const result = await readerCustody.recordReaderGrant(
-      (request.body ?? {}) as PicoReaderCustodyReaderGrantRecord,
-    );
-    if (!result.ok) {
-      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
-        error: result.reason,
-      });
-    }
-    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
-      readerGrant: result.value,
-    });
+    const result = await recordReaderCustodyReaderGrant(request.body ?? {});
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.get('/api/home/reader-custody/reader-grants', async (_request, reply) => {
@@ -1761,17 +1906,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   );
 
   app.post('/api/home/reader-custody/kek-rotations', async (request, reply) => {
-    const result = readerCustody.recordKekRotation(
-      (request.body ?? {}) as PicoReaderCustodyKekRotationRecord,
-    );
-    if (!result.ok) {
-      return sendNoStore(reply.code(readerCustodyFailureStatus(result.reason)), {
-        error: result.reason,
-      });
-    }
-    return sendNoStore(reply.code(result.inserted ? 201 : 200), {
-      rotation: result.value,
-    });
+    const result = recordReaderCustodyKekRotation(request.body ?? {});
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.get('/api/home/reader-custody/kek-rotations', async (request, reply) => {

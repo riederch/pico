@@ -29,7 +29,7 @@ export const picoVaultDaemonRequestFamilies = {
 
 /**
  * ADR 0099 gating policy. Approval guards the creation of new signed
- * authority; these four families are the operational high-frequency ones that
+ * authority; these families are the operational high-frequency ones that
  * prove possession or carry routine traffic and create nothing that outlives
  * the call. The list is closed: every other signable label - including any
  * family added later - requires approval, so the default is to ask.
@@ -39,6 +39,7 @@ export const picoVaultDaemonApprovalExemptLabels: ReadonlySet<string> = new Set(
   'pico.id.reader-key-freshness.v1',
   'pico.mem.reader-sync-manifest.v1',
   'pico.mem.reader-item.v1',
+  'pico.link.direct.request.v1',
 ]);
 
 export function picoVaultDaemonSignatureNeedsApproval(label: string): boolean {

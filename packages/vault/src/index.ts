@@ -33,6 +33,7 @@ import {
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
+  picoLinkDirectRequestSignatureInputLabel,
   picoShareCanonicalLabels,
   picoShareEnvelopeRecordSchema,
   picoShareSuite,
@@ -421,6 +422,10 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
   ]),
   device_signing: new Set<string>([
     ...Object.values(picoIdentitySignatureInputLabels),
+    // ADR 0107 D3: this authenticates one short-lived request and creates no
+    // authority of its own. The semantic record inside the operation still
+    // carries its own gated signature where required.
+    picoLinkDirectRequestSignatureInputLabel,
     picoReaderCustodyCanonicalLabels.item,
   ]),
   device_key_agreement: new Set<string>(),

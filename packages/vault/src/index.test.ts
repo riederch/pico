@@ -8,8 +8,10 @@ import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  buildPicoLinkDirectRequestSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   picoIdentitySuite,
+  picoLinkDirectPayloadDigestHex,
   picoVaultKeyfileFormat,
 } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
@@ -157,6 +159,34 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       keyfile: device.keyfile,
       passphrase: 'correct horse battery staple',
     }).sign(claim)).toThrow('unknown_signature_input_label');
+
+    // A Link request authenticates one short-lived operation and therefore
+    // belongs to the delegated device key, never the identity root.
+    const deviceSession = openPicoVaultKeyfile(sodium, {
+      keyfile: device.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    const args = { resource: 'home_state' };
+    const linkRequest = buildPicoLinkDirectRequestSignatureInput({
+      suite: picoIdentitySuite,
+      requestId: 'linkreq_vault_0001',
+      operation: 'home.authority.list',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      senderIdentityKeyFingerprintHex: created.keyFingerprintHex,
+      senderDeviceSigningKeyFingerprintHex: device.keyFingerprintHex,
+      senderDeviceKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      senderDelegationId: 'delegation_vault_0001',
+      replyPublicKeyHex: '33'.repeat(32),
+      argumentsDigestHex: picoLinkDirectPayloadDigestHex(sodium, args),
+      createdAt: '2026-07-29T10:00:00.000Z',
+      expiresAt: '2026-07-29T10:00:30.000Z',
+    });
+    expect(sodium.crypto_sign_verify_detached(
+      deviceSession.sign(linkRequest),
+      linkRequest,
+      Buffer.from(device.publicKeyHex, 'hex'),
+    )).toBe(true);
+    expect(() => session.sign(linkRequest)).toThrow('unknown_signature_input_label');
   });
 
   it('lets only the Pico identity key authorize a share envelope', () => {

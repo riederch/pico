@@ -285,12 +285,13 @@ function expectReason(response: PicoVaultDaemonResponse, reason: string): void {
 }
 
 describe('Approval gating policy (ADR 0099 P3)', () => {
-  it('exempts exactly the four operational families and gates everything else', () => {
+  it('exempts exactly the operational families and gates everything else', () => {
     for (const label of [
       'pico.id.possession.v1',
       'pico.id.reader-key-freshness.v1',
       'pico.mem.reader-sync-manifest.v1',
       'pico.mem.reader-item.v1',
+      'pico.link.direct.request.v1',
     ]) {
       expect(picoVaultDaemonSignatureNeedsApproval(label)).toBe(false);
     }

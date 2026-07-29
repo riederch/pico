@@ -39,6 +39,10 @@ import {
 import sodium from 'libsodium-wrappers-sumo';
 import { connectPicoVaultDaemonClient, type PicoVaultDaemonClient } from './client.js';
 import { startPicoVaultDaemon } from './daemon.js';
+import {
+  createPicoLinkDirectClient,
+  type PicoLinkDirectClient,
+} from './link-direct-client.js';
 
 const cliCommands = ['daemon', 'create', 'status', 'unlock', 'lock', 'sign', 'ceremony'] as const;
 type CliCommand = typeof cliCommands[number];
@@ -81,6 +85,12 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'move-in-code',
     'host-signing-fingerprint',
     'host-agreement-fingerprint',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
   'create-domain': [
     'vault-home',
@@ -90,6 +100,14 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'session',
     'domain-id',
     'lifecycle-order',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
   'delegate-device': [
     'vault-home',
@@ -122,6 +140,13 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'valid-until',
     'valid-from',
     'lifecycle-order',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
   'publish-checkpoint': [
     'vault-home',
@@ -135,6 +160,14 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'status',
     'observed-through-lifecycle-order',
     'fresh-for-seconds',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
   'rotate-domain': [
     'vault-home',
@@ -147,6 +180,14 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'writer-grant-lifecycle-records',
     'remaining-reader-grant-records',
     'lifecycle-order',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
   'grant-reader': [
     'vault-home',
@@ -165,6 +206,14 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'valid-from',
     'valid-until',
     'lifecycle-order',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
 };
 
@@ -496,16 +545,27 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
     case 'ceremony': {
       await sodium.ready;
       if (invocation.ceremony === 'create-domain') {
-        const domain = await withClient(vaultHomePath, async (client) => await runCreateDomainCeremony({
-          client,
-          vaultSodium: sodium as unknown as VaultSodium,
-          coreUrl: requireFlag(invocation.flags, 'core-url'),
-          session: requireFlag(invocation.flags, 'session'),
-          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
-          agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
-          domainId: requireFlag(invocation.flags, 'domain-id'),
-          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
-        }));
+        const domain = await withClient(vaultHomePath, async (client) => {
+          const coreUrl = requireFlag(invocation.flags, 'core-url');
+          return await runCreateDomainCeremony({
+            client,
+            vaultSodium: sodium as unknown as VaultSodium,
+            coreUrl,
+            session: transportRequiresSession(invocation.flags)
+              ? requireFlag(invocation.flags, 'session')
+              : undefined,
+            linkClient: await createCeremonyLinkClient(
+              invocation.flags,
+              client,
+              sodium as unknown as VaultSodium,
+              coreUrl,
+            ),
+            signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+            agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
+            domainId: requireFlag(invocation.flags, 'domain-id'),
+            lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+          });
+        });
         process.stdout.write(`${JSON.stringify(domain)}\n`);
         return;
       }
@@ -553,23 +613,34 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
             throw new Error(`invalid_membership_scope:${scope}`);
           }
         }
-        const issued = await withClient(vaultHomePath, async (client) => await runIssueMembershipCeremony({
-          client,
-          coreUrl: requireFlag(invocation.flags, 'core-url'),
-          session: requireFlag(invocation.flags, 'session'),
-          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
-          homeId: requireFlag(invocation.flags, 'home-id'),
-          subjectPicoIdentityFingerprintHex: requireFlag(
-            invocation.flags,
-            'subject-identity-fingerprint',
-          ),
-          hostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
-          role: roleFlag as PicoHomeMembershipRole,
-          scopes: scopes as PicoHomeMembershipScope[],
-          validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
-          validUntil: requireFlag(invocation.flags, 'valid-until'),
-          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
-        }));
+        const issued = await withClient(vaultHomePath, async (client) => {
+          const coreUrl = requireFlag(invocation.flags, 'core-url');
+          return await runIssueMembershipCeremony({
+            client,
+            coreUrl,
+            session: transportRequiresSession(invocation.flags)
+              ? requireFlag(invocation.flags, 'session')
+              : undefined,
+            linkClient: await createCeremonyLinkClient(
+              invocation.flags,
+              client,
+              sodium as unknown as VaultSodium,
+              coreUrl,
+            ),
+            signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+            homeId: requireFlag(invocation.flags, 'home-id'),
+            subjectPicoIdentityFingerprintHex: requireFlag(
+              invocation.flags,
+              'subject-identity-fingerprint',
+            ),
+            hostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
+            role: roleFlag as PicoHomeMembershipRole,
+            scopes: scopes as PicoHomeMembershipScope[],
+            validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
+            validUntil: requireFlag(invocation.flags, 'valid-until'),
+            lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+          });
+        });
         process.stdout.write(`${JSON.stringify(issued)}\n`);
         return;
       }
@@ -578,98 +649,140 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
         if (!(picoIdentityReaderKeyFreshnessStatuses as readonly string[]).includes(statusFlag)) {
           throw new Error('invalid_checkpoint_status');
         }
-        const published = await withClient(vaultHomePath, async (client) => await runPublishCheckpointCeremony({
-          client,
-          coreUrl: requireFlag(invocation.flags, 'core-url'),
-          session: requireFlag(invocation.flags, 'session'),
-          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
-          homeId: requireFlag(invocation.flags, 'home-id'),
-          deviceSigningKeyFingerprintHex: requireFlag(
-            invocation.flags,
-            'reader-device-signing-fingerprint',
-          ),
-          deviceKeyAgreementKeyFingerprintHex: requireFlag(
-            invocation.flags,
-            'reader-device-agreement-fingerprint',
-          ),
-          delegationId: requireFlag(invocation.flags, 'reader-delegation-id'),
-          status: statusFlag as PicoIdentityReaderKeyFreshnessStatus,
-          observedThroughLifecycleOrder: requireFlag(
-            invocation.flags,
-            'observed-through-lifecycle-order',
-          ),
-          freshForSeconds: Number(invocation.flags.get('fresh-for-seconds') ?? '240'),
-        }));
+        const published = await withClient(vaultHomePath, async (client) => {
+          const coreUrl = requireFlag(invocation.flags, 'core-url');
+          return await runPublishCheckpointCeremony({
+            client,
+            coreUrl,
+            session: transportRequiresSession(invocation.flags)
+              ? requireFlag(invocation.flags, 'session')
+              : undefined,
+            linkClient: await createCeremonyLinkClient(
+              invocation.flags,
+              client,
+              sodium as unknown as VaultSodium,
+              coreUrl,
+            ),
+            signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+            homeId: requireFlag(invocation.flags, 'home-id'),
+            deviceSigningKeyFingerprintHex: requireFlag(
+              invocation.flags,
+              'reader-device-signing-fingerprint',
+            ),
+            deviceKeyAgreementKeyFingerprintHex: requireFlag(
+              invocation.flags,
+              'reader-device-agreement-fingerprint',
+            ),
+            delegationId: requireFlag(invocation.flags, 'reader-delegation-id'),
+            status: statusFlag as PicoIdentityReaderKeyFreshnessStatus,
+            observedThroughLifecycleOrder: requireFlag(
+              invocation.flags,
+              'observed-through-lifecycle-order',
+            ),
+            freshForSeconds: Number(invocation.flags.get('fresh-for-seconds') ?? '240'),
+          });
+        });
         process.stdout.write(`${JSON.stringify(published)}\n`);
         return;
       }
       if (invocation.ceremony === 'rotate-domain') {
-        const rotation = await withClient(vaultHomePath, async (client) => await runRotateDomainCeremony({
-          client,
-          vaultSodium: sodium as unknown as VaultSodium,
-          coreUrl: requireFlag(invocation.flags, 'core-url'),
-          session: requireFlag(invocation.flags, 'session'),
-          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
-          domainRecord: readRecordFile(requireFlag(invocation.flags, 'domain-record'), 'domain_record'),
-          rotationRecords: readRecordListFile(invocation.flags.get('rotation-records'), 'rotation_records'),
-          readerGrantLifecycleRecords: readRecordListFile(
-            invocation.flags.get('reader-grant-lifecycle-records'),
-            'reader_grant_lifecycle_records',
-          ),
-          writerGrantLifecycleRecords: readRecordListFile(
-            invocation.flags.get('writer-grant-lifecycle-records'),
-            'writer_grant_lifecycle_records',
-          ),
-          remainingReaderGrantRecords: readRecordListFile(
-            invocation.flags.get('remaining-reader-grant-records'),
-            'remaining_reader_grant_records',
-          ),
-          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000002',
-        }));
+        const rotation = await withClient(vaultHomePath, async (client) => {
+          const coreUrl = requireFlag(invocation.flags, 'core-url');
+          return await runRotateDomainCeremony({
+            client,
+            vaultSodium: sodium as unknown as VaultSodium,
+            coreUrl,
+            session: transportRequiresSession(invocation.flags)
+              ? requireFlag(invocation.flags, 'session')
+              : undefined,
+            linkClient: await createCeremonyLinkClient(
+              invocation.flags,
+              client,
+              sodium as unknown as VaultSodium,
+              coreUrl,
+            ),
+            signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+            domainRecord: readRecordFile(requireFlag(invocation.flags, 'domain-record'), 'domain_record'),
+            rotationRecords: readRecordListFile(invocation.flags.get('rotation-records'), 'rotation_records'),
+            readerGrantLifecycleRecords: readRecordListFile(
+              invocation.flags.get('reader-grant-lifecycle-records'),
+              'reader_grant_lifecycle_records',
+            ),
+            writerGrantLifecycleRecords: readRecordListFile(
+              invocation.flags.get('writer-grant-lifecycle-records'),
+              'writer_grant_lifecycle_records',
+            ),
+            remainingReaderGrantRecords: readRecordListFile(
+              invocation.flags.get('remaining-reader-grant-records'),
+              'remaining_reader_grant_records',
+            ),
+            lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000002',
+          });
+        });
         process.stdout.write(`${JSON.stringify(rotation)}\n`);
         return;
       }
       if (invocation.ceremony === 'grant-reader') {
-        const grant = await withClient(vaultHomePath, async (client) => await runGrantReaderCeremony({
-          client,
-          coreUrl: requireFlag(invocation.flags, 'core-url'),
-          session: requireFlag(invocation.flags, 'session'),
-          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
-          agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
-          domainRecord: readRecordFile(requireFlag(invocation.flags, 'domain-record'), 'domain_record'),
-          rotationRecords: readRecordListFile(invocation.flags.get('rotation-records'), 'rotation_records'),
-          readerKeyRecord: readRecordFile(
-            requireFlag(invocation.flags, 'reader-key-record'),
-            'reader_key_record',
-          ),
-          readerGrantId: `reader_grant_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
-          readerIdentityKeyFingerprintHex: requireFlag(invocation.flags, 'reader-identity-fingerprint'),
-          readerDeviceSigningKeyFingerprintHex: requireFlag(
-            invocation.flags,
-            'reader-device-signing-fingerprint',
-          ),
-          readerDelegationId: requireFlag(invocation.flags, 'reader-delegation-id'),
-          accessMode: invocation.flags.get('access-mode') ?? 'forward_only',
-          firstKekVersion: Number(invocation.flags.get('first-kek-version') ?? '1'),
-          validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
-          validUntil: requireFlag(invocation.flags, 'valid-until'),
-          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
-        }));
+        const grant = await withClient(vaultHomePath, async (client) => {
+          const coreUrl = requireFlag(invocation.flags, 'core-url');
+          return await runGrantReaderCeremony({
+            client,
+            coreUrl,
+            session: transportRequiresSession(invocation.flags)
+              ? requireFlag(invocation.flags, 'session')
+              : undefined,
+            linkClient: await createCeremonyLinkClient(
+              invocation.flags,
+              client,
+              sodium as unknown as VaultSodium,
+              coreUrl,
+            ),
+            signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+            agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
+            domainRecord: readRecordFile(requireFlag(invocation.flags, 'domain-record'), 'domain_record'),
+            rotationRecords: readRecordListFile(invocation.flags.get('rotation-records'), 'rotation_records'),
+            readerKeyRecord: readRecordFile(
+              requireFlag(invocation.flags, 'reader-key-record'),
+              'reader_key_record',
+            ),
+            readerGrantId: `reader_grant_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
+            readerIdentityKeyFingerprintHex: requireFlag(invocation.flags, 'reader-identity-fingerprint'),
+            readerDeviceSigningKeyFingerprintHex: requireFlag(
+              invocation.flags,
+              'reader-device-signing-fingerprint',
+            ),
+            readerDelegationId: requireFlag(invocation.flags, 'reader-delegation-id'),
+            accessMode: invocation.flags.get('access-mode') ?? 'forward_only',
+            firstKekVersion: Number(invocation.flags.get('first-kek-version') ?? '1'),
+            validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
+            validUntil: requireFlag(invocation.flags, 'valid-until'),
+            lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+          });
+        });
         process.stdout.write(`${JSON.stringify(grant)}\n`);
         return;
       }
       if (invocation.ceremony !== 'claim-home') {
         throw new Error('unknown_ceremony');
       }
-      const founding = await withClient(vaultHomePath, async (client) => await runClaimHomeCeremony({
-        client,
-        vaultSodium: sodium as unknown as VaultSodium,
-        coreUrl: requireFlag(invocation.flags, 'core-url'),
-        moveInCode: requireFlag(invocation.flags, 'move-in-code'),
-        signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
-        expectedHostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
-        expectedHostKeyAgreementKeyFingerprintHex: requireFlag(invocation.flags, 'host-agreement-fingerprint'),
-      }));
+      const founding = await withClient(vaultHomePath, async (client) => {
+        const coreUrl = requireFlag(invocation.flags, 'core-url');
+        return await runClaimHomeCeremony({
+          client,
+          vaultSodium: sodium as unknown as VaultSodium,
+          coreUrl,
+          linkClient: await createCeremonyLinkClient(
+            invocation.flags,
+            client,
+            sodium as unknown as VaultSodium,
+            coreUrl,
+          ),
+          moveInCode: requireFlag(invocation.flags, 'move-in-code'),
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          expectedHostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
+          expectedHostKeyAgreementKeyFingerprintHex: requireFlag(invocation.flags, 'host-agreement-fingerprint'),
+        });
+      });
       process.stdout.write(`${JSON.stringify(founding)}\n`);
       return;
     }
@@ -744,6 +857,7 @@ async function runClaimHomeCeremony(input: {
   client: PicoVaultDaemonClient;
   vaultSodium: VaultSodium;
   coreUrl: string;
+  linkClient?: PicoLinkDirectClient;
   moveInCode: string;
   signerKeyFingerprintHex: string;
   expectedHostSigningKeyFingerprintHex: string;
@@ -760,7 +874,13 @@ async function runClaimHomeCeremony(input: {
     throw new Error('claim_requires_pico_identity_key');
   }
 
-  const setup = await foundationRequest(input.coreUrl, '/api/home/setup', undefined) as {
+  const setup = await foundationRequest(
+    input.coreUrl,
+    '/api/home/setup',
+    undefined,
+    undefined,
+    input.linkClient,
+  ) as {
     setupMode: { hostSetupNonceHex: string };
     host: {
       signingKeyFingerprintHex: string;
@@ -809,9 +929,15 @@ async function runClaimHomeCeremony(input: {
     Uint8Array.from(Buffer.from(setup.host.keyAgreementPublicKeyHex, 'hex')),
   )).toString('hex');
 
-  const pending = await foundationRequest(input.coreUrl, '/api/home/claim', {
-    claimEnvelope: { schema: picoHomeClaimEnvelopeSchema, sealedClaimPayloadHex },
-  }) as { pendingClaim: { founding: PicoHomeFoundingSignatureInput } };
+  const pending = await foundationRequest(
+    input.coreUrl,
+    '/api/home/claim',
+    {
+      claimEnvelope: { schema: picoHomeClaimEnvelopeSchema, sealedClaimPayloadHex },
+    },
+    undefined,
+    input.linkClient,
+  ) as { pendingClaim: { founding: PicoHomeFoundingSignatureInput } };
 
   process.stderr.write('Claim accepted. Approve the founding acceptance to complete it.\n');
   const foundingSignature = await input.client.sign({
@@ -820,14 +946,20 @@ async function runClaimHomeCeremony(input: {
     fields: pending.pendingClaim.founding as unknown as Record<string, unknown>,
   });
 
-  return await foundationRequest(input.coreUrl, '/api/home/claim', {
-    foundingAcceptance: {
-      schema: picoHomeFoundingAcceptanceSchema,
-      claimId: claim.claimId,
-      foundingId: pending.pendingClaim.founding.foundingId,
-      claimantFoundingSignatureHex: foundingSignature.signatureHex,
+  return await foundationRequest(
+    input.coreUrl,
+    '/api/home/claim',
+    {
+      foundingAcceptance: {
+        schema: picoHomeFoundingAcceptanceSchema,
+        claimId: claim.claimId,
+        foundingId: pending.pendingClaim.founding.foundingId,
+        claimantFoundingSignatureHex: foundingSignature.signatureHex,
+      },
     },
-  }) as Record<string, unknown>;
+    undefined,
+    input.linkClient,
+  ) as Record<string, unknown>;
 }
 
 /**
@@ -840,7 +972,25 @@ async function foundationRequest(
   path: string,
   body: Record<string, unknown> | undefined,
   session?: string,
+  linkClient?: PicoLinkDirectClient,
 ): Promise<unknown> {
+  if (linkClient !== undefined) {
+    const linked = await linkFoundationRequest(linkClient, path, body);
+    const statusCode = typeof linked.result.statusCode === 'number'
+      ? linked.result.statusCode
+      : undefined;
+    const result = { ...linked.result };
+    delete result.statusCode;
+    if (linked.outcome !== 'ok'
+      || (statusCode !== undefined && (statusCode < 200 || statusCode >= 300))) {
+      const reason = typeof result.error === 'string' ? result.error : linked.outcome;
+      throw new Error(
+        `foundation_rejected:${statusCode ?? 400}:${reason}`,
+      );
+    }
+    return result;
+  }
+
   const url = new URL(path, coreUrl.endsWith('/') ? coreUrl : `${coreUrl}/`);
   const headers: Record<string, string> = session === undefined
     ? {}
@@ -869,12 +1019,100 @@ async function foundationRequest(
   return parsed;
 }
 
+async function linkFoundationRequest(
+  client: PicoLinkDirectClient,
+  path: string,
+  body: Record<string, unknown> | undefined,
+): Promise<{ outcome: string; result: Record<string, unknown> }> {
+  if (path === '/api/home/setup' && body === undefined) {
+    return await client.request('home.setup.read', {});
+  }
+  if (path === '/api/home/claim' && body !== undefined) {
+    return await client.request('home.claim.submit', body);
+  }
+  if (path === '/api/system/status' && body === undefined) {
+    const linked = await client.request('home.authority.list', { resource: 'home_state' });
+    if (linked.outcome !== 'ok' || !isRecord(linked.result.claimState)) {
+      return linked;
+    }
+    const { claimState, ...rest } = linked.result;
+    return {
+      outcome: linked.outcome,
+      result: {
+        ...rest,
+        picoHome: { claimState },
+      },
+    };
+  }
+
+  const resources: Record<string, string> = {
+    '/api/home/memberships': 'membership',
+    '/api/home/reader-key-freshness-checkpoints': 'reader_key_freshness_checkpoint',
+    '/api/home/reader-custody/domains': 'reader_custody_domain',
+    '/api/home/reader-custody/reader-grants': 'reader_custody_reader_grant',
+    '/api/home/reader-custody/kek-rotations': 'reader_custody_kek_rotation',
+  };
+  const resource = resources[path];
+  if (resource !== undefined && body !== undefined) {
+    return await client.request('home.authority.submit', { resource, record: body });
+  }
+  throw new Error('operation_not_available_over_link');
+}
+
 function requireFlag(flags: Map<string, string>, name: string): string {
   const value = flags.get(name);
   if (value === undefined || value.trim() === '') {
     throw new Error(`missing_required_flag:--${name}`);
   }
   return value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function ceremonyTransport(flags: Map<string, string>): 'local' | 'link' {
+  const transport = flags.get('transport') ?? 'local';
+  if (transport !== 'local' && transport !== 'link') {
+    throw new Error('invalid_ceremony_transport');
+  }
+  return transport;
+}
+
+function transportRequiresSession(flags: Map<string, string>): boolean {
+  return ceremonyTransport(flags) === 'local';
+}
+
+async function createCeremonyLinkClient(
+  flags: Map<string, string>,
+  client: PicoVaultDaemonClient,
+  vaultSodium: VaultSodium,
+  coreUrl: string,
+): Promise<PicoLinkDirectClient | undefined> {
+  if (ceremonyTransport(flags) === 'local') {
+    return undefined;
+  }
+  if (flags.has('session')) {
+    throw new Error('link_transport_does_not_accept_session');
+  }
+
+  return await createPicoLinkDirectClient({
+    sodium: vaultSodium,
+    daemonClient: client,
+    coreUrl,
+    host: {
+      signingPublicKeyHex: requireFlag(flags, 'host-signing-public-key'),
+      signingKeyFingerprintHex: requireFlag(flags, 'host-signing-fingerprint'),
+      keyAgreementPublicKeyHex: requireFlag(flags, 'host-agreement-public-key'),
+      keyAgreementKeyFingerprintHex: requireFlag(flags, 'host-agreement-fingerprint'),
+    },
+    sender: {
+      identityKeyFingerprintHex: requireFlag(flags, 'fingerprint'),
+      deviceSigningKeyFingerprintHex: requireFlag(flags, 'link-signing-fingerprint'),
+      deviceKeyAgreementKeyFingerprintHex: requireFlag(flags, 'link-agreement-fingerprint'),
+      delegationId: requireFlag(flags, 'link-delegation-id'),
+    },
+  });
 }
 
 /**
@@ -895,7 +1133,8 @@ async function runCreateDomainCeremony(input: {
   client: PicoVaultDaemonClient;
   vaultSodium: VaultSodium;
   coreUrl: string;
-  session: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
   signerKeyFingerprintHex: string;
   agreementKeyFingerprintHex: string;
   domainId: string;
@@ -920,6 +1159,7 @@ async function runCreateDomainCeremony(input: {
     '/api/system/status',
     undefined,
     input.session,
+    input.linkClient,
   ) as {
     picoHome: {
       claimState: {
@@ -957,6 +1197,7 @@ async function runCreateDomainCeremony(input: {
     '/api/home/reader-custody/domains',
     ceremony.domainRecord,
     input.session,
+    input.linkClient,
   ) as Record<string, unknown>;
 
   // The signed record is returned to the caller, not just the Foundation's
@@ -1009,7 +1250,8 @@ async function runRotateDomainCeremony(input: {
   client: PicoVaultDaemonClient;
   vaultSodium: VaultSodium;
   coreUrl: string;
-  session: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
   signerKeyFingerprintHex: string;
   domainRecord: Record<string, unknown>;
   rotationRecords: Record<string, unknown>[];
@@ -1044,6 +1286,7 @@ async function runRotateDomainCeremony(input: {
     '/api/home/reader-custody/kek-rotations',
     ceremony.rotationRecord,
     input.session,
+    input.linkClient,
   ) as Record<string, unknown>;
 
   return { accepted, rotationRecord: ceremony.rotationRecord };
@@ -1052,7 +1295,8 @@ async function runRotateDomainCeremony(input: {
 async function runGrantReaderCeremony(input: {
   client: PicoVaultDaemonClient;
   coreUrl: string;
-  session: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
   signerKeyFingerprintHex: string;
   agreementKeyFingerprintHex: string;
   domainRecord: Record<string, unknown>;
@@ -1105,6 +1349,7 @@ async function runGrantReaderCeremony(input: {
     '/api/home/reader-custody/reader-grants',
     ceremony.readerGrantRecord,
     input.session,
+    input.linkClient,
   ) as Record<string, unknown>;
 
   return { accepted, readerGrantRecord: ceremony.readerGrantRecord };
@@ -1127,7 +1372,8 @@ async function runGrantReaderCeremony(input: {
 async function runPublishCheckpointCeremony(input: {
   client: PicoVaultDaemonClient;
   coreUrl: string;
-  session: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
   signerKeyFingerprintHex: string;
   homeId: string;
   deviceSigningKeyFingerprintHex: string;
@@ -1189,6 +1435,7 @@ async function runPublishCheckpointCeremony(input: {
     '/api/home/reader-key-freshness-checkpoints',
     record,
     input.session,
+    input.linkClient,
   ) as Record<string, unknown>;
 
   // Returned so a caller can see exactly what it published, and when it stops
@@ -1210,7 +1457,8 @@ async function runPublishCheckpointCeremony(input: {
 async function runIssueMembershipCeremony(input: {
   client: PicoVaultDaemonClient;
   coreUrl: string;
-  session: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
   signerKeyFingerprintHex: string;
   homeId: string;
   subjectPicoIdentityFingerprintHex: string;
@@ -1266,6 +1514,7 @@ async function runIssueMembershipCeremony(input: {
     '/api/home/memberships',
     issuerStatement,
     input.session,
+    input.linkClient,
   ) as Record<string, unknown>;
 
   return { accepted, issuerStatement };

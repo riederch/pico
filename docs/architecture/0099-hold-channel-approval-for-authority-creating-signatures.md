@@ -137,6 +137,7 @@ Exempt, as a closed list of operational high-frequency families:
 | `pico.id.reader-key-freshness.v1` | periodic ADR 0085 checkpoints |
 | `pico.mem.reader-sync-manifest.v1` | one per ADR 0089 batch |
 | `pico.mem.reader-item.v1` | one per memory item written |
+| `pico.link.direct.request.v1` | authenticates one short-lived ADR 0107 operation; the semantic record keeps its own approval |
 
 Everything else the Vault can sign is gated: key records, delegations,
 revocations, claim and founding records, reader-custody domains, reader and
@@ -178,7 +179,7 @@ safe to leave open.
   BLAKE2b-256 signature-input digest, echoed in the decision and verified;
   one approval authorizes exactly one signature; at most one pending
   approval daemon-wide; no window, batch or remembered approval exists.
-- **P3 — Gating policy: Done.** Closed exempt list of four operational
+- **P3 — Gating policy: Done.** Closed exempt list of five operational
   families; everything else signable is gated; unknown or newly added
   families default to gated.
 - **P4 — Fail-closed behaviour: Done.** No-watcher refusal, timeout denial,

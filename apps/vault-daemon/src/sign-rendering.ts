@@ -8,6 +8,7 @@ import {
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoLinkDirectRequestSignatureInput,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
@@ -20,6 +21,7 @@ import {
   picoHomeSignatureInputLabels,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
+  picoLinkDirectRequestSignatureInputLabel,
   picoReaderCustodyCanonicalLabels,
   picoShareCanonicalLabels,
   type PicoHomeClaimSignatureInput,
@@ -80,6 +82,8 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
     buildPicoIdentityRevocationSignatureInput(f as never),
   [picoIdentityReaderKeyFreshnessSignatureInputLabel]: (f) =>
     buildPicoIdentityReaderKeyFreshnessSignatureInput(f as never),
+  [picoLinkDirectRequestSignatureInputLabel]: (f) =>
+    buildPicoLinkDirectRequestSignatureInput(f as never),
   [picoHomeSignatureInputLabels.claim]: (f) =>
     buildPicoHomeClaimSignatureInput(f as never),
   [picoHomeSignatureInputLabels.founding]: (f) =>

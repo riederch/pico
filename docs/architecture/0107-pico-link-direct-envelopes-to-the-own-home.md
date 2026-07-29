@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; partially implemented (D1 and D2 done). This is the first runtime slice
+Accepted; partially implemented (D1-D3 done). This is the first runtime slice
 of Pico Link (ADR 0028) and the answer to ADR 0105 B5: an authenticated
 channel between a person's device and their own Pico Home that is not the
 deliberately closed direct port.
@@ -184,17 +184,59 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
     "these bytes do not parse" are different answers to whoever holds the
     reply key.
 
-  Deliberately not served yet: `home.claim.submit` and `home.authority.submit`
-  are declared and refused with `operation_not_available_over_link`. Serving
-  them needs the existing local route handlers split so link and route share
-  one implementation; growing a second write path would be the faster way and
-  the wrong one. A signed refusal is honest, a duplicate write path would not
-  be. `home.setup.read` reads through the same helper the local route uses,
-  so the two cannot drift.
-- **D3 - Client side: Open.** The ADR 0103 ceremonies gain a link mode:
-  host-fingerprint pinning replaces trust in the URL, the signed request
-  replaces the bearer session. The local session path stays for local
-  diagnostics.
+  `home.setup.read` reads through the same helper the local route uses.
+  D3 subsequently split the claim, membership, freshness, reader-custody
+  domain, reader-grant and KEK-rotation handlers so their local routes and
+  Link operations call one implementation rather than growing parallel write
+  paths.
+- **D3 - Client side: Done.** `pico-vault ceremony` has an explicit
+  `--transport link` mode for the claim and Home-authority ceremonies. The
+  local session path stays the default for local diagnostics, while Link mode
+  rejects a supplied Foundation session rather than silently carrying or
+  ignoring it.
+
+  `apps/vault-daemon/src/link-direct-client.ts` validates the host signing and
+  key-agreement public keys against the out-of-band fingerprints before IPC or
+  network access. The setup log now carries the public bundle beside those
+  fingerprints because a sealed request needs the agreement public key; the
+  fingerprints remain the identity pins, and the URL remains reachability
+  only. Each request gets a fresh X25519 reply key, a 30-second lifetime and a
+  random request id. Its arguments digest and canonical request fields are
+  rebuilt by the Vault daemon and signed by the unlocked delegated
+  `device_signing` key. The response is size-bounded while streaming, opened
+  only with that ephemeral private key, and accepted only after request,
+  operation, host, result-digest and host-signature binding all hold.
+
+  The outer `pico.link.direct.request.v1` signature is the fifth closed ADR
+  0099 exemption: it authenticates one short-lived operation and creates no
+  authority that outlives the call. The semantic record inside an authority
+  submission remains approval-gated exactly as before. The Vault therefore
+  permits this label only for `device_signing`; an identity root cannot sign
+  it.
+
+  `home.claim.submit` now runs the same two-stage claim implementation as the
+  local route. `home.authority.submit` exposes a closed resource set for the
+  ADR 0103 ceremonies (membership, reader-key freshness, reader-custody
+  domain, reader grant and KEK rotation), and `home.authority.list` exposes
+  only the narrow Home claim state and reader-custody domain view. It does not
+  tunnel `/api/system/status` or any other diagnostic response. Both authority
+  operations require the verified Link principal to be the current Home Host
+  Pico on top of the intake's membership and delegation check.
+
+  This also preserves one bootstrap dependency honestly:
+  `open-identity-session` remains local, because it is currently the only path
+  that records the delegation and agreement-key evidence against which an
+  authority Link principal is verified. Claim works before that evidence by
+  design; post-claim authority operations do not. Removing the dependency
+  needs another explicitly named Link operation and threat analysis, not an
+  authorization bypass inside this slice.
+
+  Real-process tests found a Home through three Link requests without a
+  bearer session and, after registering a delegated device locally, created a
+  reader-custody domain through the authenticated list and submit operations.
+  Unit coverage pins host-key mismatch, per-request reply keys, response
+  binding, carrier refusal and response-size limits. These tests do not claim
+  D4: the Foundation port is still reachable directly in the test process.
 - **D4 - End-to-end test: Open.** Two real processes, the
   `claim-ceremony.test.ts` pattern: found a Home and run a ceremony through
   the link intake with the direct port closed to everything else.

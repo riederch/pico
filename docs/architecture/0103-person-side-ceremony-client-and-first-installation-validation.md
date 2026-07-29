@@ -199,7 +199,7 @@ today, so that is the path the first installation validates.
   hand out its own key and receive a claim sealed to itself. Founding costs
   exactly two approvals, because the claim and the acceptance each create
   authority and neither is on the ADR 0099 exempt list.
-- **C2 - Domain ceremony group: Partly done.** `pico-vault ceremony
+- **C2 - Domain ceremony group: Done.** `pico-vault ceremony
   create-domain` drives the existing daemon ceremony and POSTs the signed
   record to the existing route; no new Foundation route was added. It needs
   two unlocked keys - the identity root signs, and the owner's

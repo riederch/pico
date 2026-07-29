@@ -88,11 +88,12 @@ this product form rather than a refinement of it.
   the daemon's consumer.
 - **B3 - Avatar interaction: Open.** The surface itself, with channel
   detection and graceful degradation to what the device has.
-- **B4 - Approval rendering: Open.** ADR 0099's rendered statement, now a
-  precondition rather than future work.
-- **B5 - Transport: Open.** An authenticated channel between the app and a
-  Pico Home. Pico Link is the intended answer and does not exist; the
-  current direct-port workaround is not a product path.
+- **B4 - Approval rendering: Done.** ADR 0106 makes the daemon build both
+  canonical signature input and human statement from the same fields.
+- **B5 - Transport: Partially implemented.** ADR 0107 D1-D3 supplies the
+  pinned, signed and sealed direct client plus the single Foundation intake
+  without bearer sessions. The restricted-port proof, threat ledger and
+  relay product path remain open.
 
 ## Non-goals
 
