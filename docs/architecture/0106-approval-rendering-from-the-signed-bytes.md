@@ -2,8 +2,11 @@
 
 ## Status
 
-Accepted; not implemented. ADR 0105 B4 named this a precondition for the
-avatar product form, and this decides how it works.
+Accepted and implemented. ADR 0105 B4 named this a precondition for the
+avatar product form; the `sign` family now takes a label and fields, the
+daemon rebuilds the canonical bytes and renders the statement from them,
+and every caller - the CLI ceremonies, the ADR 0100 signer adapter and the
+`@pico/vault` ceremony functions behind it - has been migrated.
 
 ## Context
 
@@ -76,18 +79,34 @@ list.
 
 ## Gates
 
-- **R1 - Structured sign: Open.** `sign` accepts `{label, fields}`, rebuilds
-  the canonical bytes and refuses anything it cannot build.
-- **R2 - Renderers: Open.** One statement per approvable label, derived from
-  the rebuilt fields. Plain sentences naming what changes and for whom.
-- **R3 - Callers migrated: Open.** `claim-home`, `delegate-device`,
-  `publish-checkpoint` and `issue-membership` currently send raw bytes.
-- **R4 - Ceremony summaries: Open.** The daemon-side ceremonies already hold
-  their own parameters, so their summary can come from those rather than
-  from the request - the same fix, one layer up.
-- **R5 - Tests: Open.** Including the case that matters: a request whose
-  claimed fields do not produce the bytes it wants signed must fail, and no
-  approval may be raised for it.
+- **R1 - Structured sign: Done.** `sign` accepts `{label, fields}`. The
+  daemon rebuilds with the shared builders and refuses an unknown label
+  (`unknown_signature_input_label`), fields the builder rejects
+  (`invalid_signature_input_fields`) and a gated label without a renderer
+  (`unrenderable_signature_input`), each without raising an approval.
+- **R2 - Renderers: Done.** `sign-rendering.ts` holds one builder entry per
+  signable label and one statement per gated label - fourteen sentences
+  naming what changes and for whom, with fingerprints shortened for the eye
+  while the digest keeps binding the exact bytes.
+- **R3 - Callers migrated: Done.** All CLI ceremonies send fields. The ADR
+  0100 signer adapter turned out to be a fifth caller this ADR had not
+  named: the `@pico/vault` ceremony functions sign through it, so
+  `PicoVaultDetachedSigner.sign` now requires a `PicoVaultSignatureContext`
+  and every ceremony function supplies the exact builder input it signs. A
+  local `PicoVaultSession` accepts and deliberately ignores the context -
+  in-process, the renderer and the signer are the same process.
+- **R4 - Ceremony statements: Done.** The three daemon-side ceremony
+  families now carry a rendered statement built from the same validated
+  parameters the ceremony executes with. The scalar summary stays as
+  diagnostics; the statement is what a person is shown.
+- **R5 - Tests: Done.** Fields the builder rejects fail with no approval
+  raised and no `approval_requested` audit line. The adapter verifies the
+  returned signature against its caller's own bytes, so claimed fields that
+  do not describe those bytes fail as `signature_context_mismatch` instead
+  of producing a record whose signature quietly covers something else; a
+  context-less call fails as `signature_context_required`. The statement
+  test pins the rendered sentence and checks the digest against
+  independently built bytes.
 
 ## Non-goals
 

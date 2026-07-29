@@ -116,23 +116,41 @@ async function holdUnlock(daemon: PicoVaultDaemon): Promise<PicoVaultDaemonClien
 
 /**
  * `pico.id.keyrecord.v1` is signable by an identity key and is not on the
- * exempt list, so it is the smallest genuinely gated input available.
+ * exempt list, so it is the smallest genuinely gated record available. ADR
+ * 0106: requests carry the fields; the byte form exists here only so tests
+ * can check the digest binding against independently built bytes.
  */
-function gatedInputHex(): string {
-  return Buffer.from(buildPicoIdentityKeyRecordSignatureInput({
+function gatedFields(): Record<string, unknown> {
+  return {
     suite: picoIdentitySuite,
     keyRole: 'pico_identity',
     publicKeyHex: identityFixture.publicKeyHex,
-  })).toString('hex');
+  };
 }
 
-function exemptInputHex(): string {
-  return Buffer.from(buildPicoIdentityPossessionSignatureInput({
+function gatedSign(): { label: string; fields: Record<string, unknown> } {
+  return { label: 'pico.id.keyrecord.v1', fields: gatedFields() };
+}
+
+function gatedInputHex(): string {
+  return Buffer.from(buildPicoIdentityKeyRecordSignatureInput(gatedFields() as never)).toString('hex');
+}
+
+function exemptFields(): Record<string, unknown> {
+  return {
     suite: picoIdentitySuite,
     subjectKeyFingerprintHex: identityFixture.keyFingerprintHex,
     verifierNonceHex: '11'.repeat(32),
     verifierContext: 'pico.test.approval',
-  })).toString('hex');
+  };
+}
+
+function exemptSign(): { label: string; fields: Record<string, unknown> } {
+  return { label: 'pico.id.possession.v1', fields: exemptFields() };
+}
+
+function exemptInputHex(): string {
+  return Buffer.from(buildPicoIdentityPossessionSignatureInput(exemptFields() as never)).toString('hex');
 }
 
 function digestOfHex(inputHex: string): string {
@@ -297,7 +315,7 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     await holdUnlock(daemon);
     const consumer = await openClient(daemon);
 
-    const signed = await consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: exemptInputHex() });
+    const signed = await consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...exemptSign() });
     expect(signed.keyRole).toBe('pico_identity');
     expect(audit.join('')).not.toContain('approval_requested');
   }, 30_000);
@@ -308,16 +326,61 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     const consumer = await openClient(daemon);
     const { waiting } = await startApprovalWait(hold, audit);
 
-    const unknown = Buffer.alloc(4 + 13);
-    unknown.writeUInt32BE(13, 0);
-    unknown.write('pico.evil.v1', 4, 'ascii');
     await expect(consumer.sign({
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: unknown.toString('hex'),
+      label: 'pico.evil.v1',
+      fields: {},
     })).rejects.toThrow('unknown_signature_input_label');
 
     expect(audit.join('')).not.toContain('approval_requested');
     expect(await waiting).toBeNull();
+  }, 30_000);
+
+  it('refuses fields the builder rejects, before any approval exists (ADR 0106 R5)', async () => {
+    const { daemon, audit } = await startDaemon({ approvalWaitMs: 300 });
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+    const { waiting } = await startApprovalWait(hold, audit);
+
+    // A known, gated label with fields its builder throws on: no bytes exist,
+    // so nothing can be signed and nobody may be asked.
+    await expect(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      label: 'pico.id.keyrecord.v1',
+      fields: { suite: 'pico.suite.id.v1', keyRole: 'pico_identity' },
+    })).rejects.toThrow('invalid_signature_input_fields');
+
+    expect(audit.join('')).not.toContain('approval_requested');
+    expect(await waiting).toBeNull();
+  }, 30_000);
+
+  it('renders the approval statement from the fields the signature covers', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+    const { waiting } = await startApprovalWait(hold, audit);
+
+    const signing = settle(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      ...gatedSign(),
+    }));
+    const pending = await waiting;
+    expect(pending).not.toBeNull();
+
+    // The statement is the daemon's rendering of the same fields the bytes
+    // were built from - and the digest still binds those exact bytes, built
+    // here independently.
+    expect(pending!.statement).toBe(
+      `Certify a pico_identity key record (${identityFixture.publicKeyHex.slice(0, 12)}\u2026).`,
+    );
+    expect(pending!.signatureInputDigestHex).toBe(digestOfHex(gatedInputHex()));
+
+    await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: false,
+    });
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
   }, 30_000);
 });
 
@@ -329,7 +392,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     const { waiting } = await startApprovalWait(hold, audit);
 
     const inputHex = gatedInputHex();
-    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: inputHex }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...gatedSign() }));
     const pending = await waiting;
     expect(pending).not.toBeNull();
     expect(pending!.label).toBe('pico.id.keyrecord.v1');
@@ -360,7 +423,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     const consumer = await openClient(daemon);
 
     const { waiting } = await startApprovalWait(hold, audit);
-    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...gatedSign() }));
     const pending = await waiting;
 
     await expect(hold.approvalDecide({
@@ -383,7 +446,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     const consumer = await openClient(daemon);
 
     const { waiting } = await startApprovalWait(hold, audit);
-    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...gatedSign() }));
     await waiting;
 
     expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
@@ -397,12 +460,12 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     const second = await openClient(daemon);
 
     const { waiting } = await startApprovalWait(hold, audit);
-    const signing = settle(first.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
+    const signing = settle(first.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...gatedSign() }));
     const pending = await waiting;
 
     await expect(second.sign({
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: gatedInputHex(),
+      ...gatedSign(),
     })).rejects.toThrow('approval_pending');
 
     await hold.approvalDecide({
@@ -422,7 +485,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
 
     await expect(consumer.sign({
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: gatedInputHex(),
+      ...gatedSign(),
     })).rejects.toThrow('approval_unavailable');
     expect(audit.join('')).toContain('approval_unavailable');
   }, 30_000);
@@ -435,7 +498,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
     await expect(consumer.approvalWait()).rejects.toThrow('approval_wait_forbidden');
 
     const { waiting } = await startApprovalWait(hold, audit);
-    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...gatedSign() }));
     const pending = await waiting;
 
     // A third connection: the requesting one already has its parked signature
@@ -462,7 +525,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
     const consumer = await openClient(daemon);
 
     const { waiting } = await startApprovalWait(hold, audit);
-    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
+    const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...gatedSign() }));
     await waiting;
 
     await hold.close();
@@ -487,7 +550,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
       family: picoVaultDaemonRequestFamilies.sign,
       requestId: 'r2',
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: gatedInputHex(),
+      ...gatedSign(),
     });
     expect(await waiting).not.toBeNull();
 

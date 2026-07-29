@@ -64,7 +64,7 @@ export const PICO_VAULT_DAEMON_READER_ACCESS_LEASE_CEILING_MS = 5 * 60 * 1_000;
 export const PICO_VAULT_DAEMON_APPROVAL_WINDOW_MS = 60 * 1_000;
 export const PICO_VAULT_DAEMON_APPROVAL_WAIT_MS = 30 * 1_000;
 export const PICO_VAULT_DAEMON_APPROVAL_ID_HEX_CHARS = 32;
-export const MAX_PICO_VAULT_DAEMON_SIGNATURE_INPUT_HEX_CHARS = 64 * 1024;
+export const MAX_PICO_VAULT_DAEMON_SIGN_LABEL_CHARS = 128;
 export const MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS = 1024;
 export const MAX_PICO_VAULT_DAEMON_REQUEST_ID_CHARS = 64;
 
@@ -109,7 +109,15 @@ export interface PicoVaultDaemonSignRequest {
    * hazard, so the request names the key it wants.
    */
   keyFingerprintHex: string;
-  signatureInputHex: string;
+  /**
+   * ADR 0106: the request names the canonical family and carries the record's
+   * fields; it never carries bytes. The daemon rebuilds the canonical bytes
+   * with the same builder every verifier uses and renders the approval
+   * statement from the same fields, so display and signature cannot diverge -
+   * and the daemon never signs bytes it did not construct.
+   */
+  label: string;
+  fields: Record<string, unknown>;
 }
 
 export interface PicoVaultDaemonReaderAccessOpenRequest {
@@ -326,6 +334,11 @@ export interface PicoVaultDaemonApprovalRequestDescriptor {
   keyRole: PicoVaultPersonKeyRole;
   keyFingerprintHex: string;
   signatureInputDigestHex: string;
+  /**
+   * ADR 0106: rendered by the daemon from the same fields the signature
+   * covers - never echoed from the requester. This is what a person is shown.
+   */
+  statement: string;
   expiresInMs: number;
   /**
    * ADR 0101: verbatim scalar echo from a ceremony request (already covered
@@ -484,13 +497,16 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       };
     }
     case picoVaultDaemonRequestFamilies.sign: {
-      assertExactKeys(parsed, ['family', 'requestId', 'keyFingerprintHex', 'signatureInputHex']);
-      const signatureInputHex = parsed.signatureInputHex;
+      assertExactKeys(parsed, ['family', 'requestId', 'keyFingerprintHex', 'label', 'fields']);
+      const label = parsed.label;
+      const fields = parsed.fields;
       if (
-        typeof signatureInputHex !== 'string'
-        || signatureInputHex.length === 0
-        || signatureInputHex.length > MAX_PICO_VAULT_DAEMON_SIGNATURE_INPUT_HEX_CHARS
-        || !lowercaseHexPattern.test(signatureInputHex)
+        typeof label !== 'string'
+        || label.length === 0
+        || label.length > MAX_PICO_VAULT_DAEMON_SIGN_LABEL_CHARS
+        || typeof fields !== 'object'
+        || fields === null
+        || Array.isArray(fields)
       ) {
         throw new Error('invalid_request');
       }
@@ -498,7 +514,8 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         family: picoVaultDaemonRequestFamilies.sign,
         requestId,
         keyFingerprintHex: requireFingerprintHex(parsed, 'keyFingerprintHex'),
-        signatureInputHex,
+        label,
+        fields: fields as Record<string, unknown>,
       };
     }
     case picoVaultDaemonRequestFamilies.readerAccessOpen: {

@@ -10,15 +10,11 @@ import {
   type VaultSodium,
 } from '@pico/vault';
 import {
-  buildPicoHomeClaimSignatureInput,
-  buildPicoHomeFoundingSignatureInput,
-  buildPicoIdentityKeyRecordSignatureInput,
-  buildPicoHomeMembershipSignatureInput,
-  buildPicoIdentityDelegationSignatureInput,
-  buildPicoIdentityPossessionSignatureInput,
-  buildPicoIdentityReaderKeyFreshnessSignatureInput,
   picoHomeMembershipCredentialSchema,
+  picoHomeSignatureInputLabels,
   picoIdentityDelegationScopes,
+  picoIdentityReaderKeyFreshnessSignatureInputLabel,
+  picoIdentitySignatureInputLabels,
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
@@ -73,7 +69,7 @@ const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
   status: ['vault-home'],
   unlock: ['vault-home', 'role', 'fingerprint'],
   lock: ['vault-home'],
-  sign: ['vault-home', 'fingerprint', 'input-hex'],
+  sign: ['vault-home', 'fingerprint', 'label', 'fields-json'],
   ceremony: [],
 };
 
@@ -370,18 +366,16 @@ async function runApprovalLoop(client: PicoVaultDaemonClient): Promise<void> {
     }
 
     const pending = waited.pending;
-    const summaryLines = pending.summary === undefined
-      ? ''
-      : Object.entries(pending.summary)
-        .map(([key, value]) => `  ${key.padEnd(11)} ${String(value)}\n`)
-        .join('');
     const isCeremony = pending.label.startsWith('pico.vault.daemon.ceremony.');
+    // ADR 0106: the statement is rendered by the daemon from the same fields
+    // the signature covers. Family, key and digest stay visible underneath -
+    // a person who can check them still may; nobody has to.
     process.stderr.write(
       `\nApproval requested\n`
+      + `\n  ${pending.statement}\n\n`
       + `  family      ${pending.label}\n`
       + `  key         ${pending.keyRole} ${pending.keyFingerprintHex}\n`
       + `  digest      ${pending.signatureInputDigestHex}\n`
-      + summaryLines
       + (isCeremony
         ? `  authorizes  exactly one ceremony over exactly this request\n`
         : `  authorizes  exactly one signature over these bytes\n`),
@@ -484,14 +478,17 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
       return;
     }
     case 'sign': {
-      const signatureInputHex = invocation.flags.get('input-hex');
+      const label = invocation.flags.get('label');
+      const fieldsJson = invocation.flags.get('fields-json');
       const keyFingerprintHex = invocation.flags.get('fingerprint');
-      if (signatureInputHex === undefined || keyFingerprintHex === undefined) {
+      if (label === undefined || fieldsJson === undefined || keyFingerprintHex === undefined) {
         throw new Error('invalid_cli_flag');
       }
+      const fields = JSON.parse(fieldsJson) as Record<string, unknown>;
       const signed = await withClient(vaultHomePath, async (client) => await client.sign({
         keyFingerprintHex,
-        signatureInputHex,
+        label,
+        fields,
       }));
       process.stdout.write(`${JSON.stringify(signed)}\n`);
       return;
@@ -797,7 +794,8 @@ async function runClaimHomeCeremony(input: {
   process.stderr.write('Approve the Home claim on the terminal holding the unlock.\n');
   const claimSignature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    signatureInputHex: Buffer.from(buildPicoHomeClaimSignatureInput(claim)).toString('hex'),
+    label: picoHomeSignatureInputLabels.claim,
+    fields: claim as unknown as Record<string, unknown>,
   });
 
   const sealedClaimPayload = {
@@ -818,9 +816,8 @@ async function runClaimHomeCeremony(input: {
   process.stderr.write('Claim accepted. Approve the founding acceptance to complete it.\n');
   const foundingSignature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    signatureInputHex: Buffer.from(
-      buildPicoHomeFoundingSignatureInput(pending.pendingClaim.founding),
-    ).toString('hex'),
+    label: picoHomeSignatureInputLabels.founding,
+    fields: pending.pendingClaim.founding as unknown as Record<string, unknown>,
   });
 
   return await foundationRequest(input.coreUrl, '/api/home/claim', {
@@ -1172,9 +1169,8 @@ async function runPublishCheckpointCeremony(input: {
 
   const signature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    signatureInputHex: Buffer.from(
-      buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint),
-    ).toString('hex'),
+    label: picoIdentityReaderKeyFreshnessSignatureInputLabel,
+    fields: checkpoint as unknown as Record<string, unknown>,
   });
 
   const record = {
@@ -1250,9 +1246,8 @@ async function runIssueMembershipCeremony(input: {
   process.stderr.write('Approve the membership on the terminal holding the identity unlock.\n');
   const signature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    signatureInputHex: Buffer.from(
-      buildPicoHomeMembershipSignatureInput(membership),
-    ).toString('hex'),
+    label: picoHomeSignatureInputLabels.membership,
+    fields: membership as unknown as Record<string, unknown>,
   });
 
   const issuerStatement = {
@@ -1321,9 +1316,8 @@ async function runDelegateDeviceCeremony(input: {
   process.stderr.write('Approve the device delegation on the terminal holding the identity unlock.\n');
   const signature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    signatureInputHex: Buffer.from(
-      buildPicoIdentityDelegationSignatureInput(record),
-    ).toString('hex'),
+    label: picoIdentitySignatureInputLabels.delegation,
+    fields: record as unknown as Record<string, unknown>,
   });
 
   return { record, signatureHex: signature.signatureHex };
@@ -1375,14 +1369,16 @@ async function runOpenIdentitySessionCeremony(input: {
     {},
   ) as { challengeId: string; verifierNonceHex: string; verifierContext: string };
 
+  const possession = {
+    suite: picoIdentitySuite,
+    subjectKeyFingerprintHex: signing.keyFingerprintHex,
+    verifierNonceHex: challenge.verifierNonceHex,
+    verifierContext: challenge.verifierContext,
+  };
   const possessionSignature = await input.client.sign({
     keyFingerprintHex: signing.keyFingerprintHex,
-    signatureInputHex: Buffer.from(buildPicoIdentityPossessionSignatureInput({
-      suite: picoIdentitySuite,
-      subjectKeyFingerprintHex: signing.keyFingerprintHex,
-      verifierNonceHex: challenge.verifierNonceHex,
-      verifierContext: challenge.verifierContext,
-    })).toString('hex'),
+    label: picoIdentitySignatureInputLabels.possession,
+    fields: possession,
   });
 
   const keyRecord = (session: { keyRole: string; publicKeyHex: string }) => ({

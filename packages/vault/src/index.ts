@@ -126,9 +126,23 @@ export interface PicoVaultSessionUseOptions {
  * export - a detached signer signs, and the V4 label discipline is enforced by
  * whichever implementation stands behind it.
  */
+/**
+ * ADR 0106: what a signature is *of*, alongside the bytes. `label` names the
+ * canonical family and `fields` is the exact builder input the bytes were
+ * built from. An in-process `PicoVaultSession` ignores it - locally, the
+ * process that renders is the process that signs, so there is nothing to
+ * bind. A remote signer (the Vault daemon) requires it, rebuilds the bytes
+ * from it with the same builder, and shows the person a statement derived
+ * from the same fields the signature covers.
+ */
+export interface PicoVaultSignatureContext {
+  label: string;
+  fields: object;
+}
+
 export interface PicoVaultDetachedSigner {
   metadata(): PicoVaultSessionMetadata;
-  sign(signatureInput: Uint8Array): Uint8Array;
+  sign(signatureInput: Uint8Array, context: PicoVaultSignatureContext): Uint8Array;
 }
 
 export interface PicoVaultPathSeparationInput {
@@ -483,7 +497,18 @@ export class PicoVaultSession {
     }
   }
 
-  public sign(signatureInput: Uint8Array, options: PicoVaultSessionUseOptions = {}): Uint8Array {
+  /**
+   * Accepts either use-options or an ADR 0106 signature context. A local
+   * session deliberately ignores the context: the process that rendered the
+   * fields is the process calling sign, so there is no display boundary to
+   * bind. The context exists for remote signers, where there is.
+   */
+  public sign(
+    signatureInput: Uint8Array,
+    contextOrOptions: PicoVaultSignatureContext | PicoVaultSessionUseOptions = {},
+  ): Uint8Array {
+    const options: PicoVaultSessionUseOptions =
+      'label' in contextOrOptions ? {} : contextOrOptions;
     assertOptionalTimestampMs(options.nowMs);
     this.#assertUnlocked(options.nowMs ?? Date.now());
     if (this.#metadata.keyRole === 'device_key_agreement') {
@@ -613,7 +638,10 @@ export function createPicoIdentityReaderKeyFreshnessCheckpoint(
     checkpoint,
     issuerIdentityKeyRecord: keyRecordFromMetadata(metadata),
     issuerSignatureHex: bytesToHex(
-      input.identitySession.sign(signatureInput),
+      input.identitySession.sign(signatureInput, {
+        label: picoIdentityReaderKeyFreshnessSignatureInputLabel,
+        fields: checkpoint,
+      }),
     ),
   };
 }
@@ -799,7 +827,10 @@ export function createPicoReaderCustodySyncBatch(
     manifest,
     ownerIdentityKeyRecord,
     ownerSignatureHex: bytesToHex(
-      input.ownerIdentitySession.sign(manifestInput),
+      input.ownerIdentitySession.sign(manifestInput, {
+        label: picoReaderCustodyCanonicalLabels.syncManifest,
+        fields: manifest,
+      }),
     ),
     domainRecord: input.domainRecord,
     readerGrantRecord: input.readerGrantRecord,
@@ -995,7 +1026,10 @@ export function createPicoReaderCustodyDomain(
     lifecycleOrder: input.lifecycleOrder,
   };
   const domainSignatureInput = buildPicoReaderCustodyDomainSignatureInput(domain);
-  const ownerSignatureHex = bytesToHex(input.ownerIdentitySession.sign(domainSignatureInput));
+  const ownerSignatureHex = bytesToHex(input.ownerIdentitySession.sign(domainSignatureInput, {
+    label: picoReaderCustodyCanonicalLabels.domain,
+    fields: domain,
+  }));
   const kek = sodium.randombytes_buf(32);
   const wrapPayload = buildPicoShareWrapPayload({
     suite: picoShareSuite,
@@ -1027,7 +1061,10 @@ export function createPicoReaderCustodyDomain(
       sealedWrapHex: bytesToHex(sealedWrap),
       issuerIdentityKeyRecord: keyRecordFromMetadata(ownerMetadata),
       issuerSignatureHex: bytesToHex(
-        input.ownerIdentitySession.sign(buildPicoShareEnvelopeSignatureInput(envelope)),
+        input.ownerIdentitySession.sign(buildPicoShareEnvelopeSignatureInput(envelope), {
+          label: picoShareCanonicalLabels.envelope,
+          fields: envelope,
+        }),
       ),
       createdAt: input.receivedAt ?? input.authorizedAt,
     };
@@ -1153,6 +1190,7 @@ export function createPicoReaderCustodyReaderGrant(
     ownerSignatureHex: bytesToHex(
       input.ownerIdentitySession.sign(
         buildPicoReaderCustodyReaderGrantSignatureInput(grant),
+        { label: picoReaderCustodyCanonicalLabels.readerGrant, fields: grant },
       ),
     ),
     receivedAt: input.receivedAt ?? input.validFrom,
@@ -1201,6 +1239,7 @@ export function revokePicoReaderCustodyReaderGrant(
     ownerSignatureHex: bytesToHex(
       input.ownerIdentitySession.sign(
         buildPicoReaderCustodyReaderGrantLifecycleSignatureInput(lifecycle),
+        { label: picoReaderCustodyCanonicalLabels.readerGrantLifecycle, fields: lifecycle },
       ),
     ),
     receivedAt: input.receivedAt ?? input.changedAt,
@@ -1340,6 +1379,7 @@ export function rotatePicoReaderCustodyDomain(
       ownerSignatureHex: bytesToHex(
         input.ownerIdentitySession.sign(
           buildPicoReaderCustodyKekRotationSignatureInput(rotation),
+          { label: picoReaderCustodyCanonicalLabels.kekRotation, fields: rotation },
         ),
       ),
       receivedAt: input.receivedAt ?? input.rotatedAt,
@@ -1402,6 +1442,7 @@ export function createPicoReaderCustodyWriterGrant(
     ownerSignatureHex: bytesToHex(
       input.ownerIdentitySession.sign(
         buildPicoReaderCustodyWriterGrantSignatureInput(grant),
+        { label: picoReaderCustodyCanonicalLabels.writerGrant, fields: grant },
       ),
     ),
     receivedAt: input.receivedAt ?? input.validFrom,
@@ -1457,6 +1498,7 @@ export function revokePicoReaderCustodyWriterGrant(
     ownerSignatureHex: bytesToHex(
       input.ownerIdentitySession.sign(
         buildPicoReaderCustodyWriterGrantLifecycleSignatureInput(lifecycle),
+        { label: picoReaderCustodyCanonicalLabels.writerGrantLifecycle, fields: lifecycle },
       ),
     ),
     receivedAt: input.receivedAt ?? input.changedAt,
@@ -1585,6 +1627,7 @@ export function encryptPicoReaderCustodyItem(
       writerSignatureHex: bytesToHex(
         input.writerSigningSession.sign(
           buildPicoReaderCustodyItemSignatureInput(item),
+          { label: picoReaderCustodyCanonicalLabels.item, fields: item },
         ),
       ),
       receivedAt: input.receivedAt ?? input.createdAt,
@@ -2294,6 +2337,7 @@ function createPicoReaderCustodyEnvelope(
       issuerSignatureHex: bytesToHex(
         input.ownerIdentitySession.sign(
           buildPicoShareEnvelopeSignatureInput(envelope),
+          { label: picoShareCanonicalLabels.envelope, fields: envelope },
         ),
       ),
       createdAt: input.createdAt,

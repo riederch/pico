@@ -1,4 +1,5 @@
 import { picoIdentitySuite } from '@pico/protocol';
+import sodium from 'libsodium-wrappers-sumo';
 import type { PicoVaultDetachedSigner, PicoVaultSessionMetadata } from '@pico/vault';
 import {
   picoVaultDaemonRequestFamilies,
@@ -87,11 +88,19 @@ export function createPicoVaultDaemonCeremonySigner(
 
   return {
     metadata: () => ({ ...metadata }),
-    sign: (signatureInput) => {
+    sign: (signatureInput, context) => {
+      // ADR 0106: the wire carries the label and the fields, never bytes. The
+      // daemon rebuilds the canonical bytes and renders the person's statement
+      // from the same fields, so nothing this process claims can diverge from
+      // what the key signs.
+      if (context === undefined || typeof context.label !== 'string') {
+        throw new Error('signature_context_required');
+      }
       const result = transport.request({
         family: picoVaultDaemonRequestFamilies.sign,
         keyFingerprintHex: metadata.keyFingerprintHex,
-        signatureInputHex: Buffer.from(signatureInput).toString('hex'),
+        label: context.label,
+        fields: context.fields as Record<string, unknown>,
       });
       // The echoed identity is rechecked per response: a signer created for
       // one key must never silently continue against another session.
@@ -102,7 +111,20 @@ export function createPicoVaultDaemonCeremonySigner(
       ) {
         throw new Error('ceremony_signer_key_mismatch');
       }
-      return Uint8Array.from(Buffer.from(result.signatureHex, 'hex'));
+      const signature = Uint8Array.from(Buffer.from(result.signatureHex, 'hex'));
+      // The daemon signed what it rebuilt from the fields. Verifying against
+      // the caller's own bytes closes the loop from the consumer side: if the
+      // fields did not describe these bytes, the signature does not match them
+      // and the ceremony fails here instead of producing a record whose
+      // signature quietly covers something else (ADR 0106 R5).
+      if (!sodium.crypto_sign_verify_detached(
+        signature,
+        signatureInput,
+        Uint8Array.from(Buffer.from(metadata.publicKeyHex, 'hex')),
+      )) {
+        throw new Error('signature_context_mismatch');
+      }
+      return signature;
     },
     close: () => {
       transport.close();

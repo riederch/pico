@@ -214,13 +214,21 @@ async function rawConnect(socketPath: string): Promise<RawConnection> {
   };
 }
 
-function possessionInput(): Uint8Array {
-  return buildPicoIdentityPossessionSignatureInput({
+function possessionFields(): Record<string, unknown> {
+  return {
     suite: picoIdentitySuite,
     subjectKeyFingerprintHex: identityFixture.keyFingerprintHex,
     verifierNonceHex: '11'.repeat(32),
     verifierContext: 'pico.test.vault-daemon',
-  });
+  };
+}
+
+function possessionSign(): { label: string; fields: Record<string, unknown> } {
+  return { label: 'pico.id.possession.v1', fields: possessionFields() };
+}
+
+function possessionInput(): Uint8Array {
+  return buildPicoIdentityPossessionSignatureInput(possessionFields() as never);
 }
 
 function canonicalElement(label: string): Buffer {
@@ -441,7 +449,7 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     }]);
 
     const input = possessionInput();
-    const signed = await consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: Buffer.from(input).toString('hex') });
+    const signed = await consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, ...possessionSign() });
     expect(sodium.crypto_sign_verify_detached(
       Uint8Array.from(Buffer.from(signed.signatureHex, 'hex')),
       input,
@@ -450,14 +458,15 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
 
     await expect(consumer.sign({
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: canonicalElement('pico.evil.v1').toString('hex'),
+      label: 'pico.evil.v1',
+      fields: {},
     })).rejects.toThrow('unknown_signature_input_label');
 
     await holder.close();
     await waitFor(async () => (await consumer.status()).locked);
     await expect(consumer.sign({
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: Buffer.from(input).toString('hex'),
+      ...possessionSign(),
     })).rejects.toThrow('vault_locked');
     expect(audit.join('')).toContain('hold_connection_closed');
   }, 30_000);
@@ -531,13 +540,13 @@ describe('Pico Vault daemon unlock lifecycle (ADR 0097 D4)', () => {
     expect(unlocked.keyRole).toBe('device_key_agreement');
     await expect(client.sign({
       keyFingerprintHex: readerFixture.keyFingerprintHex,
-      signatureInputHex: Buffer.from(possessionInput()).toString('hex'),
+      ...possessionSign(),
     })).rejects.toThrow('key_role_cannot_sign');
     // The identity keyfile exists but is not unlocked, and naming it must not
     // fall back to the agreement session that is.
     await expect(client.sign({
       keyFingerprintHex: identityFixture.keyFingerprintHex,
-      signatureInputHex: Buffer.from(possessionInput()).toString('hex'),
+      ...possessionSign(),
     })).rejects.toThrow('unknown_unlocked_key');
   });
 

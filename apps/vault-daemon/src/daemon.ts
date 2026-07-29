@@ -22,6 +22,10 @@ import type {
   PicoVaultPersonKeyRole,
 } from '@pico/protocol';
 import {
+  buildPicoVaultSignatureInputFromFields,
+  renderPicoVaultApprovalStatement,
+} from './sign-rendering.js';
+import {
   encodePicoVaultDaemonFrame,
   parsePicoVaultDaemonRequest,
   picoVaultDaemonProtocolVersion,
@@ -119,6 +123,8 @@ interface PendingApproval {
   keyRole: PicoVaultPersonKeyRole;
   keyFingerprintHex: string;
   signatureInputDigestHex: string;
+  /** ADR 0106: rendered by the daemon, never echoed from the requester. */
+  statement: string;
   summary?: Record<string, string | number>;
   consumerSocket: Socket;
   consumerRequestId: string;
@@ -511,6 +517,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       case picoVaultDaemonRequestFamilies.ceremonyCreateDomain: {
         this.#handleCeremony(socket, frame, request, {
           summary: { domainId: request.domainId, homeId: request.homeId },
+          statement: `Create encrypted domain ${request.domainId} in Home ${request.homeId}.`,
           execute: (session) => ({
             domainRecord: createPicoReaderCustodyDomain(this.#sodium, {
               ownerIdentitySession: session,
@@ -536,6 +543,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             remainingReaders: request.remainingReaderGrantRecords.length,
             rotationId: request.rotationId,
           },
+          statement: `Rotate the keys of domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')}; ${request.remainingReaderGrantRecords.length} reader(s) keep access.`,
           execute: (session) => ({
             rotationRecord: rotatePicoReaderCustodyDomain(this.#sodium, {
               ownerIdentitySession: session,
@@ -562,6 +570,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             accessMode: request.accessMode,
             historicalVersions: request.rotationRecords.length,
           },
+          statement: `Grant reader ${request.readerIdentityKeyFingerprintHex.slice(0, 12)}… access to domain ${String((request.domainRecord as { domain?: { domainId?: unknown } }).domain?.domainId ?? '')} (${request.accessMode}, ${request.rotationRecords.length} historical version(s)) until ${request.validUntil}.`,
           requires: [{
             keyFingerprintHex: request.agreementKeyFingerprintHex,
             keyRole: 'device_key_agreement',
@@ -633,21 +642,28 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'key_role_cannot_sign');
       return;
     }
-    const signatureInput = Uint8Array.from(Buffer.from(request.signatureInputHex, 'hex'));
 
-    // Classification only. The Vault still enforces its own role-scoped label
-    // set when it signs, so a disagreement here can refuse but never widen.
-    // Refusing an unsignable label here matters for approval: the person must
-    // never be asked to decide on bytes that would be rejected anyway.
-    let label: string;
-    try {
-      label = firstCanonicalElementAscii(signatureInput);
-    } catch {
+    // ADR 0106: the request names a family and carries fields; the daemon
+    // builds the bytes itself. Role discipline first, so the person is never
+    // asked about something this key could not sign anyway.
+    const label = request.label;
+    if (!picoVaultCanSignLabel(unlocked.keyRole, label)) {
       this.#audit('sign', { outcome: 'error', reason: 'unknown_signature_input_label' });
       this.#respondError(socket, request.requestId, 'unknown_signature_input_label');
       return;
     }
-    if (!picoVaultCanSignLabel(unlocked.keyRole, label)) {
+
+    let signatureInput: Uint8Array | undefined;
+    try {
+      signatureInput = buildPicoVaultSignatureInputFromFields(label, request.fields);
+    } catch {
+      // The builder rejected the fields. No bytes exist, so no approval is
+      // raised and nothing is signed - the R5 property.
+      this.#audit('sign', { outcome: 'error', reason: 'invalid_signature_input_fields', label });
+      this.#respondError(socket, request.requestId, 'invalid_signature_input_fields');
+      return;
+    }
+    if (signatureInput === undefined) {
       this.#audit('sign', { outcome: 'error', reason: 'unknown_signature_input_label' });
       this.#respondError(socket, request.requestId, 'unknown_signature_input_label');
       return;
@@ -657,6 +673,17 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#completeSign(socket, request.requestId, unlocked.keyFingerprintHex, signatureInput);
       return;
     }
+
+    // Gated: the statement is mandatory. A gated label without a renderer is
+    // unsignable by design - a record nobody can render is one nobody could
+    // have meaningfully approved.
+    const statement = renderPicoVaultApprovalStatement(label, request.fields);
+    if (statement === undefined) {
+      this.#audit('sign', { outcome: 'error', reason: 'unrenderable_signature_input', label });
+      this.#respondError(socket, request.requestId, 'unrenderable_signature_input');
+      return;
+    }
+
     if (this.#pendingApproval !== null) {
       this.#respondError(socket, request.requestId, 'approval_pending');
       return;
@@ -672,17 +699,19 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       return;
     }
 
+    const input = signatureInput;
     this.#parkApproval({
       label,
+      statement,
       digestHex: Buffer.from(
-        this.#sodium.crypto_generichash(32, signatureInput, null),
+        this.#sodium.crypto_generichash(32, input, null),
       ).toString('hex'),
       consumerSocket: socket,
       consumerRequestId: request.requestId,
       signer: unlocked,
       waiter,
       run: () => {
-        this.#completeSign(socket, request.requestId, unlocked.keyFingerprintHex, signatureInput);
+        this.#completeSign(socket, request.requestId, unlocked.keyFingerprintHex, input);
       },
     });
   }
@@ -699,6 +728,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     request: { family: string; requestId: string; signerKeyFingerprintHex: string },
     ceremony: {
       summary: Record<string, string | number>;
+      statement: string;
       /** Extra sessions this ceremony needs; resolved and role-checked before
        * the person is asked, so an approval is never raised for a ceremony
        * that cannot run. */
@@ -763,6 +793,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       digestHex: Buffer.from(
         this.#sodium.crypto_generichash(32, Uint8Array.from(frame), null),
       ).toString('hex'),
+      statement: ceremony.statement,
       summary: ceremony.summary,
       consumerSocket: socket,
       consumerRequestId: request.requestId,
@@ -799,6 +830,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
 
   #parkApproval(input: {
     label: string;
+    statement: string;
     digestHex: string;
     summary?: Record<string, string | number>;
     consumerSocket: Socket;
@@ -820,6 +852,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       keyRole: unlocked.keyRole,
       keyFingerprintHex: unlocked.keyFingerprintHex,
       signatureInputDigestHex: input.digestHex,
+      statement: input.statement,
       ...(input.summary === undefined ? {} : { summary: input.summary }),
       consumerSocket: input.consumerSocket,
       consumerRequestId: input.consumerRequestId,
@@ -1007,6 +1040,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       keyRole: pending.keyRole,
       keyFingerprintHex: pending.keyFingerprintHex,
       signatureInputDigestHex: pending.signatureInputDigestHex,
+      statement: pending.statement,
       expiresInMs: this.#approvalWindowMs,
       ...(pending.summary === undefined ? {} : { summary: pending.summary }),
     };

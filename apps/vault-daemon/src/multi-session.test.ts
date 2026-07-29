@@ -282,7 +282,8 @@ describe('Multi-session unlock (ADR 0102 M1/M2/M3)', () => {
     // unlocked; naming the identity key must fail rather than fall back.
     await expect(consumer.sign({
       keyFingerprintHex: ownerIdentity.result.keyFingerprintHex,
-      signatureInputHex: '00'.repeat(8),
+      label: 'pico.id.keyrecord.v1',
+      fields: {},
     })).rejects.toThrow('unknown_unlocked_key');
   }, 60_000);
 

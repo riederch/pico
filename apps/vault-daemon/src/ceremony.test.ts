@@ -427,4 +427,38 @@ describe('Identity ceremony signing over the Vault daemon (ADR 0100 C2/C4)', () 
       requestTimeoutMs: 30_000,
     })).toThrow('invalid_ceremony_signer_timeout_ms');
   }, 60_000);
+
+  it('fails when the claimed fields do not describe the bytes (ADR 0106 R5)', async () => {
+    const daemon = await startDaemonProcess();
+    await startApproverProcess(daemon, 'y');
+
+    const signer = createPicoVaultDaemonCeremonySigner({
+      socketPath: daemon.socketPath,
+      keyRole: 'pico_identity',
+      keyFingerprintHex: ownerIdentity.keyFingerprintHex,
+    });
+    try {
+      const fields = {
+        suite: picoIdentitySuite,
+        subjectKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+        verifierNonceHex: '22'.repeat(32),
+        verifierContext: 'pico.test.ceremony-mismatch',
+      };
+      // The daemon signs what it rebuilds from the fields - an exempt label,
+      // so no approval parks and the mismatch surfaces immediately. The bytes
+      // this process claims to be signing are different, so the returned
+      // signature does not verify against them and the signer must throw
+      // rather than hand a mismatched signature to a ceremony.
+      expect(() => signer.sign(
+        Uint8Array.from(Buffer.from('not the possession bytes', 'utf8')),
+        { label: 'pico.id.possession.v1', fields },
+      )).toThrow('signature_context_mismatch');
+      // And without a context there is nothing the daemon could rebuild.
+      expect(() => (signer.sign as unknown as (b: Uint8Array) => Uint8Array)(
+        Uint8Array.from(Buffer.from('bytes without a context', 'utf8')),
+      )).toThrow('signature_context_required');
+    } finally {
+      signer.close();
+    }
+  }, 60_000);
 });

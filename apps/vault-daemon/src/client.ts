@@ -32,7 +32,8 @@ export interface PicoVaultDaemonClient {
   lock(): Promise<PicoVaultDaemonLockResult>;
   sign(input: {
     keyFingerprintHex: string;
-    signatureInputHex: string;
+    label: string;
+    fields: Record<string, unknown>;
   }): Promise<PicoVaultDaemonSignResult>;
   approvalWait(): Promise<PicoVaultDaemonApprovalWaitResult>;
   approvalDecide(input: {
@@ -157,7 +158,8 @@ export async function connectPicoVaultDaemonClient(
     sign: async (signInput) => await request({
       family: picoVaultDaemonRequestFamilies.sign,
       keyFingerprintHex: signInput.keyFingerprintHex,
-      signatureInputHex: signInput.signatureInputHex,
+      label: signInput.label,
+      fields: signInput.fields,
     }) as unknown as PicoVaultDaemonSignResult,
     approvalWait: async () => await request({
       family: picoVaultDaemonRequestFamilies.approvalWait,
