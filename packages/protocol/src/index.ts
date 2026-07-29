@@ -179,6 +179,97 @@ export const picoIdentitySignatureInputLabels = {
 export const picoIdentityReaderKeyFreshnessSignatureInputLabel =
   'pico.id.reader-key-freshness.v1' as const;
 
+/**
+ * ADR 0107 Pico Link Direct: the first runtime slice of ADR 0028.
+ *
+ * A request is sealed to the Home's key-agreement key and signed by the
+ * sender's delegated device key; a response is sealed to a per-request
+ * ephemeral key and signed by the Home's host signing key. Neither carries
+ * authority of its own - the carrier transports, the signatures decide - so
+ * the same bytes will travel a relay unchanged when one exists.
+ */
+export const picoLinkDirectRequestSignatureInputLabel =
+  'pico.link.direct.request.v1' as const;
+export const picoLinkDirectResponseSignatureInputLabel =
+  'pico.link.direct.response.v1' as const;
+export const picoLinkDirectRequestEnvelopeSchema =
+  'pico.link.direct.request-envelope.v1' as const;
+export const picoLinkDirectResponseEnvelopeSchema =
+  'pico.link.direct.response-envelope.v1' as const;
+
+/**
+ * A closed set, deliberately not a tunnel (ADR 0107). Remote capability is
+ * opt-in per operation: adding one is a decision, not a consequence of
+ * adding a route. The two setup operations are pre-authority by nature -
+ * a claim cannot carry a membership because no Home exists yet.
+ */
+export const picoLinkDirectOperations = [
+  'home.setup.read',
+  'home.claim.submit',
+  'home.authority.submit',
+  'home.authority.list',
+] as const;
+
+export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];
+
+export interface PicoLinkDirectRequestSignatureInput {
+  suite: string;
+  requestId: string;
+  operation: PicoLinkDirectOperation;
+  /**
+   * The audience pin. A URL is reachability, never identity (ADR 0031), so
+   * the request names the Home it is for and a different Home holding a
+   * valid agreement key still cannot accept it.
+   */
+  hostSigningKeyFingerprintHex: string;
+  senderIdentityKeyFingerprintHex: string;
+  senderDeviceSigningKeyFingerprintHex: string;
+  senderDelegationId: string;
+  /** X25519 public key the response is sealed to. Fresh per request. */
+  replyPublicKeyHex: string;
+  /** BLAKE2b-256 of the canonical JSON arguments carried beside this. */
+  argumentsDigestHex: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PicoLinkDirectResponseSignatureInput {
+  suite: string;
+  requestId: string;
+  operation: PicoLinkDirectOperation;
+  hostSigningKeyFingerprintHex: string;
+  /** `ok` or a snake_case reason; a refusal is signed exactly like a result. */
+  outcome: string;
+  resultDigestHex: string;
+  createdAt: string;
+}
+
+export interface PicoLinkDirectRequestEnvelope {
+  schema: typeof picoLinkDirectRequestEnvelopeSchema;
+  sealedRequestHex: string;
+}
+
+export interface PicoLinkDirectSealedRequest {
+  schema: typeof picoLinkDirectRequestEnvelopeSchema;
+  request: PicoLinkDirectRequestSignatureInput;
+  senderIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  senderDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  arguments: Record<string, unknown>;
+  senderSignatureHex: string;
+}
+
+export interface PicoLinkDirectResponseEnvelope {
+  schema: typeof picoLinkDirectResponseEnvelopeSchema;
+  sealedResponseHex: string;
+}
+
+export interface PicoLinkDirectSealedResponse {
+  schema: typeof picoLinkDirectResponseEnvelopeSchema;
+  response: PicoLinkDirectResponseSignatureInput;
+  result: Record<string, unknown>;
+  hostSignatureHex: string;
+}
+
 export const picoIdentityReaderKeyFreshnessCheckpointSchema =
   'pico.identity.reader-key-freshness-checkpoint.v1' as const;
 
@@ -2084,6 +2175,85 @@ export function buildPicoIdentityRevocationSignatureInput(
   ]);
 }
 
+/**
+ * ADR 0107. The arguments and the result travel beside their signature as
+ * canonical JSON and are bound by digest rather than inlined: an operation's
+ * arguments are open-ended, and a signature layout cannot enumerate them
+ * without freezing every operation into this file.
+ */
+export function buildPicoLinkDirectRequestSignatureInput(
+  input: PicoLinkDirectRequestSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'requestId',
+    'operation',
+    'hostSigningKeyFingerprintHex',
+    'senderIdentityKeyFingerprintHex',
+    'senderDeviceSigningKeyFingerprintHex',
+    'senderDelegationId',
+    'replyPublicKeyHex',
+    'argumentsDigestHex',
+    'createdAt',
+    'expiresAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.requestId);
+  assertStringMember(input.operation, picoLinkDirectOperations, 'invalid_link_operation');
+  assertAsciiToken(input.senderDelegationId);
+  assertInstant(input.createdAt);
+  assertInstant(input.expiresAt);
+  assertValidBounds(input.createdAt, input.expiresAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoLinkDirectRequestSignatureInputLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.requestId),
+    asciiBytes(input.operation),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.senderIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.senderDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.senderDelegationId),
+    fixedHexBytes(input.replyPublicKeyHex, 32, 'invalid_public_key_length'),
+    fixedHexBytes(input.argumentsDigestHex, 32, 'invalid_digest_length'),
+    asciiBytes(input.createdAt),
+    asciiBytes(input.expiresAt),
+  ]);
+}
+
+export function buildPicoLinkDirectResponseSignatureInput(
+  input: PicoLinkDirectResponseSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'requestId',
+    'operation',
+    'hostSigningKeyFingerprintHex',
+    'outcome',
+    'resultDigestHex',
+    'createdAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.requestId);
+  assertStringMember(input.operation, picoLinkDirectOperations, 'invalid_link_operation');
+  assertAsciiToken(input.outcome);
+  if (!snakeCaseOutcomePattern.test(input.outcome)) {
+    throw new Error('invalid_link_outcome');
+  }
+  assertInstant(input.createdAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoLinkDirectResponseSignatureInputLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.requestId),
+    asciiBytes(input.operation),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.outcome),
+    fixedHexBytes(input.resultDigestHex, 32, 'invalid_digest_length'),
+    asciiBytes(input.createdAt),
+  ]);
+}
+
 export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
   input: PicoIdentityReaderKeyFreshnessSignatureInput,
 ): Uint8Array {
@@ -3328,6 +3498,8 @@ function canonicalHomeMembershipScopeSet(scopes: readonly string[]): PicoHomeMem
 
   return [...scopes].sort() as PicoHomeMembershipScope[];
 }
+
+const snakeCaseOutcomePattern = /^[a-z0-9_]+$/;
 
 function assertValidBounds(validFrom: string, validUntil: string): void {
   if (validUntil <= validFrom) {

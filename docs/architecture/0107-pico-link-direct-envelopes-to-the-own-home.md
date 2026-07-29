@@ -137,9 +137,17 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
 
 ## Gates
 
-- **D1 - Canonical bytes and vectors: Open.** Both families in
-  `@pico/protocol` with positive and negative vectors: tamper, expiry,
-  wrong audience pin, wrong schema, replayed `requestId`.
+- **D1 - Canonical bytes and vectors: Done.** Both families are in
+  `@pico/protocol` with the full byte form pinned, so a layout change is
+  visible as the wire change it is. Negative vectors cover an operation
+  outside the closed set, an expiry not following its creation, malformed
+  fingerprints, reply keys and digests, smuggled and missing fields,
+  non-canonical instants (including a date that rolls forward), and
+  outcomes that are not snake_case reasons. Every field is shown to be
+  bound, and the two families are shown to be separable by label alone.
+  The vectors live in the package rather than under
+  `docs/protocol/fixtures`: that directory is the conformance surface, and
+  this contract is deliberately unpublished until a separate decision.
 - **D2 - Foundation intake: Open.** One route, its own access class, size
   limits before crypto, bounded idempotency window, named operations mapped
   onto existing route authorization; no diagnostic surface reachable
