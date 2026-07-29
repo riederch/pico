@@ -74,7 +74,11 @@ import {
   type PicoShareEnvelopeRecord,
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoProtocolVersion,
+  type PicoIdentityReaderKeyFreshnessCheckpoint,
+  type PicoIdentityReaderKeyFreshnessSignatureInput,
 } from '@pico/protocol';
 import {
   verifyPicoIdentityDetachedSignature,
@@ -125,6 +129,7 @@ import { PicoIdentityReaderKeySelector } from './reader-key.js';
 import {
   AuthenticatedPicoIdentityReaderKeyFreshnessSource,
 } from './reader-key-freshness.js';
+import { PicoIdentityReaderKeyFreshnessInbox } from './reader-key-freshness-inbox.js';
 import {
   PicoShareEnvelopeIssuer,
   type PicoShareEnvelopePrepareInput,
@@ -350,15 +355,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const operators: OperatorStore = store.operators(sodium);
   const sessions = new SessionStore();
   const identitySessionChallenges = new IdentitySessionChallengeStore();
+  // ADR 0089's transport seam. An injected source still wins; otherwise the
+  // local inbox serves what the owner published, and the unchanged ADR 0085
+  // verifier judges it. Without either there is no source at all and every
+  // reader-key check stays `freshness_unavailable`.
+  const freshnessInbox = new PicoIdentityReaderKeyFreshnessInbox();
   const readerKeySelector = new PicoIdentityReaderKeySelector(
     store,
     sodium,
-    config.readerKeyFreshnessCheckpointSource === undefined
-      ? undefined
-      : new AuthenticatedPicoIdentityReaderKeyFreshnessSource(
-        sodium,
-        config.readerKeyFreshnessCheckpointSource,
-      ),
+    new AuthenticatedPicoIdentityReaderKeyFreshnessSource(
+      sodium,
+      config.readerKeyFreshnessCheckpointSource ?? freshnessInbox,
+    ),
   );
   const shareEnvelopeIssuer = new PicoShareEnvelopeIssuer(
     store,
@@ -1042,6 +1050,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('POST', '/api/home/domain-read-grants', 'home-authority-relay');
   accessClasses.register('POST', '/api/home/domain-read-grant-lifecycle', 'home-authority-relay');
   accessClasses.register('GET', '/api/home/domain-read-grants', 'home-authority-relay');
+  accessClasses.register('POST', '/api/home/reader-key-freshness-checkpoints', 'home-authority-relay');
   accessClasses.register('POST', '/api/home/share-envelope-issuance', 'home-authority-relay');
   accessClasses.register('POST', '/api/home/share-envelopes', 'home-authority-relay');
   accessClasses.register('GET', '/api/home/share-envelopes', 'home-authority-relay');
@@ -1449,6 +1458,41 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     return sendNoStore(reply.code(recorded.inserted ? 201 : 200), { grant: recorded.grant });
+  });
+
+  /**
+   * ADR 0089's transport seam, filled locally. The owner delivers an ADR 0085
+   * checkpoint the Foundation cannot fetch for itself, because the Vault has
+   * no network surface (ADR 0097).
+   *
+   * This route stores bytes and judges nothing: signature, exact binding,
+   * five-minute age ceiling and anti-rollback floors all run later, in the
+   * unchanged verifier, on every authority check. Accepting a checkpoint here
+   * therefore grants no freshness by itself - it only makes one available to
+   * be judged.
+   */
+  app.post('/api/home/reader-key-freshness-checkpoints', async (request, reply) => {
+    const body = request.body;
+    if (!isRecord(body)
+      || body.schema !== picoIdentityReaderKeyFreshnessCheckpointSchema
+      || !isRecord(body.checkpoint)
+      || !isRecord(body.issuerIdentityKeyRecord)
+      || typeof body.issuerSignatureHex !== 'string') {
+      return sendNoStore(reply.code(400), { error: 'Invalid reader-key freshness checkpoint.' });
+    }
+
+    try {
+      // Canonical bytes must build before this is stored: a malformed
+      // checkpoint is rejected at the door rather than at every later lookup.
+      buildPicoIdentityReaderKeyFreshnessSignatureInput(
+        body.checkpoint as unknown as PicoIdentityReaderKeyFreshnessSignatureInput,
+      );
+    } catch {
+      return sendNoStore(reply.code(400), { error: 'Invalid reader-key freshness checkpoint.' });
+    }
+
+    freshnessInbox.publish(body as unknown as PicoIdentityReaderKeyFreshnessCheckpoint);
+    return sendNoStore(reply.code(202), { accepted: true });
   });
 
   app.post('/api/home/share-envelope-issuance', async (request, reply) => {
