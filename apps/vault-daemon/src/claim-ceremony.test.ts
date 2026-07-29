@@ -8,6 +8,7 @@ import {
   writePicoVaultKeyfile,
   type CreatePicoVaultKeyfileResult,
 } from '@pico/vault';
+import { picoIdentitySuite } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -24,17 +25,23 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 const CLI = join(import.meta.dirname, '..', 'dist', 'cli.js');
 const CORE = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
 const IDENTITY_PASSPHRASE = 'claim ceremony identity passphrase';
+const AGREEMENT_PASSPHRASE = 'claim ceremony agreement passphrase';
 
 const temporaryDirectories: string[] = [];
 const childProcesses: ChildProcess[] = [];
 
 let ownerIdentity: CreatePicoVaultKeyfileResult;
+let ownerAgreement: CreatePicoVaultKeyfileResult;
 
 beforeAll(async () => {
   await sodium.ready;
   ownerIdentity = createPicoVaultKeyfile(sodium, {
     keyRole: 'pico_identity',
     passphrase: IDENTITY_PASSPHRASE,
+  });
+  ownerAgreement = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_key_agreement',
+    passphrase: AGREEMENT_PASSPHRASE,
   });
 }, 60_000);
 
@@ -70,6 +77,7 @@ interface RunningCore {
   moveInCode: string;
   hostSigningKeyFingerprintHex: string;
   hostKeyAgreementKeyFingerprintHex: string;
+  log: () => string;
 }
 
 /**
@@ -141,6 +149,7 @@ async function startCore(): Promise<RunningCore> {
     moveInCode: String(claim.picoHomeMoveInCode),
     hostSigningKeyFingerprintHex: String(claim.hostSigningKeyFingerprintHex),
     hostKeyAgreementKeyFingerprintHex: String(claim.hostKeyAgreementKeyFingerprintHex),
+    log: () => output,
   };
 }
 
@@ -154,6 +163,10 @@ async function startDaemon(): Promise<RunningDaemon> {
   writePicoVaultKeyfile(
     join(vaultHomePath, 'keyfiles', `pico_identity-${ownerIdentity.keyFingerprintHex}.json`),
     ownerIdentity.keyfile,
+  );
+  writePicoVaultKeyfile(
+    join(vaultHomePath, 'keyfiles', `device_key_agreement-${ownerAgreement.keyFingerprintHex}.json`),
+    ownerAgreement.keyfile,
   );
 
   const child = spawn(process.execPath, [
@@ -194,12 +207,18 @@ async function startDaemon(): Promise<RunningDaemon> {
 }
 
 /** The person: a scripted `pico-vault unlock` that answers every prompt yes. */
-async function startApprover(daemon: RunningDaemon): Promise<{ approvals: () => number }> {
+async function startApprover(
+  daemon: RunningDaemon,
+  fixture: CreatePicoVaultKeyfileResult = ownerIdentity,
+  role: 'pico_identity' | 'device_key_agreement' = 'pico_identity',
+  passphrase: string = IDENTITY_PASSPHRASE,
+): Promise<{ approvals: () => number }> {
+  const before = daemon.stderr().split('"event":"approval_watch_started"').length - 1;
   const child = spawn(process.execPath, [
     CLI, 'unlock',
     '--vault-home', daemon.vaultHomePath,
-    '--role', 'pico_identity',
-    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--role', role,
+    '--fingerprint', fixture.keyFingerprintHex,
   ], { stdio: ['pipe', 'pipe', 'pipe'] });
   childProcesses.push(child);
 
@@ -208,12 +227,12 @@ async function startApprover(daemon: RunningDaemon): Promise<{ approvals: () => 
   child.stderr!.on('data', (chunk: string) => {
     stderr += chunk;
   });
-  child.stdin!.write(`${IDENTITY_PASSPHRASE}\n`);
+  child.stdin!.write(`${passphrase}\n`);
 
   await waitFor(() => stderr.includes('Vault unlocked.'), 'approver_unlock');
   child.stdin!.write('y\n'.repeat(8));
   await waitFor(
-    () => daemon.stderr().includes('"event":"approval_watch_started"'),
+    () => daemon.stderr().split('"event":"approval_watch_started"').length - 1 > before,
     'approval_watch_started',
   );
 
@@ -234,6 +253,41 @@ function runCeremony(
     '--host-signing-fingerprint',
     overrides.hostSigningKeyFingerprintHex ?? core.hostSigningKeyFingerprintHex,
     '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
+  child.stdout!.on('data', (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+
+  return new Promise((resolvePromise) => {
+    child.once('exit', (code) => {
+      resolvePromise({ code, stdout, stderr });
+    });
+  });
+}
+
+function runCreateDomain(
+  daemon: RunningDaemon,
+  core: RunningCore,
+  session: string,
+  domainId: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [
+    CLI, 'ceremony', 'create-domain',
+    '--vault-home', daemon.vaultHomePath,
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+    '--core-url', core.baseUrl,
+    '--session', session,
+    '--domain-id', domainId,
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   childProcesses.push(child);
 
@@ -283,6 +337,48 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(((await after.json()) as { picoHome: { claimState: { state: string } } })
       .picoHome.claimState.state).toBe('claimed');
   }, 120_000);
+
+  it('creates a reader-custody domain in the Home it just founded', async () => {
+    const core = await startCore();
+    const daemon = await startDaemon();
+    const identityApprover = await startApprover(daemon);
+
+    const claim = await runCeremony(daemon, core);
+    expect(claim.code).toBe(0);
+
+    // The operator is bootstrapped after founding, so its session carries the
+    // Home binding that `home-authority-relay` requires. A relay only
+    // transports; the authority stays in the owner's signature on the record.
+    const bootstrapCode = /"operatorBootstrapCode":"([^"]+)"/.exec(core.log());
+    expect(bootstrapCode).not.toBeNull();
+    const bootstrap = await fetch(`${core.baseUrl}/api/auth/bootstrap`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ bootstrapCode: bootstrapCode![1], passphrase: 'operator relay passphrase' }),
+    });
+    expect(bootstrap.status).toBe(201);
+    const session = ((await bootstrap.json()) as { session: string }).session;
+
+    // The owner's key-agreement key needs its own terminal: the daemon
+    // publishes a public key only for a session the person opened.
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
+
+    const domain = await runCreateDomain(daemon, core, session, 'first_domain');
+    expect(domain.code).toBe(0);
+
+    const created = JSON.parse(domain.stdout) as { domain: { domainId: string; privacyDomain?: string } };
+    expect(JSON.stringify(created)).toContain('first_domain');
+
+    // Founding cost two approvals, the domain one more, all on the identity
+    // terminal - the agreement key is used but signs nothing (ADR 0102).
+    expect(identityApprover.approvals()).toBe(3);
+
+    const listed = await fetch(`${core.baseUrl}/api/home/reader-custody/domains`, {
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(await listed.json())).toContain('first_domain');
+  }, 180_000);
 
   it('cannot sign without the person: a locked daemon fails the ceremony', async () => {
     const core = await startCore();

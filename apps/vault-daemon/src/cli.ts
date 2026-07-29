@@ -34,7 +34,7 @@ type CliCommand = typeof cliCommands[number];
  * to a Foundation. ADR 0103 C1 starts with `claim-home`, because no domain
  * record is accepted before a Home has been founded.
  */
-const ceremonySubcommands = ['claim-home'] as const;
+const ceremonySubcommands = ['claim-home', 'create-domain'] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
 const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
@@ -55,6 +55,15 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'move-in-code',
     'host-signing-fingerprint',
     'host-agreement-fingerprint',
+  ],
+  'create-domain': [
+    'vault-home',
+    'fingerprint',
+    'agreement-fingerprint',
+    'core-url',
+    'session',
+    'domain-id',
+    'lifecycle-order',
   ],
 };
 
@@ -383,10 +392,24 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
       return;
     }
     case 'ceremony': {
+      await sodium.ready;
+      if (invocation.ceremony === 'create-domain') {
+        const domain = await withClient(vaultHomePath, async (client) => await runCreateDomainCeremony({
+          client,
+          vaultSodium: sodium as unknown as VaultSodium,
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          session: requireFlag(invocation.flags, 'session'),
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
+          domainId: requireFlag(invocation.flags, 'domain-id'),
+          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+        }));
+        process.stdout.write(`${JSON.stringify(domain)}\n`);
+        return;
+      }
       if (invocation.ceremony !== 'claim-home') {
         throw new Error('unknown_ceremony');
       }
-      await sodium.ready;
       const founding = await withClient(vaultHomePath, async (client) => await runClaimHomeCeremony({
         client,
         vaultSodium: sodium as unknown as VaultSodium,
@@ -565,13 +588,17 @@ async function foundationRequest(
   coreUrl: string,
   path: string,
   body: Record<string, unknown> | undefined,
+  session?: string,
 ): Promise<unknown> {
   const url = new URL(path, coreUrl.endsWith('/') ? coreUrl : `${coreUrl}/`);
+  const headers: Record<string, string> = session === undefined
+    ? {}
+    : { authorization: `Bearer ${session}` };
   const response = await fetch(url, body === undefined
-    ? { method: 'GET' }
+    ? { method: 'GET', headers }
     : {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { ...headers, 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
 
@@ -597,4 +624,87 @@ function requireFlag(flags: Map<string, string>, name: string): string {
     throw new Error(`missing_required_flag:--${name}`);
   }
   return value;
+}
+
+/**
+ * ADR 0103 C2. Creates a reader-custody domain in a founded Home.
+ *
+ * The KEK is born, sealed and zeroized inside the daemon (ADR 0101), so this
+ * process only ever sees the finished signed record and relays it. Two keys
+ * must be unlocked: the identity root signs, and the owner's key-agreement
+ * public key is read from its unlocked session because the daemon publishes
+ * public keys only for sessions the person opened. That is the two-terminal
+ * cost ADR 0102 records rather than a limitation introduced here.
+ *
+ * `homeId` and the host signing fingerprint are read from the Foundation's
+ * own claim state instead of being passed in: they are facts about the Home,
+ * and a mistyped one would produce a signed record the Home then rejects.
+ */
+async function runCreateDomainCeremony(input: {
+  client: PicoVaultDaemonClient;
+  vaultSodium: VaultSodium;
+  coreUrl: string;
+  session: string;
+  signerKeyFingerprintHex: string;
+  agreementKeyFingerprintHex: string;
+  domainId: string;
+  lifecycleOrder: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('domain_signer_not_unlocked');
+  }
+  const agreement = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.agreementKeyFingerprintHex,
+  );
+  if (agreement === undefined || agreement.keyRole !== 'device_key_agreement') {
+    throw new Error('owner_agreement_key_not_unlocked');
+  }
+
+  const foundation = await foundationRequest(
+    input.coreUrl,
+    '/api/system/status',
+    undefined,
+    input.session,
+  ) as {
+    picoHome: {
+      claimState: {
+        state: string;
+        homeId?: string;
+        hostSigningKeyFingerprintHex?: string;
+      };
+    };
+  };
+  const claimState = foundation.picoHome.claimState;
+  if (claimState.state !== 'claimed'
+    || claimState.homeId === undefined
+    || claimState.hostSigningKeyFingerprintHex === undefined) {
+    throw new Error('home_is_not_claimed');
+  }
+
+  process.stderr.write('Approve the domain ceremony on the terminal holding the identity unlock.\n');
+  const ceremony = await input.client.ceremonyCreateDomain({
+    signerKeyFingerprintHex: signer.keyFingerprintHex,
+    ownerReaderKeyRecord: {
+      suite: picoIdentitySuite,
+      keyRole: 'device_key_agreement',
+      publicKeyHex: agreement.publicKeyHex,
+    },
+    domainAuthorityId: `domain_authority_${Buffer.from(input.vaultSodium.randombytes_buf(16)).toString('hex')}`,
+    homeId: claimState.homeId,
+    hostSigningKeyFingerprintHex: claimState.hostSigningKeyFingerprintHex,
+    domainId: input.domainId,
+    authorizedAt: new Date().toISOString(),
+    lifecycleOrder: input.lifecycleOrder,
+  });
+
+  return await foundationRequest(
+    input.coreUrl,
+    '/api/home/reader-custody/domains',
+    ceremony.domainRecord,
+    input.session,
+  ) as Record<string, unknown>;
 }
