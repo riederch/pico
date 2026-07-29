@@ -101,7 +101,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.1.7
+0.1.8
 ```
 
 Prepared foundation pieces include:

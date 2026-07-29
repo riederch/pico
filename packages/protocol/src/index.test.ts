@@ -103,6 +103,7 @@ import {
   picoHomeClaimStates,
   picoEventTypes,
   picoHomeEventTypes,
+  picoProtocolVersion,
   protocolCapabilities,
   realtimeMessageType,
   realtimeMessageTypes,
@@ -568,7 +569,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps seed conformance fixtures aligned with current Foundation semantics', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
 
@@ -679,7 +680,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps memory-content AD vectors byte-exact and aligned with ADR 0073', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject('docs/protocol/fixtures/memory-content-ad/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
     const adrNoWhitespace = readRepoFile(
@@ -781,7 +782,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps Pico identity signature-input vectors byte-exact and aligned with ADR 0079 G1', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject('docs/protocol/fixtures/identity-signature-input/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
     const adrNoWhitespace = readRepoFile(
@@ -920,7 +921,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps identity reader-key freshness vectors byte-exact and aligned with ADR 0085', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject(
       'docs/protocol/fixtures/reader-key-freshness/suite.json',
     );
@@ -1054,7 +1055,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps Pico Home signature-input vectors byte-exact and aligned with ADR 0080/0082', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject('docs/protocol/fixtures/home-signature-input/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
     const adrNoWhitespace = [
@@ -1310,7 +1311,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps Pico Vault keyfile header-AAD vectors byte-exact and aligned with ADR 0081 P1', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject('docs/protocol/fixtures/vault-keyfile/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
     const adrNoWhitespace = readRepoFile(
@@ -1438,7 +1439,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps Pico share wrap and envelope vectors byte-exact and aligned with ADR 0078 R2', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject('docs/protocol/fixtures/share-envelope/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
     const adrNoWhitespace = readRepoFile(
@@ -1643,7 +1644,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps reader-custody authority vectors byte-exact and aligned with ADR 0086/0088/0089', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const suite = readRepoJsonObject(
       'docs/protocol/fixtures/reader-custody/suite.json',
     );
@@ -1777,7 +1778,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps draft Pico Link fixtures staged below runtime and compatibility claims', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const foundationSuite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
     const suite = readRepoJsonObject('docs/protocol/fixtures/pico-link/draft/suite.json');
     const fixturePaths = stringArrayField(suite, 'fixtures');
@@ -1903,7 +1904,7 @@ describe('Pico protocol types', () => {
   });
 
   it('keeps draft Model Delegation fixtures staged below runtime, trust and model-quality claims', () => {
-    const currentVersion = stringField(readRepoJsonObject('package.json'), 'version');
+    const currentVersion = picoProtocolVersion;
     const foundationSuite = readRepoJsonObject('docs/protocol/fixtures/suite.json');
     const picoLinkSuite = readRepoJsonObject('docs/protocol/fixtures/pico-link/draft/suite.json');
     const suite = readRepoJsonObject('docs/protocol/fixtures/model-delegation/draft/suite.json');

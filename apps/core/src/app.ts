@@ -74,6 +74,7 @@ import {
   type PicoShareEnvelopeRecord,
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
+  picoProtocolVersion,
 } from '@pico/protocol';
 import {
   verifyPicoIdentityDetachedSignature,
@@ -130,8 +131,11 @@ import {
 } from './share-envelope.js';
 import type { ReaderCustodyFailureReason } from './reader-custody.js';
 
-const SERVICE_VERSION = '0.1.7';
-const PROTOCOL_VERSION = '0.1.7';
+const SERVICE_VERSION = '0.1.8';
+// The wire-contract version, owned by @pico/protocol and deliberately not tied
+// to SERVICE_VERSION: a packaging or documentation release must not advertise a
+// protocol change that did not happen (ADR 0025).
+const PROTOCOL_VERSION = picoProtocolVersion;
 const DEFAULT_EVENT_LIMIT = 100;
 const MAX_EVENT_LIMIT = 500;
 const MAX_TEXT_LENGTH = 8_000;

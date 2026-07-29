@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.8
+
+Release bump so the add-on update is offered in Home Assistant.
+
+- Adds an `approval_watch_started` audit record to the Vault daemon, so an approval that returns unavailable is diagnosable after the fact. The daemon is a separate local process and is not part of this add-on image.
+- Makes the approval tests wait on that record instead of fixed sleeps, removing a load-dependent failure in the release gate.
+- Records in ADR 0103 that no tool can yet found a Pico Home, and makes the claim ceremony the first gate of the planned person-side client.
+- Separates the wire-contract version from the release version. `picoProtocolVersion` now lives in `packages/protocol` and stays at `0.1.7`, because nothing observable on the wire changed in this release. `/api/system/version` therefore reports version `0.1.8` with protocol version `0.1.7`.
+- Aligns root workspace, Pico Core, web, protocol, sync, active Home Assistant add-on metadata, and CI image tag on `0.1.8`.
+- Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.8`.
+- Does not change Pico Core runtime behaviour, database migrations or the API surface.
+
 ## 0.1.7
 
 Home Assistant add-on permission fix.

@@ -52,7 +52,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.1.7
+0.1.8
 ```
 
 Implemented or prepared:
@@ -311,18 +311,18 @@ The add-on uses the prebuilt container image:
 ghcr.io/riederch/pico/core
 ```
 
-`pico_core/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.1.7` is:
+`pico_core/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.1.8` is:
 
 ```text
-ghcr.io/riederch/pico/core:0.1.7
+ghcr.io/riederch/pico/core:0.1.8
 ```
 
-The published Git tag must match the add-on version and root package version exactly, for example `v0.1.7` for version `0.1.7`. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
+The published Git tag must match the add-on version and root package version exactly, for example `v0.1.8` for version `0.1.8`. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
 
 Current tag:
 
 ```text
-0.1.7
+0.1.8
 ```
 
 The add-on exposes Pico Home Core on port `3100`, serves the foundation dashboard at `/`, and defines a watchdog against:

@@ -99,6 +99,23 @@ export const picoEventTypes = [
 
 export type PicoEventType = typeof picoEventTypes[number];
 
+/**
+ * The wire-contract version this package defines, and the single source for it.
+ *
+ * Deliberately independent of the product and add-on version in
+ * `package.json`. Those move for reasons that have nothing to do with the
+ * wire - a Home Assistant packaging fix, a documentation release - and
+ * advertising a new protocol version for one of those tells a consumer a
+ * change happened that did not. ADR 0025 forbids the opposite error (hiding a
+ * breaking change behind an unchanged version); both directions have to hold
+ * for the number to mean anything.
+ *
+ * Raise it when the wire semantics change: canonical bytes, signature inputs,
+ * record shapes, envelope or claim semantics, or capability meaning. Do not
+ * raise it for a release bump.
+ */
+export const picoProtocolVersion = '0.1.7' as const;
+
 export const protocolCapabilities = {
   'pico.core.events.v1': true,
   'pico.core.websocket.v1': true,

@@ -5,7 +5,7 @@ This document is the central checklist for version bumps in Pico.
 ## Current version
 
 ```text
-0.1.7
+0.1.8
 ```
 
 ## Version locations
@@ -16,13 +16,44 @@ When the Pico version changes, update all version-bearing files in the same comm
 |---|---|---|---|
 | `package.json` | `version` | Root workspace/package version | Yes |
 | `apps/core/package.json` | `version` | Pico Core service package version | Yes |
+| `apps/vault-daemon/package.json` | `version` | Vault daemon package version | Yes |
 | `apps/web/package.json` | `version` | Web client package version | Yes |
+| `packages/identity/package.json` | `version` | Identity package version | Yes |
 | `packages/protocol/package.json` | `version` | Shared protocol package version | Yes |
 | `packages/sync/package.json` | `version` | Sync helper package version | Yes |
+| `packages/vault/package.json` | `version` | Vault package version | Yes |
+| `apps/core/src/app.ts` | `SERVICE_VERSION` | Version served by the Foundation API | Yes |
+| `apps/vault-daemon/src/daemon.ts` | `DAEMON_VERSION` | Version reported by the Vault daemon | Yes |
 | `pico_core/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
 | `README.md` | Current version text | Non-technical documentation | Yes |
 | `ReadmeTech.md` | Current version and Home Assistant add-on tag/version text | Technical documentation | Yes |
-| `pico_core/CHANGELOG.md` | version heading | Home Assistant-facing update notes | Yes |
+| `pico_core/README.md` | Current version text | Add-on documentation | Yes |
+| `pico_core/CHANGELOG.md` | version heading and image tag | Home Assistant-facing update notes | Yes |
+| `docs/release/versioning.md` | every version reference | This checklist | Yes |
+
+`scripts/check-version.mjs` enforces this table. If a version-bearing location
+is added, add it there rather than relying on this list being read.
+
+## Protocol version is a separate axis
+
+The wire-contract version lives in `packages/protocol/src/index.ts` as
+`picoProtocolVersion` and is deliberately **not** bumped with the release.
+
+A packaging fix, a documentation release or a Home Assistant permission change
+moves the product version without changing anything a peer can observe on the
+wire. Advertising a new protocol version for one of those tells a consumer that
+something changed when nothing did. ADR 0025 forbids the opposite error —
+hiding a breaking communication change behind an unchanged protocol version —
+and the number is only worth reading if both directions hold.
+
+Raise `picoProtocolVersion` when wire semantics change: canonical bytes,
+signature inputs, record shapes, envelope or claim semantics, or the meaning of
+a capability. Do not raise it for a release bump.
+
+Everything that states a compatibility claim — the conformance fixtures under
+`docs/protocol/fixtures`, `docs/protocol/public-surfaces.md`,
+`docs/protocol/compatibility-levels.md` and the ADR 0025 example — is checked
+against `picoProtocolVersion`, not against the release version.
 
 ## Active Home Assistant add-on path
 
@@ -63,9 +94,9 @@ pnpm version:check
 
 This check compares the root package version with package metadata, Pico Home Core runtime version constants, Home Assistant add-on metadata, README current-version blocks, the latest add-on changelog heading, and current protocol compatibility examples.
 
-The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.1.7`, so `.github/workflows/ci.yml` is not a version-bearing file.
+The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.1.8`, so `.github/workflows/ci.yml` is not a version-bearing file.
 
-Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is generated. A tag build must use the exact Git tag `v${package.json.version}`; for example, package version `0.1.7` must be released from Git tag `v0.1.7`.
+Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is generated. A tag build must use the exact Git tag `v${package.json.version}`; for example, package version `0.1.8` must be released from Git tag `v0.1.8`.
 
 ## Container image tags
 
@@ -75,10 +106,10 @@ Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is g
 ghcr.io/riederch/pico/core
 ```
 
-The versioned release artifact for add-on version `0.1.7` is the matching semver image tag:
+The versioned release artifact for add-on version `0.1.8` is the matching semver image tag:
 
 ```text
-ghcr.io/riederch/pico/core:0.1.7
+ghcr.io/riederch/pico/core:0.1.8
 ```
 
 The CI workflow publishes different tag classes for different events:
@@ -113,7 +144,7 @@ Before a release with backup-requiring migrations is tagged, the release must do
 
 ## Release bump procedure
 
-1. Choose the next semantic version, for example `0.1.7`.
+1. Choose the next semantic version, for example `0.1.8`.
 2. Update every location listed in the table above.
 3. Check whether the release contains backup-requiring database migrations. If yes, apply the backup-before-migration release rule.
 4. Run the release gates locally:
@@ -127,8 +158,8 @@ Before a release with backup-requiring migrations is tagged, the release must do
 7. Create and push the matching Git tag. The tag build publishes the versioned image tag:
 
    ```bash
-   git tag v0.1.7
-   git push origin v0.1.7
+   git tag v0.1.8
+   git push origin v0.1.8
    ```
 
 ## Home Assistant check after release

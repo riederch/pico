@@ -190,7 +190,7 @@ describe('Pico Home Core app', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({
       service: 'pico-home-core',
-      version: '0.1.7',
+      version: '0.1.8',
       protocolVersion: '0.1.7',
     });
 
@@ -211,7 +211,7 @@ describe('Pico Home Core app', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({
       service: 'pico-home-core',
-      version: '0.1.7',
+      version: '0.1.8',
       protocolVersion: '0.1.7',
       deviceId: 'test-core',
       capabilities: protocolCapabilities,
