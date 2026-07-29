@@ -8,13 +8,34 @@ import {
   writePicoVaultKeyfile,
   type VaultSodium,
 } from '@pico/vault';
-import { picoVaultPersonKeyRoles, type PicoVaultPersonKeyRole } from '@pico/protocol';
+import {
+  buildPicoHomeClaimSignatureInput,
+  buildPicoHomeFoundingSignatureInput,
+  buildPicoIdentityKeyRecordSignatureInput,
+  picoHomeClaimEnvelopeSchema,
+  picoHomeFoundingAcceptanceSchema,
+  picoHomeSealedClaimPayloadSchema,
+  picoIdentitySuite,
+  picoVaultPersonKeyRoles,
+  type PicoHomeClaimSignatureInput,
+  type PicoHomeFoundingSignatureInput,
+  type PicoIdentityKeyRecordSignatureInput,
+  type PicoVaultPersonKeyRole,
+} from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { connectPicoVaultDaemonClient, type PicoVaultDaemonClient } from './client.js';
 import { startPicoVaultDaemon } from './daemon.js';
 
-const cliCommands = ['daemon', 'create', 'status', 'unlock', 'lock', 'sign'] as const;
+const cliCommands = ['daemon', 'create', 'status', 'unlock', 'lock', 'sign', 'ceremony'] as const;
 type CliCommand = typeof cliCommands[number];
+
+/**
+ * Ceremonies run inside the daemon boundary and deliver their finished record
+ * to a Foundation. ADR 0103 C1 starts with `claim-home`, because no domain
+ * record is accepted before a Home has been founded.
+ */
+const ceremonySubcommands = ['claim-home'] as const;
+type CeremonySubcommand = typeof ceremonySubcommands[number];
 
 const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
   daemon: ['vault-home', 'foundation-data', 'foundation-backup'],
@@ -23,10 +44,23 @@ const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
   unlock: ['vault-home', 'role', 'fingerprint'],
   lock: ['vault-home'],
   sign: ['vault-home', 'fingerprint', 'input-hex'],
+  ceremony: [],
+};
+
+const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
+  'claim-home': [
+    'vault-home',
+    'fingerprint',
+    'core-url',
+    'move-in-code',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+  ],
 };
 
 export interface PicoVaultCliInvocation {
   command: CliCommand;
+  ceremony?: CeremonySubcommand;
   flags: Map<string, string>;
 }
 
@@ -35,8 +69,20 @@ export function parsePicoVaultCliArguments(argv: readonly string[]): PicoVaultCl
   if (command === undefined || !(cliCommands as readonly string[]).includes(command)) {
     throw new Error('unknown_cli_command');
   }
-  const rest = argv.slice(1);
-  const allowed = flagNamesByCommand[command as CliCommand];
+  let rest = argv.slice(1);
+  let ceremony: CeremonySubcommand | undefined;
+  let allowed = flagNamesByCommand[command as CliCommand];
+
+  if (command === 'ceremony') {
+    const subcommand = argv.at(1);
+    if (subcommand === undefined || !(ceremonySubcommands as readonly string[]).includes(subcommand)) {
+      throw new Error('unknown_ceremony');
+    }
+    ceremony = subcommand as CeremonySubcommand;
+    allowed = flagNamesByCeremony[ceremony];
+    rest = argv.slice(2);
+  }
+
   const flags = new Map<string, string>();
   for (let index = 0; index < rest.length; index += 2) {
     const flag = rest.at(index);
@@ -50,7 +96,9 @@ export function parsePicoVaultCliArguments(argv: readonly string[]): PicoVaultCl
     }
     flags.set(name, value);
   }
-  return { command: command as CliCommand, flags };
+  return ceremony === undefined
+    ? { command: command as CliCommand, flags }
+    : { command: command as CliCommand, ceremony, flags };
 }
 
 function resolveVaultHome(flags: Map<string, string>, env: NodeJS.ProcessEnv): string {
@@ -334,6 +382,23 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
       process.stdout.write(`${JSON.stringify(signed)}\n`);
       return;
     }
+    case 'ceremony': {
+      if (invocation.ceremony !== 'claim-home') {
+        throw new Error('unknown_ceremony');
+      }
+      await sodium.ready;
+      const founding = await withClient(vaultHomePath, async (client) => await runClaimHomeCeremony({
+        client,
+        vaultSodium: sodium as unknown as VaultSodium,
+        coreUrl: requireFlag(invocation.flags, 'core-url'),
+        moveInCode: requireFlag(invocation.flags, 'move-in-code'),
+        signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+        expectedHostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
+        expectedHostKeyAgreementKeyFingerprintHex: requireFlag(invocation.flags, 'host-agreement-fingerprint'),
+      }));
+      process.stdout.write(`${JSON.stringify(founding)}\n`);
+      return;
+    }
     case 'unlock': {
       const keyRole = requireRole(invocation.flags);
       const client = await connectPicoVaultDaemonClient({ socketPath: socketPathOf(vaultHomePath) });
@@ -377,10 +442,159 @@ if (isMainModule) {
       process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       process.stderr.write(
         'usage: pico-vault <daemon|create|status|unlock|lock|sign> '
+        + '| pico-vault ceremony claim-home --core-url <url> --move-in-code <code> '
+        + '--fingerprint <hex> --host-signing-fingerprint <hex> --host-agreement-fingerprint <hex>\n'
         + '[--vault-home <path>] [--foundation-data <path>] [--foundation-backup <path>] '
         + '[--role <keyRole>] [--fingerprint <hex>] [--input-hex <hex>]\n',
       );
       process.exit(1);
     },
   );
+}
+
+/**
+ * ADR 0103 C1. Founds a Pico Home from the person's side.
+ *
+ * Everything that needs the identity key crosses the daemon socket, so this
+ * process never holds a private key: the two signatures are `sign` calls, each
+ * raising an approval on the terminal holding the unlock, because founding a
+ * Home creates authority and is not on the ADR 0099 exempt list. Sealing the
+ * claim needs only the host's public key, so it stays local.
+ *
+ * The host key fingerprints the person read from the add-on log are compared
+ * against what the Foundation serves. That comparison is the whole reason the
+ * log prints them: without it, whatever answers on `--core-url` could hand out
+ * its own key and receive a claim sealed to itself.
+ */
+async function runClaimHomeCeremony(input: {
+  client: PicoVaultDaemonClient;
+  vaultSodium: VaultSodium;
+  coreUrl: string;
+  moveInCode: string;
+  signerKeyFingerprintHex: string;
+  expectedHostSigningKeyFingerprintHex: string;
+  expectedHostKeyAgreementKeyFingerprintHex: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined) {
+    throw new Error('claim_signer_not_unlocked');
+  }
+  if (signer.keyRole !== 'pico_identity') {
+    throw new Error('claim_requires_pico_identity_key');
+  }
+
+  const setup = await foundationRequest(input.coreUrl, '/api/home/setup', undefined) as {
+    setupMode: { hostSetupNonceHex: string };
+    host: {
+      signingKeyFingerprintHex: string;
+      keyAgreementKeyFingerprintHex: string;
+      keyAgreementPublicKeyHex: string;
+    };
+  };
+
+  // Trust the person's log, not the endpoint's self-description.
+  if (setup.host.signingKeyFingerprintHex !== input.expectedHostSigningKeyFingerprintHex
+    || setup.host.keyAgreementKeyFingerprintHex !== input.expectedHostKeyAgreementKeyFingerprintHex) {
+    throw new Error('host_key_fingerprint_mismatch');
+  }
+
+  const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: picoIdentitySuite,
+    keyRole: 'pico_identity',
+    publicKeyHex: signer.publicKeyHex,
+  };
+  const claim: PicoHomeClaimSignatureInput = {
+    suite: picoIdentitySuite,
+    claimId: `claim_${Buffer.from(input.vaultSodium.randombytes_buf(16)).toString('hex')}`,
+    hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
+    moveInCode: input.moveInCode,
+    claimantIdentityKeyFingerprintHex: signer.keyFingerprintHex,
+    claimantNonceHex: Buffer.from(input.vaultSodium.randombytes_buf(32)).toString('hex'),
+    hostSetupNonceHex: setup.setupMode.hostSetupNonceHex,
+  };
+
+  process.stderr.write('Approve the Home claim on the terminal holding the unlock.\n');
+  const claimSignature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    signatureInputHex: Buffer.from(buildPicoHomeClaimSignatureInput(claim)).toString('hex'),
+  });
+
+  const sealedClaimPayload = {
+    schema: picoHomeSealedClaimPayloadSchema,
+    claim,
+    claimantIdentityKeyRecord,
+    claimantSignatureHex: claimSignature.signatureHex,
+  };
+  const sealedClaimPayloadHex = Buffer.from(input.vaultSodium.crypto_box_seal(
+    Uint8Array.from(Buffer.from(JSON.stringify(sealedClaimPayload), 'utf8')),
+    Uint8Array.from(Buffer.from(setup.host.keyAgreementPublicKeyHex, 'hex')),
+  )).toString('hex');
+
+  const pending = await foundationRequest(input.coreUrl, '/api/home/claim', {
+    claimEnvelope: { schema: picoHomeClaimEnvelopeSchema, sealedClaimPayloadHex },
+  }) as { pendingClaim: { founding: PicoHomeFoundingSignatureInput } };
+
+  process.stderr.write('Claim accepted. Approve the founding acceptance to complete it.\n');
+  const foundingSignature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    signatureInputHex: Buffer.from(
+      buildPicoHomeFoundingSignatureInput(pending.pendingClaim.founding),
+    ).toString('hex'),
+  });
+
+  return await foundationRequest(input.coreUrl, '/api/home/claim', {
+    foundingAcceptance: {
+      schema: picoHomeFoundingAcceptanceSchema,
+      claimId: claim.claimId,
+      foundingId: pending.pendingClaim.founding.foundingId,
+      claimantFoundingSignatureHex: foundingSignature.signatureHex,
+    },
+  }) as Record<string, unknown>;
+}
+
+/**
+ * The Foundation's refusal is authority, not a transport failure (ADR 0103
+ * C4): its `error` is surfaced verbatim and nothing is retried, because a
+ * retry would either repeat a spent Move-In Code or hide the reason.
+ */
+async function foundationRequest(
+  coreUrl: string,
+  path: string,
+  body: Record<string, unknown> | undefined,
+): Promise<unknown> {
+  const url = new URL(path, coreUrl.endsWith('/') ? coreUrl : `${coreUrl}/`);
+  const response = await fetch(url, body === undefined
+    ? { method: 'GET' }
+    : {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  const text = await response.text();
+  let parsed: unknown;
+  try {
+    parsed = text === '' ? {} : JSON.parse(text);
+  } catch {
+    throw new Error(`foundation_invalid_response:${response.status}`);
+  }
+
+  if (!response.ok) {
+    const reason = (parsed as { error?: unknown }).error;
+    throw new Error(`foundation_rejected:${response.status}:${typeof reason === 'string' ? reason : text}`);
+  }
+
+  return parsed;
+}
+
+function requireFlag(flags: Map<string, string>, name: string): string {
+  const value = flags.get(name);
+  if (value === undefined || value.trim() === '') {
+    throw new Error(`missing_required_flag:--${name}`);
+  }
+  return value;
 }

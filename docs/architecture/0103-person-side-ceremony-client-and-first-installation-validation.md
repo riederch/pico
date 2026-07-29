@@ -4,9 +4,10 @@
 
 Accepted. The validation half (V1-V5) is done: the add-on runs on a real
 Home Assistant instance and a memory item has been written, read and
-crypto-shredded there. The client half (C1-C5) is open, and the first real
-install did not change its shape - it confirmed the claim gap that made C1
-the first gate.
+crypto-shredded there. On the client half, C1, C3 and C4 are done - a
+person can now found a Pico Home with `pico-vault ceremony claim-home`,
+which was impossible when this ADR was written. C2 (the domain ceremonies)
+and the rest of C5 remain open.
 
 This ADR replaces the follow-up ADR 0100 C5, 0101 K5 and 0102 M6 all named
 as "`apps/core` caller migration". That work does not exist: the Foundation
@@ -183,25 +184,38 @@ today, so that is the path the first installation validates.
   container cannot see that it happened. The closed-by-default port is the
   only thing holding that rule up, and it is a packaging default rather than
   a check.
-- **C1 - Claim ceremony: Open.** `pico-vault ceremony claim-home` takes the
+- **C1 - Claim ceremony: Done.** `pico-vault ceremony claim-home` takes the
   Move-In Code and host key material a person can read from the add-on log,
   seals the claim envelope to the host key-agreement key, signs the founding
   acceptance with the identity key inside the daemon, and completes both
-  steps against `POST /api/home/claim`. Until this exists nothing below it
-  can run, so it comes first.
+  steps against `POST /api/home/claim`. Implemented as
+  `pico-vault ceremony claim-home`. The host fingerprints the person reads
+  from the add-on log are compared against what the Foundation serves before
+  anything is signed - without that, whatever answers on `--core-url` could
+  hand out its own key and receive a claim sealed to itself. Founding costs
+  exactly two approvals, because the claim and the acceptance each create
+  authority and neither is on the ADR 0099 exempt list.
 - **C2 - Domain ceremony group: Open.** `pico-vault ceremony create-domain`,
   `grant-reader` and `rotate-domain` drive the existing `client.ts` ceremony
   methods and POST to the existing Foundation routes. No new Foundation
   route is added.
-- **C3 - No person key in the client: Open.** The CLI process holds no
-  identity or agreement private key; all key use crosses the socket. This
-  is a test, not a claim.
-- **C4 - Refusal fidelity: Open.** A Foundation rejection surfaces its
-  `reason` unchanged, with no retry and no partial local state.
-- **C5 - Executing test: Open.** An integration test runs a daemon and a
-  Foundation together, founds a Home and then creates a reader-custody
-  domain in it, end to end. This is the first test that executes the ADR
-  0097-0102 chain as a product path rather than as a unit.
+- **C3 - No person key in the client: Done.** The CLI holds no private key;
+  both signatures cross the socket. Proven negatively rather than asserted:
+  with no session unlocked the ceremony fails with
+  `claim_signer_not_unlocked` even though the client can see the keyfile,
+  because it has no passphrase and no way to open it.
+- **C4 - Refusal fidelity: Done.** A Foundation rejection surfaces its
+  status and `error` unchanged with no retry; a wrong Move-In Code fails as
+  `foundation_rejected:401 ... Move-In Code is invalid.` and leaves the Home
+  unclaimed. Retrying would either replay a spent Move-In Code or hide the
+  reason.
+- **C5 - Executing test: Partly done.** `claim-ceremony.test.ts` runs a real
+  Foundation process and a real Vault daemon process together and founds a
+  Home across them - the first test to exercise a product path rather than a
+  unit, and the first to prove the deployment shape (Vault on the person's
+  machine, Foundation in the Home, meeting only over HTTP carrying finished
+  records). It does not yet create a reader-custody domain in the founded
+  Home; that needs C2.
 
 ## Non-goals
 

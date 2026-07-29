@@ -64,6 +64,9 @@ importers:
         specifier: ^0.8.4
         version: 0.8.4
     devDependencies:
+      '@pico/core':
+        specifier: workspace:*
+        version: link:../core
       '@pico/sync':
         specifier: workspace:*
         version: link:../../packages/sync
