@@ -4,6 +4,22 @@
 
 Fixes the add-on refusing to start after the 0.1.8 update.
 
+**If you are updating from 0.1.8, one manual step is needed.** This release
+repairs the add-on's option *defaults*, but Home Assistant stores your own
+option values separately, and 0.1.8 left a `pico_foundation_token: null` entry
+there. The Supervisor reads that stored `null` as a missing value and refuses
+to start the add-on, so it has to be cleared once:
+
+Open the add-on's Configuration tab and remove the `pico_foundation_token`
+entry, leaving only `memory_encryption`. From the CLI this is:
+
+```bash
+ha addons options 3b6b2827_pico_core --options '{"memory_encryption": false}'
+```
+
+Pico Core cannot clean this up itself, because the Supervisor rejects the
+add-on before it starts. A fresh install is not affected.
+
 - Removes the `null` default for `pico_foundation_token` from `options`. The Supervisor reads a `null` default as a missing value and rejects the add-on before it starts, even though the schema marks the option optional. The option stays declared in `schema`, so it can still be set; leaving it unset keeps Pico Core in Home Assistant ingress mode, which is what the runtime already expected.
 - Adds `pnpm addon:check` to the release gate. It rejects null defaults, options without a schema entry and required schema entries without a default. The container smoke tests could not catch this class of fault, because they mount a finished `/data/options.json` and never exercise Supervisor validation.
 - Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.9`.
