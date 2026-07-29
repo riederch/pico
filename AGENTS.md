@@ -103,6 +103,10 @@ Konsistenzchecks; produkt- oder releasebezogene Doku braucht den vollen Gate.
 
 - Assistant macht Vorschlaege; Pico Rules/Policy entscheidet; Action Runner
   fuehrt nur freigegebene Aktionen aus; Action History dokumentiert.
+- Pico laeuft als Hintergrunddienst und wird ueber den Pico Avatar bedient -
+  Chat, Stimme, Kamera oder was das Geraet sonst bietet. Kein Produktweg
+  darf ein Terminal voraussetzen; `pico-vault` ist Werkzeug fuer Setup und
+  Diagnose, nicht die Produktform (ADR 0105).
 - Home-Administration ist keine Domain-Readership. Home Membership allein
   gewaehrt weder Domain Content Keys noch Klartextzugriff.
 - Pico Identity, Device, Home Host, Domain Content, Transport und Relay Keys
