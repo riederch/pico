@@ -141,15 +141,60 @@ function digestOfHex(inputHex: string): string {
   ).toString('hex');
 }
 
+/** Waits for a daemon audit event instead of guessing how long it takes. */
+async function waitForAudit(audit: readonly string[], event: string): Promise<void> {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (audit.some((line) => line.includes(`"event":"${event}"`))) {
+      return;
+    }
+    await sleep(20);
+  }
+  throw new Error(`wait_for_timeout:${event}`);
+}
+
+const approvalChannelsSynchronised = new WeakSet<PicoVaultDaemonClient>();
+
 /**
- * Parks an `approval.wait` and resolves once the daemon has answered it. The
- * caller must give the daemon a moment to park the request before triggering a
- * gated signature, which is what `sleep` after this call is for.
+ * Parks an `approval.wait` and returns its promise once the daemon has
+ * recorded this connection as an approval channel.
+ *
+ * A fixed sleep here only makes the race unlikely: a gated request that
+ * arrives before the wait lands fails closed with `approval_unavailable` -
+ * correct runtime behaviour, and a flaky test. Waiting for the daemon's own
+ * record removes the guess.
+ *
+ * The daemon audits `approval_watch_started` once per connection, so this can
+ * only synchronise a connection's first wait. A second use on the same
+ * connection throws instead of silently going back to hoping.
  */
-function startApprovalWait(
+async function startApprovalWait(
   client: PicoVaultDaemonClient,
-): Promise<PicoVaultDaemonApprovalRequestDescriptor | null> {
-  return client.approvalWait().then((result) => result.pending);
+  audit: readonly string[],
+): Promise<{ waiting: Promise<PicoVaultDaemonApprovalRequestDescriptor | null> }> {
+  if (approvalChannelsSynchronised.has(client)) {
+    throw new Error(
+      'approval_watch_started is audited once per connection; this helper '
+      + 'cannot synchronise a second wait on the same connection.',
+    );
+  }
+  approvalChannelsSynchronised.add(client);
+
+  const countWatchStarts = (): number =>
+    audit.filter((line) => line.includes('"event":"approval_watch_started"')).length;
+  const before = countWatchStarts();
+  const waiting = client.approvalWait().then((result) => result.pending);
+
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (countWatchStarts() > before) {
+      // Wrapped, because returning the promise bare from an async function
+      // would flatten it: the caller would await the approval itself, which
+      // only arrives once the caller triggers the gated request below.
+      return { waiting };
+    }
+    await sleep(20);
+  }
+
+  throw new Error('wait_for_timeout:approval_watch_started');
 }
 
 type Settled<T> = { ok: true; value: T } | { ok: false; reason: string };
@@ -261,8 +306,7 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     const { daemon, audit } = await startDaemon({ approvalWaitMs: 300 });
     const hold = await holdUnlock(daemon);
     const consumer = await openClient(daemon);
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
 
     const unknown = Buffer.alloc(4 + 13);
     unknown.writeUInt32BE(13, 0);
@@ -282,8 +326,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);
     const consumer = await openClient(daemon);
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
 
     const inputHex = gatedInputHex();
     const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: inputHex }));
@@ -312,12 +355,11 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
   }, 30_000);
 
   it('denies on an explicit no and on a digest that does not match', async () => {
-    const { daemon } = await startDaemon();
+    const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);
     const consumer = await openClient(daemon);
 
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
     const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     const pending = await waiting;
 
@@ -340,8 +382,7 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     const hold = await holdUnlock(daemon);
     const consumer = await openClient(daemon);
 
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
     const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     await waiting;
 
@@ -350,13 +391,12 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
   }, 30_000);
 
   it('refuses a second gated request while one approval is pending', async () => {
-    const { daemon } = await startDaemon();
+    const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);
     const first = await openClient(daemon);
     const second = await openClient(daemon);
 
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
     const signing = settle(first.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     const pending = await waiting;
 
@@ -388,14 +428,13 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
   }, 30_000);
 
   it('refuses waiting and deciding from a connection that does not hold the unlock', async () => {
-    const { daemon } = await startDaemon();
+    const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);
     const consumer = await openClient(daemon);
 
     await expect(consumer.approvalWait()).rejects.toThrow('approval_wait_forbidden');
 
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
     const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     const pending = await waiting;
 
@@ -418,12 +457,11 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
   }, 30_000);
 
   it('denies a pending approval when the hold connection disappears', async () => {
-    const { daemon } = await startDaemon();
+    const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);
     const consumer = await openClient(daemon);
 
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
     const signing = settle(consumer.sign({ keyFingerprintHex: identityFixture.keyFingerprintHex, signatureInputHex: gatedInputHex() }));
     await waiting;
 
@@ -435,8 +473,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
   it('rejects a second request sent while a parked response is outstanding', async () => {
     const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);
-    const waiting = startApprovalWait(hold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(hold, audit);
 
     const raw = await rawConnect(daemon.socketPath);
     raw.send({
@@ -459,8 +496,7 @@ describe('Approval channel authority (ADR 0099 P4/P5)', () => {
 
     // Losing the requesting connection discards its pending approval rather
     // than leaving the person to answer into nothing.
-    await sleep(100);
-    expect(audit.join('')).toContain('approval_discarded');
+    await waitForAudit(audit, 'approval_discarded');
   }, 30_000);
 
   it('bounds approval durations to their lower-only ceilings', async () => {

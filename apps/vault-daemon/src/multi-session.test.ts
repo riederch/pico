@@ -135,10 +135,68 @@ async function holdUnlock(
   return client;
 }
 
-function startApprovalWait(
+/**
+ * Polls the daemon's own view of its sessions rather than assuming how quickly
+ * a closed hold connection is noticed. The lock is what the caller is about to
+ * assert on, so waiting for it is the assertion's own precondition.
+ */
+async function waitForSessionCount(
   client: PicoVaultDaemonClient,
-): Promise<PicoVaultDaemonApprovalRequestDescriptor | null> {
-  return client.approvalWait().then((result) => result.pending);
+  expected: number,
+): Promise<Awaited<ReturnType<PicoVaultDaemonClient['status']>>> {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    const status = await client.status();
+    if (status.sessions.length === expected) {
+      return status;
+    }
+    await sleep(20);
+  }
+  throw new Error(`wait_for_timeout:session_count_${expected}`);
+}
+
+const approvalChannelsSynchronised = new WeakSet<PicoVaultDaemonClient>();
+
+/**
+ * Parks an `approval.wait` and returns its promise once the daemon has
+ * recorded this connection as an approval channel.
+ *
+ * A fixed sleep here only makes the race unlikely: a gated request that
+ * arrives before the wait lands fails closed with `approval_unavailable` -
+ * correct runtime behaviour, and a flaky test. Waiting for the daemon's own
+ * record removes the guess.
+ *
+ * The daemon audits `approval_watch_started` once per connection, so this can
+ * only synchronise a connection's first wait. A second use on the same
+ * connection throws instead of silently going back to hoping.
+ */
+async function startApprovalWait(
+  client: PicoVaultDaemonClient,
+  audit: readonly string[],
+): Promise<{ waiting: Promise<PicoVaultDaemonApprovalRequestDescriptor | null> }> {
+  if (approvalChannelsSynchronised.has(client)) {
+    throw new Error(
+      'approval_watch_started is audited once per connection; this helper '
+      + 'cannot synchronise a second wait on the same connection.',
+    );
+  }
+  approvalChannelsSynchronised.add(client);
+
+  const countWatchStarts = (): number =>
+    audit.filter((line) => line.includes('"event":"approval_watch_started"')).length;
+  const before = countWatchStarts();
+  const waiting = client.approvalWait().then((result) => result.pending);
+
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (countWatchStarts() > before) {
+      // Wrapped, because returning the promise bare from an async function
+      // would flatten it: the caller would await the approval itself, which
+      // only arrives once the caller triggers the gated request below.
+      return { waiting };
+    }
+    await sleep(20);
+  }
+
+  throw new Error('wait_for_timeout:approval_watch_started');
 }
 
 function openLocal(fixture: Fixture): PicoVaultSession {
@@ -207,8 +265,7 @@ describe('Multi-session unlock (ADR 0102 M1/M2/M3)', () => {
 
     // Closing one terminal locks that key and leaves the other untouched.
     await identityHold.close();
-    await sleep(120);
-    const afterClose = await observer.status();
+    const afterClose = await waitForSessionCount(observer, 1);
     expect(afterClose.locked).toBe(false);
     expect(afterClose.sessions.map((session) => session.keyFingerprintHex)).toEqual([
       ownerAgreement.result.keyFingerprintHex,
@@ -255,8 +312,7 @@ describe('Two-role reader-grant ceremony (ADR 0102 M4/M5)', () => {
     const consumer = await openClient(daemon);
     const domainRecord = localDomain();
 
-    const waiting = startApprovalWait(identityHold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(identityHold, audit);
     const granting = consumer.ceremonyCreateReaderGrant(readerGrantInput(domainRecord) as never);
     const pending = await waiting;
     expect(pending!.label).toBe(picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant);
@@ -318,7 +374,7 @@ describe('Two-role reader-grant ceremony (ADR 0102 M4/M5)', () => {
   }, 60_000);
 
   it('routes the approval to the signing key holder, not another holder', async () => {
-    const { daemon } = await startDaemon(undefined, 400);
+    const { daemon, audit } = await startDaemon(undefined, 400);
     const identityHold = await holdUnlock(daemon, ownerIdentity);
     const agreementHold = await holdUnlock(daemon, ownerAgreement);
     const consumer = await openClient(daemon);
@@ -326,14 +382,12 @@ describe('Two-role reader-grant ceremony (ADR 0102 M4/M5)', () => {
 
     // The agreement key's holder is watching, but the ceremony is signed by
     // the identity root - whose holder is not - so it fails closed.
-    const agreementWaiting = startApprovalWait(agreementHold);
-    await sleep(50);
+    const { waiting: agreementWaiting } = await startApprovalWait(agreementHold, audit);
     await expect(consumer.ceremonyCreateReaderGrant(readerGrantInput(domainRecord) as never))
       .rejects.toThrow('approval_unavailable');
     expect(await agreementWaiting).toBeNull();
 
-    const identityWaiting = startApprovalWait(identityHold);
-    await sleep(50);
+    const { waiting: identityWaiting } = await startApprovalWait(identityHold, audit);
     const granting = consumer.ceremonyCreateReaderGrant(readerGrantInput(domainRecord) as never)
       .then(() => ({ ok: true as const }), (error: unknown) => ({
         ok: false as const,
@@ -358,13 +412,12 @@ describe('Two-role reader-grant ceremony (ADR 0102 M4/M5)', () => {
   }, 60_000);
 
   it('refuses the ceremony when the agreement key is not unlocked', async () => {
-    const { daemon } = await startDaemon();
+    const { daemon, audit } = await startDaemon();
     const identityHold = await holdUnlock(daemon, ownerIdentity);
     const consumer = await openClient(daemon);
     const domainRecord = localDomain();
 
-    const waiting = startApprovalWait(identityHold);
-    await sleep(50);
+    const { waiting } = await startApprovalWait(identityHold, audit);
     await expect(consumer.ceremonyCreateReaderGrant(readerGrantInput(domainRecord) as never))
       .rejects.toThrow('unknown_unlocked_key');
     // The person was never asked about a ceremony that could not run.
