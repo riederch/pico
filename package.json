@@ -13,7 +13,7 @@
     "license:check": "node scripts/check-license.mjs",
     "release:tag-check": "node scripts/check-release-tag.mjs",
     "version:check": "node scripts/check-version.mjs",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --workspace-concurrency=1 test",
     "test:coverage": "pnpm -r test:coverage",
     "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm build && pnpm check && pnpm test"
   },
