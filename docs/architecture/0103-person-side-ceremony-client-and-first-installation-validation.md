@@ -9,7 +9,9 @@ as "`apps/core` caller migration". That work does not exist: the Foundation
 holds no person key and takes no Vault session, so there is nothing there to
 migrate. What is actually missing sits between the two processes that were
 built, and in front of both of them sits an installation nobody has ever
-performed.
+performed. Below both sits a Home nobody can found: the claim ceremony has
+no caller either, and without a founding record the domain ceremonies
+cannot run at all.
 
 ## Context
 
@@ -45,6 +47,21 @@ question: `pico-vault` can `daemon`, `create`, `status`, `lock`, `sign` and
 `unlock` (`cli.ts:267-337`). It cannot run a ceremony and has no way to
 deliver a record to the Foundation. Neither side is wrong; nothing joins
 them.
+
+The same gap sits one level lower, and it is the one that blocks
+everything above it. `POST /api/home/claim` takes a sealed `claimEnvelope`
+or a signed `foundingAcceptance`; the dashboard only reads `claimState`
+(`apps/web/src/api.ts:420`) and offers no claim flow; the CLI has no claim
+command; and no script or add-on document supplies one. **No tool exists
+with which a person can found a Pico Home.** The ceremony is implemented,
+signature-bound and covered by tests, and it is not reachable.
+
+That is not a separate nice-to-have. `ReaderCustodyStore.verifyDomain`
+refuses every domain record with `no_founding_record` while no founding
+exists (`apps/core/src/reader-custody.ts:1176`), so the domain ceremonies
+this ADR set out to deliver cannot be exercised against a real Foundation
+at all until a Home has been founded. The claim is the first ceremony, not
+a later one.
 
 Independently, ADR 0007, 0019 and 0027 have named real Home Assistant
 installation as unvalidated since the first week. The add-on has CI smokes
@@ -135,19 +152,25 @@ today, so that is the path the first installation validates.
   shredded, after which the read reports `key_shredded`.
 - **V5 - Findings recorded: Open.** Every friction point is written down,
   including small ones. The output of this gate is the list, not a pass.
-- **C1 - Ceremony command group: Open.** `pico-vault ceremony
-  create-domain`, `grant-reader` and `rotate-domain` drive the existing
-  `client.ts` ceremony methods and POST to the existing Foundation routes.
-  No new Foundation route is added.
-- **C2 - No person key in the client: Open.** The CLI process holds no
+- **C1 - Claim ceremony: Open.** `pico-vault ceremony claim-home` takes the
+  Move-In Code and host key material a person can read from the add-on log,
+  seals the claim envelope to the host key-agreement key, signs the founding
+  acceptance with the identity key inside the daemon, and completes both
+  steps against `POST /api/home/claim`. Until this exists nothing below it
+  can run, so it comes first.
+- **C2 - Domain ceremony group: Open.** `pico-vault ceremony create-domain`,
+  `grant-reader` and `rotate-domain` drive the existing `client.ts` ceremony
+  methods and POST to the existing Foundation routes. No new Foundation
+  route is added.
+- **C3 - No person key in the client: Open.** The CLI process holds no
   identity or agreement private key; all key use crosses the socket. This
   is a test, not a claim.
-- **C3 - Refusal fidelity: Open.** A Foundation rejection surfaces its
+- **C4 - Refusal fidelity: Open.** A Foundation rejection surfaces its
   `reason` unchanged, with no retry and no partial local state.
-- **C4 - Executing test: Open.** An integration test runs a daemon and a
-  Foundation together and creates a reader-custody domain end to end. This
-  is the first test that executes the ADR 0097-0102 chain as a product
-  path rather than as a unit.
+- **C5 - Executing test: Open.** An integration test runs a daemon and a
+  Foundation together, founds a Home and then creates a reader-custody
+  domain in it, end to end. This is the first test that executes the ADR
+  0097-0102 chain as a product path rather than as a unit.
 
 ## Non-goals
 
@@ -163,6 +186,8 @@ today, so that is the path the first installation validates.
 
 Positive:
 
+- a person can found a Pico Home for the first time, which every signed
+  record above it depends on and which no tool could do before;
 - the ADR 0097-0102 chain gains its first product path, closing the gap
   between a built custody boundary and a used one;
 - three ADRs stop carrying a follow-up item that describes work that does
