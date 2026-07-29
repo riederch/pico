@@ -13,7 +13,11 @@ import {
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoHomeMembershipSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  picoHomeMembershipCredentialSchema,
+  picoHomeMembershipRoles,
+  picoHomeMembershipScopes,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentityReaderKeyFreshnessStatuses,
   picoHomeClaimEnvelopeSchema,
@@ -24,6 +28,9 @@ import {
   type PicoHomeClaimSignatureInput,
   type PicoHomeFoundingSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
+  type PicoHomeMembershipRole,
+  type PicoHomeMembershipScope,
+  type PicoHomeMembershipSignatureInput,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
   type PicoIdentityReaderKeyFreshnessStatus,
   type PicoVaultPersonKeyRole,
@@ -49,6 +56,7 @@ const ceremonySubcommands = [
   'rotate-domain',
   'grant-reader',
   'publish-checkpoint',
+  'issue-membership',
 ] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
@@ -78,6 +86,20 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'core-url',
     'session',
     'domain-id',
+    'lifecycle-order',
+  ],
+  'issue-membership': [
+    'vault-home',
+    'fingerprint',
+    'core-url',
+    'session',
+    'home-id',
+    'subject-identity-fingerprint',
+    'host-signing-fingerprint',
+    'role',
+    'scopes',
+    'valid-until',
+    'valid-from',
     'lifecycle-order',
   ],
   'publish-checkpoint': [
@@ -463,6 +485,37 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
           lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
         }));
         process.stdout.write(`${JSON.stringify(domain)}\n`);
+        return;
+      }
+      if (invocation.ceremony === 'issue-membership') {
+        const roleFlag = invocation.flags.get('role') ?? 'home_member';
+        if (!(picoHomeMembershipRoles as readonly string[]).includes(roleFlag)) {
+          throw new Error('invalid_membership_role');
+        }
+        const scopes = (invocation.flags.get('scopes') ?? 'host.use').split(',').map((s) => s.trim());
+        for (const scope of scopes) {
+          if (!(picoHomeMembershipScopes as readonly string[]).includes(scope)) {
+            throw new Error(`invalid_membership_scope:${scope}`);
+          }
+        }
+        const issued = await withClient(vaultHomePath, async (client) => await runIssueMembershipCeremony({
+          client,
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          session: requireFlag(invocation.flags, 'session'),
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          homeId: requireFlag(invocation.flags, 'home-id'),
+          subjectPicoIdentityFingerprintHex: requireFlag(
+            invocation.flags,
+            'subject-identity-fingerprint',
+          ),
+          hostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
+          role: roleFlag as PicoHomeMembershipRole,
+          scopes: scopes as PicoHomeMembershipScope[],
+          validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
+          validUntil: requireFlag(invocation.flags, 'valid-until'),
+          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+        }));
+        process.stdout.write(`${JSON.stringify(issued)}\n`);
         return;
       }
       if (invocation.ceremony === 'publish-checkpoint') {
@@ -1087,4 +1140,80 @@ async function runPublishCheckpointCeremony(input: {
   // Returned so a caller can see exactly what it published, and when it stops
   // being usable.
   return { accepted, freshUntil: checkpoint.freshUntil, checkpointId: checkpoint.checkpointId };
+}
+
+/**
+ * ADR 0103 Weg A. Issues a Home membership credential for another Pico.
+ *
+ * The credential has two halves and only one of them is a person's. The
+ * issuer statement carries the authority (ADR 0080 H6) and is signed here,
+ * under approval, by the identity that founded the Home. The host's
+ * activation signature is added by the Foundation at intake, because it is
+ * made with the Home host key - infrastructure custody that lives in the
+ * Foundation and never in a Vault. So this command deliberately sends an
+ * issuer statement, not a finished credential.
+ */
+async function runIssueMembershipCeremony(input: {
+  client: PicoVaultDaemonClient;
+  coreUrl: string;
+  session: string;
+  signerKeyFingerprintHex: string;
+  homeId: string;
+  subjectPicoIdentityFingerprintHex: string;
+  hostSigningKeyFingerprintHex: string;
+  role: PicoHomeMembershipRole;
+  scopes: PicoHomeMembershipScope[];
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('membership_issuer_not_unlocked');
+  }
+
+  const membership: PicoHomeMembershipSignatureInput = {
+    suite: picoIdentitySuite,
+    credentialId: `membership_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
+    homeId: input.homeId,
+    issuerPicoIdentityFingerprintHex: signer.keyFingerprintHex,
+    subjectPicoIdentityFingerprintHex: input.subjectPicoIdentityFingerprintHex,
+    hostSigningKeyFingerprintHex: input.hostSigningKeyFingerprintHex,
+    role: input.role,
+    scopes: input.scopes,
+    validFrom: input.validFrom,
+    validUntil: input.validUntil,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+
+  process.stderr.write('Approve the membership on the terminal holding the identity unlock.\n');
+  const signature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    signatureInputHex: Buffer.from(
+      buildPicoHomeMembershipSignatureInput(membership),
+    ).toString('hex'),
+  });
+
+  const issuerStatement = {
+    schema: picoHomeMembershipCredentialSchema,
+    membership,
+    issuerIdentityKeyRecord: {
+      suite: picoIdentitySuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: signer.publicKeyHex,
+    },
+    issuerSignatureHex: signature.signatureHex,
+  };
+
+  const accepted = await foundationRequest(
+    input.coreUrl,
+    '/api/home/memberships',
+    issuerStatement,
+    input.session,
+  ) as Record<string, unknown>;
+
+  return { accepted, issuerStatement };
 }

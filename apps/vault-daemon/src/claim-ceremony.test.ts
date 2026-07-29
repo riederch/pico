@@ -309,6 +309,64 @@ function runCreateDomain(
   });
 }
 
+async function bootstrapOperator(core: RunningCore): Promise<string> {
+  const code = /"operatorBootstrapCode":"([^"]+)"/.exec(core.log());
+  if (code === null) {
+    throw new Error('operator_bootstrap_code_not_logged');
+  }
+  const response = await fetch(`${core.baseUrl}/api/auth/bootstrap`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ bootstrapCode: code[1], passphrase: 'operator relay passphrase' }),
+  });
+  if (response.status !== 201) {
+    throw new Error(`operator_bootstrap_failed:${response.status}`);
+  }
+  return ((await response.json()) as { session: string }).session;
+}
+
+function runIssueMembership(
+  daemon: RunningDaemon,
+  core: RunningCore,
+  session: string,
+  homeId: string,
+  subjectFingerprintHex: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return runCli([
+    'ceremony', 'issue-membership',
+    '--vault-home', daemon.vaultHomePath,
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--core-url', core.baseUrl,
+    '--session', session,
+    '--home-id', homeId,
+    '--subject-identity-fingerprint', subjectFingerprintHex,
+    '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+    '--valid-until', new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
+  ]);
+}
+
+function runCli(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [CLI, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
+  child.stdout!.on('data', (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+
+  return new Promise((resolvePromise) => {
+    child.once('exit', (code) => {
+      resolvePromise({ code, stdout, stderr });
+    });
+  });
+}
+
 function runRotateDomain(
   daemon: RunningDaemon,
   core: RunningCore,
@@ -437,6 +495,46 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     // The person was still asked: the daemon signed before the Foundation
     // judged, which is the order the approval boundary requires.
     expect(identityApprover.approvals()).toBe(4);
+  }, 180_000);
+
+  it('issues a Home membership whose host activation the Foundation adds', async () => {
+    const core = await startCore();
+    const daemon = await startDaemon();
+    const approver = await startApprover(daemon);
+
+    const claim = await runCeremony(daemon, core);
+    expect(claim.code).toBe(0);
+    const homeId = (JSON.parse(claim.stdout) as { claimState: { homeId: string } }).claimState.homeId;
+    const session = await bootstrapOperator(core);
+
+    // A membership for some other Pico. The subject never signs anything: a
+    // membership is given by the Home's authority, not claimed by its holder.
+    const subjectFingerprintHex = 'ab'.repeat(32);
+    const issued = await runIssueMembership(daemon, core, session, homeId, subjectFingerprintHex);
+    expect(issued.code).toBe(0);
+
+    // The client sent an issuer statement and nothing else: the activation
+    // signature is made with the Home host key, which no Vault holds.
+    const result = JSON.parse(issued.stdout) as {
+      accepted: Record<string, unknown>;
+      issuerStatement: Record<string, unknown>;
+    };
+    expect(result.issuerStatement.hostActivationSignatureHex).toBeUndefined();
+
+    // That the Foundation added a valid one is proven by the record existing
+    // at all: the store re-verifies both halves before writing, so a stored
+    // membership cannot carry a bad or missing activation signature. The
+    // route answers with a view, so it is not visible in the response.
+    expect(JSON.stringify(result.accepted)).toContain(subjectFingerprintHex);
+
+    // Founding cost two approvals, the membership a third.
+    expect(approver.approvals()).toBe(3);
+
+    const listed = await fetch(`${core.baseUrl}/api/home/memberships`, {
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(listed.status).toBe(200);
+    expect(JSON.stringify(await listed.json())).toContain(subjectFingerprintHex);
   }, 180_000);
 
   it('cannot sign without the person: a locked daemon fails the ceremony', async () => {
