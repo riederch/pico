@@ -13,6 +13,9 @@ import {
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
+  buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  picoIdentityReaderKeyFreshnessCheckpointSchema,
+  picoIdentityReaderKeyFreshnessStatuses,
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeSealedClaimPayloadSchema,
@@ -21,6 +24,8 @@ import {
   type PicoHomeClaimSignatureInput,
   type PicoHomeFoundingSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
+  type PicoIdentityReaderKeyFreshnessSignatureInput,
+  type PicoIdentityReaderKeyFreshnessStatus,
   type PicoVaultPersonKeyRole,
 } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
@@ -35,7 +40,16 @@ type CliCommand = typeof cliCommands[number];
  * to a Foundation. ADR 0103 C1 starts with `claim-home`, because no domain
  * record is accepted before a Home has been founded.
  */
-const ceremonySubcommands = ['claim-home', 'create-domain', 'rotate-domain', 'grant-reader'] as const;
+/** ADR 0085's ceiling, mirrored so an over-long window fails before signing. */
+const MAX_READER_KEY_FRESHNESS_MS = 5 * 60 * 1_000;
+
+const ceremonySubcommands = [
+  'claim-home',
+  'create-domain',
+  'rotate-domain',
+  'grant-reader',
+  'publish-checkpoint',
+] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
 const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
@@ -65,6 +79,19 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'session',
     'domain-id',
     'lifecycle-order',
+  ],
+  'publish-checkpoint': [
+    'vault-home',
+    'fingerprint',
+    'core-url',
+    'session',
+    'home-id',
+    'reader-device-signing-fingerprint',
+    'reader-device-agreement-fingerprint',
+    'reader-delegation-id',
+    'status',
+    'observed-through-lifecycle-order',
+    'fresh-for-seconds',
   ],
   'rotate-domain': [
     'vault-home',
@@ -436,6 +463,36 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
           lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
         }));
         process.stdout.write(`${JSON.stringify(domain)}\n`);
+        return;
+      }
+      if (invocation.ceremony === 'publish-checkpoint') {
+        const statusFlag = invocation.flags.get('status') ?? 'current';
+        if (!(picoIdentityReaderKeyFreshnessStatuses as readonly string[]).includes(statusFlag)) {
+          throw new Error('invalid_checkpoint_status');
+        }
+        const published = await withClient(vaultHomePath, async (client) => await runPublishCheckpointCeremony({
+          client,
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          session: requireFlag(invocation.flags, 'session'),
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          homeId: requireFlag(invocation.flags, 'home-id'),
+          deviceSigningKeyFingerprintHex: requireFlag(
+            invocation.flags,
+            'reader-device-signing-fingerprint',
+          ),
+          deviceKeyAgreementKeyFingerprintHex: requireFlag(
+            invocation.flags,
+            'reader-device-agreement-fingerprint',
+          ),
+          delegationId: requireFlag(invocation.flags, 'reader-delegation-id'),
+          status: statusFlag as PicoIdentityReaderKeyFreshnessStatus,
+          observedThroughLifecycleOrder: requireFlag(
+            invocation.flags,
+            'observed-through-lifecycle-order',
+          ),
+          freshForSeconds: Number(invocation.flags.get('fresh-for-seconds') ?? '240'),
+        }));
+        process.stdout.write(`${JSON.stringify(published)}\n`);
         return;
       }
       if (invocation.ceremony === 'rotate-domain') {
@@ -943,4 +1000,91 @@ async function runGrantReaderCeremony(input: {
   ) as Record<string, unknown>;
 
   return { accepted, readerGrantRecord: ceremony.readerGrantRecord };
+}
+
+/**
+ * ADR 0103 Weg A. Publishes an ADR 0085 freshness checkpoint so a reader
+ * grant can be judged at all.
+ *
+ * Signed through `sign` rather than the ceremony signer adapter, for the same
+ * reason claim-home is: the adapter blocks its thread, and this needs none of
+ * it. `reader-key-freshness` is on the ADR 0099 exempt list, so no approval is
+ * raised - which is a requirement rather than a convenience, because a
+ * checkpoint is valid for at most five minutes and has to be reissued often.
+ * A person cannot be asked every five minutes.
+ *
+ * The five-minute ceiling is enforced here as well as in the verifier, so an
+ * over-long window fails before the person's key is ever used on it.
+ */
+async function runPublishCheckpointCeremony(input: {
+  client: PicoVaultDaemonClient;
+  coreUrl: string;
+  session: string;
+  signerKeyFingerprintHex: string;
+  homeId: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+  status: PicoIdentityReaderKeyFreshnessStatus;
+  observedThroughLifecycleOrder: string;
+  freshForSeconds: number;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('checkpoint_signer_not_unlocked');
+  }
+  if (!Number.isSafeInteger(input.freshForSeconds)
+    || input.freshForSeconds < 1
+    || input.freshForSeconds * 1_000 > MAX_READER_KEY_FRESHNESS_MS) {
+    throw new Error('reader_key_freshness_window_too_long');
+  }
+
+  const checkedAtMs = Date.now();
+  const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {
+    suite: picoIdentitySuite,
+    checkpointId: `checkpoint_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
+    homeId: input.homeId,
+    // The issuer is the reader's own identity root: a reader asserts the
+    // freshness of its own device keys.
+    issuerIdentityKeyFingerprintHex: signer.keyFingerprintHex,
+    deviceSigningKeyFingerprintHex: input.deviceSigningKeyFingerprintHex,
+    deviceKeyAgreementKeyFingerprintHex: input.deviceKeyAgreementKeyFingerprintHex,
+    delegationId: input.delegationId,
+    status: input.status,
+    observedThroughLifecycleOrder: input.observedThroughLifecycleOrder,
+    checkedAt: new Date(checkedAtMs).toISOString(),
+    freshUntil: new Date(checkedAtMs + (input.freshForSeconds * 1_000)).toISOString(),
+  };
+
+  const signature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    signatureInputHex: Buffer.from(
+      buildPicoIdentityReaderKeyFreshnessSignatureInput(checkpoint),
+    ).toString('hex'),
+  });
+
+  const record = {
+    schema: picoIdentityReaderKeyFreshnessCheckpointSchema,
+    checkpoint,
+    issuerIdentityKeyRecord: {
+      suite: picoIdentitySuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: signer.publicKeyHex,
+    },
+    issuerSignatureHex: signature.signatureHex,
+  };
+
+  const accepted = await foundationRequest(
+    input.coreUrl,
+    '/api/home/reader-key-freshness-checkpoints',
+    record,
+    input.session,
+  ) as Record<string, unknown>;
+
+  // Returned so a caller can see exactly what it published, and when it stops
+  // being usable.
+  return { accepted, freshUntil: checkpoint.freshUntil, checkpointId: checkpoint.checkpointId };
 }
