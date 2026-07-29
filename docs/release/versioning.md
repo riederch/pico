@@ -176,6 +176,20 @@ Before a release with backup-requiring migrations is tagged, the release must do
    git push origin v0.1.9
    ```
 
+## Upgrade contract
+
+What the release must guarantee for an already-deployed instance — surviving
+state, change classes, image verification before touching Home Assistant, and
+the honest rollback limits — is in:
+
+```text
+docs/release/upgrade-contract.md
+```
+
+Steps 6 and 7 above publish different image tag classes, and only the tag build
+publishes the semver tag the add-on pulls. Confirm the image exists before
+refreshing Home Assistant; the upgrade contract has the command.
+
 ## Home Assistant check after release
 
 After the repository and container tag are updated, refresh Home Assistant's add-on repository cache:

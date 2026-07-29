@@ -2,6 +2,11 @@
 
 Pico is still in the foundation phase, but database migrations must already follow a clear safety model.
 
+This contract covers the database. An upgrade also carries key stores and
+Home Assistant add-on options across versions, each owned by something else;
+[`upgrade-contract.md`](upgrade-contract.md) covers those and the rollback
+limits that follow from keys being excluded from backups.
+
 ## Rule
 
 Before a migration can change, remove, rewrite or reinterpret existing user-relevant data, the migration must be marked as backup-requiring.
