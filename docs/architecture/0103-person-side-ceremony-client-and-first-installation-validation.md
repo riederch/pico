@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted; not implemented. Every gate below is open.
+Accepted. The validation half (V1-V5) is done: the add-on runs on a real
+Home Assistant instance and a memory item has been written, read and
+crypto-shredded there. The client half (C1-C5) is open, and the first real
+install did not change its shape - it confirmed the claim gap that made C1
+the first gate.
 
 This ADR replaces the follow-up ADR 0100 C5, 0101 K5 and 0102 M6 all named
 as "`apps/core` caller migration". That work does not exist: the Foundation
@@ -138,20 +142,47 @@ today, so that is the path the first installation validates.
 
 ## Gates
 
-- **V1 - Real installation: Open.** The add-on installs into an actual
-  Home Assistant instance from this repository, not a CI smoke.
-- **V2 - First boot: Open.** Setup Mode, Move-In Code delivery, claim and
-  founding complete with a person following the documented path. Log-only
-  Move-In Code delivery is expected to be the first thing that does not
-  survive contact; the outcome is recorded either way.
-- **V3 - Ingress reach: Open.** The dashboard is usable through Home
-  Assistant ingress, the operator credential can be set, and an event can
-  be written and read.
-- **V4 - Memory round trip: Open.** A memory item is written through
-  `POST /api/events`, read through the domain items route, then crypto-
-  shredded, after which the read reports `key_shredded`.
-- **V5 - Findings recorded: Open.** Every friction point is written down,
-  including small ones. The output of this gate is the list, not a pass.
+- **V1 - Real installation: Done, after two failures.** The add-on now
+  installs and runs on a real Home Assistant instance. It took three
+  releases. `0.1.8` could not be pulled at all (`404 manifest unknown`):
+  pushing `main` publishes only `main` and `sha-*`, and the semver tag the
+  add-on pulls exists only after a `v*` tag build - now step 3 and 4 of the
+  upgrade contract. `0.1.8` then installed but refused to start, because
+  `config.yaml` carried a `null` default for an optional option and the
+  Supervisor reads that back as a missing value; fixed in `0.1.9` and now
+  gated by `pnpm addon:check`. Finally, the stored option value survived the
+  update and had to be cleared by hand, because Supervisor validation runs
+  before any Pico code and Pico cannot repair it.
+- **V2 - First boot: Done as far as it can go.** Setup Mode opens, the
+  Move-In Code and the operator bootstrap code are both in the add-on log,
+  and both are usable. The expected friction is real but mild: each is a
+  field inside a JSON log line carrying four other values, so a person has
+  to find the right line and read a field out of it, and both are reminted
+  on every restart. The claim itself could not be performed - there is no
+  tool for it, which is the finding this ADR already records and gate C1
+  answers.
+- **V3 - Ingress reach: Done.** Migrations `0001`, `0002` and `0003` applied
+  cleanly on first boot, `/api/system/version` reports `0.1.9` with protocol
+  version `0.1.7` (the ADR-0104-era split, visible in production), operator
+  bootstrap succeeded against a Home with no founding record, and the
+  returned session authorized the rest.
+- **V4 - Memory round trip: Done.** `POST /api/events` wrote a
+  `memory.recorded` item and returned `payloadPosture: reference_only`, so
+  the plaintext never entered the append-only event. The domain items route
+  returned it, the shred route accepted the exact-name confirmation and
+  removed one key version, and the same read then reported
+  `contentUnavailable: key_shredded` with the record still present. The
+  ADR 0070-0074 crypto-shredding boundary works end to end on real hardware.
+- **V5 - Findings recorded: Done.** The findings are above, plus one that
+  belongs to another ADR: with the direct host port mapped, `ha-ingress`
+  and no token, `POST /api/events` accepts writes from anyone on the
+  network, because `foundation-diagnostic` is open when no token is
+  configured. ADR 0041 already forbids exactly this - *"No tokenless
+  ha-ingress mode while the add-on direct host port is mapped"* - but
+  nothing enforces it: a person can map the port in Home Assistant and the
+  container cannot see that it happened. The closed-by-default port is the
+  only thing holding that rule up, and it is a packaging default rather than
+  a check.
 - **C1 - Claim ceremony: Open.** `pico-vault ceremony claim-home` takes the
   Move-In Code and host key material a person can read from the add-on log,
   seals the claim envelope to the host key-agreement key, signs the founding
