@@ -2,10 +2,10 @@
 
 ## Status
 
-Accepted; not implemented. This is the first runtime slice of Pico Link
-(ADR 0028) and the answer to ADR 0105 B5: an authenticated channel between
-a person's device and their own Pico Home that is not the deliberately
-closed direct port.
+Accepted; partially implemented (D1 done). This is the first runtime slice
+of Pico Link (ADR 0028) and the answer to ADR 0105 B5: an authenticated
+channel between a person's device and their own Pico Home that is not the
+deliberately closed direct port.
 
 ## Context
 
