@@ -131,6 +131,11 @@ import {
 } from './reader-key-freshness.js';
 import { PicoIdentityReaderKeyFreshnessInbox } from './reader-key-freshness-inbox.js';
 import {
+  PicoLinkDirectIntake,
+  type PicoLinkDirectExecution,
+  type PicoLinkDirectPrincipal,
+} from './link-direct.js';
+import {
   PicoShareEnvelopeIssuer,
   type PicoShareEnvelopePrepareInput,
 } from './share-envelope.js';
@@ -360,6 +365,34 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // verifier judges it. Without either there is no source at all and every
   // reader-key check stays `freshness_unavailable`.
   const freshnessInbox = new PicoIdentityReaderKeyFreshnessInbox();
+  /**
+   * ADR 0107 D2. The authority surface the intake verifies against: this Home's
+   * host key identity, its two sealed-box operations, and whether a sender may
+   * act for its identity at all. The intake owns the verification order; this
+   * owns the keys and the store lookups.
+   */
+  const linkIntake = new PicoLinkDirectIntake(sodium, {
+    hostSigningKeyFingerprintHex: () => homeHostKeys?.publicBundle.signingKeyFingerprintHex,
+    openSealedToHostKeyAgreement: (sealedHex) =>
+      homeHostKeyStore.openSealedToKeyAgreement(sodium, sealedHex, 'Pico Link request'),
+    signWithHostSigningKey: (signatureInput) =>
+      homeHostKeyStore.signWithHostSigningKey(sodium, signatureInput),
+    sealToReplyKey: (replyPublicKeyHex, plaintext) =>
+      homeHostKeyStore.sealToPublicKey(sodium, replyPublicKeyHex, plaintext),
+    // The same pair of conditions an identity session is held to in
+    // `resolveAuthority`: membership admits, delegation authorizes these exact
+    // device keys. A link request gets no weaker test than a session.
+    isAuthorizedSender: (principal, at) =>
+      store.hasActivePicoHomeMembership(principal.picoIdentityFingerprintHex, undefined, at)
+      && store.hasActivePicoIdentityDelegation({
+        picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+        deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: principal.deviceKeyAgreementKeyFingerprintHex,
+        delegationId: principal.delegationId,
+        sodium,
+        at,
+      }),
+  });
   const readerKeySelector = new PicoIdentityReaderKeySelector(
     store,
     sodium,
@@ -889,6 +922,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return;
     }
 
+    // ADR 0107: the link intake authenticates inside the envelope, so it takes
+    // no Authorization header and must not be measured against one. Letting it
+    // fall through to the session checks below would reject every legitimate
+    // request; treating it as `public` would be wrong for the opposite reason,
+    // because it is not open - it is authenticated one layer in.
+    if (accessClass === 'link-intake') {
+      return;
+    }
+
     if (accessClass === 'setup-bootstrap') {
       if (routeUrl === '/api/auth/bootstrap') {
         // Only reachable while the host has no operator (ADR 0075 A10).
@@ -1013,6 +1055,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // bootstrap surfaces must be reachable without the static token, or the token
   // would become a prerequisite for the principal that outranks it.
   accessClasses.register('POST', '/api/auth/bootstrap', 'setup-bootstrap');
+  // ADR 0107: one route, envelopes only. Every class above it stays local.
+  accessClasses.register('POST', '/api/home/link', 'link-intake');
   accessClasses.register('GET', '/api/home/setup', 'setup-bootstrap');
   accessClasses.register('POST', '/api/home/claim', 'setup-bootstrap');
   accessClasses.register('POST', '/api/auth/session', 'public');
@@ -1110,6 +1154,91 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     return sendNoStore(reply, response);
   });
+
+  /**
+   * ADR 0107 D2. The only route reachable without a session, and the only one
+   * that may be exposed beyond the host: it accepts sealed envelopes and
+   * nothing else, so mapping a port for it no longer means exposing the
+   * diagnostic surface ADR 0030 keeps local.
+   *
+   * The intake verifies; this dispatches. Each operation runs the same
+   * authorization the local route runs, with the verified link principal
+   * standing where the session principal stands - so remote capability is
+   * opt-in per operation and cannot be inherited by adding a route.
+   */
+  app.post('/api/home/link', async (request, reply) => {
+    const handled = await linkIntake.handle(request.body, async (operation, args, principal) => {
+      switch (operation) {
+        case 'home.setup.read': {
+          const setup = readHomeSetupState();
+          return setup === undefined
+            ? { outcome: 'setup_mode_inactive', result: {} }
+            : { outcome: 'ok', result: setup as unknown as Record<string, unknown> };
+        }
+        case 'home.claim.submit':
+        case 'home.authority.submit': {
+          // Both write, and both need the existing route handlers split so the
+          // link and the local route share one implementation rather than
+          // growing a second one. Until that split exists the operation is
+          // declared and refused rather than half-served: a signed refusal is
+          // honest, a duplicate write path would not be.
+          return { outcome: 'operation_not_available_over_link', result: {} };
+        }
+        case 'home.authority.list': {
+          // Both require a Home-bound principal. `home-authority-relay` accepts
+          // an identity session only when it is the current Home Host Pico, so
+          // the link principal is held to exactly that and nothing broader.
+          if (principal === undefined
+            || !isCurrentHomeHostPico({
+              kind: 'pico_identity',
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+              deviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+              deviceKeyAgreementKeyFingerprintHex: principal.deviceKeyAgreementKeyFingerprintHex,
+              delegationId: principal.delegationId,
+            })) {
+            return { outcome: 'sender_is_not_home_authority', result: {} };
+          }
+          return { outcome: 'ok', result: { domains: readerCustody.domains() } };
+        }
+        default: {
+          return { outcome: 'unknown_operation', result: {} };
+        }
+      }
+    });
+
+    if (!handled.ok) {
+      // A pre-authentication refusal carries no signature, because there is no
+      // verified reply key to seal one to. It says only that the envelope was
+      // not accepted, never why in terms of the Home's state.
+      return sendNoStore(reply.code(400), { error: handled.reason });
+    }
+
+    return sendNoStore(reply.code(200), handled.envelope);
+  });
+
+  /** Shared with `GET /api/home/setup` so the link cannot drift from it. */
+  function readHomeSetupState(): PicoHomeSetupResponse | undefined {
+    currentPendingHomeClaim();
+    if (homeHostKeys === undefined || homeSetupNonceHex === undefined || !moveInCode.isPending()) {
+      return undefined;
+    }
+
+    return {
+      setupMode: {
+        active: true,
+        moveInCodePending: true,
+        claimEndpoint: '/api/home/claim',
+        hostSetupNonceHex: homeSetupNonceHex,
+      },
+      host: {
+        suite: homeHostKeys.publicBundle.suite,
+        signingPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+        signingKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        keyAgreementPublicKeyHex: homeHostKeys.publicBundle.keyAgreementPublicKeyHex,
+        keyAgreementKeyFingerprintHex: homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+      },
+    };
+  }
 
   app.get('/api/home/setup', async (_request, reply) => {
     currentPendingHomeClaim();

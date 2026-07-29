@@ -224,6 +224,13 @@ export interface PicoLinkDirectRequestSignatureInput {
   hostSigningKeyFingerprintHex: string;
   senderIdentityKeyFingerprintHex: string;
   senderDeviceSigningKeyFingerprintHex: string;
+  /**
+   * The device's key-agreement key. Signed even though this envelope never
+   * uses it: the delegation that authorizes the sender names all three keys
+   * together, so a verifier that took this one from outside the signature
+   * would be deciding authority on bytes nobody signed.
+   */
+  senderDeviceKeyAgreementKeyFingerprintHex: string;
   senderDelegationId: string;
   /** X25519 public key the response is sealed to. Fresh per request. */
   replyPublicKeyHex: string;
@@ -2104,6 +2111,26 @@ export function buildPicoIdentityPossessionSignatureInput(
   ]);
 }
 
+/**
+ * ADR 0107: the digest binding an operation's arguments or a result to its
+ * signature. Sender and verifier must produce identical bytes, so key order
+ * cannot be left to insertion order - `canonicalJson` sorts, and rejects what
+ * it cannot represent (unsafe integers, undefined) instead of dropping it.
+ *
+ * Returns a digest rather than the serialized string on purpose: exposing the
+ * serializer would invite callers to sign JSON directly, and the discipline of
+ * this layer is that only canonical byte layouts are ever signed.
+ */
+export function picoLinkDirectPayloadDigestHex(
+  sodium: { crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array },
+  payload: object,
+): string {
+  const bytes = canonicalTextEncoder.encode(canonicalJson(payload));
+  return Array.from(sodium.crypto_generichash(32, bytes, null))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 export function buildPicoIdentityDelegationSignatureInput(
   input: PicoIdentityDelegationSignatureInput,
 ): Uint8Array {
@@ -2191,6 +2218,7 @@ export function buildPicoLinkDirectRequestSignatureInput(
     'hostSigningKeyFingerprintHex',
     'senderIdentityKeyFingerprintHex',
     'senderDeviceSigningKeyFingerprintHex',
+    'senderDeviceKeyAgreementKeyFingerprintHex',
     'senderDelegationId',
     'replyPublicKeyHex',
     'argumentsDigestHex',
@@ -2213,6 +2241,7 @@ export function buildPicoLinkDirectRequestSignatureInput(
     fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.senderIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.senderDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.senderDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     asciiBytes(input.senderDelegationId),
     fixedHexBytes(input.replyPublicKeyHex, 32, 'invalid_public_key_length'),
     fixedHexBytes(input.argumentsDigestHex, 32, 'invalid_digest_length'),

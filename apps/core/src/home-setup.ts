@@ -177,9 +177,27 @@ export class HomeHostKeyStore {
     return { removedFiles };
   }
 
+  /**
+   * The claim envelope was the first thing sealed to this key; ADR 0107 link
+   * requests are the second. The operation was always generic - only its name
+   * was not - so this delegates rather than duplicating the key handling and
+   * its zeroization.
+   */
   public openSealedClaimPayload(sodium: HomeHostKeyStoreSodium, sealedClaimPayloadHex: string): string {
+    return this.openSealedToKeyAgreement(
+      sodium,
+      sealedClaimPayloadHex,
+      'Pico Home claim envelope',
+    );
+  }
+
+  public openSealedToKeyAgreement(
+    sodium: HomeHostKeyStoreSodium,
+    sealedPayloadHex: string,
+    label = 'Pico Home sealed payload',
+  ): string {
     const keyAgreement = readStoredKeyPair(sodium, this.keyPath(HOST_KEY_AGREEMENT_KEY_FILE), 'home_host_key_agreement');
-    const ciphertext = hexToBytes(sealedClaimPayloadHex, 'Pico Home claim envelope must be lowercase hex.');
+    const ciphertext = hexToBytes(sealedPayloadHex, `${label} must be lowercase hex.`);
     const publicKey = hexToBytes(keyAgreement.publicKeyHex);
     const privateKey = hexToBytes(keyAgreement.privateKeyHex);
 
@@ -191,11 +209,34 @@ export class HomeHostKeyStore {
         sodium.memzero(plaintext);
       }
     } catch {
-      throw new Error('Pico Home claim envelope could not be opened.');
+      throw new Error(`${label} could not be opened.`);
     } finally {
       sodium.memzero(publicKey);
       sodium.memzero(privateKey);
       sodium.memzero(ciphertext);
+    }
+  }
+
+  /**
+   * Sealing needs only the recipient's public key, so this holds no custody at
+   * all - it lives here because the link intake's authority surface belongs in
+   * one place, not because a host key is involved.
+   */
+  public sealToPublicKey(
+    sodium: HomeHostKeyStoreSodium & {
+      crypto_box_seal(message: Uint8Array, publicKey: Uint8Array): Uint8Array;
+    },
+    recipientPublicKeyHex: string,
+    plaintext: string,
+  ): string {
+    const recipient = hexToBytes(recipientPublicKeyHex, 'Reply key must be lowercase hex.');
+    const message = new TextEncoder().encode(plaintext);
+
+    try {
+      return bytesToHex(sodium.crypto_box_seal(message, recipient));
+    } finally {
+      sodium.memzero(message);
+      sodium.memzero(recipient);
     }
   }
 

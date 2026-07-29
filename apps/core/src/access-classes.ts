@@ -31,6 +31,12 @@ export const accessClasses = [
   // operator fallback or by the active founding Home Host Pico. The route
   // handler still verifies the evidence signature before changing state.
   'home-authority-relay',
+  // ADR 0107: the Pico Link Direct intake. Deliberately carries no session and
+  // no token - authentication is inside the envelope, where a signature binds
+  // the sender, the audience and the arguments together. That is what lets
+  // this one route be reachable while every class above it stays local: the
+  // intake exposes envelopes and nothing else.
+  'link-intake',
 ] as const;
 
 export type AccessClass = typeof accessClasses[number];

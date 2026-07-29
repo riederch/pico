@@ -32,6 +32,7 @@ function request(
     hostSigningKeyFingerprintHex: '11'.repeat(32),
     senderIdentityKeyFingerprintHex: '22'.repeat(32),
     senderDeviceSigningKeyFingerprintHex: '33'.repeat(32),
+    senderDeviceKeyAgreementKeyFingerprintHex: 'ee'.repeat(32),
     senderDelegationId: 'delegation_0001',
     replyPublicKeyHex: '44'.repeat(32),
     argumentsDigestHex: '55'.repeat(32),
@@ -57,6 +58,7 @@ function response(
 }
 
 const hex = (bytes: Uint8Array): string => Buffer.from(bytes).toString('hex');
+const ascii = (value: string): string => Buffer.from(value, 'ascii').toString('hex');
 
 describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
   it('is byte-exact and starts with its own label', () => {
@@ -67,11 +69,27 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       `${(picoLinkDirectRequestSignatureInputLabel.length).toString(16).padStart(8, '0')}`
       + Buffer.from(picoLinkDirectRequestSignatureInputLabel, 'ascii').toString('hex'),
     )).toBe(true);
-    // Full byte form pinned: any change to layout, order or encoding is a
-    // wire change and must be visible as one.
-    expect(hex(bytes)).toBe(
-      '0000001b7069636f2e6c696e6b2e6469726563742e726571756573742e7631000000107069636f2e73756974652e69642e76310000000c6c696e6b7265715f3030303100000015686f6d652e617574686f726974792e7375626d69740000002011111111111111111111111111111111111111111111111111111111111111110000002022222222222222222222222222222222222222222222222222222222222222220000002033333333333333333333333333333333333333333333333333333333333333330000000f64656c65676174696f6e5f3030303100000020444444444444444444444444444444444444444444444444444444444444444400000020555555555555555555555555555555555555555555555555555555555555555500000018323032362d30372d32395431303a30303a30302e3030305a00000018323032362d30372d32395431303a30303a33302e3030305a',
-    );
+
+    // The full byte form, pinned one length-prefixed element at a time: any
+    // change to layout, order, prefix width or encoding is a wire change and
+    // has to be visible as one. Written element-wise rather than as a single
+    // opaque blob so it can be read against the builder line by line - the
+    // literal prefixes are part of the pin, not a convenience.
+    expect(hex(bytes)).toBe([
+      `0000001b${ascii('pico.link.direct.request.v1')}`,
+      `00000010${ascii('pico.suite.id.v1')}`,
+      `0000000c${ascii('linkreq_0001')}`,
+      `00000015${ascii('home.authority.submit')}`,
+      `00000020${'11'.repeat(32)}`,
+      `00000020${'22'.repeat(32)}`,
+      `00000020${'33'.repeat(32)}`,
+      `00000020${'ee'.repeat(32)}`,
+      `0000000f${ascii('delegation_0001')}`,
+      `00000020${'44'.repeat(32)}`,
+      `00000020${'55'.repeat(32)}`,
+      `00000018${ascii('2026-07-29T10:00:00.000Z')}`,
+      `00000018${ascii('2026-07-29T10:00:30.000Z')}`,
+    ].join(''));
   });
 
   it('separates the two families: same fields never produce the same bytes', () => {
@@ -94,6 +112,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       { hostSigningKeyFingerprintHex: 'ab'.repeat(32) },
       { senderIdentityKeyFingerprintHex: 'ab'.repeat(32) },
       { senderDeviceSigningKeyFingerprintHex: 'ab'.repeat(32) },
+      { senderDeviceKeyAgreementKeyFingerprintHex: 'ab'.repeat(32) },
       { senderDelegationId: 'delegation_0002' },
       { replyPublicKeyHex: 'ab'.repeat(32) },
       { argumentsDigestHex: 'ab'.repeat(32) },

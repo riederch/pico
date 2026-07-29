@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; partially implemented (D1 done). This is the first runtime slice
+Accepted; partially implemented (D1 and D2 done). This is the first runtime slice
 of Pico Link (ADR 0028) and the answer to ADR 0105 B5: an authenticated
 channel between a person's device and their own Pico Home that is not the
 deliberately closed direct port.
@@ -148,10 +148,49 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
   The vectors live in the package rather than under
   `docs/protocol/fixtures`: that directory is the conformance surface, and
   this contract is deliberately unpublished until a separate decision.
-- **D2 - Foundation intake: Open.** One route, its own access class, size
-  limits before crypto, bounded idempotency window, named operations mapped
-  onto existing route authorization; no diagnostic surface reachable
-  through it.
+- **D2 - Foundation intake: Done.** One route, `POST /api/home/link`, in its
+  own `link-intake` access class: no session, no token, authentication one
+  layer in. The class is neither `public` (it is not open) nor session-bound,
+  so the pre-authority hook branches before the session checks rather than
+  falling through them.
+
+  The verification order is the security content, and it is pinned test by
+  test in `apps/core/src/link-direct.test.ts`: shape and size before any
+  cryptography, then one seal-open, then the closed operation set, then the
+  canonical builder as field validator, then the audience pin *before*
+  authentication, then freshness on the Home's clock with a lifetime ceiling,
+  then replay - checked before the signature so a replay costs no
+  verification, recorded only after it so an unauthenticated caller cannot
+  burn a request id the real sender still needs - then key records bound to
+  the signed fingerprints before the signature is verified with the key that
+  binding produced, then the arguments digest, then delegation and
+  membership, then the operation. Everything past authentication answers with
+  a signed, sealed response, refusals included.
+
+  Two defects surfaced while writing those tests and were fixed at the cause
+  rather than papered over in the assertions:
+
+  - the request now signs `senderDeviceKeyAgreementKeyFingerprintHex`. The
+    delegation that authorizes a sender names all three keys together and the
+    store's lookup matches on it exactly, so taking it from beside the
+    signature made authority rest on bytes nobody signed - and, because the
+    field was in practice absent, refused every authorized sender. Adding it
+    changed the D1 byte form; the vector moved with it, which is what a
+    pinned wire contract is for.
+  - the closed operation set is now checked before the canonical builder.
+    Behind it the builder's own rejection reached the caller as
+    `malformed_request`, which made `unknown_operation` unreachable and told
+    a client the wrong thing: "this Home does not offer that remotely" and
+    "these bytes do not parse" are different answers to whoever holds the
+    reply key.
+
+  Deliberately not served yet: `home.claim.submit` and `home.authority.submit`
+  are declared and refused with `operation_not_available_over_link`. Serving
+  them needs the existing local route handlers split so link and route share
+  one implementation; growing a second write path would be the faster way and
+  the wrong one. A signed refusal is honest, a duplicate write path would not
+  be. `home.setup.read` reads through the same helper the local route uses,
+  so the two cannot drift.
 - **D3 - Client side: Open.** The ADR 0103 ceremonies gain a link mode:
   host-fingerprint pinning replaces trust in the URL, the signed request
   replaces the bearer session. The local session path stays for local
