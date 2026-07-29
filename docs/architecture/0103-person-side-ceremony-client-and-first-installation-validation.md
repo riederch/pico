@@ -8,10 +8,10 @@ crypto-shredded there. On the client half, C1, C3 and C4 are done - a
 person can now found a Pico Home with `pico-vault ceremony claim-home` and
 create a reader-custody domain in it, both impossible when this ADR was
 written, and C5 proves the chain end to end across two real processes.
-C2 is implemented in full - `create-domain`, `rotate-domain` and
-`grant-reader` all exist - but only `create-domain` can complete against a
-Foundation today; the other two are blocked by deployment preconditions
-(rotation debt and freshness) rather than by missing client work.
+C2 is complete, and with it the whole of ADR 0103: a reader is admitted to
+a Home, delegates to its own device keys, registers them, asserts their
+freshness and is granted access to a domain - across two separate Vaults
+and a real Foundation, all in one test.
 
 This ADR replaces the follow-up ADR 0100 C5, 0101 K5 and 0102 M6 all named
 as "`apps/core` caller migration". That work does not exist: the Foundation
@@ -217,13 +217,12 @@ today, so that is the path the first installation validates.
   granted against again. Nothing else in the design states that, and no tool
   stores them yet.
 
-  Neither can currently complete against a Foundation, for reasons that
-  belong to the deployment rather than to this client: a rotation answers a
-  revocation (ADR 0088 rotation debt), so a domain with no readers is
-  correctly refused with `invalid_rotation_causes`; and a reader grant needs
-  an ADR 0085 freshness checkpoint, which the deployment default does not
-  supply (`freshness_unavailable`). The client half is proven up to the
-  Foundation's judgement in both cases.
+  `grant-reader` now completes: the ADR 0089 transport seam is filled by a
+  local checkpoint inbox, and the four commands a reader chain needs -
+  `issue-membership`, `delegate-device`, `open-identity-session` and
+  `publish-checkpoint` - exist. `rotate-domain` is still correctly refused
+  with `invalid_rotation_causes` on a domain whose readers have not been
+  revoked, which is ADR 0088 working rather than a gap.
 - **C3 - No person key in the client: Done.** The CLI holds no private key;
   both signatures cross the socket. Proven negatively rather than asserted:
   with no session unlocked the ceremony fails with

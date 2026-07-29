@@ -26,12 +26,16 @@ const CLI = join(import.meta.dirname, '..', 'dist', 'cli.js');
 const CORE = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
 const IDENTITY_PASSPHRASE = 'claim ceremony identity passphrase';
 const AGREEMENT_PASSPHRASE = 'claim ceremony agreement passphrase';
+const READER_PASSPHRASE = 'reader vault passphrase';
 
 const temporaryDirectories: string[] = [];
 const childProcesses: ChildProcess[] = [];
 
 let ownerIdentity: CreatePicoVaultKeyfileResult;
 let ownerAgreement: CreatePicoVaultKeyfileResult;
+let readerIdentity: CreatePicoVaultKeyfileResult;
+let readerSigning: CreatePicoVaultKeyfileResult;
+let readerAgreement: CreatePicoVaultKeyfileResult;
 
 beforeAll(async () => {
   await sodium.ready;
@@ -43,7 +47,19 @@ beforeAll(async () => {
     keyRole: 'device_key_agreement',
     passphrase: AGREEMENT_PASSPHRASE,
   });
-}, 60_000);
+  readerIdentity = createPicoVaultKeyfile(sodium, {
+    keyRole: 'pico_identity',
+    passphrase: READER_PASSPHRASE,
+  });
+  readerSigning = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_signing',
+    passphrase: READER_PASSPHRASE,
+  });
+  readerAgreement = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_key_agreement',
+    passphrase: READER_PASSPHRASE,
+  });
+}, 120_000);
 
 afterEach(() => {
   for (const child of childProcesses.splice(0)) {
@@ -206,11 +222,63 @@ async function startDaemon(): Promise<RunningDaemon> {
   return { vaultHomePath, stderr: () => stderr };
 }
 
+/**
+ * The reader's own Vault, on its own daemon: a reader is a different person
+ * with different keys, and pretending otherwise would test nothing.
+ */
+async function startReaderDaemon(): Promise<RunningDaemon> {
+  const vaultHomePath = tempDir('pico-reader-vault-');
+  for (const [role, fixture] of [
+    ['pico_identity', readerIdentity],
+    ['device_signing', readerSigning],
+    ['device_key_agreement', readerAgreement],
+  ] as const) {
+    writePicoVaultKeyfile(
+      join(vaultHomePath, 'keyfiles', `${role}-${fixture.keyFingerprintHex}.json`),
+      fixture.keyfile,
+    );
+  }
+
+  const child = spawn(process.execPath, [
+    CLI, 'daemon',
+    '--vault-home', vaultHomePath,
+    '--foundation-data', tempDir('pico-reader-data-'),
+    '--foundation-backup', tempDir('pico-reader-backup-'),
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stderr = '';
+  child.stderr!.setEncoding('utf8');
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    let stdout = '';
+    const timer = setTimeout(() => {
+      rejectPromise(new Error(`reader_daemon_start_timeout:${stderr}`));
+    }, 20_000);
+    child.stdout!.setEncoding('utf8');
+    child.stdout!.on('data', (chunk: string) => {
+      stdout += chunk;
+      if (stdout.includes('\n')) {
+        clearTimeout(timer);
+        resolvePromise();
+      }
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      rejectPromise(new Error(`reader_daemon_exited:${String(code)}:${stderr}`));
+    });
+  });
+
+  return { vaultHomePath, stderr: () => stderr };
+}
+
 /** The person: a scripted `pico-vault unlock` that answers every prompt yes. */
 async function startApprover(
   daemon: RunningDaemon,
   fixture: CreatePicoVaultKeyfileResult = ownerIdentity,
-  role: 'pico_identity' | 'device_key_agreement' = 'pico_identity',
+  role: 'pico_identity' | 'device_key_agreement' | 'device_signing' = 'pico_identity',
   passphrase: string = IDENTITY_PASSPHRASE,
 ): Promise<{ approvals: () => number }> {
   const before = daemon.stderr().split('"event":"approval_watch_started"').length - 1;
@@ -536,6 +604,130 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(listed.status).toBe(200);
     expect(JSON.stringify(await listed.json())).toContain(subjectFingerprintHex);
   }, 180_000);
+
+  it('grants a reader access to a domain, end to end across two Vaults', async () => {
+    const core = await startCore();
+    const ownerDaemon = await startDaemon();
+    const ownerApprover = await startApprover(ownerDaemon);
+
+    const claim = await runCeremony(ownerDaemon, core);
+    expect(claim.code).toBe(0);
+    const homeId = (JSON.parse(claim.stdout) as { claimState: { homeId: string } }).claimState.homeId;
+    const session = await bootstrapOperator(core);
+
+    // 1. The owner admits the reader to the Home. Without this the reader
+    //    cannot even open a session.
+    const membership = await runIssueMembership(
+      ownerDaemon, core, session, homeId, readerIdentity.keyFingerprintHex,
+    );
+    if (membership.code !== 0) {
+      throw new Error(`MEMBERSHIP_FAILED: ${membership.stderr}`);
+    }
+
+    // 2. The reader delegates to its own device keys, in its own Vault.
+    const readerDaemon = await startReaderDaemon();
+    await startApprover(readerDaemon, readerIdentity, 'pico_identity', READER_PASSPHRASE);
+    await startApprover(readerDaemon, readerSigning, 'device_signing', READER_PASSPHRASE);
+    await startApprover(readerDaemon, readerAgreement, 'device_key_agreement', READER_PASSPHRASE);
+
+    const delegated = await runCli([
+      'ceremony', 'delegate-device',
+      '--vault-home', readerDaemon.vaultHomePath,
+      '--fingerprint', readerIdentity.keyFingerprintHex,
+      '--signing-fingerprint', readerSigning.keyFingerprintHex,
+      '--agreement-fingerprint', readerAgreement.keyFingerprintHex,
+      '--valid-until', new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
+    ]);
+    if (delegated.code !== 0) {
+      throw new Error(`DELEGATE_FAILED: ${delegated.stderr}`);
+    }
+    const delegationPath = join(tempDir('pico-reader-records-'), 'delegation.json');
+    writeFileSync(delegationPath, delegated.stdout.trim(), 'utf8');
+    const delegationId = (JSON.parse(delegated.stdout) as {
+      record: { delegationId: string };
+    }).record.delegationId;
+
+    // 3. Opening the session is what registers the reader key (app.ts:1733).
+    const opened = await runCli([
+      'ceremony', 'open-identity-session',
+      '--vault-home', readerDaemon.vaultHomePath,
+      '--fingerprint', readerIdentity.keyFingerprintHex,
+      '--signing-fingerprint', readerSigning.keyFingerprintHex,
+      '--agreement-fingerprint', readerAgreement.keyFingerprintHex,
+      '--core-url', core.baseUrl,
+      '--delegation', delegationPath,
+    ]);
+    if (opened.code !== 0) {
+      throw new Error(`OPEN_SESSION_FAILED: ${opened.stderr}`);
+    }
+
+    // 4. The reader asserts its own device keys are current. Exempt from
+    //    approval, because a checkpoint lasts five minutes and is reissued
+    //    constantly.
+    const published = await runCli([
+      'ceremony', 'publish-checkpoint',
+      '--vault-home', readerDaemon.vaultHomePath,
+      '--fingerprint', readerIdentity.keyFingerprintHex,
+      '--core-url', core.baseUrl,
+      '--session', session,
+      '--home-id', homeId,
+      '--reader-device-signing-fingerprint', readerSigning.keyFingerprintHex,
+      '--reader-device-agreement-fingerprint', readerAgreement.keyFingerprintHex,
+      '--reader-delegation-id', delegationId,
+      '--observed-through-lifecycle-order', 'seq:0000000000000001',
+    ]);
+    if (published.code !== 0) {
+      throw new Error(`PUBLISH_FAILED: ${published.stderr}`);
+    }
+
+    // 5. The owner creates the domain and grants the reader access to it.
+    //    Both need the owner's agreement key unlocked - it never signs, but
+    //    its public key seals the KEK to the reader.
+    await startApprover(ownerDaemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
+    const domain = await runCreateDomain(ownerDaemon, core, session, 'shared_domain');
+    if (domain.code !== 0) {
+      throw new Error(`DOMAIN_FAILED: ${domain.stderr}`);
+    }
+    const domainRecordPath = join(tempDir('pico-owner-records-'), 'domain.json');
+    writeFileSync(
+      domainRecordPath,
+      JSON.stringify((JSON.parse(domain.stdout) as { domainRecord: unknown }).domainRecord),
+      'utf8',
+    );
+    const readerKeyRecordPath = join(tempDir('pico-owner-records-'), 'reader-key.json');
+    writeFileSync(readerKeyRecordPath, JSON.stringify({
+      suite: 'pico.suite.id.v1',
+      keyRole: 'device_key_agreement',
+      publicKeyHex: readerAgreement.publicKeyHex,
+    }), 'utf8');
+
+    const granted = await runCli([
+      'ceremony', 'grant-reader',
+      '--vault-home', ownerDaemon.vaultHomePath,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+      '--core-url', core.baseUrl,
+      '--session', session,
+      '--domain-record', domainRecordPath,
+      '--reader-key-record', readerKeyRecordPath,
+      '--reader-identity-fingerprint', readerIdentity.keyFingerprintHex,
+      '--reader-device-signing-fingerprint', readerSigning.keyFingerprintHex,
+      '--reader-delegation-id', delegationId,
+      '--valid-until', new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
+    ]);
+    if (granted.code !== 0) {
+      throw new Error(`GRANT_FAILED: ${granted.stderr}`);
+    }
+
+    const grants = await fetch(`${core.baseUrl}/api/home/reader-custody/reader-grants`, {
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(grants.status).toBe(200);
+    expect(JSON.stringify(await grants.json())).toContain(readerIdentity.keyFingerprintHex);
+
+    // Owner terminal: claim, founding, membership, domain, grant.
+    expect(ownerApprover.approvals()).toBe(5);
+  }, 300_000);
 
   it('cannot sign without the person: a locked daemon fails the ceremony', async () => {
     const core = await startCore();

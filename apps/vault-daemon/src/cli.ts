@@ -14,8 +14,11 @@ import {
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoHomeMembershipSignatureInput,
+  buildPicoIdentityDelegationSignatureInput,
+  buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   picoHomeMembershipCredentialSchema,
+  picoIdentityDelegationScopes,
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
@@ -29,6 +32,8 @@ import {
   type PicoHomeFoundingSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoHomeMembershipRole,
+  type PicoIdentityDelegationScope,
+  type PicoIdentityDelegationSignatureInput,
   type PicoHomeMembershipScope,
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
@@ -57,6 +62,8 @@ const ceremonySubcommands = [
   'grant-reader',
   'publish-checkpoint',
   'issue-membership',
+  'delegate-device',
+  'open-identity-session',
 ] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
@@ -87,6 +94,24 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'session',
     'domain-id',
     'lifecycle-order',
+  ],
+  'delegate-device': [
+    'vault-home',
+    'fingerprint',
+    'signing-fingerprint',
+    'agreement-fingerprint',
+    'scopes',
+    'valid-from',
+    'valid-until',
+    'lifecycle-order',
+  ],
+  'open-identity-session': [
+    'vault-home',
+    'fingerprint',
+    'signing-fingerprint',
+    'agreement-fingerprint',
+    'core-url',
+    'delegation',
   ],
   'issue-membership': [
     'vault-home',
@@ -485,6 +510,39 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
           lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
         }));
         process.stdout.write(`${JSON.stringify(domain)}\n`);
+        return;
+      }
+      if (invocation.ceremony === 'delegate-device') {
+        const scopes = (invocation.flags.get('scopes')
+          ?? 'surface_session,decrypt_domain,receive_key_envelope').split(',').map((v) => v.trim());
+        for (const scope of scopes) {
+          if (!(picoIdentityDelegationScopes as readonly string[]).includes(scope)) {
+            throw new Error(`invalid_delegation_scope:${scope}`);
+          }
+        }
+        const delegation = await withClient(vaultHomePath, async (client) => await runDelegateDeviceCeremony({
+          client,
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          subjectSigningKeyFingerprintHex: requireFlag(invocation.flags, 'signing-fingerprint'),
+          subjectKeyAgreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
+          scopes: scopes as PicoIdentityDelegationScope[],
+          validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
+          validUntil: requireFlag(invocation.flags, 'valid-until'),
+          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+        }));
+        process.stdout.write(`${JSON.stringify(delegation)}\n`);
+        return;
+      }
+      if (invocation.ceremony === 'open-identity-session') {
+        const opened = await withClient(vaultHomePath, async (client) => await runOpenIdentitySessionCeremony({
+          client,
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          identityKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          signingKeyFingerprintHex: requireFlag(invocation.flags, 'signing-fingerprint'),
+          agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
+          delegation: readRecordFile(requireFlag(invocation.flags, 'delegation'), 'delegation'),
+        }));
+        process.stdout.write(`${JSON.stringify(opened)}\n`);
         return;
       }
       if (invocation.ceremony === 'issue-membership') {
@@ -1216,4 +1274,131 @@ async function runIssueMembershipCeremony(input: {
   ) as Record<string, unknown>;
 
   return { accepted, issuerStatement };
+}
+
+/**
+ * ADR 0103 Weg A. The identity root delegates to its own device keys.
+ *
+ * Purely local: nothing is delivered anywhere, because a delegation is not a
+ * Home's business until its holder presents it. The signed record is printed
+ * for the person to keep, and `open-identity-session` takes it back as a file.
+ * Losing it means re-delegating, the same way losing a domain record means
+ * the domain cannot be rotated.
+ *
+ * Delegating creates authority - it is what lets a device key act for an
+ * identity - so it is not on the ADR 0099 exempt list and costs one approval.
+ */
+async function runDelegateDeviceCeremony(input: {
+  client: PicoVaultDaemonClient;
+  signerKeyFingerprintHex: string;
+  subjectSigningKeyFingerprintHex: string;
+  subjectKeyAgreementKeyFingerprintHex: string;
+  scopes: PicoIdentityDelegationScope[];
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('delegation_issuer_not_unlocked');
+  }
+
+  const record: PicoIdentityDelegationSignatureInput = {
+    suite: picoIdentitySuite,
+    delegationId: `delegation_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
+    issuerIdentityKeyFingerprintHex: signer.keyFingerprintHex,
+    subjectSigningKeyFingerprintHex: input.subjectSigningKeyFingerprintHex,
+    subjectKeyAgreementKeyFingerprintHex: input.subjectKeyAgreementKeyFingerprintHex,
+    scopes: input.scopes,
+    validFrom: input.validFrom,
+    validUntil: input.validUntil,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+
+  process.stderr.write('Approve the device delegation on the terminal holding the identity unlock.\n');
+  const signature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    signatureInputHex: Buffer.from(
+      buildPicoIdentityDelegationSignatureInput(record),
+    ).toString('hex'),
+  });
+
+  return { record, signatureHex: signature.signatureHex };
+}
+
+/**
+ * ADR 0103 Weg A. Opens an identity-bound Foundation session, which is also
+ * the only way a reader key is ever registered (`app.ts:1733`).
+ *
+ * Needs all three of the identity's keys unlocked, because the proof carries a
+ * public key record for each and the daemon publishes a public key only for a
+ * session the person opened. Three unlocked keys means three terminals today -
+ * the cost ADR 0102 recorded and ADR 0105 is the answer to.
+ *
+ * The possession signature is made by the *device signing* key, not the root:
+ * it proves the device holds what the delegation names. It is on the ADR 0099
+ * exempt list, so opening a session costs no approval - correct, because a
+ * session is proof of possession rather than a new authority.
+ */
+async function runOpenIdentitySessionCeremony(input: {
+  client: PicoVaultDaemonClient;
+  coreUrl: string;
+  identityKeyFingerprintHex: string;
+  signingKeyFingerprintHex: string;
+  agreementKeyFingerprintHex: string;
+  delegation: Record<string, unknown>;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const find = (fingerprint: string, role: string, reason: string) => {
+    const session = status.sessions.find(
+      (candidate) => candidate.keyFingerprintHex === fingerprint && candidate.keyRole === role,
+    );
+    if (session === undefined) {
+      throw new Error(reason);
+    }
+    return session;
+  };
+  const identity = find(input.identityKeyFingerprintHex, 'pico_identity', 'identity_key_not_unlocked');
+  const signing = find(input.signingKeyFingerprintHex, 'device_signing', 'device_signing_key_not_unlocked');
+  const agreement = find(
+    input.agreementKeyFingerprintHex,
+    'device_key_agreement',
+    'device_key_agreement_key_not_unlocked',
+  );
+
+  const challenge = await foundationRequest(
+    input.coreUrl,
+    '/api/auth/identity-challenges',
+    {},
+  ) as { challengeId: string; verifierNonceHex: string; verifierContext: string };
+
+  const possessionSignature = await input.client.sign({
+    keyFingerprintHex: signing.keyFingerprintHex,
+    signatureInputHex: Buffer.from(buildPicoIdentityPossessionSignatureInput({
+      suite: picoIdentitySuite,
+      subjectKeyFingerprintHex: signing.keyFingerprintHex,
+      verifierNonceHex: challenge.verifierNonceHex,
+      verifierContext: challenge.verifierContext,
+    })).toString('hex'),
+  });
+
+  const keyRecord = (session: { keyRole: string; publicKeyHex: string }) => ({
+    suite: picoIdentitySuite,
+    keyRole: session.keyRole,
+    publicKeyHex: session.publicKeyHex,
+  });
+
+  // The route takes these flat, not nested under a `proof` object.
+  return await foundationRequest(input.coreUrl, '/api/auth/identity-session', {
+    challengeId: challenge.challengeId,
+    identityKeyRecord: keyRecord(identity),
+    deviceSigningKeyRecord: keyRecord(signing),
+    deviceKeyAgreementKeyRecord: keyRecord(agreement),
+    delegation: input.delegation,
+    revocations: [],
+    possessionSignatureHex: possessionSignature.signatureHex,
+  }) as Record<string, unknown>;
 }
