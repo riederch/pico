@@ -376,14 +376,25 @@ interface PrivateKeyPayload {
  * Host families (`claim-response`, `continuity`) appear nowhere on purpose -
  * host-role keys are not Vault keys at all (`picoVaultPersonKeyRoles`), so
  * those labels stay unrepresentable rather than merely unlisted. The membership
- * families wait for the runtime that issues them; listing them now would be a
- * guess about who signs which half.
+ * families are listed now that the split is settled rather than guessed: the
+ * issuer statement carries the authority and is a person's to sign, while the
+ * host's activation signature acknowledges it and is made by a key this Vault
+ * never holds.
  */
 const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string>> = {
   pico_identity: new Set<string>([
     ...Object.values(picoIdentitySignatureInputLabels),
     picoHomeSignatureInputLabels.claim,
     picoHomeSignatureInputLabels.founding,
+    // The issuer half of a Home membership, and its lifecycle. ADR 0080 H6
+    // makes `issuerSignatureHex` the authority, and an authority over a
+    // resident's membership is a person's to give - so it is signable by a
+    // Pico Identity and by nothing else. The host's activation signature is
+    // deliberately absent: it acknowledges rather than authorizes, it is made
+    // by the Home host key, and that key lives in the Foundation
+    // (`home-setup.ts`), never in a person's Vault.
+    picoHomeSignatureInputLabels.membership,
+    picoHomeSignatureInputLabels.membershipLifecycle,
     picoIdentityReaderKeyFreshnessSignatureInputLabel,
     picoShareCanonicalLabels.envelope,
     picoReaderCustodyCanonicalLabels.domain,
