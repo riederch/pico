@@ -111,6 +111,12 @@ Konsistenzchecks; produkt- oder releasebezogene Doku braucht den vollen Gate.
   Membership-, Action- oder Decryption-Autoritaet.
 - Die Foundation-HTTP-/WebSocket-Flaeche ist lokale Diagnose-/Foundation-
   Infrastruktur, keine oeffentliche Remote-API und kein Pico-Link-Transport.
+- Alles, was eine Person ueber ihr eigenes Pico entscheidet, wird in Pico
+  gesetzt - nicht in Host-Configfiles, Add-on-Optionen oder Umgebungs-
+  variablen. Deployment-Parameter (Pfade, Port, Bind-Adresse, Device-Id)
+  sind keine Einstellungen und bleiben aussen. Testfrage: Koennte die
+  Antwort sich zwischen zwei Personen im selben Home unterscheiden? Dann
+  ist es eine Einstellung und gehoert nach Pico (ADR 0104).
 - Kein Portforwarding oder public Reverse Proxy als Produktmodell empfehlen.
 - `apps/web` bleibt frameworkfrei und erhaelt keine Runtime-Abhaengigkeiten.
 - Keine REST-Endpunkte allein fuer Dashboard-Komfort einfuehren.
