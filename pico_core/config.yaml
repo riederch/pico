@@ -1,5 +1,5 @@
 name: Pico Core
-version: "0.1.8"
+version: "0.1.9"
 slug: pico_core
 description: Local-first personal AI companion core for Home Assistant.
 url: https://github.com/riederch/pico
@@ -16,8 +16,13 @@ ingress_entry: /
 ingress_stream: true
 panel_title: Pico Core
 panel_admin: true
+# Only options with a real default belong here. A `null` default is not the
+# same as "unset": the Supervisor reads it back as a missing value and rejects
+# the add-on before it starts, even when the schema marks the option optional.
+# An optional option with no default is declared in `schema` alone, which is
+# what `applyHomeAssistantAddonOptions` already expects (it treats a missing,
+# null or blank token as "no token" and stays in ingress mode).
 options:
-  pico_foundation_token: null
   memory_encryption: false
 schema:
   pico_foundation_token: password?

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.9
+
+Fixes the add-on refusing to start after the 0.1.8 update.
+
+- Removes the `null` default for `pico_foundation_token` from `options`. The Supervisor reads a `null` default as a missing value and rejects the add-on before it starts, even though the schema marks the option optional. The option stays declared in `schema`, so it can still be set; leaving it unset keeps Pico Core in Home Assistant ingress mode, which is what the runtime already expected.
+- Adds `pnpm addon:check` to the release gate. It rejects null defaults, options without a schema entry and required schema entries without a default. The container smoke tests could not catch this class of fault, because they mount a finished `/data/options.json` and never exercise Supervisor validation.
+- Keeps the active add-on image aligned with `ghcr.io/riederch/pico/core:0.1.9`.
+- Does not change Pico Core runtime behaviour, database migrations or the API surface. The wire-contract version remains `0.1.7`.
+
 ## 0.1.8
 
 Release bump so the add-on update is offered in Home Assistant.
