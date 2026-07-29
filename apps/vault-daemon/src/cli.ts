@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -34,7 +35,7 @@ type CliCommand = typeof cliCommands[number];
  * to a Foundation. ADR 0103 C1 starts with `claim-home`, because no domain
  * record is accepted before a Home has been founded.
  */
-const ceremonySubcommands = ['claim-home', 'create-domain'] as const;
+const ceremonySubcommands = ['claim-home', 'create-domain', 'rotate-domain', 'grant-reader'] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
 const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
@@ -63,6 +64,36 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'core-url',
     'session',
     'domain-id',
+    'lifecycle-order',
+  ],
+  'rotate-domain': [
+    'vault-home',
+    'fingerprint',
+    'core-url',
+    'session',
+    'domain-record',
+    'rotation-records',
+    'reader-grant-lifecycle-records',
+    'writer-grant-lifecycle-records',
+    'remaining-reader-grant-records',
+    'lifecycle-order',
+  ],
+  'grant-reader': [
+    'vault-home',
+    'fingerprint',
+    'agreement-fingerprint',
+    'core-url',
+    'session',
+    'domain-record',
+    'rotation-records',
+    'reader-key-record',
+    'reader-identity-fingerprint',
+    'reader-device-signing-fingerprint',
+    'reader-delegation-id',
+    'access-mode',
+    'first-kek-version',
+    'valid-from',
+    'valid-until',
     'lifecycle-order',
   ],
 };
@@ -407,6 +438,61 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
         process.stdout.write(`${JSON.stringify(domain)}\n`);
         return;
       }
+      if (invocation.ceremony === 'rotate-domain') {
+        const rotation = await withClient(vaultHomePath, async (client) => await runRotateDomainCeremony({
+          client,
+          vaultSodium: sodium as unknown as VaultSodium,
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          session: requireFlag(invocation.flags, 'session'),
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          domainRecord: readRecordFile(requireFlag(invocation.flags, 'domain-record'), 'domain_record'),
+          rotationRecords: readRecordListFile(invocation.flags.get('rotation-records'), 'rotation_records'),
+          readerGrantLifecycleRecords: readRecordListFile(
+            invocation.flags.get('reader-grant-lifecycle-records'),
+            'reader_grant_lifecycle_records',
+          ),
+          writerGrantLifecycleRecords: readRecordListFile(
+            invocation.flags.get('writer-grant-lifecycle-records'),
+            'writer_grant_lifecycle_records',
+          ),
+          remainingReaderGrantRecords: readRecordListFile(
+            invocation.flags.get('remaining-reader-grant-records'),
+            'remaining_reader_grant_records',
+          ),
+          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000002',
+        }));
+        process.stdout.write(`${JSON.stringify(rotation)}\n`);
+        return;
+      }
+      if (invocation.ceremony === 'grant-reader') {
+        const grant = await withClient(vaultHomePath, async (client) => await runGrantReaderCeremony({
+          client,
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          session: requireFlag(invocation.flags, 'session'),
+          signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
+          domainRecord: readRecordFile(requireFlag(invocation.flags, 'domain-record'), 'domain_record'),
+          rotationRecords: readRecordListFile(invocation.flags.get('rotation-records'), 'rotation_records'),
+          readerKeyRecord: readRecordFile(
+            requireFlag(invocation.flags, 'reader-key-record'),
+            'reader_key_record',
+          ),
+          readerGrantId: `reader_grant_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
+          readerIdentityKeyFingerprintHex: requireFlag(invocation.flags, 'reader-identity-fingerprint'),
+          readerDeviceSigningKeyFingerprintHex: requireFlag(
+            invocation.flags,
+            'reader-device-signing-fingerprint',
+          ),
+          readerDelegationId: requireFlag(invocation.flags, 'reader-delegation-id'),
+          accessMode: invocation.flags.get('access-mode') ?? 'forward_only',
+          firstKekVersion: Number(invocation.flags.get('first-kek-version') ?? '1'),
+          validFrom: invocation.flags.get('valid-from') ?? new Date().toISOString(),
+          validUntil: requireFlag(invocation.flags, 'valid-until'),
+          lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
+        }));
+        process.stdout.write(`${JSON.stringify(grant)}\n`);
+        return;
+      }
       if (invocation.ceremony !== 'claim-home') {
         throw new Error('unknown_ceremony');
       }
@@ -701,10 +787,160 @@ async function runCreateDomainCeremony(input: {
     lifecycleOrder: input.lifecycleOrder,
   });
 
-  return await foundationRequest(
+  const accepted = await foundationRequest(
     input.coreUrl,
     '/api/home/reader-custody/domains',
     ceremony.domainRecord,
     input.session,
   ) as Record<string, unknown>;
+
+  // The signed record is returned to the caller, not just the Foundation's
+  // view of it. `GET .../domains` answers with a view that carries no
+  // signature and no key records, so the Foundation cannot hand this back
+  // later - and every later ceremony on this domain needs it as input. The
+  // owner holds their own records; keep this output.
+  return { accepted, domainRecord: ceremony.domainRecord };
+}
+
+/**
+ * ADR 0103 C2. Rotates a domain KEK, and grants a reader access to it.
+ *
+ * Both take the signed domain record as a file rather than fetching it,
+ * because the Foundation only ever returns views. That is the custody model
+ * working as intended - the owner's records are the owner's - and it means a
+ * person who loses them cannot rotate or grant again without re-founding the
+ * domain. Recording that here because nothing else states it.
+ */
+function readRecordFile(path: string, label: string): Record<string, unknown> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(resolve(path), 'utf8'));
+  } catch (error) {
+    throw new Error(`invalid_${label}_file:${(error as Error).message}`);
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`invalid_${label}_file:not_an_object`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function readRecordListFile(path: string | undefined, label: string): Record<string, unknown>[] {
+  if (path === undefined) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(resolve(path), 'utf8'));
+  } catch (error) {
+    throw new Error(`invalid_${label}_file:${(error as Error).message}`);
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`invalid_${label}_file:not_an_array`);
+  }
+  return parsed as Record<string, unknown>[];
+}
+
+async function runRotateDomainCeremony(input: {
+  client: PicoVaultDaemonClient;
+  vaultSodium: VaultSodium;
+  coreUrl: string;
+  session: string;
+  signerKeyFingerprintHex: string;
+  domainRecord: Record<string, unknown>;
+  rotationRecords: Record<string, unknown>[];
+  readerGrantLifecycleRecords: Record<string, unknown>[];
+  writerGrantLifecycleRecords: Record<string, unknown>[];
+  remainingReaderGrantRecords: Record<string, unknown>[];
+  lifecycleOrder: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('domain_signer_not_unlocked');
+  }
+
+  process.stderr.write('Approve the rotation on the terminal holding the identity unlock.\n');
+  const ceremony = await input.client.ceremonyRotateDomain({
+    signerKeyFingerprintHex: signer.keyFingerprintHex,
+    domainRecord: input.domainRecord,
+    rotationRecords: input.rotationRecords,
+    readerGrantLifecycleRecords: input.readerGrantLifecycleRecords,
+    writerGrantLifecycleRecords: input.writerGrantLifecycleRecords,
+    remainingReaderGrantRecords: input.remainingReaderGrantRecords,
+    rotationId: `rotation_${Buffer.from(input.vaultSodium.randombytes_buf(16)).toString('hex')}`,
+    rotatedAt: new Date().toISOString(),
+    lifecycleOrder: input.lifecycleOrder,
+  });
+
+  const accepted = await foundationRequest(
+    input.coreUrl,
+    '/api/home/reader-custody/kek-rotations',
+    ceremony.rotationRecord,
+    input.session,
+  ) as Record<string, unknown>;
+
+  return { accepted, rotationRecord: ceremony.rotationRecord };
+}
+
+async function runGrantReaderCeremony(input: {
+  client: PicoVaultDaemonClient;
+  coreUrl: string;
+  session: string;
+  signerKeyFingerprintHex: string;
+  agreementKeyFingerprintHex: string;
+  domainRecord: Record<string, unknown>;
+  rotationRecords: Record<string, unknown>[];
+  readerKeyRecord: Record<string, unknown>;
+  readerGrantId: string;
+  readerIdentityKeyFingerprintHex: string;
+  readerDeviceSigningKeyFingerprintHex: string;
+  readerDelegationId: string;
+  accessMode: string;
+  firstKekVersion: number;
+  validFrom: string;
+  validUntil: string;
+  lifecycleOrder: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('domain_signer_not_unlocked');
+  }
+  const agreement = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.agreementKeyFingerprintHex,
+  );
+  if (agreement === undefined || agreement.keyRole !== 'device_key_agreement') {
+    throw new Error('owner_agreement_key_not_unlocked');
+  }
+
+  process.stderr.write('Approve the reader grant on the terminal holding the identity unlock.\n');
+  const ceremony = await input.client.ceremonyCreateReaderGrant({
+    signerKeyFingerprintHex: signer.keyFingerprintHex,
+    agreementKeyFingerprintHex: agreement.keyFingerprintHex,
+    domainRecord: input.domainRecord,
+    rotationRecords: input.rotationRecords,
+    readerKeyRecord: input.readerKeyRecord,
+    readerGrantId: input.readerGrantId,
+    readerIdentityKeyFingerprintHex: input.readerIdentityKeyFingerprintHex,
+    readerDeviceSigningKeyFingerprintHex: input.readerDeviceSigningKeyFingerprintHex,
+    readerDelegationId: input.readerDelegationId,
+    accessMode: input.accessMode,
+    firstKekVersion: input.firstKekVersion,
+    validFrom: input.validFrom,
+    validUntil: input.validUntil,
+    lifecycleOrder: input.lifecycleOrder,
+  });
+
+  const accepted = await foundationRequest(
+    input.coreUrl,
+    '/api/home/reader-custody/reader-grants',
+    ceremony.readerGrantRecord,
+    input.session,
+  ) as Record<string, unknown>;
+
+  return { accepted, readerGrantRecord: ceremony.readerGrantRecord };
 }

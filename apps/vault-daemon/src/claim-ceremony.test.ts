@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -309,6 +309,40 @@ function runCreateDomain(
   });
 }
 
+function runRotateDomain(
+  daemon: RunningDaemon,
+  core: RunningCore,
+  session: string,
+  domainRecordPath: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const child = spawn(process.execPath, [
+    CLI, 'ceremony', 'rotate-domain',
+    '--vault-home', daemon.vaultHomePath,
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--core-url', core.baseUrl,
+    '--session', session,
+    '--domain-record', domainRecordPath,
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stdout = '';
+  let stderr = '';
+  child.stdout!.setEncoding('utf8');
+  child.stderr!.setEncoding('utf8');
+  child.stdout!.on('data', (chunk: string) => {
+    stdout += chunk;
+  });
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+
+  return new Promise((resolvePromise) => {
+    child.once('exit', (code) => {
+      resolvePromise({ code, stdout, stderr });
+    });
+  });
+}
+
 describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
   it('founds a Home end to end without a private key in the client process', async () => {
     const core = await startCore();
@@ -366,8 +400,11 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     const domain = await runCreateDomain(daemon, core, session, 'first_domain');
     expect(domain.code).toBe(0);
 
-    const created = JSON.parse(domain.stdout) as { domain: { domainId: string; privacyDomain?: string } };
-    expect(JSON.stringify(created)).toContain('first_domain');
+    const created = JSON.parse(domain.stdout) as {
+      accepted: unknown;
+      domainRecord: Record<string, unknown>;
+    };
+    expect(JSON.stringify(created.accepted)).toContain('first_domain');
 
     // Founding cost two approvals, the domain one more, all on the identity
     // terminal - the agreement key is used but signs nothing (ADR 0102).
@@ -378,6 +415,28 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     });
     expect(listed.status).toBe(200);
     expect(JSON.stringify(await listed.json())).toContain('first_domain');
+
+    // The Foundation answers `GET .../domains` with a view that carries no
+    // signature, so the owner's copy of the signed record is the only input a
+    // later ceremony can take. Round-tripping it through `rotate-domain`
+    // proves the client half works: the record is read, the daemon signs a
+    // rotation from it, and the Foundation judges the result.
+    //
+    // It judges it unrotatable, and correctly so. A rotation answers a
+    // revocation (ADR 0088 rotation debt); a domain with no readers has
+    // nothing to rotate, so `invalid_rotation_causes` is the right answer and
+    // reaching it means everything before it worked. A green end-to-end
+    // rotation needs a reader grant first, and that needs a freshness
+    // checkpoint the deployment default does not supply.
+    const recordPath = join(tempDir('pico-claim-records-'), 'domain.json');
+    writeFileSync(recordPath, JSON.stringify(created.domainRecord), 'utf8');
+
+    const rotation = await runRotateDomain(daemon, core, session, recordPath);
+    expect(rotation.code).not.toBe(0);
+    expect(rotation.stderr).toContain('invalid_rotation_causes');
+    // The person was still asked: the daemon signed before the Foundation
+    // judged, which is the order the approval boundary requires.
+    expect(identityApprover.approvals()).toBe(4);
   }, 180_000);
 
   it('cannot sign without the person: a locked daemon fails the ceremony', async () => {
