@@ -15,6 +15,7 @@ import {
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeDomainReadGrantLifecycleSignatureInput,
   buildPicoHomeDomainReadGrantSignatureInput,
+  buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
   buildPicoHomeMembershipSignatureInput,
   picoHomeMembershipCredentialSchema,
@@ -34,6 +35,8 @@ import {
   picoHomeFoundingRecordV2Schema,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
+  picoHomeDeviceLifecycleEvidenceDigestHex,
+  picoHomeDeviceLifecycleSubmissionSchema,
   picoHomeMembershipScopes,
   picoHomeEventTypes,
   picoHomeSealedClaimPayloadSchema,
@@ -70,6 +73,7 @@ import { KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import {
   foundationOperatorHomeBindingMigrationId,
+  picoHomeDeviceLifecycleMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
@@ -247,6 +251,7 @@ describe('Pico Home Core app', () => {
           { id: foundationOperatorHomeBindingMigrationId, appliedAt: expect.any(String) },
           { id: readerCustodyMultiReaderRotationMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeFoundingFirstDeviceEvidenceMigrationId, appliedAt: expect.any(String) },
+          { id: picoHomeDeviceLifecycleMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
@@ -2108,7 +2113,7 @@ describe('Pico Home Core app', () => {
       scopes: ['surface_session'],
       validFrom: '2026-01-01T00:00:00.000Z',
       validUntil: '2027-01-01T00:00:00.000Z',
-      lifecycleOrder: 'seq:0000000000000001',
+      lifecycleOrder: 'seq:0000000000000002',
     };
     const signedDelegation = {
       record: delegation,
@@ -2239,6 +2244,126 @@ describe('Pico Home Core app', () => {
       statusCode: 200,
       claimState: { state: 'claimed', homeId },
     });
+
+    const linkedDeviceLifecycle = await linkRequest('home.device.lifecycle.read', {});
+    expect(linkedDeviceLifecycle.response.outcome).toBe('ok');
+    expect(linkedDeviceLifecycle.result).toMatchObject({
+      homeId,
+      picoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      observedLifecycleOrder: delegation.lifecycleOrder,
+      devices: expect.arrayContaining([
+        expect.objectContaining({
+          delegationId: delegation.delegationId,
+          deviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+          status: 'active',
+        }),
+      ]),
+    });
+
+    const targetSigning = sodium.crypto_sign_keypair();
+    const targetSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_signing',
+      publicKeyHex: bytesToHex(targetSigning.publicKey),
+    };
+    const targetAgreement = sodium.crypto_box_keypair();
+    const targetAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_key_agreement',
+      publicKeyHex: bytesToHex(targetAgreement.publicKey),
+    };
+    const targetDelegation: PicoIdentityDelegationSignatureInput = {
+      suite: picoIdentitySuite,
+      delegationId: 'delegation_20260730_link_lifecycle_target',
+      issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+      subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(targetSigningKeyRecord),
+      subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(targetAgreementKeyRecord),
+      scopes: ['surface_session'],
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validUntil: '2027-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000003',
+    };
+    const transitionCreatedAt = Date.now();
+    const lifecycleEvidence = {
+      transitionId: 'transition_20260730_link_lifecycle_target',
+      action: 'enroll' as const,
+      picoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      targetDelegationId: targetDelegation.delegationId,
+      targetDeviceSigningKeyFingerprintHex:
+        keyRecordFingerprintHex(targetSigningKeyRecord),
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        keyRecordFingerprintHex(targetAgreementKeyRecord),
+      replacedDelegationId: null,
+      observedLifecycleOrder: delegation.lifecycleOrder,
+      identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+      targetDeviceSigningKeyRecord: targetSigningKeyRecord,
+      targetDeviceKeyAgreementKeyRecord: targetAgreementKeyRecord,
+      delegation: {
+        record: targetDelegation,
+        signatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityDelegationSignatureInput(targetDelegation),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+      revocations: [],
+    };
+    const targetActivation = {
+      suite: picoIdentitySuite,
+      activationId: lifecycleEvidence.transitionId,
+      action: 'enroll' as const,
+      homeId,
+      hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+      picoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      sponsorDelegationId: delegation.delegationId,
+      sponsorDeviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+      sponsorDeviceKeyAgreementKeyFingerprintHex:
+        keyRecordFingerprintHex(deviceAgreementKeyRecord),
+      targetDelegationId: targetDelegation.delegationId,
+      targetDeviceSigningKeyFingerprintHex:
+        keyRecordFingerprintHex(targetSigningKeyRecord),
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        keyRecordFingerprintHex(targetAgreementKeyRecord),
+      lifecycleEvidenceDigestHex:
+        picoHomeDeviceLifecycleEvidenceDigestHex(sodium, lifecycleEvidence),
+      observedLifecycleOrder: delegation.lifecycleOrder,
+      createdAt: new Date(transitionCreatedAt).toISOString(),
+      expiresAt: new Date(transitionCreatedAt + 5 * 60_000).toISOString(),
+    };
+    const linkedLifecycleSubmit = await linkRequest(
+      'home.device.lifecycle.submit',
+      {
+        submission: {
+          schema: picoHomeDeviceLifecycleSubmissionSchema,
+          evidence: lifecycleEvidence,
+          activation: {
+            input: targetActivation,
+            targetSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+              buildPicoHomeDeviceActivationSignatureInput(targetActivation),
+              targetSigning.privateKey,
+            )),
+          },
+        },
+      },
+    );
+    expect(linkedLifecycleSubmit.response.outcome).toBe('ok');
+    expect(linkedLifecycleSubmit.result).toMatchObject({
+      inserted: true,
+      record: {
+        receipt: {
+          transitionId: lifecycleEvidence.transitionId,
+          acceptedLifecycleOrder: delegation.lifecycleOrder,
+          resultingLifecycleOrder: targetDelegation.lifecycleOrder,
+          leavesNoActiveDevice: false,
+        },
+      },
+    });
+
+    const invalidLifecycleSubmit = await linkRequest(
+      'home.device.lifecycle.submit',
+      {},
+    );
+    expect(invalidLifecycleSubmit.response.outcome).toBe('invalid_arguments');
+    expect(invalidLifecycleSubmit.result).toEqual({});
 
     const checkedAtMs = Date.now();
     const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {

@@ -411,6 +411,39 @@ describe('PicoIdentityLifecycleIndex', () => {
     })).toThrow('conflicting_revocation_statement');
   });
 
+  it('reserves each lifecycle order for exactly one statement per issuer', () => {
+    expect(() => createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [delegation()],
+      acceptedRevocations: [
+        revocation({ lifecycleOrder: 'seq:0000000000000001' }),
+      ],
+    })).toThrow('conflicting_lifecycle_order_statement');
+
+    expect(() => createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [
+        delegation(),
+        delegation({
+          delegationId: 'del_same_order_different_statement',
+          subjectSigningKeyFingerprintHex: replacementSigningFingerprint,
+        }),
+      ],
+    })).toThrow('conflicting_lifecycle_order_statement');
+
+    expect(createPicoIdentityLifecycleIndex({
+      acceptedDelegations: [
+        delegation(),
+        delegation({
+          delegationId: 'del_foreign_same_order',
+          issuerIdentityKeyFingerprintHex: foreignIdentityFingerprint,
+          subjectSigningKeyFingerprintHex: replacementSigningFingerprint,
+        }),
+      ],
+    }).delegationIds()).toEqual([
+      'del_01hzx8m9q4rt5v',
+      'del_foreign_same_order',
+    ]);
+  });
+
   it('keeps lifecycle ordering numeric and fixed-width', () => {
     expect(parsePicoIdentityLifecycleOrder('seq:9007199254740992')).toBe(9007199254740992n);
     expect(comparePicoIdentityLifecycleOrder('seq:0000000000000010', 'seq:0000000000000009')).toBe(1);

@@ -178,6 +178,18 @@ no private keys or signatures and publishes no compatibility contract.
 home-first-device-founding/suite.json
 ```
 
+## Current authenticated device-lifecycle fixtures
+
+These fixtures pin ADR 0109's canonical target-activation and host-receipt
+bytes plus the complete enrollment evidence and submission digests. The
+negative cases name the fail-closed protocol, Core and issuer-order checks.
+They contain synthetic public fields only: no valid authority, private keys,
+published compatibility contract, L4 basis or commercial permission.
+
+```text
+home-device-lifecycle/suite.json
+```
+
 ## Current identity signature-verification fixtures
 
 These fixtures carry deterministic detached Ed25519 verification vectors for the `pico.suite.id.v1` possession, delegation and revocation families (ADR 0079). They publish public key records and signatures only: no private keys, no registry freshness, no storage adapter, no reader membership, no L4 compatibility basis and no commercial permission.

@@ -61,6 +61,8 @@ export const readerCustodyMultiReaderRotationMigrationId =
   '0003_reader_custody_multi_reader_rotation' as const;
 export const picoHomeFoundingFirstDeviceEvidenceMigrationId =
   '0004_pico_home_founding_first_device_evidence' as const;
+export const picoHomeDeviceLifecycleMigrationId =
+  '0005_pico_home_device_lifecycle' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -650,6 +652,32 @@ const migrations: readonly MigrationDefinition[] = [
         FROM pico_home_founding_record_v1;
 
         DROP TABLE pico_home_founding_record_v1;
+      `);
+    },
+  },
+  {
+    id: picoHomeDeviceLifecycleMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_home_device_lifecycle_transition (
+          transition_id TEXT PRIMARY KEY,
+          action TEXT NOT NULL CHECK (action IN ('enroll', 'renew', 'revoke')),
+          home_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          sponsor_delegation_id TEXT NOT NULL,
+          target_delegation_id TEXT NOT NULL,
+          submission_digest_hex TEXT NOT NULL,
+          lifecycle_record_json TEXT NOT NULL,
+          accepted_at TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_pico_home_device_lifecycle_identity
+        ON pico_home_device_lifecycle_transition (
+          pico_identity_fingerprint_hex,
+          accepted_at,
+          transition_id
+        );
       `);
     },
   },

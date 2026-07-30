@@ -133,6 +133,7 @@ export interface PicoIdentityLifecycleSnapshot {
 
 type LifecycleStatement = {
   kind: PicoIdentityLifecycleStatementKind;
+  issuerIdentityKeyFingerprintHex: string;
   order: bigint;
   id: string;
   stableJson: string;
@@ -158,6 +159,7 @@ export class PicoIdentityLifecycleIndex {
       addUniqueStatement(delegationsById, canonical.delegationId, canonical, 'conflicting_delegation_statement');
       statements.push({
         kind: 'delegation',
+        issuerIdentityKeyFingerprintHex: canonical.issuerIdentityKeyFingerprintHex,
         order: parsePicoIdentityLifecycleOrder(canonical.lifecycleOrder),
         id: canonical.delegationId,
         stableJson: stableJson(canonical),
@@ -170,11 +172,14 @@ export class PicoIdentityLifecycleIndex {
       addUniqueStatement(revocationsById, canonical.revocationId, canonical, 'conflicting_revocation_statement');
       statements.push({
         kind: 'revocation',
+        issuerIdentityKeyFingerprintHex: canonical.issuerIdentityKeyFingerprintHex,
         order: parsePicoIdentityLifecycleOrder(canonical.lifecycleOrder),
         id: canonical.revocationId,
         stableJson: stableJson(canonical),
       });
     }
+
+    assertUniqueIssuerLifecycleOrders(statements);
 
     this.#delegationsById = delegationsById;
     this.#revocationsById = revocationsById;
@@ -533,6 +538,26 @@ function freshestLifecycleOrder(statements: readonly LifecycleStatement[]): stri
   }
 
   return `seq:${freshest.order.toString().padStart(16, '0')}`;
+}
+
+function assertUniqueIssuerLifecycleOrders(statements: readonly LifecycleStatement[]): void {
+  const statementByIssuerAndOrder = new Map<string, LifecycleStatement>();
+  for (const statement of statements) {
+    const key = `${statement.issuerIdentityKeyFingerprintHex}:${statement.order.toString()}`;
+    const previous = statementByIssuerAndOrder.get(key);
+    if (previous === undefined) {
+      statementByIssuerAndOrder.set(key, statement);
+      continue;
+    }
+
+    if (
+      previous.kind !== statement.kind
+      || previous.id !== statement.id
+      || previous.stableJson !== statement.stableJson
+    ) {
+      throw new Error('conflicting_lifecycle_order_statement');
+    }
+  }
 }
 
 function addUniqueStatement<TStatement>(

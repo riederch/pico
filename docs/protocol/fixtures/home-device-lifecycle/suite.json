@@ -1,0 +1,117 @@
+{
+  "schema": "pico.home.device-lifecycle.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.home-device-lifecycle.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-device-lifecycle",
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-local-device-lifecycle-vectors",
+  "disclaimer": "Authoritative local canonical bytes and digests for ADR 0109. Synthetic public fields only; no private keys, valid signatures, published contract, L4 compatibility basis or commercial permission.",
+  "enrollment": {
+    "evidence": {
+      "transitionId": "transition_adr0109_vector_0001",
+      "action": "enroll",
+      "picoIdentityFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "targetDelegationId": "delegation_adr0109_target_0001",
+      "targetDeviceSigningKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "targetDeviceKeyAgreementKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "replacedDelegationId": null,
+      "observedLifecycleOrder": "seq:0000000000000001",
+      "identityKeyRecord": {
+        "suite": "pico.suite.id.v1",
+        "keyRole": "pico_identity",
+        "publicKeyHex": "4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "targetDeviceSigningKeyRecord": {
+        "suite": "pico.suite.id.v1",
+        "keyRole": "device_signing",
+        "publicKeyHex": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "targetDeviceKeyAgreementKeyRecord": {
+        "suite": "pico.suite.id.v1",
+        "keyRole": "device_key_agreement",
+        "publicKeyHex": "6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "delegation": {
+        "record": {
+          "suite": "pico.suite.id.v1",
+          "delegationId": "delegation_adr0109_target_0001",
+          "issuerIdentityKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+          "subjectSigningKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+          "subjectKeyAgreementKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+          "scopes": [
+            "surface_session"
+          ],
+          "validFrom": "2026-07-30T10:00:00.000Z",
+          "validUntil": "2027-07-30T10:00:00.000Z",
+          "lifecycleOrder": "seq:0000000000000002"
+        },
+        "signatureHex": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "revocations": []
+    },
+    "evidenceDigestHex": "6329c04c9b8c5827352acdfe760a03ae619e9559eb99428cba4141766668bbe2",
+    "activation": {
+      "suite": "pico.suite.id.v1",
+      "activationId": "transition_adr0109_vector_0001",
+      "action": "enroll",
+      "homeId": "home_adr0109_vector_0001",
+      "hostSigningKeyFingerprintHex": "7777777777777777777777777777777777777777777777777777777777777777",
+      "picoIdentityFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "sponsorDelegationId": "delegation_adr0109_sponsor_0001",
+      "sponsorDeviceSigningKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
+      "sponsorDeviceKeyAgreementKeyFingerprintHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "targetDelegationId": "delegation_adr0109_target_0001",
+      "targetDeviceSigningKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "targetDeviceKeyAgreementKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "lifecycleEvidenceDigestHex": "6329c04c9b8c5827352acdfe760a03ae619e9559eb99428cba4141766668bbe2",
+      "observedLifecycleOrder": "seq:0000000000000001",
+      "createdAt": "2026-07-30T10:04:00.000Z",
+      "expiresAt": "2026-07-30T10:09:00.000Z"
+    },
+    "targetSignatureHex": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "activationSignatureInputHex": "0000001e7069636f2e686f6d652e6465766963652d61637469766174696f6e2e7631000000107069636f2e73756974652e69642e76310000001e7472616e736974696f6e5f616472303130395f766563746f725f3030303100000006656e726f6c6c00000018686f6d655f616472303130395f766563746f725f303030310000002077777777777777777777777777777777777777777777777777777777777777770000002011111111111111111111111111111111111111111111111111111111111111110000001f64656c65676174696f6e5f616472303130395f73706f6e736f725f303030310000002088888888888888888888888888888888888888888888888888888888888888880000002099999999999999999999999999999999999999999999999999999999999999990000001e64656c65676174696f6e5f616472303130395f7461726765745f30303031000000202222222222222222222222222222222222222222222222222222222222222222000000203333333333333333333333333333333333333333333333333333333333333333000000206329c04c9b8c5827352acdfe760a03ae619e9559eb99428cba4141766668bbe2000000147365713a3030303030303030303030303030303100000018323032362d30372d33305431303a30343a30302e3030305a00000018323032362d30372d33305431303a30393a30302e3030305a",
+    "activationSignatureInputLen": 527,
+    "submissionDigestHex": "754f092fdea771a97c486bde38f0b443c56bec5114e22c4999f6203f4dfba70a"
+  },
+  "receipt": {
+    "fields": {
+      "suite": "pico.suite.id.v1",
+      "transitionId": "transition_adr0109_vector_0001",
+      "action": "enroll",
+      "homeId": "home_adr0109_vector_0001",
+      "hostSigningKeyFingerprintHex": "7777777777777777777777777777777777777777777777777777777777777777",
+      "picoIdentityFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+      "sponsorDelegationId": "delegation_adr0109_sponsor_0001",
+      "sponsorDeviceSigningKeyFingerprintHex": "8888888888888888888888888888888888888888888888888888888888888888",
+      "sponsorDeviceKeyAgreementKeyFingerprintHex": "9999999999999999999999999999999999999999999999999999999999999999",
+      "targetDelegationId": "delegation_adr0109_target_0001",
+      "targetDeviceSigningKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+      "targetDeviceKeyAgreementKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+      "transitionDigestHex": "754f092fdea771a97c486bde38f0b443c56bec5114e22c4999f6203f4dfba70a",
+      "acceptedLifecycleOrder": "seq:0000000000000001",
+      "resultingLifecycleOrder": "seq:0000000000000002",
+      "acceptedAt": "2026-07-30T10:05:00.000Z",
+      "leavesNoActiveDevice": false
+    },
+    "signatureInputHex": "000000257069636f2e686f6d652e6465766963652d6c6966656379636c652d726563656970742e7631000000107069636f2e73756974652e69642e76310000001e7472616e736974696f6e5f616472303130395f766563746f725f3030303100000006656e726f6c6c00000018686f6d655f616472303130395f766563746f725f303030310000002077777777777777777777777777777777777777777777777777777777777777770000002011111111111111111111111111111111111111111111111111111111111111110000001f64656c65676174696f6e5f616472303130395f73706f6e736f725f303030310000002088888888888888888888888888888888888888888888888888888888888888880000002099999999999999999999999999999999999999999999999999999999999999990000001e64656c65676174696f6e5f616472303130395f7461726765745f3030303100000020222222222222222222222222222222222222222222222222222222222222222200000020333333333333333333333333333333333333333333333333333333333333333300000020754f092fdea771a97c486bde38f0b443c56bec5114e22c4999f6203f4dfba70a000000147365713a30303030303030303030303030303031000000147365713a3030303030303030303030303030303200000018323032362d30372d33305431303a30353a30302e3030305a0000000566616c7365",
+    "signatureInputLen": 539
+  },
+  "negativeCases": [
+    "activation-evidence-digest-substitution",
+    "activation-home-substitution",
+    "activation-over-five-minutes",
+    "revoke-with-target-activation",
+    "enroll-with-root-revocation",
+    "renew-without-replaced-delegation",
+    "unknown-action",
+    "receipt-transition-digest-substitution",
+    "issuer-lifecycle-order-reuse"
+  ],
+  "notes": "The enrollment evidence and complete submission pin their BLAKE2b-256 digests. Activation and receipt vectors pin every canonical field. Negative protocol and Core tests execute the listed fail-closed cases; no vector contains valid authority."
+}

@@ -568,6 +568,17 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
     // can require it to equal the first-device binding inside the payload.
     expect(calls.every((call) => call.principal.delegationId === 'delegation_0001'))
       .toBe(true);
+
+    for (const operation of [
+      'home.device.lifecycle.read',
+      'home.device.lifecycle.submit',
+    ] as const) {
+      expect(await intake.handle(
+        sealedRequest({ requestOverrides: { operation } }),
+        execute,
+        NOW,
+      )).toEqual({ ok: false, reason: 'sender_is_not_authorized' });
+    }
   });
 
   it('signs a refusal from a failing operation instead of leaking the failure', async () => {

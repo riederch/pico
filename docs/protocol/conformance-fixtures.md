@@ -20,6 +20,11 @@ The fixture layout should let future implementations test:
 - lifecycle-aware rejection once key lifecycle state exists
 - compatibility-claim honesty
 
+The current authoritative local suites also include
+`fixtures/home-device-lifecycle/suite.json`, which pins ADR 0109 activation,
+evidence/submission digest and host-receipt forms without publishing a Pico
+Link compatibility contract.
+
 The immediate goal is to define where and how such fixtures should be organized and to keep the first Foundation examples small enough to review.
 
 ## Relationship to architecture decisions

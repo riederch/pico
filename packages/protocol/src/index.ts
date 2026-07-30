@@ -140,6 +140,34 @@ export const picoHomeClaimResponseRecordSchema = 'pico.home.claim-response-recor
 export const picoHomeFoundingAcceptanceSchema = 'pico.home.founding-acceptance.v1' as const;
 export const picoHomeFoundingRecordSchema = 'pico.home.founding-record.v1' as const;
 export const picoHomeFoundingRecordV2Schema = 'pico.home.founding-record.v2' as const;
+export const picoHomeDeviceLifecycleSubmissionSchema =
+  'pico.home.device-lifecycle-submission.v1' as const;
+export const picoHomeDeviceLifecycleRecordSchema =
+  'pico.home.device-lifecycle-record.v1' as const;
+
+export const picoHomeDeviceLifecycleActions = [
+  'enroll',
+  'renew',
+  'revoke',
+] as const;
+
+export type PicoHomeDeviceLifecycleAction =
+  typeof picoHomeDeviceLifecycleActions[number];
+
+export const picoHomeDeviceActivationActions = [
+  'enroll',
+  'renew',
+] as const;
+
+export type PicoHomeDeviceActivationAction =
+  typeof picoHomeDeviceActivationActions[number];
+
+export const picoHomeDeviceLifecycleCanonicalLabels = {
+  activation: 'pico.home.device-activation.v1',
+  evidenceDigest: 'pico.home.device-lifecycle-evidence-digest.v1',
+  submissionDigest: 'pico.home.device-lifecycle-submission-digest.v1',
+  receipt: 'pico.home.device-lifecycle-receipt.v1',
+} as const;
 
 // ADR 0080 H6 record families. A credential carries two signatures with
 // different meanings: the Home Host Pico's issuer signature is the authority,
@@ -210,6 +238,8 @@ export const picoLinkDirectOperations = [
   'home.claim.submit',
   'home.authority.submit',
   'home.authority.list',
+  'home.device.lifecycle.read',
+  'home.device.lifecycle.submit',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];
@@ -996,6 +1026,84 @@ export interface PicoHomeFirstDeviceEvidence {
     record: PicoIdentityRevocationSignatureInput;
     signatureHex: string;
   }[];
+}
+
+export interface PicoHomeDeviceLifecycleEvidence {
+  transitionId: string;
+  action: PicoHomeDeviceLifecycleAction;
+  picoIdentityFingerprintHex: string;
+  targetDelegationId: string;
+  targetDeviceSigningKeyFingerprintHex: string;
+  targetDeviceKeyAgreementKeyFingerprintHex: string;
+  replacedDelegationId: string | null;
+  observedLifecycleOrder: string;
+  identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  targetDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput | null;
+  targetDeviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput | null;
+  delegation: {
+    record: PicoIdentityDelegationSignatureInput;
+    signatureHex: string;
+  } | null;
+  revocations: {
+    record: PicoIdentityRevocationSignatureInput;
+    signatureHex: string;
+  }[];
+}
+
+export interface PicoHomeDeviceActivationSignatureInput {
+  suite: string;
+  activationId: string;
+  action: PicoHomeDeviceActivationAction;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  picoIdentityFingerprintHex: string;
+  sponsorDelegationId: string;
+  sponsorDeviceSigningKeyFingerprintHex: string;
+  sponsorDeviceKeyAgreementKeyFingerprintHex: string;
+  targetDelegationId: string;
+  targetDeviceSigningKeyFingerprintHex: string;
+  targetDeviceKeyAgreementKeyFingerprintHex: string;
+  lifecycleEvidenceDigestHex: string;
+  observedLifecycleOrder: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PicoHomeDeviceLifecycleSubmission {
+  schema: typeof picoHomeDeviceLifecycleSubmissionSchema;
+  evidence: PicoHomeDeviceLifecycleEvidence;
+  activation: {
+    input: PicoHomeDeviceActivationSignatureInput;
+    targetSignatureHex: string;
+  } | null;
+}
+
+export interface PicoHomeDeviceLifecycleReceiptSignatureInput {
+  suite: string;
+  transitionId: string;
+  action: PicoHomeDeviceLifecycleAction;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  picoIdentityFingerprintHex: string;
+  sponsorDelegationId: string;
+  sponsorDeviceSigningKeyFingerprintHex: string;
+  sponsorDeviceKeyAgreementKeyFingerprintHex: string;
+  targetDelegationId: string;
+  targetDeviceSigningKeyFingerprintHex: string;
+  targetDeviceKeyAgreementKeyFingerprintHex: string;
+  transitionDigestHex: string;
+  acceptedLifecycleOrder: string;
+  resultingLifecycleOrder: string;
+  acceptedAt: string;
+  leavesNoActiveDevice: boolean;
+}
+
+export interface PicoHomeDeviceLifecycleRecord {
+  schema: typeof picoHomeDeviceLifecycleRecordSchema;
+  submission: PicoHomeDeviceLifecycleSubmission;
+  receipt: PicoHomeDeviceLifecycleReceiptSignatureInput;
+  hostSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  hostSignatureHex: string;
 }
 
 export interface PicoHomeSealedClaimPayload extends PicoHomeFirstDeviceEvidence {
@@ -2187,6 +2295,158 @@ export function picoLinkDirectPayloadDigestHex(
   return Array.from(sodium.crypto_generichash(32, bytes, null))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
+}
+
+export function buildPicoHomeDeviceActivationSignatureInput(
+  input: PicoHomeDeviceActivationSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'activationId',
+    'action',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'picoIdentityFingerprintHex',
+    'sponsorDelegationId',
+    'sponsorDeviceSigningKeyFingerprintHex',
+    'sponsorDeviceKeyAgreementKeyFingerprintHex',
+    'targetDelegationId',
+    'targetDeviceSigningKeyFingerprintHex',
+    'targetDeviceKeyAgreementKeyFingerprintHex',
+    'lifecycleEvidenceDigestHex',
+    'observedLifecycleOrder',
+    'createdAt',
+    'expiresAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.activationId);
+  assertStringMember(input.action, picoHomeDeviceActivationActions, 'invalid_device_lifecycle_action');
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.sponsorDelegationId);
+  assertAsciiToken(input.targetDelegationId);
+  assertLifecycleOrder(input.observedLifecycleOrder);
+  assertInstant(input.createdAt);
+  assertInstant(input.expiresAt);
+  assertValidBounds(input.createdAt, input.expiresAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeDeviceLifecycleCanonicalLabels.activation),
+    asciiBytes(input.suite),
+    asciiBytes(input.activationId),
+    asciiBytes(input.action),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.picoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.sponsorDelegationId),
+    fixedHexBytes(input.sponsorDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.sponsorDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.targetDelegationId),
+    fixedHexBytes(input.targetDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.targetDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.lifecycleEvidenceDigestHex, 32, 'invalid_digest_length'),
+    asciiBytes(input.observedLifecycleOrder),
+    asciiBytes(input.createdAt),
+    asciiBytes(input.expiresAt),
+  ]);
+}
+
+export function buildPicoHomeDeviceLifecycleEvidenceDigestInput(
+  evidence: PicoHomeDeviceLifecycleEvidence,
+): Uint8Array {
+  assertPicoHomeDeviceLifecycleEvidence(evidence);
+  return concatCanonicalElements([
+    asciiBytes(picoHomeDeviceLifecycleCanonicalLabels.evidenceDigest),
+    canonicalTextEncoder.encode(canonicalJson(evidence)),
+  ]);
+}
+
+export function picoHomeDeviceLifecycleEvidenceDigestHex(
+  sodium: { crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array },
+  evidence: PicoHomeDeviceLifecycleEvidence,
+): string {
+  return bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoHomeDeviceLifecycleEvidenceDigestInput(evidence),
+    null,
+  ));
+}
+
+export function buildPicoHomeDeviceLifecycleSubmissionDigestInput(
+  submission: PicoHomeDeviceLifecycleSubmission,
+): Uint8Array {
+  assertPicoHomeDeviceLifecycleSubmission(submission);
+  return concatCanonicalElements([
+    asciiBytes(picoHomeDeviceLifecycleCanonicalLabels.submissionDigest),
+    canonicalTextEncoder.encode(canonicalJson(submission)),
+  ]);
+}
+
+export function picoHomeDeviceLifecycleSubmissionDigestHex(
+  sodium: { crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array },
+  submission: PicoHomeDeviceLifecycleSubmission,
+): string {
+  return bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoHomeDeviceLifecycleSubmissionDigestInput(submission),
+    null,
+  ));
+}
+
+export function buildPicoHomeDeviceLifecycleReceiptSignatureInput(
+  input: PicoHomeDeviceLifecycleReceiptSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'transitionId',
+    'action',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'picoIdentityFingerprintHex',
+    'sponsorDelegationId',
+    'sponsorDeviceSigningKeyFingerprintHex',
+    'sponsorDeviceKeyAgreementKeyFingerprintHex',
+    'targetDelegationId',
+    'targetDeviceSigningKeyFingerprintHex',
+    'targetDeviceKeyAgreementKeyFingerprintHex',
+    'transitionDigestHex',
+    'acceptedLifecycleOrder',
+    'resultingLifecycleOrder',
+    'acceptedAt',
+    'leavesNoActiveDevice',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.transitionId);
+  assertStringMember(input.action, picoHomeDeviceLifecycleActions, 'invalid_device_lifecycle_action');
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.sponsorDelegationId);
+  assertAsciiToken(input.targetDelegationId);
+  assertLifecycleOrder(input.acceptedLifecycleOrder);
+  assertLifecycleOrder(input.resultingLifecycleOrder);
+  assertInstant(input.acceptedAt);
+  if (typeof input.leavesNoActiveDevice !== 'boolean') {
+    throw new Error('invalid_leaves_no_active_device');
+  }
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeDeviceLifecycleCanonicalLabels.receipt),
+    asciiBytes(input.suite),
+    asciiBytes(input.transitionId),
+    asciiBytes(input.action),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.picoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.sponsorDelegationId),
+    fixedHexBytes(input.sponsorDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.sponsorDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.targetDelegationId),
+    fixedHexBytes(input.targetDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.targetDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.transitionDigestHex, 32, 'invalid_digest_length'),
+    asciiBytes(input.acceptedLifecycleOrder),
+    asciiBytes(input.resultingLifecycleOrder),
+    asciiBytes(input.acceptedAt),
+    asciiBytes(input.leavesNoActiveDevice ? 'true' : 'false'),
+  ]);
 }
 
 export function buildPicoIdentityDelegationSignatureInput(
@@ -3448,6 +3708,174 @@ function positiveSafeIntegerBytes(value: number, reason: string): Uint8Array {
     throw new Error(reason);
   }
   return asciiBytes(String(value));
+}
+
+function assertPicoHomeDeviceLifecycleEvidence(
+  evidence: PicoHomeDeviceLifecycleEvidence,
+): void {
+  assertExactKeys(evidence as unknown as Record<string, unknown>, [
+    'transitionId',
+    'action',
+    'picoIdentityFingerprintHex',
+    'targetDelegationId',
+    'targetDeviceSigningKeyFingerprintHex',
+    'targetDeviceKeyAgreementKeyFingerprintHex',
+    'replacedDelegationId',
+    'observedLifecycleOrder',
+    'identityKeyRecord',
+    'targetDeviceSigningKeyRecord',
+    'targetDeviceKeyAgreementKeyRecord',
+    'delegation',
+    'revocations',
+  ]);
+  assertAsciiToken(evidence.transitionId);
+  assertStringMember(
+    evidence.action,
+    picoHomeDeviceLifecycleActions,
+    'invalid_device_lifecycle_action',
+  );
+  fixedHexBytes(evidence.picoIdentityFingerprintHex, 32, 'invalid_fingerprint_length');
+  assertAsciiToken(evidence.targetDelegationId);
+  fixedHexBytes(evidence.targetDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length');
+  fixedHexBytes(evidence.targetDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length');
+  assertLifecycleOrder(evidence.observedLifecycleOrder);
+  buildPicoIdentityKeyRecordSignatureInput(evidence.identityKeyRecord);
+  if (evidence.identityKeyRecord.keyRole !== 'pico_identity') {
+    throw new Error('invalid_identity_key_role');
+  }
+  if (!Array.isArray(evidence.revocations)) {
+    throw new Error('invalid_revocation_set');
+  }
+  for (const revocation of evidence.revocations) {
+    assertExactKeys(revocation as unknown as Record<string, unknown>, ['record', 'signatureHex']);
+    buildPicoIdentityRevocationSignatureInput(revocation.record);
+    fixedHexBytes(revocation.signatureHex, 64, 'invalid_signature_length');
+    if (revocation.record.issuerIdentityKeyFingerprintHex !== evidence.picoIdentityFingerprintHex) {
+      throw new Error('device_lifecycle_identity_mismatch');
+    }
+  }
+
+  if (evidence.action === 'revoke') {
+    if (
+      evidence.replacedDelegationId !== null
+      || evidence.targetDeviceSigningKeyRecord !== null
+      || evidence.targetDeviceKeyAgreementKeyRecord !== null
+      || evidence.delegation !== null
+      || evidence.revocations.length === 0
+    ) {
+      throw new Error('invalid_device_revocation_evidence');
+    }
+    const allowedSubjectRefs = new Set([
+      evidence.targetDelegationId,
+      evidence.targetDeviceSigningKeyFingerprintHex,
+      evidence.targetDeviceKeyAgreementKeyFingerprintHex,
+    ]);
+    if (evidence.revocations.some((entry) => !allowedSubjectRefs.has(entry.record.subjectRef))) {
+      throw new Error('invalid_device_revocation_subject');
+    }
+    return;
+  }
+
+  if (
+    evidence.targetDeviceSigningKeyRecord === null
+    || evidence.targetDeviceKeyAgreementKeyRecord === null
+    || evidence.delegation === null
+  ) {
+    throw new Error('missing_device_activation_evidence');
+  }
+  buildPicoIdentityKeyRecordSignatureInput(evidence.targetDeviceSigningKeyRecord);
+  buildPicoIdentityKeyRecordSignatureInput(evidence.targetDeviceKeyAgreementKeyRecord);
+  if (
+    evidence.targetDeviceSigningKeyRecord.keyRole !== 'device_signing'
+    || evidence.targetDeviceKeyAgreementKeyRecord.keyRole !== 'device_key_agreement'
+  ) {
+    throw new Error('invalid_device_key_role');
+  }
+  assertExactKeys(
+    evidence.delegation as unknown as Record<string, unknown>,
+    ['record', 'signatureHex'],
+  );
+  buildPicoIdentityDelegationSignatureInput(evidence.delegation.record);
+  fixedHexBytes(evidence.delegation.signatureHex, 64, 'invalid_signature_length');
+  const delegation = evidence.delegation.record;
+  if (
+    delegation.delegationId !== evidence.targetDelegationId
+    || delegation.issuerIdentityKeyFingerprintHex !== evidence.picoIdentityFingerprintHex
+    || delegation.subjectSigningKeyFingerprintHex
+      !== evidence.targetDeviceSigningKeyFingerprintHex
+    || delegation.subjectKeyAgreementKeyFingerprintHex
+      !== evidence.targetDeviceKeyAgreementKeyFingerprintHex
+    || !delegation.scopes.includes('surface_session')
+  ) {
+    throw new Error('device_lifecycle_delegation_mismatch');
+  }
+
+  if (evidence.action === 'enroll') {
+    if (evidence.replacedDelegationId !== null || evidence.revocations.length !== 0) {
+      throw new Error('invalid_device_enrollment_evidence');
+    }
+    return;
+  }
+
+  if (
+    evidence.replacedDelegationId === null
+    || evidence.revocations.length !== 1
+    || evidence.revocations[0]?.record.subjectKind !== 'delegation'
+    || evidence.revocations[0].record.subjectRef !== evidence.replacedDelegationId
+  ) {
+    throw new Error('invalid_device_renewal_evidence');
+  }
+  assertAsciiToken(evidence.replacedDelegationId);
+}
+
+function assertPicoHomeDeviceLifecycleSubmission(
+  submission: PicoHomeDeviceLifecycleSubmission,
+): void {
+  assertExactKeys(submission as unknown as Record<string, unknown>, [
+    'schema',
+    'evidence',
+    'activation',
+  ]);
+  if (submission.schema !== picoHomeDeviceLifecycleSubmissionSchema) {
+    throw new Error('invalid_device_lifecycle_submission_schema');
+  }
+  assertPicoHomeDeviceLifecycleEvidence(submission.evidence);
+  if (submission.evidence.action === 'revoke') {
+    if (submission.activation !== null) {
+      throw new Error('unexpected_device_activation');
+    }
+    return;
+  }
+  if (submission.activation === null) {
+    throw new Error('missing_device_activation');
+  }
+  assertExactKeys(
+    submission.activation as unknown as Record<string, unknown>,
+    ['input', 'targetSignatureHex'],
+  );
+  buildPicoHomeDeviceActivationSignatureInput(submission.activation.input);
+  fixedHexBytes(submission.activation.targetSignatureHex, 64, 'invalid_signature_length');
+  const activation = submission.activation.input;
+  const evidence = submission.evidence;
+  if (
+    activation.activationId !== evidence.transitionId
+    || activation.action !== evidence.action
+    || activation.picoIdentityFingerprintHex !== evidence.picoIdentityFingerprintHex
+    || activation.targetDelegationId !== evidence.targetDelegationId
+    || activation.targetDeviceSigningKeyFingerprintHex
+      !== evidence.targetDeviceSigningKeyFingerprintHex
+    || activation.targetDeviceKeyAgreementKeyFingerprintHex
+      !== evidence.targetDeviceKeyAgreementKeyFingerprintHex
+    || activation.observedLifecycleOrder !== evidence.observedLifecycleOrder
+  ) {
+    throw new Error('device_activation_evidence_mismatch');
+  }
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 function canonicalJson(value: unknown): string {

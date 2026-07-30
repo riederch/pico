@@ -59,6 +59,7 @@ import {
   type PicoHomeMembershipLifecycleRecord,
   type PicoHomeDomainReadGrantLifecycleRecord,
   type PicoHomeDomainReadGrantRecord,
+  type PicoHomeDeviceLifecycleSubmission,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
@@ -682,6 +683,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       app.log.error(
         firstDeviceReconciliation,
         'Pico Home first-device evidence could not be re-projected from v2 founding evidence.',
+      );
+    }
+    const deviceLifecycleReconciliation =
+      store.reconcilePicoHomeDeviceLifecycleTransitions(sodium);
+    if (deviceLifecycleReconciliation.quarantinedIdentities.length > 0) {
+      app.log.error(
+        deviceLifecycleReconciliation,
+        'Pico Home device-lifecycle receipt verification failed; affected identity projections were quarantined.',
       );
     }
   }
@@ -1440,6 +1449,52 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             return { outcome: 'sender_is_not_home_authority', result: {} };
           }
           return toLinkExecution(executeHomeAuthorityList(args));
+        }
+        case 'home.device.lifecycle.read': {
+          if (Object.keys(args).length !== 0) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const view = store.picoHomeDeviceLifecycleView({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            sodium,
+          });
+          return view === undefined
+            ? { outcome: 'lifecycle_unavailable', result: {} }
+            : {
+              outcome: 'ok',
+              result: view as unknown as Record<string, unknown>,
+            };
+        }
+        case 'home.device.lifecycle.submit': {
+          if (
+            Object.keys(args).length !== 1
+            || !('submission' in args)
+            || !isRecord(args.submission)
+            || homeHostKeys === undefined
+          ) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const result = store.recordPicoHomeDeviceLifecycleTransition({
+            submission: args.submission as unknown as PicoHomeDeviceLifecycleSubmission,
+            sponsor: principal,
+            hostSigningKeyRecord: {
+              suite: homeHostKeys.publicBundle.suite,
+              keyRole: 'home_host_signing',
+              publicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+            },
+            signHostReceipt: (signatureInput) =>
+              homeHostKeyStore.signWithHostSigningKey(sodium, signatureInput),
+            sodium,
+          });
+          return result.ok
+            ? {
+              outcome: 'ok',
+              result: {
+                inserted: result.inserted,
+                record: result.record,
+              },
+            }
+            : { outcome: result.reason, result: {} };
         }
         default: {
           return { outcome: 'unknown_operation', result: {} };

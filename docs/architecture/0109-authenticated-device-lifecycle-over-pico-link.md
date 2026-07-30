@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; implementation pending (gates D1-D5). This ADR decides how an
+Accepted; gates D1-D2 implemented, gates D3-D5 pending. This ADR decides how an
 already admitted Pico identity enrolls, renews and revokes its own delegated
 devices over Pico Link. It deliberately does not create a zero-device remote
 recovery path: once no active device remains, Link authentication is closed
@@ -325,12 +325,12 @@ explicit signed domain action and cannot promise historical erasure.
 
 ## Gates
 
-- **D1 - Protocol forms and lifecycle conflicts:** Add canonical target
+- **D1 - Protocol forms and lifecycle conflicts (implemented):** Add canonical target
   activation and host receipt inputs, the durable transition record, exact
   action/evidence digests and authoritative positive/negative vectors. Make
   issuer-plus-lifecycle-order reuse with different statement bytes fail
   closed.
-- **D2 - Foundation intake and atomic state:** Add the two authenticated
+- **D2 - Foundation intake and atomic state (implemented):** Add the two authenticated
   closed Link operations, same-identity/sponsor/target verification,
   head-bound authority creation, non-stale revocation merge, migration and
   ordered atomic projection with rollback and restart-quarantine tests.
