@@ -6,9 +6,10 @@ Accepted and implemented through gates D1-D5. This ADR decides how an
 already admitted Pico identity enrolls, renews and revokes its own delegated
 devices over Pico Link. It deliberately does not create a zero-device remote
 recovery path: once no active device remains, Link authentication is closed
-until a separate, locally activated recovery design exists. ADR 0110 now
-decides that design; until its gates are implemented, the closure decided
-here remains the runtime behaviour.
+until a separate, locally activated recovery design exists. ADR 0110 has
+since superseded the locally-activated premise and decided recovery as a
+Recovery-Card-based, time-locked remote contract; until its gates are
+implemented, the closure decided here remains the runtime behaviour.
 
 ## Context
 
@@ -261,8 +262,10 @@ device possession, Home confirmation, durable freshness and visible audit.
 It must also define the case where the identity root is unavailable; hidden
 continuity is forbidden, so explicit identity replacement may be the only
 honest result. No part of that future surface is reserved or implemented here.
-ADR 0110 has since decided exactly that contract; its gates R1-R5 remain
-unimplemented, so nothing in this runtime changes yet.
+ADR 0110 has since decided that contract - keeping every ingredient except
+the locally-activated premise, which it supersedes by product decision in
+favour of a printed Recovery Card and a time-locked veto window. Its gates
+R1-R5 remain unimplemented, so nothing in this runtime changes yet.
 
 ### Revocation stops future authority; domain recovery stays separate
 
@@ -409,8 +412,9 @@ Negative and residual:
   and lost-device handling neither rewrites history nor rotates domain keys by
   implication.
 - Hands zero-device recovery and the identity-replacement boundary to ADR
-  `0110`, which keeps this ADR's closure rules and replaces only the missing
-  sponsor authority with locally activated, one-use display control.
+  `0110`, which keeps this ADR's closure rules and replaces the missing
+  sponsor authority with the identity root restored from a printed Recovery
+  Card, behind a time-locked veto window.
 
 ## References
 
@@ -422,4 +426,4 @@ Negative and residual:
 - [ADR 0099](0099-hold-channel-approval-for-authority-creating-signatures.md)
 - [ADR 0107](0107-pico-link-direct-envelopes-to-the-own-home.md)
 - [ADR 0108](0108-the-first-delegated-device-is-founded-with-the-home.md)
-- [ADR 0110](0110-zero-device-recovery-mode-and-the-identity-replacement-boundary.md)
+- [ADR 0110](0110-recovery-card-and-time-locked-zero-device-recovery.md)

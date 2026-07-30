@@ -281,7 +281,7 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
 | Parsing and resource exhaustion | Exact target/method gate, 32-header cap, five-second header/keep-alive bounds, ten-second request timeout, 100 requests per socket, route body limit, sealed-field limit, cheap shape checks and closed operations precede private-key verification. | One seal-open is unavoidable before sender authentication. There is no IP/account rate limit, adaptive abuse control or distributed DoS protection; public exposure is not supported. |
 | Metadata privacy | Payload fields are hidden from the carrier and only one HTTP target exists, so the target itself reveals no operation name. | Direct transport still reveals source/destination addresses, TCP/HTTP timing, direction, ciphertext size, retries and availability. Core request logs include source address/port, and log retention is deployment-controlled. No padding, batching, routing-identity indirection or retention protocol exists. |
 | Malicious carrier delivery | Authenticated results and post-auth refusals are signed and sealed; duplicate delivery is bounded as above. | Delay, drop, selective forwarding and traffic analysis remain fully possible. Direct Link has no receipts, queue, alternate relay or liveness claim. |
-| Host/member/domain authority separation | Link authentication reuses exact delegation and active membership evidence; authority operations additionally require the current Home Host Pico. For v2 founding, the exact first-device delegation and reader key are projected only after the root/device/host bindings verify, and a Link-carried claim must have the same outer sender. ADR 0109 now adds same-identity later-device enrollment, replacement renewal and revocation through two normally authorized operations; root authority, target possession, sponsor delivery and host receipt remain separate signatures. Shared handlers retain record signature, reader-key and domain-custody checks. | Home hosting still exposes host operational metadata. Link does not make Home administration into domain readership. A last-device self-revocation deliberately closes Link; ADR 0110 now decides zero-device recovery as a locally activated one-use Recovery Mode, but its gates are unimplemented, so recovery remains absent in runtime. |
+| Host/member/domain authority separation | Link authentication reuses exact delegation and active membership evidence; authority operations additionally require the current Home Host Pico. For v2 founding, the exact first-device delegation and reader key are projected only after the root/device/host bindings verify, and a Link-carried claim must have the same outer sender. ADR 0109 now adds same-identity later-device enrollment, replacement renewal and revocation through two normally authorized operations; root authority, target possession, sponsor delivery and host receipt remain separate signatures. Shared handlers retain record signature, reader-key and domain-custody checks. | Home hosting still exposes host operational metadata. Link does not make Home administration into domain readership. A last-device self-revocation deliberately closes Link; ADR 0110 now decides zero-device recovery as a Recovery-Card-authorized, time-locked standing operation, but its gates are unimplemented, so recovery remains absent in runtime. |
 | Audit | Accepted inner operations use the same durable state changes and audit paths as local delivery; no carrier can substitute a different operation. | Pre-authentication failures are operational request logs, not signed audit records. No privacy-bounded abuse ledger exists. |
 | Compatibility and relay identity | The direct wire is local and unpublished; no HTTP identity, account or address becomes Pico identity. | There is no public conformance claim, relay routing identity, packet queue, metadata-retention policy or transport-session-key protocol. Those remain relay work under ADR 0028/0029. |
 
@@ -342,9 +342,10 @@ Negative and residual:
   by carrying the first delegated device's evidence in claim/founding.
 - ADR `0109` implements authenticated later-device lifecycle through two
   closed operations without widening the two-operation pre-authority set.
-  ADR `0110` decides zero-device recovery: one further closed operation,
-  pre-authority only while a locally opened one-use window exists, with the
-  pinned verification order unchanged; its gates are not implemented.
+  ADR `0110` decides zero-device recovery: one standing closed operation
+  keyed solely by the identity root over durable one-use pending state,
+  plus an authenticated veto operation, with the pinned verification order
+  unchanged; its gates are not implemented.
 
 ## References
 
@@ -356,4 +357,4 @@ Negative and residual:
 - [ADR 0032](0032-pico-link-envelope-and-credential-schema-direction.md)
 - [ADR 0080](0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md)
 - [ADR 0105](0105-pico-runs-as-a-background-companion-not-a-cli.md)
-- [ADR 0110](0110-zero-device-recovery-mode-and-the-identity-replacement-boundary.md)
+- [ADR 0110](0110-recovery-card-and-time-locked-zero-device-recovery.md)

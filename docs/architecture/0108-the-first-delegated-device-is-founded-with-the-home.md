@@ -225,11 +225,12 @@ Positive:
   first-device evidence arrive in one atomic, approval-gated,
   possession-proven contract, and every ADR 0107 authority operation works
   from the first second of the Home's existence;
-- no standing second pre-authority channel exists: the closed pre-authority
-  set stays `home.setup.read` and `home.claim.submit` (ADR 0110 later amends
-  this by exactly one recovery operation that is pre-authority only while a
-  locally opened one-use window exists; the rejection of a lifetime-reachable
-  enrollment operation stands);
+- no unauthorized standing pre-authority channel exists: the closed
+  pre-authority set stays `home.setup.read` and `home.claim.submit`
+  (ADR 0110 later revises this consciously by exactly one standing recovery
+  operation keyed solely by the identity root over durable one-use,
+  time-locked pending state; the rejection of enrollment without root
+  authority stands);
 - identity-root usage stays confined to the founding ceremony; the ADR 0099
   exemption list is untouched;
 - the founding record becomes the single projection root for "who may act
@@ -272,7 +273,7 @@ Negative and residual:
   Link enrollment.
 - ADR `0110` decides zero-device recovery without reusing the claim: the
   Move-In Code, Setup Mode and founding families stay single-purpose, and
-  recovery gets its own mode, code and record families.
+  recovery gets its own card, claim and receipt families.
 
 ## References
 
@@ -284,4 +285,4 @@ Negative and residual:
 - [ADR 0105](0105-pico-runs-as-a-background-companion-not-a-cli.md)
 - [ADR 0107](0107-pico-link-direct-envelopes-to-the-own-home.md)
 - [ADR 0109](0109-authenticated-device-lifecycle-over-pico-link.md)
-- [ADR 0110](0110-zero-device-recovery-mode-and-the-identity-replacement-boundary.md)
+- [ADR 0110](0110-recovery-card-and-time-locked-zero-device-recovery.md)
