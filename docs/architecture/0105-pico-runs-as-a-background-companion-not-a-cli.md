@@ -90,10 +90,11 @@ this product form rather than a refinement of it.
   detection and graceful degradation to what the device has.
 - **B4 - Approval rendering: Done.** ADR 0106 makes the daemon build both
   canonical signature input and human statement from the same fields.
-- **B5 - Transport: Partially implemented.** ADR 0107 D1-D3 supplies the
-  pinned, signed and sealed direct client plus the single Foundation intake
-  without bearer sessions. The restricted-port proof, threat ledger and
-  relay product path remain open.
+- **B5 - Transport: Partially implemented.** ADR 0107 D1-D5 supplies the
+  pinned, signed and sealed direct client plus an envelope-only listener
+  without bearer sessions. The real process gate proves that this listener
+  exposes no Foundation routes, and the direct threat ledger is explicit.
+  Relay-backed product reachability remains open.
 
 ## Non-goals
 

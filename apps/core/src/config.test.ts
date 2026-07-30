@@ -8,6 +8,7 @@ describe('Core config', () => {
     expect(config).toEqual({
       host: '127.0.0.1',
       port: 3100,
+      linkIntake: undefined,
       databasePath: 'apps/core/data/pico.sqlite',
       backupDirectory: 'apps/core/data/backups',
       keyStorePath: 'apps/core/data/keys',
@@ -25,6 +26,8 @@ describe('Core config', () => {
     const config = loadConfig({
       PICO_HOST: '127.0.0.1',
       PICO_PORT: '4100',
+      PICO_LINK_INTAKE_HOST: '0.0.0.0',
+      PICO_LINK_INTAKE_PORT: '4101',
       PICO_DATABASE_PATH: '/tmp/pico.sqlite',
       PICO_BACKUP_DIRECTORY: '/tmp/pico-backups',
       PICO_KEY_STORE_PATH: '/tmp/pico-keys',
@@ -34,12 +37,16 @@ describe('Core config', () => {
       PICO_WEB_ROOT: '/tmp/pico-web',
       PICO_WS_ALLOWED_ORIGINS: 'https://dev.example.test, http://localhost:5173/',
       PICO_FOUNDATION_TOKEN: 'dev-token',
-      PICO_FOUNDATION_ACCESS_MODE: 'direct-token',
+      PICO_FOUNDATION_ACCESS_MODE: 'loopback-dev',
     });
 
     expect(config).toEqual({
       host: '127.0.0.1',
       port: 4100,
+      linkIntake: {
+        host: '0.0.0.0',
+        port: 4101,
+      },
       databasePath: '/tmp/pico.sqlite',
       backupDirectory: '/tmp/pico-backups',
       keyStorePath: '/tmp/pico-keys',
@@ -49,7 +56,7 @@ describe('Core config', () => {
       webRootPath: '/tmp/pico-web',
       wsAllowedOrigins: ['https://dev.example.test', 'http://localhost:5173'],
       foundationToken: 'dev-token',
-      foundationAccessMode: 'direct-token',
+      foundationAccessMode: 'loopback-dev',
     });
   });
 
@@ -100,13 +107,47 @@ describe('Core config', () => {
   it('rejects invalid ports', () => {
     for (const port of ['0', '65536', '3100abc', '1.5', '-1', '   ']) {
       expect(() => loadConfig({ PICO_PORT: port })).toThrow('PICO_PORT must be an integer from 1 to 65535.');
+      expect(() => loadConfig({
+        PICO_LINK_INTAKE_HOST: '127.0.0.1',
+        PICO_LINK_INTAKE_PORT: port,
+      })).toThrow('PICO_LINK_INTAKE_PORT must be an integer from 1 to 65535.');
     }
+  });
+
+  it('requires the restricted Link listener binding as an explicit pair on a distinct port', () => {
+    expect(() => loadConfig({ PICO_LINK_INTAKE_HOST: '127.0.0.1' })).toThrow(
+      'PICO_LINK_INTAKE_HOST and PICO_LINK_INTAKE_PORT must be provided together.',
+    );
+    expect(() => loadConfig({ PICO_LINK_INTAKE_PORT: '4101' })).toThrow(
+      'PICO_LINK_INTAKE_HOST and PICO_LINK_INTAKE_PORT must be provided together.',
+    );
+    expect(() => loadConfig({
+      PICO_LINK_INTAKE_HOST: '127.0.0.1',
+      PICO_LINK_INTAKE_PORT: '3100',
+    })).toThrow('PICO_LINK_INTAKE_PORT must differ from PICO_PORT.');
+  });
+
+  it('refuses a restricted Link listener beside a directly exposed Foundation listener', () => {
+    expect(() => loadConfig({
+      PICO_HOST: '0.0.0.0',
+      PICO_FOUNDATION_ACCESS_MODE: 'direct-token',
+      PICO_FOUNDATION_TOKEN: 'dev-token',
+      PICO_LINK_INTAKE_HOST: '0.0.0.0',
+      PICO_LINK_INTAKE_PORT: '3101',
+    })).toThrow(
+      'PICO_LINK_INTAKE_HOST/PICO_LINK_INTAKE_PORT cannot be combined with '
+      + 'PICO_FOUNDATION_ACCESS_MODE=direct-token; keep the Foundation listener local.',
+    );
   });
 
   it('rejects blank string settings', () => {
     for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_BACKUP_DIRECTORY', 'PICO_KEY_STORE_PATH', 'PICO_HOME_HOST_KEY_STORE_PATH', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
       expect(() => loadConfig({ [name]: '   ' })).toThrow(`${name} must be a non-empty string.`);
     }
+    expect(() => loadConfig({
+      PICO_LINK_INTAKE_HOST: '   ',
+      PICO_LINK_INTAKE_PORT: '3101',
+    })).toThrow('PICO_LINK_INTAKE_HOST must be a non-empty string when provided.');
   });
 
   it('rejects a blank foundation token when provided', () => {

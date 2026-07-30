@@ -421,6 +421,25 @@ The accepted access modes are `loopback-dev`, `direct-token` and `ha-ingress`.
 Tokenless direct non-loopback startup fails closed; CI direct-port smokes use
 `direct-token` with disposable tokens.
 
+ADR 0107's direct Link slice can instead expose a separate envelope-only
+listener while the Foundation listener remains local:
+
+```bash
+PICO_HOST=127.0.0.1 \
+PICO_FOUNDATION_ACCESS_MODE=loopback-dev \
+PICO_LINK_INTAKE_HOST=0.0.0.0 \
+PICO_LINK_INTAKE_PORT=3101 \
+pnpm dev:core
+```
+
+Both Link variables are required together, the port must differ from
+`PICO_PORT`, and this restricted listener cannot be combined with
+`direct-token`. It accepts exactly `POST /api/home/link`; dashboard, health,
+diagnostics, Foundation APIs, WebSocket, query variants and other methods are
+not routed. This is a controlled direct/LAN validation path, not a public
+reverse-proxy or port-forwarding product model. Remote product reachability
+still belongs to Pico Relay.
+
 Mint a short-lived realtime ticket for browser WebSocket access:
 
 ```bash

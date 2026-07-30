@@ -131,6 +131,7 @@ import {
 } from './reader-key-freshness.js';
 import { PicoIdentityReaderKeyFreshnessInbox } from './reader-key-freshness-inbox.js';
 import {
+  MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES,
   PicoLinkDirectIntake,
   type PicoLinkDirectExecution,
   type PicoLinkDirectPrincipal,
@@ -1371,7 +1372,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * standing where the session principal stands - so remote capability is
    * opt-in per operation and cannot be inherited by adding a route.
    */
-  app.post('/api/home/link', async (request, reply) => {
+  app.post('/api/home/link', {
+    bodyLimit: MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES,
+  }, async (request, reply) => {
     const handled = await linkIntake.handle(request.body, async (operation, args, principal) => {
       switch (operation) {
         case 'home.setup.read': {

@@ -2,7 +2,12 @@
 
 ## Status
 
-Accepted as a pre-implementation threat-model constraint for Pico Link, Pico Home Link, key lifecycle, relay transport and protected domains.
+Accepted as a threat-model constraint for Pico Link, Pico Home Link, key
+lifecycle, relay transport and protected domains. Identity/device/Home key
+separation and protected reader-custody domains are now partially implemented;
+ADR 0107 D5 contains the runtime-backed ledger for the bounded direct Link
+slice. Relay metadata privacy, routing identities, abuse handling and
+production compatibility remain open.
 
 ## Context
 

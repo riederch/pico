@@ -2,10 +2,11 @@
 
 ## Status
 
-Accepted; partially implemented (D1-D3 done). This is the first runtime slice
-of Pico Link (ADR 0028) and the answer to ADR 0105 B5: an authenticated
-channel between a person's device and their own Pico Home that is not the
-deliberately closed direct port.
+Accepted; implemented for the bounded direct slice (D1-D5 done). This is the
+first runtime slice of Pico Link (ADR 0028) and the direct answer to ADR 0105
+B5: an authenticated channel between a person's device and their own Pico Home
+that is not the deliberately local Foundation listener. Relay-backed product
+reachability remains outside this ADR.
 
 ## Context
 
@@ -235,14 +236,49 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
   bearer session and, after registering a delegated device locally, created a
   reader-custody domain through the authenticated list and submit operations.
   Unit coverage pins host-key mismatch, per-request reply keys, response
-  binding, carrier refusal and response-size limits. These tests do not claim
-  D4: the Foundation port is still reachable directly in the test process.
-- **D4 - End-to-end test: Open.** Two real processes, the
-  `claim-ceremony.test.ts` pattern: found a Home and run a ceremony through
-  the link intake with the direct port closed to everything else.
-- **D5 - Honest threat ledger: Open.** The implementation records which ADR
-  0031 properties this slice satisfies and which remain open - carrier
-  metadata (size, timing, source address) above all, until the relay ADR.
+  binding, carrier refusal and response-size limits. Those D3 assertions alone
+  did not establish listener isolation; D4 below adds that deployment proof.
+- **D4 - End-to-end test: Done.** Core can optionally bind a second listener
+  through the paired deployment parameters `PICO_LINK_INTAKE_HOST` and
+  `PICO_LINK_INTAKE_PORT`. The Foundation listener stays in `loopback-dev` or
+  its HA-internal packaging boundary; configuration rejects combining the
+  restricted listener with `direct-token`, and the two listeners cannot share
+  a port.
+
+  The second listener owns no authority and no parallel handler. It forwards
+  only the exact request target `POST /api/home/link` into the same Fastify
+  instance; every other path, query variant and method is refused before
+  Fastify routing. Consequently a future Foundation route cannot become
+  remotely reachable by accident. Header-count, header-time, request-time,
+  keep-alive, requests-per-socket and Link-specific body limits bound the
+  carrier edge before the intake's shape check and first seal-open.
+
+  `link-intake-listener.test.ts` probes the real listener against dashboard,
+  health, setup, status, events, query/trailing-slash variants, wrong methods
+  and an oversized body. The spawned `claim-ceremony.test.ts` path then starts
+  a real Core with separate Foundation and Link ports, a real Vault daemon and
+  the ceremony CLI. The CLI receives only the Link URL, the test first proves
+  that Foundation routes are absent on it, then founds the Home and completes
+  an authenticated domain ceremony without a Foundation bearer session.
+- **D5 - Honest threat ledger: Done.** The table below records the bounded
+  direct slice against ADR 0031. It is intentionally a list of both achieved
+  and missing properties; completing this gate does not complete the relay,
+  metadata privacy, abuse handling or public compatibility work.
+
+## ADR 0031 threat ledger for the direct slice
+
+| Threat/property | Implemented direct posture | Residual/open boundary |
+|---|---|---|
+| Carrier reads payload | Requests are sealed to the Home agreement key; responses are sealed to the request's one-use reply key. The dedicated listener sees envelope JSON and ciphertext only. | A compromised Home agreement key reveals recorded requests; requests have no forward secrecy. The Home endpoint necessarily sees the operation after opening it. |
+| Carrier forges a Pico or Home result | The delegated device key signs request, audience and arguments; the pinned Home signing key signs response, request id, operation, outcome and result digest. URL, source address and HTTP identity grant no authority. | A carrier can still drop traffic or forge a bare pre-authentication HTTP refusal. It cannot forge a client-accepted success or authenticated refusal. |
+| Replay, duplication and reordering | Requests expire after 30 seconds client-side with a 60-second server ceiling. A bounded 1,024-entry set rejects an authenticated request id already seen during the process lifetime. Response binding prevents moving a response to another request. | The seen set is in-memory; a restart inside a request's remaining validity window can admit the same otherwise-valid request again. There is no ordering or exactly-once availability guarantee. |
+| Foundation surface exposure | The optional listener admits exactly `POST /api/home/link`; diagnostics, dashboard, health, WebSocket and all other Foundation routes are absent. `direct-token` cannot be enabled beside it. | HA/container packaging must still publish only the intended listener. Port forwarding or a public reverse proxy remains outside the product model. |
+| Parsing and resource exhaustion | Exact target/method gate, 32-header cap, five-second header/keep-alive bounds, ten-second request timeout, 100 requests per socket, route body limit, sealed-field limit, cheap shape checks and closed operations precede private-key verification. | One seal-open is unavoidable before sender authentication. There is no IP/account rate limit, adaptive abuse control or distributed DoS protection; public exposure is not supported. |
+| Metadata privacy | Payload fields are hidden from the carrier and only one HTTP target exists, so the target itself reveals no operation name. | Direct transport still reveals source/destination addresses, TCP/HTTP timing, direction, ciphertext size, retries and availability. Core request logs include source address/port, and log retention is deployment-controlled. No padding, batching, routing-identity indirection or retention protocol exists. |
+| Malicious carrier delivery | Authenticated results and post-auth refusals are signed and sealed; duplicate delivery is bounded as above. | Delay, drop, selective forwarding and traffic analysis remain fully possible. Direct Link has no receipts, queue, alternate relay or liveness claim. |
+| Host/member/domain authority separation | Link authentication reuses exact delegation and active membership evidence; authority operations additionally require the current Home Host Pico. Shared handlers retain record signature, reader-key and domain-custody checks. | Home hosting still exposes host operational metadata. Link does not make Home administration into domain readership and does not improve a compromised delegated device until revocation/rotation takes effect. |
+| Audit | Accepted inner operations use the same durable state changes and audit paths as local delivery; no carrier can substitute a different operation. | Pre-authentication failures are operational request logs, not signed audit records. No privacy-bounded abuse ledger exists. |
+| Compatibility and relay identity | The direct wire is local and unpublished; no HTTP identity, account or address becomes Pico identity. | There is no public conformance claim, relay routing identity, packet queue, metadata-retention policy or transport-session-key protocol. Those remain relay work under ADR 0028/0029. |
 
 ## Non-goals
 
@@ -259,8 +295,9 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
 Positive:
 
 - a person's device can reach their own Home without exposing the
-  diagnostic surface, which closes the gap ADR 0105 B5 named and retires
-  the non-product deployment the validation run used;
+  diagnostic surface when the dedicated listener is the only published
+  binding; D4 proves that boundary in the real process path and retires the
+  non-product shared-port validation path;
 - the carrier-without-authority rule is now load-bearing runtime, not
   concept: the relay, when it comes, transports these envelopes unchanged;
 - authorization becomes per-request and stateless on the wire, which is

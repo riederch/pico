@@ -8,6 +8,13 @@ import type {
 export interface CoreConfig {
   host: string;
   port: number;
+  /**
+   * Optional restricted Pico Link listener (ADR 0107 D4). This is a deployment
+   * binding, not a Pico setting: when present, it exposes exactly
+   * `POST /api/home/link` on a second listener while the Foundation listener
+   * remains local.
+   */
+  linkIntake?: PicoLinkIntakeBinding;
   databasePath: string;
   backupDirectory?: string;
   keyStorePath?: string;
@@ -42,6 +49,11 @@ export interface CoreConfig {
   readerKeyFreshnessCheckpointSource?: PicoIdentityReaderKeyFreshnessCheckpointSource;
 }
 
+export interface PicoLinkIntakeBinding {
+  host: string;
+  port: number;
+}
+
 type Environment = Record<string, string | undefined>;
 
 export type FoundationAccessMode = typeof foundationAccessModes[number];
@@ -59,16 +71,19 @@ export function defaultWebRootPath(): string {
 export function loadConfig(env: Environment = process.env): CoreConfig {
   const databasePath = readNonEmptyString(env, 'PICO_DATABASE_PATH', 'apps/core/data/pico.sqlite');
   const host = readNonEmptyString(env, 'PICO_HOST', '127.0.0.1');
+  const port = readPort(env.PICO_PORT, 'PICO_PORT', '3100');
   const foundationToken = readOptionalNonEmptyString(env.PICO_FOUNDATION_TOKEN, 'PICO_FOUNDATION_TOKEN');
   const foundationAccessMode = resolveFoundationAccessMode({
     host,
     foundationToken,
     requestedAccessMode: readOptionalNonEmptyString(env.PICO_FOUNDATION_ACCESS_MODE, 'PICO_FOUNDATION_ACCESS_MODE'),
   });
+  const linkIntake = readPicoLinkIntakeBinding(env, port, foundationAccessMode);
 
   return {
     host,
-    port: readPort(env.PICO_PORT),
+    port,
+    linkIntake,
     databasePath,
     backupDirectory: readNonEmptyString(env, 'PICO_BACKUP_DIRECTORY', join(dirname(databasePath), 'backups')),
     keyStorePath: readNonEmptyString(env, 'PICO_KEY_STORE_PATH', join(dirname(databasePath), 'keys')),
@@ -82,20 +97,52 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
   };
 }
 
-function readPort(rawPort: string | undefined): number {
-  const port = rawPort ?? '3100';
-
-  if (!/^[1-9]\d*$/.test(port)) {
-    throw new Error('PICO_PORT must be an integer from 1 to 65535.');
+function readPort(rawPort: string | undefined, name: string, defaultValue?: string): number {
+  const port = rawPort ?? defaultValue;
+  if (port === undefined || !/^[1-9]\d*$/.test(port)) {
+    throw new Error(`${name} must be an integer from 1 to 65535.`);
   }
 
   const parsedPort = Number.parseInt(port, 10);
 
   if (parsedPort > 65_535) {
-    throw new Error('PICO_PORT must be an integer from 1 to 65535.');
+    throw new Error(`${name} must be an integer from 1 to 65535.`);
   }
 
   return parsedPort;
+}
+
+function readPicoLinkIntakeBinding(
+  env: Environment,
+  foundationPort: number,
+  foundationAccessMode: FoundationAccessMode,
+): PicoLinkIntakeBinding | undefined {
+  const rawHost = env.PICO_LINK_INTAKE_HOST;
+  const rawPort = env.PICO_LINK_INTAKE_PORT;
+
+  if (rawHost === undefined && rawPort === undefined) {
+    return undefined;
+  }
+  if (rawHost === undefined || rawPort === undefined) {
+    throw new Error('PICO_LINK_INTAKE_HOST and PICO_LINK_INTAKE_PORT must be provided together.');
+  }
+
+  const host = readOptionalNonEmptyString(rawHost, 'PICO_LINK_INTAKE_HOST');
+  const port = readPort(rawPort, 'PICO_LINK_INTAKE_PORT');
+  if (host === undefined) {
+    throw new Error('PICO_LINK_INTAKE_HOST must be a non-empty string when provided.');
+  }
+  if (port === foundationPort) {
+    throw new Error('PICO_LINK_INTAKE_PORT must differ from PICO_PORT.');
+  }
+  if (foundationAccessMode === 'direct-token') {
+    throw new Error(
+      'PICO_LINK_INTAKE_HOST/PICO_LINK_INTAKE_PORT cannot be combined with '
+      + 'PICO_FOUNDATION_ACCESS_MODE=direct-token; keep the Foundation listener local.',
+    );
+  }
+
+  return { host, port };
 }
 
 function readNonEmptyString(env: Environment, name: string, defaultValue: string): string {

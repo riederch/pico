@@ -1,0 +1,123 @@
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { FastifyInstance } from 'fastify';
+import type { PicoLinkIntakeBinding } from './config.js';
+
+export const PICO_LINK_INTAKE_PATH = '/api/home/link';
+export const PICO_LINK_INTAKE_REQUEST_TIMEOUT_MS = 10_000;
+export const PICO_LINK_INTAKE_HEADERS_TIMEOUT_MS = 5_000;
+export const PICO_LINK_INTAKE_KEEP_ALIVE_TIMEOUT_MS = 5_000;
+export const MAX_PICO_LINK_INTAKE_HEADERS = 32;
+export const MAX_PICO_LINK_INTAKE_REQUESTS_PER_SOCKET = 100;
+
+export interface PicoLinkIntakeListener {
+  host: string;
+  port: number;
+  close(): Promise<void>;
+}
+
+/**
+ * ADR 0107 D4: a second HTTP listener that can be published without publishing
+ * the Foundation API.
+ *
+ * This adapter owns no route table and no authority. It forwards exactly one
+ * method and request target into the already-built Fastify application, so the
+ * request runs the same parser, `link-intake` access class, verifier, replay
+ * state and operation handlers as local delivery. Everything else is refused
+ * before Fastify routing, which means adding a Foundation route can never widen
+ * this listener by accident.
+ */
+export async function startPicoLinkIntakeListener(
+  app: FastifyInstance,
+  binding: PicoLinkIntakeBinding,
+): Promise<PicoLinkIntakeListener> {
+  await app.ready();
+
+  const server = createServer((request, response) => {
+    if (request.url !== PICO_LINK_INTAKE_PATH) {
+      refuse(request, response, 404, 'Not found.');
+      return;
+    }
+    if (request.method !== 'POST') {
+      response.setHeader('allow', 'POST');
+      refuse(request, response, 405, 'Method not allowed.');
+      return;
+    }
+
+    // Even parser/size failures must not be cached by an intermediary.
+    response.setHeader('cache-control', 'no-store');
+    app.routing(request, response);
+  });
+
+  // The first private-key work happens only after bounded body parsing and
+  // envelope-shape checks. Header, slow-request and connection limits keep the
+  // carrier edge finite too; they are abuse guardrails, not authentication.
+  server.requestTimeout = PICO_LINK_INTAKE_REQUEST_TIMEOUT_MS;
+  server.headersTimeout = PICO_LINK_INTAKE_HEADERS_TIMEOUT_MS;
+  server.keepAliveTimeout = PICO_LINK_INTAKE_KEEP_ALIVE_TIMEOUT_MS;
+  server.maxHeadersCount = MAX_PICO_LINK_INTAKE_HEADERS;
+  server.maxRequestsPerSocket = MAX_PICO_LINK_INTAKE_REQUESTS_PER_SOCKET;
+  server.on('upgrade', (_request, socket) => {
+    socket.destroy();
+  });
+
+  await listen(server, binding);
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    await closeServer(server);
+    throw new Error('Pico Link intake did not bind to a TCP address.');
+  }
+
+  return {
+    host: binding.host,
+    port: (address as AddressInfo).port,
+    close: () => closeServer(server),
+  };
+}
+
+function refuse(
+  request: IncomingMessage,
+  response: ServerResponse,
+  statusCode: 404 | 405,
+  error: string,
+): void {
+  // Do not buffer or route a body for a target this listener does not expose.
+  request.resume();
+  response.statusCode = statusCode;
+  response.setHeader('cache-control', 'no-store');
+  response.setHeader('connection', 'close');
+  response.setHeader('content-type', 'application/json; charset=utf-8');
+  response.setHeader('x-content-type-options', 'nosniff');
+  response.end(JSON.stringify({ error }));
+}
+
+async function listen(
+  server: ReturnType<typeof createServer>,
+  binding: PicoLinkIntakeBinding,
+): Promise<void> {
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const onError = (error: Error): void => {
+      rejectPromise(error);
+    };
+    server.once('error', onError);
+    server.listen(binding.port, binding.host, () => {
+      server.off('error', onError);
+      resolvePromise();
+    });
+  });
+}
+
+async function closeServer(server: ReturnType<typeof createServer>): Promise<void> {
+  if (!server.listening) {
+    return;
+  }
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    server.close((error) => {
+      if (error === undefined) {
+        resolvePromise();
+      } else {
+        rejectPromise(error);
+      }
+    });
+  });
+}

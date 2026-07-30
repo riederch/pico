@@ -96,6 +96,7 @@ async function waitFor(condition: () => boolean, label: string): Promise<void> {
 
 interface RunningCore {
   baseUrl: string;
+  linkBaseUrl?: string;
   moveInCode: string;
   hostSigningKeyFingerprintHex: string;
   hostSigningPublicKeyHex: string;
@@ -124,9 +125,17 @@ async function freePort(): Promise<number> {
   });
 }
 
-async function startCore(): Promise<RunningCore> {
+async function startCore(
+  options: { restrictedLinkIntake?: boolean } = {},
+): Promise<RunningCore> {
   const dataDir = tempDir('pico-claim-core-');
   const port = await freePort();
+  let linkPort: number | undefined;
+  if (options.restrictedLinkIntake === true) {
+    do {
+      linkPort = await freePort();
+    } while (linkPort === port);
+  }
   const child = spawn(process.execPath, [CORE], {
     env: {
       ...process.env,
@@ -137,6 +146,12 @@ async function startCore(): Promise<RunningCore> {
       PICO_HOST: '127.0.0.1',
       PICO_PORT: String(port),
       PICO_FOUNDATION_ACCESS_MODE: 'loopback-dev',
+      ...(linkPort === undefined
+        ? {}
+        : {
+          PICO_LINK_INTAKE_HOST: '127.0.0.1',
+          PICO_LINK_INTAKE_PORT: String(linkPort),
+        }),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -151,7 +166,9 @@ async function startCore(): Promise<RunningCore> {
   }
 
   await waitFor(
-    () => output.includes('picoHomeMoveInCode') && output.includes('Server listening at'),
+    () => output.includes('picoHomeMoveInCode')
+      && output.includes('Server listening at')
+      && (linkPort === undefined || output.includes('Pico Link restricted intake listening')),
     'core_ready',
   );
 
@@ -170,6 +187,7 @@ async function startCore(): Promise<RunningCore> {
 
   return {
     baseUrl: `http://127.0.0.1:${port}`,
+    ...(linkPort === undefined ? {} : { linkBaseUrl: `http://127.0.0.1:${linkPort}` }),
     moveInCode: String(claim.picoHomeMoveInCode),
     hostSigningKeyFingerprintHex: String(claim.hostSigningKeyFingerprintHex),
     hostSigningPublicKeyHex: String(claim.hostSigningPublicKeyHex),
@@ -360,11 +378,12 @@ function runLinkCeremony(
   daemon: RunningDaemon,
   core: RunningCore,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const linkBaseUrl = requireLinkBaseUrl(core);
   const child = spawn(process.execPath, [
     CLI, 'ceremony', 'claim-home',
     '--vault-home', daemon.vaultHomePath,
     '--fingerprint', ownerIdentity.keyFingerprintHex,
-    '--core-url', core.baseUrl,
+    '--core-url', linkBaseUrl,
     '--move-in-code', core.moveInCode,
     '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
     '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
@@ -429,11 +448,12 @@ function runCreateDomainOverLink(
   domainId: string,
   delegationId: string,
 ): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const linkBaseUrl = requireLinkBaseUrl(core);
   return runDaemonCli(daemon, [
     'ceremony', 'create-domain',
     '--fingerprint', ownerIdentity.keyFingerprintHex,
     '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
-    '--core-url', core.baseUrl,
+    '--core-url', linkBaseUrl,
     '--domain-id', domainId,
     '--transport', 'link',
     '--link-signing-fingerprint', ownerSigning.keyFingerprintHex,
@@ -444,6 +464,13 @@ function runCreateDomainOverLink(
     '--host-signing-public-key', core.hostSigningPublicKeyHex,
     '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
   ]);
+}
+
+function requireLinkBaseUrl(core: RunningCore): string {
+  if (core.linkBaseUrl === undefined) {
+    throw new Error('restricted_link_intake_not_started');
+  }
+  return core.linkBaseUrl;
 }
 
 function runCreateDomain(
@@ -602,8 +629,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       .picoHome.claimState.state).toBe('claimed');
   }, 120_000);
 
-  it('founds a Home through signed Pico Link requests without a bearer session', async () => {
-    const core = await startCore();
+  it('founds a Home through the restricted Pico Link listener without exposing Foundation routes', async () => {
+    const core = await startCore({ restrictedLinkIntake: true });
     const daemon = await startDaemon();
     const identityApprover = await startApprover(daemon);
     const signingApprover = await startApprover(
@@ -612,6 +639,14 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       'device_signing',
       SIGNING_PASSPHRASE,
     );
+
+    const linkBaseUrl = requireLinkBaseUrl(core);
+    for (const path of ['/', '/health', '/api/system/status', '/api/home/setup', '/api/events']) {
+      const response = await fetch(`${linkBaseUrl}${path}`);
+      expect(response.status, path).toBe(404);
+    }
+    expect((await fetch(`${linkBaseUrl}/api/home/link`)).status).toBe(405);
+
     const run = await runLinkCeremony(daemon, core);
     expect(run.code).toBe(0);
     expect(JSON.parse(run.stdout)).toMatchObject({
@@ -694,7 +729,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
   }, 180_000);
 
   it('delivers an authorized domain ceremony through Pico Link without a Foundation session', async () => {
-    const core = await startCore();
+    const core = await startCore({ restrictedLinkIntake: true });
     const daemon = await startDaemon();
     const identityApprover = await startApprover(daemon);
     await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);

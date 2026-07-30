@@ -30,6 +30,11 @@ import type { IdentityVerificationSodium } from '@pico/identity';
  */
 
 export const MAX_PICO_LINK_DIRECT_ENVELOPE_HEX_CHARS = 256 * 1024;
+// JSON framing around `sealedRequestHex` stays deliberately tiny. Fastify
+// applies this per-route limit before the intake performs its own exact
+// envelope-field limit and before any private-key operation.
+export const MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES =
+  MAX_PICO_LINK_DIRECT_ENVELOPE_HEX_CHARS + 1024;
 export const MAX_PICO_LINK_DIRECT_REQUEST_LIFETIME_MS = 60 * 1_000;
 export const MAX_PICO_LINK_DIRECT_SEEN_REQUESTS = 1_024;
 
