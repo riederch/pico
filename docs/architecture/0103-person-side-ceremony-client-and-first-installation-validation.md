@@ -196,9 +196,11 @@ today, so that is the path the first installation validates.
   `pico-vault ceremony claim-home`. The host fingerprints the person reads
   from the add-on log are compared against what the Foundation serves before
   anything is signed - without that, whatever answers on `--core-url` could
-  hand out its own key and receive a claim sealed to itself. Founding costs
-  exactly two approvals, because the claim and the acceptance each create
-  authority and neither is on the ADR 0099 exempt list.
+  hand out its own key and receive a claim sealed to itself. ADR 0108 extends
+  this ceremony for v2 founding: it first creates the root-signed first-device
+  delegation, then root-signs claim and founding acceptance. Those three
+  authority statements each require approval; the device co-signature over
+  the claim is operational possession proof and requires no fourth approval.
 - **C2 - Domain ceremony group: Done.** `pico-vault ceremony
   create-domain` drives the existing daemon ceremony and POSTs the signed
   record to the existing route; no new Foundation route was added. It needs

@@ -8,6 +8,7 @@ import {
   foundationOperatorHomeBindingMigrationId,
   listAppliedMigrations,
   listMigrationAuditRecords,
+  picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
   runMigrations,
@@ -46,9 +47,13 @@ describe('database migrations', () => {
           id: readerCustodyMultiReaderRotationMigrationId,
           requiresBackup: false,
         },
+        {
+          id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
+          requiresBackup: true,
+        },
       ],
       unknownMigrationIds: [],
-      backupRequired: false,
+      backupRequired: true,
     });
 
     const tables = db
@@ -98,6 +103,10 @@ describe('database migrations', () => {
         id: readerCustodyMultiReaderRotationMigrationId,
         appliedAt: expect.any(String),
       },
+      {
+        id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
+        appliedAt: expect.any(String),
+      },
     ]);
 
     db.close();
@@ -123,6 +132,7 @@ describe('database migrations', () => {
 
     expect(foundingColumns).not.toContain('claimant_claim_signature_hex');
     expect(foundingColumns).toContain('claimant_founding_signature_hex');
+    expect(foundingColumns).toContain('first_device_evidence_json');
     expect(eventColumns).toContain('payload_posture');
     expect(memoryColumns).toEqual(expect.arrayContaining(['content_posture', 'key_envelope_ref']));
 
@@ -204,22 +214,28 @@ describe('database migrations', () => {
         picoSchemaBaselineMigrationId,
         foundationOperatorHomeBindingMigrationId,
         readerCustodyMultiReaderRotationMigrationId,
+        picoHomeFoundingFirstDeviceEvidenceMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(3);
+    expect(listAppliedMigrations(db)).toHaveLength(4);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
   });
 
-  it('can require backup confirmation without blocking safe foundation migrations', () => {
+  it('requires explicit backup confirmation for the v2 founding migration', () => {
     const db = new Database(createDatabasePath());
 
-    expect(() => runMigrations(db, { requireBackupBeforeMigration: true })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(3);
+    expect(() => runMigrations(db, { requireBackupBeforeMigration: true }))
+      .toThrow('Backup confirmation is required');
+    expect(() => runMigrations(db, {
+      requireBackupBeforeMigration: true,
+      backupConfirmed: true,
+    })).not.toThrow();
+    expect(listAppliedMigrations(db)).toHaveLength(4);
 
     db.close();
   });
@@ -258,7 +274,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(3);
+    expect(listAppliedMigrations(db)).toHaveLength(4);
 
     db.close();
   });
@@ -272,6 +288,7 @@ describe('database migrations', () => {
       picoSchemaBaselineMigrationId,
       foundationOperatorHomeBindingMigrationId,
       readerCustodyMultiReaderRotationMigrationId,
+      picoHomeFoundingFirstDeviceEvidenceMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -283,6 +300,7 @@ describe('database migrations', () => {
           picoSchemaBaselineMigrationId,
           foundationOperatorHomeBindingMigrationId,
           readerCustodyMultiReaderRotationMigrationId,
+          picoHomeFoundingFirstDeviceEvidenceMigrationId,
         ],
       },
     ]);
@@ -346,6 +364,7 @@ describe('database migrations', () => {
           picoSchemaBaselineMigrationId,
           foundationOperatorHomeBindingMigrationId,
           readerCustodyMultiReaderRotationMigrationId,
+          picoHomeFoundingFirstDeviceEvidenceMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

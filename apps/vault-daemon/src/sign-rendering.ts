@@ -19,6 +19,7 @@ import {
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   picoHomeSignatureInputLabels,
+  picoHomeV2SignatureInputLabels,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
   picoLinkDirectRequestSignatureInputLabel,
@@ -86,7 +87,11 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
     buildPicoLinkDirectRequestSignatureInput(f as never),
   [picoHomeSignatureInputLabels.claim]: (f) =>
     buildPicoHomeClaimSignatureInput(f as never),
+  [picoHomeV2SignatureInputLabels.claim]: (f) =>
+    buildPicoHomeClaimSignatureInput(f as never),
   [picoHomeSignatureInputLabels.founding]: (f) =>
+    buildPicoHomeFoundingSignatureInput(f as never),
+  [picoHomeV2SignatureInputLabels.founding]: (f) =>
     buildPicoHomeFoundingSignatureInput(f as never),
   [picoHomeSignatureInputLabels.membership]: (f) =>
     buildPicoHomeMembershipSignatureInput(f as never),
@@ -138,9 +143,17 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
     const v = f as PicoHomeClaimSignatureInput;
     return `Claim the Pico Home whose host key is ${short(v.hostSigningKeyFingerprintHex)} for identity ${short(v.claimantIdentityKeyFingerprintHex)}.`;
   },
+  [picoHomeV2SignatureInputLabels.claim]: (f) => {
+    const v = f as PicoHomeClaimSignatureInput;
+    return `Claim the Pico Home whose host key is ${short(v.hostSigningKeyFingerprintHex)} for identity ${short(v.claimantIdentityKeyFingerprintHex)} with first device ${short(v.firstDeviceSigningKeyFingerprintHex)}.`;
+  },
   [picoHomeSignatureInputLabels.founding]: (f) => {
     const v = f as PicoHomeFoundingSignatureInput;
     return `Found Pico Home ${v.homeId} and take Home Host authority for it.`;
+  },
+  [picoHomeV2SignatureInputLabels.founding]: (f) => {
+    const v = f as PicoHomeFoundingSignatureInput;
+    return `Found Pico Home ${v.homeId} and bind first device ${short(v.firstDeviceSigningKeyFingerprintHex)} as Home Host authority.`;
   },
   [picoHomeSignatureInputLabels.membership]: (f) => {
     const v = f as PicoHomeMembershipSignatureInput;

@@ -353,6 +353,10 @@ function runCeremony(
     '--host-signing-fingerprint',
     overrides.hostSigningKeyFingerprintHex ?? core.hostSigningKeyFingerprintHex,
     '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+    '--signing-fingerprint', ownerSigning.keyFingerprintHex,
+    '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+    '--delegation-valid-until',
+    new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
   childProcesses.push(child);
 
@@ -390,7 +394,8 @@ function runLinkCeremony(
     '--transport', 'link',
     '--link-signing-fingerprint', ownerSigning.keyFingerprintHex,
     '--link-agreement-fingerprint', ownerAgreement.keyFingerprintHex,
-    '--link-delegation-id', 'delegation_pre_authority_claim_0001',
+    '--delegation-valid-until',
+    new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
     '--host-signing-public-key', core.hostSigningPublicKeyHex,
     '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
   ], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -605,6 +610,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     const core = await startCore();
     const daemon = await startDaemon();
     const approver = await startApprover(daemon);
+    await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
     const before = await fetch(`${core.baseUrl}/api/system/status`);
     expect(((await before.json()) as { picoHome: { claimState: { state: string } } })
@@ -617,9 +624,9 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(founding.claimState.state).toBe('claimed');
     expect(founding.claimState.homeId).toMatch(/^home_[0-9a-f]{32}$/);
 
-    // Founding creates authority twice - the claim and the acceptance - and
-    // neither is on the ADR 0099 exempt list, so the person was asked twice.
-    expect(approver.approvals()).toBe(2);
+    // Delegation, claim and founding acceptance create authority. The device
+    // co-signature proves possession and raises no additional approval.
+    expect(approver.approvals()).toBe(3);
 
     // Setup Mode closes behind a claimed Home.
     expect((await fetch(`${core.baseUrl}/api/home/setup`)).status).toBe(404);
@@ -639,6 +646,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       'device_signing',
       SIGNING_PASSPHRASE,
     );
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
     const linkBaseUrl = requireLinkBaseUrl(core);
     for (const path of ['/', '/health', '/api/system/status', '/api/home/setup', '/api/events']) {
@@ -657,7 +665,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     // The claim and founding records create authority and remain approval
     // gated. The three outer Link requests only authenticate short-lived
     // operations, so the delegated device key is never asked for approval.
-    expect(identityApprover.approvals()).toBe(2);
+    expect(identityApprover.approvals()).toBe(3);
     expect(signingApprover.approvals()).toBe(0);
   }, 120_000);
 
@@ -665,6 +673,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     const core = await startCore();
     const daemon = await startDaemon();
     const identityApprover = await startApprover(daemon);
+    await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
     const claim = await runCeremony(daemon, core);
     expect(claim.code).toBe(0);
@@ -682,9 +692,9 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(bootstrap.status).toBe(201);
     const session = ((await bootstrap.json()) as { session: string }).session;
 
-    // The owner's key-agreement key needs its own terminal: the daemon
-    // publishes a public key only for a session the person opened.
-    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
+    // The founding ceremony already required and kept open the owner's
+    // key-agreement terminal, so the same person-held unlock supplies the
+    // public key for the domain ceremony.
 
     const domain = await runCreateDomain(daemon, core, session, 'first_domain');
     expect(domain.code).toBe(0);
@@ -695,9 +705,9 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     };
     expect(JSON.stringify(created.accepted)).toContain('first_domain');
 
-    // Founding cost two approvals, the domain one more, all on the identity
+    // Founding costs three approvals, the domain one more, all on the identity
     // terminal - the agreement key is used but signs nothing (ADR 0102).
-    expect(identityApprover.approvals()).toBe(3);
+    expect(identityApprover.approvals()).toBe(4);
 
     const listed = await fetch(`${core.baseUrl}/api/home/reader-custody/domains`, {
       headers: { authorization: `Bearer ${session}` },
@@ -725,7 +735,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(rotation.stderr).toContain('invalid_rotation_causes');
     // The person was still asked: the daemon signed before the Foundation
     // judged, which is the order the approval boundary requires.
-    expect(identityApprover.approvals()).toBe(4);
+    expect(identityApprover.approvals()).toBe(5);
   }, 180_000);
 
   it('delivers an authorized domain ceremony through Pico Link without a Foundation session', async () => {
@@ -735,39 +745,23 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
     await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
-    expect((await runCeremony(daemon, core)).code).toBe(0);
-
-    const delegated = await runDaemonCli(daemon, [
-      'ceremony', 'delegate-device',
-      '--fingerprint', ownerIdentity.keyFingerprintHex,
-      '--signing-fingerprint', ownerSigning.keyFingerprintHex,
-      '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
-      '--valid-until', '2027-07-29T00:00:00.000Z',
-    ]);
-    expect(delegated.code).toBe(0);
-    const delegationId = (JSON.parse(delegated.stdout) as {
-      record: { delegationId: string };
-    }).record.delegationId;
-    const delegationPath = join(tempDir('pico-owner-link-'), 'delegation.json');
-    writeFileSync(delegationPath, delegated.stdout, 'utf8');
-
-    const opened = await runDaemonCli(daemon, [
-      'ceremony', 'open-identity-session',
-      '--fingerprint', ownerIdentity.keyFingerprintHex,
-      '--signing-fingerprint', ownerSigning.keyFingerprintHex,
-      '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
-      '--core-url', core.baseUrl,
-      '--delegation', delegationPath,
-    ]);
-    expect(opened.code).toBe(0);
+    const founded = await runLinkCeremony(daemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const delegationId = (JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    }).foundingRecord.firstDeviceDelegation.record.delegationId;
 
     const domain = await runCreateDomainOverLink(daemon, core, 'link_domain', delegationId);
     expect(domain.code, domain.stderr).toBe(0);
     expect(JSON.stringify(JSON.parse(domain.stdout).accepted)).toContain('link_domain');
     expect(core.log()).toContain('/api/home/link');
+    expect(core.log()).not.toContain('/api/auth/identity-session');
 
-    // Two founding approvals, one delegation and one domain authority. The
-    // identity session proof and both outer Link requests are operational.
+    // Delegation, claim, founding acceptance and domain authority are the four
+    // root decisions. Claim possession and every outer Link request are
+    // operational; no local identity-session ceremony exists in this path.
     expect(identityApprover.approvals()).toBe(4);
   }, 180_000);
 
@@ -775,6 +769,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     const core = await startCore();
     const daemon = await startDaemon();
     const approver = await startApprover(daemon);
+    await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
     const claim = await runCeremony(daemon, core);
     expect(claim.code).toBe(0);
@@ -801,8 +797,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     // route answers with a view, so it is not visible in the response.
     expect(JSON.stringify(result.accepted)).toContain(subjectFingerprintHex);
 
-    // Founding cost two approvals, the membership a third.
-    expect(approver.approvals()).toBe(3);
+    // Founding cost three approvals, the membership a fourth.
+    expect(approver.approvals()).toBe(4);
 
     const listed = await fetch(`${core.baseUrl}/api/home/memberships`, {
       headers: { authorization: `Bearer ${session}` },
@@ -815,6 +811,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     const core = await startCore();
     const ownerDaemon = await startDaemon();
     const ownerApprover = await startApprover(ownerDaemon);
+    await startApprover(ownerDaemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(ownerDaemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
     const claim = await runCeremony(ownerDaemon, core);
     expect(claim.code).toBe(0);
@@ -887,9 +885,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     }
 
     // 5. The owner creates the domain and grants the reader access to it.
-    //    Both need the owner's agreement key unlocked - it never signs, but
-    //    its public key seals the KEK to the reader.
-    await startApprover(ownerDaemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
+    //    Both reuse the agreement-key unlock held since founding - it never
+    //    signs, but its public key seals the KEK to the reader.
     const domain = await runCreateDomain(ownerDaemon, core, session, 'shared_domain');
     if (domain.code !== 0) {
       throw new Error(`DOMAIN_FAILED: ${domain.stderr}`);
@@ -932,7 +929,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(JSON.stringify(await grants.json())).toContain(readerIdentity.keyFingerprintHex);
 
     // Owner terminal: claim, founding, membership, domain, grant.
-    expect(ownerApprover.approvals()).toBe(5);
+    expect(ownerApprover.approvals()).toBe(6);
   }, 300_000);
 
   it('cannot sign without the person: a locked daemon fails the ceremony', async () => {
@@ -972,6 +969,8 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     const core = await startCore();
     const daemon = await startDaemon();
     await startApprover(daemon);
+    await startApprover(daemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(daemon, ownerAgreement, 'device_key_agreement', AGREEMENT_PASSPHRASE);
 
     const run = await runCeremony(daemon, core, { moveInCode: 'WRONG-MOVE-IN-CODE-0000000000000' });
 

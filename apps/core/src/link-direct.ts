@@ -118,7 +118,7 @@ export class PicoLinkDirectIntake {
     execute: (
       operation: PicoLinkDirectOperation,
       args: Record<string, unknown>,
-      principal: PicoLinkDirectPrincipal | undefined,
+      principal: PicoLinkDirectPrincipal,
     ) => Promise<PicoLinkDirectExecution>,
     now: Date = new Date(),
   ): Promise<
@@ -277,7 +277,7 @@ export class PicoLinkDirectIntake {
       execution = await execute(
         request.operation,
         args,
-        preAuthority ? undefined : principal,
+        principal,
       );
     } catch {
       execution = { outcome: 'operation_failed', result: {} };

@@ -135,9 +135,11 @@ export type PicoHomeClaimStateName = typeof picoHomeClaimStates[number];
 
 export const picoHomeClaimEnvelopeSchema = 'pico.home.claim-envelope.v1' as const;
 export const picoHomeSealedClaimPayloadSchema = 'pico.home.claim-payload.v1' as const;
+export const picoHomeSealedClaimPayloadV2Schema = 'pico.home.claim-payload.v2' as const;
 export const picoHomeClaimResponseRecordSchema = 'pico.home.claim-response-record.v1' as const;
 export const picoHomeFoundingAcceptanceSchema = 'pico.home.founding-acceptance.v1' as const;
 export const picoHomeFoundingRecordSchema = 'pico.home.founding-record.v1' as const;
+export const picoHomeFoundingRecordV2Schema = 'pico.home.founding-record.v2' as const;
 
 // ADR 0080 H6 record families. A credential carries two signatures with
 // different meanings: the Home Host Pico's issuer signature is the authority,
@@ -314,6 +316,15 @@ export const picoHomeSignatureInputLabels = {
   domainReadGrantLifecycle: 'pico.home.domain-read-grant-lifecycle.v1',
   continuity: 'pico.home.continuity.v1',
 } as const satisfies Record<PicoHomeSignatureInputFamily, string>;
+
+// ADR 0108 keeps v1 founding evidence verifiable, while refusing new v1
+// claims. These labels are separate from the ADR 0080 v1 family catalog so
+// the old canonical vectors remain durable rather than being silently
+// reinterpreted as the new founding contract.
+export const picoHomeV2SignatureInputLabels = {
+  claim: 'pico.home.claim.v2',
+  founding: 'pico.home.founding.v2',
+} as const;
 
 export const picoIdentityKeyRoles = [
   'pico_identity',
@@ -945,7 +956,7 @@ export interface PicoIdentityReaderKeyFreshnessCheckpoint {
   issuerSignatureHex: string;
 }
 
-export interface PicoHomeClaimSignatureInput {
+export interface PicoHomeClaimSignatureInputV1 {
   suite: string;
   claimId: string;
   hostSigningKeyFingerprintHex: string;
@@ -956,16 +967,43 @@ export interface PicoHomeClaimSignatureInput {
   hostSetupNonceHex: string;
 }
 
+export interface PicoHomeClaimSignatureInput extends PicoHomeClaimSignatureInputV1 {
+  firstDeviceDelegationId: string;
+  firstDeviceSigningKeyFingerprintHex: string;
+  firstDeviceKeyAgreementKeyFingerprintHex: string;
+}
+
 export interface PicoHomeClaimEnvelope {
   schema: typeof picoHomeClaimEnvelopeSchema;
   sealedClaimPayloadHex: string;
 }
 
-export interface PicoHomeSealedClaimPayload {
+export interface PicoHomeSealedClaimPayloadV1 {
   schema: typeof picoHomeSealedClaimPayloadSchema;
+  claim: PicoHomeClaimSignatureInputV1;
+  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  claimantSignatureHex: string;
+}
+
+export interface PicoHomeFirstDeviceEvidence {
+  firstDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  firstDeviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  firstDeviceDelegation: {
+    record: PicoIdentityDelegationSignatureInput;
+    signatureHex: string;
+  };
+  firstDeviceRevocations: {
+    record: PicoIdentityRevocationSignatureInput;
+    signatureHex: string;
+  }[];
+}
+
+export interface PicoHomeSealedClaimPayload extends PicoHomeFirstDeviceEvidence {
+  schema: typeof picoHomeSealedClaimPayloadV2Schema;
   claim: PicoHomeClaimSignatureInput;
   claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   claimantSignatureHex: string;
+  firstDeviceSignatureHex: string;
 }
 
 export interface PicoHomeClaimResponseRecord {
@@ -981,9 +1019,9 @@ export interface PicoHomeFoundingAcceptance {
   claimantFoundingSignatureHex: string;
 }
 
-export interface PicoHomeFoundingRecord {
+export interface PicoHomeFoundingRecordV1 {
   schema: typeof picoHomeFoundingRecordSchema;
-  founding: PicoHomeFoundingSignatureInput;
+  founding: PicoHomeFoundingSignatureInputV1;
   claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   // No claimant signature over the claim: the claim's signed bytes carry the
   // Move-In Code and the host setup nonce, and neither is kept, so such a field
@@ -995,6 +1033,18 @@ export interface PicoHomeFoundingRecord {
   hostFoundingSignatureHex: string;
   createdAt: string;
 }
+
+export interface PicoHomeFoundingRecordV2 extends PicoHomeFirstDeviceEvidence {
+  schema: typeof picoHomeFoundingRecordV2Schema;
+  founding: PicoHomeFoundingSignatureInput;
+  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  claimantFoundingSignatureHex: string;
+  hostClaimResponse: PicoHomeClaimResponseRecord;
+  hostFoundingSignatureHex: string;
+  createdAt: string;
+}
+
+export type PicoHomeFoundingRecord = PicoHomeFoundingRecordV1 | PicoHomeFoundingRecordV2;
 
 /**
  * What the Home Host Pico produces and hands over: the authority half on its
@@ -1058,7 +1108,7 @@ export interface PicoHomeClaimResponseSignatureInput {
   foundingRecordId: string;
 }
 
-export interface PicoHomeFoundingSignatureInput {
+export interface PicoHomeFoundingSignatureInputV1 {
   suite: string;
   foundingId: string;
   homeId: string;
@@ -1069,6 +1119,12 @@ export interface PicoHomeFoundingSignatureInput {
   hostNonceHex: string;
   foundedAt: string;
   lifecycleOrder: string;
+}
+
+export interface PicoHomeFoundingSignatureInput extends PicoHomeFoundingSignatureInputV1 {
+  firstDeviceDelegationId: string;
+  firstDeviceSigningKeyFingerprintHex: string;
+  firstDeviceKeyAgreementKeyFingerprintHex: string;
 }
 
 export interface PicoHomeMembershipSignatureInput {
@@ -1161,8 +1217,10 @@ export type PicoIdentitySignatureInput =
   | PicoIdentityRevocationSignatureInput;
 
 export type PicoHomeSignatureInput =
+  | PicoHomeClaimSignatureInputV1
   | PicoHomeClaimSignatureInput
   | PicoHomeClaimResponseSignatureInput
+  | PicoHomeFoundingSignatureInputV1
   | PicoHomeFoundingSignatureInput
   | PicoHomeMembershipSignatureInput
   | PicoHomeMembershipLifecycleSignatureInput
@@ -2329,7 +2387,48 @@ export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
   ]);
 }
 
-export function buildPicoHomeClaimSignatureInput(input: PicoHomeClaimSignatureInput): Uint8Array {
+export function buildPicoHomeClaimSignatureInput(
+  input: PicoHomeClaimSignatureInput | PicoHomeClaimSignatureInputV1,
+): Uint8Array {
+  if (!('firstDeviceDelegationId' in input)) {
+    return buildPicoHomeClaimSignatureInputV1(input);
+  }
+
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'claimId',
+    'hostSigningKeyFingerprintHex',
+    'hostKeyAgreementKeyFingerprintHex',
+    'moveInCode',
+    'claimantIdentityKeyFingerprintHex',
+    'claimantNonceHex',
+    'hostSetupNonceHex',
+    'firstDeviceDelegationId',
+    'firstDeviceSigningKeyFingerprintHex',
+    'firstDeviceKeyAgreementKeyFingerprintHex',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.claimId);
+  assertAsciiToken(input.moveInCode);
+  assertAsciiToken(input.firstDeviceDelegationId);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeV2SignatureInputLabels.claim),
+    asciiBytes(input.suite),
+    asciiBytes(input.claimId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.moveInCode),
+    fixedHexBytes(input.claimantIdentityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.firstDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.firstDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.firstDeviceDelegationId),
+    fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
+    fixedHexBytes(input.hostSetupNonceHex, 32, 'invalid_nonce_length'),
+  ]);
+}
+
+export function buildPicoHomeClaimSignatureInputV1(input: PicoHomeClaimSignatureInputV1): Uint8Array {
   assertExactKeys(input as unknown as Record<string, unknown>, [
     'suite',
     'claimId',
@@ -2388,7 +2487,56 @@ export function buildPicoHomeClaimResponseSignatureInput(input: PicoHomeClaimRes
   ]);
 }
 
-export function buildPicoHomeFoundingSignatureInput(input: PicoHomeFoundingSignatureInput): Uint8Array {
+export function buildPicoHomeFoundingSignatureInput(
+  input: PicoHomeFoundingSignatureInput | PicoHomeFoundingSignatureInputV1,
+): Uint8Array {
+  if (!('firstDeviceDelegationId' in input)) {
+    return buildPicoHomeFoundingSignatureInputV1(input);
+  }
+
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'foundingId',
+    'homeId',
+    'hostSigningKeyFingerprintHex',
+    'hostKeyAgreementKeyFingerprintHex',
+    'homeHostPicoIdentityFingerprintHex',
+    'claimantNonceHex',
+    'hostNonceHex',
+    'foundedAt',
+    'lifecycleOrder',
+    'firstDeviceDelegationId',
+    'firstDeviceSigningKeyFingerprintHex',
+    'firstDeviceKeyAgreementKeyFingerprintHex',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.foundingId);
+  assertAsciiToken(input.homeId);
+  assertAsciiToken(input.firstDeviceDelegationId);
+  assertInstant(input.foundedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+
+  return concatCanonicalElements([
+    asciiBytes(picoHomeV2SignatureInputLabels.founding),
+    asciiBytes(input.suite),
+    asciiBytes(input.foundingId),
+    asciiBytes(input.homeId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.homeHostPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.firstDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.firstDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.firstDeviceDelegationId),
+    fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
+    fixedHexBytes(input.hostNonceHex, 32, 'invalid_nonce_length'),
+    asciiBytes(input.foundedAt),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+export function buildPicoHomeFoundingSignatureInputV1(
+  input: PicoHomeFoundingSignatureInputV1,
+): Uint8Array {
   assertExactKeys(input as unknown as Record<string, unknown>, [
     'suite',
     'foundingId',

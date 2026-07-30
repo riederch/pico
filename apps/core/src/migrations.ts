@@ -59,6 +59,8 @@ export const picoSchemaBaselineMigrationId = '0001_initial_schema' as const;
 export const foundationOperatorHomeBindingMigrationId = '0002_foundation_operator_home_binding' as const;
 export const readerCustodyMultiReaderRotationMigrationId =
   '0003_reader_custody_multi_reader_rotation' as const;
+export const picoHomeFoundingFirstDeviceEvidenceMigrationId =
+  '0004_pico_home_founding_first_device_evidence' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -565,6 +567,89 @@ const migrations: readonly MigrationDefinition[] = [
           domain_authority_id,
           kek_version
         );
+      `);
+    },
+  },
+  {
+    id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
+    requiresBackup: true,
+    up(db) {
+      // ADR 0108 introduces a v2 founding record, while v1 records remain
+      // durable and verifiable. SQLite cannot widen the schema CHECK in
+      // place, so rebuild the singleton table and carry every v1 byte across
+      // unchanged. The nullable evidence column is populated only by v2.
+      db.exec(`
+        ALTER TABLE pico_home_founding_record
+        RENAME TO pico_home_founding_record_v1;
+
+        CREATE TABLE pico_home_founding_record (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          schema TEXT NOT NULL CHECK (
+            schema IN (
+              'pico.home.founding-record.v1',
+              'pico.home.founding-record.v2'
+            )
+          ),
+          founding_id TEXT NOT NULL UNIQUE,
+          home_id TEXT NOT NULL UNIQUE,
+          claim_id TEXT NOT NULL UNIQUE,
+          home_host_pico_identity_fingerprint_hex TEXT NOT NULL,
+          host_signing_key_fingerprint_hex TEXT NOT NULL,
+          host_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          founded_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          claim_response_json TEXT NOT NULL,
+          founding_json TEXT NOT NULL,
+          claimant_identity_key_record_json TEXT NOT NULL,
+          claimant_founding_signature_hex TEXT NOT NULL,
+          host_claim_response_signature_hex TEXT NOT NULL,
+          host_founding_signature_hex TEXT NOT NULL,
+          first_device_evidence_json TEXT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        INSERT INTO pico_home_founding_record (
+          id,
+          schema,
+          founding_id,
+          home_id,
+          claim_id,
+          home_host_pico_identity_fingerprint_hex,
+          host_signing_key_fingerprint_hex,
+          host_key_agreement_key_fingerprint_hex,
+          founded_at,
+          lifecycle_order,
+          claim_response_json,
+          founding_json,
+          claimant_identity_key_record_json,
+          claimant_founding_signature_hex,
+          host_claim_response_signature_hex,
+          host_founding_signature_hex,
+          first_device_evidence_json,
+          created_at
+        )
+        SELECT
+          id,
+          schema,
+          founding_id,
+          home_id,
+          claim_id,
+          home_host_pico_identity_fingerprint_hex,
+          host_signing_key_fingerprint_hex,
+          host_key_agreement_key_fingerprint_hex,
+          founded_at,
+          lifecycle_order,
+          claim_response_json,
+          founding_json,
+          claimant_identity_key_record_json,
+          claimant_founding_signature_hex,
+          host_claim_response_signature_hex,
+          host_founding_signature_hex,
+          NULL,
+          created_at
+        FROM pico_home_founding_record_v1;
+
+        DROP TABLE pico_home_founding_record_v1;
       `);
     },
   },

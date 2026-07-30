@@ -70,13 +70,13 @@ function fingerprintOf(record: KeyRecord): string {
 interface Recorded {
   operation: PicoLinkDirectOperation;
   args: Record<string, unknown>;
-  principal: PicoLinkDirectPrincipal | undefined;
+  principal: PicoLinkDirectPrincipal;
 }
 
 type Execute = (
   operation: PicoLinkDirectOperation,
   args: Record<string, unknown>,
-  principal: PicoLinkDirectPrincipal | undefined,
+  principal: PicoLinkDirectPrincipal,
 ) => Promise<PicoLinkDirectExecution>;
 
 function hostAuthority(overrides: Partial<PicoLinkDirectAuthority> = {}): PicoLinkDirectAuthority {
@@ -563,9 +563,11 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
     }
     expect(calls.map((call) => call.operation))
       .toEqual(['home.setup.read', 'home.claim.submit']);
-    // Pre-authority means the operation gets no principal to act on: it must
-    // not be able to mistake an unauthorized sender for an authorized one.
-    expect(calls.every((call) => call.principal === undefined)).toBe(true);
+    // Pre-authority skips membership/delegation authorization, not sender
+    // authentication. ADR 0108 needs the verified principal so claim handling
+    // can require it to equal the first-device binding inside the payload.
+    expect(calls.every((call) => call.principal.delegationId === 'delegation_0001'))
+      .toBe(true);
   });
 
   it('signs a refusal from a failing operation instead of leaking the failure', async () => {

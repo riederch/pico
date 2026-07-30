@@ -224,19 +224,19 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
   operations require the verified Link principal to be the current Home Host
   Pico on top of the intake's membership and delegation check.
 
-  This also preserves one bootstrap dependency honestly:
-  `open-identity-session` remains local, because it is currently the only path
-  that records the delegation and agreement-key evidence against which an
-  authority Link principal is verified. Claim works before that evidence by
-  design; post-claim authority operations do not. Removing the dependency
-  needs another explicitly named Link operation and threat analysis, not an
-  authorization bypass inside this slice. ADR 0108 has since decided that
-  removal - not as a Link operation, but by founding the first delegated
-  device with the Home itself.
+  This slice originally preserved one bootstrap dependency honestly:
+  `open-identity-session` was the only path that recorded the delegation and
+  agreement-key evidence against which an authority Link principal is
+  verified. ADR 0108 has now discharged that dependency for new Homes without
+  adding an authorization bypass or a third pre-authority operation: v2 claim
+  and founding carry the root-signed delegation, exact device key records and
+  device possession proof, and founding acceptance projects them atomically.
+  Existing v1-founded Homes continue to use the local session path.
 
-  Real-process tests found a Home through three Link requests without a
-  bearer session and, after registering a delegated device locally, created a
-  reader-custody domain through the authenticated list and submit operations.
+  Real-process tests now found a Home through three Link requests without a
+  bearer session and immediately create a reader-custody domain through the
+  authenticated list and submit operations. The path never calls
+  `open-identity-session`.
   Unit coverage pins host-key mismatch, per-request reply keys, response
   binding, carrier refusal and response-size limits. Those D3 assertions alone
   did not establish listener isolation; D4 below adds that deployment proof.
@@ -278,7 +278,7 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
 | Parsing and resource exhaustion | Exact target/method gate, 32-header cap, five-second header/keep-alive bounds, ten-second request timeout, 100 requests per socket, route body limit, sealed-field limit, cheap shape checks and closed operations precede private-key verification. | One seal-open is unavoidable before sender authentication. There is no IP/account rate limit, adaptive abuse control or distributed DoS protection; public exposure is not supported. |
 | Metadata privacy | Payload fields are hidden from the carrier and only one HTTP target exists, so the target itself reveals no operation name. | Direct transport still reveals source/destination addresses, TCP/HTTP timing, direction, ciphertext size, retries and availability. Core request logs include source address/port, and log retention is deployment-controlled. No padding, batching, routing-identity indirection or retention protocol exists. |
 | Malicious carrier delivery | Authenticated results and post-auth refusals are signed and sealed; duplicate delivery is bounded as above. | Delay, drop, selective forwarding and traffic analysis remain fully possible. Direct Link has no receipts, queue, alternate relay or liveness claim. |
-| Host/member/domain authority separation | Link authentication reuses exact delegation and active membership evidence; authority operations additionally require the current Home Host Pico. Shared handlers retain record signature, reader-key and domain-custody checks. | Home hosting still exposes host operational metadata. Link does not make Home administration into domain readership and does not improve a compromised delegated device until revocation/rotation takes effect. |
+| Host/member/domain authority separation | Link authentication reuses exact delegation and active membership evidence; authority operations additionally require the current Home Host Pico. For v2 founding, the exact first-device delegation and reader key are projected only after the root/device/host bindings verify, and a Link-carried claim must have the same outer sender. Shared handlers retain record signature, reader-key and domain-custody checks. | Home hosting still exposes host operational metadata. Link does not make Home administration into domain readership. Later-device enrollment and delegation renewal/revocation over Link remain absent; expiry or loss of the founding device can strand a remote-only Home on the local recovery path. |
 | Audit | Accepted inner operations use the same durable state changes and audit paths as local delivery; no carrier can substitute a different operation. | Pre-authentication failures are operational request logs, not signed audit records. No privacy-bounded abuse ledger exists. |
 | Compatibility and relay identity | The direct wire is local and unpublished; no HTTP identity, account or address becomes Pico identity. | There is no public conformance claim, relay routing identity, packet queue, metadata-retention policy or transport-session-key protocol. Those remain relay work under ADR 0028/0029. |
 
@@ -300,6 +300,9 @@ Positive:
   diagnostic surface when the dedicated listener is the only published
   binding; D4 proves that boundary in the real process path and retires the
   non-product shared-port validation path;
+- a v2-founded Home can authorize that first device immediately from its
+  atomic founding evidence; no local Foundation session is needed to turn
+  founding into usable Link authority;
 - the carrier-without-authority rule is now load-bearing runtime, not
   concept: the relay, when it comes, transports these envelopes unchanged;
 - authorization becomes per-request and stateless on the wire, which is

@@ -30,6 +30,7 @@ import {
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
   picoHomeSignatureInputLabels,
+  picoHomeV2SignatureInputLabels,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
   picoIdentitySignatureInputLabels,
@@ -401,6 +402,8 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     ...Object.values(picoIdentitySignatureInputLabels),
     picoHomeSignatureInputLabels.claim,
     picoHomeSignatureInputLabels.founding,
+    picoHomeV2SignatureInputLabels.claim,
+    picoHomeV2SignatureInputLabels.founding,
     // The issuer half of a Home membership, and its lifecycle. ADR 0080 H6
     // makes `issuerSignatureHex` the authority, and an authority over a
     // resident's membership is a person's to give - so it is signable by a
@@ -426,6 +429,10 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     // authority of its own. The semantic record inside the operation still
     // carries its own gated signature where required.
     picoLinkDirectRequestSignatureInputLabel,
+    // ADR 0108: possession proof over the fresh claim bytes. The root
+    // signature creates the Home authority; this co-signature only proves
+    // that the first delegated device holds its signing key.
+    picoHomeV2SignatureInputLabels.claim,
     picoReaderCustodyCanonicalLabels.item,
   ]),
   device_key_agreement: new Set<string>(),

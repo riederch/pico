@@ -21,7 +21,8 @@ import {
   picoIdentityReaderKeyFreshnessStatuses,
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
-  picoHomeSealedClaimPayloadSchema,
+  picoHomeSealedClaimPayloadV2Schema,
+  picoHomeV2SignatureInputLabels,
   picoIdentitySuite,
   picoVaultPersonKeyRoles,
   type PicoHomeClaimSignatureInput,
@@ -85,10 +86,12 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'move-in-code',
     'host-signing-fingerprint',
     'host-agreement-fingerprint',
+    'signing-fingerprint',
+    'agreement-fingerprint',
+    'delegation-valid-until',
     'transport',
     'link-signing-fingerprint',
     'link-agreement-fingerprint',
-    'link-delegation-id',
     'host-signing-public-key',
     'host-agreement-public-key',
   ],
@@ -767,6 +770,13 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
       }
       const founding = await withClient(vaultHomePath, async (client) => {
         const coreUrl = requireFlag(invocation.flags, 'core-url');
+        const firstDeviceSigningKeyFingerprintHex = invocation.flags.get('signing-fingerprint')
+          ?? requireFlag(invocation.flags, 'link-signing-fingerprint');
+        const firstDeviceKeyAgreementKeyFingerprintHex =
+          invocation.flags.get('agreement-fingerprint')
+          ?? requireFlag(invocation.flags, 'link-agreement-fingerprint');
+        const firstDeviceDelegationId =
+          `delegation_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`;
         return await runClaimHomeCeremony({
           client,
           vaultSodium: sodium as unknown as VaultSodium,
@@ -776,9 +786,21 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
             client,
             sodium as unknown as VaultSodium,
             coreUrl,
+            {
+              identityKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+              deviceSigningKeyFingerprintHex: firstDeviceSigningKeyFingerprintHex,
+              deviceKeyAgreementKeyFingerprintHex:
+                firstDeviceKeyAgreementKeyFingerprintHex,
+              delegationId: firstDeviceDelegationId,
+            },
           ),
           moveInCode: requireFlag(invocation.flags, 'move-in-code'),
           signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+          firstDeviceSigningKeyFingerprintHex,
+          firstDeviceKeyAgreementKeyFingerprintHex,
+          firstDeviceDelegationId,
+          firstDeviceDelegationValidUntil:
+            requireFlag(invocation.flags, 'delegation-valid-until'),
           expectedHostSigningKeyFingerprintHex: requireFlag(invocation.flags, 'host-signing-fingerprint'),
           expectedHostKeyAgreementKeyFingerprintHex: requireFlag(invocation.flags, 'host-agreement-fingerprint'),
         });
@@ -830,7 +852,9 @@ if (isMainModule) {
       process.stderr.write(
         'usage: pico-vault <daemon|create|status|unlock|lock|sign> '
         + '| pico-vault ceremony claim-home --core-url <url> --move-in-code <code> '
-        + '--fingerprint <hex> --host-signing-fingerprint <hex> --host-agreement-fingerprint <hex>\n'
+        + '--fingerprint <hex> --signing-fingerprint <hex> --agreement-fingerprint <hex> '
+        + '--delegation-valid-until <instant> --host-signing-fingerprint <hex> '
+        + '--host-agreement-fingerprint <hex>\n'
         + '[--vault-home <path>] [--foundation-data <path>] [--foundation-backup <path>] '
         + '[--role <keyRole>] [--fingerprint <hex>] [--input-hex <hex>]\n',
       );
@@ -843,10 +867,10 @@ if (isMainModule) {
  * ADR 0103 C1. Founds a Pico Home from the person's side.
  *
  * Everything that needs the identity key crosses the daemon socket, so this
- * process never holds a private key: the two signatures are `sign` calls, each
- * raising an approval on the terminal holding the unlock, because founding a
- * Home creates authority and is not on the ADR 0099 exempt list. Sealing the
- * claim needs only the host's public key, so it stays local.
+ * process never holds a private key. The identity root first delegates to the
+ * first device, then signs the claim and founding acceptance; those three
+ * authority-creating signatures each raise an approval. The device co-signs
+ * the fresh claim bytes operationally, without another approval.
  *
  * The host key fingerprints the person read from the add-on log are compared
  * against what the Foundation serves. That comparison is the whole reason the
@@ -860,6 +884,10 @@ async function runClaimHomeCeremony(input: {
   linkClient?: PicoLinkDirectClient;
   moveInCode: string;
   signerKeyFingerprintHex: string;
+  firstDeviceSigningKeyFingerprintHex: string;
+  firstDeviceKeyAgreementKeyFingerprintHex: string;
+  firstDeviceDelegationId: string;
+  firstDeviceDelegationValidUntil: string;
   expectedHostSigningKeyFingerprintHex: string;
   expectedHostKeyAgreementKeyFingerprintHex: string;
 }): Promise<Record<string, unknown>> {
@@ -873,7 +901,6 @@ async function runClaimHomeCeremony(input: {
   if (signer.keyRole !== 'pico_identity') {
     throw new Error('claim_requires_pico_identity_key');
   }
-
   const setup = await foundationRequest(
     input.coreUrl,
     '/api/home/setup',
@@ -895,10 +922,47 @@ async function runClaimHomeCeremony(input: {
     throw new Error('host_key_fingerprint_mismatch');
   }
 
+  const firstDeviceSigning = status.sessions.find(
+    (session) =>
+      session.keyFingerprintHex === input.firstDeviceSigningKeyFingerprintHex,
+  );
+  if (firstDeviceSigning?.keyRole !== 'device_signing') {
+    throw new Error('claim_device_signing_key_not_unlocked');
+  }
+  const firstDeviceAgreement = status.sessions.find(
+    (session) =>
+      session.keyFingerprintHex === input.firstDeviceKeyAgreementKeyFingerprintHex,
+  );
+  if (firstDeviceAgreement?.keyRole !== 'device_key_agreement') {
+    throw new Error('claim_device_agreement_key_not_unlocked');
+  }
+
+  const firstDeviceDelegation = await runDelegateDeviceCeremony({
+    client: input.client,
+    signerKeyFingerprintHex: signer.keyFingerprintHex,
+    subjectSigningKeyFingerprintHex: firstDeviceSigning.keyFingerprintHex,
+    subjectKeyAgreementKeyFingerprintHex: firstDeviceAgreement.keyFingerprintHex,
+    scopes: ['surface_session', 'decrypt_domain', 'receive_key_envelope'],
+    validFrom: new Date().toISOString(),
+    validUntil: input.firstDeviceDelegationValidUntil,
+    lifecycleOrder: 'seq:0000000000000001',
+    delegationId: input.firstDeviceDelegationId,
+  });
+
   const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
     suite: picoIdentitySuite,
     keyRole: 'pico_identity',
     publicKeyHex: signer.publicKeyHex,
+  };
+  const firstDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: picoIdentitySuite,
+    keyRole: 'device_signing',
+    publicKeyHex: firstDeviceSigning.publicKeyHex,
+  };
+  const firstDeviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: picoIdentitySuite,
+    keyRole: 'device_key_agreement',
+    publicKeyHex: firstDeviceAgreement.publicKeyHex,
   };
   const claim: PicoHomeClaimSignatureInput = {
     suite: picoIdentitySuite,
@@ -909,20 +973,33 @@ async function runClaimHomeCeremony(input: {
     claimantIdentityKeyFingerprintHex: signer.keyFingerprintHex,
     claimantNonceHex: Buffer.from(input.vaultSodium.randombytes_buf(32)).toString('hex'),
     hostSetupNonceHex: setup.setupMode.hostSetupNonceHex,
+    firstDeviceDelegationId: firstDeviceDelegation.record.delegationId,
+    firstDeviceSigningKeyFingerprintHex: firstDeviceSigning.keyFingerprintHex,
+    firstDeviceKeyAgreementKeyFingerprintHex: firstDeviceAgreement.keyFingerprintHex,
   };
 
   process.stderr.write('Approve the Home claim on the terminal holding the unlock.\n');
   const claimSignature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    label: picoHomeSignatureInputLabels.claim,
+    label: picoHomeV2SignatureInputLabels.claim,
+    fields: claim as unknown as Record<string, unknown>,
+  });
+  const firstDeviceSignature = await input.client.sign({
+    keyFingerprintHex: firstDeviceSigning.keyFingerprintHex,
+    label: picoHomeV2SignatureInputLabels.claim,
     fields: claim as unknown as Record<string, unknown>,
   });
 
   const sealedClaimPayload = {
-    schema: picoHomeSealedClaimPayloadSchema,
+    schema: picoHomeSealedClaimPayloadV2Schema,
     claim,
     claimantIdentityKeyRecord,
+    firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation,
+    firstDeviceRevocations: [],
     claimantSignatureHex: claimSignature.signatureHex,
+    firstDeviceSignatureHex: firstDeviceSignature.signatureHex,
   };
   const sealedClaimPayloadHex = Buffer.from(input.vaultSodium.crypto_box_seal(
     Uint8Array.from(Buffer.from(JSON.stringify(sealedClaimPayload), 'utf8')),
@@ -942,7 +1019,7 @@ async function runClaimHomeCeremony(input: {
   process.stderr.write('Claim accepted. Approve the founding acceptance to complete it.\n');
   const foundingSignature = await input.client.sign({
     keyFingerprintHex: signer.keyFingerprintHex,
-    label: picoHomeSignatureInputLabels.founding,
+    label: picoHomeV2SignatureInputLabels.founding,
     fields: pending.pendingClaim.founding as unknown as Record<string, unknown>,
   });
 
@@ -1088,6 +1165,12 @@ async function createCeremonyLinkClient(
   client: PicoVaultDaemonClient,
   vaultSodium: VaultSodium,
   coreUrl: string,
+  senderOverride?: {
+    identityKeyFingerprintHex: string;
+    deviceSigningKeyFingerprintHex: string;
+    deviceKeyAgreementKeyFingerprintHex: string;
+    delegationId: string;
+  },
 ): Promise<PicoLinkDirectClient | undefined> {
   if (ceremonyTransport(flags) === 'local') {
     return undefined;
@@ -1107,10 +1190,15 @@ async function createCeremonyLinkClient(
       keyAgreementKeyFingerprintHex: requireFlag(flags, 'host-agreement-fingerprint'),
     },
     sender: {
-      identityKeyFingerprintHex: requireFlag(flags, 'fingerprint'),
-      deviceSigningKeyFingerprintHex: requireFlag(flags, 'link-signing-fingerprint'),
-      deviceKeyAgreementKeyFingerprintHex: requireFlag(flags, 'link-agreement-fingerprint'),
-      delegationId: requireFlag(flags, 'link-delegation-id'),
+      identityKeyFingerprintHex: senderOverride?.identityKeyFingerprintHex
+        ?? requireFlag(flags, 'fingerprint'),
+      deviceSigningKeyFingerprintHex: senderOverride?.deviceSigningKeyFingerprintHex
+        ?? requireFlag(flags, 'link-signing-fingerprint'),
+      deviceKeyAgreementKeyFingerprintHex:
+        senderOverride?.deviceKeyAgreementKeyFingerprintHex
+        ?? requireFlag(flags, 'link-agreement-fingerprint'),
+      delegationId: senderOverride?.delegationId
+        ?? requireFlag(flags, 'link-delegation-id'),
     },
   });
 }
@@ -1541,7 +1629,11 @@ async function runDelegateDeviceCeremony(input: {
   validFrom: string;
   validUntil: string;
   lifecycleOrder: string;
-}): Promise<Record<string, unknown>> {
+  delegationId?: string;
+}): Promise<{
+  record: PicoIdentityDelegationSignatureInput;
+  signatureHex: string;
+}> {
   const status = await input.client.status();
   const signer = status.sessions.find(
     (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
@@ -1552,7 +1644,8 @@ async function runDelegateDeviceCeremony(input: {
 
   const record: PicoIdentityDelegationSignatureInput = {
     suite: picoIdentitySuite,
-    delegationId: `delegation_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
+    delegationId: input.delegationId
+      ?? `delegation_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
     issuerIdentityKeyFingerprintHex: signer.keyFingerprintHex,
     subjectSigningKeyFingerprintHex: input.subjectSigningKeyFingerprintHex,
     subjectKeyAgreementKeyFingerprintHex: input.subjectKeyAgreementKeyFingerprintHex,

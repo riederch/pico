@@ -166,6 +166,18 @@ home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-witho
 home-signature-input/pico.suite.id.v1/canonicalization-negative/continuity-invalid-lifecycle-order/
 ```
 
+## Current first-device founding fixtures
+
+These fixtures pin the local v2 claim and founding signature-input bytes from
+ADR 0108, including the identity, first-device signing and key-agreement
+fingerprints and the exact delegation id. The suite also names the seven
+fail-closed submission cases exercised by the Foundation tests. It contains
+no private keys or signatures and publishes no compatibility contract.
+
+```text
+home-first-device-founding/suite.json
+```
+
 ## Current identity signature-verification fixtures
 
 These fixtures carry deterministic detached Ed25519 verification vectors for the `pico.suite.id.v1` possession, delegation and revocation families (ADR 0079). They publish public key records and signatures only: no private keys, no registry freshness, no storage adapter, no reader membership, no L4 compatibility basis and no commercial permission.

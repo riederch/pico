@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   foundationOperatorHomeBindingMigrationId,
   listAppliedMigrations,
+  picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
   runMigrations,
@@ -230,6 +231,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: readerCustodyMultiReaderRotationMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

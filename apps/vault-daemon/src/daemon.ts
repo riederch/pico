@@ -669,7 +669,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       return;
     }
 
-    if (!picoVaultDaemonSignatureNeedsApproval(label)) {
+    if (!picoVaultDaemonSignatureNeedsApproval(label, unlocked.keyRole)) {
       this.#completeSign(socket, request.requestId, unlocked.keyFingerprintHex, signatureInput);
       return;
     }

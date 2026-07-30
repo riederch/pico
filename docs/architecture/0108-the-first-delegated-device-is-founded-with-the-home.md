@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted; not yet implemented (gates D1-D5 below). This ADR decides how the
-first delegated device's evidence reaches a Pico Home, and thereby discharges
-the bootstrap dependency ADR 0107 D3 recorded: post-claim authority operations
-over Pico Link require delegation and agreement-key evidence that today only
-the local `open-identity-session` route can record.
+Accepted; implemented (gates D1-D5 complete). This ADR decides and implements
+how the first delegated device's evidence reaches a Pico Home. It discharges
+the bootstrap dependency ADR 0107 D3 recorded: a v2-founded Home can run
+post-claim authority operations over Pico Link from its first device without
+the local `open-identity-session` route.
 
 ## Context
 
@@ -171,31 +171,38 @@ rejected on four grounds:
 
 ## Gates
 
-- **D1 - Protocol forms and vectors.** v2 claim payload and founding record
-  in `@pico/protocol` with full canonical bytes pinned and negative vectors:
-  missing or invalid device co-signature, delegation subject not matching the
-  carried key records, missing `surface_session` scope, delegation expired at
-  founding time, fingerprints in the signed bytes not matching the carried
-  records, and a v1 claim payload refused at submission.
-- **D2 - Foundation acceptance.** `executeHomeClaim` verifies the extended
-  claim (including the Link outer-sender binding when the submission arrives
-  over the intake), and founding acceptance performs the atomic four-step
-  recording with pinned order and fail-closed refusal reasons. Restart
-  reconciliation re-projects first-device evidence from v2 founding records;
-  v1 founding records continue to verify and reconcile exactly as today.
-- **D3 - Ceremony client.** The `claim-home` ceremony builds the v2 payload:
-  delegation first (existing `delegate-device` ceremony), then the claim with
-  the device co-signature produced by the daemon. Claim and founding
-  acceptance stay approval-gated exactly as before; the device co-signature
-  is operational (it creates no authority the root signature has not already
-  created) and follows the existing ADR 0099 discipline for such signatures.
-- **D4 - End-to-end proof.** The real-process test founds a Home through the
-  restricted Link listener and completes an authenticated authority ceremony
-  **without `open-identity-session` ever being called** - the assertion that
-  the bootstrap dependency is gone, not merely bypassed.
-- **D5 - Documentation honesty.** ADR 0107's bootstrap note, the
-  implementation-status matrix and the threat notes reflect the new
-  boundary; the residual list below is carried into the handoff.
+- **D1 - Protocol forms and vectors: Done.** `@pico/protocol` carries the v2
+  claim payload, founding record, canonical claim/founding inputs and the
+  durable v1/v2 founding union. The authoritative local vectors live in
+  `docs/protocol/fixtures/home-first-device-founding/suite.json`. Foundation
+  tests execute all seven negatives: missing/invalid device co-signature,
+  delegation subject mismatch, missing `surface_session`, expired delegation,
+  signed-fingerprint/key-record mismatch and v1 claim refusal. Every refusal
+  is proven not to consume the Move-In Code.
+- **D2 - Foundation acceptance: Done.** `executeHomeClaim` verifies all
+  carried key records, root delegation/lifecycle, root and device signatures,
+  plus exact Link outer-sender equality. Migration
+  `0004_pico_home_founding_first_device_evidence` stores the v2 evidence.
+  One SQLite transaction records founding, founding membership, lifecycle
+  evidence and reader key in the decided order; an injected failure on the
+  fourth step proves complete rollback. Restart reconciliation re-verifies
+  the founding contract before re-projecting missing v2 device evidence. v1
+  founding records remain readable, verifiable and reconcilable unchanged.
+- **D3 - Ceremony client: Done.** `claim-home` creates the delegation first,
+  root-signs the v2 claim, obtains the operational device co-signature over
+  the same bytes, and root-signs founding acceptance. Delegation, claim and
+  founding each remain person-approved. Only `device_signing` on the v2 claim
+  label skips an additional approval; the identity root stays gated and ADR
+  0099's global closed exemption-label list is unchanged.
+- **D4 - End-to-end proof: Done.** The spawned Foundation/Vault/CLI test founds
+  through the restricted Link listener and immediately creates a
+  reader-custody domain over authenticated Link. It never calls
+  `open-identity-session` and asserts the Foundation log contains no such
+  route.
+- **D5 - Documentation honesty: Done.** ADR 0107's bootstrap boundary and
+  threat ledger, the implementation-status matrix and the agent handoff
+  reflect the implemented v2 boundary and retain the later-device,
+  renewal/revocation and direct-transport residuals below.
 
 ## Non-goals
 

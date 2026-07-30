@@ -300,7 +300,9 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
       'pico.id.delegation.v1',
       'pico.id.revocation.v1',
       'pico.home.claim.v1',
+      'pico.home.claim.v2',
       'pico.home.founding.v1',
+      'pico.home.founding.v2',
       'pico.mem.reader-domain.v1',
       'pico.mem.reader-grant.v1',
       'pico.mem.reader-kek-rotation.v1',
@@ -309,6 +311,14 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     ]) {
       expect(picoVaultDaemonSignatureNeedsApproval(label)).toBe(true);
     }
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      'pico.home.claim.v2',
+      'device_signing',
+    )).toBe(false);
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      'pico.home.claim.v2',
+      'pico_identity',
+    )).toBe(true);
   });
 
   it('signs an exempt family without ever raising an approval', async () => {

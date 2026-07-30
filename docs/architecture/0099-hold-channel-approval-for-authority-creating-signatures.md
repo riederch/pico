@@ -139,10 +139,13 @@ Exempt, as a closed list of operational high-frequency families:
 | `pico.mem.reader-item.v1` | one per memory item written |
 | `pico.link.direct.request.v1` | authenticates one short-lived ADR 0107 operation; the semantic record keeps its own approval |
 
-Everything else the Vault can sign is gated: key records, delegations,
-revocations, claim and founding records, reader-custody domains, reader and
-writer grants and their lifecycle statements, KEK rotations and share
-envelopes.
+ADR 0108 adds one role-aware operational use without widening that global
+label list: `device_signing` may co-sign `pico.home.claim.v2` as fresh
+possession proof. The identity root's signature over the same label creates
+the authority and remains gated. Everything else the Vault can sign is gated:
+key records, delegations, revocations, root-signed claim and founding records,
+reader-custody domains, reader and writer grants and their lifecycle
+statements, KEK rotations and share envelopes.
 
 Reader access (ADR 0098) stays ungated by the same principle, and this is a
 scope decision rather than an oversight: the person's unlock of a
@@ -179,9 +182,9 @@ safe to leave open.
   BLAKE2b-256 signature-input digest, echoed in the decision and verified;
   one approval authorizes exactly one signature; at most one pending
   approval daemon-wide; no window, batch or remembered approval exists.
-- **P3 — Gating policy: Done.** Closed exempt list of five operational
-  families; everything else signable is gated; unknown or newly added
-  families default to gated.
+- **P3 — Gating policy: Done.** Closed global exempt list of five operational
+  families, plus ADR 0108's exact role-aware device co-sign rule; every
+  identity-root use and every unknown or newly added family defaults to gated.
 - **P4 — Fail-closed behaviour: Done.** No-watcher refusal, timeout denial,
   holder-only decisions, denial on hold loss, session lock and shutdown,
   and discard on consumer loss.

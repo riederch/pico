@@ -1,4 +1,8 @@
-import { picoVaultPersonKeyRoles, type PicoVaultPersonKeyRole } from '@pico/protocol';
+import {
+  picoHomeV2SignatureInputLabels,
+  picoVaultPersonKeyRoles,
+  type PicoVaultPersonKeyRole,
+} from '@pico/protocol';
 import { MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES } from '@pico/vault';
 
 /**
@@ -42,7 +46,17 @@ export const picoVaultDaemonApprovalExemptLabels: ReadonlySet<string> = new Set(
   'pico.link.direct.request.v1',
 ]);
 
-export function picoVaultDaemonSignatureNeedsApproval(label: string): boolean {
+export function picoVaultDaemonSignatureNeedsApproval(
+  label: string,
+  keyRole?: PicoVaultPersonKeyRole,
+): boolean {
+  // ADR 0108 keeps the closed global exemption list unchanged. The v2 claim
+  // remains gated for the identity root, while the delegated device's
+  // co-signature over those same bytes is possession proof and creates no
+  // authority of its own.
+  if (keyRole === 'device_signing' && label === picoHomeV2SignatureInputLabels.claim) {
+    return false;
+  }
   return !picoVaultDaemonApprovalExemptLabels.has(label);
 }
 

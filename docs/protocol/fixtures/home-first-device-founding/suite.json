@@ -1,0 +1,95 @@
+{
+  "schema": "pico.home.first-device-founding.vector.suite",
+  "schemaVersion": 1,
+  "suiteId": "pico.home-first-device-founding.pico_suite_id_v1",
+  "suiteVersion": "0.1.7",
+  "stage": "fixture_data",
+  "suite": "pico.suite.id.v1",
+  "surface": "home-first-device-founding",
+  "runner": {
+    "required": false,
+    "status": "none"
+  },
+  "compatibilityLevel": "authoritative-local-v2-signature-input-vectors",
+  "disclaimer": "Authoritative local canonical bytes and fail-closed acceptance cases for ADR 0108. No private keys, no signatures, no published contract, no L4 compatibility basis and no commercial permission.",
+  "vectors": [
+    {
+      "case": "claim-first-device-binding",
+      "construction": "pico.home.claim.v2",
+      "fields": {
+        "suite": "pico.suite.id.v1",
+        "claimId": "claim_adr0108_vector_0001",
+        "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "hostKeyAgreementKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "moveInCode": "MOVEIN-ADR0108-VECTOR",
+        "claimantIdentityKeyFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "firstDeviceSigningKeyFingerprintHex": "6666666666666666666666666666666666666666666666666666666666666666",
+        "firstDeviceKeyAgreementKeyFingerprintHex": "7777777777777777777777777777777777777777777777777777777777777777",
+        "firstDeviceDelegationId": "delegation_adr0108_vector_0001",
+        "claimantNonceHex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "hostSetupNonceHex": "5555555555555555555555555555555555555555555555555555555555555555"
+      },
+      "signatureInputHex": "000000127069636f2e686f6d652e636c61696d2e7632000000107069636f2e73756974652e69642e763100000019636c61696d5f616472303130385f766563746f725f30303031000000201111111111111111111111111111111111111111111111111111111111111111000000202222222222222222222222222222222222222222222222222222222222222222000000154d4f5645494e2d414452303130382d564543544f520000002033333333333333333333333333333333333333333333333333333333333333330000002066666666666666666666666666666666666666666666666666666666666666660000002077777777777777777777777777777777777777777777777777777777777777770000001e64656c65676174696f6e5f616472303130385f766563746f725f30303031000000204444444444444444444444444444444444444444444444444444444444444444000000205555555555555555555555555555555555555555555555555555555555555555",
+      "signatureInputLen": 382
+    },
+    {
+      "case": "founding-first-device-binding",
+      "construction": "pico.home.founding.v2",
+      "fields": {
+        "suite": "pico.suite.id.v1",
+        "foundingId": "founding_adr0108_vector_0001",
+        "homeId": "home_adr0108_vector_0001",
+        "hostSigningKeyFingerprintHex": "1111111111111111111111111111111111111111111111111111111111111111",
+        "hostKeyAgreementKeyFingerprintHex": "2222222222222222222222222222222222222222222222222222222222222222",
+        "homeHostPicoIdentityFingerprintHex": "3333333333333333333333333333333333333333333333333333333333333333",
+        "firstDeviceSigningKeyFingerprintHex": "6666666666666666666666666666666666666666666666666666666666666666",
+        "firstDeviceKeyAgreementKeyFingerprintHex": "7777777777777777777777777777777777777777777777777777777777777777",
+        "firstDeviceDelegationId": "delegation_adr0108_vector_0001",
+        "claimantNonceHex": "4444444444444444444444444444444444444444444444444444444444444444",
+        "hostNonceHex": "8888888888888888888888888888888888888888888888888888888888888888",
+        "foundedAt": "2026-07-30T10:00:00.000Z",
+        "lifecycleOrder": "seq:0000000000000001"
+      },
+      "signatureInputHex": "000000157069636f2e686f6d652e666f756e64696e672e7632000000107069636f2e73756974652e69642e76310000001c666f756e64696e675f616472303130385f766563746f725f3030303100000018686f6d655f616472303130385f766563746f725f303030310000002011111111111111111111111111111111111111111111111111111111111111110000002022222222222222222222222222222222222222222222222222222222222222220000002033333333333333333333333333333333333333333333333333333333333333330000002066666666666666666666666666666666666666666666666666666666666666660000002077777777777777777777777777777777777777777777777777777777777777770000001e64656c65676174696f6e5f616472303130385f766563746f725f3030303100000020444444444444444444444444444444444444444444444444444444444444444400000020888888888888888888888888888888888888888888888888888888888888888800000018323032362d30372d33305431303a30303a30302e3030305a000000147365713a30303030303030303030303030303031",
+      "signatureInputLen": 443
+    }
+  ],
+  "negativeCases": [
+    {
+      "case": "missing-device-cosignature",
+      "mutation": "remove firstDeviceSignatureHex",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    },
+    {
+      "case": "invalid-device-cosignature",
+      "mutation": "replace firstDeviceSignatureHex with a detached signature from another device key",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    },
+    {
+      "case": "delegation-subject-mismatch",
+      "mutation": "carry a delegation whose device-signing subject differs from the carried key record",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    },
+    {
+      "case": "missing-surface-session-scope",
+      "mutation": "remove surface_session from the carried delegation scopes",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    },
+    {
+      "case": "delegation-expired-at-founding",
+      "mutation": "set delegation validUntil before the claim verification instant",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    },
+    {
+      "case": "signed-fingerprint-record-mismatch",
+      "mutation": "replace a carried key record without changing the root-signed fingerprint",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    },
+    {
+      "case": "legacy-v1-claim-refused",
+      "mutation": "submit pico.home.claim-payload.v1",
+      "expected": "claim_refused_before_move_in_code_consumption"
+    }
+  ],
+  "notes": "The two positive vectors pin the v2 authority-creating byte layouts. The seven negative cases are executed by the Foundation claim tests, including proof that rejection leaves the one-use Move-In Code available for a valid retry."
+}

@@ -56,7 +56,9 @@ import {
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
+  picoHomeFoundingRecordV2Schema,
   picoHomeSealedClaimPayloadSchema,
+  picoHomeSealedClaimPayloadV2Schema,
   picoHomeMembershipLifecycleReasonCategories,
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
@@ -65,6 +67,7 @@ import {
   picoHomeDomainReadGrantRevocationReasonCategories,
   picoHomeSignatureInputFamilies,
   picoHomeSignatureInputLabels,
+  picoHomeV2SignatureInputLabels,
   picoVaultAeadAlgorithms,
   picoVaultArgon2idModerateParams,
   picoVaultKdfAlgorithms,
@@ -443,6 +446,12 @@ describe('Pico protocol types', () => {
     expect(picoHomeClaimResponseRecordSchema).toBe('pico.home.claim-response-record.v1');
     expect(picoHomeFoundingAcceptanceSchema).toBe('pico.home.founding-acceptance.v1');
     expect(picoHomeFoundingRecordSchema).toBe('pico.home.founding-record.v1');
+    expect(picoHomeSealedClaimPayloadV2Schema).toBe('pico.home.claim-payload.v2');
+    expect(picoHomeFoundingRecordV2Schema).toBe('pico.home.founding-record.v2');
+    expect(picoHomeV2SignatureInputLabels).toEqual({
+      claim: 'pico.home.claim.v2',
+      founding: 'pico.home.founding.v2',
+    });
     expect(picoHomeMembershipRoles).toEqual(['home_host', 'home_member']);
     expect(picoHomeMembershipScopes).toEqual([
       'host.use',
@@ -479,6 +488,54 @@ describe('Pico protocol types', () => {
       'host_migrated',
       'host_restored',
     ]);
+  });
+
+  it('pins the ADR 0108 v2 claim and founding canonical bytes', () => {
+    const suite = readRepoJsonObject(
+      'docs/protocol/fixtures/home-first-device-founding/suite.json',
+    );
+    const [claimVector, foundingVector] = recordArrayField(suite, 'vectors');
+    const claimFields = recordField(claimVector, 'fields');
+    const foundingFields = recordField(foundingVector, 'fields');
+    const claim = buildPicoHomeClaimSignatureInput(
+      claimFields as unknown as Parameters<typeof buildPicoHomeClaimSignatureInput>[0],
+    );
+    const founding = buildPicoHomeFoundingSignatureInput(
+      foundingFields as unknown as Parameters<typeof buildPicoHomeFoundingSignatureInput>[0],
+    );
+
+    expect(stringField(suite, 'schema'))
+      .toBe('pico.home.first-device-founding.vector.suite');
+    expect(numberField(suite, 'schemaVersion')).toBe(1);
+    expect(stringField(suite, 'suiteVersion')).toBe(picoProtocolVersion);
+    expect(stringField(suite, 'stage')).toBe('fixture_data');
+    expect(stringField(suite, 'suite')).toBe(picoIdentitySuite);
+    expect(stringField(suite, 'compatibilityLevel'))
+      .toBe('authoritative-local-v2-signature-input-vectors');
+    expect(stringField(suite, 'disclaimer')).toContain('no published contract');
+    expect(stringField(claimVector, 'construction')).toBe(picoHomeV2SignatureInputLabels.claim);
+    expect(stringField(foundingVector, 'construction')).toBe(picoHomeV2SignatureInputLabels.founding);
+
+    expect(Buffer.from(claim).toString('hex')).toBe(stringField(claimVector, 'signatureInputHex'));
+    expect(claim.length).toBe(numberField(claimVector, 'signatureInputLen'));
+    expect(Buffer.from(founding).toString('hex'))
+      .toBe(stringField(foundingVector, 'signatureInputHex'));
+    expect(founding.length).toBe(numberField(foundingVector, 'signatureInputLen'));
+
+    expect(recordArrayField(suite, 'negativeCases').map((entry) => stringField(entry, 'case')))
+      .toEqual([
+        'missing-device-cosignature',
+        'invalid-device-cosignature',
+        'delegation-subject-mismatch',
+        'missing-surface-session-scope',
+        'delegation-expired-at-founding',
+        'signed-fingerprint-record-mismatch',
+        'legacy-v1-claim-refused',
+      ]);
+    expect(textFenceAfterHeading(
+      readRepoFile('docs/protocol/fixtures/README.md'),
+      '## Current first-device founding fixtures',
+    )).toEqual(['home-first-device-founding/suite.json']);
   });
 
   it('exports ADR 0081 Vault keyfile vocabulary', () => {

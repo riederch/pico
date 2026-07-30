@@ -286,8 +286,9 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
       const row = db.prepare(
         'SELECT sealed_wrap_hex AS sealedWrapHex FROM pico_share_envelope',
       ).get() as { sealedWrapHex: string };
+      const lastByte = Number.parseInt(row.sealedWrapHex.slice(-2), 16);
       db.prepare('UPDATE pico_share_envelope SET sealed_wrap_hex = ?')
-        .run(`${row.sealedWrapHex.slice(0, -2)}00`);
+        .run(`${row.sealedWrapHex.slice(0, -2)}${(lastByte ^ 1).toString(16).padStart(2, '0')}`);
       db.close();
 
       const restored = new EventStore(tampered.databasePath, {
