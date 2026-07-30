@@ -230,7 +230,9 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
   authority Link principal is verified. Claim works before that evidence by
   design; post-claim authority operations do not. Removing the dependency
   needs another explicitly named Link operation and threat analysis, not an
-  authorization bypass inside this slice.
+  authorization bypass inside this slice. ADR 0108 has since decided that
+  removal - not as a Link operation, but by founding the first delegated
+  device with the Home itself.
 
   Real-process tests found a Home through three Link requests without a
   bearer session and, after registering a delegated device locally, created a
@@ -330,6 +332,8 @@ Negative and residual:
   identity-session verification for the link principal.
 - Keeps ADR `0030` and `0041` intact: the diagnostic surface stays local,
   the port default stays closed.
+- ADR `0108` discharges the D3 bootstrap dependency for newly founded Homes
+  by carrying the first delegated device's evidence in claim/founding.
 
 ## References
 
