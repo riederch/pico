@@ -29,6 +29,7 @@ import {
   picoReaderCustodySyncPayloadSchema,
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
+  picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeSignatureInputLabels,
   picoHomeV2SignatureInputLabels,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
@@ -433,6 +434,10 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     // signature creates the Home authority; this co-signature only proves
     // that the first delegated device holds its signing key.
     picoHomeV2SignatureInputLabels.claim,
+    // ADR 0109: the root-signed delegation creates device authority. This
+    // short-lived, Home-bound co-signature proves only that the target device
+    // holds the signing key named by that delegation.
+    picoHomeDeviceLifecycleCanonicalLabels.activation,
     picoReaderCustodyCanonicalLabels.item,
   ]),
   device_key_agreement: new Set<string>(),

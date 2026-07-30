@@ -1,4 +1,5 @@
 import {
+  buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeFoundingSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
@@ -18,6 +19,7 @@ import {
   buildPicoReaderCustodyWriterGrantLifecycleSignatureInput,
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
+  picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeSignatureInputLabels,
   picoHomeV2SignatureInputLabels,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
@@ -26,6 +28,7 @@ import {
   picoReaderCustodyCanonicalLabels,
   picoShareCanonicalLabels,
   type PicoHomeClaimSignatureInput,
+  type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeFoundingSignatureInput,
   type PicoHomeMembershipLifecycleSignatureInput,
   type PicoHomeMembershipSignatureInput,
@@ -73,6 +76,10 @@ export function renderPicoVaultApprovalStatement(
 }
 
 const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
+  [picoHomeDeviceLifecycleCanonicalLabels.activation]: (f) =>
+    buildPicoHomeDeviceActivationSignatureInput(
+      f as PicoHomeDeviceActivationSignatureInput,
+    ),
   [picoIdentitySignatureInputLabels.keyrecord]: (f) =>
     buildPicoIdentityKeyRecordSignatureInput(f as never),
   [picoIdentitySignatureInputLabels.possession]: (f) =>
@@ -133,11 +140,11 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   },
   [picoIdentitySignatureInputLabels.delegation]: (f) => {
     const v = f as PicoIdentityDelegationSignatureInput;
-    return `Delegate ${v.scopes.join(', ')} to device keys ${short(v.subjectSigningKeyFingerprintHex)} and ${short(v.subjectKeyAgreementKeyFingerprintHex)} until ${v.validUntil}.`;
+    return `Create device authority: delegate ${v.scopes.join(', ')} to device keys ${short(v.subjectSigningKeyFingerprintHex)} and ${short(v.subjectKeyAgreementKeyFingerprintHex)} from ${v.validFrom} until ${v.validUntil}.`;
   },
   [picoIdentitySignatureInputLabels.revocation]: (f) => {
     const v = f as PicoIdentityRevocationSignatureInput;
-    return `Revoke ${v.subjectKind} ${v.subjectRef} (${v.reasonCategory}).`;
+    return `Revoke ${v.subjectKind} ${v.subjectRef} (${v.reasonCategory}). Warning: this may close the last remote device path.`;
   },
   [picoHomeSignatureInputLabels.claim]: (f) => {
     const v = f as PicoHomeClaimSignatureInput;

@@ -28,6 +28,7 @@ const IDENTITY_PASSPHRASE = 'claim ceremony identity passphrase';
 const SIGNING_PASSPHRASE = 'claim ceremony signing passphrase';
 const AGREEMENT_PASSPHRASE = 'claim ceremony agreement passphrase';
 const READER_PASSPHRASE = 'reader vault passphrase';
+const TARGET_PASSPHRASE = 'target device vault passphrase';
 
 const temporaryDirectories: string[] = [];
 const childProcesses: ChildProcess[] = [];
@@ -38,6 +39,8 @@ let ownerAgreement: CreatePicoVaultKeyfileResult;
 let readerIdentity: CreatePicoVaultKeyfileResult;
 let readerSigning: CreatePicoVaultKeyfileResult;
 let readerAgreement: CreatePicoVaultKeyfileResult;
+let targetSigning: CreatePicoVaultKeyfileResult;
+let targetAgreement: CreatePicoVaultKeyfileResult;
 
 beforeAll(async () => {
   await sodium.ready;
@@ -64,6 +67,14 @@ beforeAll(async () => {
   readerAgreement = createPicoVaultKeyfile(sodium, {
     keyRole: 'device_key_agreement',
     passphrase: READER_PASSPHRASE,
+  });
+  targetSigning = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_signing',
+    passphrase: TARGET_PASSPHRASE,
+  });
+  targetAgreement = createPicoVaultKeyfile(sodium, {
+    keyRole: 'device_key_agreement',
+    passphrase: TARGET_PASSPHRASE,
   });
 }, 120_000);
 
@@ -95,6 +106,8 @@ async function waitFor(condition: () => boolean, label: string): Promise<void> {
 }
 
 interface RunningCore {
+  child: ChildProcess;
+  dataDir: string;
   baseUrl: string;
   linkBaseUrl?: string;
   moveInCode: string;
@@ -126,9 +139,13 @@ async function freePort(): Promise<number> {
 }
 
 async function startCore(
-  options: { restrictedLinkIntake?: boolean } = {},
+  options: {
+    restrictedLinkIntake?: boolean;
+    dataDir?: string;
+    restoredFrom?: RunningCore;
+  } = {},
 ): Promise<RunningCore> {
-  const dataDir = tempDir('pico-claim-core-');
+  const dataDir = options.dataDir ?? tempDir('pico-claim-core-');
   const port = await freePort();
   let linkPort: number | undefined;
   if (options.restrictedLinkIntake === true) {
@@ -166,33 +183,43 @@ async function startCore(
   }
 
   await waitFor(
-    () => output.includes('picoHomeMoveInCode')
-      && output.includes('Server listening at')
+    () => output.includes('Server listening at')
       && (linkPort === undefined || output.includes('Pico Link restricted intake listening')),
     'core_ready',
   );
 
-  const claim = output.split('\n')
-    .map((line) => {
-      try {
-        return JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        return undefined;
-      }
-    })
-    .find((line) => line?.picoHomeMoveInCode !== undefined);
-  if (claim === undefined) {
-    throw new Error(`move_in_code_not_logged:${output}`);
+  let claim: Record<string, unknown> | undefined;
+  if (options.restoredFrom === undefined) {
+    await waitFor(() => output.includes('picoHomeMoveInCode'), 'move_in_code');
+    claim = output.split('\n')
+      .map((line) => {
+        try {
+          return JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          return undefined;
+        }
+      })
+      .find((line) => line?.picoHomeMoveInCode !== undefined);
+    if (claim === undefined) {
+      throw new Error(`move_in_code_not_logged:${output}`);
+    }
   }
+  const source = options.restoredFrom;
 
   return {
+    child,
+    dataDir,
     baseUrl: `http://127.0.0.1:${port}`,
     ...(linkPort === undefined ? {} : { linkBaseUrl: `http://127.0.0.1:${linkPort}` }),
-    moveInCode: String(claim.picoHomeMoveInCode),
-    hostSigningKeyFingerprintHex: String(claim.hostSigningKeyFingerprintHex),
-    hostSigningPublicKeyHex: String(claim.hostSigningPublicKeyHex),
-    hostKeyAgreementKeyFingerprintHex: String(claim.hostKeyAgreementKeyFingerprintHex),
-    hostKeyAgreementPublicKeyHex: String(claim.hostKeyAgreementPublicKeyHex),
+    moveInCode: source?.moveInCode ?? String(claim!.picoHomeMoveInCode),
+    hostSigningKeyFingerprintHex: source?.hostSigningKeyFingerprintHex
+      ?? String(claim!.hostSigningKeyFingerprintHex),
+    hostSigningPublicKeyHex: source?.hostSigningPublicKeyHex
+      ?? String(claim!.hostSigningPublicKeyHex),
+    hostKeyAgreementKeyFingerprintHex: source?.hostKeyAgreementKeyFingerprintHex
+      ?? String(claim!.hostKeyAgreementKeyFingerprintHex),
+    hostKeyAgreementPublicKeyHex: source?.hostKeyAgreementPublicKeyHex
+      ?? String(claim!.hostKeyAgreementPublicKeyHex),
     log: () => output,
   };
 }
@@ -306,6 +333,58 @@ async function startReaderDaemon(): Promise<RunningDaemon> {
   return { vaultHomePath, stderr: () => stderr };
 }
 
+/**
+ * A later device has no identity-root keyfile. It receives the public identity
+ * key through the ceremony and proves Link authority only with its delegated
+ * device-signing key.
+ */
+async function startTargetDaemon(): Promise<RunningDaemon> {
+  const vaultHomePath = tempDir('pico-target-vault-');
+  for (const [role, fixture] of [
+    ['device_signing', targetSigning],
+    ['device_key_agreement', targetAgreement],
+  ] as const) {
+    writePicoVaultKeyfile(
+      join(vaultHomePath, 'keyfiles', `${role}-${fixture.keyFingerprintHex}.json`),
+      fixture.keyfile,
+    );
+  }
+
+  const child = spawn(process.execPath, [
+    CLI, 'daemon',
+    '--vault-home', vaultHomePath,
+    '--foundation-data', tempDir('pico-target-data-'),
+    '--foundation-backup', tempDir('pico-target-backup-'),
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stderr = '';
+  child.stderr!.setEncoding('utf8');
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    let stdout = '';
+    const timer = setTimeout(() => {
+      rejectPromise(new Error(`target_daemon_start_timeout:${stderr}`));
+    }, 20_000);
+    child.stdout!.setEncoding('utf8');
+    child.stdout!.on('data', (chunk: string) => {
+      stdout += chunk;
+      if (stdout.includes('\n')) {
+        clearTimeout(timer);
+        resolvePromise();
+      }
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      rejectPromise(new Error(`target_daemon_exited:${String(code)}:${stderr}`));
+    });
+  });
+
+  return { vaultHomePath, stderr: () => stderr };
+}
+
 /** The person: a scripted `pico-vault unlock` that answers every prompt yes. */
 async function startApprover(
   daemon: RunningDaemon,
@@ -330,7 +409,7 @@ async function startApprover(
   child.stdin!.write(`${passphrase}\n`);
 
   await waitFor(() => stderr.includes('Vault unlocked.'), 'approver_unlock');
-  child.stdin!.write('y\n'.repeat(8));
+  child.stdin!.write('y\n'.repeat(16));
   await waitFor(
     () => daemon.stderr().split('"event":"approval_watch_started"').length - 1 > before,
     'approval_watch_started',
@@ -469,6 +548,124 @@ function runCreateDomainOverLink(
     '--host-signing-public-key', core.hostSigningPublicKeyHex,
     '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
   ]);
+}
+
+function lifecycleLinkFlags(
+  core: RunningCore,
+  signingKeyFingerprintHex: string,
+  agreementKeyFingerprintHex: string,
+  delegationId: string,
+): string[] {
+  return [
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--core-url', requireLinkBaseUrl(core),
+    '--link-signing-fingerprint', signingKeyFingerprintHex,
+    '--link-agreement-fingerprint', agreementKeyFingerprintHex,
+    '--link-delegation-id', delegationId,
+    '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+    '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+    '--host-signing-public-key', core.hostSigningPublicKeyHex,
+    '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
+  ];
+}
+
+function inspectDeviceLifecycle(
+  signerDaemon: RunningDaemon,
+  core: RunningCore,
+  signingKeyFingerprintHex: string,
+  agreementKeyFingerprintHex: string,
+  delegationId: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return runCli([
+    'ceremony', 'inspect-device-lifecycle',
+    '--vault-home', signerDaemon.vaultHomePath,
+    '--identity-public-key', ownerIdentity.publicKeyHex,
+    ...lifecycleLinkFlags(
+      core,
+      signingKeyFingerprintHex,
+      agreementKeyFingerprintHex,
+      delegationId,
+    ),
+  ]);
+}
+
+function runLifecycleCeremony(
+  action: 'enroll-device' | 'renew-device' | 'revoke-device',
+  rootDaemon: RunningDaemon,
+  sponsorDaemon: RunningDaemon,
+  core: RunningCore,
+  input: {
+    sponsorSigningKeyFingerprintHex: string;
+    sponsorAgreementKeyFingerprintHex: string;
+    sponsorDelegationId: string;
+    targetDaemon?: RunningDaemon;
+    targetSigningKeyFingerprintHex?: string;
+    targetAgreementKeyFingerprintHex?: string;
+    targetDelegationId?: string;
+  },
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  const targetFlags = action === 'revoke-device'
+    ? [
+      '--target-delegation-id', input.targetDelegationId!,
+    ]
+    : [
+      '--target-vault-home', input.targetDaemon!.vaultHomePath,
+      '--target-signing-fingerprint', input.targetSigningKeyFingerprintHex!,
+      '--target-agreement-fingerprint', input.targetAgreementKeyFingerprintHex!,
+      '--valid-until', new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
+      ...(action === 'renew-device'
+        ? ['--target-delegation-id', input.targetDelegationId!]
+        : []),
+    ];
+  return runCli([
+    'ceremony', action,
+    '--vault-home', rootDaemon.vaultHomePath,
+    '--sponsor-vault-home', sponsorDaemon.vaultHomePath,
+    ...lifecycleLinkFlags(
+      core,
+      input.sponsorSigningKeyFingerprintHex,
+      input.sponsorAgreementKeyFingerprintHex,
+      input.sponsorDelegationId,
+    ),
+    ...targetFlags,
+  ]);
+}
+
+function runCreateDomainThroughDevice(
+  rootDaemon: RunningDaemon,
+  linkDaemon: RunningDaemon,
+  core: RunningCore,
+  delegationId: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return runDaemonCli(rootDaemon, [
+    'ceremony', 'create-domain',
+    '--fingerprint', ownerIdentity.keyFingerprintHex,
+    '--agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+    '--core-url', requireLinkBaseUrl(core),
+    '--domain-id', 'later_device_authority_domain',
+    '--transport', 'link',
+    '--link-vault-home', linkDaemon.vaultHomePath,
+    '--link-signing-fingerprint', targetSigning.keyFingerprintHex,
+    '--link-agreement-fingerprint', targetAgreement.keyFingerprintHex,
+    '--link-delegation-id', delegationId,
+    '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+    '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+    '--host-signing-public-key', core.hostSigningPublicKeyHex,
+    '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
+  ]);
+}
+
+async function stopCore(core: RunningCore): Promise<void> {
+  if (core.child.exitCode !== null) {
+    return;
+  }
+  const exited = new Promise<void>((resolvePromise) => {
+    core.child.once('exit', () => {
+      resolvePromise();
+    });
+  });
+  core.child.kill('SIGTERM');
+  await exited;
 }
 
 function requireLinkBaseUrl(core: RunningCore): string {
@@ -764,6 +961,210 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     // operational; no local identity-session ceremony exists in this path.
     expect(identityApprover.approvals()).toBe(4);
   }, 180_000);
+
+  it('enrolls, renews and revokes later devices over real Vault and Link processes', async () => {
+    const core = await startCore({ restrictedLinkIntake: true });
+    const rootDaemon = await startDaemon();
+    const rootApprover = await startApprover(rootDaemon);
+    const firstDeviceApprover = await startApprover(
+      rootDaemon,
+      ownerSigning,
+      'device_signing',
+      SIGNING_PASSPHRASE,
+    );
+    await startApprover(
+      rootDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const targetDaemon = await startTargetDaemon();
+    const targetApprover = await startApprover(
+      targetDaemon,
+      targetSigning,
+      'device_signing',
+      TARGET_PASSPHRASE,
+    );
+    await startApprover(
+      targetDaemon,
+      targetAgreement,
+      'device_key_agreement',
+      TARGET_PASSPHRASE,
+    );
+
+    const founded = await runLinkCeremony(rootDaemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const firstDelegationId = (JSON.parse(founded.stdout) as {
+      foundingRecord: {
+        firstDeviceDelegation: { record: { delegationId: string } };
+      };
+    }).foundingRecord.firstDeviceDelegation.record.delegationId;
+
+    const enrollment = await runLifecycleCeremony(
+      'enroll-device',
+      rootDaemon,
+      rootDaemon,
+      core,
+      {
+        sponsorSigningKeyFingerprintHex: ownerSigning.keyFingerprintHex,
+        sponsorAgreementKeyFingerprintHex: ownerAgreement.keyFingerprintHex,
+        sponsorDelegationId: firstDelegationId,
+        targetDaemon,
+        targetSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        targetAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+      },
+    );
+    expect(enrollment.code, enrollment.stderr).toBe(0);
+    const enrolled = JSON.parse(enrollment.stdout) as {
+      accepted: {
+        inserted: boolean;
+        record: { receipt: { leavesNoActiveDevice: boolean } };
+      };
+      submission: { evidence: { targetDelegationId: string } };
+    };
+    const enrolledDelegationId = enrolled.submission.evidence.targetDelegationId;
+    expect(enrolled.accepted).toMatchObject({
+      inserted: true,
+      record: { receipt: { leavesNoActiveDevice: false } },
+    });
+
+    // The target Vault has no identity-root keyfile. Its delegated device key
+    // nevertheless authenticates a real Home-authority operation while the
+    // root Vault separately creates the signed domain authority.
+    const domain = await runCreateDomainThroughDevice(
+      rootDaemon,
+      targetDaemon,
+      core,
+      enrolledDelegationId,
+    );
+    expect(domain.code, domain.stderr).toBe(0);
+    expect(domain.stdout).toContain('later_device_authority_domain');
+
+    // Renewal is replacement: the target itself sponsors the request, its
+    // Vault co-signs the activation, and the root holder approves two distinct
+    // signatures (new delegation, old-delegation revocation).
+    const renewal = await runLifecycleCeremony(
+      'renew-device',
+      rootDaemon,
+      targetDaemon,
+      core,
+      {
+        sponsorSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        sponsorAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+        sponsorDelegationId: enrolledDelegationId,
+        targetDaemon,
+        targetSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        targetAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+        targetDelegationId: enrolledDelegationId,
+      },
+    );
+    expect(renewal.code, renewal.stderr).toBe(0);
+    const renewed = JSON.parse(renewal.stdout) as {
+      submission: { evidence: { targetDelegationId: string } };
+    };
+    const renewedDelegationId = renewed.submission.evidence.targetDelegationId;
+    expect(renewedDelegationId).not.toBe(enrolledDelegationId);
+
+    const oldTarget = await inspectDeviceLifecycle(
+      targetDaemon,
+      core,
+      targetSigning.keyFingerprintHex,
+      targetAgreement.keyFingerprintHex,
+      enrolledDelegationId,
+    );
+    expect(oldTarget.code).not.toBe(0);
+    expect(oldTarget.stderr).toContain('sender_is_not_authorized');
+
+    const currentTarget = await inspectDeviceLifecycle(
+      targetDaemon,
+      core,
+      targetSigning.keyFingerprintHex,
+      targetAgreement.keyFingerprintHex,
+      renewedDelegationId,
+    );
+    expect(currentTarget.code, currentTarget.stderr).toBe(0);
+    expect(currentTarget.stdout).toContain(renewedDelegationId);
+
+    // The renewed second device revokes the first. The first device's old
+    // record stops authenticating immediately.
+    const revokeFirst = await runLifecycleCeremony(
+      'revoke-device',
+      rootDaemon,
+      targetDaemon,
+      core,
+      {
+        sponsorSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        sponsorAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+        sponsorDelegationId: renewedDelegationId,
+        targetDelegationId: firstDelegationId,
+      },
+    );
+    expect(revokeFirst.code, revokeFirst.stderr).toBe(0);
+    const oldFirst = await inspectDeviceLifecycle(
+      rootDaemon,
+      core,
+      ownerSigning.keyFingerprintHex,
+      ownerAgreement.keyFingerprintHex,
+      firstDelegationId,
+    );
+    expect(oldFirst.code).not.toBe(0);
+    expect(oldFirst.stderr).toContain('sender_is_not_authorized');
+
+    // Last-device self-revocation must return its signed accepted response,
+    // even though the same key cannot authenticate the next request.
+    const revokeLast = await runLifecycleCeremony(
+      'revoke-device',
+      rootDaemon,
+      targetDaemon,
+      core,
+      {
+        sponsorSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        sponsorAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+        sponsorDelegationId: renewedDelegationId,
+        targetDelegationId: renewedDelegationId,
+      },
+    );
+    expect(revokeLast.code, revokeLast.stderr).toBe(0);
+    expect(JSON.parse(revokeLast.stdout)).toMatchObject({
+      accepted: {
+        inserted: true,
+        record: { receipt: { leavesNoActiveDevice: true } },
+      },
+    });
+    const closed = await inspectDeviceLifecycle(
+      targetDaemon,
+      core,
+      targetSigning.keyFingerprintHex,
+      targetAgreement.keyFingerprintHex,
+      renewedDelegationId,
+    );
+    expect(closed.code).not.toBe(0);
+    expect(closed.stderr).toContain('sender_is_not_authorized');
+
+    // Boot reconciliation verifies and reprojects the durable transition
+    // chain. Zero-device state stays closed after a real Foundation restart.
+    await stopCore(core);
+    const restarted = await startCore({
+      restrictedLinkIntake: true,
+      dataDir: core.dataDir,
+      restoredFrom: core,
+    });
+    const closedAfterRestart = await inspectDeviceLifecycle(
+      targetDaemon,
+      restarted,
+      targetSigning.keyFingerprintHex,
+      targetAgreement.keyFingerprintHex,
+      renewedDelegationId,
+    );
+    expect(closedAfterRestart.code).not.toBe(0);
+    expect(closedAfterRestart.stderr).toContain('sender_is_not_authorized');
+
+    // Root: founding 3, enrollment 1, domain 1, renewal 2, revocations 2.
+    // Device signatures are possession/transport only and never prompt.
+    expect(rootApprover.approvals()).toBe(9);
+    expect(firstDeviceApprover.approvals()).toBe(0);
+    expect(targetApprover.approvals()).toBe(0);
+  }, 300_000);
 
   it('issues a Home membership whose host activation the Foundation adds', async () => {
     const core = await startCore();

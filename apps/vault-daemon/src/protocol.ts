@@ -1,4 +1,5 @@
 import {
+  picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeV2SignatureInputLabels,
   picoVaultPersonKeyRoles,
   type PicoVaultPersonKeyRole,
@@ -55,6 +56,16 @@ export function picoVaultDaemonSignatureNeedsApproval(
   // co-signature over those same bytes is possession proof and creates no
   // authority of its own.
   if (keyRole === 'device_signing' && label === picoHomeV2SignatureInputLabels.claim) {
+    return false;
+  }
+  // ADR 0109 keeps the global exempt-label catalog closed. The only new
+  // exception is role-aware: a delegated device key may prove possession of
+  // the exact short-lived activation bytes, while an identity root requesting
+  // the same label remains gated (and cannot sign it at the Vault role gate).
+  if (
+    keyRole === 'device_signing'
+    && label === picoHomeDeviceLifecycleCanonicalLabels.activation
+  ) {
     return false;
   }
   return !picoVaultDaemonApprovalExemptLabels.has(label);

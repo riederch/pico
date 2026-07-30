@@ -28,6 +28,13 @@ export interface PicoLinkDirectHostPin {
 
 export interface PicoLinkDirectSender {
   identityKeyFingerprintHex: string;
+  /**
+   * ADR 0109: a delegated device authenticates Link without unlocking the
+   * identity root. The public identity key may therefore be supplied from the
+   * lifecycle ceremony's already verified root session. Older callers may
+   * omit it and retain the pre-0109 unlocked-session lookup.
+   */
+  identityPublicKeyHex?: string;
   deviceSigningKeyFingerprintHex: string;
   deviceKeyAgreementKeyFingerprintHex: string;
   delegationId: string;
@@ -44,6 +51,7 @@ export interface CreatePicoLinkDirectClientInput {
 }
 
 export interface PicoLinkDirectClient {
+  readonly hostSigningKeyFingerprintHex: string;
   request(
     operation: PicoLinkDirectOperation,
     args: Record<string, unknown>,
@@ -64,13 +72,15 @@ export async function createPicoLinkDirectClient(
   assertHostPin(input.sodium, input.host);
 
   const status = await input.daemonClient.status();
-  const identity = status.sessions.find(
-    (session) => session.keyFingerprintHex === input.sender.identityKeyFingerprintHex,
-  );
+  const identity = input.sender.identityPublicKeyHex === undefined
+    ? status.sessions.find(
+      (session) => session.keyFingerprintHex === input.sender.identityKeyFingerprintHex,
+    )
+    : undefined;
   const signing = status.sessions.find(
     (session) => session.keyFingerprintHex === input.sender.deviceSigningKeyFingerprintHex,
   );
-  if (identity?.keyRole !== 'pico_identity') {
+  if (input.sender.identityPublicKeyHex === undefined && identity?.keyRole !== 'pico_identity') {
     throw new Error('link_identity_key_not_unlocked');
   }
   if (signing?.keyRole !== 'device_signing') {
@@ -83,7 +93,7 @@ export async function createPicoLinkDirectClient(
   const senderIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
     suite: picoIdentitySuite,
     keyRole: 'pico_identity',
-    publicKeyHex: identity.publicKeyHex,
+    publicKeyHex: input.sender.identityPublicKeyHex ?? identity!.publicKeyHex,
   };
   const senderDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
     suite: picoIdentitySuite,
@@ -111,6 +121,7 @@ export async function createPicoLinkDirectClient(
   );
 
   return {
+    hostSigningKeyFingerprintHex: input.host.signingKeyFingerprintHex,
     request: async (operation, args) => {
       const replyKeypair = input.sodium.crypto_box_keypair();
       try {

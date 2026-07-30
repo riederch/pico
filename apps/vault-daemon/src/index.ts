@@ -86,6 +86,20 @@ export type {
   CreatePicoVaultDaemonCeremonySignerInput,
   PicoVaultDaemonCeremonySigner,
 } from './ceremony-signer.js';
+export {
+  enrollPicoHomeDevice,
+  readPicoHomeDeviceLifecycle,
+  renewPicoHomeDevice,
+  revokePicoHomeDevice,
+} from './device-lifecycle-ceremony.js';
+export type {
+  EnrollPicoHomeDeviceInput,
+  PicoHomeDeviceLifecycleCeremonyResult,
+  PicoHomeDeviceLifecycleDeviceView,
+  PicoHomeDeviceLifecycleView,
+  RenewPicoHomeDeviceInput,
+  RevokePicoHomeDeviceInput,
+} from './device-lifecycle-ceremony.js';
 export type {
   OpenPicoVaultDaemonReaderAccessInput,
   PicoVaultDaemonReaderAccessSession,

@@ -220,6 +220,44 @@ describe('Pico Link direct client (ADR 0107 D3)', () => {
     expect(replyKeys[0]).not.toBe(replyKeys[1]);
   });
 
+  it('uses a supplied public identity key without requiring the root to be unlocked', async () => {
+    const f = fixture();
+    const status = await f.daemonClient.status();
+    const identity = status.sessions.find((session) => session.keyRole === 'pico_identity')!;
+    f.sender.identityPublicKeyHex = identity.publicKeyHex;
+    f.daemonClient.status = async () => ({
+      ...status,
+      sessions: status.sessions.filter((session) => session.keyRole !== 'pico_identity'),
+    });
+    const client = await createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+      fetch: answeringFetch(f),
+      now: () => new Date('2026-07-29T12:00:00.000Z'),
+    });
+
+    await expect(client.request('home.device.lifecycle.read', {}))
+      .resolves.toMatchObject({ outcome: 'ok' });
+  });
+
+  it('rejects a supplied identity public key that does not match its fingerprint', async () => {
+    const f = fixture();
+    const other = sodium.crypto_sign_keypair();
+    f.sender.identityPublicKeyHex = hex(other.publicKey);
+
+    await expect(createPicoLinkDirectClient({
+      sodium: vaultSodium,
+      daemonClient: f.daemonClient,
+      coreUrl: 'http://carrier.invalid/reachable',
+      host: f.host,
+      sender: f.sender,
+    })).rejects.toThrow('link_identity_key_fingerprint_mismatch');
+    expect(f.sign).not.toHaveBeenCalled();
+  });
+
   it('rejects a public key that does not match the pinned host fingerprint before IPC or network', async () => {
     const f = fixture();
     const other = sodium.crypto_sign_keypair();

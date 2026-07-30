@@ -17,6 +17,7 @@ import {
   picoIdentitySignatureInputLabels,
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
+  picoIdentityRevocationReasonCategories,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoIdentityReaderKeyFreshnessStatuses,
   picoHomeClaimEnvelopeSchema,
@@ -35,6 +36,7 @@ import {
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
   type PicoIdentityReaderKeyFreshnessStatus,
+  type PicoIdentityRevocationReasonCategory,
   type PicoVaultPersonKeyRole,
 } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
@@ -44,6 +46,12 @@ import {
   createPicoLinkDirectClient,
   type PicoLinkDirectClient,
 } from './link-direct-client.js';
+import {
+  enrollPicoHomeDevice,
+  readPicoHomeDeviceLifecycle,
+  renewPicoHomeDevice,
+  revokePicoHomeDevice,
+} from './device-lifecycle-ceremony.js';
 
 const cliCommands = ['daemon', 'create', 'status', 'unlock', 'lock', 'sign', 'ceremony'] as const;
 type CliCommand = typeof cliCommands[number];
@@ -65,6 +73,10 @@ const ceremonySubcommands = [
   'issue-membership',
   'delegate-device',
   'open-identity-session',
+  'enroll-device',
+  'renew-device',
+  'revoke-device',
+  'inspect-device-lifecycle',
 ] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
@@ -111,6 +123,7 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'host-agreement-fingerprint',
     'host-signing-public-key',
     'host-agreement-public-key',
+    'link-vault-home',
   ],
   'delegate-device': [
     'vault-home',
@@ -129,6 +142,74 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'agreement-fingerprint',
     'core-url',
     'delegation',
+  ],
+  'enroll-device': [
+    'vault-home',
+    'sponsor-vault-home',
+    'target-vault-home',
+    'fingerprint',
+    'core-url',
+    'target-signing-fingerprint',
+    'target-agreement-fingerprint',
+    'scopes',
+    'valid-from',
+    'valid-until',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
+  'renew-device': [
+    'vault-home',
+    'sponsor-vault-home',
+    'target-vault-home',
+    'fingerprint',
+    'core-url',
+    'target-signing-fingerprint',
+    'target-agreement-fingerprint',
+    'target-delegation-id',
+    'scopes',
+    'valid-from',
+    'valid-until',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
+  'revoke-device': [
+    'vault-home',
+    'sponsor-vault-home',
+    'fingerprint',
+    'core-url',
+    'target-delegation-id',
+    'subject',
+    'reason-category',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
+  'inspect-device-lifecycle': [
+    'vault-home',
+    'fingerprint',
+    'identity-public-key',
+    'core-url',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
   ],
   'issue-membership': [
     'vault-home',
@@ -467,6 +548,115 @@ async function withClient<T>(
   }
 }
 
+async function runDeviceLifecycleCli(
+  ceremony: Extract<
+    CeremonySubcommand,
+    'enroll-device' | 'renew-device' | 'revoke-device' | 'inspect-device-lifecycle'
+  >,
+  flags: Map<string, string>,
+  rootVaultHomePath: string,
+  vaultSodium: VaultSodium,
+): Promise<Record<string, unknown>> {
+  const identityKeyFingerprintHex = requireFlag(flags, 'fingerprint');
+  const sponsor = {
+    identityKeyFingerprintHex,
+    deviceSigningKeyFingerprintHex: requireFlag(flags, 'link-signing-fingerprint'),
+    deviceKeyAgreementKeyFingerprintHex: requireFlag(flags, 'link-agreement-fingerprint'),
+    delegationId: requireFlag(flags, 'link-delegation-id'),
+  };
+
+  if (ceremony === 'inspect-device-lifecycle') {
+    return await withClient(rootVaultHomePath, async (signerClient) => {
+      const identityPublicKeyHex = requireFlag(flags, 'identity-public-key');
+      const linkClient = await createLifecycleLinkClient(
+        flags,
+        signerClient,
+        vaultSodium,
+        identityPublicKeyHex,
+      );
+      return await readPicoHomeDeviceLifecycle(linkClient, {
+        identityKeyFingerprintHex,
+        sponsor: { ...sponsor, identityPublicKeyHex },
+      }) as unknown as Record<string, unknown>;
+    });
+  }
+
+  return await withClient(rootVaultHomePath, async (rootClient) => {
+    const identityPublicKeyHex = await unlockedIdentityPublicKey(
+      rootClient,
+      identityKeyFingerprintHex,
+    );
+    const sponsorVaultHomePath = resolve(
+      flags.get('sponsor-vault-home') ?? rootVaultHomePath,
+    );
+    return await withClient(sponsorVaultHomePath, async (sponsorClient) => {
+      const sponsorWithIdentity = { ...sponsor, identityPublicKeyHex };
+      const sponsorLinkClient = await createLifecycleLinkClient(
+        flags,
+        sponsorClient,
+        vaultSodium,
+        identityPublicKeyHex,
+      );
+
+      if (ceremony === 'revoke-device') {
+        const reasonCategory = flags.get('reason-category') ?? 'device_retired';
+        if (!(picoIdentityRevocationReasonCategories as readonly string[])
+          .includes(reasonCategory)) {
+          throw new Error('invalid_revocation_reason_category');
+        }
+        const subject = flags.get('subject') ?? 'delegation';
+        if (![
+          'delegation',
+          'device_signing_key',
+          'device_key_agreement_key',
+        ].includes(subject)) {
+          throw new Error('invalid_revocation_subject');
+        }
+        return await revokePicoHomeDevice({
+          rootClient,
+          sponsorLinkClient,
+          sodium: vaultSodium,
+          identityKeyFingerprintHex,
+          sponsor: sponsorWithIdentity,
+          targetDelegationId: requireFlag(flags, 'target-delegation-id'),
+          subject: subject as
+            | 'delegation'
+            | 'device_signing_key'
+            | 'device_key_agreement_key',
+          reasonCategory: reasonCategory as PicoIdentityRevocationReasonCategory,
+        }) as unknown as Record<string, unknown>;
+      }
+
+      const targetVaultHomePath = resolve(requireFlag(flags, 'target-vault-home'));
+      return await withClient(targetVaultHomePath, async (targetClient) => {
+        const common = {
+          rootClient,
+          targetClient,
+          sponsorLinkClient,
+          sodium: vaultSodium,
+          identityKeyFingerprintHex,
+          sponsor: sponsorWithIdentity,
+          targetSigningKeyFingerprintHex:
+            requireFlag(flags, 'target-signing-fingerprint'),
+          targetKeyAgreementKeyFingerprintHex:
+            requireFlag(flags, 'target-agreement-fingerprint'),
+          scopes: lifecycleScopes(flags),
+          ...(flags.has('valid-from')
+            ? { validFrom: requireFlag(flags, 'valid-from') }
+            : {}),
+          validUntil: requireFlag(flags, 'valid-until'),
+        };
+        return ceremony === 'enroll-device'
+          ? await enrollPicoHomeDevice(common) as unknown as Record<string, unknown>
+          : await renewPicoHomeDevice({
+            ...common,
+            replacedDelegationId: requireFlag(flags, 'target-delegation-id'),
+          }) as unknown as Record<string, unknown>;
+      });
+    });
+  });
+}
+
 export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
   const invocation = parsePicoVaultCliArguments(argv);
   const vaultHomePath = resolveVaultHome(invocation.flags, process.env);
@@ -547,10 +737,28 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
     }
     case 'ceremony': {
       await sodium.ready;
+      if (
+        invocation.ceremony === 'enroll-device'
+        || invocation.ceremony === 'renew-device'
+        || invocation.ceremony === 'revoke-device'
+        || invocation.ceremony === 'inspect-device-lifecycle'
+      ) {
+        const result = await runDeviceLifecycleCli(
+          invocation.ceremony,
+          invocation.flags,
+          vaultHomePath,
+          sodium as unknown as VaultSodium,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        return;
+      }
       if (invocation.ceremony === 'create-domain') {
         const domain = await withClient(vaultHomePath, async (client) => {
           const coreUrl = requireFlag(invocation.flags, 'core-url');
-          return await runCreateDomainCeremony({
+          const run = async (
+            linkSignerClient: PicoVaultDaemonClient,
+            identityPublicKeyHex?: string,
+          ) => await runCreateDomainCeremony({
             client,
             vaultSodium: sodium as unknown as VaultSodium,
             coreUrl,
@@ -559,15 +767,45 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
               : undefined,
             linkClient: await createCeremonyLinkClient(
               invocation.flags,
-              client,
+              linkSignerClient,
               sodium as unknown as VaultSodium,
               coreUrl,
+              identityPublicKeyHex === undefined
+                ? undefined
+                : {
+                  identityKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+                  identityPublicKeyHex,
+                  deviceSigningKeyFingerprintHex:
+                    requireFlag(invocation.flags, 'link-signing-fingerprint'),
+                  deviceKeyAgreementKeyFingerprintHex:
+                    requireFlag(invocation.flags, 'link-agreement-fingerprint'),
+                  delegationId: requireFlag(invocation.flags, 'link-delegation-id'),
+                },
             ),
             signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
             agreementKeyFingerprintHex: requireFlag(invocation.flags, 'agreement-fingerprint'),
             domainId: requireFlag(invocation.flags, 'domain-id'),
             lifecycleOrder: invocation.flags.get('lifecycle-order') ?? 'seq:0000000000000001',
           });
+
+          const linkVaultHome = invocation.flags.get('link-vault-home');
+          if (linkVaultHome === undefined) {
+            return await run(client);
+          }
+          if (ceremonyTransport(invocation.flags) !== 'link') {
+            throw new Error('link_vault_home_requires_link_transport');
+          }
+          const identityPublicKeyHex = await unlockedIdentityPublicKey(
+            client,
+            requireFlag(invocation.flags, 'fingerprint'),
+          );
+          return await withClient(
+            resolve(linkVaultHome),
+            async (linkSignerClient) => await run(
+              linkSignerClient,
+              identityPublicKeyHex,
+            ),
+          );
         });
         process.stdout.write(`${JSON.stringify(domain)}\n`);
         return;
@@ -851,12 +1089,11 @@ if (isMainModule) {
       process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       process.stderr.write(
         'usage: pico-vault <daemon|create|status|unlock|lock|sign> '
-        + '| pico-vault ceremony claim-home --core-url <url> --move-in-code <code> '
-        + '--fingerprint <hex> --signing-fingerprint <hex> --agreement-fingerprint <hex> '
-        + '--delegation-valid-until <instant> --host-signing-fingerprint <hex> '
-        + '--host-agreement-fingerprint <hex>\n'
+        + '| pico-vault ceremony <claim-home|create-domain|rotate-domain|grant-reader'
+        + '|publish-checkpoint|issue-membership|delegate-device|open-identity-session'
+        + '|enroll-device|renew-device|revoke-device|inspect-device-lifecycle> [flags]\n'
         + '[--vault-home <path>] [--foundation-data <path>] [--foundation-backup <path>] '
-        + '[--role <keyRole>] [--fingerprint <hex>] [--input-hex <hex>]\n',
+        + '[--role <keyRole>] [--fingerprint <hex>]\n',
       );
       process.exit(1);
     },
@@ -1167,6 +1404,7 @@ async function createCeremonyLinkClient(
   coreUrl: string,
   senderOverride?: {
     identityKeyFingerprintHex: string;
+    identityPublicKeyHex?: string;
     deviceSigningKeyFingerprintHex: string;
     deviceKeyAgreementKeyFingerprintHex: string;
     delegationId: string;
@@ -1192,6 +1430,9 @@ async function createCeremonyLinkClient(
     sender: {
       identityKeyFingerprintHex: senderOverride?.identityKeyFingerprintHex
         ?? requireFlag(flags, 'fingerprint'),
+      ...(senderOverride?.identityPublicKeyHex === undefined
+        ? {}
+        : { identityPublicKeyHex: senderOverride.identityPublicKeyHex }),
       deviceSigningKeyFingerprintHex: senderOverride?.deviceSigningKeyFingerprintHex
         ?? requireFlag(flags, 'link-signing-fingerprint'),
       deviceKeyAgreementKeyFingerprintHex:
@@ -1201,6 +1442,65 @@ async function createCeremonyLinkClient(
         ?? requireFlag(flags, 'link-delegation-id'),
     },
   });
+}
+
+async function createLifecycleLinkClient(
+  flags: Map<string, string>,
+  signerClient: PicoVaultDaemonClient,
+  vaultSodium: VaultSodium,
+  identityPublicKeyHex: string,
+): Promise<PicoLinkDirectClient> {
+  return await createPicoLinkDirectClient({
+    sodium: vaultSodium,
+    daemonClient: signerClient,
+    coreUrl: requireFlag(flags, 'core-url'),
+    host: {
+      signingPublicKeyHex: requireFlag(flags, 'host-signing-public-key'),
+      signingKeyFingerprintHex: requireFlag(flags, 'host-signing-fingerprint'),
+      keyAgreementPublicKeyHex: requireFlag(flags, 'host-agreement-public-key'),
+      keyAgreementKeyFingerprintHex: requireFlag(flags, 'host-agreement-fingerprint'),
+    },
+    sender: {
+      identityKeyFingerprintHex: requireFlag(flags, 'fingerprint'),
+      identityPublicKeyHex,
+      deviceSigningKeyFingerprintHex: requireFlag(flags, 'link-signing-fingerprint'),
+      deviceKeyAgreementKeyFingerprintHex:
+        requireFlag(flags, 'link-agreement-fingerprint'),
+      delegationId: requireFlag(flags, 'link-delegation-id'),
+    },
+  });
+}
+
+async function unlockedIdentityPublicKey(
+  client: PicoVaultDaemonClient,
+  fingerprintHex: string,
+): Promise<string> {
+  const status = await client.status();
+  const identity = status.sessions.find(
+    (session) =>
+      session.keyRole === 'pico_identity'
+      && session.keyFingerprintHex === fingerprintHex,
+  );
+  if (identity === undefined) {
+    throw new Error('lifecycle_identity_key_not_unlocked');
+  }
+  return identity.publicKeyHex;
+}
+
+function lifecycleScopes(flags: Map<string, string>): PicoIdentityDelegationScope[] {
+  const scopes = (flags.get('scopes')
+    ?? 'surface_session,decrypt_domain,receive_key_envelope')
+    .split(',')
+    .map((value) => value.trim());
+  for (const scope of scopes) {
+    if (!(picoIdentityDelegationScopes as readonly string[]).includes(scope)) {
+      throw new Error(`invalid_delegation_scope:${scope}`);
+    }
+  }
+  if (!scopes.includes('surface_session')) {
+    throw new Error('device_lifecycle_requires_surface_session');
+  }
+  return scopes as PicoIdentityDelegationScope[];
 }
 
 /**

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; gates D1-D2 implemented, gates D3-D5 pending. This ADR decides how an
+Accepted and implemented through gates D1-D5. This ADR decides how an
 already admitted Pico identity enrolls, renews and revokes its own delegated
 devices over Pico Link. It deliberately does not create a zero-device remote
 recovery path: once no active device remains, Link authentication is closed
@@ -334,21 +334,29 @@ explicit signed domain action and cannot promise historical erasure.
   closed Link operations, same-identity/sponsor/target verification,
   head-bound authority creation, non-stale revocation merge, migration and
   ordered atomic projection with rollback and restart-quarantine tests.
-- **D3 - Vault ceremonies and approvals:** Add enrollment, renewal and
-  revocation ceremony clients across sponsor/target Vaults. Keep every root
-  signature gated, add only the exact role-aware target activation exception,
-  and render last-device risk without weakening the closed global exemption
-  list.
-- **D4 - Real-process lifecycle proof:** Over the restricted Link listener,
-  enroll a second device without `open-identity-session`, use it for an
-  authenticated authority operation, renew it, revoke the first device and
-  prove the old records fail. Then self-revoke the last device, return the
-  accepted response and prove all later Link requests fail. Restart and
-  injected-rollback paths must preserve the same result.
-- **D5 - Documentation honesty:** Update ADR 0107's threat ledger, ADR 0099's
-  role-aware exception, implementation status and handoff. Keep zero-device
-  recovery, external lifecycle freshness, domain rotation and Relay/public
-  compatibility explicitly open.
+- **D3 - Vault ceremonies and approvals (implemented):** Enrollment, renewal
+  and revocation clients coordinate distinct root, sponsor and target Vault
+  connections. Every delegation/revocation root signature remains separately
+  approval-gated; only `device_signing` may sign the exact short-lived
+  `pico.home.device-activation.v1` possession input without approval. The
+  closed global exemption-label set is unchanged. Rendering pins target,
+  scopes, both validity bounds and action, and every identity revocation warns
+  that it may close the last remote device path.
+- **D4 - Real-process lifecycle proof (implemented):** A spawned Foundation,
+  restricted Link listener, root/sponsor Vault and a second Vault containing
+  no identity-root keyfile enroll the second device without
+  `open-identity-session`. That device delivers a real domain-authority
+  ceremony, replacement-renews itself, revokes the first device and then
+  self-revokes as the last device. Each superseded sender fails immediately;
+  the last accepted response reports `leavesNoActiveDevice`, and all later
+  requests remain closed after a real Foundation restart. D2's injected
+  reader-projection collision test continues to prove complete transaction
+  rollback.
+- **D5 - Documentation honesty (implemented):** ADR 0107's threat ledger,
+  ADR 0099's role-aware exception, the implementation matrix and handoff state
+  the implemented boundary. Zero-device recovery, external lifecycle
+  freshness, domain rotation and Relay/public compatibility remain explicitly
+  open.
 
 ## Consequences
 

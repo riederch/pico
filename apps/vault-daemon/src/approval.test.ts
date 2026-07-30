@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  picoHomeDeviceLifecycleCanonicalLabels,
   picoIdentitySuite,
 } from '@pico/protocol';
 import {
@@ -317,6 +318,14 @@ describe('Approval gating policy (ADR 0099 P3)', () => {
     )).toBe(false);
     expect(picoVaultDaemonSignatureNeedsApproval(
       'pico.home.claim.v2',
+      'pico_identity',
+    )).toBe(true);
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      picoHomeDeviceLifecycleCanonicalLabels.activation,
+      'device_signing',
+    )).toBe(false);
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      picoHomeDeviceLifecycleCanonicalLabels.activation,
       'pico_identity',
     )).toBe(true);
   });

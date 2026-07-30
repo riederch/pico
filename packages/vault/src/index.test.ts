@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeContinuitySignatureInput,
+  buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeFoundingSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
@@ -187,6 +188,50 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       Buffer.from(device.publicKeyHex, 'hex'),
     )).toBe(true);
     expect(() => session.sign(linkRequest)).toThrow('unknown_signature_input_label');
+  });
+
+  it('lets only a device-signing key co-sign a short-lived Home device activation', () => {
+    const identity = createPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: 'correct horse battery staple',
+    });
+    const device = createPicoVaultKeyfile(sodium, {
+      keyRole: 'device_signing',
+      passphrase: 'correct horse battery staple',
+    });
+    const activation = buildPicoHomeDeviceActivationSignatureInput({
+      suite: picoIdentitySuite,
+      activationId: 'activation_vault_device_lifecycle_0001',
+      action: 'enroll',
+      homeId: 'home_vault_device_lifecycle_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      picoIdentityFingerprintHex: identity.keyFingerprintHex,
+      sponsorDelegationId: 'delegation_vault_sponsor_0001',
+      sponsorDeviceSigningKeyFingerprintHex: '22'.repeat(32),
+      sponsorDeviceKeyAgreementKeyFingerprintHex: '33'.repeat(32),
+      targetDelegationId: 'delegation_vault_target_0001',
+      targetDeviceSigningKeyFingerprintHex: device.keyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex: '44'.repeat(32),
+      lifecycleEvidenceDigestHex: '55'.repeat(32),
+      observedLifecycleOrder: 'seq:0000000000000001',
+      createdAt: '2026-07-30T12:00:00.000Z',
+      expiresAt: '2026-07-30T12:05:00.000Z',
+    });
+    const identitySession = openPicoVaultKeyfile(sodium, {
+      keyfile: identity.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+    const deviceSession = openPicoVaultKeyfile(sodium, {
+      keyfile: device.keyfile,
+      passphrase: 'correct horse battery staple',
+    });
+
+    expect(sodium.crypto_sign_verify_detached(
+      deviceSession.sign(activation),
+      activation,
+      Buffer.from(device.publicKeyHex, 'hex'),
+    )).toBe(true);
+    expect(() => identitySession.sign(activation)).toThrow('unknown_signature_input_label');
   });
 
   it('lets only the Pico identity key authorize a share envelope', () => {

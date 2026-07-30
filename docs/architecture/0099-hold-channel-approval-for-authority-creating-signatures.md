@@ -147,11 +147,12 @@ key records, delegations, revocations, root-signed claim and founding records,
 reader-custody domains, reader and writer grants and their lifecycle
 statements, KEK rotations and share envelopes.
 
-ADR 0109 decides a second role-aware possession use for its future
-`pico.home.device-activation.v1` target co-signature. That exception does not
-exist in runtime until ADR 0109 D3 is implemented: today the unknown label
-still fails closed. The global exemption-label list remains unchanged, and
-the delegation/revocation root signatures stay gated one at a time.
+ADR 0109 implements a second role-aware possession use without widening the
+global label list: `device_signing` may co-sign the exact short-lived
+`pico.home.device-activation.v1` target activation. The identity root cannot
+sign that label at the Vault role gate. The delegation and revocation root
+signatures remain gated one at a time; renewal therefore raises two distinct
+approvals.
 
 Reader access (ADR 0098) stays ungated by the same principle, and this is a
 scope decision rather than an oversight: the person's unlock of a
@@ -159,15 +160,13 @@ key-agreement key is itself the act of consenting to read with it.
 
 ### What the person actually sees, stated honestly
 
-The approval carries the family label, the key role and fingerprint, and the
-digest. It does **not** carry a rendered, human-meaningful statement of what
-the record says, because no such renderer exists yet and inventing an
-informal one here would be worse than none: a half-accurate summary of a
-constitutional record is a security problem wearing a UX costume. What this
-layer delivers today is a genuine, unforgeable, request-bound decision point
-with an honest description of its own resolution — "an identity key is being
-asked to sign a founding record" — and a named place for a future rendering
-ADR to raise that fidelity.
+ADR 0106 now adds a mandatory human-readable statement for every gated
+signature. The daemon builds both canonical bytes and statement from the same
+closed fields; a gated label without a renderer is unsignable. The approval
+also retains family label, key role/fingerprint and exact digest. ADR 0109's
+delegation statement shows target keys, scopes and both validity bounds, while
+revocation states the target/action and warns that the last remote device path
+may close.
 
 ### Parked responses require in-flight discipline
 
@@ -189,8 +188,9 @@ safe to leave open.
   one approval authorizes exactly one signature; at most one pending
   approval daemon-wide; no window, batch or remembered approval exists.
 - **P3 — Gating policy: Done.** Closed global exempt list of five operational
-  families, plus ADR 0108's exact role-aware device co-sign rule; every
-  identity-root use and every unknown or newly added family defaults to gated.
+  families, plus ADR 0108's claim-possession and ADR 0109's
+  device-activation exact role-aware co-sign rules; every identity-root use
+  and every unknown or newly added family defaults to gated.
 - **P4 — Fail-closed behaviour: Done.** No-watcher refusal, timeout denial,
   holder-only decisions, denial on hold loss, session lock and shutdown,
   and discard on consumer loss.
@@ -201,15 +201,17 @@ safe to leave open.
   and prompts on the person's TTY; real-crypto tests cover exempt signing,
   approved signing, denial, timeout, digest mismatch, foreign-connection
   decisions, no-watcher refusal, second-approval refusal, hold loss during
-  a pending approval and the in-flight violation.
-- **P7 — Future:** rendering canonical records for display; approval for
-  additional surfaces if a later ADR argues for it; migrating the claim,
-  checkpoint, envelope and rotation ceremonies onto the daemon, which is
-  now unblocked and is the next block.
+  a pending approval, the in-flight violation and ADR 0109's exact
+  role-aware activation boundary.
+- **P7 — Done for the implemented families:** ADR 0106 derives statements
+  from the signed fields, and claim, checkpoint, envelope, rotation and
+  device-lifecycle consumers now use the daemon boundary. Any additional
+  surface still defaults to gated and requires its own builder/renderer and
+  reviewed role rule.
 
 ## Non-goals
 
-- rendering, decoding or summarizing signature inputs for display;
+- free-form or requester-supplied rendering of signature inputs;
 - policy engines, allow-lists, remembered decisions or delegated approval;
 - approval for reader access, unlock or lock;
 - secure display, biometric confirmation or anti-spoofing of the terminal;
@@ -235,8 +237,9 @@ Positive:
 
 Negative and residual:
 
-- the person sees a label and a digest, not a rendered statement; fidelity
-  is future work and is named rather than implied;
+- the rendered statement is ordinary terminal output, not a protected
+  display; endpoint malware may still spoof it even though the digest and
+  signed bytes cannot diverge inside the daemon;
 - a terminal prompt can be spoofed by malware that already owns the
   session — endpoint compromise remains outside what this defends against,
   the ADR 0081 honesty restated;
