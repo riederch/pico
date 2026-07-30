@@ -147,6 +147,12 @@ key records, delegations, revocations, root-signed claim and founding records,
 reader-custody domains, reader and writer grants and their lifecycle
 statements, KEK rotations and share envelopes.
 
+ADR 0109 decides a second role-aware possession use for its future
+`pico.home.device-activation.v1` target co-signature. That exception does not
+exist in runtime until ADR 0109 D3 is implemented: today the unknown label
+still fails closed. The global exemption-label list remains unchanged, and
+the delegation/revocation root signatures stay gated one at a time.
+
 Reader access (ADR 0098) stays ungated by the same principle, and this is a
 scope decision rather than an oversight: the person's unlock of a
 key-agreement key is itself the act of consenting to read with it.

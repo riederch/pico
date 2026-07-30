@@ -55,7 +55,9 @@ founded Homes are treated, and why the alternative is rejected.
 
 Does not cover: enrolling second and later devices, delegation renewal or
 rotation over Link, device revocation over Link, removing
-`open-identity-session`, or any relay work. Those remain separate decisions.
+`open-identity-session`, or any relay work. ADR 0109 now decides the
+authenticated later-device lifecycle, with implementation still pending;
+zero-device recovery remains a separate future decision.
 
 ## Decision
 
@@ -232,8 +234,9 @@ Positive:
 
 Negative and residual:
 
-- only the first device is solved; the enrollment story for later devices is
-  still missing and must not be improvised through the claim path;
+- only the first device is solved in this runtime; ADR 0109 now decides the
+  authenticated later-device path, but its gates are not implemented and the
+  claim path must still never be reused for it;
 - a delegation carried at founding has a validity window; its expiry without
   a renewal path over Link can strand a remote-only Home back to a local
   route (named above as an explicit non-goal, not an accident);
@@ -261,6 +264,9 @@ Negative and residual:
 - Discharges ADR `0107` D3's bootstrap dependency for v2-founded Homes; the
   intake's closed operation set and verification order are unchanged except
   for the first-device binding check inside `home.claim.submit`.
+- Hands later-device enrollment, renewal and revocation to ADR `0109`, which
+  preserves this ADR's rejection of root-only or permanently pre-authority
+  Link enrollment.
 
 ## References
 
@@ -271,3 +277,4 @@ Negative and residual:
 - [ADR 0103](0103-person-side-ceremony-client-and-first-installation-validation.md)
 - [ADR 0105](0105-pico-runs-as-a-background-companion-not-a-cli.md)
 - [ADR 0107](0107-pico-link-direct-envelopes-to-the-own-home.md)
+- [ADR 0109](0109-authenticated-device-lifecycle-over-pico-link.md)
