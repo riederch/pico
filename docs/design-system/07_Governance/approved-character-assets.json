@@ -1,0 +1,36 @@
+{
+  "schema": "pico.character.assets.v1",
+  "characterStandard": "PICO Character Design v3.2.1",
+  "sourceArchive": {
+    "name": "PICO_Product_Design_System_v1.0.zip",
+    "sha256": "6229e3374856960790f384bf99fbcc7282ea2de29bfc8a38896534ec679e4146"
+  },
+  "assets": [
+    {
+      "path": "08_Starter_Kit/assets/PICO_Designboard_Original.png",
+      "sha256": "fce76fd8e3cc78525551f3c158200e482520ac3347ea5190e01fafbcc3ec2696",
+      "class": "character_reference",
+      "role": "canonical_visual_origin",
+      "productionUses": []
+    },
+    {
+      "path": "08_Starter_Kit/assets/PICO_Basis_Avatar.png",
+      "sha256": "360cf8b06d933d659bb1a5a1000aa18fdb17f321a92c3c7f1f7dd1d98f9cfb8e",
+      "class": "character_reference",
+      "role": "canonical_neutral_full_body_reference",
+      "productionUses": []
+    },
+    {
+      "path": "08_Starter_Kit/assets/PICO_Regression_15er_v3.2.1.png",
+      "sha256": "862e88fceed5cfce70d0c0121c712567dac554be674081af7dc4b13abdd42e0a",
+      "class": "diagnostic_reference",
+      "role": "character_and_status_regression_board",
+      "knownNegativeExamples": [
+        "fire_context_mixed_status_group",
+        "success_mixed_status_group",
+        "energy_context_mixed_status_group"
+      ],
+      "productionUses": []
+    }
+  ]
+}

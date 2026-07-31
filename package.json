@@ -9,13 +9,16 @@
     "build": "pnpm -r build",
     "check": "pnpm -r check",
     "dev:core": "pnpm --filter @pico/core dev",
+    "design-system:generate": "node scripts/generate-design-tokens.mjs --write",
+    "design-system:manifest": "node scripts/update-design-system-manifest.mjs",
+    "design-system:check": "node scripts/generate-design-tokens.mjs --check && node scripts/check-design-system.mjs",
     "addon:check": "node scripts/check-addon-config.mjs",
     "license:check": "node scripts/check-license.mjs",
     "release:tag-check": "node scripts/check-release-tag.mjs",
     "version:check": "node scripts/check-version.mjs",
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:coverage": "pnpm -r test:coverage",
-    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm build && pnpm check && pnpm test"
+    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm build && pnpm check && pnpm test"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

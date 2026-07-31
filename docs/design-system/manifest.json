@@ -1,0 +1,378 @@
+{
+  "name": "PICO Product Design System",
+  "version": "1.0.1",
+  "characterDependency": "PICO Character Design v3.2.1",
+  "releasedOn": "2026-07-31",
+  "sourceArchive": {
+    "name": "PICO_Product_Design_System_v1.0.zip",
+    "sha256": "6229e3374856960790f384bf99fbcc7282ea2de29bfc8a38896534ec679e4146"
+  },
+  "language": "de",
+  "files": [
+    {
+      "path": "00_START_HERE/QUICK_START.md",
+      "bytes": 1241,
+      "sha256": "957f7bdc9fe5d4cd0885d1d6266327b89f3b36ef91664ca6dac0251a41cca9bf"
+    },
+    {
+      "path": "00_START_HERE/README.md",
+      "bytes": 1386,
+      "sha256": "ca4798a8388a9b08bd867e2700a1fe4a017f7423b00a7e4dfb8062aa6e28ba4c"
+    },
+    {
+      "path": "00_START_HERE/SCOPE_AND_DEPENDENCY.md",
+      "bytes": 980,
+      "sha256": "f465315da300667d863718e1c8cbccb676e23ae9876e19da02cf19eaab635a4e"
+    },
+    {
+      "path": "01_Foundations/Color_System.md",
+      "bytes": 730,
+      "sha256": "ce1ae30c4c1c699b3941e8206bdd60ce1b392bb433c0c7b3ab33f1b57ea10a41"
+    },
+    {
+      "path": "01_Foundations/Elevation_Lighting.md",
+      "bytes": 498,
+      "sha256": "aca2bb943c0c9bd1986e5af1a2f86bdfc2816cfd9c97645631c63bc687fd7546"
+    },
+    {
+      "path": "01_Foundations/Motion.md",
+      "bytes": 572,
+      "sha256": "f02bfc70a8171640a6dec36f24e0bd6e927bc83b72788722ecd168d33ea0cf70"
+    },
+    {
+      "path": "01_Foundations/PICO_Product_Design_System_v1.0.md",
+      "bytes": 9059,
+      "sha256": "d8354fc3f8680eda29ae19f3a2a7f6f7e35843c1c746f7dd213dc52bb41dbafc"
+    },
+    {
+      "path": "01_Foundations/Responsive_and_Light_Mode.md",
+      "bytes": 629,
+      "sha256": "b96b266b9e780e7712baf1e625b1579735da37184e4c69d895b14deb5c17ac93"
+    },
+    {
+      "path": "01_Foundations/Shape_Radius.md",
+      "bytes": 375,
+      "sha256": "23e196a3ccf01c991e8b40c51e1c3be792e5a6f5e8e4027bb2c880fdc6f3e1b0"
+    },
+    {
+      "path": "01_Foundations/Spacing_Grid.md",
+      "bytes": 333,
+      "sha256": "95d77f10c961bd66f1c3be03307fc4cbbcd06e3957a7b4a0216794c8c8776d40"
+    },
+    {
+      "path": "01_Foundations/tokens/pico.tokens.css",
+      "bytes": 1951,
+      "sha256": "a651c948118efb1914e187cdb631555d9575d7c956abb6c05ce9f7b5ea6e385f"
+    },
+    {
+      "path": "01_Foundations/tokens/pico.tokens.json",
+      "bytes": 8869,
+      "sha256": "48058d909c496b0812b17bd1bcd3f60cc219305808b172e9a57b765711a27e30"
+    },
+    {
+      "path": "01_Foundations/tokens/pico.tokens.scss",
+      "bytes": 1435,
+      "sha256": "301f33f2edaec35c64d57a26d2009eb47f96ead3269f3777e7e860820e4a794d"
+    },
+    {
+      "path": "01_Foundations/tokens/pico.tokens.ts",
+      "bytes": 2211,
+      "sha256": "bc18add636bec07564fa28317d1c4cc68dbb7acc6b0f4025fc0ff2a7d4b81502"
+    },
+    {
+      "path": "01_Foundations/Typography.md",
+      "bytes": 559,
+      "sha256": "ab48c6880523141ab57a16e886f55a3356fda2d8b4be2e779e1283e7b620b247"
+    },
+    {
+      "path": "02_Brand/App_Icon_System.md",
+      "bytes": 1048,
+      "sha256": "4ee96c07d0bf96c5d4a2f9d778904a88836527c3c8da4e74dc6ef7c55e3283c7"
+    },
+    {
+      "path": "02_Brand/Context_Icon_System.md",
+      "bytes": 487,
+      "sha256": "ea3c4a409d14b89f41cbcae89d33ba2aea5188d38f3f95cacd7e81f2352a688f"
+    },
+    {
+      "path": "02_Brand/icons/context-communication.svg",
+      "bytes": 352,
+      "sha256": "f4ae9a5e47179c9b787ea00e235dc10e562dbafe7c50d523e6d9b31cc3b393ca"
+    },
+    {
+      "path": "02_Brand/icons/context-energy.svg",
+      "bytes": 329,
+      "sha256": "30a526325d5980662f0fcdbef4550a1f024016756658b8501dad475ce109a92c"
+    },
+    {
+      "path": "02_Brand/icons/context-fire.svg",
+      "bytes": 462,
+      "sha256": "72189a8ab06b07c0f5cd9f2036d9b63eb7eb1e43d022fa10efd499cd995034af"
+    },
+    {
+      "path": "02_Brand/icons/context-focus.svg",
+      "bytes": 309,
+      "sha256": "d4bb5f62d90e297e42d6f9ea8ff58c5a0892e31e32acc3d0ba4db74be065fff4"
+    },
+    {
+      "path": "02_Brand/icons/context-organization.svg",
+      "bytes": 326,
+      "sha256": "86c8b935ba5d86ee4771a1c9a41661d5164994a0060559223050cd5cee556395"
+    },
+    {
+      "path": "02_Brand/icons/context-smart-home.svg",
+      "bytes": 295,
+      "sha256": "5ddf39510a903b6c6b7c4fc244c2e84d1d20344cd5a4ef5a14ae73c384baad63"
+    },
+    {
+      "path": "02_Brand/icons/context-technology.svg",
+      "bytes": 355,
+      "sha256": "914973f3ea81614f936e009c357f8dc4d58a7da4d2475dfb6bf4574ba6aee700"
+    },
+    {
+      "path": "02_Brand/icons/context-water.svg",
+      "bytes": 318,
+      "sha256": "5116b6578e772f9529ee7427f5a6ce1375486246d00b3a8a037dde21552135c4"
+    },
+    {
+      "path": "02_Brand/icons/status-active.svg",
+      "bytes": 296,
+      "sha256": "0e12dfb92677dcad6225e70c51ed5c248ae853b6778c07d0e2f01ea225bdf835"
+    },
+    {
+      "path": "02_Brand/icons/status-blocked.svg",
+      "bytes": 273,
+      "sha256": "63455829049329d8b96eb46c35930cdc9ae068883a56b7e828a7f2cfc42d45de"
+    },
+    {
+      "path": "02_Brand/icons/status-listening.svg",
+      "bytes": 264,
+      "sha256": "b0609071def5898dda38fefc87b5ce2153e8bad5ef53c68e84b2757338ebbf2d"
+    },
+    {
+      "path": "02_Brand/icons/status-success.svg",
+      "bytes": 283,
+      "sha256": "5fd63f23937da33c17453c6266c8985a4168d442e80dcd7443000a22032353ab"
+    },
+    {
+      "path": "02_Brand/icons/status-thinking.svg",
+      "bytes": 366,
+      "sha256": "ecb414dae6f218af824199df78e3b9cb1b15c84e4b89d5a7f8644a507fc7a1c4"
+    },
+    {
+      "path": "02_Brand/icons/status-warning.svg",
+      "bytes": 280,
+      "sha256": "16298306387484d3e1847320a154acebbfadff4b7e89dd4d2b8a0fe6ead3b7d7"
+    },
+    {
+      "path": "02_Brand/Illustration_Usage.md",
+      "bytes": 783,
+      "sha256": "a7a51d8ee3ec52c84cb9d1c39cf710a59d4ad6974198678dff4c075e5f4ab11d"
+    },
+    {
+      "path": "02_Brand/PICO_Avatar_System.md",
+      "bytes": 771,
+      "sha256": "28343835723090bd76ae37923b0ec2e4296b204450355e8dedcd0fff28a82cca"
+    },
+    {
+      "path": "02_Brand/Status_Assets.md",
+      "bytes": 515,
+      "sha256": "f5386181b427ce6d382721847e93a3533f48bb994905f3b68f8a9f730ab7e61e"
+    },
+    {
+      "path": "02_Brand/templates/app-icon-safe-area.svg",
+      "bytes": 747,
+      "sha256": "15101955f47a557c38695b32ee3c889a9c8af887df893384d3d832721ef5969c"
+    },
+    {
+      "path": "03_Components/Buttons.md",
+      "bytes": 470,
+      "sha256": "05d06720ef742158d49968dadb9598422bb6e468024fa4fa90ecda51a9f1a8a5"
+    },
+    {
+      "path": "03_Components/Cards_and_Panels.md",
+      "bytes": 427,
+      "sha256": "f6c70f99464fec6c9b93021e32e839c2e75b8afcf9a9f246d9544b53bff1ecef"
+    },
+    {
+      "path": "03_Components/Dialogs_Notifications.md",
+      "bytes": 421,
+      "sha256": "aa2260a8c3b7f948ad5e6c9b616f7e5c7881742ed17e78b91d0c88b307865b54"
+    },
+    {
+      "path": "03_Components/Inputs.md",
+      "bytes": 341,
+      "sha256": "93d1a7a89d435045ceff3db4394dc330466938859ea7f3868018b5509b3ae74c"
+    },
+    {
+      "path": "03_Components/Lists_Tables_Loading.md",
+      "bytes": 479,
+      "sha256": "831d13fea97a24c5e4b27343d5ad496f787899af1563780eef1b8cb2cfb6ece4"
+    },
+    {
+      "path": "03_Components/Navigation.md",
+      "bytes": 421,
+      "sha256": "39cf033040d4b37611cce4a8659255bc51c57090d609470338f438285ae2d106"
+    },
+    {
+      "path": "04_Chat/Chat_Architecture.md",
+      "bytes": 436,
+      "sha256": "8341ab740f16a8404a47096c68651919b306c84727f4772c43886af578be1ecb"
+    },
+    {
+      "path": "04_Chat/Composer_and_Voice.md",
+      "bytes": 399,
+      "sha256": "16694c81b429968a819908bfb13ae234516ff2c2d44ebe4c28e7b4eb2236dc4e"
+    },
+    {
+      "path": "04_Chat/Message_Bubbles.md",
+      "bytes": 382,
+      "sha256": "a337d29f7c5e2ff932bc4df3e67ecb956068eadcfc83b2fc855408db2bd95c43"
+    },
+    {
+      "path": "04_Chat/PICO_Chat_States.md",
+      "bytes": 466,
+      "sha256": "99e7e2de53c814ccdb1595260c43da33fee34e3a4bf963f8690506f54e61645c"
+    },
+    {
+      "path": "04_Chat/Tool_Results.md",
+      "bytes": 349,
+      "sha256": "3111441bacb9b3369ff3b62c1c9299e2da01ab997e266a9cde8b271f020df489"
+    },
+    {
+      "path": "05_Patterns/Context_Modules.md",
+      "bytes": 664,
+      "sha256": "4438c3483561ccdaa2d0cbf38ca8c46556ae9ae99f7aaa734e388d44f956532c"
+    },
+    {
+      "path": "05_Patterns/Empty_States.md",
+      "bytes": 247,
+      "sha256": "563ad2a3873504b91060e961fe757acda7f0d70354289ae14b7eb4cfca32b6ad"
+    },
+    {
+      "path": "05_Patterns/Errors_Warnings_Success.md",
+      "bytes": 400,
+      "sha256": "22f34406e45d793eaf4c920cf3d40014ce652a267c16b53b7dce8dc4490a2784"
+    },
+    {
+      "path": "05_Patterns/Onboarding.md",
+      "bytes": 247,
+      "sha256": "f76df6ea13c8556ffbf9d430edabbfa4125745e3c0539754fee84b8b0f26b3bb"
+    },
+    {
+      "path": "06_Accessibility/Content_Guidelines.md",
+      "bytes": 459,
+      "sha256": "26849279bd600c52e48e9cfb20d5996c4c9c3e2f564513b07285e65a48c75aaf"
+    },
+    {
+      "path": "06_Accessibility/Contrast_Report.md",
+      "bytes": 866,
+      "sha256": "9dfbd211ce238721660b8d2bec01d1b783d34e97aa0a8b337c64b679154ebf62"
+    },
+    {
+      "path": "06_Accessibility/Reduced_Motion.md",
+      "bytes": 300,
+      "sha256": "ffe4adf256a699138af87be9dc0a1b3ec1809ee009b037cfee6899b28f8ea5f4"
+    },
+    {
+      "path": "06_Accessibility/WCAG_Guidelines.md",
+      "bytes": 469,
+      "sha256": "6c784308b0839f97f4ee053d5ee8c06f00b8b7cfacbb17c96c25883133cb08d0"
+    },
+    {
+      "path": "07_Governance/approved-character-assets.json",
+      "bytes": 1280,
+      "sha256": "2cf199d803e7c85b89f5c15749d79a716dcb0920392cc6f5ba74d27095316431"
+    },
+    {
+      "path": "07_Governance/Character_Standard_v3.2.1.md",
+      "bytes": 3394,
+      "sha256": "679c839c08e2065e5135e758d001900161188e56284ebb445377340d5fa5df84"
+    },
+    {
+      "path": "07_Governance/DO_NOT_MODIFY_CHARACTER_STANDARD.md",
+      "bytes": 385,
+      "sha256": "ef817cdb66cd38c374d8d8ca43f39e823b989268246205bebe37e54ca754ed67"
+    },
+    {
+      "path": "07_Governance/Legacy_Asset_Register.md",
+      "bytes": 1242,
+      "sha256": "940c2e58f973efbb2c1cab3c54c8502e0f29d587fcc9b1d1b3fd4482d1f7cdca"
+    },
+    {
+      "path": "07_Governance/QA_Checklist.md",
+      "bytes": 1092,
+      "sha256": "70ceea3785c4a5b987d4821f9df94ab8cd9113f443210940646b6c42caa03404"
+    },
+    {
+      "path": "07_Governance/Status_Light_Hotfix_v3.2.1.md",
+      "bytes": 1238,
+      "sha256": "109f9e4f9d75052c3548b629e02d13db5ca3d901986299b388c549b9e6fb905a"
+    },
+    {
+      "path": "07_Governance/Versioning_and_Naming.md",
+      "bytes": 706,
+      "sha256": "038e17001e0b743d4ef34d24c4fadcc454d79fa6d3b2f0737a20e9f6d44bb2a7"
+    },
+    {
+      "path": "08_Starter_Kit/assets/PICO_Basis_Avatar.png",
+      "bytes": 252136,
+      "sha256": "360cf8b06d933d659bb1a5a1000aa18fdb17f321a92c3c7f1f7dd1d98f9cfb8e"
+    },
+    {
+      "path": "08_Starter_Kit/assets/PICO_Designboard_Original.png",
+      "bytes": 1959031,
+      "sha256": "fce76fd8e3cc78525551f3c158200e482520ac3347ea5190e01fafbcc3ec2696"
+    },
+    {
+      "path": "08_Starter_Kit/assets/PICO_Regression_15er_v3.2.1.png",
+      "bytes": 2882954,
+      "sha256": "862e88fceed5cfce70d0c0121c712567dac554be674081af7dc4b13abdd42e0a"
+    },
+    {
+      "path": "08_Starter_Kit/demo.html",
+      "bytes": 4504,
+      "sha256": "5a7f33c1248e48da2d94a2a80f26f8f94374f21444aaa4cb130e0e9ef37200f6"
+    },
+    {
+      "path": "08_Starter_Kit/README.md",
+      "bytes": 841,
+      "sha256": "8723fd763470f70f6361ba3dbd6420d00f8f640f6b13f512c06eab639f085aac"
+    },
+    {
+      "path": "08_Starter_Kit/styles/pico-components.css",
+      "bytes": 4495,
+      "sha256": "826e890e5120a7aad88d4933add47fb3abea3932742cba8fc90b1a383d0a0a83"
+    },
+    {
+      "path": "08_Starter_Kit/styles/pico-tokens.css",
+      "bytes": 142,
+      "sha256": "77aa295ad24afa64d10e3769494d391ea2956d7dd4a2e60cc3292465f84a8878"
+    },
+    {
+      "path": "09_Examples/README.md",
+      "bytes": 756,
+      "sha256": "b1d10b0f38593d1430a714e92ca79962b5fe9a23f9f13e42f21217b74d244e1f"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 1009,
+      "sha256": "991dd7783c2f334ed1d6e3d8b0b69bf025a5a81de8fcb696b695edece971d06c"
+    },
+    {
+      "path": "LICENSE_NOTICE.md",
+      "bytes": 808,
+      "sha256": "17ea5471d30e8a1d06cafabbaa00c712a6bae735b3e26b3f46d54dd059eee430"
+    },
+    {
+      "path": "SOURCE.md",
+      "bytes": 835,
+      "sha256": "f619eaba0a468554cc16f91410c8f67dc691468326e156a54fe2206e2af167c3"
+    },
+    {
+      "path": "VERSION.txt",
+      "bytes": 85,
+      "sha256": "9d8f7e6d2fd1a813364cf97350a3b78399bff25c2694168a7dc0e227a424cbb8"
+    }
+  ]
+}

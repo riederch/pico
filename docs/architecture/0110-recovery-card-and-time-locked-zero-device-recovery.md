@@ -115,6 +115,12 @@ The card is a generated two-sided print artifact in Pico's visual style,
 sized to ID-1 credit-card format (85.60 x 53.98 mm). Its content is
 pinned here; its design is product work:
 
+The implemented PDF palette is derived from the generated ADR 0013 Product
+Design tokens. The card renders no PICO Character, so it neither needs nor
+claims a Character production asset. Any future card revision that adds PICO
+must first use an asset registered for that exact printed purpose under
+Character Design v3.2.1; product code may not draw or recolor one.
+
 - **Front (public):** the Pico's name, the identity-key fingerprint in
   display form, the Home's name or id, and the issuance date. Nothing on
   the front is secret; a photographed front leaks no authority.

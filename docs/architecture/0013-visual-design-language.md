@@ -10,6 +10,17 @@ Pico should have a recognizable visual identity. The chosen design basis is a sm
 
 The visual language should communicate state, context, and risk without implying that the avatar itself has authority to bypass policy.
 
+## Two standards, and which one wins
+
+The design work is split into two separate standards, both checked in under `docs/design-system`:
+
+1. **PICO Character Design v3.2.1** — the character standard: silhouette, head, visor, torso, arms, material and rendering style, approved identity modules, state and gesture logic, detail corridor and the status light group.
+2. **PICO Product Design System v1.0.1** — the derived product, UI and interaction standard: color, typography, spacing, shape, components, chat, patterns, motion, accessibility and asset naming.
+
+The product system may use Pico but must not replace or reinterpret the character. On conflict the character standard wins over UI composition, marketing needs and context design.
+
+This ADR stays the architectural entry point and the authority boundary; it does not restate the packages. Character Design v3.2.1 is always the highest design authority. The Product Design System is derived from it and can never override it. The package version is recorded in `docs/design-system/VERSION.txt` and `manifest.json`; source archive provenance and the immutable original-asset hashes are pinned in `SOURCE.md` and `07_Governance/approved-character-assets.json`. A newer package release replaces that folder rather than living beside it.
+
 ## Image assets
 
 The checked-in image assets are expected at:
@@ -19,6 +30,16 @@ docs/assets/pico-design-concept.png
 docs/assets/pico-ha-icon.png
 docs/assets/pico-readme-hero.png
 pico_core/icon.png
+```
+
+The design system package adds the normative sources:
+
+```text
+docs/design-system/01_Foundations/tokens/          canonical DTCG tokens and generated platform outputs
+docs/design-system/02_Brand/icons/                 approved product status and context icons
+docs/design-system/08_Starter_Kit/assets/          immutable Character reference and diagnostic assets
+docs/design-system/07_Governance/approved-character-assets.json
+                                                     role and production-approval registry
 ```
 
 Large or binary visual assets should be provided as a ZIP archive with the correct repository folder structure and then committed locally.
@@ -39,19 +60,24 @@ The default Pico avatar uses:
 
 This shape is the default silhouette for icons, avatar states, UI headers, and companion surfaces.
 
+Every production rendering of Pico must use a purpose-bound `production_asset` from the Character registry. New candidates must be derived from the binding Character references and pass the Character workflow before that registration. Three consequences follow and they are not optional:
+
+- no newly drawn or simplified Pico geometry, in particular not for small surfaces — small sizes may use an approved crop that shows less of the approved figure, but they do not redesign it;
+- the app icon and the avatar are not interchangeable, so an icon variant is never the character reference for an avatar; and
+- new character assets, including new poses and new state variants, come from the character workflow, not from UI or product work.
+
+This applies to generated artifacts as well as to UI. A generated artifact that renders Pico needs an approved production asset. The current ADR 0110 Recovery Card deliberately renders no Character at all; it reads its palette from the generated tokens and must not be described as printing an avatar.
+
 ## Design basis image
 
-The original concept board from the design discussion is the reference for:
+The original concept board from the design discussion is where this visual world comes from, and it still shows the intent for:
 
-- default avatar proportions
-- status color system
 - neutral/technical/soft style variants
 - context modes
-- small-state miniatures
 - modular elements
 - multi-surface presentation
 
-The concept board should be treated as direction, not as a strict fixed asset. Product assets should simplify it for small UI surfaces.
+The original concept board is the binding visual origin for Character geometry, proportions, materiality and identity modules, but it is not itself a general production asset. The canonical neutral full-body reference and the precise precedence inside Character Design v3.2.1 are pinned by the Character Standard and asset registry. Exact product color values live in the derived tokens. Small surfaces may show less of a registered production figure — for example an approved head/visor crop — rather than a simplified redrawing of it.
 
 ## Style variants
 
@@ -83,6 +109,8 @@ Pico uses color as system state, not decoration.
 | Red | blocked, critical, policy stop |
 | Green | success, safe completion, positive result |
 
+The exact values are the status tokens, not literals repeated here; the same file also pins listening as its own blue beside normal/active.
+
 Status color appears in:
 
 - eyes
@@ -91,6 +119,16 @@ Status color appears in:
 - hover glow
 - UI badges
 - action confirmation surfaces
+
+On Pico itself these are not separate accents. Eyes, mouth line, chest core, antenna light, underside glow and hover ring form one inseparable status light group, and within a single rendering every element of it carries exactly the same status color (status light rule v3.2.1). Context colors may tint accessories, panels, tools and surroundings, and may never recolor that group. A rendering with a differently colored hover ring or recolored eyes is not releasable.
+
+Because the group is baked into an approved Character production asset, a state variant means a separately approved asset — recoloring an existing rendering in product code is exactly what this rule forbids. The immutable diagnostic board retains several mixed-group negative examples; the v3.2.1 hotfix rejects them rather than inheriting their pixels. Status is also never color alone: color, symbol or shape, and text, as the product system requires.
+
+## Design tokens are the source of truth
+
+Color, spacing, radius and motion values live canonically in the DTCG-2025.10 JSON under `docs/design-system/01_Foundations/tokens/`. CSS, SCSS and TypeScript are deterministic, complete generated outputs. Product code and generated artifacts read or import those outputs instead of copying values, because copies drift silently and a design system that is only prose is not enforceable. Typography is Inter or an equivalent system sans; the package ships no font files, so a deployment either provides Inter under its own license terms or accepts the fallback.
+
+The release gate verifies DTCG value shapes, generated-output equality, manifest completeness, source/asset hashes and the token imports used by the Foundation dashboard and Recovery Card PDF. Existing pre-standard presentation and Home Assistant character assets remain explicitly registered as Legacy until purpose-bound Character production exports replace them.
 
 ## Avatar states
 
@@ -120,11 +158,12 @@ Examples:
 
 ## Icon rules
 
-Small icons must simplify the full avatar.
+Small icons reduce composition through an approved Character crop; they never simplify or redraw Pico's geometry.
 
 For Home Assistant and app icons:
 
-- keep the head, eyes, antenna, and chest core
+- use the registered app-icon production asset for that platform and size
+- normally keep head, visor, eyes and antenna; include the chest core only when the approved crop contains it
 - avoid tiny UI panels and small text
 - use strong contrast against a dark rounded square
 - preserve the cyan core glow for default state
@@ -217,7 +256,7 @@ The origin marker must remain separate from all of them.
 
 Large README or landing-page assets may use the richer companion scene with panels and feature cards.
 
-Small repo, add-on, and app icons should use the simplified neutral avatar.
+Small repo, add-on, and app icons should use their registered neutral Character production crop. The current Home Assistant add-on icon is a documented pre-standard Legacy asset, not a reference for new work.
 
 ## Authority boundary
 

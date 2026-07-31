@@ -12,6 +12,7 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import QRCode from 'qrcode';
+import { picoTokens } from './pico-design-tokens.generated.js';
 
 const POINTS_PER_MM = 72 / 25.4;
 
@@ -414,7 +415,7 @@ function drawSpecimen(page: PDFPage, bold: PDFFont): void {
     y: page.getHeight() / 2 - size / 2,
     font: bold,
     size,
-    color: rgb(0.85, 0.12, 0.2),
+    color: BLOCKED,
     opacity: 0.34,
     rotate: degrees(18),
   });
@@ -546,9 +547,22 @@ function mm(value: number): number {
   return value * POINTS_PER_MM;
 }
 
-const NAVY = rgb(0.035, 0.075, 0.13);
-const CYAN = rgb(0.19, 0.82, 0.91);
-const WHITE = rgb(1, 1, 1);
-const PALE = rgb(0.82, 0.9, 0.93);
-const PAPER = rgb(0.985, 0.98, 0.955);
-const SLATE = rgb(0.28, 0.34, 0.38);
+const NAVY = pdfColor(picoTokens.color.background.deep);
+const CYAN = pdfColor(picoTokens.color.brand.primary);
+const WHITE = pdfColor(picoTokens.theme.light.color.surface.primary);
+const PALE = pdfColor(picoTokens.color.text.secondary);
+const PAPER = pdfColor(picoTokens.theme.light.color.background.base);
+const SLATE = pdfColor(picoTokens.theme.light.color.text.secondary);
+const BLOCKED = pdfColor(picoTokens.color.status.blocked);
+
+function pdfColor(hex: string) {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/iu.exec(hex);
+  if (match === null) {
+    throw new Error('invalid_pico_design_color');
+  }
+  return rgb(
+    Number.parseInt(match[1], 16) / 255,
+    Number.parseInt(match[2], 16) / 255,
+    Number.parseInt(match[3], 16) / 255,
+  );
+}

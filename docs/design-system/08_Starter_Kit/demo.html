@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PICO Product Design System – Starter</title>
+  <link rel="stylesheet" href="styles/pico-tokens.css">
+  <link rel="stylesheet" href="styles/pico-components.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-orb"></span>PICO</div>
+      <nav class="nav" aria-label="Hauptnavigation">
+        <a class="active" href="#start" aria-current="location">Start</a>
+        <a href="#chat">Chat</a>
+        <a href="#status">Status</a>
+        <a href="#settings">Einstellungen</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <section class="hero card" id="start">
+        <div>
+          <p class="muted">PICO Product Design System v1.0.1</p>
+          <h1>Ruhige UI, klare Informationen, PICO als visueller Anker.</h1>
+          <p class="muted">Dieses Beispiel zeigt die Hierarchie aus neutralen Flächen, gezielten Statusfarben und der kanonischen PICO-Character-Referenz.</p>
+          <button class="button primary">Assistent öffnen</button>
+          <button class="button secondary">Details anzeigen</button>
+        </div>
+        <img class="pico-art" src="assets/PICO_Basis_Avatar.png" alt="PICO im neutralen aktiven Zustand">
+      </section>
+
+      <section class="grid" id="status" aria-label="Statusbeispiele">
+        <article class="card status" data-kind="active"><svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="9" opacity=".35"></circle></svg><div><strong>Aktiv</strong><p class="muted">System arbeitet normal.</p></div></article>
+        <article class="card status" data-kind="warning"><svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z"></path><path d="M12 9v5m0 3h.01"></path></svg><div><strong>Warnung</strong><p class="muted">Eine Prüfung ist erforderlich.</p></div></article>
+        <article class="card status" data-kind="success"><svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 2.5 2.5L16.5 8"></path></svg><div><strong>Erledigt</strong><p class="muted">Der Vorgang wurde abgeschlossen.</p></div></article>
+      </section>
+
+      <section class="card" id="chat" style="margin-top:16px">
+        <h2>Chat-Muster</h2>
+        <div class="chat" aria-live="polite">
+          <div class="message pico">Hallo, ich habe die aktuellen Werte geprüft. Ein Eintrag benötigt deine Aufmerksamkeit.</div>
+          <div class="message user">Zeig mir den betroffenen Eintrag.</div>
+          <div class="message pico">Hier ist die relevante Information. Die Warnung wird mit Farbe, Symbol und Text vermittelt.</div>
+        </div>
+        <form class="composer">
+          <input aria-label="Nachricht" placeholder="Nachricht eingeben">
+          <button class="button primary" type="button">Senden</button>
+        </form>
+      </section>
+
+      <section class="card settings" id="settings">
+        <h2>Darstellung</h2>
+        <p class="muted">Der Light Mode nutzt dieselben kanonischen Tokens und verändert PICO selbst nicht.</p>
+        <button class="button secondary" id="theme-toggle" type="button" aria-pressed="false">Light Mode einschalten</button>
+      </section>
+    </main>
+  </div>
+  <nav class="mobile-nav" aria-label="Mobile Hauptnavigation">
+    <a href="#start" aria-current="location">Start</a>
+    <a href="#chat">Chat</a>
+    <a href="#status">Status</a>
+    <a href="#settings">Design</a>
+  </nav>
+  <script>
+    const themeToggle = document.querySelector('#theme-toggle');
+    const setLightTheme = (light) => {
+      document.documentElement.dataset.theme = light ? 'light' : 'dark';
+      themeToggle.setAttribute('aria-pressed', String(light));
+      themeToggle.textContent = light ? 'Dark Mode einschalten' : 'Light Mode einschalten';
+    };
+    setLightTheme(new URLSearchParams(window.location.search).get('theme') === 'light');
+    themeToggle.addEventListener('click', () => {
+      setLightTheme(document.documentElement.dataset.theme !== 'light');
+    });
+  </script>
+</body>
+</html>

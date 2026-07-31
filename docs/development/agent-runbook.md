@@ -54,7 +54,7 @@ npx pnpm@9.0.0 release:verify
 Enthalten sind:
 
 ```text
-license:check -> version:check -> build -> check -> test
+license:check -> version:check -> addon:check -> design-system:check -> build -> check -> test
 ```
 
 Fokussierte Beispiele:

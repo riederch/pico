@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="224" fill="#071827"/>
+  <rect x="102" y="102" width="820" height="820" rx="184" fill="none" stroke="#27475D" stroke-width="4" stroke-dasharray="18 18"/>
+  <circle cx="512" cy="500" r="330" fill="none" stroke="#2CCFFF" stroke-width="4" stroke-dasharray="18 18" opacity=".7"/>
+  <circle cx="790" cy="790" r="128" fill="#123E55" stroke="#2CCFFF" stroke-width="4"/>
+  <text x="512" y="500" fill="#A7BDCB" font-family="sans-serif" font-size="42" text-anchor="middle">APPROVED PICO HEAD ASSET</text>
+  <text x="790" y="800" fill="#A7BDCB" font-family="sans-serif" font-size="28" text-anchor="middle">CONTEXT</text>
+</svg>

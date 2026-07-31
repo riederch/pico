@@ -286,6 +286,7 @@ Details are documented in:
 ├── docs
 │   ├── architecture      # architecture decision notes and concept docs
 │   ├── assets            # README/project assets
+│   ├── design-system     # binding Character 3.2.1 references and derived Product Design System
 │   ├── protocol          # protocol compatibility and public surface notes
 │   └── release           # release, versioning and documentation notes
 ├── packages
@@ -485,6 +486,15 @@ Documentation consistency rules are documented in `docs/release/documentation-co
 
 Large or binary files such as PNG design assets are not edited directly through text-file patch workflows. When such files are needed, they should be prepared as a ZIP archive with the correct repository folder structure. The ZIP can be extracted in the repository root and committed locally.
 
+The binding visual source is PICO Character Design v3.2.1. Its original
+reference assets are hash-pinned under `docs/design-system`; the derived Product
+Design System may not override it. New production character art needs a
+purpose-bound entry in
+`docs/design-system/07_Governance/approved-character-assets.json`. Product
+tokens are maintained only in canonical DTCG JSON and generated with
+`pnpm design-system:generate`; `pnpm design-system:check` is part of the release
+gate.
+
 Expected image asset paths:
 
 ```text
@@ -630,6 +640,7 @@ The demo must not become the path for production remote access. If it starts for
 - Tests block releases
 - Updates must become reversible before real data matters
 - Friendly visual companion layer, strict execution layer
+- PICO Character Design v3.2.1 is the highest visual authority; UI, product and generated assets derive from it and never reinterpret it
 - Pico can be a digital companion and technical twin of a user-chosen subject
 - Use reviewed cryptographic primitives; do not invent cryptography
 - Pico Vaults own knowledge and backups; Pico Surfaces are interaction surfaces
