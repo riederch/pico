@@ -37,8 +37,16 @@ watchdog: "http://[HOST]:[PORT:3100]/health"
 # family may share a backup artifact with the database. Keys are not recoverable
 # from a data backup by design; recovery is a deliberate, separate key export or
 # continuity flow.
+#
+# /data/recovery-anchor is excluded for the opposite reason (ADR 0110 R6): it
+# must NOT travel with a backup. It records which device recoveries this Home
+# accepted and resolved, so a restored database cannot resurrect a recovery
+# that was already consumed or vetoed. Including it here would restore the
+# anchor alongside the rows it is supposed to outlive.
 backup_exclude:
   - keys/**
   - keys
   - home-host-keys/**
   - home-host-keys
+  - recovery-anchor/**
+  - recovery-anchor

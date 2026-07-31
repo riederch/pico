@@ -80,6 +80,11 @@ import {
   type PicoIdentitySignedRevocation,
 } from '@pico/identity';
 import type { MemoryContentCrypto } from './memory-content-crypto.js';
+import {
+  defaultPicoHomeRecoveryAnchorPath,
+  openPicoHomeRecoveryAnchor,
+  type PicoHomeRecoveryAnchor,
+} from './recovery-anchor.js';
 import type { SqliteBackupResult } from './sqlite-backup.js';
 import {
   verifyPicoHomeDomainReadGrant,
@@ -258,6 +263,7 @@ export type PicoHomeDeviceRecoveryInitiationResult =
       | 'stale_lifecycle_head'
       | 'active_delegation_not_covered'
       | 'recovery_id_reused'
+      | 'recovery_anchor_unavailable'
       | 'conflicting_record';
   };
 
@@ -284,6 +290,7 @@ export type PicoHomeDeviceRecoveryCompletionResult =
       | 'recovery_not_effective'
       | 'stale_lifecycle_head'
       | 'invalid_recovery'
+      | 'recovery_anchor_unavailable'
       | 'conflicting_record';
   };
 
@@ -294,7 +301,8 @@ export type PicoHomeDeviceRecoveryVetoResult =
     reason:
       | 'recovery_not_found'
       | 'recovery_not_pending'
-      | 'identity_mismatch';
+      | 'identity_mismatch'
+      | 'recovery_anchor_unavailable';
   };
 
 export interface PicoHomeDeviceRecoveryReconciliationResult {
@@ -302,6 +310,16 @@ export interface PicoHomeDeviceRecoveryReconciliationResult {
   reprojectedRecoveries: number;
   lapsedPending: number;
   quarantinedIdentities: string[];
+  /**
+   * ADR 0110 R6. `seeded` is a fresh Home taking ownership of an empty anchor;
+   * `anchor_lost` is a Home with recovery history whose anchor is gone, which
+   * is indistinguishable from a rollback and therefore fails closed until an
+   * operator re-seeds; `rollback_detected` means the anchor knows resolutions
+   * the database no longer carries.
+   */
+  anchorStatus: 'live' | 'seeded' | 'anchor_lost' | 'rollback_detected' | 'absent';
+  /** Recovery ids the anchor resolved but the database still shows unresolved. */
+  resurrectedRecoveryIds: string[];
 }
 
 export interface PicoHomeDeviceLifecycleSodium extends IdentityVerificationSodium {
@@ -387,23 +405,38 @@ export interface EventStoreOpenOptions {
   migrationDefinitions?: readonly MigrationDefinition[];
   /** Optional provider that lets {@link EventStore.memory} encrypt/decrypt domain_encrypted items (ADR 0071). */
   memoryCrypto?: MemoryContentCrypto;
+  /** ADR 0110 R6; defaults to the filesystem anchor beside the database. */
+  recoveryAnchor?: PicoHomeRecoveryAnchor;
 }
 
 interface EventStoreConstructorOptions {
   runMigrations?: boolean;
   migrationDefinitions?: readonly MigrationDefinition[];
   memoryCrypto?: MemoryContentCrypto;
+  /**
+   * ADR 0110 R6. Kept outside every restorable Foundation snapshot, so a
+   * restored database cannot resurrect a spent recovery. `EventStore.open`
+   * supplies the filesystem anchor by default; a store constructed directly
+   * without one refuses every recovery decision rather than silently allowing
+   * what the anchor exists to refuse.
+   */
+  recoveryAnchor?: PicoHomeRecoveryAnchor;
 }
 
 export class EventStore {
   private readonly db: Database.Database;
   private readonly memoryCrypto?: MemoryContentCrypto;
+  private readonly recoveryAnchor?: PicoHomeRecoveryAnchor;
   private closed = false;
 
   public static async open(databasePath: string, options: EventStoreOpenOptions = {}): Promise<EventStore> {
     const store = new EventStore(databasePath, {
       runMigrations: false,
       memoryCrypto: options.memoryCrypto,
+      recoveryAnchor: options.recoveryAnchor
+        ?? openPicoHomeRecoveryAnchor(
+          defaultPicoHomeRecoveryAnchorPath(databasePath),
+        ),
     });
 
     try {
@@ -437,6 +470,7 @@ export class EventStore {
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
     this.memoryCrypto = options.memoryCrypto;
+    this.recoveryAnchor = options.recoveryAnchor;
 
     if (options.runMigrations !== false) {
       runMigrations(this.db, {
@@ -1825,6 +1859,37 @@ export class EventStore {
       claim.picoIdentityFingerprintHex,
     );
     const status = existing === null ? 'pending' : 'superseded';
+
+    // ADR 0110 R6. The anchor is written before the database, and it is the
+    // anchor - not the restorable row - that makes this recovery completable
+    // later. An anchor that refuses here costs one re-initiation; an anchor
+    // written afterwards would leave a window in which a snapshot captures a
+    // pending row the anchor never saw.
+    const anchor = this.recoveryAnchor;
+    if (anchor === undefined) {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
+    }
+    try {
+      if (existing !== null) {
+        anchor.record({
+          recoveryId: existing.recoveryId,
+          claimDigestHex: existing.claimDigestHex,
+          picoIdentityFingerprintHex: claim.picoIdentityFingerprintHex,
+          state: 'superseded',
+          updatedAt: acceptedAt,
+        });
+      }
+      anchor.record({
+        recoveryId: claim.recoveryId,
+        claimDigestHex: verification.claimDigestHex,
+        picoIdentityFingerprintHex: claim.picoIdentityFingerprintHex,
+        state: 'accepted',
+        updatedAt: acceptedAt,
+      });
+    } catch {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
+    }
+
     try {
       this.db.transaction(() => {
         if (existing !== null) {
@@ -1905,12 +1970,14 @@ export class EventStore {
     const row = this.db
       .prepare(`
         SELECT pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               claim_digest_hex AS claimDigestHex,
                status
         FROM pico_home_device_recovery
         WHERE recovery_id = ?
       `)
       .get(params.recoveryId) as {
         picoIdentityFingerprintHex: string;
+        claimDigestHex: string;
         status: PicoHomeDeviceRecoveryRow['status'];
       } | undefined;
     if (row === undefined) {
@@ -1922,6 +1989,30 @@ export class EventStore {
     if (row.status !== 'pending') {
       return { ok: false, reason: 'recovery_not_pending' };
     }
+    // ADR 0110 R6. A veto that only lands in the database is undone by the
+    // restore that resurrects the recovery it vetoed.
+    const anchor = this.recoveryAnchor;
+    const anchored = anchor?.lookup(params.recoveryId);
+    if (
+      anchor === undefined
+      || anchored === undefined
+      || anchored.state !== 'accepted'
+      || anchored.claimDigestHex !== row.claimDigestHex
+    ) {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
+    }
+    const vetoedAt = params.vetoedAt ?? new Date().toISOString();
+    try {
+      anchor.record({
+        recoveryId: params.recoveryId,
+        claimDigestHex: row.claimDigestHex,
+        picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+        state: 'vetoed',
+        updatedAt: vetoedAt,
+      });
+    } catch {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
+    }
     this.db
       .prepare(`
         UPDATE pico_home_device_recovery
@@ -1930,7 +2021,7 @@ export class EventStore {
         WHERE recovery_id = ?
           AND status = 'pending'
       `)
-      .run(params.vetoedAt ?? new Date().toISOString(), params.recoveryId);
+      .run(vetoedAt, params.recoveryId);
     return { ok: true };
   }
 
@@ -1969,6 +2060,21 @@ export class EventStore {
           { ok: true }
         >['reason'],
       };
+    }
+    // ADR 0110 R6. The database row alone proves nothing about one-use: it is
+    // exactly what a pre-consumption backup restores. Completion therefore
+    // requires that this anchor accepted this recovery and has not resolved
+    // it - which a resurrected row, a re-seeded anchor and a lost anchor all
+    // fail, deliberately, at the cost of a re-initiation.
+    const anchor = this.recoveryAnchor;
+    if (
+      anchor === undefined
+      || !anchor.isCompletable({
+        recoveryId: row.recoveryId,
+        claimDigestHex: row.claimDigestHex,
+      })
+    ) {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
     }
     if (Date.parse(completedAt) < Date.parse(row.effectiveAt)) {
       return { ok: false, reason: 'recovery_not_effective' };
@@ -2074,6 +2180,18 @@ export class EventStore {
       hostSigningKeyRecord: params.hostSigningKeyRecord,
       hostSignatureHex,
     };
+
+    try {
+      anchor.record({
+        recoveryId: row.recoveryId,
+        claimDigestHex: row.claimDigestHex,
+        picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+        state: 'consumed',
+        updatedAt: completedAt,
+      });
+    } catch {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
+    }
 
     try {
       this.db.transaction(() => {
@@ -3006,6 +3124,13 @@ export class EventStore {
    * quarantines all device authority for that identity, matching ADR 0109.
    * Pending rows are intentionally left in place; only an elapsed completion
    * window changes them, and a restart never restarts either clock.
+   *
+   * ADR 0110 R6 adds the anchor cross-check. Boot is where a restored
+   * database first meets the anchor that outlived it, so this is where the
+   * rollback becomes visible: resolutions the anchor knows are re-applied to
+   * rows the restore rewound, a Home with recovery history but no anchor is
+   * reported as `anchor_lost`, and a fresh Home silently seeds an empty one.
+   * Nothing here grants anything - the strongest thing it can do is refuse.
    */
   public reconcilePicoHomeDeviceRecoveries(
     sodium: PicoHomeDeviceLifecycleSodium,
@@ -3018,8 +3143,12 @@ export class EventStore {
         reprojectedRecoveries: 0,
         lapsedPending: 0,
         quarantinedIdentities: [],
+        anchorStatus: this.recoveryAnchor === undefined ? 'absent' : 'live',
+        resurrectedRecoveryIds: [],
       };
     }
+
+    const anchorReconciliation = this.reconcilePicoHomeRecoveryAnchor(reconciledAt);
 
     const lapsedPending = this.db
       .prepare(`
@@ -3158,6 +3287,10 @@ export class EventStore {
       }
     })();
 
+    for (const identity of anchorReconciliation.quarantinedIdentities) {
+      quarantined.add(identity);
+    }
+
     return {
       verifiedRecoveries: verified.length,
       reprojectedRecoveries: verified.filter(
@@ -3165,7 +3298,152 @@ export class EventStore {
       ).length,
       lapsedPending,
       quarantinedIdentities: [...quarantined].sort(),
+      anchorStatus: anchorReconciliation.anchorStatus,
+      resurrectedRecoveryIds: anchorReconciliation.resurrectedRecoveryIds,
     };
+  }
+
+  /**
+   * ADR 0110 R6. Reconciles the durable anchor against the restorable rows.
+   *
+   * Three outcomes matter. A fresh Home with no recovery history seeds an
+   * empty anchor silently, so a normal installation never notices this
+   * machinery. A Home whose rows show recovery history but whose anchor is
+   * empty cannot tell a wiped anchor from a rollback, so it stays empty and
+   * reports `anchor_lost`: every completion then fails closed until an
+   * operator re-seeds explicitly. Where the anchor holds a resolution the
+   * rows no longer carry, the rollback is concrete - those rows are pushed
+   * back to their resolved state and the identity is quarantined, because
+   * this Home has lost evidence it once projected.
+   */
+  private reconcilePicoHomeRecoveryAnchor(reconciledAt: string): {
+    anchorStatus: PicoHomeDeviceRecoveryReconciliationResult['anchorStatus'];
+    resurrectedRecoveryIds: string[];
+    quarantinedIdentities: string[];
+  } {
+    const anchor = this.recoveryAnchor;
+    if (anchor === undefined) {
+      return {
+        anchorStatus: 'absent',
+        resurrectedRecoveryIds: [],
+        quarantinedIdentities: [],
+      };
+    }
+
+    const rowCount = (this.db
+      .prepare('SELECT COUNT(*) AS count FROM pico_home_device_recovery')
+      .get() as { count: number }).count;
+
+    if (anchor.isEmpty()) {
+      if (rowCount === 0) {
+        anchor.seed({ homeId: this.picoHomeClaimState().homeId ?? null, entries: [] });
+        return {
+          anchorStatus: 'seeded',
+          resurrectedRecoveryIds: [],
+          quarantinedIdentities: [],
+        };
+      }
+      return {
+        anchorStatus: 'anchor_lost',
+        resurrectedRecoveryIds: [],
+        quarantinedIdentities: [],
+      };
+    }
+
+    const resurrected: string[] = [];
+    const quarantined = new Set<string>();
+    for (const entry of anchor.document().entries) {
+      if (entry.state === 'accepted') {
+        continue;
+      }
+      const row = this.db
+        .prepare(`
+          SELECT status, claim_digest_hex AS claimDigestHex
+          FROM pico_home_device_recovery
+          WHERE recovery_id = ?
+        `)
+        .get(entry.recoveryId) as
+          | { status: PicoHomeDeviceRecoveryRow['status']; claimDigestHex: string }
+          | undefined;
+      if (row === undefined) {
+        // The rows were rewound past this recovery's very existence. Nothing
+        // can be re-applied, and this Home no longer holds the evidence for
+        // whatever that recovery projected.
+        resurrected.push(entry.recoveryId);
+        quarantined.add(entry.picoIdentityFingerprintHex);
+        continue;
+      }
+      if (row.claimDigestHex !== entry.claimDigestHex || row.status === 'pending') {
+        resurrected.push(entry.recoveryId);
+        quarantined.add(entry.picoIdentityFingerprintHex);
+        this.db
+          .prepare(`
+            UPDATE pico_home_device_recovery
+            SET status = ?,
+                resolved_at = COALESCE(resolved_at, ?)
+            WHERE recovery_id = ?
+          `)
+          .run(entry.state, reconciledAt, entry.recoveryId);
+      }
+    }
+
+    return {
+      anchorStatus: resurrected.length > 0 ? 'rollback_detected' : 'live',
+      resurrectedRecoveryIds: resurrected.sort(),
+      quarantinedIdentities: [...quarantined].sort(),
+    };
+  }
+
+  /**
+   * ADR 0110 R6. The explicit, audited re-seed after anchor loss. It rebuilds
+   * only terminal knowledge from the rows: pending recoveries are deliberately
+   * not seeded as accepted, because a restored pending row is exactly what an
+   * attacker would want re-blessed. Those recoveries must be initiated again,
+   * which costs 3+N root approvals and a fresh veto window - and creates no
+   * authority by itself.
+   */
+  public reseedPicoHomeRecoveryAnchor(): {
+    ok: boolean;
+    seededEntries: number;
+    reason?: 'anchor_absent' | 'anchor_not_empty';
+  } {
+    this.ensureOpen();
+    const anchor = this.recoveryAnchor;
+    if (anchor === undefined) {
+      return { ok: false, seededEntries: 0, reason: 'anchor_absent' };
+    }
+    if (!anchor.isEmpty()) {
+      return { ok: false, seededEntries: 0, reason: 'anchor_not_empty' };
+    }
+    const rows = this.db
+      .prepare(`
+        SELECT recovery_id AS recoveryId,
+               claim_digest_hex AS claimDigestHex,
+               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               status,
+               resolved_at AS resolvedAt
+        FROM pico_home_device_recovery
+        WHERE status IN ('consumed', 'vetoed', 'superseded')
+        ORDER BY resolved_at ASC, recovery_id ASC
+      `)
+      .all() as {
+        recoveryId: string;
+        claimDigestHex: string;
+        picoIdentityFingerprintHex: string;
+        status: 'consumed' | 'vetoed' | 'superseded';
+        resolvedAt: string | null;
+      }[];
+    anchor.seed({
+      homeId: this.picoHomeClaimState().homeId ?? null,
+      entries: rows.map((row) => ({
+        recoveryId: row.recoveryId,
+        claimDigestHex: row.claimDigestHex,
+        picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+        state: row.status,
+        updatedAt: row.resolvedAt ?? new Date().toISOString(),
+      })),
+    });
+    return { ok: true, seededEntries: rows.length };
   }
 
   public recordPicoHomeDomainReadGrant(params: {

@@ -2,12 +2,12 @@
 
 ## Status
 
-Accepted; partially implemented. R1-R4 and the single-snapshot scope of R2
-are implemented; R5 product integration and R6 restore-proof consumption
-remain open. This
-ADR decides the path ADR
-0109 deliberately left missing: how an identity whose Home projects no
-active delegated device regains exactly one. The person's instrument is the
+Accepted; partially implemented. R1-R4 and R6 are implemented, and R2 now
+holds across a restore rather than within one snapshot. R5's documentation
+half is done and its product half is decided by ADR 0112, whose companion
+surfaces remain open. This ADR decides the path ADR 0109 deliberately left
+missing: how an identity whose Home projects no active delegated device
+regains exactly one. The person's instrument is the
 Recovery Card - a printed, card-sized artifact carrying the PIN-encrypted
 identity-root seed as a recovery phrase and QR code - and the contract is
 a remote, root-authorized, time-locked, one-use recovery that always
@@ -529,7 +529,8 @@ authorize, approve or veto another identity's recovery.
 | Remote attacker without the card | The standing operation yields nothing without a root signature; refusals are cheap and status is unreadable from outside. |
 | Attacker with the old Vault keyfile but no card and no passphrase | Unchanged ADR 0081 posture: the keyfile alone is inert. |
 | Malicious Home host | Never sees the seed (issuance is person-side); cannot mint, veto, or shorten the pendency it must enforce; can at most withhold service, as always. |
-| Crash/restart and stale-backup attacker | Pending records are durable with Home-clock instants: a restart neither resets nor skips the lock, a snapshot containing consumption keeps it consumed, and an overdue restored pending row lapses. A fully matching snapshot from before consumption can resurrect its in-window pending state because the database has no knowledge outside that snapshot; restore-proof one-use remains blocked on R6's external monotonic anchor. The ADR 0107 request bounds are unchanged beneath. |
+| Crash/restart and stale-backup attacker | Pending records are durable with Home-clock instants: a restart neither resets nor skips the lock, a snapshot containing consumption keeps it consumed, and an overdue restored pending row lapses. R6 closes the matching-snapshot case for the supported restore path: completion requires the out-of-snapshot anchor to have accepted that exact claim and not resolved it, so a pre-consumption backup restores a row that can no longer be completed. A crash between anchor write and database commit fails closed and costs a re-initiation. The ADR 0107 request bounds are unchanged beneath. |
+| Whole-filesystem rollback or write access to the anchor | Unresolved, and named rather than implied: a VM image, disk copy or rsync host migration moves the anchor together with the database, and an attacker who can write the excluded anchor directory can rewind it. This is what a platform monotonic counter (TPM NV, secure element) would close; until one exists the anchor raises the bar from "restore through the supported path" to "reach the excluded storage". |
 | Two root holders racing (owner vs. thief) | Superseding claims restart the clock and are audited; neither silently wins; a living device can veto the thief. The stalemate's exit is root rotation - named, not hidden. |
 | Evil-twin Home endpoint | Fails against the card's printed pins; the endpoint hint is reachability, never identity (ADR 0031); no trust-on-first-use. |
 | Cloud-photo leak of the card | Identical to card theft; the product must warn at issuance. Not enforceable by protocol, stated honestly. |
@@ -548,15 +549,16 @@ authorize, approve or veto another identity's recovery.
   scheme (Argon2id parameters, salt and nonce derivation, wrong-PIN
   detection via fingerprint mismatch) with vectors, including a card
   payload whose protection flag is unset as a reject vector.
-- **R2 - Foundation pending state and intake (implemented within one database snapshot):** the standing
+- **R2 - Foundation pending state and intake (implemented):** the standing
   operation with root-signature verification, the durable per-identity
   pending state machine (`pending`/`superseded`/`vetoed`/`lapsed`/
   `consumed`), 48-hour/7-day Home-clock enforcement, the authenticated
   veto operation, implicit cancel on any accepted lifecycle transition,
   the ordered atomic completion commit with injected-failure rollback
   proof, restart/snapshot reconciliation, issuer quarantine and bounded
-  operational logging with the two reserved append-only events. A fully
-  matching rollback predating consumption remains R6, not an R2 claim.
+  operational logging with the two reserved append-only events. One-use no
+  longer stops at the snapshot boundary: R6's anchor carries it across a
+  restore, within the substrate limits stated there.
 - **R3 - Vault ceremonies and the export exception (implemented):** the
   approval-gated seed materialization with its own rendering and audit;
   card generation as person-side tooling (both print forms - ID-1 and the
@@ -590,12 +592,27 @@ authorize, approve or veto another identity's recovery.
   person issues, restores, sees the pending alarm, vetoes and completes -
   is decided by ADR 0112: its S1 transitional CLI wrappers exist, its
   companion surfaces S2-S4 remain open there.
-- **R6 - Restore-proof consumption anchor (open):** choose and implement a
-  platform-backed monotonic consumption floor, or an equivalent anchor outside
-  every restorable Foundation snapshot, before claiming that restoration of a
-  fully matching pre-consumption backup cannot resurrect pending state. The
-  design must cover add-on backup/restore, host migration and anchor-loss
-  recovery without turning Home administration into identity authority.
+- **R6 - Restore-proof consumption anchor (implemented for the supported
+  restore path):** `pico.home.recovery-anchor.v1` lives outside every
+  restorable Foundation snapshot - by default in the add-on's
+  `backup_exclude`d `recovery-anchor/` directory, overridable to storage
+  outside the data directory - and is authoritative for a recovery id's whole
+  life, not only its end. Acceptance, supersession, veto and consumption are
+  written to the anchor with fsync *before* the matching database
+  transaction, and completion requires that this anchor accepted that exact
+  claim digest and has not resolved it. Boot reconciliation re-applies
+  resolutions the rows no longer carry and quarantines those identities; a
+  fresh Home seeds silently; a Home with recovery history but no anchor fails
+  closed until an operator re-seeds explicitly, and that re-seed rebuilds
+  terminal knowledge only - it never blesses a restored pending row. The
+  anchor can only refuse: it creates no device authority and replaces no root
+  signature or possession proof, so Home administration stays outside
+  identity authority. Honest boundary, also in the ledger: a whole-filesystem
+  rollback (VM image, disk copy, rsync host migration) or write access to the
+  excluded directory still moves anchor and database together. A platform
+  monotonic counter - TPM NV or a secure element - would close that too and
+  stays future work; the interface is shaped so the substrate can be swapped
+  without touching a caller.
 
 ## Consequences
 
@@ -647,7 +664,15 @@ Negative and residual:
   the then-pending row until R6 supplies a monotonic platform anchor; local
   database reconciliation alone cannot honestly prove otherwise;
 - nothing here restores lost plaintext, and root-and-card loss keeps its
-  full replacement cost.
+  full replacement cost;
+- R6's anchor adds a failure mode recovery did not have: a lost or unreadable
+  anchor blocks completion until an operator re-seeds, and the person who
+  needs recovery is often not the person who can do that. Re-seeding
+  automatically would hand the documented attack back, so the block is the
+  deliberate choice;
+- every recovery transition now costs one durable fsynced write before its
+  database commit, and a crash in between costs a re-initiation of 3+N root
+  approvals.
 
 ## Relationship to other ADRs
 

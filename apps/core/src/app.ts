@@ -106,6 +106,11 @@ import type { MemoryContentCursor, MemoryItem, MemoryStore } from './memory-stor
 import { HomeMembershipReadership, SoleResidentReadership, type DomainReadership } from './domain-readership.js';
 import { registerWebDashboard } from './static-web.js';
 import { assertKeyStoreSeparation, KeyStore } from './key-store.js';
+import {
+  assertPicoHomeRecoveryAnchorSeparation,
+  defaultPicoHomeRecoveryAnchorPath,
+  openPicoHomeRecoveryAnchor,
+} from './recovery-anchor.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import { RetentionSweeper } from './retention-sweep.js';
 import { AccessClassRegistry, DESTRUCTIVE_CONFIRM_FIELD, isFoundationApiRoute, type AccessClass } from './access-classes.js';
@@ -335,6 +340,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     databasePath: config.databasePath,
     backupDirectory: config.backupDirectory ?? join(dirname(config.databasePath), 'backups'),
   });
+  // ADR 0110 R6: the recovery anchor only outlives a restore if it never
+  // shares a directory with what the snapshot captures.
+  const recoveryAnchorPath = config.recoveryAnchorPath
+    ?? defaultPicoHomeRecoveryAnchorPath(config.databasePath);
+  assertPicoHomeRecoveryAnchorSeparation({
+    anchorPath: recoveryAnchorPath,
+    databasePath: config.databasePath,
+    backupDirectory: config.backupDirectory ?? join(dirname(config.databasePath), 'backups'),
+  });
 
   // Memory-content encryption is off by default: content stays plaintext
   // foundation data (ADR 0070). When enabled, the domain_encrypted posture
@@ -373,6 +387,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const store = await EventStore.open(config.databasePath, {
     backupDirectory: config.backupDirectory,
     memoryCrypto,
+    recoveryAnchor: openPicoHomeRecoveryAnchor(recoveryAnchorPath),
   });
   const clock = new LamportClock(store.maxLamport());
   const factory = new EventFactory(clock);
@@ -706,6 +721,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         deviceRecoveryReconciliation.quarantinedIdentities.length > 0
           ? 'Pico Home device-recovery evidence failed verification; affected identity projections were quarantined.'
           : 'Expired pending Pico Home device recoveries were lapsed during startup.',
+      );
+    }
+    // ADR 0110 R6. Both anchor faults are loud: a rollback is an attack
+    // signature, and a lost anchor blocks every completion until an operator
+    // re-seeds, so neither may be discovered by a person waiting for recovery.
+    if (deviceRecoveryReconciliation.anchorStatus === 'rollback_detected') {
+      app.log.error(
+        deviceRecoveryReconciliation,
+        'Pico Home recovery anchor holds resolutions this database no longer carries: '
+        + 'the Foundation data was rolled back. Affected recoveries were re-resolved '
+        + 'and the identities quarantined; the recoveries cannot be completed again.',
+      );
+    } else if (deviceRecoveryReconciliation.anchorStatus === 'anchor_lost') {
+      app.log.error(
+        deviceRecoveryReconciliation,
+        'Pico Home recovery anchor is empty although recovery history exists. '
+        + 'A wiped anchor cannot be told apart from a rollback, so device recovery '
+        + 'stays closed until it is re-seeded explicitly (ADR 0110 R6).',
       );
     }
   }

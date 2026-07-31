@@ -19,6 +19,14 @@ export interface CoreConfig {
   backupDirectory?: string;
   keyStorePath?: string;
   homeHostKeyStorePath?: string;
+  /**
+   * ADR 0110 R6 consumption anchor. A deployment binding, not a Pico setting:
+   * it must live outside every restorable Foundation snapshot. Defaults to
+   * `recovery-anchor/anchor.json` beside the database, which the add-on
+   * excludes from backups; installations that can mount storage outside the
+   * data directory should point this there instead.
+   */
+  recoveryAnchorPath?: string;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -88,6 +96,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     backupDirectory: readNonEmptyString(env, 'PICO_BACKUP_DIRECTORY', join(dirname(databasePath), 'backups')),
     keyStorePath: readNonEmptyString(env, 'PICO_KEY_STORE_PATH', join(dirname(databasePath), 'keys')),
     homeHostKeyStorePath: readNonEmptyString(env, 'PICO_HOME_HOST_KEY_STORE_PATH', join(dirname(databasePath), 'home-host-keys')),
+    recoveryAnchorPath: readNonEmptyString(env, 'PICO_RECOVERY_ANCHOR_PATH', join(dirname(databasePath), 'recovery-anchor', 'anchor.json')),
     memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION'),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),

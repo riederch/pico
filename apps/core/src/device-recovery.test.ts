@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { openPicoHomeRecoveryAnchor } from './recovery-anchor.js';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
@@ -138,7 +139,9 @@ describe('ADR 0110 durable device recovery', () => {
     })).toEqual({ ok: false, reason: 'recovery_not_effective' });
     fixture.store.close();
 
-    const reopened = new EventStore(fixture.databasePath);
+    const reopened = new EventStore(fixture.databasePath, {
+      recoveryAnchor: openPicoHomeRecoveryAnchor(fixture.anchorPath),
+    });
     expect(reopened.reconcilePicoHomeDeviceRecoveries(
       sodium,
       '2026-08-01T10:00:00.000Z',
@@ -147,6 +150,8 @@ describe('ADR 0110 durable device recovery', () => {
       reprojectedRecoveries: 0,
       lapsedPending: 0,
       quarantinedIdentities: [],
+      anchorStatus: 'live',
+      resurrectedRecoveryIds: [],
     });
     expect(reopened.picoHomeDeviceRecoveryPendingView(
       fixture.identity.fingerprintHex,
@@ -203,7 +208,9 @@ describe('ADR 0110 durable device recovery', () => {
     `).run();
     staleProjection.close();
 
-    const reconciled = new EventStore(fixture.databasePath);
+    const reconciled = new EventStore(fixture.databasePath, {
+      recoveryAnchor: openPicoHomeRecoveryAnchor(fixture.anchorPath),
+    });
     expect(reconciled.reconcilePicoHomeDeviceRecoveries(
       sodium,
       completedAt,
@@ -212,6 +219,8 @@ describe('ADR 0110 durable device recovery', () => {
       reprojectedRecoveries: 1,
       lapsedPending: 0,
       quarantinedIdentities: [],
+      anchorStatus: 'live',
+      resurrectedRecoveryIds: [],
     });
     expect(reconciled.hasActivePicoIdentityDelegation({
       ...sender,
@@ -535,7 +544,9 @@ describe('ADR 0110 durable device recovery', () => {
       WHERE recovery_id = 'recovery_corrupt'
     `).run(JSON.stringify(record));
     corrupted.close();
-    const quarantining = new EventStore(clean.databasePath);
+    const quarantining = new EventStore(clean.databasePath, {
+      recoveryAnchor: openPicoHomeRecoveryAnchor(clean.anchorPath),
+    });
     expect(quarantining.reconcilePicoHomeDeviceRecoveries(
       sodium,
       completedAt,
@@ -544,6 +555,8 @@ describe('ADR 0110 durable device recovery', () => {
       reprojectedRecoveries: 0,
       lapsedPending: 0,
       quarantinedIdentities: [clean.identity.fingerprintHex],
+      anchorStatus: 'live',
+      resurrectedRecoveryIds: [],
     });
     expect(quarantining.hasActivePicoIdentityDelegation({
       ...validSender,
@@ -558,7 +571,10 @@ function createFixture() {
   const dir = mkdtempSync(join(tmpdir(), 'pico-device-recovery-test-'));
   tempDirs.push(dir);
   const databasePath = join(dir, 'pico.sqlite');
-  const store = new EventStore(databasePath);
+  const anchorPath = join(dir, 'recovery-anchor', 'anchor.json');
+  const store = new EventStore(databasePath, {
+    recoveryAnchor: openPicoHomeRecoveryAnchor(anchorPath),
+  });
   const identity = createSigningKey('pico_identity');
   const host = createSigningKey('home_host_signing');
   const sponsorSigning = createSigningKey('device_signing');
@@ -613,6 +629,7 @@ function createFixture() {
   };
   return {
     databasePath,
+    anchorPath,
     store,
     identity,
     host,
@@ -921,3 +938,241 @@ function createFoundingRecord(input: {
     createdAt: foundedAt,
   };
 }
+
+/**
+ * ADR 0110 R6. The attack these prove: a Foundation backup taken while a
+ * recovery was still pending is restored after that recovery was resolved.
+ * Every in-database defence is restored with it, so the rollback is done at
+ * the file level - copy the SQLite files, act, copy them back - exactly the
+ * way a Supervisor restore or a `cp -a` would.
+ */
+describe('ADR 0110 R6 restore-proof consumption anchor', () => {
+  function snapshotDatabase(fixture: ReturnType<typeof createFixture>): () => void {
+    const sources = [
+      fixture.databasePath,
+      `${fixture.databasePath}-wal`,
+      `${fixture.databasePath}-shm`,
+    ];
+    const captured = sources.map((path) => ({
+      path,
+      bytes: existsSync(path) ? readFileSync(path) : undefined,
+    }));
+    return () => {
+      for (const entry of captured) {
+        if (entry.bytes === undefined) {
+          rmSync(entry.path, { force: true });
+        } else {
+          writeFileSync(entry.path, entry.bytes);
+        }
+      }
+    };
+  }
+
+  function reopen(fixture: ReturnType<typeof createFixture>): EventStore {
+    return new EventStore(fixture.databasePath, {
+      recoveryAnchor: openPicoHomeRecoveryAnchor(fixture.anchorPath),
+    });
+  }
+
+  function acceptRecovery(
+    fixture: ReturnType<typeof createFixture>,
+    recoveryId: string,
+  ): {
+    claimDigestHex: string;
+    sender: PicoHomeDeviceLifecycleSponsor;
+  } {
+    const target = createDeviceKeys();
+    const submission = createRecoverySubmission(fixture, { recoveryId, target });
+    const sender = recoverySender(fixture, submission);
+    const initiated = fixture.store.initiatePicoHomeDeviceRecovery({
+      submission,
+      sender,
+      sodium,
+      acceptedAt,
+    });
+    if (!initiated.ok) {
+      throw new Error(`accept_failed:${initiated.reason}`);
+    }
+    return { claimDigestHex: initiated.pending.claimDigestHex, sender };
+  }
+
+  it('refuses to let a restored snapshot resurrect and re-consume a spent recovery', () => {
+    const fixture = createFixture();
+    const { claimDigestHex, sender } = acceptRecovery(fixture, 'recovery_r6_consumed');
+
+    // The attacker's copy: taken while the recovery is still pending.
+    const restorePreConsumption = snapshotDatabase(fixture);
+
+    const completed = fixture.store.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_consumed',
+      claimDigestHex,
+      sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    });
+    expect(completed.ok).toBe(true);
+    fixture.store.close();
+
+    // Roll the Foundation data back underneath the anchor.
+    restorePreConsumption();
+    const rolledBack = reopen(fixture);
+    const reconciliation = rolledBack.reconcilePicoHomeDeviceRecoveries(sodium, completedAt);
+    expect(reconciliation.anchorStatus).toBe('rollback_detected');
+    expect(reconciliation.resurrectedRecoveryIds).toEqual(['recovery_r6_consumed']);
+    expect(reconciliation.quarantinedIdentities)
+      .toEqual([fixture.identity.fingerprintHex]);
+
+    // The restored row is back to its resolved state and the spent root
+    // authorization cannot be replayed a second time.
+    expect(rolledBack.picoHomeDeviceRecoveryPendingView(
+      fixture.identity.fingerprintHex,
+    )).toBeNull();
+    expect(rolledBack.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_consumed',
+      claimDigestHex,
+      sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    })).toEqual({ ok: false, reason: 'recovery_consumed' });
+    rolledBack.close();
+  });
+
+  it('refuses to let a restored snapshot undo a veto', () => {
+    const fixture = createFixture();
+    const { claimDigestHex, sender } = acceptRecovery(fixture, 'recovery_r6_vetoed');
+    const restorePreVeto = snapshotDatabase(fixture);
+
+    expect(fixture.store.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_vetoed',
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      vetoedAt: '2026-07-31T12:00:00.000Z',
+    })).toEqual({ ok: true });
+    fixture.store.close();
+
+    restorePreVeto();
+    const rolledBack = reopen(fixture);
+    expect(rolledBack.reconcilePicoHomeDeviceRecoveries(sodium, completedAt).anchorStatus)
+      .toBe('rollback_detected');
+    expect(rolledBack.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_vetoed',
+      claimDigestHex,
+      sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    })).toEqual({ ok: false, reason: 'recovery_vetoed' });
+    rolledBack.close();
+  });
+
+  it('fails closed when the anchor is lost, and a re-seed restores service without reviving anything', () => {
+    const fixture = createFixture();
+    const { claimDigestHex, sender } = acceptRecovery(fixture, 'recovery_r6_lost');
+    fixture.store.close();
+
+    // A restore that wiped the excluded directory: rows have history, the
+    // anchor does not. That is indistinguishable from a rollback.
+    rmSync(dirname(fixture.anchorPath), { recursive: true, force: true });
+    const withoutAnchor = reopen(fixture);
+    const lost = withoutAnchor.reconcilePicoHomeDeviceRecoveries(sodium, completedAt);
+    expect(lost.anchorStatus).toBe('anchor_lost');
+    expect(withoutAnchor.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_lost',
+      claimDigestHex,
+      sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    })).toEqual({ ok: false, reason: 'recovery_anchor_unavailable' });
+
+    // The explicit operator re-seed brings the Home back into service - and
+    // deliberately does not bless the pending recovery it found.
+    expect(withoutAnchor.reseedPicoHomeRecoveryAnchor())
+      .toEqual({ ok: true, seededEntries: 0 });
+    expect(withoutAnchor.reseedPicoHomeRecoveryAnchor())
+      .toEqual({ ok: false, seededEntries: 0, reason: 'anchor_not_empty' });
+    expect(withoutAnchor.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_lost',
+      claimDigestHex,
+      sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    })).toEqual({ ok: false, reason: 'recovery_anchor_unavailable' });
+    withoutAnchor.close();
+  });
+
+  it('seeds a fresh Home silently and refuses every recovery decision without an anchor', () => {
+    const fixture = createFixture();
+    fixture.store.close();
+    rmSync(dirname(fixture.anchorPath), { recursive: true, force: true });
+
+    const fresh = reopen(fixture);
+    expect(fresh.reconcilePicoHomeDeviceRecoveries(sodium, acceptedAt))
+      .toMatchObject({ anchorStatus: 'seeded', resurrectedRecoveryIds: [] });
+    // Seeded, so a normal installation notices nothing on the next boot.
+    expect(fresh.reconcilePicoHomeDeviceRecoveries(sodium, acceptedAt).anchorStatus)
+      .toBe('live');
+    fresh.close();
+
+    // A store built without an anchor at all must never quietly permit what
+    // the anchor exists to refuse.
+    const anchorless = new EventStore(fixture.databasePath);
+    const target = createDeviceKeys();
+    const submission = createRecoverySubmission(fixture, {
+      recoveryId: 'recovery_r6_anchorless',
+      target,
+    });
+    expect(anchorless.initiatePicoHomeDeviceRecovery({
+      submission,
+      sender: recoverySender(fixture, submission),
+      sodium,
+      acceptedAt,
+    })).toEqual({ ok: false, reason: 'recovery_anchor_unavailable' });
+    expect(anchorless.reconcilePicoHomeDeviceRecoveries(sodium, acceptedAt).anchorStatus)
+      .toBe('absent');
+    anchorless.close();
+  });
+
+  it('keeps the anchor monotonic: terminal states never walk back and a torn anchor fails closed', () => {
+    const fixture = createFixture();
+    acceptRecovery(fixture, 'recovery_r6_monotonic');
+    fixture.store.close();
+
+    const anchor = openPicoHomeRecoveryAnchor(fixture.anchorPath);
+    const entry = anchor.lookup('recovery_r6_monotonic');
+    expect(entry?.state).toBe('accepted');
+    anchor.record({
+      recoveryId: 'recovery_r6_monotonic',
+      claimDigestHex: entry!.claimDigestHex,
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      state: 'consumed',
+    });
+    // Terminal is terminal: no rewind, no swap, no second resolution.
+    for (const state of ['accepted', 'vetoed', 'superseded'] as const) {
+      expect(() => anchor.record({
+        recoveryId: 'recovery_r6_monotonic',
+        claimDigestHex: entry!.claimDigestHex,
+        picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+        state,
+      })).toThrow(/terminal|already_accepted/);
+    }
+    // A different claim digest under a known id is a substitution attempt.
+    expect(() => anchor.record({
+      recoveryId: 'recovery_r6_monotonic',
+      claimDigestHex: 'ff'.repeat(32),
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      state: 'consumed',
+    })).toThrow('recovery_anchor_claim_digest_conflict');
+
+    writeFileSync(fixture.anchorPath, '{"schema":"pico.home.recovery-anchor.v1"');
+    expect(() => openPicoHomeRecoveryAnchor(fixture.anchorPath))
+      .toThrow('unreadable_recovery_anchor');
+  });
+});
