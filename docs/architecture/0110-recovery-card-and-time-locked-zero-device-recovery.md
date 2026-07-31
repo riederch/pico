@@ -580,12 +580,16 @@ authorize, approve or veto another identity's recovery.
   dead. A second path proves a living identity sees the authenticated pending
   alarm and vetoes a thief's recovery, and that a lifecycle transition
   implicitly cancels. A third restart path proves post-window lapse.
-- **R5 - Documentation honesty (partially implemented):** this ADR, the
-  implementation matrix and the handoff state the snapshot-rollback and
-  passkey boundaries honestly. ADR 0107's threat ledger, ADR
-  0099's exception note, ADR 0097-0102's export boundary, the
-  implementation matrix and the handoff state the implemented boundary,
-  including the stolen-card residual and the replacement boundary.
+- **R5 - Documentation honesty and product surface (documentation
+  implemented; product surface delegated):** this ADR, the implementation
+  matrix and the handoff state the snapshot-rollback and passkey
+  boundaries honestly. ADR 0107's threat ledger, ADR 0099's exception
+  note, ADR 0097-0102's export boundary, the implementation matrix and
+  the handoff state the implemented boundary, including the stolen-card
+  residual and the replacement boundary. The product half - where a
+  person issues, restores, sees the pending alarm, vetoes and completes -
+  is decided by ADR 0112: its S1 transitional CLI wrappers exist, its
+  companion surfaces S2-S4 remain open there.
 - **R6 - Restore-proof consumption anchor (open):** choose and implement a
   platform-backed monotonic consumption floor, or an equivalent anchor outside
   every restorable Foundation snapshot, before claiming that restoration of a
@@ -681,6 +685,9 @@ Negative and residual:
 - Supersedes ADR `0109`'s locally-activated recovery sketch while
   keeping its closure rules, lifecycle machinery and every one of its
   required recovery ingredients in mapped form.
+- Delegates its product surface to ADR `0112`: the companion carries the
+  alarm and the ceremonies; the transitional CLI wrappers are tooling,
+  not a product form.
 
 ## References
 
@@ -699,3 +706,4 @@ Negative and residual:
 - [ADR 0107](0107-pico-link-direct-envelopes-to-the-own-home.md)
 - [ADR 0108](0108-the-first-delegated-device-is-founded-with-the-home.md)
 - [ADR 0109](0109-authenticated-device-lifecycle-over-pico-link.md)
+- [ADR 0112](0112-recovery-product-surfaces-in-the-background-companion.md)

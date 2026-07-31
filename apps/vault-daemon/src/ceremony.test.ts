@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { picoIdentitySuite } from '@pico/protocol';
 import {
@@ -460,5 +460,153 @@ describe('Identity ceremony signing over the Vault daemon (ADR 0100 C2/C4)', () 
     } finally {
       signer.close();
     }
+  }, 60_000);
+});
+
+/**
+ * ADR 0112 S1: the transitional recovery wrappers are real processes - a
+ * spawned daemon, a spawned scripted approver and a spawned one-shot CLI with
+ * secrets over piped prompts. Initiate/complete/veto reuse the same library
+ * ceremonies these wrappers call, proven end to end in claim-ceremony.test.ts.
+ */
+describe('Transitional recovery ceremony CLI (ADR 0112 S1)', () => {
+  interface CliRun {
+    code: number | null;
+    stdout: string;
+    stderr: string;
+  }
+
+  async function runCeremonyCli(
+    args: readonly string[],
+    stdinLines: readonly string[],
+  ): Promise<CliRun> {
+    const child = spawn(process.execPath, [DAEMON_CLI, ...args], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    childProcesses.push(child);
+    let stdout = '';
+    let stderr = '';
+    child.stdout!.setEncoding('utf8');
+    child.stdout!.on('data', (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr!.setEncoding('utf8');
+    child.stderr!.on('data', (chunk: string) => {
+      stderr += chunk;
+    });
+    // All prompt answers in one write: the shared stdin line buffer must not
+    // lose queued lines between sequential prompts.
+    child.stdin!.write(stdinLines.map((line) => `${line}\n`).join(''));
+    const code = await new Promise<number | null>((resolvePromise) => {
+      child.once('exit', (exitCode) => {
+        resolvePromise(exitCode);
+      });
+    });
+    return { code, stdout, stderr };
+  }
+
+  it('issues the Recovery Card over the CLI and keeps every secret off stdout', async () => {
+    const daemon = await startDaemonProcess();
+    const approver = await startApproverProcess(daemon, 'y');
+    const outputDir = tempDir('pico-cs-card-');
+
+    const run = await runCeremonyCli([
+      'ceremony', 'issue-recovery-card',
+      '--vault-home', daemon.vaultHomePath,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--pico-name', 'Mira',
+      '--home-name', 'Alpengasse 7',
+      '--home-id', 'home_recovery_cli_0001',
+      '--host-signing-fingerprint', '11'.repeat(32),
+      '--host-agreement-fingerprint', '22'.repeat(32),
+      '--host-agreement-public-key', '33'.repeat(32),
+      '--endpoint-hint', 'pico-link://recovery-cli',
+      '--output-dir', outputDir,
+    ], ['card42pin', 'card42pin']);
+
+    expect(run.stderr).toContain('print and laminate now');
+    expect(run.code).toBe(0);
+    expect(approver.approvals()).toBe(1);
+
+    const printed = JSON.parse(run.stdout) as Record<string, unknown>;
+    expect(printed).toMatchObject({
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      picoName: 'Mira',
+      homeId: 'home_recovery_cli_0001',
+      pinProtected: true,
+    });
+    expect(printed).not.toHaveProperty('recoveryPhrase');
+    expect(printed).not.toHaveProperty('canonicalPayloadHex');
+    expect(printed).not.toHaveProperty('seedMaterialHex');
+    expect(run.stdout).not.toContain('card42pin');
+
+    for (const key of ['cardPrinterPdfPath', 'paperPrintablePdfPath'] as const) {
+      const pdfPath = printed[key] as string;
+      const stat = statSync(pdfPath);
+      expect(stat.mode & 0o777).toBe(0o600);
+      const bytes = readFileSync(pdfPath);
+      expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+    }
+  }, 120_000);
+
+  it('restores the identity from phrase and PIN over piped prompts, normalizing typed input', async () => {
+    const session = openPicoVaultKeyfile(sodium, {
+      keyfile: ownerIdentity.keyfile,
+      passphrase: IDENTITY_PASSPHRASE,
+    });
+    const card = session.issueRecoveryCard({
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      homeId: 'home_recovery_cli_0002',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '33'.repeat(32),
+      endpointHint: 'pico-link://recovery-cli',
+      issuedAt: '2026-07-31T10:00:00.000Z',
+      pin: 'card42pin',
+    });
+    session.lock();
+
+    // A person retypes the phrase from paper: mixed case and uneven spacing
+    // must restore the identical root.
+    const typedPhrase = `  ${card.recoveryPhrase.toUpperCase().split(' ').join('   ')} `;
+    const freshVaultHome = tempDir('pico-cs-restore-');
+    const restoreArgs = [
+      'ceremony', 'restore-identity',
+      '--vault-home', freshVaultHome,
+      '--foundation-data', tempDir('pico-cs-restore-data-'),
+      '--foundation-backup', tempDir('pico-cs-restore-backup-'),
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+    ];
+
+    const restored = await runCeremonyCli(restoreArgs, [
+      typedPhrase,
+      'card42pin',
+      'restored keyfile passphrase',
+      'restored keyfile passphrase',
+    ]);
+    expect(restored.stderr).toBe('');
+    expect(restored.code).toBe(0);
+    const printed = JSON.parse(restored.stdout) as Record<string, unknown>;
+    expect(printed).toMatchObject({
+      keyRole: 'pico_identity',
+      keyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      publicKeyHex: ownerIdentity.publicKeyHex,
+    });
+    expect(statSync(printed.path as string).isFile()).toBe(true);
+
+    // A wrong PIN is a detected failure, never a silently different identity.
+    const wrongPin = await runCeremonyCli([
+      ...restoreArgs.slice(0, 3),
+      tempDir('pico-cs-restore-wrong-'),
+      ...restoreArgs.slice(4),
+    ], [
+      typedPhrase,
+      'wrongpin',
+      'restored keyfile passphrase',
+      'restored keyfile passphrase',
+    ]);
+    expect(wrongPin.code).toBe(1);
+    expect(wrongPin.stderr).toContain('recovery_pin_or_seed_mismatch');
   }, 60_000);
 });

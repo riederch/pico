@@ -645,4 +645,44 @@ describe('pico-vault CLI argument contract (ADR 0097 D5)', () => {
       'unlock', '--role', 'a', '--role', 'b',
     ])).toThrow('invalid_cli_flag');
   });
+
+  it('parses the transitional recovery subcommands and refuses every secret as a flag (ADR 0112 S1)', () => {
+    const issue = parsePicoVaultCliArguments([
+      'ceremony', 'issue-recovery-card',
+      '--fingerprint', identityFixture.keyFingerprintHex,
+      '--pico-name', 'Mira',
+      '--home-id', 'home_cli_contract_0001',
+      '--host-signing-fingerprint', '11'.repeat(32),
+      '--host-agreement-fingerprint', '22'.repeat(32),
+      '--host-agreement-public-key', '33'.repeat(32),
+      '--endpoint-hint', 'pico-link://cli-contract',
+      '--output-dir', '/tmp/pico-cli-contract',
+    ]);
+    expect(issue.ceremony).toBe('issue-recovery-card');
+
+    for (const subcommand of [
+      'restore-identity',
+      'initiate-recovery',
+      'complete-recovery',
+      'veto-recovery',
+    ]) {
+      expect(parsePicoVaultCliArguments([
+        'ceremony', subcommand,
+        '--fingerprint', identityFixture.keyFingerprintHex,
+      ]).ceremony).toBe(subcommand);
+    }
+
+    // The PIN, the Recovery Phrase and every passphrase arrive over prompts
+    // only; as flags they would land in shell history and process lists.
+    for (const [subcommand, secretFlag] of [
+      ['issue-recovery-card', '--pin'],
+      ['restore-identity', '--pin'],
+      ['restore-identity', '--recovery-phrase'],
+      ['restore-identity', '--passphrase'],
+    ] as const) {
+      expect(() => parsePicoVaultCliArguments([
+        'ceremony', subcommand, secretFlag, 'leaked',
+      ])).toThrow('invalid_cli_flag');
+    }
+  });
 });

@@ -1,0 +1,221 @@
+# 0112 - Recovery Product Surfaces in the Background Companion
+
+## Status
+
+Accepted; partially implemented. The transitional CLI wrappers (gate S1)
+land with this ADR; the companion surfaces (S2-S4) are open and depend on
+ADR 0105 B2/B3. This ADR takes over the product half of ADR 0110's R5:
+where a person actually issues a card, restores from it, sees a pending
+alarm, vetoes, and completes a recovery. It deliberately does not choose
+the client shell technology - that choice belongs to the ADR that starts
+ADR 0105 B2, with an implementation milestone attached, and is recorded
+here as an explicit non-goal so this contract cannot be read as having
+made it in passing.
+
+## Context
+
+ADR 0110 R1-R4 are implemented and proven in real processes: canonical
+forms, durable pending state, the composite prepare/initiate/complete
+ceremony with 3+N root approvals, the veto, and the zero-device path
+across restarts. But every one of those proofs drives library functions
+(`initiatePicoHomeDeviceRecovery`, `completePicoHomeDeviceRecovery`,
+`vetoPicoHomeDeviceRecovery`, the daemon's `issue-recovery-card` family,
+`restorePicoVaultIdentityFromRecovery`) from test code. Unlike the twelve
+existing `pico-vault ceremony` subcommands, recovery has no
+human-invokable wrapper: with 0.1.9 installed as an add-on, a person who
+lost their last device could not execute the recovery this repository
+proves works.
+
+The pending alarm has the same gap one level up. ADR 0110 requires that
+"the product must alarm loudly" during pendency, and the authenticated
+lifecycle read now carries `pendingRecovery` - but a read only alarms
+somebody who performs it. There is no person-side long-running process,
+which is exactly the open ADR 0105 B2 (background service) and B3 (avatar
+interaction).
+
+ADR 0105 fixed the product form: a background service reached through the
+avatar; the CLI stays a tool. The design system fixes the visual
+authority: PICO Character Design v3.2.1 is binding, no approved
+production asset exists yet, product code may not draw or recolor the
+character, and status is always color plus symbol plus text.
+
+## Scope
+
+Covers:
+
+- which product surface carries each of the five recovery moments -
+  issuance, restore, pending alarm, veto, completion;
+- the alarm-carrier contract for the background service, including its
+  check cadence against the 48-hour veto window;
+- what every recovery surface must render, bound to ADR 0106 statements;
+- the character-asset gate for any avatar visual on these surfaces;
+- the explicit non-surfaces; and
+- the transitional CLI wrappers as the interim executable path.
+
+Does not cover:
+
+- the client shell technology, platform order or packaging (the ADR that
+  starts ADR 0105 B2);
+- avatar visual design or any new character asset (Character Design
+  v3.2.1 workflow);
+- relay transport or reachability of a Home from outside (ADR 0031/0107
+  future work);
+- ADR 0110 R6, the restore-proof consumption anchor; and
+- any change to ceremonies, canonical bytes, approvals or custody.
+
+## Decision
+
+### The five moments and their surfaces
+
+**Issuance belongs to onboarding.** The companion offers the Recovery
+Card at the end of person onboarding - "print and laminate this now" -
+and again on demand from settings (re-issue after loss or host-key
+rotation). Issuance is the approval-gated `issue-recovery-card` ceremony;
+the companion renders the ADR 0106 statement ("this exports your identity
+root once for printing"), prefers direct-to-printer, warns about file
+copies, and never persists the phrase, the PIN or the PDF beyond the
+print job. The PIN is chosen at issuance, entered only there and at
+restore, and never stored.
+
+**Restore is a first-run path.** A fresh companion install asks one
+question before creating anything: "new identity, or do you have a
+Recovery Card?" The card path takes the 24 words or the QR scan plus the
+PIN, restores into a fresh Vault, and continues directly into recovery
+initiation. The prompt language keeps the three-codes rule: the Vault
+passphrase, the Recovery Phrase and the Card PIN are never called by one
+another's names.
+
+**The background service carries the alarm.** While any device of an
+identity runs the companion, the service performs the authenticated
+lifecycle read on a bounded cadence: at least once every six hours while
+running, plus immediately on start, wake and network regain. A
+`pendingRecovery` in the response is a loud alarm, not a badge: an
+interrupting notification on every channel the device has, the avatar in
+its blocked/warning state, and a plain statement rendered from the signed
+pending view - which identity, which target device fingerprints, when it
+becomes effective. Six hours against a 48-hour window gives a running
+device at least seven independent chances to see the alarm; a device
+that is off for the whole window misses it, which is ADR 0110's stated
+veto residual, not a new one.
+
+**Veto is one decision away from the alarm.** The alarm notification
+opens directly into the veto decision; no navigation may sit between
+them. The veto renders what is vetoed (recovery id, target fingerprints,
+effective instant) and executes the authenticated
+`home.device.recovery.veto` operation. Dismissing the alarm without
+deciding keeps the alarm armed; it re-raises on every later check while
+pendency lasts.
+
+**Completion is a waiting surface, not a button hunt.** After
+initiation, the recovering companion shows the time lock honestly: when
+the recovery becomes effective, that nothing can hurry it, and that
+every other device of the identity will be revoked. After `effectiveAt`
+the same companion completes automatically on its next check within the
+completion window, then shows the receipt summary: exactly one active
+device remains, everything else is revoked, surviving hardware re-enrolls
+through the normal sponsor path.
+
+### Approval rendering is the companion's, unchanged
+
+Every root approval in these flows renders the ADR 0106 statement built
+from the canonical bytes - the avatar asks, the background service holds
+the unlock (ADR 0105). Recovery adds no new approval semantics and no
+exemption beyond the pinned role-aware target co-signature.
+
+### No avatar visual before a registered production asset
+
+The alarm, veto and completion surfaces work with color, symbol and text
+alone - the design system's minimum status contract. Any rendering of
+the character on these surfaces requires a production asset registered
+for exactly that surface, state and size under Character Design v3.2.1.
+The alarm must never wait for the asset: a companion without an approved
+character rendering still alarms at full loudness.
+
+### Non-surfaces
+
+The Foundation dashboard and HTTP surface stay diagnosis: they never
+gain issuance, restore, veto or completion. The CLI wrappers below are
+transitional tooling under ADR 0105, not a product surface, and no
+future work may cite their existence as a reason to skip S2/S3.
+
+### Transitional CLI wrappers (this milestone)
+
+`pico-vault ceremony` gains five subcommands, in the exact idiom of the
+existing twelve: `issue-recovery-card`, `restore-identity`,
+`initiate-recovery`, `complete-recovery` and `veto-recovery`. They wrap
+the proven library ceremonies unchanged; secrets (PIN, phrase,
+passphrase) travel only over prompts, never flags; the card wrapper
+writes the two normative PDFs and prints only public metadata to stdout.
+They exist because a shipped add-on whose recovery is proven but humanly
+unreachable would make "implemented" an overclaim - and they are named
+transitional for the same reason the other twelve are.
+
+## Gates
+
+- **S1 - Transitional CLI wrappers (implemented with this ADR):** the
+  five subcommands over the unchanged library ceremonies, secrets only
+  via prompts, PDFs written person-side, public-metadata-only stdout,
+  covered by CLI-level tests.
+- **S2 - Background alarm carrier (open, needs ADR 0105 B2):** the
+  long-running service performing the authenticated lifecycle read on
+  the pinned cadence, raising the loud alarm and keeping it armed
+  through pendency.
+- **S3 - Companion ceremonies (open, needs ADR 0105 B2/B3):** issuance
+  in onboarding, restore as first-run path, veto one decision from the
+  alarm, automatic completion with receipt summary - all rendering ADR
+  0106 statements through the avatar.
+- **S4 - Character visuals (open, needs registered production assets):**
+  avatar renderings for alarm/veto/completion states, each gated on a
+  purpose-registered Character 3.2.1 production asset.
+
+## Consequences
+
+Positive:
+
+- ADR 0110's "the product must alarm loudly" stops being a sentence and
+  becomes a carrier, a cadence and a reachability rule;
+- recovery is humanly executable today, honestly labeled transitional;
+- the companion work (B2/B3) inherits a fixed product target for its
+  first security-critical vertical instead of inventing one;
+- the character governance holds: nothing here draws a Pico.
+
+Negative and residual:
+
+- the CLI wrappers are a terminal surface for the most safety-critical
+  ceremony; the mitigation is the shared rendering path and their
+  explicit transitional status, and S3 is the real fix;
+- a device that is off or disconnected for the whole veto window still
+  misses the alarm - unchanged ADR 0110 residual;
+- the six-hour cadence is a product default pinned here; making it a
+  per-identity Pico setting is legitimate ADR 0104 work later, never
+  host configuration;
+- the shell decision is still open, and S2/S3 stay blocked until an ADR
+  with an implementation milestone makes it.
+
+## Relationship to other ADRs
+
+- Executes ADR `0105` for the recovery slice: the background service and
+  avatar are the surfaces; the CLI stays a transitional tool; B2/B3
+  remain the implementation gates.
+- Takes over the product half of ADR `0110` R5; its documentation-honesty
+  half stays in ADR 0110. The veto residual and 48-hour default are
+  unchanged.
+- Binds every approval surface to ADR `0106` rendered statements over
+  ADR `0099` hold-channel approval, adding no exemption.
+- Applies ADR `0013` and the checked-in design system: Character 3.2.1
+  gates visuals, status is color plus symbol plus text, tokens are the
+  palette source.
+- Applies ADR `0104` to the alarm cadence: a pinned product default that
+  may later become a per-identity Pico setting.
+- Leaves ADR `0009`'s separation intact: the avatar renders state and
+  asks; it decides nothing.
+
+## References
+
+- [ADR 0009](0009-avatar-and-interaction-model.md)
+- [ADR 0013](0013-visual-design-language.md)
+- [ADR 0099](0099-hold-channel-approval-for-authority-creating-signatures.md)
+- [ADR 0104](0104-settings-belong-to-pico-not-to-host-configuration.md)
+- [ADR 0105](0105-pico-runs-as-a-background-companion-not-a-cli.md)
+- [ADR 0106](0106-approval-rendering-from-the-signed-bytes.md)
+- [ADR 0110](0110-recovery-card-and-time-locked-zero-device-recovery.md)

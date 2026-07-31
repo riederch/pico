@@ -1,12 +1,14 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   assertVaultCustodyPathSeparation,
   createPicoVaultKeyfile,
+  restorePicoVaultIdentityFromRecovery,
   writePicoVaultKeyfile,
+  type PicoVaultRecoveryCard,
   type VaultSodium,
 } from '@pico/vault';
 import {
@@ -27,6 +29,7 @@ import {
   picoIdentitySuite,
   picoVaultPersonKeyRoles,
   type PicoHomeClaimSignatureInput,
+  type PicoHomeDeviceRecoveryPendingView,
   type PicoHomeFoundingSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoHomeMembershipRole,
@@ -52,6 +55,12 @@ import {
   renewPicoHomeDevice,
   revokePicoHomeDevice,
 } from './device-lifecycle-ceremony.js';
+import {
+  completePicoHomeDeviceRecovery,
+  initiatePicoHomeDeviceRecovery,
+  vetoPicoHomeDeviceRecovery,
+} from './device-recovery-ceremony.js';
+import { generatePicoRecoveryCardPdfs } from './recovery-card-pdf.js';
 
 const cliCommands = ['daemon', 'create', 'status', 'unlock', 'lock', 'sign', 'ceremony'] as const;
 type CliCommand = typeof cliCommands[number];
@@ -77,6 +86,11 @@ const ceremonySubcommands = [
   'renew-device',
   'revoke-device',
   'inspect-device-lifecycle',
+  'issue-recovery-card',
+  'restore-identity',
+  'initiate-recovery',
+  'complete-recovery',
+  'veto-recovery',
 ] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
@@ -299,6 +313,69 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'host-signing-public-key',
     'host-agreement-public-key',
   ],
+  'issue-recovery-card': [
+    'vault-home',
+    'fingerprint',
+    'pico-name',
+    'home-name',
+    'home-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-agreement-public-key',
+    'endpoint-hint',
+    'output-dir',
+  ],
+  'restore-identity': [
+    'vault-home',
+    'foundation-data',
+    'foundation-backup',
+    'fingerprint',
+  ],
+  'initiate-recovery': [
+    'vault-home',
+    'target-vault-home',
+    'fingerprint',
+    'core-url',
+    'home-id',
+    'target-delegation-id',
+    'target-signing-fingerprint',
+    'target-agreement-fingerprint',
+    'scopes',
+    'valid-from',
+    'valid-until',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
+  'complete-recovery': [
+    'vault-home',
+    'fingerprint',
+    'identity-public-key',
+    'core-url',
+    'pending-file',
+    'target-delegation-id',
+    'target-signing-fingerprint',
+    'target-agreement-fingerprint',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
+  'veto-recovery': [
+    'vault-home',
+    'fingerprint',
+    'identity-public-key',
+    'core-url',
+    'recovery-id',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
 };
 
 export interface PicoVaultCliInvocation {
@@ -373,15 +450,22 @@ function requireRole(flags: Map<string, string>): PicoVaultPersonKeyRole {
 async function readPassphrase(prompt: string): Promise<string> {
   const stdin = process.stdin;
   if (!stdin.isTTY) {
+    // Piped input goes through the shared line buffer, so queued lines for
+    // sequential prompts (passphrase plus repeat, PIN plus repeat) are not
+    // lost when they arrive inside one chunk. Unlike approval answers, a
+    // passphrase line is never trimmed.
+    const alreadyBuffered = takeBufferedRawLine();
+    if (alreadyBuffered !== undefined) {
+      return alreadyBuffered;
+    }
     return await new Promise<string>((resolvePromise, rejectPromise) => {
-      let buffered = '';
       const onData = (chunk: Buffer): void => {
-        buffered += chunk.toString('utf8');
-        const newlineIndex = buffered.indexOf('\n');
-        if (newlineIndex >= 0) {
+        bufferedStdin += chunk.toString('utf8');
+        const line = takeBufferedRawLine();
+        if (line !== undefined) {
           stdin.off('data', onData);
           stdin.pause();
-          resolvePromise(buffered.slice(0, newlineIndex).replace(/\r$/, ''));
+          resolvePromise(line);
         }
       };
       stdin.on('data', onData);
@@ -432,14 +516,18 @@ async function readPassphrase(prompt: string): Promise<string> {
  */
 let bufferedStdin = '';
 
-function takeBufferedLine(): string | undefined {
+function takeBufferedRawLine(): string | undefined {
   const newlineIndex = bufferedStdin.indexOf('\n');
   if (newlineIndex < 0) {
     return undefined;
   }
   const line = bufferedStdin.slice(0, newlineIndex);
   bufferedStdin = bufferedStdin.slice(newlineIndex + 1);
-  return line.replace(/\r$/, '').trim();
+  return line.replace(/\r$/, '');
+}
+
+function takeBufferedLine(): string | undefined {
+  return takeBufferedRawLine()?.trim();
 }
 
 async function readLine(prompt: string): Promise<string> {
@@ -657,6 +745,214 @@ async function runDeviceLifecycleCli(
   });
 }
 
+/**
+ * ADR 0112 S1: transitional wrappers over the proven ADR 0110 R3 recovery
+ * ceremonies. Secrets (PIN, Recovery Phrase, keyfile passphrase) travel only
+ * over prompts, never flags; the card wrapper writes the two normative PDFs
+ * person-side and prints public metadata only. These are tooling under ADR
+ * 0105, not a product surface - the companion (0112 S2/S3) is the real one.
+ */
+async function runDeviceRecoveryCli(
+  ceremony: Extract<
+    CeremonySubcommand,
+    | 'issue-recovery-card'
+    | 'restore-identity'
+    | 'initiate-recovery'
+    | 'complete-recovery'
+    | 'veto-recovery'
+  >,
+  flags: Map<string, string>,
+  rootVaultHomePath: string,
+  vaultSodium: VaultSodium,
+): Promise<Record<string, unknown>> {
+  if (ceremony === 'issue-recovery-card') {
+    const outputDir = resolve(requireFlag(flags, 'output-dir'));
+    const pin = await readPassphrase(
+      'Card PIN (digits and lowercase letters; never printed, never stored): ',
+    );
+    const pinConfirmation = await readPassphrase('Repeat Card PIN: ');
+    if (pin !== pinConfirmation) {
+      throw new Error('recovery_pin_mismatch');
+    }
+    return await withClient(rootVaultHomePath, async (client) => {
+      const homeId = requireFlag(flags, 'home-id');
+      const card = await client.ceremonyIssueRecoveryCard({
+        signerKeyFingerprintHex: requireFlag(flags, 'fingerprint'),
+        picoName: requireFlag(flags, 'pico-name'),
+        homeNameOrId: flags.get('home-name') ?? homeId,
+        homeId,
+        hostSigningKeyFingerprintHex: requireFlag(flags, 'host-signing-fingerprint'),
+        hostKeyAgreementKeyFingerprintHex: requireFlag(flags, 'host-agreement-fingerprint'),
+        hostKeyAgreementPublicKeyHex: requireFlag(flags, 'host-agreement-public-key'),
+        endpointHint: requireFlag(flags, 'endpoint-hint'),
+        issuedAt: new Date().toISOString(),
+        pin,
+      }) as unknown as PicoVaultRecoveryCard;
+      const pdfs = await generatePicoRecoveryCardPdfs(card);
+      mkdirSync(outputDir, { recursive: true, mode: 0o700 });
+      const cardPrinterPdfPath = join(outputDir, 'pico-recovery-card-card-printer.pdf');
+      const paperPrintablePdfPath = join(outputDir, 'pico-recovery-card-paper-printable.pdf');
+      writeFileSync(cardPrinterPdfPath, pdfs.cardPrinterPdf, { mode: 0o600 });
+      writeFileSync(paperPrintablePdfPath, pdfs.paperPrintablePdf, { mode: 0o600 });
+      process.stderr.write(
+        'These PDFs are your identity root behind the Card PIN (ADR 0110): '
+        + 'print and laminate now, then delete both files. Never photograph '
+        + 'the back side.\n',
+      );
+      return {
+        identityKeyFingerprintHex: card.payload.identityKeyFingerprintHex,
+        picoName: card.payload.picoName,
+        homeId: card.payload.homeId,
+        issuedAt: card.payload.issuedAt,
+        pinProtected: card.payload.pinProtected,
+        cardPrinterPdfPath,
+        paperPrintablePdfPath,
+      };
+    });
+  }
+
+  if (ceremony === 'restore-identity') {
+    const foundationPaths = resolveFoundationPaths(flags, process.env);
+    assertVaultCustodyPathSeparation({
+      vaultKeyfilePath: rootVaultHomePath,
+      foundationDataPath: foundationPaths.foundationDataPath,
+      foundationBackupPath: foundationPaths.foundationBackupPath,
+    });
+    const phrase = await readPassphrase('Recovery Phrase (24 words, one line): ');
+    const pin = await readPassphrase('Card PIN: ');
+    const passphrase = await readPassphrase(
+      'Passphrase for the restored pico_identity keyfile: ',
+    );
+    const confirmation = await readPassphrase('Repeat passphrase: ');
+    if (passphrase !== confirmation) {
+      throw new Error('passphrase_mismatch');
+    }
+    const restored = restorePicoVaultIdentityFromRecovery(vaultSodium, {
+      recoveryPhrase: phrase.trim().toLowerCase().split(/\s+/u).join(' '),
+      pinProtected: true,
+      pin,
+      identityKeyFingerprintHex: requireFlag(flags, 'fingerprint'),
+      passphrase,
+    });
+    const path = join(
+      rootVaultHomePath,
+      'keyfiles',
+      `pico_identity-${restored.keyFingerprintHex}.json`,
+    );
+    writePicoVaultKeyfile(path, restored.keyfile);
+    return {
+      keyRole: 'pico_identity',
+      keyFingerprintHex: restored.keyFingerprintHex,
+      publicKeyHex: restored.publicKeyHex,
+      path,
+    };
+  }
+
+  if (ceremony === 'initiate-recovery') {
+    return await withClient(rootVaultHomePath, async (rootClient) => {
+      const identityKeyFingerprintHex = requireFlag(flags, 'fingerprint');
+      const identityPublicKeyHex = await unlockedIdentityPublicKey(
+        rootClient,
+        identityKeyFingerprintHex,
+      );
+      const targetVaultHomePath = resolve(requireFlag(flags, 'target-vault-home'));
+      return await withClient(targetVaultHomePath, async (targetClient) => {
+        const targetLinkClient = await createRecoveryTargetLinkClient(
+          flags,
+          targetClient,
+          vaultSodium,
+          identityPublicKeyHex,
+        );
+        return await initiatePicoHomeDeviceRecovery({
+          rootClient,
+          targetClient,
+          targetLinkClient,
+          sodium: vaultSodium,
+          homeId: requireFlag(flags, 'home-id'),
+          hostSigningKeyFingerprintHex: requireFlag(flags, 'host-signing-fingerprint'),
+          hostKeyAgreementKeyFingerprintHex:
+            requireFlag(flags, 'host-agreement-fingerprint'),
+          identityKeyFingerprintHex,
+          targetDelegationId: requireFlag(flags, 'target-delegation-id'),
+          targetDeviceSigningKeyFingerprintHex:
+            requireFlag(flags, 'target-signing-fingerprint'),
+          targetDeviceKeyAgreementKeyFingerprintHex:
+            requireFlag(flags, 'target-agreement-fingerprint'),
+          ...(flags.has('valid-from')
+            ? { validFrom: requireFlag(flags, 'valid-from') }
+            : {}),
+          validUntil: requireFlag(flags, 'valid-until'),
+          ...(flags.has('scopes') ? { scopes: lifecycleScopes(flags) } : {}),
+        }) as unknown as Record<string, unknown>;
+      });
+    });
+  }
+
+  if (ceremony === 'complete-recovery') {
+    const pending = readRecordFile(
+      requireFlag(flags, 'pending-file'),
+      'pending_recovery',
+    ) as unknown as PicoHomeDeviceRecoveryPendingView;
+    return await withClient(rootVaultHomePath, async (targetClient) => {
+      const targetLinkClient = await createRecoveryTargetLinkClient(
+        flags,
+        targetClient,
+        vaultSodium,
+        requireFlag(flags, 'identity-public-key'),
+      );
+      return await completePicoHomeDeviceRecovery({
+        targetLinkClient,
+        pending,
+      }) as unknown as Record<string, unknown>;
+    });
+  }
+
+  return await withClient(rootVaultHomePath, async (livingClient) => {
+    const livingDeviceLinkClient = await createLifecycleLinkClient(
+      flags,
+      livingClient,
+      vaultSodium,
+      requireFlag(flags, 'identity-public-key'),
+    );
+    return await vetoPicoHomeDeviceRecovery({
+      livingDeviceLinkClient,
+      recoveryId: requireFlag(flags, 'recovery-id'),
+    }) as unknown as Record<string, unknown>;
+  });
+}
+
+/**
+ * ADR 0110 pins the outer Link sender of a recovery submission to the claim's
+ * exact target binding, so the sender is built from the target flags by
+ * construction rather than from separate link-* flags that could diverge.
+ */
+async function createRecoveryTargetLinkClient(
+  flags: Map<string, string>,
+  targetClient: PicoVaultDaemonClient,
+  vaultSodium: VaultSodium,
+  identityPublicKeyHex: string,
+): Promise<PicoLinkDirectClient> {
+  return await createPicoLinkDirectClient({
+    sodium: vaultSodium,
+    daemonClient: targetClient,
+    coreUrl: requireFlag(flags, 'core-url'),
+    host: {
+      signingPublicKeyHex: requireFlag(flags, 'host-signing-public-key'),
+      signingKeyFingerprintHex: requireFlag(flags, 'host-signing-fingerprint'),
+      keyAgreementPublicKeyHex: requireFlag(flags, 'host-agreement-public-key'),
+      keyAgreementKeyFingerprintHex: requireFlag(flags, 'host-agreement-fingerprint'),
+    },
+    sender: {
+      identityKeyFingerprintHex: requireFlag(flags, 'fingerprint'),
+      identityPublicKeyHex,
+      deviceSigningKeyFingerprintHex: requireFlag(flags, 'target-signing-fingerprint'),
+      deviceKeyAgreementKeyFingerprintHex:
+        requireFlag(flags, 'target-agreement-fingerprint'),
+      delegationId: requireFlag(flags, 'target-delegation-id'),
+    },
+  });
+}
+
 export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
   const invocation = parsePicoVaultCliArguments(argv);
   const vaultHomePath = resolveVaultHome(invocation.flags, process.env);
@@ -737,6 +1033,22 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
     }
     case 'ceremony': {
       await sodium.ready;
+      if (
+        invocation.ceremony === 'issue-recovery-card'
+        || invocation.ceremony === 'restore-identity'
+        || invocation.ceremony === 'initiate-recovery'
+        || invocation.ceremony === 'complete-recovery'
+        || invocation.ceremony === 'veto-recovery'
+      ) {
+        const result = await runDeviceRecoveryCli(
+          invocation.ceremony,
+          invocation.flags,
+          vaultHomePath,
+          sodium as unknown as VaultSodium,
+        );
+        process.stdout.write(`${JSON.stringify(result)}\n`);
+        return;
+      }
       if (
         invocation.ceremony === 'enroll-device'
         || invocation.ceremony === 'renew-device'
@@ -1091,7 +1403,9 @@ if (isMainModule) {
         'usage: pico-vault <daemon|create|status|unlock|lock|sign> '
         + '| pico-vault ceremony <claim-home|create-domain|rotate-domain|grant-reader'
         + '|publish-checkpoint|issue-membership|delegate-device|open-identity-session'
-        + '|enroll-device|renew-device|revoke-device|inspect-device-lifecycle> [flags]\n'
+        + '|enroll-device|renew-device|revoke-device|inspect-device-lifecycle'
+        + '|issue-recovery-card|restore-identity|initiate-recovery'
+        + '|complete-recovery|veto-recovery> [flags]\n'
         + '[--vault-home <path>] [--foundation-data <path>] [--foundation-backup <path>] '
         + '[--role <keyRole>] [--fingerprint <hex>]\n',
       );
