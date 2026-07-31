@@ -18,7 +18,8 @@
     "version:check": "node scripts/check-version.mjs",
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:coverage": "pnpm -r test:coverage",
-    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm build && pnpm check && pnpm test"
+    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm companion:check && pnpm build && pnpm check && pnpm test",
+    "companion:check": "node scripts/check-companion-boundary.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

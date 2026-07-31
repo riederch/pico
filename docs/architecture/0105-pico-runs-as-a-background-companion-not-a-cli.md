@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted product-form decision. Nothing implements it yet, and the current
-CLI is named here as a transitional tool rather than a product surface.
+Accepted product-form decision. ADR 0113 has since decided B2's shell and
+landed the companion service core; the CLI remains a transitional tool
+rather than a product surface.
 
 ## Context
 
@@ -83,11 +84,13 @@ this product form rather than a refinement of it.
 
 - **B1 - Recorded: Done.** The product form is written down, so later work
   stops inheriting the CLI as an assumption.
-- **B2 - Background service: Open.** A long-running local process that
-  holds the Vault unlock and serves the avatar, replacing the terminal as
-  the daemon's consumer.
+- **B2 - Background service: Decided and started.** ADR 0113 decides the
+  shell (Electron over a shell-free service core) and lands the service
+  core with the ADR 0112 alarm carrier as its C1 gate; the shell wiring
+  and packaging are ADR 0113 C2/C3.
 - **B3 - Avatar interaction: Open.** The surface itself, with channel
-  detection and graceful degradation to what the device has.
+  detection and graceful degradation to what the device has; it starts
+  at ADR 0113 C2 with the renderer and its typed bridge.
 - **B4 - Approval rendering: Done.** ADR 0106 makes the daemon build both
   canonical signature input and human statement from the same fields.
 - **B5 - Transport: Partially implemented.** ADR 0107 D1-D5 supplies the
@@ -115,8 +118,9 @@ Positive:
 
 Negative and residual:
 
-- nothing implements this; the distance between it and the current state is
-  larger than any single gate suggests;
+- the distance between this product form and the current state remains
+  larger than any single gate suggests; B2 has started (ADR 0113), the
+  interaction surface has not;
 - the ADR 0103 ceremony commands are transitional, and their CLI surface
   will be replaced even though their logic survives;
 - ADR 0097's platform order was reasoned about a daemon, not about a
@@ -142,3 +146,4 @@ Negative and residual:
 - [ADR 0097](0097-deployable-vault-process-and-local-ipc-authority-boundary.md)
 - [ADR 0099](0099-hold-channel-approval-for-authority-creating-signatures.md)
 - [ADR 0103](0103-person-side-ceremony-client-and-first-installation-validation.md)
+- [ADR 0113](0113-electron-shell-over-a-shell-free-companion-service-core.md)
