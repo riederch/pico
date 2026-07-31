@@ -17,16 +17,28 @@ import type {
   PicoHomeDeviceLifecycleRecord,
   PicoHomeDeviceLifecycleSubmission,
   PicoHomeDeviceLifecycleReceiptSignatureInput,
+  PicoHomeDeviceRecoveryPendingView,
+  PicoHomeDeviceRecoveryPreparation,
+  PicoHomeDeviceRecoveryRecord,
+  PicoHomeDeviceRecoverySubmission,
+  PicoHomeDeviceRecoveryReceiptSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceLifecycleReceiptSignatureInput,
+  buildPicoHomeDeviceRecoveryClaimSignatureInput,
+  buildPicoHomeDeviceRecoveryPrepareSignatureInput,
+  buildPicoHomeDeviceRecoveryReceiptSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   picoHomeDeviceLifecycleEvidenceDigestHex,
   picoHomeDeviceLifecycleRecordSchema,
   picoHomeDeviceLifecycleSubmissionDigestHex,
+  picoHomeDeviceRecoveryClaimDigestHex,
+  picoHomeDeviceRecoveryEvidenceDigestHex,
+  picoHomeDeviceRecoveryRecordSchema,
+  picoHomeDeviceRecoverySubmissionSchema,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
@@ -75,6 +87,10 @@ import {
 } from './domain-read-grant.js';
 import { ReaderCustodyStore } from './reader-custody.js';
 import type { PicoIdentityReaderKeySelector } from './reader-key.js';
+
+export const PICO_HOME_DEVICE_RECOVERY_DELAY_MS = 48 * 60 * 60 * 1_000;
+export const PICO_HOME_DEVICE_RECOVERY_COMPLETION_WINDOW_MS =
+  7 * 24 * 60 * 60 * 1_000;
 
 export type AppendResult = PicoEventAppendResult;
 
@@ -223,6 +239,66 @@ export type PicoHomeDeviceLifecycleRecordResult =
 export interface PicoHomeDeviceLifecycleReconciliationResult {
   verifiedTransitions: number;
   reprojectedTransitions: number;
+  quarantinedIdentities: string[];
+}
+
+export type PicoHomeDeviceRecoveryInitiationResult =
+  | {
+    ok: true;
+    status: 'pending' | 'superseded';
+    pending: PicoHomeDeviceRecoveryPendingView;
+  }
+  | {
+    ok: false;
+    reason:
+      | 'identity_is_not_active_member'
+      | 'invalid_recovery'
+      | 'stale_lifecycle_head'
+      | 'active_delegation_not_covered'
+      | 'recovery_id_reused'
+      | 'conflicting_record';
+  };
+
+export type PicoHomeDeviceRecoveryPreparationResult =
+  | {
+    ok: true;
+    view: PicoHomeDeviceLifecycleView;
+  }
+  | {
+    ok: false;
+    reason: 'recovery_prepare_unavailable' | 'invalid_recovery_prepare';
+  };
+
+export type PicoHomeDeviceRecoveryCompletionResult =
+  | { ok: true; record: PicoHomeDeviceRecoveryRecord }
+  | {
+    ok: false;
+    reason:
+      | 'recovery_unavailable'
+      | 'recovery_superseded'
+      | 'recovery_vetoed'
+      | 'recovery_lapsed'
+      | 'recovery_consumed'
+      | 'recovery_not_effective'
+      | 'stale_lifecycle_head'
+      | 'invalid_recovery'
+      | 'conflicting_record';
+  };
+
+export type PicoHomeDeviceRecoveryVetoResult =
+  | { ok: true }
+  | {
+    ok: false;
+    reason:
+      | 'recovery_not_found'
+      | 'recovery_not_pending'
+      | 'identity_mismatch';
+  };
+
+export interface PicoHomeDeviceRecoveryReconciliationResult {
+  verifiedRecoveries: number;
+  reprojectedRecoveries: number;
+  lapsedPending: number;
   quarantinedIdentities: string[];
 }
 
@@ -1577,6 +1653,529 @@ export class EventStore {
     };
   }
 
+  public picoHomeDeviceRecoveryPendingView(
+    picoIdentityFingerprintHex: string,
+  ): PicoHomeDeviceRecoveryPendingView | null {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_home_device_recovery')) {
+      return null;
+    }
+    const row = this.db
+      .prepare(`
+        SELECT recovery_id AS recoveryId,
+               claim_digest_hex AS claimDigestHex,
+               target_delegation_id AS targetDelegationId,
+               target_device_signing_key_fingerprint_hex
+                 AS targetDeviceSigningKeyFingerprintHex,
+               target_device_key_agreement_key_fingerprint_hex
+                 AS targetDeviceKeyAgreementKeyFingerprintHex,
+               accepted_at AS acceptedAt,
+               effective_at AS effectiveAt,
+               completion_expires_at AS completionExpiresAt
+        FROM pico_home_device_recovery
+        WHERE pico_identity_fingerprint_hex = ?
+          AND status = 'pending'
+      `)
+      .get(picoIdentityFingerprintHex) as PicoHomeDeviceRecoveryPendingView | undefined;
+    return row ?? null;
+  }
+
+  public preparePicoHomeDeviceRecovery(params: {
+    preparation: PicoHomeDeviceRecoveryPreparation;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    sodium: PicoHomeDeviceLifecycleSodium;
+    acceptedAt?: string;
+  }): PicoHomeDeviceRecoveryPreparationResult {
+    this.ensureOpen();
+    const acceptedAt = params.acceptedAt ?? new Date().toISOString();
+    try {
+      if (!hasExactRecordKeys(
+        params.preparation as unknown as Record<string, unknown>,
+        ['request', 'identityKeyRecord', 'rootSignatureHex'],
+      )) {
+        return { ok: false, reason: 'invalid_recovery_prepare' };
+      }
+      const { request, identityKeyRecord, rootSignatureHex } =
+        params.preparation;
+      const claimState = this.picoHomeClaimState();
+      if (
+        claimState.state !== 'claimed'
+        || claimState.homeId === null
+        || claimState.hostSigningKeyFingerprintHex === null
+        || claimState.hostKeyAgreementKeyFingerprintHex === null
+        || request.homeId !== claimState.homeId
+        || request.hostSigningKeyFingerprintHex
+          !== claimState.hostSigningKeyFingerprintHex
+        || request.hostKeyAgreementKeyFingerprintHex
+          !== claimState.hostKeyAgreementKeyFingerprintHex
+        || request.picoIdentityFingerprintHex
+          !== params.sender.picoIdentityFingerprintHex
+        || request.targetDelegationId !== params.sender.delegationId
+        || request.targetDeviceSigningKeyFingerprintHex
+          !== params.sender.deviceSigningKeyFingerprintHex
+        || request.targetDeviceKeyAgreementKeyFingerprintHex
+          !== params.sender.deviceKeyAgreementKeyFingerprintHex
+        || identityKeyRecord.suite !== picoIdentitySuite
+        || identityKeyRecord.keyRole !== 'pico_identity'
+        || !verifyPicoIdentityKeyRecordFingerprint(params.sodium, {
+          keyRecord: identityKeyRecord,
+          expectedFingerprintHex: request.picoIdentityFingerprintHex,
+        })
+      ) {
+        return { ok: false, reason: 'invalid_recovery_prepare' };
+      }
+      const createdAtMs = Date.parse(request.createdAt);
+      const expiresAtMs = Date.parse(request.expiresAt);
+      const acceptedAtMs = Date.parse(acceptedAt);
+      if (
+        !Number.isFinite(createdAtMs)
+        || !Number.isFinite(expiresAtMs)
+        || !Number.isFinite(acceptedAtMs)
+        || acceptedAtMs < createdAtMs
+        || acceptedAtMs >= expiresAtMs
+        || expiresAtMs - createdAtMs > 5 * 60 * 1_000
+        || !verifyPicoIdentityDetachedSignature(params.sodium, {
+          publicKeyHex: identityKeyRecord.publicKeyHex,
+          signatureInput:
+            buildPicoHomeDeviceRecoveryPrepareSignatureInput(request),
+          signatureHex: rootSignatureHex,
+        })
+      ) {
+        return { ok: false, reason: 'invalid_recovery_prepare' };
+      }
+
+      // Membership and lifecycle state are consulted only after the identity
+      // root signature has authenticated the request. A random pre-authority
+      // caller therefore cannot use this phase as a membership/status oracle.
+      const view = this.picoHomeDeviceLifecycleView({
+        picoIdentityFingerprintHex: request.picoIdentityFingerprintHex,
+        sodium: params.sodium,
+        at: acceptedAt,
+      });
+      return view === undefined
+        ? { ok: false, reason: 'recovery_prepare_unavailable' }
+        : { ok: true, view };
+    } catch {
+      return { ok: false, reason: 'invalid_recovery_prepare' };
+    }
+  }
+
+  public initiatePicoHomeDeviceRecovery(params: {
+    submission: PicoHomeDeviceRecoverySubmission;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    sodium: PicoHomeDeviceLifecycleSodium;
+    acceptedAt?: string;
+  }): PicoHomeDeviceRecoveryInitiationResult {
+    this.ensureOpen();
+    const acceptedAt = params.acceptedAt ?? new Date().toISOString();
+    const claimState = this.picoHomeClaimState();
+    const claim = params.submission.claim;
+    if (!verifyPicoHomeDeviceRecoveryPreAuthority(params.sodium, {
+      submission: params.submission,
+      sender: params.sender,
+      claimState,
+      acceptedAt,
+    })) {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+    const homeId = claimState.homeId ?? undefined;
+    if (homeId === undefined
+      || !this.hasActivePicoHomeMembership(
+        claim.picoIdentityFingerprintHex,
+        homeId,
+        acceptedAt,
+      )) {
+      return { ok: false, reason: 'identity_is_not_active_member' };
+    }
+    const view = this.picoHomeDeviceLifecycleView({
+      picoIdentityFingerprintHex: claim.picoIdentityFingerprintHex,
+      sodium: params.sodium,
+      at: acceptedAt,
+    });
+    if (view === undefined || view.observedLifecycleOrder !== claim.observedLifecycleOrder) {
+      return { ok: false, reason: 'stale_lifecycle_head' };
+    }
+
+    const verification = verifyPicoHomeDeviceRecoverySubmission(params.sodium, {
+      submission: params.submission,
+      sender: params.sender,
+      claimState,
+      view,
+      acceptedAt,
+    });
+    if (!verification.ok) {
+      return { ok: false, reason: verification.reason };
+    }
+    if (this.db
+      .prepare('SELECT 1 FROM pico_home_device_recovery WHERE recovery_id = ?')
+      .get(claim.recoveryId) !== undefined) {
+      return { ok: false, reason: 'recovery_id_reused' };
+    }
+    const acceptedAtMs = Date.parse(acceptedAt);
+    const effectiveAt = new Date(
+      acceptedAtMs + PICO_HOME_DEVICE_RECOVERY_DELAY_MS,
+    ).toISOString();
+    const completionExpiresAt = new Date(
+      Date.parse(effectiveAt) + PICO_HOME_DEVICE_RECOVERY_COMPLETION_WINDOW_MS,
+    ).toISOString();
+    const existing = this.picoHomeDeviceRecoveryPendingView(
+      claim.picoIdentityFingerprintHex,
+    );
+    const status = existing === null ? 'pending' : 'superseded';
+    try {
+      this.db.transaction(() => {
+        if (existing !== null) {
+          this.db
+            .prepare(`
+              UPDATE pico_home_device_recovery
+              SET status = 'superseded',
+                  resolved_at = ?,
+                  superseded_by_recovery_id = ?
+              WHERE recovery_id = ?
+                AND status = 'pending'
+            `)
+            .run(acceptedAt, claim.recoveryId, existing.recoveryId);
+        }
+        this.db
+          .prepare(`
+            INSERT INTO pico_home_device_recovery (
+              recovery_id,
+              home_id,
+              pico_identity_fingerprint_hex,
+              status,
+              target_delegation_id,
+              target_device_signing_key_fingerprint_hex,
+              target_device_key_agreement_key_fingerprint_hex,
+              observed_lifecycle_order,
+              evidence_digest_hex,
+              claim_digest_hex,
+              submission_json,
+              accepted_at,
+              effective_at,
+              completion_expires_at
+            ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `)
+          .run(
+            claim.recoveryId,
+            homeId,
+            claim.picoIdentityFingerprintHex,
+            claim.targetDelegationId,
+            claim.targetDeviceSigningKeyFingerprintHex,
+            claim.targetDeviceKeyAgreementKeyFingerprintHex,
+            claim.observedLifecycleOrder,
+            claim.evidenceDigestHex,
+            verification.claimDigestHex,
+            serializePayload(params.submission),
+            acceptedAt,
+            effectiveAt,
+            completionExpiresAt,
+          );
+      })();
+    } catch {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    return {
+      ok: true,
+      status,
+      pending: {
+        recoveryId: claim.recoveryId,
+        claimDigestHex: verification.claimDigestHex,
+        targetDelegationId: claim.targetDelegationId,
+        targetDeviceSigningKeyFingerprintHex:
+          claim.targetDeviceSigningKeyFingerprintHex,
+        targetDeviceKeyAgreementKeyFingerprintHex:
+          claim.targetDeviceKeyAgreementKeyFingerprintHex,
+        acceptedAt,
+        effectiveAt,
+        completionExpiresAt,
+      },
+    };
+  }
+
+  public vetoPicoHomeDeviceRecovery(params: {
+    recoveryId: string;
+    picoIdentityFingerprintHex: string;
+    vetoedAt?: string;
+  }): PicoHomeDeviceRecoveryVetoResult {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               status
+        FROM pico_home_device_recovery
+        WHERE recovery_id = ?
+      `)
+      .get(params.recoveryId) as {
+        picoIdentityFingerprintHex: string;
+        status: PicoHomeDeviceRecoveryRow['status'];
+      } | undefined;
+    if (row === undefined) {
+      return { ok: false, reason: 'recovery_not_found' };
+    }
+    if (row.picoIdentityFingerprintHex !== params.picoIdentityFingerprintHex) {
+      return { ok: false, reason: 'identity_mismatch' };
+    }
+    if (row.status !== 'pending') {
+      return { ok: false, reason: 'recovery_not_pending' };
+    }
+    this.db
+      .prepare(`
+        UPDATE pico_home_device_recovery
+        SET status = 'vetoed',
+            resolved_at = ?
+        WHERE recovery_id = ?
+          AND status = 'pending'
+      `)
+      .run(params.vetoedAt ?? new Date().toISOString(), params.recoveryId);
+    return { ok: true };
+  }
+
+  public completePicoHomeDeviceRecovery(params: {
+    recoveryId: string;
+    claimDigestHex: string;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    hostSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    signHostReceipt(signatureInput: Uint8Array): string;
+    sodium: PicoHomeDeviceLifecycleSodium;
+    completedAt?: string;
+  }): PicoHomeDeviceRecoveryCompletionResult {
+    this.ensureOpen();
+    const completedAt = params.completedAt ?? new Date().toISOString();
+    const row = this.readPicoHomeDeviceRecoveryRow(params.recoveryId);
+    if (
+      row === undefined
+      || row.claimDigestHex !== params.claimDigestHex
+      || row.picoIdentityFingerprintHex !== params.sender.picoIdentityFingerprintHex
+      || row.targetDelegationId !== params.sender.delegationId
+      || row.targetDeviceSigningKeyFingerprintHex
+        !== params.sender.deviceSigningKeyFingerprintHex
+      || row.targetDeviceKeyAgreementKeyFingerprintHex
+        !== params.sender.deviceKeyAgreementKeyFingerprintHex
+    ) {
+      // `home.device.recovery.submit` is a pre-authority operation. Unknown
+      // ids, wrong digests and wrong targets therefore share one response:
+      // no caller may turn a learned recovery id into a status oracle.
+      return { ok: false, reason: 'recovery_unavailable' };
+    }
+    if (row.status !== 'pending') {
+      return {
+        ok: false,
+        reason: `recovery_${row.status}` as Exclude<
+          PicoHomeDeviceRecoveryCompletionResult,
+          { ok: true }
+        >['reason'],
+      };
+    }
+    if (Date.parse(completedAt) < Date.parse(row.effectiveAt)) {
+      return { ok: false, reason: 'recovery_not_effective' };
+    }
+    if (Date.parse(completedAt) >= Date.parse(row.completionExpiresAt)) {
+      this.db
+        .prepare(`
+          UPDATE pico_home_device_recovery
+          SET status = 'lapsed',
+              resolved_at = ?
+          WHERE recovery_id = ?
+            AND status = 'pending'
+        `)
+        .run(completedAt, row.recoveryId);
+      return { ok: false, reason: 'recovery_lapsed' };
+    }
+
+    let submission: PicoHomeDeviceRecoverySubmission;
+    try {
+      submission = JSON.parse(row.submissionJson) as PicoHomeDeviceRecoverySubmission;
+    } catch {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+    const claimState = this.picoHomeClaimState();
+    // Re-evaluate the exact device set that the Home accepted, not the set
+    // that happens to remain active after the 48-hour delay. A delegation may
+    // expire naturally while recovery is pending; that must neither invalidate
+    // an otherwise complete replacement nor let a delegation active at
+    // acceptance escape its root-signed revocation.
+    const view = this.picoHomeDeviceLifecycleView({
+      picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+      sodium: params.sodium,
+      at: row.acceptedAt,
+    });
+    if (view === undefined || view.observedLifecycleOrder !== row.observedLifecycleOrder) {
+      return { ok: false, reason: 'stale_lifecycle_head' };
+    }
+    const verification = verifyPicoHomeDeviceRecoverySubmission(params.sodium, {
+      submission,
+      sender: params.sender,
+      claimState,
+      view,
+      acceptedAt: row.acceptedAt,
+    });
+    if (!verification.ok
+      || verification.claimDigestHex !== row.claimDigestHex
+      || submission.claim.evidenceDigestHex !== row.evidenceDigestHex) {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+
+    const resultingLifecycleOrder = freshestRecoveryEvidenceOrder(submission);
+    const receipt: PicoHomeDeviceRecoveryReceiptSignatureInput = {
+      suite: picoIdentitySuite,
+      recoveryId: row.recoveryId,
+      homeId: row.homeId,
+      hostSigningKeyFingerprintHex:
+        claimState.hostSigningKeyFingerprintHex ?? '',
+      picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+      targetDelegationId: row.targetDelegationId,
+      targetDeviceSigningKeyFingerprintHex:
+        row.targetDeviceSigningKeyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        row.targetDeviceKeyAgreementKeyFingerprintHex,
+      evidenceDigestHex: row.evidenceDigestHex,
+      claimDigestHex: row.claimDigestHex,
+      acceptedLifecycleOrder: row.observedLifecycleOrder,
+      resultingLifecycleOrder,
+      pendingAcceptedAt: row.acceptedAt,
+      effectiveAt: row.effectiveAt,
+      completionExpiresAt: row.completionExpiresAt,
+      completedAt,
+      leavesExactlyOneActiveDevice: true,
+    };
+    let hostSignatureHex: string;
+    try {
+      if (
+        params.hostSigningKeyRecord.suite !== picoIdentitySuite
+        || params.hostSigningKeyRecord.keyRole !== 'home_host_signing'
+        || !verifyPicoIdentityKeyRecordFingerprint(params.sodium, {
+          keyRecord: params.hostSigningKeyRecord,
+          expectedFingerprintHex:
+            claimState.hostSigningKeyFingerprintHex ?? '',
+        })
+      ) {
+        return { ok: false, reason: 'invalid_recovery' };
+      }
+      const input = buildPicoHomeDeviceRecoveryReceiptSignatureInput(receipt);
+      hostSignatureHex = params.signHostReceipt(input);
+      if (!verifyPicoIdentityDetachedSignature(params.sodium, {
+        publicKeyHex: params.hostSigningKeyRecord.publicKeyHex,
+        signatureInput: input,
+        signatureHex: hostSignatureHex,
+      })) {
+        return { ok: false, reason: 'invalid_recovery' };
+      }
+    } catch {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+    const record: PicoHomeDeviceRecoveryRecord = {
+      schema: picoHomeDeviceRecoveryRecordSchema,
+      submission,
+      receipt,
+      hostSigningKeyRecord: params.hostSigningKeyRecord,
+      hostSignatureHex,
+    };
+
+    try {
+      this.db.transaction(() => {
+        const lifecycle = this.recordPicoIdentityLifecycleEvidence({
+          identityKeyRecord: submission.evidence.identityKeyRecord,
+          delegation: submission.evidence.delegation,
+          revocations: submission.evidence.revocations,
+          sodium: params.sodium,
+          recordedAt: completedAt,
+        });
+        if (!lifecycle.ok) {
+          throw new PicoHomeDeviceRecoveryCommitError(
+            lifecycle.reason === 'conflicting_record'
+              ? 'conflicting_record'
+              : 'invalid_recovery',
+          );
+        }
+        const reader = this.registerPicoIdentityReaderKey({
+          picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+          deviceSigningKeyFingerprintHex:
+            row.targetDeviceSigningKeyFingerprintHex,
+          delegationId: row.targetDelegationId,
+          deviceKeyAgreementKeyRecord:
+            submission.evidence.targetDeviceKeyAgreementKeyRecord,
+          sodium: params.sodium,
+          at: completedAt,
+          registeredAt: completedAt,
+        });
+        if (!reader.ok) {
+          throw new PicoHomeDeviceRecoveryCommitError(
+            reader.reason === 'conflicting_record'
+              ? 'conflicting_record'
+              : 'invalid_recovery',
+          );
+        }
+        const resulting = this.picoHomeDeviceLifecycleView({
+          picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+          sodium: params.sodium,
+          at: completedAt,
+        });
+        if (
+          resulting === undefined
+          || resulting.observedLifecycleOrder !== resultingLifecycleOrder
+          || resulting.devices.filter((device) => device.status === 'active').length !== 1
+          || resulting.devices.find(
+            (device) => device.status === 'active',
+          )?.delegationId !== row.targetDelegationId
+        ) {
+          throw new PicoHomeDeviceRecoveryCommitError('invalid_recovery');
+        }
+        const consumed = this.db
+          .prepare(`
+            UPDATE pico_home_device_recovery
+            SET status = 'consumed',
+                resolved_at = ?,
+                recovery_record_json = ?
+            WHERE recovery_id = ?
+              AND status = 'pending'
+          `)
+          .run(completedAt, serializePayload(record), row.recoveryId);
+        if (consumed.changes !== 1) {
+          throw new PicoHomeDeviceRecoveryCommitError('conflicting_record');
+        }
+      })();
+    } catch (error) {
+      return {
+        ok: false,
+        reason: error instanceof PicoHomeDeviceRecoveryCommitError
+          ? error.reason
+          : 'conflicting_record',
+      };
+    }
+    return { ok: true, record };
+  }
+
+  private readPicoHomeDeviceRecoveryRow(
+    recoveryId: string,
+  ): PicoHomeDeviceRecoveryRow | undefined {
+    return this.db
+      .prepare(`
+        SELECT recovery_id AS recoveryId,
+               home_id AS homeId,
+               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               status,
+               target_delegation_id AS targetDelegationId,
+               target_device_signing_key_fingerprint_hex
+                 AS targetDeviceSigningKeyFingerprintHex,
+               target_device_key_agreement_key_fingerprint_hex
+                 AS targetDeviceKeyAgreementKeyFingerprintHex,
+               observed_lifecycle_order AS observedLifecycleOrder,
+               evidence_digest_hex AS evidenceDigestHex,
+               claim_digest_hex AS claimDigestHex,
+               submission_json AS submissionJson,
+               accepted_at AS acceptedAt,
+               effective_at AS effectiveAt,
+               completion_expires_at AS completionExpiresAt,
+               resolved_at AS resolvedAt,
+               superseded_by_recovery_id AS supersededByRecoveryId,
+               recovery_record_json AS recoveryRecordJson
+        FROM pico_home_device_recovery
+        WHERE recovery_id = ?
+      `)
+      .get(recoveryId) as PicoHomeDeviceRecoveryRow | undefined;
+  }
+
   /**
    * ADR 0109 D2. The Link sponsor is checked before the transaction and the
    * host receipt is constructed from that historical fact. The receipt,
@@ -1975,6 +2574,21 @@ export class EventStore {
                 : 'invalid_transition',
             );
           }
+        }
+
+        // A living device action always outranks a pending root recovery
+        // (ADR 0110). Keep the cancellation in the same transaction as the
+        // accepted lifecycle transition so neither outcome can exist alone.
+        if (tableExists(this.db, 'pico_home_device_recovery')) {
+          this.db
+            .prepare(`
+              UPDATE pico_home_device_recovery
+              SET status = 'vetoed',
+                  resolved_at = ?
+              WHERE pico_identity_fingerprint_hex = ?
+                AND status = 'pending'
+            `)
+            .run(acceptedAt, evidence.picoIdentityFingerprintHex);
         }
       })();
     } catch (error) {
@@ -2378,6 +2992,175 @@ export class EventStore {
       reprojectedTransitions: verified.filter(
         ({ row }) => !quarantined.has(row.picoIdentityFingerprintHex),
       ).length,
+      quarantinedIdentities: [...quarantined].sort(),
+    };
+  }
+
+  /**
+   * ADR 0110 R2. A consumed recovery is evidence, not merely a projection:
+   * boot re-verifies the root and target signatures plus the host receipt,
+   * then rebuilds the lifecycle and reader-key projection. Any altered record
+   * quarantines all device authority for that identity, matching ADR 0109.
+   * Pending rows are intentionally left in place; only an elapsed completion
+   * window changes them, and a restart never restarts either clock.
+   */
+  public reconcilePicoHomeDeviceRecoveries(
+    sodium: PicoHomeDeviceLifecycleSodium,
+    reconciledAt: string = new Date().toISOString(),
+  ): PicoHomeDeviceRecoveryReconciliationResult {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_home_device_recovery')) {
+      return {
+        verifiedRecoveries: 0,
+        reprojectedRecoveries: 0,
+        lapsedPending: 0,
+        quarantinedIdentities: [],
+      };
+    }
+
+    const lapsedPending = this.db
+      .prepare(`
+        UPDATE pico_home_device_recovery
+        SET status = 'lapsed',
+            resolved_at = ?
+        WHERE status = 'pending'
+          AND completion_expires_at <= ?
+      `)
+      .run(reconciledAt, reconciledAt).changes;
+    const claim = this.picoHomeClaimState();
+    const rows = this.db
+      .prepare(`
+        SELECT recovery_id AS recoveryId,
+               home_id AS homeId,
+               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               status,
+               target_delegation_id AS targetDelegationId,
+               target_device_signing_key_fingerprint_hex
+                 AS targetDeviceSigningKeyFingerprintHex,
+               target_device_key_agreement_key_fingerprint_hex
+                 AS targetDeviceKeyAgreementKeyFingerprintHex,
+               observed_lifecycle_order AS observedLifecycleOrder,
+               evidence_digest_hex AS evidenceDigestHex,
+               claim_digest_hex AS claimDigestHex,
+               submission_json AS submissionJson,
+               accepted_at AS acceptedAt,
+               effective_at AS effectiveAt,
+               completion_expires_at AS completionExpiresAt,
+               resolved_at AS resolvedAt,
+               superseded_by_recovery_id AS supersededByRecoveryId,
+               recovery_record_json AS recoveryRecordJson
+        FROM pico_home_device_recovery
+        WHERE status = 'consumed'
+        ORDER BY resolved_at ASC, recovery_id ASC
+      `)
+      .all() as PicoHomeDeviceRecoveryRow[];
+    const verified: {
+      row: PicoHomeDeviceRecoveryRow;
+      record: PicoHomeDeviceRecoveryRecord;
+    }[] = [];
+    const quarantined = new Set<string>();
+
+    for (const row of rows) {
+      try {
+        if (row.recoveryRecordJson === null) {
+          throw new Error('missing_recovery_record');
+        }
+        const record =
+          JSON.parse(row.recoveryRecordJson) as PicoHomeDeviceRecoveryRecord;
+        if (!verifyStoredPicoHomeDeviceRecoveryRecord(
+          sodium,
+          claim,
+          row,
+          record,
+        )) {
+          throw new Error('invalid_recovery_record');
+        }
+        verified.push({ row, record });
+      } catch {
+        quarantined.add(row.picoIdentityFingerprintHex);
+      }
+    }
+
+    this.db.transaction(() => {
+      for (const { row, record } of verified) {
+        if (quarantined.has(row.picoIdentityFingerprintHex)) {
+          continue;
+        }
+        const evidence = record.submission.evidence;
+        const lifecycle = this.recordPicoIdentityLifecycleEvidence({
+          identityKeyRecord: evidence.identityKeyRecord,
+          delegation: evidence.delegation,
+          revocations: evidence.revocations,
+          sodium,
+          recordedAt: record.receipt.completedAt,
+        });
+        if (!lifecycle.ok) {
+          quarantined.add(row.picoIdentityFingerprintHex);
+          continue;
+        }
+        const reader = this.registerPicoIdentityReaderKey({
+          picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+          deviceSigningKeyFingerprintHex:
+            row.targetDeviceSigningKeyFingerprintHex,
+          delegationId: row.targetDelegationId,
+          deviceKeyAgreementKeyRecord:
+            evidence.targetDeviceKeyAgreementKeyRecord,
+          sodium,
+          at: record.receipt.completedAt,
+          registeredAt: record.receipt.completedAt,
+        });
+        if (!reader.ok) {
+          quarantined.add(row.picoIdentityFingerprintHex);
+          continue;
+        }
+        const resulting = this.picoHomeDeviceLifecycleView({
+          picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+          sodium,
+          at: record.receipt.completedAt,
+        });
+        if (
+          resulting === undefined
+          || resulting.observedLifecycleOrder
+            !== record.receipt.resultingLifecycleOrder
+          || resulting.devices.filter(
+            (device) => device.status === 'active',
+          ).length !== 1
+          || resulting.devices.find(
+            (device) => device.status === 'active',
+          )?.delegationId !== row.targetDelegationId
+        ) {
+          quarantined.add(row.picoIdentityFingerprintHex);
+        }
+      }
+
+      for (const identity of quarantined) {
+        this.db
+          .prepare(`
+            DELETE FROM pico_identity_reader_key
+            WHERE pico_identity_fingerprint_hex = ?
+          `)
+          .run(identity);
+        this.db
+          .prepare(`
+            DELETE FROM pico_identity_revocation
+            WHERE issuer_pico_identity_fingerprint_hex = ?
+          `)
+          .run(identity);
+        this.db
+          .prepare(`
+            DELETE FROM pico_identity_delegation
+            WHERE issuer_pico_identity_fingerprint_hex = ?
+          `)
+          .run(identity);
+      }
+    })();
+
+    return {
+      verifiedRecoveries: verified.length,
+      reprojectedRecoveries: verified.filter(
+        ({ row }) => !quarantined.has(row.picoIdentityFingerprintHex),
+      ).length,
+      lapsedPending,
       quarantinedIdentities: [...quarantined].sort(),
     };
   }
@@ -3542,9 +4325,37 @@ interface PicoHomeDeviceLifecycleTransitionRow {
   acceptedAt: string;
 }
 
+interface PicoHomeDeviceRecoveryRow {
+  recoveryId: string;
+  homeId: string;
+  picoIdentityFingerprintHex: string;
+  status: 'pending' | 'superseded' | 'vetoed' | 'lapsed' | 'consumed';
+  targetDelegationId: string;
+  targetDeviceSigningKeyFingerprintHex: string;
+  targetDeviceKeyAgreementKeyFingerprintHex: string;
+  observedLifecycleOrder: string;
+  evidenceDigestHex: string;
+  claimDigestHex: string;
+  submissionJson: string;
+  acceptedAt: string;
+  effectiveAt: string;
+  completionExpiresAt: string;
+  resolvedAt: string | null;
+  supersededByRecoveryId: string | null;
+  recoveryRecordJson: string | null;
+}
+
 class PicoHomeDeviceLifecycleCommitError extends Error {
   public constructor(
     public readonly reason: 'invalid_transition' | 'conflicting_record',
+  ) {
+    super(reason);
+  }
+}
+
+class PicoHomeDeviceRecoveryCommitError extends Error {
+  public constructor(
+    public readonly reason: 'invalid_recovery' | 'conflicting_record',
   ) {
     super(reason);
   }
@@ -4037,6 +4848,446 @@ function tableExists(db: Database.Database, tableName: string): boolean {
   return db
     .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(tableName) !== undefined;
+}
+
+function verifyPicoHomeDeviceRecoverySubmission(
+  sodium: PicoHomeDeviceLifecycleSodium,
+  params: {
+    submission: PicoHomeDeviceRecoverySubmission;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    claimState: PicoHomeClaimState;
+    view: PicoHomeDeviceLifecycleView;
+    acceptedAt: string;
+  },
+):
+  | { ok: true; claimDigestHex: string }
+  | {
+    ok: false;
+    reason:
+      | 'invalid_recovery'
+      | 'active_delegation_not_covered';
+  } {
+  try {
+    const { submission, sender, claimState, view, acceptedAt } = params;
+    const { claim, evidence } = submission;
+    if (
+      submission.schema !== picoHomeDeviceRecoverySubmissionSchema
+      || claimState.state !== 'claimed'
+      || claimState.homeId === null
+      || claimState.hostSigningKeyFingerprintHex === null
+      || claimState.hostKeyAgreementKeyFingerprintHex === null
+      || claim.homeId !== claimState.homeId
+      || claim.hostSigningKeyFingerprintHex
+        !== claimState.hostSigningKeyFingerprintHex
+      || claim.hostKeyAgreementKeyFingerprintHex
+        !== claimState.hostKeyAgreementKeyFingerprintHex
+      || claim.picoIdentityFingerprintHex
+        !== sender.picoIdentityFingerprintHex
+      || claim.targetDelegationId !== sender.delegationId
+      || claim.targetDeviceSigningKeyFingerprintHex
+        !== sender.deviceSigningKeyFingerprintHex
+      || claim.targetDeviceKeyAgreementKeyFingerprintHex
+        !== sender.deviceKeyAgreementKeyFingerprintHex
+      || claim.observedLifecycleOrder !== view.observedLifecycleOrder
+      || evidence.identityKeyRecord.suite !== picoIdentitySuite
+      || evidence.identityKeyRecord.keyRole !== 'pico_identity'
+      || evidence.targetDeviceSigningKeyRecord.suite !== picoIdentitySuite
+      || evidence.targetDeviceSigningKeyRecord.keyRole !== 'device_signing'
+      || evidence.targetDeviceKeyAgreementKeyRecord.suite !== picoIdentitySuite
+      || evidence.targetDeviceKeyAgreementKeyRecord.keyRole
+        !== 'device_key_agreement'
+      || evidence.delegation.record.issuerIdentityKeyFingerprintHex
+        !== claim.picoIdentityFingerprintHex
+      || evidence.delegation.record.delegationId
+        !== claim.targetDelegationId
+      || evidence.delegation.record.subjectSigningKeyFingerprintHex
+        !== claim.targetDeviceSigningKeyFingerprintHex
+      || evidence.delegation.record.subjectKeyAgreementKeyFingerprintHex
+        !== claim.targetDeviceKeyAgreementKeyFingerprintHex
+      || !evidence.delegation.record.scopes.includes('surface_session')
+      || claim.evidenceDigestHex
+        !== picoHomeDeviceRecoveryEvidenceDigestHex(sodium, evidence)
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.identityKeyRecord,
+        expectedFingerprintHex: claim.picoIdentityFingerprintHex,
+      })
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.targetDeviceSigningKeyRecord,
+        expectedFingerprintHex: claim.targetDeviceSigningKeyFingerprintHex,
+      })
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.targetDeviceKeyAgreementKeyRecord,
+        expectedFingerprintHex: claim.targetDeviceKeyAgreementKeyFingerprintHex,
+      })
+    ) {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+
+    const createdAtMs = Date.parse(claim.createdAt);
+    const expiresAtMs = Date.parse(claim.expiresAt);
+    const acceptedAtMs = Date.parse(acceptedAt);
+    if (
+      !Number.isFinite(createdAtMs)
+      || !Number.isFinite(expiresAtMs)
+      || !Number.isFinite(acceptedAtMs)
+      || acceptedAtMs < createdAtMs
+      || acceptedAtMs >= expiresAtMs
+      || expiresAtMs - createdAtMs > 5 * 60 * 1_000
+      || Date.parse(evidence.delegation.record.validFrom) > acceptedAtMs
+      || Date.parse(evidence.delegation.record.validUntil)
+        <= acceptedAtMs
+          + PICO_HOME_DEVICE_RECOVERY_DELAY_MS
+          + PICO_HOME_DEVICE_RECOVERY_COMPLETION_WINDOW_MS
+    ) {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+
+    const claimInput = buildPicoHomeDeviceRecoveryClaimSignatureInput(claim);
+    if (
+      !verifyPicoIdentityDetachedSignature(sodium, {
+        publicKeyHex: evidence.identityKeyRecord.publicKeyHex,
+        signatureInput: claimInput,
+        signatureHex: submission.rootSignatureHex,
+      })
+      || !verifyPicoIdentityDetachedSignature(sodium, {
+        publicKeyHex: evidence.targetDeviceSigningKeyRecord.publicKeyHex,
+        signatureInput: claimInput,
+        signatureHex: submission.targetSignatureHex,
+      })
+    ) {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+
+    createVerifiedPicoIdentityLifecycleIndex(sodium, {
+      issuerIdentityKeyRecord: evidence.identityKeyRecord,
+      signedDelegations: [evidence.delegation],
+      signedRevocations: evidence.revocations,
+    });
+
+    const evidenceOrders = [
+      evidence.delegation.record.lifecycleOrder,
+      ...evidence.revocations.map((entry) => entry.record.lifecycleOrder),
+    ];
+    if (
+      evidenceOrders.some((order) => order <= claim.observedLifecycleOrder)
+      || evidenceOrders.some((order, index) =>
+        index > 0 && order <= evidenceOrders[index - 1])
+      || new Set(evidenceOrders).size !== evidenceOrders.length
+      || evidence.revocations.some((entry) =>
+        entry.record.issuerIdentityKeyFingerprintHex
+          !== claim.picoIdentityFingerprintHex
+        || entry.record.subjectKind !== 'delegation')
+    ) {
+      return { ok: false, reason: 'invalid_recovery' };
+    }
+
+    const activeDelegations = view.devices
+      .filter((device) => device.status === 'active')
+      .map((device) => device.delegationId)
+      .sort();
+    const revokedDelegations = evidence.revocations
+      .map((entry) => entry.record.subjectRef)
+      .sort();
+    if (
+      activeDelegations.length !== revokedDelegations.length
+      || activeDelegations.some((id, index) => id !== revokedDelegations[index])
+    ) {
+      return { ok: false, reason: 'active_delegation_not_covered' };
+    }
+
+    return {
+      ok: true,
+      claimDigestHex: picoHomeDeviceRecoveryClaimDigestHex(sodium, claim),
+    };
+  } catch {
+    return { ok: false, reason: 'invalid_recovery' };
+  }
+}
+
+/**
+ * Authenticates the standing pre-authority request before membership or
+ * lifecycle state is consulted. The full verifier below still rechecks these
+ * bindings and all evidence/coverage rules; this first pass exists so an
+ * unauthenticated caller cannot distinguish inactive, stale or current
+ * identities by their outcome.
+ */
+function verifyPicoHomeDeviceRecoveryPreAuthority(
+  sodium: PicoHomeDeviceLifecycleSodium,
+  params: {
+    submission: PicoHomeDeviceRecoverySubmission;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    claimState: PicoHomeClaimState;
+    acceptedAt: string;
+  },
+): boolean {
+  try {
+    const { submission, sender, claimState, acceptedAt } = params;
+    const { claim, evidence } = submission;
+    const createdAtMs = Date.parse(claim.createdAt);
+    const expiresAtMs = Date.parse(claim.expiresAt);
+    const acceptedAtMs = Date.parse(acceptedAt);
+    if (
+      submission.schema !== picoHomeDeviceRecoverySubmissionSchema
+      || claimState.state !== 'claimed'
+      || claimState.homeId === null
+      || claimState.hostSigningKeyFingerprintHex === null
+      || claimState.hostKeyAgreementKeyFingerprintHex === null
+      || claim.homeId !== claimState.homeId
+      || claim.hostSigningKeyFingerprintHex
+        !== claimState.hostSigningKeyFingerprintHex
+      || claim.hostKeyAgreementKeyFingerprintHex
+        !== claimState.hostKeyAgreementKeyFingerprintHex
+      || claim.picoIdentityFingerprintHex
+        !== sender.picoIdentityFingerprintHex
+      || claim.targetDelegationId !== sender.delegationId
+      || claim.targetDeviceSigningKeyFingerprintHex
+        !== sender.deviceSigningKeyFingerprintHex
+      || claim.targetDeviceKeyAgreementKeyFingerprintHex
+        !== sender.deviceKeyAgreementKeyFingerprintHex
+      || evidence.identityKeyRecord.suite !== picoIdentitySuite
+      || evidence.identityKeyRecord.keyRole !== 'pico_identity'
+      || evidence.targetDeviceSigningKeyRecord.suite !== picoIdentitySuite
+      || evidence.targetDeviceSigningKeyRecord.keyRole !== 'device_signing'
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.identityKeyRecord,
+        expectedFingerprintHex: claim.picoIdentityFingerprintHex,
+      })
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.targetDeviceSigningKeyRecord,
+        expectedFingerprintHex:
+          claim.targetDeviceSigningKeyFingerprintHex,
+      })
+      || !Number.isFinite(createdAtMs)
+      || !Number.isFinite(expiresAtMs)
+      || !Number.isFinite(acceptedAtMs)
+      || acceptedAtMs < createdAtMs
+      || acceptedAtMs >= expiresAtMs
+      || expiresAtMs - createdAtMs > 5 * 60 * 1_000
+    ) {
+      return false;
+    }
+    const signatureInput =
+      buildPicoHomeDeviceRecoveryClaimSignatureInput(claim);
+    return verifyPicoIdentityDetachedSignature(sodium, {
+      publicKeyHex: evidence.identityKeyRecord.publicKeyHex,
+      signatureInput,
+      signatureHex: submission.rootSignatureHex,
+    }) && verifyPicoIdentityDetachedSignature(sodium, {
+      publicKeyHex: evidence.targetDeviceSigningKeyRecord.publicKeyHex,
+      signatureInput,
+      signatureHex: submission.targetSignatureHex,
+    });
+  } catch {
+    return false;
+  }
+}
+
+function freshestRecoveryEvidenceOrder(
+  submission: PicoHomeDeviceRecoverySubmission,
+): string {
+  return [
+    submission.evidence.delegation.record.lifecycleOrder,
+    ...submission.evidence.revocations.map(
+      (entry) => entry.record.lifecycleOrder,
+    ),
+  ].sort().at(-1) ?? submission.claim.observedLifecycleOrder;
+}
+
+function verifyStoredPicoHomeDeviceRecoveryRecord(
+  sodium: PicoHomeDeviceLifecycleSodium,
+  claimState: PicoHomeClaimState,
+  row: PicoHomeDeviceRecoveryRow,
+  record: PicoHomeDeviceRecoveryRecord,
+): boolean {
+  try {
+    if (
+      row.status !== 'consumed'
+      || row.resolvedAt === null
+      || claimState.state !== 'claimed'
+      || claimState.homeId === null
+      || claimState.hostSigningKeyFingerprintHex === null
+      || claimState.hostKeyAgreementKeyFingerprintHex === null
+      || record.schema !== picoHomeDeviceRecoveryRecordSchema
+      || !hasExactRecordKeys(
+        record as unknown as Record<string, unknown>,
+        [
+          'schema',
+          'submission',
+          'receipt',
+          'hostSigningKeyRecord',
+          'hostSignatureHex',
+        ],
+      )
+    ) {
+      return false;
+    }
+    const { submission, receipt } = record;
+    const { claim, evidence } = submission;
+    if (
+      submission.schema !== picoHomeDeviceRecoverySubmissionSchema
+      || claim.homeId !== claimState.homeId
+      || claim.hostSigningKeyFingerprintHex
+        !== claimState.hostSigningKeyFingerprintHex
+      || claim.hostKeyAgreementKeyFingerprintHex
+        !== claimState.hostKeyAgreementKeyFingerprintHex
+      || claim.recoveryId !== row.recoveryId
+      || claim.homeId !== row.homeId
+      || claim.picoIdentityFingerprintHex
+        !== row.picoIdentityFingerprintHex
+      || claim.targetDelegationId !== row.targetDelegationId
+      || claim.targetDeviceSigningKeyFingerprintHex
+        !== row.targetDeviceSigningKeyFingerprintHex
+      || claim.targetDeviceKeyAgreementKeyFingerprintHex
+        !== row.targetDeviceKeyAgreementKeyFingerprintHex
+      || claim.observedLifecycleOrder !== row.observedLifecycleOrder
+      || claim.evidenceDigestHex !== row.evidenceDigestHex
+      || picoHomeDeviceRecoveryEvidenceDigestHex(sodium, evidence)
+        !== row.evidenceDigestHex
+      || picoHomeDeviceRecoveryClaimDigestHex(sodium, claim)
+        !== row.claimDigestHex
+      || evidence.identityKeyRecord.suite !== picoIdentitySuite
+      || evidence.identityKeyRecord.keyRole !== 'pico_identity'
+      || evidence.targetDeviceSigningKeyRecord.suite !== picoIdentitySuite
+      || evidence.targetDeviceSigningKeyRecord.keyRole !== 'device_signing'
+      || evidence.targetDeviceKeyAgreementKeyRecord.suite !== picoIdentitySuite
+      || evidence.targetDeviceKeyAgreementKeyRecord.keyRole
+        !== 'device_key_agreement'
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.identityKeyRecord,
+        expectedFingerprintHex: row.picoIdentityFingerprintHex,
+      })
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.targetDeviceSigningKeyRecord,
+        expectedFingerprintHex:
+          row.targetDeviceSigningKeyFingerprintHex,
+      })
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: evidence.targetDeviceKeyAgreementKeyRecord,
+        expectedFingerprintHex:
+          row.targetDeviceKeyAgreementKeyFingerprintHex,
+      })
+    ) {
+      return false;
+    }
+
+    const claimInput =
+      buildPicoHomeDeviceRecoveryClaimSignatureInput(claim);
+    if (
+      !verifyPicoIdentityDetachedSignature(sodium, {
+        publicKeyHex: evidence.identityKeyRecord.publicKeyHex,
+        signatureInput: claimInput,
+        signatureHex: submission.rootSignatureHex,
+      })
+      || !verifyPicoIdentityDetachedSignature(sodium, {
+        publicKeyHex: evidence.targetDeviceSigningKeyRecord.publicKeyHex,
+        signatureInput: claimInput,
+        signatureHex: submission.targetSignatureHex,
+      })
+    ) {
+      return false;
+    }
+    createVerifiedPicoIdentityLifecycleIndex(sodium, {
+      issuerIdentityKeyRecord: evidence.identityKeyRecord,
+      signedDelegations: [evidence.delegation],
+      signedRevocations: evidence.revocations,
+    });
+    const evidenceOrders = [
+      evidence.delegation.record.lifecycleOrder,
+      ...evidence.revocations.map(
+        (entry) => entry.record.lifecycleOrder,
+      ),
+    ];
+    if (
+      evidence.delegation.record.issuerIdentityKeyFingerprintHex
+        !== row.picoIdentityFingerprintHex
+      || evidence.delegation.record.delegationId
+        !== row.targetDelegationId
+      || evidence.delegation.record.subjectSigningKeyFingerprintHex
+        !== row.targetDeviceSigningKeyFingerprintHex
+      || evidence.delegation.record.subjectKeyAgreementKeyFingerprintHex
+        !== row.targetDeviceKeyAgreementKeyFingerprintHex
+      || evidence.revocations.some(
+        (entry) =>
+          entry.record.issuerIdentityKeyFingerprintHex
+            !== row.picoIdentityFingerprintHex
+          || entry.record.subjectKind !== 'delegation'
+          || entry.record.subjectRef === row.targetDelegationId,
+      )
+      || new Set(
+        evidence.revocations.map((entry) => entry.record.subjectRef),
+      ).size !== evidence.revocations.length
+      || evidenceOrders.some(
+        (order) =>
+          comparePicoIdentityLifecycleOrder(
+            order,
+            row.observedLifecycleOrder,
+          ) <= 0,
+      )
+      || evidenceOrders.some(
+        (order, index) =>
+          index > 0
+          && comparePicoIdentityLifecycleOrder(
+            order,
+            evidenceOrders[index - 1]!,
+          ) <= 0,
+      )
+    ) {
+      return false;
+    }
+
+    const expectedReceipt: PicoHomeDeviceRecoveryReceiptSignatureInput = {
+      suite: picoIdentitySuite,
+      recoveryId: row.recoveryId,
+      homeId: row.homeId,
+      hostSigningKeyFingerprintHex:
+        claimState.hostSigningKeyFingerprintHex,
+      picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+      targetDelegationId: row.targetDelegationId,
+      targetDeviceSigningKeyFingerprintHex:
+        row.targetDeviceSigningKeyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        row.targetDeviceKeyAgreementKeyFingerprintHex,
+      evidenceDigestHex: row.evidenceDigestHex,
+      claimDigestHex: row.claimDigestHex,
+      acceptedLifecycleOrder: row.observedLifecycleOrder,
+      resultingLifecycleOrder:
+        freshestRecoveryEvidenceOrder(submission),
+      pendingAcceptedAt: row.acceptedAt,
+      effectiveAt: row.effectiveAt,
+      completionExpiresAt: row.completionExpiresAt,
+      completedAt: row.resolvedAt,
+      leavesExactlyOneActiveDevice: true,
+    };
+    if (
+      serializePayload(receipt) !== serializePayload(expectedReceipt)
+      || record.hostSigningKeyRecord.suite !== picoIdentitySuite
+      || record.hostSigningKeyRecord.keyRole !== 'home_host_signing'
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: record.hostSigningKeyRecord,
+        expectedFingerprintHex:
+          claimState.hostSigningKeyFingerprintHex,
+      })
+      || !verifyPicoIdentityDetachedSignature(sodium, {
+        publicKeyHex: record.hostSigningKeyRecord.publicKeyHex,
+        signatureInput:
+          buildPicoHomeDeviceRecoveryReceiptSignatureInput(receipt),
+        signatureHex: record.hostSignatureHex,
+      })
+    ) {
+      return false;
+    }
+
+    const acceptedAtMs = Date.parse(row.acceptedAt);
+    return Date.parse(claim.createdAt) <= acceptedAtMs
+      && acceptedAtMs < Date.parse(claim.expiresAt)
+      && Date.parse(claim.expiresAt) - Date.parse(claim.createdAt)
+        <= 5 * 60 * 1_000
+      && Date.parse(evidence.delegation.record.validFrom) <= acceptedAtMs
+      && Date.parse(evidence.delegation.record.validUntil)
+        > Date.parse(row.completionExpiresAt);
+  } catch {
+    return false;
+  }
 }
 
 function verifyStoredPicoHomeDeviceLifecycleRecord(

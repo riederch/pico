@@ -73,6 +73,19 @@ These endpoints are not yet a complete Pico Link or Pico Home Link specification
 
 They assume a trusted local access path while production authentication, authorization, Home membership, Pico Link transport security and policy/audit models are not implemented. They must not be treated as a public internet API or production remote-access surface. The exposure boundary is documented in `../architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`; the staged local hardening direction is documented in `../architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`; the direct-access WebSocket ticket boundary is documented in `../architecture/0039-foundation-websocket-ticket-boundary.md`; the Home Assistant ingress packaging direction is documented in `../architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`.
 
+ADR 0110 adds internal, unpublished Pico Link Direct recovery handling under
+the single closed operation `home.device.recovery.submit`: a
+root-authenticated target-bound `prepare` phase returns the current lifecycle
+head and active replacement set, `initiate` creates durable pending state only
+from a root-signed/target-co-signed total-replacement claim, and `complete`
+reveals state only after exact recovery id, claim digest and target binding
+match. `home.device.recovery.veto` remains normally authorized to a living
+same-identity device. These forms, the Recovery Card PDF generator and the
+Foundation state machine are local implementation surfaces, not Pico Link
+compatibility. A fully matching database backup from before consumption can
+still resurrect its in-window pending row until ADR 0110 R6 supplies an
+external monotonic anchor.
+
 The current Foundation API is local diagnostics only. Direct Foundation HTTP API access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and with a local Foundation Operator login, but this is not production authentication, authorization, membership, claim, production memory or Home Assistant control boundary. Current `deviceId` values are client-supplied metadata, not verified device identity.
 
 Every Foundation API route carries exactly one access class (`../architecture/0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md`), enforced at route registration so an unclassified route cannot be served. Authority comes from typed **operator sessions**, typed **Pico identity sessions**, domain readership and the principal-less static token at its strict diagnostic ceiling. Operator sessions administer but never become Pico identity or readership. Identity sessions may satisfy `authenticated` and, through the readership decision, `domain-content`; they never satisfy diagnostics or host administration. Repeated failed operator logins on `POST /api/auth/session` are throttled with a growing, capped delay and answered `429` with `Retry-After`; the delay is deliberately not a lockout, because a lockout would let anyone deny the owner their own appliance, and failed attempts stay in operational logging only. Both session kinds are opaque bearer values, sent as `Authorization: Bearer <session>`, held in memory only and never persisted; they are not cookies, so the browser attaches no ambient credential. Revoking a session — individually, through a revoke-all, or by replacing the operator credential — also drops its realtime tickets and terminates WebSocket connections opened under it. Connections opened with the static token or in credential-free local mode carry no session and are unaffected.
@@ -185,6 +198,8 @@ home.domain_read_granted
 home.domain_read_revoked
 home.share_envelope_issued
 home.share_envelope_removed
+home.device_recovered
+home.device_recovery_vetoed
 ```
 
 Server-synthesized foundation event types (exported as `serverSynthesizedFoundationEventTypes`), appended by the server and never accepted on `POST /api/events`:
@@ -203,6 +218,8 @@ home.domain_read_granted
 home.domain_read_revoked
 home.share_envelope_issued
 home.share_envelope_removed
+home.device_recovered
+home.device_recovery_vetoed
 ```
 
 `memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller?, retentionPolicyRef? }`); an unknown `retentionPolicyRef` is rejected at write time, because the sweep's fail-safe rule would otherwise keep the item forever while the writer believed expiry was configured. The reference is stored with the item and does not appear in the event payload; the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.

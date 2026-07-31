@@ -60,6 +60,8 @@ import {
   type PicoHomeDomainReadGrantLifecycleRecord,
   type PicoHomeDomainReadGrantRecord,
   type PicoHomeDeviceLifecycleSubmission,
+  type PicoHomeDeviceRecoverySubmission,
+  type PicoHomeDeviceRecoveryPreparation,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
@@ -691,6 +693,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       app.log.error(
         deviceLifecycleReconciliation,
         'Pico Home device-lifecycle receipt verification failed; affected identity projections were quarantined.',
+      );
+    }
+    const deviceRecoveryReconciliation =
+      store.reconcilePicoHomeDeviceRecoveries(sodium);
+    if (
+      deviceRecoveryReconciliation.quarantinedIdentities.length > 0
+      || deviceRecoveryReconciliation.lapsedPending > 0
+    ) {
+      app.log.warn(
+        deviceRecoveryReconciliation,
+        deviceRecoveryReconciliation.quarantinedIdentities.length > 0
+          ? 'Pico Home device-recovery evidence failed verification; affected identity projections were quarantined.'
+          : 'Expired pending Pico Home device recoveries were lapsed during startup.',
       );
     }
   }
@@ -1462,7 +1477,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             ? { outcome: 'lifecycle_unavailable', result: {} }
             : {
               outcome: 'ok',
-              result: view as unknown as Record<string, unknown>,
+              result: {
+                ...view,
+                pendingRecovery:
+                  store.picoHomeDeviceRecoveryPendingView(
+                    principal.picoIdentityFingerprintHex,
+                  ),
+              } as unknown as Record<string, unknown>,
             };
         }
         case 'home.device.lifecycle.submit': {
@@ -1474,6 +1495,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           ) {
             return { outcome: 'invalid_arguments', result: {} };
           }
+          const pendingBefore = store.picoHomeDeviceRecoveryPendingView(
+            principal.picoIdentityFingerprintHex,
+          );
           const result = store.recordPicoHomeDeviceLifecycleTransition({
             submission: args.submission as unknown as PicoHomeDeviceLifecycleSubmission,
             sponsor: principal,
@@ -1486,6 +1510,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               homeHostKeyStore.signWithHostSigningKey(sodium, signatureInput),
             sodium,
           });
+          if (result.ok && result.inserted && pendingBefore !== null) {
+            appendServerEvent('home.device_recovery_vetoed', {});
+            app.log.warn(
+              {
+                recoveryId: pendingBefore.recoveryId,
+                picoIdentityFingerprintHex:
+                  principal.picoIdentityFingerprintHex,
+                cause: 'accepted_device_lifecycle_transition',
+              },
+              'Pending Pico device recovery was cancelled by a living device lifecycle transition.',
+            );
+          }
           return result.ok
             ? {
               outcome: 'ok',
@@ -1495,6 +1531,160 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               },
             }
             : { outcome: result.reason, result: {} };
+        }
+        case 'home.device.recovery.submit': {
+          if (args.phase === 'prepare') {
+            if (
+              !hasExactKeys(args, ['phase', 'preparation'])
+              || !isRecord(args.preparation)
+            ) {
+              return { outcome: 'invalid_arguments', result: {} };
+            }
+            const result = store.preparePicoHomeDeviceRecovery({
+              preparation:
+                args.preparation as unknown as PicoHomeDeviceRecoveryPreparation,
+              sender: principal,
+              sodium,
+            });
+            return result.ok
+              ? {
+                outcome: 'ok',
+                result: {
+                  preparationId:
+                    (args.preparation as unknown as PicoHomeDeviceRecoveryPreparation)
+                      .request.preparationId,
+                  homeId: result.view.homeId,
+                  picoIdentityFingerprintHex:
+                    result.view.picoIdentityFingerprintHex,
+                  observedLifecycleOrder:
+                    result.view.observedLifecycleOrder,
+                  activeDevices: result.view.devices
+                    .filter((device) => device.status === 'active')
+                    .map((device) => ({
+                      delegationId: device.delegationId,
+                      deviceSigningKeyFingerprintHex:
+                        device.deviceSigningKeyFingerprintHex,
+                      deviceKeyAgreementKeyFingerprintHex:
+                        device.deviceKeyAgreementKeyFingerprintHex,
+                    })),
+                },
+              }
+              : { outcome: result.reason, result: {} };
+          }
+          if (args.phase === 'initiate') {
+            if (
+              !hasExactKeys(args, ['phase', 'submission'])
+              || !isRecord(args.submission)
+            ) {
+              return { outcome: 'invalid_arguments', result: {} };
+            }
+            const result = store.initiatePicoHomeDeviceRecovery({
+              submission:
+                args.submission as unknown as PicoHomeDeviceRecoverySubmission,
+              sender: principal,
+              sodium,
+            });
+            if (!result.ok) {
+              return { outcome: result.reason, result: {} };
+            }
+            app.log.warn(
+              {
+                recoveryId: result.pending.recoveryId,
+                picoIdentityFingerprintHex:
+                  principal.picoIdentityFingerprintHex,
+                effectiveAt: result.pending.effectiveAt,
+                completionExpiresAt: result.pending.completionExpiresAt,
+                supersededExisting: result.status === 'superseded',
+              },
+              'Pico device recovery is pending.',
+            );
+            return {
+              outcome: 'recovery_pending',
+              result: {
+                status: 'pending',
+                ...result.pending,
+              },
+            };
+          }
+          if (args.phase === 'complete') {
+            if (
+              !hasExactKeys(args, ['phase', 'recoveryId', 'claimDigestHex'])
+              || typeof args.recoveryId !== 'string'
+              || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(args.recoveryId)
+              || typeof args.claimDigestHex !== 'string'
+              || !/^[0-9a-f]{64}$/u.test(args.claimDigestHex)
+              || homeHostKeys === undefined
+            ) {
+              return { outcome: 'invalid_arguments', result: {} };
+            }
+            const result = store.completePicoHomeDeviceRecovery({
+              recoveryId: args.recoveryId,
+              claimDigestHex: args.claimDigestHex,
+              sender: principal,
+              hostSigningKeyRecord: {
+                suite: homeHostKeys.publicBundle.suite,
+                keyRole: 'home_host_signing',
+                publicKeyHex:
+                  homeHostKeys.publicBundle.signingPublicKeyHex,
+              },
+              signHostReceipt: (signatureInput) =>
+                homeHostKeyStore.signWithHostSigningKey(
+                  sodium,
+                  signatureInput,
+                ),
+              sodium,
+            });
+            if (!result.ok) {
+              return { outcome: result.reason, result: {} };
+            }
+            appendServerEvent('home.device_recovered', {});
+            app.log.warn(
+              {
+                recoveryId: args.recoveryId,
+                picoIdentityFingerprintHex:
+                  principal.picoIdentityFingerprintHex,
+              },
+              'Pico device recovery completed and replaced the projected device set.',
+            );
+            return {
+              outcome: 'ok',
+              result: {
+                status: 'consumed',
+                record: result.record,
+              },
+            };
+          }
+          return { outcome: 'invalid_arguments', result: {} };
+        }
+        case 'home.device.recovery.veto': {
+          if (
+            !hasExactKeys(args, ['recoveryId'])
+            || typeof args.recoveryId !== 'string'
+          ) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const result = store.vetoPicoHomeDeviceRecovery({
+            recoveryId: args.recoveryId,
+            picoIdentityFingerprintHex:
+              principal.picoIdentityFingerprintHex,
+          });
+          if (!result.ok) {
+            return { outcome: result.reason, result: {} };
+          }
+          appendServerEvent('home.device_recovery_vetoed', {});
+          app.log.warn(
+            {
+              recoveryId: args.recoveryId,
+              picoIdentityFingerprintHex:
+                principal.picoIdentityFingerprintHex,
+              cause: 'explicit_device_veto',
+            },
+            'Pending Pico device recovery was vetoed by a living device.',
+          );
+          return {
+            outcome: 'ok',
+            result: { status: 'vetoed' },
+          };
         }
         default: {
           return { outcome: 'unknown_operation', result: {} };

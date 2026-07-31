@@ -19,6 +19,8 @@ export const foundationEventTypes = [
   'home.domain_read_revoked',
   'home.share_envelope_issued',
   'home.share_envelope_removed',
+  'home.device_recovered',
+  'home.device_recovery_vetoed',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -44,6 +46,8 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.domain_read_revoked',
   'home.share_envelope_issued',
   'home.share_envelope_removed',
+  'home.device_recovered',
+  'home.device_recovery_vetoed',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -240,6 +244,8 @@ export const picoLinkDirectOperations = [
   'home.authority.list',
   'home.device.lifecycle.read',
   'home.device.lifecycle.submit',
+  'home.device.recovery.submit',
+  'home.device.recovery.veto',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];
@@ -1524,6 +1530,9 @@ export interface HomeShareEnvelopeRemovedPayload extends HomeShareEnvelopeIssued
   reasonCategory: HomeShareEnvelopeRemovalReasonCategory;
 }
 
+export type HomeDeviceRecoveredPayload = Record<string, never>;
+export type HomeDeviceRecoveryVetoedPayload = Record<string, never>;
+
 export type FoundationEventPayload =
   | DeviceRegisteredPayload
   | DeviceSeenPayload
@@ -1544,7 +1553,9 @@ export type FoundationEventPayload =
   | HomeDomainReadGrantedPayload
   | HomeDomainReadRevokedPayload
   | HomeShareEnvelopeIssuedPayload
-  | HomeShareEnvelopeRemovedPayload;
+  | HomeShareEnvelopeRemovedPayload
+  | HomeDeviceRecoveredPayload
+  | HomeDeviceRecoveryVetoedPayload;
 
 export type FoundationPayloadValidationResult =
   | { ok: true; payload: FoundationEventPayload }
@@ -1564,10 +1575,14 @@ export function validateFoundationEventPayload(
     return { ok: false, error: 'payload must be an object.' };
   }
 
-  if (type === 'device.registered') {
+  if (
+    type === 'device.registered'
+    || type === 'home.device_recovered'
+    || type === 'home.device_recovery_vetoed'
+  ) {
     const extraKey = firstUnexpectedKey(payload, []);
     if (extraKey !== undefined) {
-      return { ok: false, error: `device.registered payload has unexpected field: ${extraKey}.` };
+      return { ok: false, error: `${type} payload has unexpected field: ${extraKey}.` };
     }
 
     return { ok: true, payload: {} };
@@ -4046,6 +4061,8 @@ function assertStringMember<const TValues extends readonly string[]>(
     throw new Error(reason);
   }
 }
+
+export * from './recovery.js';
 
 function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationScope[] {
   if (!Array.isArray(scopes) || scopes.length === 0) {

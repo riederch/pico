@@ -73,6 +73,8 @@ home.domain_read_granted
 home.domain_read_revoked
 home.share_envelope_issued
 home.share_envelope_removed
+home.device_recovered
+home.device_recovery_vetoed
 ```
 
 L1 does not imply sync compatibility, Pico Link compatibility, Pico Home hosting compatibility or commercial permission.

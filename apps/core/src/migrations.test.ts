@@ -9,6 +9,7 @@ import {
   listAppliedMigrations,
   listMigrationAuditRecords,
   picoHomeDeviceLifecycleMigrationId,
+  picoHomeDeviceRecoveryMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
@@ -56,6 +57,10 @@ describe('database migrations', () => {
           id: picoHomeDeviceLifecycleMigrationId,
           requiresBackup: false,
         },
+        {
+          id: picoHomeDeviceRecoveryMigrationId,
+          requiresBackup: false,
+        },
       ],
       unknownMigrationIds: [],
       backupRequired: true,
@@ -96,6 +101,7 @@ describe('database migrations', () => {
     expect(tables).toContain('pico_reader_custody_reader_grant_lifecycle');
     expect(tables).toContain('pico_reader_custody_kek_rotation');
     expect(tables).toContain('pico_home_device_lifecycle_transition');
+    expect(tables).toContain('pico_home_device_recovery');
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
@@ -115,6 +121,10 @@ describe('database migrations', () => {
       },
       {
         id: picoHomeDeviceLifecycleMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoHomeDeviceRecoveryMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -226,12 +236,13 @@ describe('database migrations', () => {
         readerCustodyMultiReaderRotationMigrationId,
         picoHomeFoundingFirstDeviceEvidenceMigrationId,
         picoHomeDeviceLifecycleMigrationId,
+        picoHomeDeviceRecoveryMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -246,7 +257,7 @@ describe('database migrations', () => {
       requireBackupBeforeMigration: true,
       backupConfirmed: true,
     })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
 
     db.close();
   });
@@ -285,7 +296,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
 
     db.close();
   });
@@ -301,6 +312,7 @@ describe('database migrations', () => {
       readerCustodyMultiReaderRotationMigrationId,
       picoHomeFoundingFirstDeviceEvidenceMigrationId,
       picoHomeDeviceLifecycleMigrationId,
+      picoHomeDeviceRecoveryMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -314,6 +326,7 @@ describe('database migrations', () => {
           readerCustodyMultiReaderRotationMigrationId,
           picoHomeFoundingFirstDeviceEvidenceMigrationId,
           picoHomeDeviceLifecycleMigrationId,
+          picoHomeDeviceRecoveryMigrationId,
         ],
       },
     ]);
@@ -379,6 +392,7 @@ describe('database migrations', () => {
           readerCustodyMultiReaderRotationMigrationId,
           picoHomeFoundingFirstDeviceEvidenceMigrationId,
           picoHomeDeviceLifecycleMigrationId,
+          picoHomeDeviceRecoveryMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

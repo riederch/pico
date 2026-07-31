@@ -10,6 +10,7 @@ import {
   createPicoVaultKeyfile,
   encryptPicoReaderCustodyItem,
   openPicoVaultKeyfile,
+  restorePicoVaultIdentityFromRecovery,
   writePicoVaultKeyfile,
   type CreatePicoVaultKeyfileResult,
   type PicoVaultSession,
@@ -23,6 +24,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   connectPicoVaultDaemonClient,
   encodePicoVaultDaemonFrame,
+  parsePicoVaultDaemonRequest,
   parsePicoVaultDaemonResponse,
   picoVaultDaemonProtocolVersion,
   picoVaultDaemonRequestFamilies,
@@ -314,6 +316,95 @@ async function rawConnect(socketPath: string): Promise<RawConnection> {
 }
 
 describe('Daemon-side KEK ceremony families (ADR 0101 K2/K3/K4)', () => {
+  it('rejects Recovery Card issuance before approval when the PIN is absent', () => {
+    expect(() => parsePicoVaultDaemonRequest(Buffer.from(JSON.stringify({
+      family:
+        picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
+      requestId: 'missing_pin',
+      signerKeyFingerprintHex: '11'.repeat(32),
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      homeId: 'home_recovery_card_daemon_0001',
+      hostSigningKeyFingerprintHex: '22'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '33'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '44'.repeat(32),
+      endpointHint: 'pico-link://recovery-card-daemon',
+      issuedAt: '2026-07-31T10:00:00.000Z',
+    })))).toThrow('invalid_request');
+  });
+
+  it('issues the named Recovery Card export under one bound approval', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    const { waiting } = await startApprovalWait(hold, audit);
+    const issuing = consumer.ceremonyIssueRecoveryCard({
+      signerKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      homeId: 'home_recovery_card_daemon_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '33'.repeat(32),
+      endpointHint: 'pico-link://recovery-card-daemon',
+      issuedAt: '2026-07-31T10:00:00.000Z',
+      pin: 'card42',
+    });
+    const pending = await waiting;
+    expect(pending!.label).toBe(
+      picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
+    );
+    expect(pending!.summary).toEqual({
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      identityKeyFingerprint:
+        ownerIdentity.keyFingerprintHex.slice(0, 12),
+      pinProtected: 'yes',
+    });
+    expect(pending!.statement).toContain(
+      'exports the identity-root recovery material once',
+    );
+    expect(pending!.statement).not.toContain('card42');
+    await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: true,
+    });
+
+    const card = await issuing;
+    expect(card.payload).toMatchObject({
+      schema: 'pico.recovery.card.v1',
+      seedMaterialHex: expect.stringMatching(/^[0-9a-f]{64}$/),
+      pinProtected: true,
+      identityKeyFingerprintHex:
+        ownerIdentity.keyFingerprintHex,
+      homeId: 'home_recovery_card_daemon_0001',
+    });
+    expect(card.recoveryPhrase.split(' ')).toHaveLength(24);
+    expect(card.canonicalPayloadHex)
+      .toMatch(/^[0-9a-f]+$/);
+
+    const restored = restorePicoVaultIdentityFromRecovery(sodium, {
+      recoveryPhrase: card.recoveryPhrase,
+      pinProtected: true,
+      pin: 'card42',
+      identityKeyFingerprintHex:
+        ownerIdentity.keyFingerprintHex,
+      passphrase: 'restored identity passphrase',
+    });
+    expect(restored.publicKeyHex).toBe(ownerIdentity.publicKeyHex);
+
+    const auditText = audit.join('');
+    expect(auditText)
+      .toContain('"event":"ceremony_completed","outcome":"ok"');
+    expect(auditText).not.toContain('card42');
+    expect(auditText).not.toContain(card.recoveryPhrase);
+    expect(auditText).not.toContain(
+      String(card.payload.seedMaterialHex),
+    );
+  }, 60_000);
+
   it('creates a domain under exactly one approval, with the KEK born inside the daemon', async () => {
     const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);

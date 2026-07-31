@@ -142,6 +142,8 @@ describe('Pico protocol types', () => {
       'home.domain_read_revoked',
       'home.share_envelope_issued',
       'home.share_envelope_removed',
+      'home.device_recovered',
+      'home.device_recovery_vetoed',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -157,6 +159,8 @@ describe('Pico protocol types', () => {
       'home.domain_read_revoked',
       'home.share_envelope_issued',
       'home.share_envelope_removed',
+      'home.device_recovered',
+      'home.device_recovery_vetoed',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');

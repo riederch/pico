@@ -136,6 +136,8 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.authority.list',
       'home.device.lifecycle.read',
       'home.device.lifecycle.submit',
+      'home.device.recovery.submit',
+      'home.device.recovery.veto',
     ]);
   });
 

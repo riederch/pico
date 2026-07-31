@@ -16,6 +16,7 @@ import {
   buildPicoHomeDomainReadGrantLifecycleSignatureInput,
   buildPicoHomeDomainReadGrantSignatureInput,
   buildPicoHomeDeviceActivationSignatureInput,
+  buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
   buildPicoHomeMembershipSignatureInput,
   picoHomeMembershipCredentialSchema,
@@ -25,6 +26,7 @@ import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  buildPicoIdentityRevocationSignatureInput,
   buildPicoLinkDirectRequestSignatureInput,
   buildPicoLinkDirectResponseSignatureInput,
   deviceSeenStatuses,
@@ -37,6 +39,8 @@ import {
   picoHomeDomainReadGrantRecordSchema,
   picoHomeDeviceLifecycleEvidenceDigestHex,
   picoHomeDeviceLifecycleSubmissionSchema,
+  picoHomeDeviceRecoveryEvidenceDigestHex,
+  picoHomeDeviceRecoverySubmissionSchema,
   picoHomeMembershipScopes,
   picoHomeEventTypes,
   picoHomeSealedClaimPayloadSchema,
@@ -64,6 +68,7 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityDelegationScope,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
+  type PicoIdentityRevocationSignatureInput,
   type PicoLinkDirectOperation,
   type PicoLinkDirectResponseSignatureInput,
 } from '@pico/protocol';
@@ -74,6 +79,7 @@ import { MemoryContentCrypto } from './memory-content-crypto.js';
 import {
   foundationOperatorHomeBindingMigrationId,
   picoHomeDeviceLifecycleMigrationId,
+  picoHomeDeviceRecoveryMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
@@ -252,6 +258,7 @@ describe('Pico Home Core app', () => {
           { id: readerCustodyMultiReaderRotationMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeFoundingFirstDeviceEvidenceMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeDeviceLifecycleMigrationId, appliedAt: expect.any(String) },
+          { id: picoHomeDeviceRecoveryMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
@@ -2166,6 +2173,17 @@ describe('Pico Home Core app', () => {
     const linkRequest = async (
       operation: PicoLinkDirectOperation,
       args: Record<string, unknown>,
+      sender: {
+        signingKeyRecord: PicoIdentityKeyRecordSignatureInput;
+        signingPrivateKey: Uint8Array;
+        agreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
+        delegationId: string;
+      } = {
+        signingKeyRecord: deviceSigningKeyRecord,
+        signingPrivateKey: deviceSigning.privateKey,
+        agreementKeyRecord: deviceAgreementKeyRecord,
+        delegationId: delegation.delegationId,
+      },
     ): Promise<{
       response: PicoLinkDirectResponseSignatureInput;
       result: Record<string, unknown>;
@@ -2178,11 +2196,12 @@ describe('Pico Home Core app', () => {
         operation,
         hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
         senderIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
-        senderDeviceSigningKeyFingerprintHex: deviceSigningFingerprint,
+        senderDeviceSigningKeyFingerprintHex:
+          keyRecordFingerprintHex(sender.signingKeyRecord),
         senderDeviceKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(
-          deviceAgreementKeyRecord,
+          sender.agreementKeyRecord,
         ),
-        senderDelegationId: delegation.delegationId,
+        senderDelegationId: sender.delegationId,
         replyPublicKeyHex: bytesToHex(replyKey.publicKey),
         argumentsDigestHex: picoLinkDirectPayloadDigestHex(sodium, args),
         createdAt: new Date(createdAtMs).toISOString(),
@@ -2195,11 +2214,11 @@ describe('Pico Home Core app', () => {
             schema: picoLinkDirectRequestEnvelopeSchema,
             request,
             senderIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
-            senderDeviceSigningKeyRecord: deviceSigningKeyRecord,
+            senderDeviceSigningKeyRecord: sender.signingKeyRecord,
             arguments: args,
             senderSignatureHex: bytesToHex(sodium.crypto_sign_detached(
               buildPicoLinkDirectRequestSignatureInput(request),
-              deviceSigning.privateKey,
+              sender.signingPrivateKey,
             )),
           }), 'utf8'),
           hexToBytes(setup.host.keyAgreementPublicKeyHex),
@@ -2364,6 +2383,181 @@ describe('Pico Home Core app', () => {
     );
     expect(invalidLifecycleSubmit.response.outcome).toBe('invalid_arguments');
     expect(invalidLifecycleSubmit.result).toEqual({});
+
+    const recoverySigning = sodium.crypto_sign_keypair();
+    const recoverySigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_signing',
+      publicKeyHex: bytesToHex(recoverySigning.publicKey),
+    };
+    const recoveryAgreement = sodium.crypto_box_keypair();
+    const recoveryAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+      suite: picoIdentitySuite,
+      keyRole: 'device_key_agreement',
+      publicKeyHex: bytesToHex(recoveryAgreement.publicKey),
+    };
+    const recoveryDelegation: PicoIdentityDelegationSignatureInput = {
+      suite: picoIdentitySuite,
+      delegationId: 'delegation_20260731_link_recovery_target',
+      issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+      subjectSigningKeyFingerprintHex:
+        keyRecordFingerprintHex(recoverySigningKeyRecord),
+      subjectKeyAgreementKeyFingerprintHex:
+        keyRecordFingerprintHex(recoveryAgreementKeyRecord),
+      scopes: ['surface_session'],
+      validFrom: new Date(Date.now() - 1_000).toISOString(),
+      validUntil: new Date(
+        Date.now() + 365 * 24 * 60 * 60_000,
+      ).toISOString(),
+      lifecycleOrder: 'seq:0000000000000004',
+    };
+    const recoveryRevokedAt = new Date().toISOString();
+    const recoveryRevocations: {
+      record: PicoIdentityRevocationSignatureInput;
+      signatureHex: string;
+    }[] = [
+      {
+        record: {
+          suite: picoIdentitySuite,
+          revocationId:
+            'revocation_20260731_link_recovery_first_device',
+          issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+          subjectKind: 'delegation',
+          subjectRef: sealedClaim.claim.firstDeviceDelegationId,
+          reasonCategory: 'lost_device',
+          revokedAt: recoveryRevokedAt,
+          lifecycleOrder: 'seq:0000000000000005',
+        },
+        signatureHex: '',
+      },
+      {
+        record: {
+          suite: picoIdentitySuite,
+          revocationId:
+            'revocation_20260731_link_recovery_sponsor',
+          issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+          subjectKind: 'delegation',
+          subjectRef: delegation.delegationId,
+          reasonCategory: 'lost_device',
+          revokedAt: recoveryRevokedAt,
+          lifecycleOrder: 'seq:0000000000000006',
+        },
+        signatureHex: '',
+      },
+      {
+        record: {
+          suite: picoIdentitySuite,
+          revocationId:
+            'revocation_20260731_link_recovery_enrolled',
+          issuerIdentityKeyFingerprintHex: homeHostIdentityFingerprint,
+          subjectKind: 'delegation',
+          subjectRef: targetDelegation.delegationId,
+          reasonCategory: 'lost_device',
+          revokedAt: recoveryRevokedAt,
+          lifecycleOrder: 'seq:0000000000000007',
+        },
+        signatureHex: '',
+      },
+    ];
+    for (const revocation of recoveryRevocations) {
+      revocation.signatureHex = bytesToHex(sodium.crypto_sign_detached(
+        buildPicoIdentityRevocationSignatureInput(revocation.record),
+        sealedClaim.claimantPrivateKey,
+      ));
+    }
+    const recoveryEvidence = {
+      identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+      targetDeviceSigningKeyRecord: recoverySigningKeyRecord,
+      targetDeviceKeyAgreementKeyRecord: recoveryAgreementKeyRecord,
+      delegation: {
+        record: recoveryDelegation,
+        signatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityDelegationSignatureInput(recoveryDelegation),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+      revocations: recoveryRevocations,
+    };
+    const recoveryCreatedAtMs = Date.now();
+    const recoveryClaim = {
+      suite: picoIdentitySuite,
+      recoveryId: 'recovery_20260731_link_veto',
+      homeId,
+      hostSigningKeyFingerprintHex:
+        setup.host.signingKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        setup.host.keyAgreementKeyFingerprintHex,
+      picoIdentityFingerprintHex: homeHostIdentityFingerprint,
+      targetDelegationId: recoveryDelegation.delegationId,
+      targetDeviceSigningKeyFingerprintHex:
+        recoveryDelegation.subjectSigningKeyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        recoveryDelegation.subjectKeyAgreementKeyFingerprintHex,
+      evidenceDigestHex:
+        picoHomeDeviceRecoveryEvidenceDigestHex(
+          sodium,
+          recoveryEvidence,
+        ),
+      observedLifecycleOrder: targetDelegation.lifecycleOrder,
+      createdAt: new Date(recoveryCreatedAtMs).toISOString(),
+      expiresAt: new Date(
+        recoveryCreatedAtMs + 5 * 60_000,
+      ).toISOString(),
+    };
+    const recoveryClaimInput =
+      buildPicoHomeDeviceRecoveryClaimSignatureInput(recoveryClaim);
+    const recoverySubmission = {
+      schema: picoHomeDeviceRecoverySubmissionSchema,
+      claim: recoveryClaim,
+      evidence: recoveryEvidence,
+      rootSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+        recoveryClaimInput,
+        sealedClaim.claimantPrivateKey,
+      )),
+      targetSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+        recoveryClaimInput,
+        recoverySigning.privateKey,
+      )),
+    };
+    const linkedRecovery = await linkRequest(
+      'home.device.recovery.submit',
+      {
+        phase: 'initiate',
+        submission: recoverySubmission,
+      },
+      {
+        signingKeyRecord: recoverySigningKeyRecord,
+        signingPrivateKey: recoverySigning.privateKey,
+        agreementKeyRecord: recoveryAgreementKeyRecord,
+        delegationId: recoveryDelegation.delegationId,
+      },
+    );
+    expect(linkedRecovery.response.outcome).toBe('recovery_pending');
+    expect(linkedRecovery.result).toMatchObject({
+      status: 'pending',
+      recoveryId: recoveryClaim.recoveryId,
+      targetDelegationId: recoveryDelegation.delegationId,
+    });
+    const linkedPendingRead = await linkRequest(
+      'home.device.lifecycle.read',
+      {},
+    );
+    expect(linkedPendingRead.result).toMatchObject({
+      pendingRecovery: {
+        recoveryId: recoveryClaim.recoveryId,
+        targetDelegationId: recoveryDelegation.delegationId,
+      },
+    });
+    const linkedVeto = await linkRequest(
+      'home.device.recovery.veto',
+      { recoveryId: recoveryClaim.recoveryId },
+    );
+    expect(linkedVeto.response.outcome).toBe('ok');
+    expect(linkedVeto.result).toEqual({ status: 'vetoed' });
+    expect((await linkRequest(
+      'home.device.lifecycle.read',
+      {},
+    )).result).toMatchObject({ pendingRecovery: null });
 
     const checkedAtMs = Date.now();
     const checkpoint: PicoIdentityReaderKeyFreshnessSignatureInput = {

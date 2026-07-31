@@ -190,6 +190,20 @@ published compatibility contract, L4 basis or commercial permission.
 home-device-lifecycle/suite.json
 ```
 
+## Current recovery-card and device-recovery fixtures
+
+These fixtures pin ADR 0110's canonical Recovery Card payload, deterministic
+English BIP39 mnemonic/PIN protection, complete root-signed recovery evidence
+digest, root-authenticated target-bound prepare bytes, shared root/target claim
+bytes and host receipt bytes. The published
+seed is an explicit non-production test vector and the signatures are synthetic
+vector material only. They publish no Pico Link compatibility contract and
+contain no production credential.
+
+```text
+home-device-recovery/suite.json
+```
+
 ## Current identity signature-verification fixtures
 
 These fixtures carry deterministic detached Ed25519 verification vectors for the `pico.suite.id.v1` possession, delegation and revocation families (ADR 0079). They publish public key records and signatures only: no private keys, no registry freshness, no storage adapter, no reader membership, no L4 compatibility basis and no commercial permission.

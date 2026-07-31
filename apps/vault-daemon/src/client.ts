@@ -12,6 +12,8 @@ import {
   type PicoVaultDaemonCeremonyCreateDomainResult,
   type PicoVaultDaemonCeremonyCreateReaderGrantRequest,
   type PicoVaultDaemonCeremonyCreateReaderGrantResult,
+  type PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
+  type PicoVaultDaemonCeremonyIssueRecoveryCardResult,
   type PicoVaultDaemonCeremonyRotateDomainRequest,
   type PicoVaultDaemonCeremonyRotateDomainResult,
   type PicoVaultDaemonHelloResult,
@@ -50,6 +52,9 @@ export interface PicoVaultDaemonClient {
   ceremonyCreateReaderGrant(
     input: Omit<PicoVaultDaemonCeremonyCreateReaderGrantRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyCreateReaderGrantResult>;
+  ceremonyIssueRecoveryCard(
+    input: Omit<PicoVaultDaemonCeremonyIssueRecoveryCardRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonCeremonyIssueRecoveryCardResult>;
   close(): Promise<void>;
 }
 
@@ -182,6 +187,11 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.ceremonyCreateReaderGrant,
       ...ceremonyInput,
     }) as unknown as PicoVaultDaemonCeremonyCreateReaderGrantResult,
+    ceremonyIssueRecoveryCard: async (ceremonyInput) => await request({
+      family:
+        picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
+      ...ceremonyInput,
+    }) as unknown as PicoVaultDaemonCeremonyIssueRecoveryCardResult,
     close: async () => {
       if (closed) {
         return;

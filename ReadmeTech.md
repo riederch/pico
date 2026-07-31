@@ -195,7 +195,14 @@ Pico may define sovereignty boundaries, trust relationships, identity concepts, 
 
 Pico must not invent cryptography.
 
-Future encryption work should evaluate established building blocks such as MLS, libsodium, age-style backup encryption, platform keystores, passkeys or hardware-backed identity where appropriate.
+Future encryption and authentication work should evaluate established building
+blocks such as MLS, libsodium, age-style backup encryption and platform
+keystores. For passwordless human-to-client authentication the intended
+standard direction is WebAuthn/FIDO2 passkeys. No passkey runtime exists yet:
+a passkey may later unlock local Vault custody or approve an operation, but it
+does not silently replace Pico's Ed25519 identity/device signatures, X25519
+agreement keys or the Recovery Card PIN. A passkey-class protocol key requires
+a new ADR 0079 suite and vectors.
 
 Pico Link requires asymmetric cryptographic identity material for Picos, devices and Homes. Public keys can act as portable identity material; private keys must remain under the control of Pico Vaults or other trusted key storage. Pico identity, device, Home, transport and domain keys are separate roles. PGP is an acceptable mental model for public/private key identity and signed messages, but it is not automatically the Pico Link wire protocol.
 

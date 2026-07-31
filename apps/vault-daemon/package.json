@@ -19,10 +19,13 @@
   "dependencies": {
     "@pico/protocol": "workspace:*",
     "@pico/vault": "workspace:*",
-    "libsodium-wrappers-sumo": "^0.8.4"
+    "libsodium-wrappers-sumo": "^0.8.4",
+    "pdf-lib": "1.17.1",
+    "qrcode": "1.5.4"
   },
   "devDependencies": {
     "@pico/core": "workspace:*",
-    "@pico/sync": "workspace:*"
+    "@pico/sync": "workspace:*",
+    "@types/qrcode": "1.5.6"
   }
 }

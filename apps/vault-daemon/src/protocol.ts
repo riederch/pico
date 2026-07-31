@@ -1,10 +1,14 @@
 import {
   picoHomeDeviceLifecycleCanonicalLabels,
+  picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeV2SignatureInputLabels,
   picoVaultPersonKeyRoles,
   type PicoVaultPersonKeyRole,
 } from '@pico/protocol';
-import { MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES } from '@pico/vault';
+import {
+  MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES,
+  picoRecoveryPinProtection,
+} from '@pico/vault';
 
 /**
  * ADR 0097 local wire contract. This is a private contract between the Vault
@@ -30,6 +34,7 @@ export const picoVaultDaemonRequestFamilies = {
   ceremonyCreateDomain: 'pico.vault.daemon.ceremony.create-domain.v1',
   ceremonyRotateDomain: 'pico.vault.daemon.ceremony.rotate-domain.v1',
   ceremonyCreateReaderGrant: 'pico.vault.daemon.ceremony.create-reader-grant.v1',
+  ceremonyIssueRecoveryCard: 'pico.vault.daemon.ceremony.issue-recovery-card.v1',
 } as const;
 
 /**
@@ -65,6 +70,15 @@ export function picoVaultDaemonSignatureNeedsApproval(
   if (
     keyRole === 'device_signing'
     && label === picoHomeDeviceLifecycleCanonicalLabels.activation
+  ) {
+    return false;
+  }
+  // ADR 0110 mirrors the v2 founding split: the identity root approval
+  // authorizes total replacement, while the target device co-signature proves
+  // possession of the same short-lived claim and creates no authority alone.
+  if (
+    keyRole === 'device_signing'
+    && label === picoHomeDeviceRecoveryCanonicalLabels.claim
   ) {
     return false;
   }
@@ -249,6 +263,32 @@ export interface PicoVaultDaemonCeremonyCreateReaderGrantResult {
   readerGrantRecord: Record<string, unknown>;
 }
 
+/**
+ * ADR 0110's one named seed-export exception. The mandatory PIN enters only
+ * this approval-bound issuance frame and is neither rendered nor audited.
+ */
+export interface PicoVaultDaemonCeremonyIssueRecoveryCardRequest {
+  family:
+    typeof picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard;
+  requestId: string;
+  signerKeyFingerprintHex: string;
+  picoName: string;
+  homeNameOrId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  hostKeyAgreementPublicKeyHex: string;
+  endpointHint: string;
+  issuedAt: string;
+  pin: string;
+}
+
+export interface PicoVaultDaemonCeremonyIssueRecoveryCardResult {
+  payload: Record<string, unknown>;
+  recoveryPhrase: string;
+  canonicalPayloadHex: string;
+}
+
 export interface PicoVaultDaemonApprovalWaitRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalWait;
   requestId: string;
@@ -277,7 +317,8 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonApprovalDecideRequest
   | PicoVaultDaemonCeremonyCreateDomainRequest
   | PicoVaultDaemonCeremonyRotateDomainRequest
-  | PicoVaultDaemonCeremonyCreateReaderGrantRequest;
+  | PicoVaultDaemonCeremonyCreateReaderGrantRequest
+  | PicoVaultDaemonCeremonyIssueRecoveryCardRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -715,6 +756,55 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         ...(parsed.receivedAt === undefined
           ? {}
           : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
+      };
+    }
+    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard: {
+      assertExactKeys(
+        parsed,
+        [
+          'family', 'requestId', 'signerKeyFingerprintHex',
+          'picoName', 'homeNameOrId', 'homeId',
+          'hostSigningKeyFingerprintHex',
+          'hostKeyAgreementKeyFingerprintHex',
+          'hostKeyAgreementPublicKeyHex', 'endpointHint', 'issuedAt', 'pin',
+        ],
+      );
+      const pin = parsed.pin;
+      if (
+        typeof pin !== 'string'
+        || pin.length < picoRecoveryPinProtection.minLength
+        || pin.length > picoRecoveryPinProtection.maxLength
+        || !/^[0-9a-z]+$/.test(pin)
+      ) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family:
+          picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
+        requestId,
+        signerKeyFingerprintHex:
+          requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
+        picoName: requireBoundedString(parsed, 'picoName'),
+        homeNameOrId: requireBoundedString(parsed, 'homeNameOrId'),
+        homeId: requireBoundedString(parsed, 'homeId'),
+        hostSigningKeyFingerprintHex:
+          requireFingerprintHex(
+            parsed,
+            'hostSigningKeyFingerprintHex',
+          ),
+        hostKeyAgreementKeyFingerprintHex:
+          requireFingerprintHex(
+            parsed,
+            'hostKeyAgreementKeyFingerprintHex',
+          ),
+        hostKeyAgreementPublicKeyHex:
+          requireFingerprintHex(
+            parsed,
+            'hostKeyAgreementPublicKeyHex',
+          ),
+        endpointHint: requireBoundedString(parsed, 'endpointHint'),
+        issuedAt: requireBoundedString(parsed, 'issuedAt'),
+        pin,
       };
     }
     case picoVaultDaemonRequestFamilies.approvalWait: {

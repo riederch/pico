@@ -63,6 +63,8 @@ export const picoHomeFoundingFirstDeviceEvidenceMigrationId =
   '0004_pico_home_founding_first_device_evidence' as const;
 export const picoHomeDeviceLifecycleMigrationId =
   '0005_pico_home_device_lifecycle' as const;
+export const picoHomeDeviceRecoveryMigrationId =
+  '0006_pico_home_device_recovery' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -678,6 +680,46 @@ const migrations: readonly MigrationDefinition[] = [
           accepted_at,
           transition_id
         );
+      `);
+    },
+  },
+  {
+    id: picoHomeDeviceRecoveryMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_home_device_recovery (
+          recovery_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          status TEXT NOT NULL
+            CHECK (status IN ('pending', 'superseded', 'vetoed', 'lapsed', 'consumed')),
+          target_delegation_id TEXT NOT NULL,
+          target_device_signing_key_fingerprint_hex TEXT NOT NULL,
+          target_device_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          observed_lifecycle_order TEXT NOT NULL,
+          evidence_digest_hex TEXT NOT NULL,
+          claim_digest_hex TEXT NOT NULL UNIQUE,
+          submission_json TEXT NOT NULL,
+          accepted_at TEXT NOT NULL,
+          effective_at TEXT NOT NULL,
+          completion_expires_at TEXT NOT NULL,
+          resolved_at TEXT NULL,
+          superseded_by_recovery_id TEXT NULL,
+          recovery_record_json TEXT NULL
+        );
+
+        CREATE INDEX idx_pico_home_device_recovery_identity
+        ON pico_home_device_recovery (
+          pico_identity_fingerprint_hex,
+          status,
+          accepted_at,
+          recovery_id
+        );
+
+        CREATE UNIQUE INDEX idx_pico_home_device_recovery_one_pending
+        ON pico_home_device_recovery (pico_identity_fingerprint_hex)
+        WHERE status = 'pending';
       `);
     },
   },

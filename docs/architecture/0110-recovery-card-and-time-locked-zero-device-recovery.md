@@ -2,17 +2,19 @@
 
 ## Status
 
-Accepted; not implemented (gates R1-R5 open). This ADR decides the path ADR
+Accepted; partially implemented. R1 and the single-snapshot scope of R2 are
+implemented, R3 is partial, and R4-R6 keep product/rollback claims open. This
+ADR decides the path ADR
 0109 deliberately left missing: how an identity whose Home projects no
 active delegated device regains exactly one. The person's instrument is the
-Recovery Card - a printed, card-sized artifact carrying the identity-root
-seed as a recovery phrase and QR code - and the contract is a remote,
-root-authorized, time-locked, one-use recovery that always replaces the
-identity's whole device set. A Home-local Recovery Mode was considered and
-is rejected by product decision: recovery must not require standing at the
-host. This ADR also fixes the boundary recovery cannot cross: with the
-root and the card both lost, the honest answer remains explicit, visible
-identity replacement - never hidden continuity.
+Recovery Card - a printed, card-sized artifact carrying the PIN-encrypted
+identity-root seed as a recovery phrase and QR code - and the contract is
+a remote, root-authorized, time-locked, one-use recovery that always
+replaces the identity's whole device set. A Home-local Recovery Mode was
+considered and is rejected by product decision: recovery must not require
+standing at the host. It also fixes the boundary recovery cannot cross:
+with the root and the card both lost, the honest answer remains explicit,
+visible identity replacement - never hidden continuity.
 
 ## Context
 
@@ -58,8 +60,8 @@ and ADR 0110's total-replacement rule making a successful capture loud.
 Covers:
 
 - the Recovery Card: content, phrase and QR encoding, format direction,
-  issuance and re-issuance ceremonies, and the custody honesty around a
-  printed root;
+  the mandatory PIN protection of the printed seed, issuance and
+  re-issuance ceremonies, and the custody honesty around a printed root;
 - the narrow, named exception to the Vault no-export boundary that card
   issuance requires;
 - the remote recovery contract: the standing Link operation, root
@@ -90,42 +92,67 @@ Does not cover:
 
 ### The Recovery Card is the identity root on paper
 
-The recovery phrase encodes the 32-byte Ed25519 identity-root seed as a
-24-word mnemonic (BIP39 English wordlist with its standard SHA-256
-checksum, computed via libsodium - an encoding of an existing key, not a
-new primitive; exact pinning is Gate R1 work). Restoring the phrase into a
-fresh Vault deterministically recreates the identity root. The card is
-therefore the full identity, and the ADR says so rather than softening it:
-whoever holds the card holds the root. Physical custody - print it,
-laminate it, put it in a safe - is the deliberate trade, and it is the
-same trade every serious key-custody product makes.
+The recovery phrase encodes 32 bytes of card seed material - the Ed25519
+identity-root seed under the mandatory PIN protection below - as a 24-word
+mnemonic (BIP39 English wordlist with its standard SHA-256 checksum,
+computed via libsodium - an encoding of an existing key, not a new
+primitive; exact pinning is Gate R1 work). Restoring the phrase and the
+PIN into a fresh Vault deterministically recreates the identity root. The
+card is therefore the full identity behind one short offline secret, and
+the ADR says so rather than softening it: a card in the wrong hands is a
+race the owner can lose. Physical custody - print it, laminate it, put it
+in a safe - stays the deliberate trade, and it is the same trade every
+serious key-custody product makes.
 
 The phrase is never called a passphrase. The Vault unlock passphrase
-(ADR 0081) and the Recovery Phrase are different objects with different
-custody, and neither may ever be described as the other - the ADR 0076
-two-codes rule, applied a second time.
+(ADR 0081), the Recovery Phrase and the Card PIN are three different
+objects with three different custodies, and none may ever be described as
+another - the ADR 0076 two-codes rule, now applied to three.
 
 ### The card contract
 
-The card is a generated print artifact in ID-1 credit-card format
-(85.60 x 53.98 mm), two-sided, in Pico's visual style. Its content is
+The card is a generated two-sided print artifact in Pico's visual style,
+sized to ID-1 credit-card format (85.60 x 53.98 mm). Its content is
 pinned here; its design is product work:
 
 - **Front (public):** the Pico's name, the identity-key fingerprint in
   display form, the Home's name or id, and the issuance date. Nothing on
   the front is secret; a photographed front leaks no authority.
-- **Back (secret):** the 24-word Recovery Phrase, and a QR code carrying
-  the complete canonical card payload for scan comfort. Words and QR
-  encode the same secret; the QR adds convenience, not a second factor.
+- **Back (secret):** the 24-word Recovery Phrase, a QR code carrying the
+  complete canonical card payload for scan comfort, and one unlabeled
+  writing line with clear space above it. Words and QR encode the same
+  secret; the QR adds convenience, not a second factor. The line is
+  deliberately unlabeled - a found card must not advertise what belongs
+  on it - and what a person writes there is their custody decision, with
+  the consequence named below.
 - **The QR payload** is a versioned canonical encoding,
   `pico.recovery.card.v1` (labeled, length-prefixed elements in the ADR
-  0073/0079 style, with authoritative vectors at Gate R1): suite, root
-  seed, identity fingerprint, Home id, both host key fingerprints, the
-  host key-agreement public key and an endpoint hint, plus the issuance
-  instant. The pins and endpoint make the card self-sufficient: a sealed
+  0073/0079 style, with authoritative vectors at Gate R1): suite, the
+  PIN-protected seed material and its protection flag, identity
+  fingerprint, Home id, both host key fingerprints, the host key-agreement
+  public key and an endpoint hint, plus the issuance instant. The pins and
+  endpoint make the card self-sufficient: a sealed
   recovery claim needs the Home's agreement key and audience pin, and
   trust-on-first-use remains forbidden, so the card carries what the claim
   bundle once displayed.
+
+Issuance renders that content in exactly two print forms, because the two
+ways people actually own a card differ in what the paper has to survive:
+
+- **Card printer:** both faces at true ID-1, one per side, for people who
+  print onto card stock.
+- **Paper, folded:** one sheet carrying both faces on a shared fold edge
+  with no gap between them, the lower face turned 180 degrees so it reads
+  upright once the sheet is folded back to back. This form prints
+  slightly under ID-1 - the whole card scaled, not re-laid-out - so the
+  folded double-layer card fits a standard credit-card laminating pouch
+  with a sealing margin. Folding also keeps the secret side inward until
+  lamination.
+
+Both forms are the same card: same pinned content, same canonical
+payload, same identity. The size difference is a lamination
+accommodation, never a second card format, and nothing in the protocol
+reads a card's physical dimensions.
 
 Display-form fingerprints on the front are UX; every security-relevant
 comparison uses the full digests inside the QR payload (ADR 0079 I5).
@@ -134,19 +161,23 @@ exists (ADR 0080 M3 open work), a card printed before a rotation may fail
 pin validation, and re-printing after rotation is the product answer - a
 stated residual, not a silent one.
 
-### An optional short PIN protects the printed seed
+### A short PIN always protects the printed seed
 
-At issuance the person may protect the card with a short PIN (digits and
-lowercase letters; the product recommends one and allows longer). The
-scheme reuses the Vault keyfile primitives and adds none: the seed on the
-card is `seed XOR XChaCha20(Argon2id(PIN, salt))`, with the salt derived
-from the identity fingerprint - which is public and already printed on the
-front - so the ciphertext stays exactly 32 bytes, the phrase stays 24
-words, and the QR payload only gains a flag. Restore decrypts, derives the
-root keypair and compares its fingerprint against the card's full identity
-fingerprint: a wrong PIN is detected reliably without an authentication
-tag. The PIN is never printed, never stored anywhere, and never the Vault
-passphrase.
+Every card is PIN-protected; issuance without a PIN does not exist. At
+issuance the person chooses a short PIN (digits and lowercase letters; the
+product recommends six characters and allows longer). The scheme reuses
+the Vault keyfile primitives and adds none: the material on the card is
+`seed XOR XChaCha20(Argon2id(PIN, salt))`, with salt and stream nonce
+derived from the identity fingerprint - which is public and already
+printed on the front - so the ciphertext stays exactly 32 bytes, the
+phrase stays 24 words, and the QR payload only carries a protection flag.
+Restore decrypts, derives the root keypair and compares its fingerprint
+against the card's full identity fingerprint: a wrong PIN is detected
+reliably without an authentication tag. The PIN is never printed by the
+tooling, never stored anywhere, and never the Vault passphrase. The flag
+stays in the `pico.recovery.card.v1` layout for format stability; v1
+issuance always sets it, and restore refuses a card that claims no
+protection.
 
 The honesty that makes this acceptable: the card is offline, so no
 attempt counter can exist and a thief brute-forces the PIN at whatever
@@ -155,11 +186,27 @@ roughly 31 bits - with deliberately expensive parameters that costs a
 determined attacker weeks to months of dedicated compute, and it stops an
 opportunistic thief or a leaked photo cold. The PIN therefore buys
 deterrence and reaction time - exactly what the 48-hour veto window can
-use - not absolute protection, and the ADR says so. The trade in the
-other direction is a lockout: a forgotten PIN makes the card worthless
-precisely when everything else is already lost. That is why the PIN is
-the person's choice at issuance rather than mandatory, and why a card
-without a PIN remains a valid, honestly-framed option.
+use - not absolute protection, and the ADR says so.
+
+The trade in the other direction is a lockout, and making the PIN
+mandatory accepts it as a real failure mode: a forgotten PIN makes the
+card worthless precisely when everything else is already lost, and no
+Home-side, host-side or operator-side path may ever soften that (the
+replacement boundary below is the only exit). The decision goes this way
+because the opposite default is worse in practice. A plain card is a
+bearer root: found in a drawer, photographed once, or lifted during a
+burglary, it is instant, silent identity capture, and the people most
+likely to skip an optional protection are exactly the people least able
+to survive that. A mandatory PIN turns every one of those events into a
+race with a cost, which is what the veto window is built to use.
+
+PIN custody is therefore its own custody, and the product must say so at
+issuance: the PIN belongs somewhere the card is not. The card's unlabeled
+writing line exists for people who split custody differently - a hint, a
+location note, or the PIN itself. Writing the PIN on the card voids the
+protection entirely and returns the card to bearer-root behaviour; that
+is the person's decision to make, and the ADR names the consequence
+rather than preventing it.
 
 ### Issuance is the one named export exception, person-side only
 
@@ -190,7 +237,7 @@ pre-authority set changes from exactly two operations to exactly three.
 Unlike the claim, this operation is reachable for the Home's lifetime -
 the shape ADR 0108 rejected. The revision is deliberate and its grounds
 are answered one by one: the operation executes nothing without a verified
-identity-root signature over the semantic claim (an unauthenticated caller
+identity-root signature over the semantic prepare request or claim (an unauthenticated caller
 gets a cheap refusal at the same cost class as any sealed garbage); its
 one-use semantics rest on durable pending/consumed state, not on the
 restart-lossy replay map; the root signs the semantic record while the
@@ -200,9 +247,19 @@ veto and total replacement below. The rejection of an *unauthorized*
 standing enrollment stands; what exists now is a standing operation whose
 only key is the identity root itself.
 
-There is no recovery read operation. Status is returned only inside the
-signed, sealed responses of the recovery operation itself, so an outsider
-cannot probe whether a recovery is pending.
+There is no recovery read operation. The operation's `prepare` phase is a
+root-authenticated, target-bound discovery request, not an open status
+surface: `pico.home.device-recovery-prepare.v1` binds a fresh preparation
+id, Home and host pins, identity, the proposed delegation and both proposed
+device keys, plus a validity interval of at most five minutes. The outer
+Link envelope proves possession of the proposed target signing key; the
+identity root signs the prepare bytes under a separate approval. Only then
+does the signed, sealed response reveal the current lifecycle head and
+active device bindings needed to construct total replacement. It exposes
+no pending-recovery status. Completion returns state-specific results only
+after `recoveryId`, claim digest and every target binding match; unknown,
+wrong-digest and wrong-target requests all return the same
+`recovery_unavailable`.
 
 ### Root authorization and target possession sign the same recovery claim
 
@@ -215,8 +272,9 @@ revocation), the identity-local lifecycle head as the recovering Vault
 knows it, and creation/expiry instants of at most five minutes checked on
 the Home clock.
 
-The identity root - restored from the card into a fresh Vault - signs
-these exact bytes, approval-gated. The target device signing key co-signs
+The identity root - restored from the card into a fresh Vault - first signs
+the target-bound prepare bytes and then signs these exact claim bytes,
+approval-gated in both cases. The target device signing key co-signs
 the same bytes as a possession proof, the third role-aware possession use
 after ADR 0108's claim co-signature and ADR 0109's activation
 co-signature. The intake requires the outer Link sender's device
@@ -273,8 +331,9 @@ read.
 The transition carries exactly one new root-signed delegation for the
 target device, and root-signed revocations for every delegation of the
 recovering identity that this Home currently projects as active - the
-recovering Vault learns the current bindings and head from the recovery
-operation's signed response at initiation. If any active delegation is
+recovering Vault learns the current bindings and head from the
+root-authenticated prepare response before it builds or signs the claim.
+If any active delegation is
 not covered by a verified revocation, the claim is refused. Recovery ends
 with the identity holding exactly one active device.
 
@@ -318,9 +377,14 @@ Restart reconciliation re-verifies the receipt, every root signature and
 the target co-signature before re-projecting; manipulated recovery
 evidence quarantines that issuer's device authority (the ADR 0109 rule).
 Pending records survive restarts - the time lock must not be resettable by
-crashing the Home - and reconcile fail-closed: a restored stale backup
-cannot resurrect a consumed recovery as pending, and a restored pending
-older than its window lapses. `home.device_recovered` and
+crashing the Home. Reconciliation verifies the recovery state present in
+the supplied database snapshot and lapses a pending row older than its
+window. It cannot distinguish a fully matching old snapshot captured
+before consumption from the legitimate state at that earlier time: such a
+restore can resurrect the then-pending row while it remains in-window.
+Restore-proof one-use semantics therefore require an external monotonic
+consumption floor or equivalent platform anchor; R6 keeps that claim open.
+`home.device_recovered` and
 `home.device_recovery_vetoed` are reserved as server-synthesized,
 content-free append-only event types; initiations, supersessions and
 lapses stay in bounded operational logging plus the durable pending row,
@@ -334,6 +398,10 @@ so a root holder cannot grow the undeletable log by cycling initiations
   normally costs 2+N root approvals, honest until the separately reviewed
   composite root record ADR 0109 already names exists. Completion needs no
   further root approval.
+- The root signature on
+  `pico.home.device-recovery-prepare.v1` is separately gated and its
+  rendering names the Home and exact target while stating that it only
+  reads the current replacement head and does not start the veto delay.
 - `device_signing` may co-sign exactly
   `pico.home.device-recovery-claim.v1` without an additional approval, as
   the third role-aware possession use. The global ADR 0099 exemption-label
@@ -347,6 +415,24 @@ so a root holder cannot grow the undeletable log by cycling initiations
   the recovery becomes effective only after the veto delay.
 - The Home host signs its receipt from host custody and cannot mint the
   root records it acknowledges.
+
+### Passkeys authenticate people to clients; they are not Pico root keys
+
+The standard direction for a future passwordless client or Vault-unlock
+experience is a passkey through WebAuthn/FIDO2. That is a human-to-client
+authentication layer with an RP/origin, authenticator and platform custody
+model; it is not silently interchangeable with Pico's Ed25519 identity root,
+delegated device-signing key or X25519 agreement key. A future client may use
+a passkey to unlock local Vault custody or approve an operation, but the
+canonical Pico records remain signed by their named Pico key roles.
+
+No passkey runtime exists in this milestone. Choosing RP ids/origins,
+attestation posture, multi-device credential policy, local fallback and
+recovery requires its own reviewed ADR. If a passkey-class public key ever
+appears directly in Pico protocol records, ADR 0079 I2 requires a new suite
+and vectors rather than changing `pico.suite.id.v1` in place. The Recovery
+Card PIN remains an offline seed-wrapping deterrent and is neither a passkey
+nor a WebAuthn fallback.
 
 ### No card, no root, no recovery: replacement stays explicit and visible
 
@@ -403,11 +489,24 @@ second authority this design gives up.
 ### A mandatory memorized passphrase on the phrase
 
 Encrypting the printed seed under a mandatory full-strength passphrase
-shifts the failure mode from theft to lockout: the person who needs the
-card has, by definition, lost everything else, and a forgotten passphrase
-would make the card worthless exactly then. The decided middle ground is
-the optional short PIN above - rememberable, honestly bounded in what it
-resists, and refusable by the person who prefers plain physical custody.
+shifts the failure mode from theft to lockout without bound: the person
+who needs the card has, by definition, lost everything else, and a
+forgotten long passphrase would make the card worthless exactly then. The
+decided middle ground is the mandatory short PIN above - rememberable,
+honestly bounded in what it resists, and paired with an unlabeled writing
+line for people who split custody differently.
+
+### Leaving the PIN optional
+
+The originally decided position: the person chooses at issuance, and a
+plain card stays a valid, honestly-framed option. Rejected on second
+review. An optional protection is declined exactly by the people who most
+need it, and it makes the plain card - a bearer root that a single
+photograph or drawer search converts into silent identity capture - the
+path of least resistance at the one moment the product has the person's
+attention. The lockout cost is real and is accepted knowingly above,
+because a forgotten PIN fails loudly at recovery time while a stolen
+plain card fails silently and irreversibly.
 
 ### Home-side or operator-assisted recovery
 
@@ -419,42 +518,48 @@ authorize, approve or veto another identity's recovery.
 
 | Attacker | Posture |
 |---|---|
-| Card thief (physical theft or photographed back) | Without a PIN: holds the identity root. With a PIN: must brute-force offline at Argon2id cost - weeks to months for ~31 bits of dedicated compute, prohibitive for an opportunistic thief - buying the owner reaction time. Either way, every still-active device is alarmed for 48 hours and can veto, and success revokes the whole legitimate device set, loudly and durably audited. The lasting answer to a stolen card is root rotation, which today is explicit replacement - stated residual. |
+| Card thief (physical theft or photographed back) | Must brute-force the PIN offline at Argon2id cost - weeks to months for ~31 bits of dedicated compute, prohibitive for an opportunistic thief - buying the owner reaction time; a card whose owner wrote the PIN on the writing line is a bearer root instead, which is why issuance says so. Either way, every still-active device is alarmed for 48 hours and can veto, and success revokes the whole legitimate device set, loudly and durably audited. The lasting answer to a stolen card is root rotation, which today is explicit replacement - stated residual. |
 | Remote attacker without the card | The standing operation yields nothing without a root signature; refusals are cheap and status is unreadable from outside. |
 | Attacker with the old Vault keyfile but no card and no passphrase | Unchanged ADR 0081 posture: the keyfile alone is inert. |
 | Malicious Home host | Never sees the seed (issuance is person-side); cannot mint, veto, or shorten the pendency it must enforce; can at most withhold service, as always. |
-| Crash/restart and stale-backup attacker | Pending records are durable with Home-clock instants: a restart neither resets nor skips the lock; restored backups reconcile fail-closed (consumed stays consumed, overdue pending lapses); the ADR 0107 request bounds are unchanged beneath. |
+| Crash/restart and stale-backup attacker | Pending records are durable with Home-clock instants: a restart neither resets nor skips the lock, a snapshot containing consumption keeps it consumed, and an overdue restored pending row lapses. A fully matching snapshot from before consumption can resurrect its in-window pending state because the database has no knowledge outside that snapshot; restore-proof one-use remains blocked on R6's external monotonic anchor. The ADR 0107 request bounds are unchanged beneath. |
 | Two root holders racing (owner vs. thief) | Superseding claims restart the clock and are audited; neither silently wins; a living device can veto the thief. The stalemate's exit is root rotation - named, not hidden. |
 | Evil-twin Home endpoint | Fails against the card's printed pins; the endpoint hint is reachability, never identity (ADR 0031); no trust-on-first-use. |
 | Cloud-photo leak of the card | Identical to card theft; the product must warn at issuance. Not enforceable by protocol, stated honestly. |
 
 ## Gates
 
-- **R1 - Protocol forms and vectors (open):** canonical
-  `pico.recovery.card.v1`, `pico.home.device-recovery-claim.v1` and
+- **R1 - Protocol forms and vectors (implemented for the local suite):** canonical
+  `pico.recovery.card.v1`, `pico.home.device-recovery-prepare.v1`,
+  `pico.home.device-recovery-claim.v1` and
   `pico.home.device-recovery-receipt.v1` layouts with authoritative
   accept/reject vectors: wrong Home pins, cross-identity and cross-Home
   transplants, head mismatch, outer-sender/target mismatch, an active
   delegation left uncovered, early or post-window completion, superseded
   and consumed `recoveryId` reuse, role swaps. Pin the mnemonic encoding
-  (wordlist, checksum), the seed-to-root derivation and the optional PIN
-  scheme (Argon2id parameters, salt derivation, wrong-PIN detection via
-  fingerprint mismatch) with vectors.
-- **R2 - Foundation pending state and intake (open):** the standing
+  (wordlist, checksum), the seed-to-root derivation and the mandatory PIN
+  scheme (Argon2id parameters, salt and nonce derivation, wrong-PIN
+  detection via fingerprint mismatch) with vectors, including a card
+  payload whose protection flag is unset as a reject vector.
+- **R2 - Foundation pending state and intake (implemented within one database snapshot):** the standing
   operation with root-signature verification, the durable per-identity
   pending state machine (`pending`/`superseded`/`vetoed`/`lapsed`/
   `consumed`), 48-hour/7-day Home-clock enforcement, the authenticated
   veto operation, implicit cancel on any accepted lifecycle transition,
   the ordered atomic completion commit with injected-failure rollback
-  proof, restart/backup reconciliation, issuer quarantine and bounded
-  operational logging with the two reserved append-only events.
-- **R3 - Vault ceremonies and the export exception (open):** the
+  proof, restart/snapshot reconciliation, issuer quarantine and bounded
+  operational logging with the two reserved append-only events. A fully
+  matching rollback predating consumption remains R6, not an R2 claim.
+- **R3 - Vault ceremonies and the export exception (partially implemented):** the
   approval-gated seed materialization with its own rendering and audit;
-  card generation as person-side tooling (ID-1 print artifact, front/back
-  content contract, words plus QR, optional PIN chosen and entered only at
-  issuance and restore, never printed or stored); restore-from-phrase and
-  restore-from-QR into a fresh Vault with wrong-PIN detection; the
-  recovery ceremony with 2+N
+  card generation as person-side tooling (both print forms - ID-1 and the
+  folded paper sheet - over one front/back content contract, words plus QR
+  plus the unlabeled writing line, the mandatory PIN chosen and entered
+  only at issuance and restore, never printed or stored, issuance refused
+  without one); restore-from-phrase
+  and restore-from-QR into a fresh Vault with wrong-PIN detection. Root
+  preparation/claim signing is supported with role-aware rendering;
+  the full recovery ceremony with 2+N
   gated root approvals rendering total replacement and the veto delay;
   the veto ceremony on a surviving device; the exact role-aware
   `device_signing` co-signature exception with the global list unchanged.
@@ -466,10 +571,18 @@ authorize, approve or veto another identity's recovery.
   delay, and end with exactly one active device and every old sender
   dead. A second path proves a living identity is alarmed and vetoes a
   thief's recovery, and that a lifecycle transition implicitly cancels.
-- **R5 - Documentation honesty (open):** ADR 0107's threat ledger, ADR
+- **R5 - Documentation honesty (partially implemented):** this ADR, the
+  implementation matrix and the handoff state the snapshot-rollback and
+  passkey boundaries honestly. ADR 0107's threat ledger, ADR
   0099's exception note, ADR 0097-0102's export boundary, the
   implementation matrix and the handoff state the implemented boundary,
   including the stolen-card residual and the replacement boundary.
+- **R6 - Restore-proof consumption anchor (open):** choose and implement a
+  platform-backed monotonic consumption floor, or an equivalent anchor outside
+  every restorable Foundation snapshot, before claiming that restoration of a
+  fully matching pre-consumption backup cannot resurrect pending state. The
+  design must cover add-on backup/restore, host migration and anchor-loss
+  recovery without turning Home administration into identity authority.
 
 ## Consequences
 
@@ -482,11 +595,13 @@ Positive:
   so recovery needs no trust-on-first-use and no Home-side
   pre-provisioning at founding;
 - silent identity capture stays structurally hard: a thief needs the
-  physical card, faces a 48-hour announced veto window against any living
-  device, and a success loudly kills the legitimate device set;
+  physical card, then an offline brute force against every card's PIN,
+  faces a 48-hour announced veto window against any living device, and a
+  success loudly kills the legitimate device set;
 - the pre-authority surface grows by one operation whose only key is the
-  identity root, with durable one-use state - the 0108 objections are
-  answered rather than ignored;
+  identity root, with durable consumption inside the current snapshot; R6
+  names the remaining restore-proof requirement instead of overstating
+  one-use - the other 0108 objections are answered rather than ignored;
 - everything reuses proven machinery: seed-derived Ed25519 via libsodium,
   I3-style canonical layouts, ADR 0107 intake order, ADR 0109
   transitions, receipts and reconciliation - no new cryptography.
@@ -494,13 +609,17 @@ Positive:
 Negative and residual:
 
 - the card is the identity: theft or a leaked photo of the back is root
-  compromise - delayed but not prevented by the optional PIN, whose ~31
+  compromise - delayed but not prevented by the mandatory PIN, whose ~31
   bits are offline-brute-forceable at KDF cost - and the lasting remedy,
   root rotation with continuity, does not exist yet; until that ADR, a
   stolen card forces explicit identity replacement;
-- the optional PIN adds a lockout mode: a forgotten PIN makes the card
-  worthless exactly when everything else is lost, which is why it stays
-  the person's choice;
+- the mandatory PIN makes lockout an accepted failure mode: a forgotten
+  PIN makes the card worthless exactly when everything else is lost, with
+  no softer exit than identity replacement, and it adds a third secret
+  with its own custody beside the Vault passphrase and the phrase;
+- the unlabeled writing line is protection the person can silently
+  disable: a PIN written on the card is a bearer root again, visible to
+  nobody but whoever finds it;
 - the Vault's clean "no export, ever" boundary gains one named exception,
   and holding it to exactly card issuance is now a discipline to keep;
 - recovery takes at least 48 hours plus 2+N root approvals, and total
@@ -511,6 +630,9 @@ Negative and residual:
 - a standing pre-authority operation now exists on the intake, and its
   inertness without a root signature must be actively preserved by every
   future change;
+- a fully matching Foundation backup from before consumption can resurrect
+  the then-pending row until R6 supplies a monotonic platform anchor; local
+  database reconciliation alone cannot honestly prove otherwise;
 - nothing here restores lost plaintext, and root-and-card loss keeps its
   full replacement cost.
 
@@ -525,13 +647,16 @@ Negative and residual:
   not new cryptography.
 - Extends ADR `0081`: the card is a second person-side custody location
   for the root; the Vault keyfile, passphrase and platform-keystore
-  future are unchanged, and the Recovery Phrase is never the Vault
-  passphrase.
+  future are unchanged, and neither the Recovery Phrase nor the Card PIN
+  is ever the Vault passphrase.
 - Amends ADR `0097`-`0102` narrowly: one named, approval-gated,
   person-side export exists - card issuance - and nothing else crosses
   the no-export boundary.
 - Keeps ADR `0099`'s global exemption-label list closed and adds one
   exact role-aware possession use for the recovery claim co-signature.
+- Keeps passkeys at the WebAuthn/FIDO2 client-authentication and custody
+  layer unless a future ADR introduces a new protocol suite; neither the
+  Card PIN nor the current Pico root/device keys are relabeled as passkeys.
 - Applies ADR `0104`: the veto delay is a pinned default today and may
   become a per-identity Pico setting later, never host configuration.
 - Executes ADR `0105`: recovery requires no terminal, no display at the
@@ -557,6 +682,8 @@ Negative and residual:
 - [ADR 0080](0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md)
 - [ADR 0081](0081-pico-vault-person-role-key-custody-threat-model-and-direction.md)
 - [ADR 0087](0087-foundation-operator-home-host-authority-consolidation.md)
+- [W3C Web Authentication](https://www.w3.org/TR/webauthn/)
+- [FIDO Alliance: Passkeys](https://fidoalliance.org/passkeys/)
 - [ADR 0099](0099-hold-channel-approval-for-authority-creating-signatures.md)
 - [ADR 0104](0104-settings-belong-to-pico-not-to-host-configuration.md)
 - [ADR 0105](0105-pico-runs-as-a-background-companion-not-a-cli.md)

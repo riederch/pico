@@ -1,11 +1,16 @@
 import {
   buildPicoHomeDeviceActivationSignatureInput,
+  buildPicoHomeDeviceRecoveryClaimSignatureInput,
+  buildPicoHomeDeviceRecoveryPrepareSignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
   picoHomeDeviceLifecycleCanonicalLabels,
+  picoHomeDeviceRecoveryCanonicalLabels,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
   type PicoHomeDeviceActivationSignatureInput,
+  type PicoHomeDeviceRecoveryClaimSignatureInput,
+  type PicoHomeDeviceRecoveryPrepareSignatureInput,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
@@ -14,6 +19,10 @@ import {
   buildPicoVaultSignatureInputFromFields,
   renderPicoVaultApprovalStatement,
 } from './sign-rendering.js';
+import { picoVaultCanSignLabel } from '@pico/vault';
+import {
+  picoVaultDaemonSignatureNeedsApproval,
+} from './protocol.js';
 
 describe('ADR 0109 device lifecycle approval rendering', () => {
   it('shows the exact device target, scopes, validity and delegation action', () => {
@@ -96,5 +105,96 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
       picoHomeDeviceLifecycleCanonicalLabels.activation,
       activation,
     )).toBeUndefined();
+  });
+
+  it('renders root recovery while keeping the target co-signature exempt', () => {
+    const prepare: PicoHomeDeviceRecoveryPrepareSignatureInput = {
+      suite: picoIdentitySuite,
+      preparationId: 'prepare_render_0001',
+      homeId: 'home_render_recovery_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      picoIdentityFingerprintHex: '33'.repeat(32),
+      targetDelegationId: 'delegation_render_recovery_0001',
+      targetDeviceSigningKeyFingerprintHex: '44'.repeat(32),
+      targetDeviceKeyAgreementKeyFingerprintHex: '55'.repeat(32),
+      createdAt: '2026-07-31T09:59:00.000Z',
+      expiresAt: '2026-07-31T10:04:00.000Z',
+    };
+    const claim: PicoHomeDeviceRecoveryClaimSignatureInput = {
+      suite: picoIdentitySuite,
+      recoveryId: 'recovery_render_0001',
+      homeId: 'home_render_recovery_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      picoIdentityFingerprintHex: '33'.repeat(32),
+      targetDelegationId: 'delegation_render_recovery_0001',
+      targetDeviceSigningKeyFingerprintHex: '44'.repeat(32),
+      targetDeviceKeyAgreementKeyFingerprintHex: '55'.repeat(32),
+      evidenceDigestHex: '66'.repeat(32),
+      observedLifecycleOrder: 'seq:0000000000000007',
+      createdAt: '2026-07-31T10:00:00.000Z',
+      expiresAt: '2026-07-31T10:05:00.000Z',
+    };
+
+    expect(buildPicoVaultSignatureInputFromFields(
+      picoHomeDeviceRecoveryCanonicalLabels.prepare,
+      prepare,
+    )).toEqual(
+      buildPicoHomeDeviceRecoveryPrepareSignatureInput(prepare),
+    );
+    expect(renderPicoVaultApprovalStatement(
+      picoHomeDeviceRecoveryCanonicalLabels.prepare,
+      prepare,
+    )).toBe(
+      'Prepare recovery of identity 333333333333… in Home '
+      + 'home_render_recovery_0001 for target 444444444444… by reading '
+      + 'the current device-replacement head. This does not start the '
+      + '48-hour veto delay.',
+    );
+    expect(picoVaultCanSignLabel(
+      'pico_identity',
+      picoHomeDeviceRecoveryCanonicalLabels.prepare,
+    )).toBe(true);
+    expect(picoVaultCanSignLabel(
+      'device_signing',
+      picoHomeDeviceRecoveryCanonicalLabels.prepare,
+    )).toBe(false);
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      picoHomeDeviceRecoveryCanonicalLabels.prepare,
+      'pico_identity',
+    )).toBe(true);
+
+    expect(buildPicoVaultSignatureInputFromFields(
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+      claim,
+    )).toEqual(
+      buildPicoHomeDeviceRecoveryClaimSignatureInput(claim),
+    );
+    expect(renderPicoVaultApprovalStatement(
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+      claim,
+    )).toBe(
+      'Recover identity 333333333333… into Home '
+      + 'home_render_recovery_0001 by replacing the complete device set '
+      + 'with target 444444444444…. The 48-hour veto delay starts only '
+      + 'after the Home accepts this claim.',
+    );
+    expect(picoVaultCanSignLabel(
+      'pico_identity',
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+    )).toBe(true);
+    expect(picoVaultCanSignLabel(
+      'device_signing',
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+    )).toBe(true);
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+      'pico_identity',
+    )).toBe(true);
+    expect(picoVaultDaemonSignatureNeedsApproval(
+      picoHomeDeviceRecoveryCanonicalLabels.claim,
+      'device_signing',
+    )).toBe(false);
   });
 });

@@ -27,6 +27,8 @@ export type {
   PicoVaultDaemonApprovalWaitResult,
   PicoVaultDaemonCeremonyCreateDomainRequest,
   PicoVaultDaemonCeremonyCreateDomainResult,
+  PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
+  PicoVaultDaemonCeremonyIssueRecoveryCardResult,
   PicoVaultDaemonCeremonyRotateDomainRequest,
   PicoVaultDaemonCeremonyRotateDomainResult,
   PicoVaultDaemonErrorResponse,
@@ -92,6 +94,17 @@ export {
   renewPicoHomeDevice,
   revokePicoHomeDevice,
 } from './device-lifecycle-ceremony.js';
+export {
+  createPicoRecoveryCardQrMatrix,
+  generatePicoRecoveryCardPdfs,
+  picoRecoveryCardQrPayload,
+  PICO_RECOVERY_CARD_PDF_LAYOUT,
+} from './recovery-card-pdf.js';
+export type {
+  PicoRecoveryCardPdfOptions,
+  PicoRecoveryCardPdfs,
+  PicoRecoveryCardQrMatrix,
+} from './recovery-card-pdf.js';
 export type {
   EnrollPicoHomeDeviceInput,
   PicoHomeDeviceLifecycleCeremonyResult,

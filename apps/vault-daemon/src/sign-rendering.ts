@@ -1,5 +1,7 @@
 import {
   buildPicoHomeDeviceActivationSignatureInput,
+  buildPicoHomeDeviceRecoveryClaimSignatureInput,
+  buildPicoHomeDeviceRecoveryPrepareSignatureInput,
   buildPicoHomeClaimSignatureInput,
   buildPicoHomeFoundingSignatureInput,
   buildPicoHomeMembershipLifecycleSignatureInput,
@@ -20,6 +22,7 @@ import {
   buildPicoReaderCustodyWriterGrantSignatureInput,
   buildPicoShareEnvelopeSignatureInput,
   picoHomeDeviceLifecycleCanonicalLabels,
+  picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeSignatureInputLabels,
   picoHomeV2SignatureInputLabels,
   picoIdentityReaderKeyFreshnessSignatureInputLabel,
@@ -29,6 +32,8 @@ import {
   picoShareCanonicalLabels,
   type PicoHomeClaimSignatureInput,
   type PicoHomeDeviceActivationSignatureInput,
+  type PicoHomeDeviceRecoveryClaimSignatureInput,
+  type PicoHomeDeviceRecoveryPrepareSignatureInput,
   type PicoHomeFoundingSignatureInput,
   type PicoHomeMembershipLifecycleSignatureInput,
   type PicoHomeMembershipSignatureInput,
@@ -76,6 +81,14 @@ export function renderPicoVaultApprovalStatement(
 }
 
 const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
+  [picoHomeDeviceRecoveryCanonicalLabels.prepare]: (f) =>
+    buildPicoHomeDeviceRecoveryPrepareSignatureInput(
+      f as PicoHomeDeviceRecoveryPrepareSignatureInput,
+    ),
+  [picoHomeDeviceRecoveryCanonicalLabels.claim]: (f) =>
+    buildPicoHomeDeviceRecoveryClaimSignatureInput(
+      f as PicoHomeDeviceRecoveryClaimSignatureInput,
+    ),
   [picoHomeDeviceLifecycleCanonicalLabels.activation]: (f) =>
     buildPicoHomeDeviceActivationSignatureInput(
       f as PicoHomeDeviceActivationSignatureInput,
@@ -134,6 +147,14 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
  * integrity burden alone.
  */
 const renderersByLabel: Record<string, (fields: object) => string> = {
+  [picoHomeDeviceRecoveryCanonicalLabels.prepare]: (f) => {
+    const v = f as PicoHomeDeviceRecoveryPrepareSignatureInput;
+    return `Prepare recovery of identity ${short(v.picoIdentityFingerprintHex)} in Home ${v.homeId} for target ${short(v.targetDeviceSigningKeyFingerprintHex)} by reading the current device-replacement head. This does not start the 48-hour veto delay.`;
+  },
+  [picoHomeDeviceRecoveryCanonicalLabels.claim]: (f) => {
+    const v = f as PicoHomeDeviceRecoveryClaimSignatureInput;
+    return `Recover identity ${short(v.picoIdentityFingerprintHex)} into Home ${v.homeId} by replacing the complete device set with target ${short(v.targetDeviceSigningKeyFingerprintHex)}. The 48-hour veto delay starts only after the Home accepts this claim.`;
+  },
   [picoIdentitySignatureInputLabels.keyrecord]: (f) => {
     const v = f as PicoIdentityKeyRecordSignatureInput;
     return `Certify a ${v.keyRole} key record (${short(v.publicKeyHex)}).`;

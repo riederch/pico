@@ -535,6 +535,33 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         });
         return;
       }
+      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard: {
+        this.#handleCeremony(socket, frame, request, {
+          summary: {
+            picoName: request.picoName,
+            homeNameOrId: request.homeNameOrId,
+            identityKeyFingerprint:
+              request.signerKeyFingerprintHex.slice(0, 12),
+            pinProtected: 'yes',
+          },
+          statement: `Issue a Recovery Card for Pico ${request.picoName} in ${request.homeNameOrId}. This exports the identity-root recovery material once for printing; PIN protection is mandatory and enabled.`,
+          execute: (session) => session.issueRecoveryCard({
+            picoName: request.picoName,
+            homeNameOrId: request.homeNameOrId,
+            homeId: request.homeId,
+            hostSigningKeyFingerprintHex:
+              request.hostSigningKeyFingerprintHex,
+            hostKeyAgreementKeyFingerprintHex:
+              request.hostKeyAgreementKeyFingerprintHex,
+            hostKeyAgreementPublicKeyHex:
+              request.hostKeyAgreementPublicKeyHex,
+            endpointHint: request.endpointHint,
+            issuedAt: request.issuedAt,
+            pin: request.pin,
+          }) as unknown as Record<string, unknown>,
+        });
+        return;
+      }
       case picoVaultDaemonRequestFamilies.ceremonyRotateDomain: {
         this.#handleCeremony(socket, frame, request, {
           summary: {

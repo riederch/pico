@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { wordlist as bip39EnglishWordlist } from '@scure/bip39/wordlists/english.js';
 import {
   buildPicoMemoryContentAd,
   buildPicoMemoryDekWrapAd,
@@ -18,6 +19,7 @@ import {
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoVaultKeyfileHeaderAad,
+  buildPicoRecoveryCardPayload,
   picoMemoryContentSuite,
   picoReaderCustodyCanonicalLabels,
   picoReaderCustodyDomainRecordSchema,
@@ -30,6 +32,7 @@ import {
   picoReaderCustodyWriterGrantLifecycleRecordSchema,
   picoReaderCustodyWriterGrantRecordSchema,
   picoHomeDeviceLifecycleCanonicalLabels,
+  picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeSignatureInputLabels,
   picoHomeV2SignatureInputLabels,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
@@ -46,6 +49,7 @@ import {
   picoVaultKdfProfiles,
   picoVaultKeyfileFormat,
   picoVaultPersonKeyRoles,
+  picoRecoveryCardSchema,
 } from '@pico/protocol';
 import type {
   PicoVaultAeadAlgorithm,
@@ -75,6 +79,7 @@ import type {
   PicoReaderCustodyWriterGrantRecord,
   PicoReaderCustodyWriterGrantSignatureInput,
   PicoShareEnvelopeRecord,
+  PicoRecoveryCardPayload,
 } from '@pico/protocol';
 
 export const picoVaultKeyfileEnvelopeSchema = 'pico.vault.keyfile.encrypted.v1' as const;
@@ -84,6 +89,16 @@ export const MAX_PICO_READER_CUSTODY_SYNC_PAYLOAD_BYTES = 16 * 1024 * 1024;
 export const MAX_PICO_READER_CUSTODY_SYNC_MANIFEST_MS =
   24 * 60 * 60 * 1_000;
 export const PICO_READER_CUSTODY_SYNC_GENESIS_DIGEST_HEX = '00'.repeat(32);
+export const picoRecoveryPinProtection = {
+  kdfAlgorithm: 'argon2id13',
+  kdfProfile: 'moderate',
+  saltLabel: 'pico.recovery.pin-salt.v1',
+  nonceLabel: 'pico.recovery.pin-nonce.v1',
+  streamAlgorithm: 'xchacha20',
+  minLength: 6,
+  maxLength: 64,
+  alphabet: '0123456789abcdefghijklmnopqrstuvwxyz',
+} as const;
 
 export interface PicoVaultEncryptedKeyfileV1 {
   schema: typeof picoVaultKeyfileEnvelopeSchema;
@@ -102,6 +117,33 @@ export interface CreatePicoVaultKeyfileResult {
   keyfile: PicoVaultEncryptedKeyfileV1;
   publicKeyHex: string;
   keyFingerprintHex: string;
+}
+
+export interface IssuePicoVaultRecoveryCardInput {
+  picoName: string;
+  homeNameOrId: string;
+  homeId: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  hostKeyAgreementPublicKeyHex: string;
+  endpointHint: string;
+  issuedAt: string;
+  pin: string;
+}
+
+export interface PicoVaultRecoveryCard {
+  payload: PicoRecoveryCardPayload;
+  recoveryPhrase: string;
+  canonicalPayloadHex: string;
+}
+
+export interface RestorePicoVaultIdentityFromRecoveryInput {
+  recoveryPhrase?: string;
+  seedMaterialHex?: string;
+  pinProtected: true;
+  pin: string;
+  identityKeyFingerprintHex: string;
+  passphrase: string;
 }
 
 export interface OpenPicoVaultKeyfileInput {
@@ -341,6 +383,8 @@ export interface VaultSodium {
   crypto_pwhash_SALTBYTES: number;
   crypto_sign_PUBLICKEYBYTES: number;
   crypto_sign_SECRETKEYBYTES: number;
+  crypto_stream_xchacha20_KEYBYTES: number;
+  crypto_stream_xchacha20_NONCEBYTES: number;
   crypto_aead_xchacha20poly1305_ietf_encrypt(
     message: Uint8Array,
     additionalData: Uint8Array,
@@ -366,8 +410,19 @@ export interface VaultSodium {
     memLimit: number,
     algorithm: number,
   ): Uint8Array;
+  crypto_hash_sha256(message: Uint8Array): Uint8Array;
+  crypto_stream_xchacha20_xor(
+    message: Uint8Array,
+    nonce: Uint8Array,
+    key: Uint8Array,
+  ): Uint8Array;
   crypto_sign_detached(message: Uint8Array | string, privateKey: Uint8Array): Uint8Array;
+  crypto_sign_ed25519_sk_to_seed(privateKey: Uint8Array): Uint8Array;
   crypto_sign_keypair(): { publicKey: Uint8Array; privateKey: Uint8Array };
+  crypto_sign_seed_keypair(seed: Uint8Array): {
+    publicKey: Uint8Array;
+    privateKey: Uint8Array;
+  };
   crypto_sign_verify_detached(
     signature: Uint8Array,
     message: Uint8Array | string,
@@ -405,6 +460,12 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     picoHomeSignatureInputLabels.founding,
     picoHomeV2SignatureInputLabels.claim,
     picoHomeV2SignatureInputLabels.founding,
+    // ADR 0110: the identity root first authorizes target-bound lifecycle
+    // discovery, then authorizes the total-replacement recovery. The claim
+    // bytes are co-signed below by the target device as possession proof; the
+    // daemon keeps approval policy role-aware.
+    picoHomeDeviceRecoveryCanonicalLabels.prepare,
+    picoHomeDeviceRecoveryCanonicalLabels.claim,
     // The issuer half of a Home membership, and its lifecycle. ADR 0080 H6
     // makes `issuerSignatureHex` the authority, and an authority over a
     // resident's membership is a person's to give - so it is signable by a
@@ -438,6 +499,7 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     // short-lived, Home-bound co-signature proves only that the target device
     // holds the signing key named by that delegation.
     picoHomeDeviceLifecycleCanonicalLabels.activation,
+    picoHomeDeviceRecoveryCanonicalLabels.claim,
     picoReaderCustodyCanonicalLabels.item,
   ]),
   device_key_agreement: new Set<string>(),
@@ -554,6 +616,37 @@ export class PicoVaultSession {
       hexToBytes(this.#metadata.publicKeyHex),
       this.#privateKey,
     );
+  }
+
+  /**
+   * ADR 0110's one named no-export exception. The raw Ed25519 seed exists only
+   * inside this call and is zeroed after the printable phrase/card payload has
+   * been produced. The daemon exposes this method only behind the dedicated
+   * approval-gated card-issuance request; it is never a generic key export.
+   */
+  public issueRecoveryCard(
+    input: IssuePicoVaultRecoveryCardInput,
+    options: PicoVaultSessionUseOptions = {},
+  ): PicoVaultRecoveryCard {
+    assertOptionalTimestampMs(options.nowMs);
+    this.#assertUnlocked(options.nowMs ?? Date.now());
+    if (this.#metadata.keyRole !== 'pico_identity') {
+      throw new Error('recovery_card_requires_identity_root');
+    }
+    const seed =
+      this.#sodium.crypto_sign_ed25519_sk_to_seed(this.#privateKey);
+    try {
+      const card = issuePicoVaultRecoveryCardFromSeed(
+        this.#sodium,
+        seed,
+        this.#metadata.keyFingerprintHex,
+        input,
+      );
+      this.#markUsed(options.nowMs ?? Date.now());
+      return card;
+    } finally {
+      this.#sodium.memzero(seed);
+    }
   }
 
   public exportEncryptedKeyfile(): PicoVaultEncryptedKeyfileV1 {
@@ -1746,6 +1839,141 @@ export function decryptPicoReaderCustodyItem(
   }
 }
 
+export function encodePicoRecoveryPhrase(
+  sodium: VaultSodium,
+  seedMaterial: Uint8Array,
+): string {
+  if (seedMaterial.byteLength !== 32) {
+    throw new Error('invalid_recovery_seed_length');
+  }
+  if (bip39EnglishWordlist.length !== 2_048) {
+    throw new Error('invalid_bip39_english_wordlist');
+  }
+  const checksum = sodium.crypto_hash_sha256(seedMaterial)[0]!;
+  const bits = [...seedMaterial, checksum]
+    .map((byte) => byte.toString(2).padStart(8, '0'))
+    .join('');
+  return Array.from({ length: 24 }, (_, index) =>
+    bip39EnglishWordlist[
+      Number.parseInt(bits.slice(index * 11, (index + 1) * 11), 2)
+    ]!,
+  ).join(' ');
+}
+
+export function decodePicoRecoveryPhrase(
+  sodium: VaultSodium,
+  recoveryPhrase: string,
+): Uint8Array {
+  if (typeof recoveryPhrase !== 'string') {
+    throw new Error('invalid_recovery_phrase');
+  }
+  const words = recoveryPhrase.normalize('NFKD').trim().split(/\s+/);
+  if (words.length !== 24) {
+    throw new Error('invalid_recovery_phrase_word_count');
+  }
+  const bits = words.map((word) => {
+    if (!/^[a-z]+$/.test(word)) {
+      throw new Error('invalid_recovery_phrase_word');
+    }
+    const index = bip39EnglishWordlist.indexOf(word);
+    if (index < 0) {
+      throw new Error('invalid_recovery_phrase_word');
+    }
+    return index.toString(2).padStart(11, '0');
+  }).join('');
+  const seed = Uint8Array.from(
+    Array.from({ length: 32 }, (_, index) =>
+      Number.parseInt(bits.slice(index * 8, (index + 1) * 8), 2),
+    ),
+  );
+  const checksum = Number.parseInt(bits.slice(256, 264), 2);
+  if (sodium.crypto_hash_sha256(seed)[0] !== checksum) {
+    sodium.memzero(seed);
+    throw new Error('invalid_recovery_phrase_checksum');
+  }
+  return seed;
+}
+
+export function protectPicoRecoverySeedWithPin(
+  sodium: VaultSodium,
+  input: {
+    seed: Uint8Array;
+    identityKeyFingerprintHex: string;
+    pin: string;
+  },
+): Uint8Array {
+  if (input.seed.byteLength !== 32) {
+    throw new Error('invalid_recovery_seed_length');
+  }
+  const { key, nonce } = derivePicoRecoveryPinMaterial(
+    sodium,
+    input.identityKeyFingerprintHex,
+    input.pin,
+  );
+  try {
+    return sodium.crypto_stream_xchacha20_xor(
+      input.seed,
+      nonce,
+      key,
+    );
+  } finally {
+    sodium.memzero(key);
+    sodium.memzero(nonce);
+  }
+}
+
+export function restorePicoVaultIdentityFromRecovery(
+  sodium: VaultSodium,
+  input: RestorePicoVaultIdentityFromRecoveryInput,
+): CreatePicoVaultKeyfileResult {
+  assertSodiumConstants(sodium);
+  assertPassphrase(input.passphrase);
+  const hasPhrase = input.recoveryPhrase !== undefined;
+  const hasSeedMaterial = input.seedMaterialHex !== undefined;
+  if (hasPhrase === hasSeedMaterial) {
+    throw new Error('recovery_source_must_be_phrase_or_qr_seed');
+  }
+  let cardSeedMaterial = hasPhrase
+    ? decodePicoRecoveryPhrase(sodium, input.recoveryPhrase!)
+    : hexToBytes(input.seedMaterialHex!);
+  if (cardSeedMaterial.byteLength !== 32) {
+    sodium.memzero(cardSeedMaterial);
+    throw new Error('invalid_recovery_seed_length');
+  }
+  let rootSeed = cardSeedMaterial;
+  try {
+    if (input.pinProtected !== true) {
+      throw new Error('recovery_card_pin_protection_required');
+    }
+    rootSeed = protectPicoRecoverySeedWithPin(sodium, {
+      seed: cardSeedMaterial,
+      identityKeyFingerprintHex:
+        input.identityKeyFingerprintHex,
+      pin: input.pin,
+    });
+
+    const pair = sodium.crypto_sign_seed_keypair(rootSeed);
+    const fingerprint = keyRecordFingerprintHex(
+      sodium,
+      'pico_identity',
+      pair.publicKey,
+    );
+    if (fingerprint !== input.identityKeyFingerprintHex) {
+      sodium.memzero(pair.privateKey);
+      throw new Error('recovery_pin_or_seed_mismatch');
+    }
+    return createEncryptedPicoVaultKeyfile(sodium, {
+      keyRole: 'pico_identity',
+      passphrase: input.passphrase,
+    }, pair);
+  } finally {
+    if (rootSeed !== cardSeedMaterial) {
+      sodium.memzero(rootSeed);
+    }
+    sodium.memzero(cardSeedMaterial);
+  }
+}
+
 export function createPicoVaultKeyfile(
   sodium: VaultSodium,
   input: CreatePicoVaultKeyfileInput,
@@ -1755,6 +1983,14 @@ export function createPicoVaultKeyfile(
   assertSodiumConstants(sodium);
 
   const keypair = generateKeypairForRole(sodium, input.keyRole);
+  return createEncryptedPicoVaultKeyfile(sodium, input, keypair);
+}
+
+function createEncryptedPicoVaultKeyfile(
+  sodium: VaultSodium,
+  input: CreatePicoVaultKeyfileInput,
+  keypair: { publicKey: Uint8Array; privateKey: Uint8Array },
+): CreatePicoVaultKeyfileResult {
   const publicKey = new Uint8Array(keypair.publicKey);
   const privateKey = new Uint8Array(keypair.privateKey);
   const keyFingerprintHex = keyRecordFingerprintHex(sodium, input.keyRole, publicKey);
@@ -1808,6 +2044,109 @@ export function createPicoVaultKeyfile(
     publicKeyHex: bytesToHex(publicKey),
     keyFingerprintHex,
   };
+}
+
+function issuePicoVaultRecoveryCardFromSeed(
+  sodium: VaultSodium,
+  seed: Uint8Array,
+  identityKeyFingerprintHex: string,
+  input: IssuePicoVaultRecoveryCardInput,
+): PicoVaultRecoveryCard {
+  assertSodiumConstants(sodium);
+  if (seed.byteLength !== 32) {
+    throw new Error('invalid_recovery_seed_length');
+  }
+  let seedMaterial: Uint8Array = new Uint8Array(seed);
+  try {
+    const protectedSeed = protectPicoRecoverySeedWithPin(sodium, {
+      seed: seedMaterial,
+      identityKeyFingerprintHex,
+      pin: input.pin,
+    });
+    sodium.memzero(seedMaterial);
+    seedMaterial = protectedSeed;
+    const payload: PicoRecoveryCardPayload = {
+      schema: picoRecoveryCardSchema,
+      suite: picoIdentitySuite,
+      picoName: input.picoName,
+      homeNameOrId: input.homeNameOrId,
+      seedMaterialHex: bytesToHex(seedMaterial),
+      pinProtected: true,
+      identityKeyFingerprintHex,
+      homeId: input.homeId,
+      hostSigningKeyFingerprintHex:
+        input.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        input.hostKeyAgreementKeyFingerprintHex,
+      hostKeyAgreementPublicKeyHex:
+        input.hostKeyAgreementPublicKeyHex,
+      endpointHint: input.endpointHint,
+      issuedAt: input.issuedAt,
+    };
+    const canonicalPayload = buildPicoRecoveryCardPayload(payload);
+    return {
+      payload,
+      recoveryPhrase:
+        encodePicoRecoveryPhrase(sodium, seedMaterial),
+      canonicalPayloadHex: bytesToHex(canonicalPayload),
+    };
+  } finally {
+    sodium.memzero(seedMaterial);
+  }
+}
+
+function derivePicoRecoveryPinMaterial(
+  sodium: VaultSodium,
+  identityKeyFingerprintHex: string,
+  pin: string,
+): { key: Uint8Array; nonce: Uint8Array } {
+  assertSodiumConstants(sodium);
+  if (
+    typeof pin !== 'string'
+    || pin.length < picoRecoveryPinProtection.minLength
+    || pin.length > picoRecoveryPinProtection.maxLength
+    || !/^[0-9a-z]+$/.test(pin)
+  ) {
+    throw new Error('invalid_recovery_pin');
+  }
+  const identityFingerprint = hexToBytes(
+    identityKeyFingerprintHex,
+  );
+  if (identityFingerprint.byteLength !== 32) {
+    throw new Error('invalid_recovery_identity_fingerprint');
+  }
+  const salt = sodium.crypto_generichash(
+    sodium.crypto_pwhash_SALTBYTES,
+    concatElements([
+      asciiBytes(picoRecoveryPinProtection.saltLabel),
+      identityFingerprint,
+    ]),
+    null,
+  );
+  const nonce = sodium.crypto_generichash(
+    sodium.crypto_stream_xchacha20_NONCEBYTES,
+    concatElements([
+      asciiBytes(picoRecoveryPinProtection.nonceLabel),
+      identityFingerprint,
+    ]),
+    null,
+  );
+  try {
+    return {
+      key: sodium.crypto_pwhash(
+        sodium.crypto_stream_xchacha20_KEYBYTES,
+        pin,
+        salt,
+        picoVaultArgon2idModerateParams.opsLimit,
+        picoVaultArgon2idModerateParams.memLimitBytes,
+        sodium.crypto_pwhash_ALG_ARGON2ID13,
+      ),
+      nonce,
+    };
+  } finally {
+    sodium.memzero(salt);
+    sodium.memzero(identityFingerprint);
+  }
 }
 
 export function openPicoVaultKeyfile(
@@ -2948,6 +3287,10 @@ function assertSodiumConstants(sodium: VaultSodium): void {
     throw new Error('unsupported_sodium_constants');
   }
   if (sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES !== 24) {
+    throw new Error('unsupported_sodium_constants');
+  }
+  if (sodium.crypto_stream_xchacha20_KEYBYTES !== 32
+    || sodium.crypto_stream_xchacha20_NONCEBYTES !== 24) {
     throw new Error('unsupported_sodium_constants');
   }
   if (sodium.crypto_sign_PUBLICKEYBYTES !== 32 || sodium.crypto_box_PUBLICKEYBYTES !== 32) {

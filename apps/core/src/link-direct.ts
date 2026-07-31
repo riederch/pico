@@ -88,6 +88,10 @@ export interface PicoLinkDirectAuthority {
 const preAuthorityOperations: ReadonlySet<string> = new Set<PicoLinkDirectOperation>([
   'home.setup.read',
   'home.claim.submit',
+  // ADR 0110: standing but inert without the root signature carried by the
+  // semantic recovery submission. The outer envelope remains a target-device
+  // possession proof and never turns the identity root into a carrier key.
+  'home.device.recovery.submit',
 ]);
 
 export class PicoLinkDirectIntake {

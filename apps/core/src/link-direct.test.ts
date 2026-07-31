@@ -548,12 +548,17 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
     )).toEqual({ ok: false, reason: 'invalid_sender_signature' });
   });
 
-  it('lets the two setup operations through without membership, by design', async () => {
+  it('lets only setup, claim and root-authorized recovery submission through without membership', async () => {
     // A claim cannot carry a membership: no Home exists yet. Authorization is
-    // skipped for exactly these two operations and for nothing else.
+    // skipped for exactly these three operations and for nothing else. The
+    // recovery dispatcher still verifies the root-signed semantic claim.
     const { intake, calls, execute } = makeIntake({ isAuthorizedSender: () => false });
 
-    for (const operation of ['home.setup.read', 'home.claim.submit'] as const) {
+    for (const operation of [
+      'home.setup.read',
+      'home.claim.submit',
+      'home.device.recovery.submit',
+    ] as const) {
       const handled = await intake.handle(
         sealedRequest({ requestOverrides: { operation } }),
         execute,
@@ -562,7 +567,11 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
       expect(handled.ok).toBe(true);
     }
     expect(calls.map((call) => call.operation))
-      .toEqual(['home.setup.read', 'home.claim.submit']);
+      .toEqual([
+        'home.setup.read',
+        'home.claim.submit',
+        'home.device.recovery.submit',
+      ]);
     // Pre-authority skips membership/delegation authorization, not sender
     // authentication. ADR 0108 needs the verified principal so claim handling
     // can require it to equal the first-device binding inside the payload.
@@ -572,6 +581,7 @@ describe('Pico Link direct intake (ADR 0107 D2)', () => {
     for (const operation of [
       'home.device.lifecycle.read',
       'home.device.lifecycle.submit',
+      'home.device.recovery.veto',
     ] as const) {
       expect(await intake.handle(
         sealedRequest({ requestOverrides: { operation } }),
