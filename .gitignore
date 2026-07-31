@@ -11,3 +11,7 @@ coverage/
 apps/core/data/
 package-lock.json
 yarn.lock
+
+# Locally generated Recovery Card print previews
+/pico-recovery-card-option1-card-printer.pdf
+/pico-recovery-card-option2-paper-printable.pdf
