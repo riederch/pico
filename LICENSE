@@ -20,21 +20,43 @@ Private Pico WG use is permitted, including use by family members, households, p
 
 Private cost sharing is permitted when it only reimburses actual shared infrastructure costs and does not create profit, paid hosting, paid support, a subscription, a managed service, a commercial service, or a business advantage.
 
+## Self-operated business use
+
+Business use is permitted without additional commercial permission when it happens on a self-operated Pico Home.
+
+A business, organisation, association or other legal entity may run one or more Picos on its own Pico Home. Those Picos may serve the entity itself and interact with its owners, members, employees, guests and customers.
+
+A Pico Home is self-operated when the entity that uses it holds custody of that Pico Home's host keys, operates and controls that Pico Home itself, and does not obtain that Pico Home from a third party as commercial hosting, a managed service or part of a paid offering.
+
+Renting general-purpose infrastructure, such as a server, virtual machine, storage or connectivity, is not by itself commercial Pico hosting, as long as the entity remains the only party that operates the Pico Home and holds its host keys.
+
+A third party may be paid to install, configure, migrate, maintain, update or support a self-operated Pico Home on behalf of the entity that operates it. That third party must not operate the Pico Home as its own service, hold the host keys as a service provider, or offer Pico Homes to its own customers.
+
+### Interaction is not provision
+
+People outside the entity, including guests and customers, may interact with a Pico that the entity operates. Their own Picos and Pico Homes may communicate with it. This remains self-operated business use even when that interaction is part of what those people pay for.
+
+Provision is different. An entity provides Pico to another party when that party gets a Pico or a Pico Home of their own that the entity operates, or of which the entity holds the host keys, so that the entity runs a companion on that party's behalf. Enrolling people outside the entity as members of a Pico Home the entity operates is provision in this sense.
+
+Provision for money, or as part of a paid offering, is commercial Pico hosting and requires prior written permission. Self-operated business use does not permit it.
+
 ## Commercial use
 
-Commercial use is not permitted without prior written permission from the designated Pico rights holder.
+Commercial use is not permitted without prior written permission from the designated Pico rights holder, except as expressly permitted under "Self-operated business use" above.
 
-Commercial use includes, without limitation:
+Commercial Pico hosting, and commercial provision of Pico or of Pico Homes to others, remain reserved to the designated Pico rights holder.
+
+Commercial use requiring prior written permission includes, without limitation:
 
 - paid Pico hosting
 - managed Pico Home services
 - Pico Home rental or multi-tenant hosting for money
+- operating a Pico or a Pico Home on behalf of another party as a service or as part of a paid offering
 - SaaS operation
 - selling Pico or Pico-based products
-- paid support or support bundles
-- business-internal use
-- use to provide commercial services to third parties
+- giving parties outside your own entity a Pico or a Pico Home of their own that you operate, as a product, as a service or as part of a paid offering
 - integration into a commercial product or service
+- redistribution or sublicensing for money
 
 Commercial permissions are granted only by the designated Pico rights holder.
 

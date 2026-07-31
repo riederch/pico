@@ -130,7 +130,9 @@ Pico is source-available for private and non-commercial use under the PolyForm N
 
 Private Pico use, private Pico Home use and private Pico WG use are permitted, including family, household, private shared-home and private non-commercial friend-group use.
 
-Commercial use requires prior written permission from the designated Pico rights holder. This includes paid hosting, managed Pico Home services, Pico Home rental, SaaS operation, paid support, business-internal use and integration into commercial products or services.
+Business use is permitted on a self-operated Pico Home. A guesthouse, workshop, practice or small company may run one or more Picos for itself, as long as it operates that Pico Home itself and holds its host keys. Those Picos may interact with employees, guests and customers.
+
+Commercial Pico hosting stays with the designated Pico rights holder. Paid hosting, managed Pico Home services, Pico Home rental, multi-tenant hosting, SaaS operation, selling Pico or Pico-based products, and integration into commercial products or services require prior written permission.
 
 Current commercial permission contact:
 

@@ -6,9 +6,9 @@ Pico is currently in the foundation phase. Nothing in this document makes the cu
 
 ## License boundary
 
-Pico is source-available for private and non-commercial use.
+Pico is source-available for private and non-commercial use, and for business use on a self-operated Pico Home.
 
-Commercial use, including paid hosting, managed Pico Home services, SaaS operation, paid support, business-internal use and commercial product integration, requires prior written permission.
+Commercial Pico hosting, including paid hosting, managed Pico Home services, Pico Home rental, multi-tenant hosting, SaaS operation, operating a Pico Home on behalf of another party and commercial product integration, requires prior written permission. `LICENSE` and `COMMERCIAL.md` are authoritative.
 
 Protocol compatibility does not grant commercial permission.
 

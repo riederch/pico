@@ -50,7 +50,9 @@ Operational form:
 
 The source-available license should allow private and non-commercial modification and self-hosting, including private Pico Home and private Pico WG use.
 
-Commercial use, including paid hosting, managed Pico Home services, SaaS operation, paid support, business-internal use and commercial product integration, requires prior written permission.
+Commercial Pico hosting, including paid hosting, managed Pico Home services, SaaS operation, operating a Pico Home on behalf of another party and commercial product integration, requires prior written permission.
+
+The concrete permission boundary lives in `LICENSE` and `COMMERCIAL.md`, not in this ADR. ADR [0111](0111-self-operated-business-use-and-reserved-commercial-hosting.md) has since widened it to allow business use on a self-operated Pico Home and narrowed the reserved surface to commercial Pico hosting. That change does not affect this ADR's compatibility constraint: compatibility still grants no commercial permission, and commercial permission still grants no compatibility status.
 
 Protocol compatibility should be handled through:
 

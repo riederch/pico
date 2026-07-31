@@ -159,7 +159,9 @@ Key rules:
 
 - private and non-commercial use is allowed within the license
 - private Pico Home and private Pico WG use are allowed
-- commercial use requires prior written permission
+- business use on a self-operated Pico Home is allowed
+- commercial Pico hosting stays with the rights holder; other commercial use
+  requires prior written permission
 - compatibility does not grant commercial permission
 - commercial permission does not automatically grant compatibility status
 - official names and official hosted-service claims require permission
