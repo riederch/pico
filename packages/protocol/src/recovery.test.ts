@@ -12,6 +12,7 @@ import {
   picoHomeDeviceRecoveryEvidenceDigestHex,
   picoHomeDeviceRecoveryRecordSchema,
   picoHomeDeviceRecoverySubmissionSchema,
+  picoHomeDeviceRecoveryTiming,
   picoProtocolVersion,
   picoRecoveryCardSchema,
   type PicoHomeDeviceRecoveryClaimSignatureInput,
@@ -74,6 +75,11 @@ describe('ADR 0110 recovery protocol forms', () => {
         'pico.home.device-recovery-evidence-digest.v1',
       claim: 'pico.home.device-recovery-claim.v1',
       receipt: 'pico.home.device-recovery-receipt.v1',
+    });
+    expect(picoHomeDeviceRecoveryTiming).toEqual({
+      signedRequestLifetimeMs: 5 * 60 * 1_000,
+      vetoDelayMs: 48 * 60 * 60 * 1_000,
+      completionWindowMs: 7 * 24 * 60 * 60 * 1_000,
     });
   });
 

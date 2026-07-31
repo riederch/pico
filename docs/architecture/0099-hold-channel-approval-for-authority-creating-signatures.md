@@ -154,12 +154,15 @@ sign that label at the Vault role gate. The delegation and revocation root
 signatures remain gated one at a time; renewal therefore raises two distinct
 approvals.
 
-ADR 0110 decides a third role-aware possession use for its future
-`pico.home.device-recovery-claim.v1` target co-signature. That exception does
-not exist in runtime until ADR 0110 R3 is implemented: today the unknown
-label still fails closed. The global exemption-label list remains unchanged,
-and the recovery claim, delegation and revocation root signatures stay gated
-one at a time - a recovery therefore raises 2+N distinct root approvals.
+ADR 0110 implements a third role-aware possession use for the
+`pico.home.device-recovery-claim.v1` target co-signature. The global
+exemption-label list remains unchanged; the exception is exact and role-aware.
+Root preparation, delegation, N revocations and recovery claim remain gated
+one at a time, so an end-to-end recovery raises 3+N distinct root approvals.
+A live approval channel remains standing between decisions: a back-to-back
+request parks until the same connected terminal renews its long poll, while a
+key whose holder never registered a watcher still fails as
+`approval_unavailable`.
 
 Reader access (ADR 0098) stays ungated by the same principle, and this is a
 scope decision rather than an oversight: the person's unlock of a

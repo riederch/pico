@@ -35,6 +35,17 @@ export const picoHomeDeviceRecoveryPendingStatuses = [
 export type PicoHomeDeviceRecoveryPendingStatus =
   typeof picoHomeDeviceRecoveryPendingStatuses[number];
 
+/**
+ * ADR 0110 timing is protocol policy, not host configuration. Keeping the
+ * values beside the canonical forms lets Foundation and person-side ceremony
+ * clients enforce the same fixed bounds without copying magic numbers.
+ */
+export const picoHomeDeviceRecoveryTiming = {
+  signedRequestLifetimeMs: 5 * 60 * 1_000,
+  vetoDelayMs: 48 * 60 * 60 * 1_000,
+  completionWindowMs: 7 * 24 * 60 * 60 * 1_000,
+} as const;
+
 export interface PicoRecoveryCardPayload {
   schema: typeof picoRecoveryCardSchema;
   suite: string;

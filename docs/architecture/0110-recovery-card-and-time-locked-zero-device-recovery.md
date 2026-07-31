@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted; partially implemented. R1 and the single-snapshot scope of R2 are
-implemented, R3 is partial, and R4-R6 keep product/rollback claims open. This
+Accepted; partially implemented. R1-R4 and the single-snapshot scope of R2
+are implemented; R5 product integration and R6 restore-proof consumption
+remain open. This
 ADR decides the path ADR
 0109 deliberately left missing: how an identity whose Home projects no
 active delegated device regains exactly one. The person's instrument is the
@@ -400,10 +401,10 @@ so a root holder cannot grow the undeletable log by cycling initiations
 ### Approval and rendering boundaries
 
 - The root signatures on the recovery claim, the new delegation and every
-  revocation remain gated one at a time under ADR 0099: a recovery
-  normally costs 2+N root approvals, honest until the separately reviewed
-  composite root record ADR 0109 already names exists. Completion needs no
-  further root approval.
+  revocation remain gated one at a time under ADR 0099: claim construction
+  after prepare costs 2+N root approvals, and the end-to-end path costs 3+N.
+  This stays honest until the separately reviewed composite root record ADR
+  0109 already names exists. Completion needs no further root approval.
 - The root signature on
   `pico.home.device-recovery-prepare.v1` is separately gated and its
   rendering names the Home and exact target while stating that it only
@@ -556,7 +557,7 @@ authorize, approve or veto another identity's recovery.
   proof, restart/snapshot reconciliation, issuer quarantine and bounded
   operational logging with the two reserved append-only events. A fully
   matching rollback predating consumption remains R6, not an R2 claim.
-- **R3 - Vault ceremonies and the export exception (partially implemented):** the
+- **R3 - Vault ceremonies and the export exception (implemented):** the
   approval-gated seed materialization with its own rendering and audit;
   card generation as person-side tooling (both print forms - ID-1 and the
   folded paper sheet - over one front/back content contract, words plus QR
@@ -565,18 +566,20 @@ authorize, approve or veto another identity's recovery.
   without one); restore-from-phrase
   and restore-from-QR into a fresh Vault with wrong-PIN detection. Root
   preparation/claim signing is supported with role-aware rendering;
-  the full recovery ceremony with 2+N
-  gated root approvals rendering total replacement and the veto delay;
+  the composite prepare/initiate/complete recovery ceremony with 3+N gated
+  root approvals end to end (prepare, delegation, N revocations and claim),
+  rendering total replacement and the veto delay;
   the veto ceremony on a surviving device; the exact role-aware
   `device_signing` co-signature exception with the global list unchanged.
-- **R4 - Real-process proof (open):** from the ADR 0109 D4 zero-device
+- **R4 - Real-process proof (implemented):** from the ADR 0109 D4 zero-device
   closure: issue a card during onboarding, destroy the original Vault,
   restore the root from the card payload into a fresh Vault, initiate
   recovery through the isolated Link listener, prove pendency grants
   nothing and survives a Foundation restart, complete after the simulated
   delay, and end with exactly one active device and every old sender
-  dead. A second path proves a living identity is alarmed and vetoes a
-  thief's recovery, and that a lifecycle transition implicitly cancels.
+  dead. A second path proves a living identity sees the authenticated pending
+  alarm and vetoes a thief's recovery, and that a lifecycle transition
+  implicitly cancels. A third restart path proves post-window lapse.
 - **R5 - Documentation honesty (partially implemented):** this ADR, the
   implementation matrix and the handoff state the snapshot-rollback and
   passkey boundaries honestly. ADR 0107's threat ledger, ADR
@@ -628,7 +631,7 @@ Negative and residual:
   nobody but whoever finds it;
 - the Vault's clean "no export, ever" boundary gains one named exception,
   and holding it to exactly card issuance is now a discipline to keep;
-- recovery takes at least 48 hours plus 2+N root approvals, and total
+- recovery takes at least 48 hours plus 3+N root approvals end to end, and total
   replacement forces surviving devices to re-enroll - the price of
   loudness;
 - printed pins go stale on host-key rotation until continuity

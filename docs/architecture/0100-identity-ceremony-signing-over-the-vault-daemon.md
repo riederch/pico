@@ -131,7 +131,9 @@ Reader grants, rotations, item encryption and batch opening unwrap raw
 KEKs. Raw KEKs, DEKs and custody plaintext never leave the Vault boundary -
 that invariant predates the daemon and survives it. A generic `unwrap`
 family would hand raw KEKs to consumers and is therefore not merely
-deferred but structurally refused, exactly like a key-export family.
+deferred but structurally refused, exactly like a generic key-export family.
+ADR 0110 later adds one deliberately non-generic exception: separately
+approved Recovery Card issuance of the identity root.
 
 Consequently those ceremonies run hybrid today: their root signature goes
 over the daemon, their KEK handling runs in the local `@pico/vault` library

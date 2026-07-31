@@ -103,9 +103,11 @@ interface ConnectionState {
   approvalWaitRequestId: string | null;
   approvalWaitTimer: NodeJS.Timeout | null;
   /**
-   * Whether this connection has already been audited as an approval channel.
-   * The long poll repeats for as long as the terminal is open, so the audit
-   * records the transition once rather than every poll.
+   * Whether this live hold connection registered as an approval channel.
+   * Registration stays standing between long polls so consecutive gated
+   * steps cannot race the same terminal's next wait. Disconnect still locks
+   * the held session and denies anything pending. The audit records this
+   * transition once rather than once per poll.
    */
   approvalWatchAudited: boolean;
 }
@@ -715,8 +717,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'approval_pending');
       return;
     }
-    const waiter = this.#approvalWaiter(unlocked);
-    if (waiter === null) {
+    const approvalChannel = this.#connections.get(unlocked.holdSocket);
+    if (approvalChannel?.approvalWatchAudited !== true) {
       this.#audit('approval_requested', {
         outcome: 'error',
         reason: 'approval_unavailable',
@@ -725,6 +727,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'approval_unavailable');
       return;
     }
+    const waiter = this.#approvalWaiter(unlocked);
 
     const input = signatureInput;
     this.#parkApproval({
@@ -803,8 +806,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'approval_pending');
       return;
     }
-    const waiter = this.#approvalWaiter(unlocked);
-    if (waiter === null) {
+    const approvalChannel = this.#connections.get(unlocked.holdSocket);
+    if (approvalChannel?.approvalWatchAudited !== true) {
       this.#audit('ceremony_requested', {
         outcome: 'error',
         reason: 'approval_unavailable',
@@ -813,6 +816,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       this.#respondError(socket, request.requestId, 'approval_unavailable');
       return;
     }
+    const waiter = this.#approvalWaiter(unlocked);
 
     this.#audit('ceremony_requested', { outcome: 'ok', label: request.family });
     this.#parkApproval({
@@ -863,7 +867,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     consumerSocket: Socket;
     consumerRequestId: string;
     signer: UnlockedState;
-    waiter: { socket: Socket; state: ConnectionState; requestId: string };
+    waiter: { socket: Socket; state: ConnectionState; requestId: string } | null;
     run: () => void;
   }): void {
     const unlocked = input.signer;
@@ -894,10 +898,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       keyRole: unlocked.keyRole,
       keyFingerprintHex: unlocked.keyFingerprintHex,
     });
-    this.#clearApprovalWait(input.waiter.state);
-    this.#respondOk(input.waiter.socket, input.waiter.requestId, {
-      pending: this.#approvalDescriptor(this.#pendingApproval),
-    });
+    if (input.waiter !== null) {
+      this.#clearApprovalWait(input.waiter.state);
+      this.#respondOk(input.waiter.socket, input.waiter.requestId, {
+        pending: this.#approvalDescriptor(this.#pendingApproval),
+      });
+    }
   }
 
   #completeSign(
@@ -948,10 +954,11 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       return;
     }
     // A terminal becomes an approval channel when its first wait arrives, and
-    // a gated signature fails closed as `approval_unavailable` while none is
-    // watching. Auditing that transition is what makes an unavailable
-    // approval diagnosable after the fact; the flag keeps the repeating long
-    // poll from turning one standing terminal into a stream of records.
+    // a gated signature fails closed as `approval_unavailable` until one has
+    // registered. Once registered, the live hold connection stays the channel
+    // between long polls; requests may park but cannot approve themselves.
+    // Auditing that transition makes unavailability diagnosable and keeps the
+    // repeating poll from turning one standing terminal into many records.
     if (!state.approvalWatchAudited) {
       state.approvalWatchAudited = true;
       this.#audit('approval_watch_started', {

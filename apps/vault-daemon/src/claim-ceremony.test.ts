@@ -1,16 +1,29 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createPicoVaultKeyfile,
+  restorePicoVaultIdentityFromRecovery,
   writePicoVaultKeyfile,
   type CreatePicoVaultKeyfileResult,
+  type PicoVaultRecoveryCard,
 } from '@pico/vault';
 import { picoIdentitySuite } from '@pico/protocol';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { connectPicoVaultDaemonClient, type PicoVaultDaemonClient } from './client.js';
+import {
+  completePicoHomeDeviceRecovery,
+  initiatePicoHomeDeviceRecovery,
+  vetoPicoHomeDeviceRecovery,
+} from './device-recovery-ceremony.js';
+import { readPicoHomeDeviceLifecycle } from './device-lifecycle-ceremony.js';
+import {
+  createPicoLinkDirectClient,
+  type PicoLinkDirectClient,
+} from './link-direct-client.js';
 
 /**
  * ADR 0103 C1/C3/C4/C5. The first test that drives a real Foundation and a
@@ -24,11 +37,14 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const CLI = join(import.meta.dirname, '..', 'dist', 'cli.js');
 const CORE = join(import.meta.dirname, '..', '..', 'core', 'dist', 'index.js');
+const TEST_FIXED_CLOCK = join(import.meta.dirname, 'test-fixed-clock.cjs');
 const IDENTITY_PASSPHRASE = 'claim ceremony identity passphrase';
 const SIGNING_PASSPHRASE = 'claim ceremony signing passphrase';
 const AGREEMENT_PASSPHRASE = 'claim ceremony agreement passphrase';
 const READER_PASSPHRASE = 'reader vault passphrase';
 const TARGET_PASSPHRASE = 'target device vault passphrase';
+const RESTORED_IDENTITY_PASSPHRASE = 'restored recovery identity passphrase';
+const RECOVERY_PIN = 'mira42';
 
 const temporaryDirectories: string[] = [];
 const childProcesses: ChildProcess[] = [];
@@ -143,6 +159,7 @@ async function startCore(
     restrictedLinkIntake?: boolean;
     dataDir?: string;
     restoredFrom?: RunningCore;
+    nowMs?: number;
   } = {},
 ): Promise<RunningCore> {
   const dataDir = options.dataDir ?? tempDir('pico-claim-core-');
@@ -153,7 +170,12 @@ async function startCore(
       linkPort = await freePort();
     } while (linkPort === port);
   }
-  const child = spawn(process.execPath, [CORE], {
+  const child = spawn(process.execPath, [
+    ...(options.nowMs === undefined
+      ? []
+      : ['--require', TEST_FIXED_CLOCK]),
+    CORE,
+  ], {
     env: {
       ...process.env,
       PICO_DATABASE_PATH: join(dataDir, 'pico.sqlite'),
@@ -163,6 +185,9 @@ async function startCore(
       PICO_HOST: '127.0.0.1',
       PICO_PORT: String(port),
       PICO_FOUNDATION_ACCESS_MODE: 'loopback-dev',
+      ...(options.nowMs === undefined
+        ? {}
+        : { PICO_TEST_NOW_MS: String(options.nowMs) }),
       ...(linkPort === undefined
         ? {}
         : {
@@ -225,6 +250,7 @@ async function startCore(
 }
 
 interface RunningDaemon {
+  child: ChildProcess;
   vaultHomePath: string;
   stderr: () => string;
 }
@@ -278,7 +304,7 @@ async function startDaemon(): Promise<RunningDaemon> {
     });
   });
 
-  return { vaultHomePath, stderr: () => stderr };
+  return { child, vaultHomePath, stderr: () => stderr };
 }
 
 /**
@@ -330,7 +356,7 @@ async function startReaderDaemon(): Promise<RunningDaemon> {
     });
   });
 
-  return { vaultHomePath, stderr: () => stderr };
+  return { child, vaultHomePath, stderr: () => stderr };
 }
 
 /**
@@ -382,7 +408,170 @@ async function startTargetDaemon(): Promise<RunningDaemon> {
     });
   });
 
-  return { vaultHomePath, stderr: () => stderr };
+  return { child, vaultHomePath, stderr: () => stderr };
+}
+
+async function startDaemonWithKeyfiles(
+  prefix: string,
+  keyfiles: ReadonlyArray<{
+    role: 'pico_identity' | 'device_signing' | 'device_key_agreement';
+    fixture: CreatePicoVaultKeyfileResult;
+  }>,
+): Promise<RunningDaemon> {
+  const vaultHomePath = tempDir(prefix);
+  for (const { role, fixture } of keyfiles) {
+    writePicoVaultKeyfile(
+      join(vaultHomePath, 'keyfiles', `${role}-${fixture.keyFingerprintHex}.json`),
+      fixture.keyfile,
+    );
+  }
+
+  const child = spawn(process.execPath, [
+    CLI, 'daemon',
+    '--vault-home', vaultHomePath,
+    '--foundation-data', tempDir(`${prefix}data-`),
+    '--foundation-backup', tempDir(`${prefix}backup-`),
+  ], { stdio: ['ignore', 'pipe', 'pipe'] });
+  childProcesses.push(child);
+
+  let stderr = '';
+  child.stderr!.setEncoding('utf8');
+  child.stderr!.on('data', (chunk: string) => {
+    stderr += chunk;
+  });
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    let stdout = '';
+    const timer = setTimeout(() => {
+      rejectPromise(new Error(`recovery_daemon_start_timeout:${stderr}`));
+    }, 20_000);
+    child.stdout!.setEncoding('utf8');
+    child.stdout!.on('data', (chunk: string) => {
+      stdout += chunk;
+      if (stdout.includes('\n')) {
+        clearTimeout(timer);
+        resolvePromise();
+      }
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      rejectPromise(new Error(`recovery_daemon_exited:${String(code)}:${stderr}`));
+    });
+  });
+
+  return { child, vaultHomePath, stderr: () => stderr };
+}
+
+function startRestoredRootDaemon(
+  restoredIdentity: CreatePicoVaultKeyfileResult,
+): Promise<RunningDaemon> {
+  return startDaemonWithKeyfiles('pico-restored-root-vault-', [{
+    role: 'pico_identity',
+    fixture: restoredIdentity,
+  }]);
+}
+
+function startStaleDeviceDaemon(): Promise<RunningDaemon> {
+  return startDaemonWithKeyfiles('pico-stale-device-vault-', [
+    { role: 'device_signing', fixture: ownerSigning },
+    { role: 'device_key_agreement', fixture: ownerAgreement },
+  ]);
+}
+
+async function openDaemonClient(
+  daemon: RunningDaemon,
+): Promise<PicoVaultDaemonClient> {
+  const client = await connectPicoVaultDaemonClient({
+    socketPath: join(daemon.vaultHomePath, 'run', 'daemon.sock'),
+  });
+  await client.hello();
+  return client;
+}
+
+async function createRecoveryLinkClient(input: {
+  core: RunningCore;
+  daemonClient: PicoVaultDaemonClient;
+  signing: CreatePicoVaultKeyfileResult;
+  agreement: CreatePicoVaultKeyfileResult;
+  delegationId: string;
+  nowMs?: number;
+}): Promise<PicoLinkDirectClient> {
+  return await createPicoLinkDirectClient({
+    sodium,
+    daemonClient: input.daemonClient,
+    coreUrl: requireLinkBaseUrl(input.core),
+    host: {
+      signingPublicKeyHex: input.core.hostSigningPublicKeyHex,
+      signingKeyFingerprintHex: input.core.hostSigningKeyFingerprintHex,
+      keyAgreementPublicKeyHex: input.core.hostKeyAgreementPublicKeyHex,
+      keyAgreementKeyFingerprintHex:
+        input.core.hostKeyAgreementKeyFingerprintHex,
+    },
+    sender: {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      identityPublicKeyHex: ownerIdentity.publicKeyHex,
+      deviceSigningKeyFingerprintHex: input.signing.keyFingerprintHex,
+      deviceKeyAgreementKeyFingerprintHex: input.agreement.keyFingerprintHex,
+      delegationId: input.delegationId,
+    },
+    ...(input.nowMs === undefined
+      ? {}
+      : { now: () => new Date(input.nowMs!) }),
+  });
+}
+
+async function issueRecoveryCard(
+  daemon: RunningDaemon,
+  core: RunningCore,
+  homeId: string,
+): Promise<PicoVaultRecoveryCard> {
+  const client = await openDaemonClient(daemon);
+  try {
+    const card = await client.ceremonyIssueRecoveryCard({
+      signerKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      picoName: 'Mira',
+      homeNameOrId: homeId,
+      homeId,
+      hostSigningKeyFingerprintHex: core.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        core.hostKeyAgreementKeyFingerprintHex,
+      hostKeyAgreementPublicKeyHex: core.hostKeyAgreementPublicKeyHex,
+      endpointHint: requireLinkBaseUrl(core),
+      issuedAt: new Date().toISOString(),
+      pin: RECOVERY_PIN,
+    });
+    return card as unknown as PicoVaultRecoveryCard;
+  } finally {
+    await client.close();
+  }
+}
+
+function restoreIdentityFromCard(
+  card: PicoVaultRecoveryCard,
+): CreatePicoVaultKeyfileResult {
+  return restorePicoVaultIdentityFromRecovery(sodium, {
+    recoveryPhrase: card.recoveryPhrase,
+    pinProtected: true,
+    pin: RECOVERY_PIN,
+    identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+    passphrase: RESTORED_IDENTITY_PASSPHRASE,
+  });
+}
+
+function foundingFacts(stdout: string): {
+  homeId: string;
+  firstDelegationId: string;
+} {
+  const founded = JSON.parse(stdout) as {
+    claimState: { homeId: string };
+    foundingRecord: {
+      firstDeviceDelegation: { record: { delegationId: string } };
+    };
+  };
+  return {
+    homeId: founded.claimState.homeId,
+    firstDelegationId:
+      founded.foundingRecord.firstDeviceDelegation.record.delegationId,
+  };
 }
 
 /** The person: a scripted `pico-vault unlock` that answers every prompt yes. */
@@ -665,6 +854,19 @@ async function stopCore(core: RunningCore): Promise<void> {
     });
   });
   core.child.kill('SIGTERM');
+  await exited;
+}
+
+async function stopDaemon(daemon: RunningDaemon): Promise<void> {
+  if (daemon.child.exitCode !== null) {
+    return;
+  }
+  const exited = new Promise<void>((resolvePromise) => {
+    daemon.child.once('exit', () => {
+      resolvePromise();
+    });
+  });
+  daemon.child.kill('SIGTERM');
   await exited;
 }
 
@@ -1164,6 +1366,472 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(rootApprover.approvals()).toBe(9);
     expect(firstDeviceApprover.approvals()).toBe(0);
     expect(targetApprover.approvals()).toBe(0);
+  }, 300_000);
+
+  it('recovers from a destroyed zero-device Vault after delay and real process restarts', async () => {
+    const core = await startCore({ restrictedLinkIntake: true });
+    const originalRootDaemon = await startDaemon();
+    const originalRootApprover = await startApprover(originalRootDaemon);
+    await startApprover(
+      originalRootDaemon,
+      ownerSigning,
+      'device_signing',
+      SIGNING_PASSPHRASE,
+    );
+    await startApprover(
+      originalRootDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const targetDaemon = await startTargetDaemon();
+    const targetSigningApprover = await startApprover(
+      targetDaemon,
+      targetSigning,
+      'device_signing',
+      TARGET_PASSPHRASE,
+    );
+    await startApprover(
+      targetDaemon,
+      targetAgreement,
+      'device_key_agreement',
+      TARGET_PASSPHRASE,
+    );
+
+    const founded = await runLinkCeremony(originalRootDaemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const { homeId, firstDelegationId } = foundingFacts(founded.stdout);
+    const card = await issueRecoveryCard(originalRootDaemon, core, homeId);
+
+    const revokeLast = await runLifecycleCeremony(
+      'revoke-device',
+      originalRootDaemon,
+      originalRootDaemon,
+      core,
+      {
+        sponsorSigningKeyFingerprintHex: ownerSigning.keyFingerprintHex,
+        sponsorAgreementKeyFingerprintHex: ownerAgreement.keyFingerprintHex,
+        sponsorDelegationId: firstDelegationId,
+        targetDelegationId: firstDelegationId,
+      },
+    );
+    expect(revokeLast.code, revokeLast.stderr).toBe(0);
+    expect(JSON.parse(revokeLast.stdout)).toMatchObject({
+      accepted: {
+        inserted: true,
+        record: { receipt: { leavesNoActiveDevice: true } },
+      },
+    });
+
+    // The original Vault is genuinely gone. Recovery below starts from the
+    // printed phrase and PIN in a different Vault directory and process.
+    await stopDaemon(originalRootDaemon);
+    rmSync(originalRootDaemon.vaultHomePath, { recursive: true, force: true });
+    expect(existsSync(originalRootDaemon.vaultHomePath)).toBe(false);
+    await stopCore(core);
+    let restartedCore = await startCore({
+      restrictedLinkIntake: true,
+      dataDir: core.dataDir,
+      restoredFrom: core,
+    });
+
+    const restoredIdentity = restoreIdentityFromCard(card);
+    expect(restoredIdentity.publicKeyHex).toBe(ownerIdentity.publicKeyHex);
+    const restoredRootDaemon = await startRestoredRootDaemon(restoredIdentity);
+    const restoredRootApprover = await startApprover(
+      restoredRootDaemon,
+      restoredIdentity,
+      'pico_identity',
+      RESTORED_IDENTITY_PASSPHRASE,
+    );
+    const rootClient = await openDaemonClient(restoredRootDaemon);
+    const targetClient = await openDaemonClient(targetDaemon);
+    const targetDelegationId = 'delegation_recovery_zero_device';
+    let targetLink = await createRecoveryLinkClient({
+      core: restartedCore,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: targetDelegationId,
+    });
+    const initiated = await initiatePicoHomeDeviceRecovery({
+      rootClient,
+      targetClient,
+      targetLinkClient: targetLink,
+      sodium,
+      homeId,
+      hostSigningKeyFingerprintHex:
+        restartedCore.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        restartedCore.hostKeyAgreementKeyFingerprintHex,
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      targetDelegationId,
+      targetDeviceSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        targetAgreement.keyFingerprintHex,
+      validUntil: new Date(
+        Date.now() + (365 * 24 * 60 * 60 * 1_000),
+      ).toISOString(),
+    });
+    expect(initiated.preparationView.activeDevices).toEqual([]);
+
+    // Restart neither loses the durable pending record nor bypasses its
+    // 48-hour veto delay.
+    await stopCore(restartedCore);
+    restartedCore = await startCore({
+      restrictedLinkIntake: true,
+      dataDir: core.dataDir,
+      restoredFrom: core,
+    });
+    targetLink = await createRecoveryLinkClient({
+      core: restartedCore,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: targetDelegationId,
+    });
+    await expect(completePicoHomeDeviceRecovery({
+      targetLinkClient: targetLink,
+      pending: initiated.pending,
+    })).rejects.toThrow('recovery_not_effective');
+
+    const effectiveNowMs = Date.parse(initiated.pending.effectiveAt) + 1_000;
+    await stopCore(restartedCore);
+    restartedCore = await startCore({
+      restrictedLinkIntake: true,
+      dataDir: core.dataDir,
+      restoredFrom: core,
+      nowMs: effectiveNowMs,
+    });
+    targetLink = await createRecoveryLinkClient({
+      core: restartedCore,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: targetDelegationId,
+      nowMs: effectiveNowMs,
+    });
+    const completed = await completePicoHomeDeviceRecovery({
+      targetLinkClient: targetLink,
+      pending: initiated.pending,
+    });
+    expect(completed).toMatchObject({
+      status: 'consumed',
+      record: {
+        receipt: {
+          recoveryId: initiated.pending.recoveryId,
+          leavesExactlyOneActiveDevice: true,
+        },
+      },
+    });
+    const recoveredView = await readPicoHomeDeviceLifecycle(targetLink, {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      sponsor: targetLink.sender,
+    });
+    expect(recoveredView.pendingRecovery).toBeNull();
+    expect(recoveredView.devices.filter((device) => device.status === 'active'))
+      .toEqual([expect.objectContaining({
+        delegationId: targetDelegationId,
+        deviceSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        deviceKeyAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+      })]);
+
+    // A fresh daemon containing only the destroyed device's copied keys still
+    // cannot authenticate: total replacement revoked its old delegation.
+    const staleDaemon = await startStaleDeviceDaemon();
+    await startApprover(
+      staleDaemon,
+      ownerSigning,
+      'device_signing',
+      SIGNING_PASSPHRASE,
+    );
+    await startApprover(
+      staleDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const staleClient = await openDaemonClient(staleDaemon);
+    const staleLink = await createRecoveryLinkClient({
+      core: restartedCore,
+      daemonClient: staleClient,
+      signing: ownerSigning,
+      agreement: ownerAgreement,
+      delegationId: firstDelegationId,
+      nowMs: effectiveNowMs,
+    });
+    await expect(readPicoHomeDeviceLifecycle(staleLink, {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      sponsor: staleLink.sender,
+    })).rejects.toThrow('sender_is_not_authorized');
+
+    expect(originalRootApprover.approvals()).toBe(5);
+    expect(restoredRootApprover.approvals()).toBe(3);
+    expect(targetSigningApprover.approvals()).toBe(0);
+    await Promise.all([rootClient.close(), targetClient.close(), staleClient.close()]);
+  }, 300_000);
+
+  it('surfaces pending recovery to a living device and honors veto and lifecycle cancellation', async () => {
+    const core = await startCore({ restrictedLinkIntake: true });
+    const livingDaemon = await startDaemon();
+    await startApprover(livingDaemon);
+    await startApprover(
+      livingDaemon,
+      ownerSigning,
+      'device_signing',
+      SIGNING_PASSPHRASE,
+    );
+    await startApprover(
+      livingDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const founded = await runLinkCeremony(livingDaemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const { homeId, firstDelegationId } = foundingFacts(founded.stdout);
+    const card = await issueRecoveryCard(livingDaemon, core, homeId);
+
+    const restoredIdentity = restoreIdentityFromCard(card);
+    const restoredRootDaemon = await startRestoredRootDaemon(restoredIdentity);
+    await startApprover(
+      restoredRootDaemon,
+      restoredIdentity,
+      'pico_identity',
+      RESTORED_IDENTITY_PASSPHRASE,
+    );
+    const targetDaemon = await startTargetDaemon();
+    await startApprover(
+      targetDaemon,
+      targetSigning,
+      'device_signing',
+      TARGET_PASSPHRASE,
+    );
+    await startApprover(
+      targetDaemon,
+      targetAgreement,
+      'device_key_agreement',
+      TARGET_PASSPHRASE,
+    );
+    const rootClient = await openDaemonClient(restoredRootDaemon);
+    const livingClient = await openDaemonClient(livingDaemon);
+    const targetClient = await openDaemonClient(targetDaemon);
+    const livingLink = await createRecoveryLinkClient({
+      core,
+      daemonClient: livingClient,
+      signing: ownerSigning,
+      agreement: ownerAgreement,
+      delegationId: firstDelegationId,
+    });
+
+    const firstRecoveryDelegationId = 'delegation_recovery_veto';
+    let targetLink = await createRecoveryLinkClient({
+      core,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: firstRecoveryDelegationId,
+    });
+    const firstRecovery = await initiatePicoHomeDeviceRecovery({
+      rootClient,
+      targetClient,
+      targetLinkClient: targetLink,
+      sodium,
+      homeId,
+      hostSigningKeyFingerprintHex: core.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        core.hostKeyAgreementKeyFingerprintHex,
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      targetDelegationId: firstRecoveryDelegationId,
+      targetDeviceSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        targetAgreement.keyFingerprintHex,
+      validUntil: new Date(
+        Date.now() + (365 * 24 * 60 * 60 * 1_000),
+      ).toISOString(),
+    });
+    expect(firstRecovery.preparationView.activeDevices).toEqual([
+      expect.objectContaining({ delegationId: firstDelegationId }),
+    ]);
+    const alarmView = await readPicoHomeDeviceLifecycle(livingLink, {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      sponsor: livingLink.sender,
+    });
+    expect(alarmView.pendingRecovery).toEqual(firstRecovery.pending);
+
+    await expect(vetoPicoHomeDeviceRecovery({
+      livingDeviceLinkClient: livingLink,
+      recoveryId: firstRecovery.pending.recoveryId,
+    })).resolves.toEqual({ status: 'vetoed' });
+    await expect(completePicoHomeDeviceRecovery({
+      targetLinkClient: targetLink,
+      pending: firstRecovery.pending,
+    })).rejects.toThrow('recovery_vetoed');
+    expect((await readPicoHomeDeviceLifecycle(livingLink, {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      sponsor: livingLink.sender,
+    })).pendingRecovery).toBeNull();
+
+    const secondRecoveryDelegationId = 'delegation_recovery_cancelled';
+    targetLink = await createRecoveryLinkClient({
+      core,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: secondRecoveryDelegationId,
+    });
+    const secondRecovery = await initiatePicoHomeDeviceRecovery({
+      rootClient,
+      targetClient,
+      targetLinkClient: targetLink,
+      sodium,
+      homeId,
+      hostSigningKeyFingerprintHex: core.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        core.hostKeyAgreementKeyFingerprintHex,
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      targetDelegationId: secondRecoveryDelegationId,
+      targetDeviceSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        targetAgreement.keyFingerprintHex,
+      validUntil: new Date(
+        Date.now() + (365 * 24 * 60 * 60 * 1_000),
+      ).toISOString(),
+    });
+    const enrollment = await runLifecycleCeremony(
+      'enroll-device',
+      restoredRootDaemon,
+      livingDaemon,
+      core,
+      {
+        sponsorSigningKeyFingerprintHex: ownerSigning.keyFingerprintHex,
+        sponsorAgreementKeyFingerprintHex: ownerAgreement.keyFingerprintHex,
+        sponsorDelegationId: firstDelegationId,
+        targetDaemon,
+        targetSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+        targetAgreementKeyFingerprintHex: targetAgreement.keyFingerprintHex,
+      },
+    );
+    expect(enrollment.code, enrollment.stderr).toBe(0);
+    await expect(completePicoHomeDeviceRecovery({
+      targetLinkClient: targetLink,
+      pending: secondRecovery.pending,
+    })).rejects.toThrow('recovery_vetoed');
+    expect((await readPicoHomeDeviceLifecycle(livingLink, {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      sponsor: livingLink.sender,
+    })).pendingRecovery).toBeNull();
+    expect(core.log()).toContain('accepted_device_lifecycle_transition');
+
+    await Promise.all([rootClient.close(), livingClient.close(), targetClient.close()]);
+  }, 300_000);
+
+  it('lapses an uncompleted recovery across a future Foundation restart', async () => {
+    const core = await startCore({ restrictedLinkIntake: true });
+    const livingDaemon = await startDaemon();
+    await startApprover(livingDaemon);
+    await startApprover(
+      livingDaemon,
+      ownerSigning,
+      'device_signing',
+      SIGNING_PASSPHRASE,
+    );
+    await startApprover(
+      livingDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const founded = await runLinkCeremony(livingDaemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const { homeId, firstDelegationId } = foundingFacts(founded.stdout);
+    const card = await issueRecoveryCard(livingDaemon, core, homeId);
+    const restoredIdentity = restoreIdentityFromCard(card);
+    const restoredRootDaemon = await startRestoredRootDaemon(restoredIdentity);
+    await startApprover(
+      restoredRootDaemon,
+      restoredIdentity,
+      'pico_identity',
+      RESTORED_IDENTITY_PASSPHRASE,
+    );
+    const targetDaemon = await startTargetDaemon();
+    await startApprover(
+      targetDaemon,
+      targetSigning,
+      'device_signing',
+      TARGET_PASSPHRASE,
+    );
+    await startApprover(
+      targetDaemon,
+      targetAgreement,
+      'device_key_agreement',
+      TARGET_PASSPHRASE,
+    );
+    const rootClient = await openDaemonClient(restoredRootDaemon);
+    const livingClient = await openDaemonClient(livingDaemon);
+    const targetClient = await openDaemonClient(targetDaemon);
+    const targetDelegationId = 'delegation_recovery_lapse';
+    let targetLink = await createRecoveryLinkClient({
+      core,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: targetDelegationId,
+    });
+    const initiated = await initiatePicoHomeDeviceRecovery({
+      rootClient,
+      targetClient,
+      targetLinkClient: targetLink,
+      sodium,
+      homeId,
+      hostSigningKeyFingerprintHex: core.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        core.hostKeyAgreementKeyFingerprintHex,
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      targetDelegationId,
+      targetDeviceSigningKeyFingerprintHex: targetSigning.keyFingerprintHex,
+      targetDeviceKeyAgreementKeyFingerprintHex:
+        targetAgreement.keyFingerprintHex,
+      validUntil: new Date(
+        Date.now() + (365 * 24 * 60 * 60 * 1_000),
+      ).toISOString(),
+    });
+
+    const lapsedNowMs = Date.parse(initiated.pending.completionExpiresAt) + 1_000;
+    await stopCore(core);
+    const restartedCore = await startCore({
+      restrictedLinkIntake: true,
+      dataDir: core.dataDir,
+      restoredFrom: core,
+      nowMs: lapsedNowMs,
+    });
+    targetLink = await createRecoveryLinkClient({
+      core: restartedCore,
+      daemonClient: targetClient,
+      signing: targetSigning,
+      agreement: targetAgreement,
+      delegationId: targetDelegationId,
+      nowMs: lapsedNowMs,
+    });
+    await expect(completePicoHomeDeviceRecovery({
+      targetLinkClient: targetLink,
+      pending: initiated.pending,
+    })).rejects.toThrow('recovery_lapsed');
+
+    const livingLink = await createRecoveryLinkClient({
+      core: restartedCore,
+      daemonClient: livingClient,
+      signing: ownerSigning,
+      agreement: ownerAgreement,
+      delegationId: firstDelegationId,
+      nowMs: lapsedNowMs,
+    });
+    expect((await readPicoHomeDeviceLifecycle(livingLink, {
+      identityKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      sponsor: livingLink.sender,
+    })).pendingRecovery).toBeNull();
+
+    await Promise.all([rootClient.close(), livingClient.close(), targetClient.close()]);
   }, 300_000);
 
   it('issues a Home membership whose host activation the Foundation adds', async () => {

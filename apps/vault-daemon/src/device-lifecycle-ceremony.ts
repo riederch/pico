@@ -2,11 +2,13 @@ import {
   picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeDeviceLifecycleEvidenceDigestHex,
   picoHomeDeviceLifecycleSubmissionSchema,
+  picoHomeDeviceRecoveryTiming,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
   type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceLifecycleEvidence,
   type PicoHomeDeviceLifecycleSubmission,
+  type PicoHomeDeviceRecoveryPendingView,
   type PicoIdentityDelegationScope,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
@@ -40,6 +42,7 @@ export interface PicoHomeDeviceLifecycleView {
   picoIdentityFingerprintHex: string;
   observedLifecycleOrder: string;
   devices: PicoHomeDeviceLifecycleDeviceView[];
+  pendingRecovery: PicoHomeDeviceRecoveryPendingView | null;
 }
 
 export interface PicoHomeDeviceLifecycleCeremonyResult {
@@ -449,6 +452,7 @@ function parseLifecycleView(value: Record<string, unknown>): PicoHomeDeviceLifec
     || typeof value.observedLifecycleOrder !== 'string'
     || !lifecycleOrderPattern.test(value.observedLifecycleOrder)
     || !Array.isArray(value.devices)
+    || !('pendingRecovery' in value)
   ) {
     throw new Error('invalid_lifecycle_view');
   }
@@ -471,7 +475,50 @@ function parseLifecycleView(value: Record<string, unknown>): PicoHomeDeviceLifec
     picoIdentityFingerprintHex: value.picoIdentityFingerprintHex,
     observedLifecycleOrder: value.observedLifecycleOrder,
     devices,
+    pendingRecovery: parsePendingRecovery(value.pendingRecovery),
   };
+}
+
+function parsePendingRecovery(
+  value: unknown,
+): PicoHomeDeviceRecoveryPendingView | null {
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value) || !hasExactKeys(value, [
+    'recoveryId',
+    'claimDigestHex',
+    'targetDelegationId',
+    'targetDeviceSigningKeyFingerprintHex',
+    'targetDeviceKeyAgreementKeyFingerprintHex',
+    'acceptedAt',
+    'effectiveAt',
+    'completionExpiresAt',
+  ])) {
+    throw new Error('invalid_lifecycle_pending_recovery');
+  }
+  const pending = value as unknown as PicoHomeDeviceRecoveryPendingView;
+  const acceptedAt = Date.parse(pending.acceptedAt);
+  const effectiveAt = Date.parse(pending.effectiveAt);
+  const completionExpiresAt = Date.parse(pending.completionExpiresAt);
+  if (
+    !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(pending.recoveryId)
+    || !/^[0-9a-f]{64}$/u.test(pending.claimDigestHex)
+    || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(pending.targetDelegationId)
+    || !/^[0-9a-f]{64}$/u.test(
+      pending.targetDeviceSigningKeyFingerprintHex,
+    )
+    || !/^[0-9a-f]{64}$/u.test(
+      pending.targetDeviceKeyAgreementKeyFingerprintHex,
+    )
+    || !Number.isFinite(acceptedAt)
+    || effectiveAt - acceptedAt !== picoHomeDeviceRecoveryTiming.vetoDelayMs
+    || completionExpiresAt - effectiveAt
+      !== picoHomeDeviceRecoveryTiming.completionWindowMs
+  ) {
+    throw new Error('invalid_lifecycle_pending_recovery');
+  }
+  return pending;
 }
 
 function requireSession(
@@ -519,4 +566,14 @@ function randomId(sodium: VaultSodium, prefix: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(
+  value: Record<string, unknown>,
+  keys: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length
+    && actual.every((key, index) => key === expected[index]);
 }

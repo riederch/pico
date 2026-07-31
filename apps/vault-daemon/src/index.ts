@@ -95,6 +95,11 @@ export {
   revokePicoHomeDevice,
 } from './device-lifecycle-ceremony.js';
 export {
+  completePicoHomeDeviceRecovery,
+  initiatePicoHomeDeviceRecovery,
+  vetoPicoHomeDeviceRecovery,
+} from './device-recovery-ceremony.js';
+export {
   createPicoRecoveryCardQrMatrix,
   generatePicoRecoveryCardPdfs,
   picoRecoveryCardQrPayload,
@@ -113,6 +118,15 @@ export type {
   RenewPicoHomeDeviceInput,
   RevokePicoHomeDeviceInput,
 } from './device-lifecycle-ceremony.js';
+export type {
+  CompletePicoHomeDeviceRecoveryInput,
+  InitiatePicoHomeDeviceRecoveryInput,
+  PicoHomeDeviceRecoveryActiveDeviceView,
+  PicoHomeDeviceRecoveryCeremonyResult,
+  PicoHomeDeviceRecoveryCompletionResult,
+  PicoHomeDeviceRecoveryPreparationView,
+  VetoPicoHomeDeviceRecoveryInput,
+} from './device-recovery-ceremony.js';
 export type {
   OpenPicoVaultDaemonReaderAccessInput,
   PicoVaultDaemonReaderAccessSession,

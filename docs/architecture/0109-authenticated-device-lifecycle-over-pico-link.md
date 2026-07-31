@@ -4,12 +4,12 @@
 
 Accepted and implemented through gates D1-D5. This ADR decides how an
 already admitted Pico identity enrolls, renews and revokes its own delegated
-devices over Pico Link. It deliberately does not create a zero-device remote
-recovery path: once no active device remains, Link authentication is closed
-until a separate, locally activated recovery design exists. ADR 0110 has
-since superseded the locally-activated premise and decided recovery as a
-Recovery-Card-based, time-locked remote contract; until its gates are
-implemented, the closure decided here remains the runtime behaviour.
+devices over Pico Link. It deliberately does not make normal lifecycle a
+zero-device path: once no active device remains, ordinary Link authentication
+is closed. ADR 0110 supersedes the locally activated recovery premise and now
+implements a separate Recovery-Card-authorized, target-bound and time-locked
+standing operation through R4. That exception does not weaken this ADR's
+normal sponsor requirement.
 
 ## Context
 
@@ -382,9 +382,9 @@ Positive:
 
 Negative and residual:
 
-- loss of the only active device remains operationally severe: even a healthy
-  identity root has no remote Link carrier until the local Recovery Mode ADR
-  exists;
+- loss of the only active device remains operationally severe: normal Link
+  authority stays closed, and the separate ADR 0110 recovery path costs a
+  restored root, a fresh target and at least the fixed 48-hour delay;
 - enrollment needs coordination between sponsor, root and target Vaults, and
   renewal normally needs two explicit root approvals;
 - local lifecycle head binding prevents races on this Home but is not a global

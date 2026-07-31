@@ -19,7 +19,10 @@ framed wire contract with named request families (`hello`, `status`,
 `unlock`, `lock`, `sign`), hold-connection unlock with idle/duration/suspend/
 rollback locking, unlock throttling, content-free audit and startup custody
 path separation, plus the `pico-vault` CLI. It is not a network API, platform
-keystore integration, approval UX, recovery path or Pico Link surface.
+keystore integration or Pico Link surface. Later ADRs add approval and
+ceremony families; ADR 0110 adds exactly one approval-gated Recovery Card
+export exception without making recovery a Foundation or network custody
+role.
 
 ## Context
 
@@ -71,7 +74,7 @@ transit during unlock, and the authority to obtain signatures at all.
 | Attacker | Capability | Posture |
 |---|---|---|
 | Other local OS users | Can see the filesystem and try to connect. | Structurally excluded: the socket lives in a `0700` run directory under the `0700` Vault home; pathname sockets are connect-authorized by directory permissions, which the OS enforces. Abstract-namespace sockets are forbidden because they bypass exactly this. |
-| Compromised same-user local consumer | Can connect, speak the protocol, submit requests while a session is unlocked, guess passphrases through the unlock family, and flood connections or frames. | Bounded, not solved (the ADR 0081 endpoint honesty). It can never read keys or the passphrase back, never exports key material, and can only request label-checked families the Vault already recognizes; unlock guessing meets Argon2id cost plus daemon throttling and audit; frames, connection counts and in-flight requests are capped. During an unlock window it can request signatures within recognized families — per-request approval is the named later tightening, above this floor, and ADR 0099 now implements it for the authority-creating families. |
+| Compromised same-user local consumer | Can connect, speak the protocol, submit requests while a session is unlocked, guess passphrases through the unlock family, and flood connections or frames. | Bounded, not solved (the ADR 0081 endpoint honesty). It cannot read passphrases, generic private keys, KEKs or DEKs and can request only recognized label-checked families; unlock guessing meets Argon2id cost plus daemon throttling and audit; frames, connection counts and in-flight requests are capped. ADR 0099 gates authority creation per request. ADR 0110 deliberately adds one exact separately gated export: Recovery Card issuance from the identity root. No other raw-key export exists. |
 | Malware with the person's uid reading daemon memory | ptrace, /proc/pid/mem, core dumps. | Endpoint compromise wins — stated. The daemon narrows exposure to one process instead of every consumer, and sessions are bounded (idle, duration, suspend, hold) so the window is short, but a GC runtime still cannot promise erasure (ADR 0081 V7 limits restated). |
 | Foundation host process or backup sweep | Reads Foundation data and backup scopes. | Structurally void: startup refuses a Vault home (keyfiles and socket) inside the Foundation data or backup scope via `assertVaultCustodyPathSeparation` — V1's disjoint-paths rule executed at boot, not policied. |
 | Keyfile thief | Steals disk or synced directory. | ADR 0081 posture unchanged: keyfiles are Argon2id/XChaCha20-Poly1305 encrypted; the socket is not a secret; nothing session-shaped is ever persisted. |
@@ -180,14 +183,16 @@ The v1 request families:
 | `pico.vault.daemon.sign.v1` | detached signature over canonical labeled bytes, allowed from any connection while unlocked | the signature and public signer metadata |
 
 Only named request families, public key metadata and required crypto results
-cross the boundary. What structurally never crosses outward: private key
-bytes in any encoding, passphrases, raw KEKs/DEKs, keyfile contents — v1 has
-**no export family at all**, not even the encrypted one; the encrypted
-keyfile is a local file the person already owns, and the CLI reads it from
-disk, not from the wire. What never crosses inward except on the person's
-own unlock: a passphrase. Unlock of `device_key_agreement` keyfiles is
-refused (`key_role_not_served`) until a wire family exists that such a
-session could serve; an unlocked-but-unusable window would be pure exposure.
+cross the boundary. The original v1 slice had no export family at all. ADR
+0110 later amends that invariant once and narrowly:
+`ceremony.issue-recovery-card` may return the PIN-protected identity-root
+recovery material after its own bound approval. Private key bytes in every
+other encoding, passphrases, raw KEKs/DEKs and keyfile contents never cross
+outward; the encrypted keyfile is a local file the person already owns and
+the CLI reads it from disk, not from the wire. What never crosses inward
+except on the person's own unlock is a passphrase; the Recovery Card PIN is
+accepted only by that named issuance ceremony and is neither audited nor
+persisted.
 
 The wire contract is a **local, private contract** of this daemon. It is not
 a `docs/protocol` public surface, carries no fixtures, no compatibility or
@@ -288,7 +293,8 @@ not evidence.
 
 - any network, remote or Relay reachability, and any Pico Link claim;
 - Foundation, dashboard or add-on custody of person keys, in any mode;
-- cloud escrow, account recovery, seed phrases or any recovery mechanism;
+- cloud escrow or host-assisted recovery; ADR 0110's later, exact
+  person-side Recovery Card exception is outside this ADR's original scope;
 - platform keystore, secure enclave, biometric or OS-credential unlock;
 - background/auto-started daemons, session persistence or cached unlock;
 - multi-person daemons, shared Vaults or per-client authorization tiers;
@@ -341,7 +347,8 @@ Negative and residual:
 - Applies ADR `0072`-family file custody patterns (`0700`/`0600`, backup
   exclusion) to the Vault home and socket.
 - Leaves ADR `0033` recovery and ADR `0016` primitive boundaries untouched;
-  no new cryptography exists at this layer.
+  ADR 0110 later adds one named export ceremony while reusing existing
+  primitives and preserving every other no-export rule.
 - Respects ADR `0024`/`0015`/`0026`: the Core Host and Surfaces gain no
   custody role; the Pico Vault node role gains its first deployable body.
 

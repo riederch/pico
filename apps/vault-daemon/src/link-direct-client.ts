@@ -52,6 +52,8 @@ export interface CreatePicoLinkDirectClientInput {
 
 export interface PicoLinkDirectClient {
   readonly hostSigningKeyFingerprintHex: string;
+  readonly hostKeyAgreementKeyFingerprintHex: string;
+  readonly sender: Readonly<PicoLinkDirectSender>;
   request(
     operation: PicoLinkDirectOperation,
     args: Record<string, unknown>,
@@ -122,6 +124,9 @@ export async function createPicoLinkDirectClient(
 
   return {
     hostSigningKeyFingerprintHex: input.host.signingKeyFingerprintHex,
+    hostKeyAgreementKeyFingerprintHex:
+      input.host.keyAgreementKeyFingerprintHex,
+    sender: Object.freeze({ ...input.sender }),
     request: async (operation, args) => {
       const replyKeypair = input.sodium.crypto_box_keypair();
       try {

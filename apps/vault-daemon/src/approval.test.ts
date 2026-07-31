@@ -437,6 +437,57 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
     expect(audit.join('')).toContain('"event":"approval_decided","outcome":"ok","approved":true');
   }, 30_000);
 
+  it('keeps a live approval channel standing between back-to-back decisions', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+    const { waiting } = await startApprovalWait(hold, audit);
+
+    const firstSigning = settle(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      ...gatedSign(),
+    }));
+    const firstPending = await waiting;
+    await hold.approvalDecide({
+      approvalId: firstPending!.approvalId,
+      signatureInputDigestHex: firstPending!.signatureInputDigestHex,
+      approved: true,
+    });
+    expect((await firstSigning).ok).toBe(true);
+
+    // The consumer may issue the next authority request before the terminal's
+    // long-poll loop has sent its next wait. A still-live channel that has
+    // already registered stays authoritative; the request parks until the
+    // next wait instead of racing to approval_unavailable.
+    const auditStart = audit.length;
+    const secondSigning = settle(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      ...gatedSign(),
+    }));
+    for (let attempt = 0; attempt < 300; attempt += 1) {
+      if (audit.slice(auditStart).some((line) =>
+        line.includes('"event":"approval_requested","outcome":"ok"'))) {
+        break;
+      }
+      await sleep(20);
+    }
+    expect(audit.slice(auditStart).join('')).toContain(
+      '"event":"approval_requested","outcome":"ok"',
+    );
+
+    const secondPending = (await hold.approvalWait()).pending;
+    expect(secondPending).not.toBeNull();
+    await hold.approvalDecide({
+      approvalId: secondPending!.approvalId,
+      signatureInputDigestHex: secondPending!.signatureInputDigestHex,
+      approved: false,
+    });
+    expect(await secondSigning).toEqual({
+      ok: false,
+      reason: 'approval_denied',
+    });
+  }, 30_000);
+
   it('denies on an explicit no and on a digest that does not match', async () => {
     const { daemon, audit } = await startDaemon();
     const hold = await holdUnlock(daemon);

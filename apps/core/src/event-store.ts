@@ -39,6 +39,7 @@ import {
   picoHomeDeviceRecoveryEvidenceDigestHex,
   picoHomeDeviceRecoveryRecordSchema,
   picoHomeDeviceRecoverySubmissionSchema,
+  picoHomeDeviceRecoveryTiming,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
@@ -88,9 +89,10 @@ import {
 import { ReaderCustodyStore } from './reader-custody.js';
 import type { PicoIdentityReaderKeySelector } from './reader-key.js';
 
-export const PICO_HOME_DEVICE_RECOVERY_DELAY_MS = 48 * 60 * 60 * 1_000;
+export const PICO_HOME_DEVICE_RECOVERY_DELAY_MS =
+  picoHomeDeviceRecoveryTiming.vetoDelayMs;
 export const PICO_HOME_DEVICE_RECOVERY_COMPLETION_WINDOW_MS =
-  7 * 24 * 60 * 60 * 1_000;
+  picoHomeDeviceRecoveryTiming.completionWindowMs;
 
 export type AppendResult = PicoEventAppendResult;
 
@@ -1733,7 +1735,8 @@ export class EventStore {
         || !Number.isFinite(acceptedAtMs)
         || acceptedAtMs < createdAtMs
         || acceptedAtMs >= expiresAtMs
-        || expiresAtMs - createdAtMs > 5 * 60 * 1_000
+        || expiresAtMs - createdAtMs
+          > picoHomeDeviceRecoveryTiming.signedRequestLifetimeMs
         || !verifyPicoIdentityDetachedSignature(params.sodium, {
           publicKeyHex: identityKeyRecord.publicKeyHex,
           signatureInput:
@@ -4932,7 +4935,8 @@ function verifyPicoHomeDeviceRecoverySubmission(
       || !Number.isFinite(acceptedAtMs)
       || acceptedAtMs < createdAtMs
       || acceptedAtMs >= expiresAtMs
-      || expiresAtMs - createdAtMs > 5 * 60 * 1_000
+      || expiresAtMs - createdAtMs
+        > picoHomeDeviceRecoveryTiming.signedRequestLifetimeMs
       || Date.parse(evidence.delegation.record.validFrom) > acceptedAtMs
       || Date.parse(evidence.delegation.record.validUntil)
         <= acceptedAtMs
@@ -5062,7 +5066,8 @@ function verifyPicoHomeDeviceRecoveryPreAuthority(
       || !Number.isFinite(acceptedAtMs)
       || acceptedAtMs < createdAtMs
       || acceptedAtMs >= expiresAtMs
-      || expiresAtMs - createdAtMs > 5 * 60 * 1_000
+      || expiresAtMs - createdAtMs
+        > picoHomeDeviceRecoveryTiming.signedRequestLifetimeMs
     ) {
       return false;
     }
@@ -5281,7 +5286,7 @@ function verifyStoredPicoHomeDeviceRecoveryRecord(
     return Date.parse(claim.createdAt) <= acceptedAtMs
       && acceptedAtMs < Date.parse(claim.expiresAt)
       && Date.parse(claim.expiresAt) - Date.parse(claim.createdAt)
-        <= 5 * 60 * 1_000
+        <= picoHomeDeviceRecoveryTiming.signedRequestLifetimeMs
       && Date.parse(evidence.delegation.record.validFrom) <= acceptedAtMs
       && Date.parse(evidence.delegation.record.validUntil)
         > Date.parse(row.completionExpiresAt);

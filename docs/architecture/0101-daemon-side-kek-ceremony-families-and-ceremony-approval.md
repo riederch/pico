@@ -11,7 +11,9 @@ and a rotation costs the person one decision instead of one per remaining
 reader plus one. The single-session lifecycle of ADR 0097 is untouched. It
 is not a multi-session daemon, not a generic ceremony-execution service, and
 not a migration of the two-role ceremonies - those are named, with their
-driver, for the next fork.
+driver, for the next fork. ADR 0110 later reuses this bound-ceremony model for
+one non-KEK family, `ceremony.issue-recovery-card`; it does not generalize
+export.
 
 ## Context
 
@@ -53,7 +55,8 @@ from "an approved signature" to "an approved action".
 
 Does not cover: reader grants, item encryption or any two-role ceremony;
 more than one concurrently unlocked session; batch or remembered approvals;
-rendering; any unwrap, export or raw-key family; `SO_PEERCRED`,
+rendering; any generic unwrap, export or raw-key family (ADR 0110 later adds
+only its exact Recovery Card issuance exception); `SO_PEERCRED`,
 platform-keystore unlock, packaging or network surfaces; and any change to
 record formats or verification rules - the daemon calls the same
 `@pico/vault` functions a local composition calls, and verifiers cannot
@@ -165,7 +168,8 @@ outcome-carrying failures) from plain signatures, content-free as always.
 - reader grants, item encryption or any ceremony needing two private keys;
 - a second concurrently unlocked session or any hold-lifecycle change;
 - generic ceremony execution, scripting or batching on the daemon;
-- unwrap, export or any raw-key-material family, in any direction;
+- generic unwrap, export or raw-key-material families in either direction;
+  ADR 0110's exact Recovery Card issuance exception remains the only one;
 - approval batching, remembered decisions or rendering;
 - changes to record formats, canonical bytes or verification rules;
 - any network, remote or Pico Link surface.
