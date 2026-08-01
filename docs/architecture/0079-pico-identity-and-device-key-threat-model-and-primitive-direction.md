@@ -348,7 +348,7 @@ This ADR does not define or implement:
 - **Fingerprint display encoding** for humans (grouping, prefix, checksum) — UX work; the comparison rule (full digest only) is fixed here regardless.
 - **Post-quantum.** Ed25519/X25519 are chosen for review maturity and toolkit consolidation. Harvest-now-decrypt-later pressure applies to key agreement (ADR 0078 envelopes), not signatures; a PQ or hybrid suite would arrive as `pico.suite.id.v2`/`pico.suite.share.v2` through the normal deviation path. Revisit when reviewed implementations stabilize, not before.
 - **Whether signed event segments adopt I3 verbatim** — presumably yes, but their ADR decides, with their own families and vectors.
-- **Identity rotation continuity** (replacing a compromised identity root while preserving relationships) — ADR 0033 names it; it needs the relationship layer to mean anything, so it waits for that strand.
+- ~~**Identity rotation continuity** (replacing a compromised identity root while preserving relationships) — ADR 0033 names it; it needs the relationship layer to mean anything, so it waits for that strand.~~ Decided in ADR `0114` now that the relationship layer exists: a dual-signed `pico.identity.rotation.v1` record ends the predecessor's authority and makes the successor eligible, with issuers re-issuing their own records. Its I5 full-length role-bound fingerprint rule is what stops a device key being named as a root's successor.
 
 ## Consequences
 

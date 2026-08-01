@@ -197,6 +197,7 @@ export const picoIdentitySignatureInputFamilies = [
   'possession',
   'delegation',
   'revocation',
+  'rotation',
 ] as const;
 
 export type PicoIdentitySignatureInputFamily = typeof picoIdentitySignatureInputFamilies[number];
@@ -206,6 +207,7 @@ export const picoIdentitySignatureInputLabels = {
   possession: 'pico.id.possession.v1',
   delegation: 'pico.id.delegation.v1',
   revocation: 'pico.id.revocation.v1',
+  rotation: 'pico.identity.rotation.v1',
 } as const satisfies Record<PicoIdentitySignatureInputFamily, string>;
 
 // ADR 0085 freshness checkpoints deliberately remain outside the generic
@@ -395,6 +397,21 @@ export const picoIdentityRevocationReasonCategories = [
 ] as const;
 
 export type PicoIdentityRevocationReasonCategory = typeof picoIdentityRevocationReasonCategories[number];
+
+/**
+ * ADR 0114. Why a root was replaced. `suspected_compromise` is the case the
+ * mechanism exists for - a stolen Recovery Card - and the categories stay
+ * coarse on purpose: a finer reason would invite putting circumstance into an
+ * append-only record that every relying party reads.
+ */
+export const picoIdentityRotationReasonCategories = [
+  'suspected_compromise',
+  'planned_replacement',
+  'algorithm_retirement',
+] as const;
+
+export type PicoIdentityRotationReasonCategory =
+  typeof picoIdentityRotationReasonCategories[number];
 
 export const picoHomeMembershipRoles = [
   'home_host',
@@ -954,6 +971,16 @@ export interface PicoIdentityDelegationSignatureInput {
   scopes: PicoIdentityDelegationScope[];
   validFrom: string;
   validUntil: string;
+  lifecycleOrder: string;
+}
+
+export interface PicoIdentityRotationSignatureInput {
+  suite: string;
+  rotationId: string;
+  predecessorIdentityKeyFingerprintHex: string;
+  successorIdentityKeyFingerprintHex: string;
+  reasonCategory: PicoIdentityRotationReasonCategory;
+  rotatedAt: string;
   lifecycleOrder: string;
 }
 
@@ -2500,6 +2527,68 @@ export function buildPicoIdentityDelegationSignatureInput(
     ...scopes.map((scope) => asciiBytes(scope)),
     asciiBytes(input.validFrom),
     asciiBytes(input.validUntil),
+    asciiBytes(input.lifecycleOrder),
+  ]);
+}
+
+/**
+ * ADR 0114 T1. The identity-root rotation record.
+ *
+ * Both roots sign these exact bytes: the predecessor because it is the only
+ * credential that can authorize its own succession, and the successor because
+ * otherwise a root could name a key nobody holds. Both fingerprints are
+ * full-length digests over key records that bind suite and role (ADR 0079 I5),
+ * so a device key can never be named as a root's successor.
+ *
+ * The record proves continuity of the person; it does not move relationships.
+ * Issuers re-issue their own records against the successor (ADR 0114).
+ */
+export function buildPicoIdentityRotationSignatureInput(
+  input: PicoIdentityRotationSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'rotationId',
+    'predecessorIdentityKeyFingerprintHex',
+    'successorIdentityKeyFingerprintHex',
+    'reasonCategory',
+    'rotatedAt',
+    'lifecycleOrder',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.rotationId);
+  assertStringMember(
+    input.reasonCategory,
+    picoIdentityRotationReasonCategories,
+    'invalid_reason_category',
+  );
+  assertInstant(input.rotatedAt);
+  assertLifecycleOrder(input.lifecycleOrder);
+  // A root cannot succeed itself: the record would end the authority it is
+  // simultaneously granting, and no relying party could act on it.
+  if (
+    input.predecessorIdentityKeyFingerprintHex
+    === input.successorIdentityKeyFingerprintHex
+  ) {
+    throw new Error('rotation_successor_equals_predecessor');
+  }
+
+  return concatCanonicalElements([
+    asciiBytes(picoIdentitySignatureInputLabels.rotation),
+    asciiBytes(input.suite),
+    asciiBytes(input.rotationId),
+    fixedHexBytes(
+      input.predecessorIdentityKeyFingerprintHex,
+      32,
+      'invalid_fingerprint_length',
+    ),
+    fixedHexBytes(
+      input.successorIdentityKeyFingerprintHex,
+      32,
+      'invalid_fingerprint_length',
+    ),
+    asciiBytes(input.reasonCategory),
+    asciiBytes(input.rotatedAt),
     asciiBytes(input.lifecycleOrder),
   ]);
 }

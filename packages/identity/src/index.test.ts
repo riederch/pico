@@ -10,12 +10,14 @@ import type {
   PicoIdentityPossessionSignatureInput,
   PicoIdentityReaderKeyFreshnessSignatureInput,
   PicoIdentityRevocationSignatureInput,
+  PicoIdentityRotationSignatureInput,
 } from '@pico/protocol';
 import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoIdentityRotationSignatureInput,
   picoIdentitySuite,
 } from '@pico/protocol';
 import type { IdentityVerificationSodium } from './index.js';
@@ -32,6 +34,7 @@ import {
   verifyPicoIdentityPossessionSignature,
   verifyPicoIdentityReaderKeyFreshnessSignature,
   verifyPicoIdentityRevocationSignature,
+  verifyPicoIdentityRotationSignatures,
 } from './index.js';
 
 interface TestSodium extends IdentityVerificationSodium {
@@ -629,6 +632,204 @@ describe('Pico identity signature verification runtime', () => {
         signatureHex: signedDeviceDelegation.signatureHex,
       }],
     })).toThrow('invalid_delegation_signature');
+  });
+});
+
+describe('ADR 0114 T1 identity-root rotation records', () => {
+  function rotation(
+    predecessor: SigningFixture,
+    successor: SigningFixture,
+    overrides: Partial<PicoIdentityRotationSignatureInput> = {},
+  ): PicoIdentityRotationSignatureInput {
+    return {
+      suite: picoIdentitySuite,
+      rotationId: 'rotation_0001',
+      predecessorIdentityKeyFingerprintHex: predecessor.fingerprintHex,
+      successorIdentityKeyFingerprintHex: successor.fingerprintHex,
+      reasonCategory: 'suspected_compromise',
+      rotatedAt: '2026-08-01T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+      ...overrides,
+    };
+  }
+
+  function signedRotation(
+    predecessor: SigningFixture,
+    successor: SigningFixture,
+    overrides: Partial<PicoIdentityRotationSignatureInput> = {},
+  ): {
+    record: PicoIdentityRotationSignatureInput;
+    predecessorSignatureHex: string;
+    successorSignatureHex: string;
+  } {
+    const record = rotation(predecessor, successor, overrides);
+    const signatureInput = buildPicoIdentityRotationSignatureInput(record);
+    return {
+      record,
+      predecessorSignatureHex: signHex(signatureInput, predecessor.privateKey),
+      successorSignatureHex: signHex(signatureInput, successor.privateKey),
+    };
+  }
+
+  it('accepts a rotation only when both roots signed the same bytes', () => {
+    const predecessor = signingFixture('pico_identity', 0x41);
+    const successor = signingFixture('pico_identity', 0x42);
+    const signed = signedRotation(predecessor, successor);
+
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signed.predecessorSignatureHex,
+      successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(true);
+
+    // Authorization without possession: the predecessor may not hand the
+    // identity to a key nobody proves they hold.
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signed.predecessorSignatureHex,
+      successorSignatureHex: signed.predecessorSignatureHex,
+    })).toBe(false);
+    // Possession without authorization: a successor cannot appoint itself.
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signed.successorSignatureHex,
+      successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(false);
+  });
+
+  it('refuses a stranger substituted for either side, and swapped roles', () => {
+    const predecessor = signingFixture('pico_identity', 0x43);
+    const successor = signingFixture('pico_identity', 0x44);
+    const stranger = signingFixture('pico_identity', 0x45);
+    const signed = signedRotation(predecessor, successor);
+
+    // The key record presented must be the one the signed bytes name, or a
+    // valid rotation could be re-pointed at a third party's root.
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: stranger.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signed.predecessorSignatureHex,
+      successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(false);
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: stranger.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signed.predecessorSignatureHex,
+      successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(false);
+    // The dangerous substitution is a cooperating stranger: they sign the
+    // real record's bytes with their own root and present their own key
+    // record. Both signatures then verify on their own, and only the
+    // fingerprint binding stops a caller from reading the stranger's key
+    // record as the successor of somebody else's identity.
+    const signatureInput = buildPicoIdentityRotationSignatureInput(signed.record);
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: stranger.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signed.predecessorSignatureHex,
+      successorSignatureHex: signHex(signatureInput, stranger.privateKey),
+    })).toBe(false);
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: stranger.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: signed.record,
+      predecessorSignatureHex: signHex(signatureInput, stranger.privateKey),
+      successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(false);
+
+    // Direction is part of the signed bytes, so the pair cannot be reversed.
+    const reversed = signedRotation(successor, predecessor);
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: reversed.record,
+      predecessorSignatureHex: reversed.predecessorSignatureHex,
+      successorSignatureHex: reversed.successorSignatureHex,
+    })).toBe(false);
+  });
+
+  it('refuses any key role other than a root on either side (ADR 0079 I5)', () => {
+    const predecessor = signingFixture('pico_identity', 0x46);
+    const successor = signingFixture('pico_identity', 0x47);
+    const deviceSigning = signingFixture('device_signing', 0x48);
+    const hostSigning = signingFixture('home_host_signing', 0x49);
+    const signed = signedRotation(predecessor, successor);
+
+    for (const impostor of [deviceSigning, hostSigning]) {
+      expect(() => verifyPicoIdentityRotationSignatures(testSodium, {
+        predecessorIdentityKeyRecord: impostor.keyRecord,
+        successorIdentityKeyRecord: successor.keyRecord,
+        rotation: signed.record,
+        predecessorSignatureHex: signed.predecessorSignatureHex,
+        successorSignatureHex: signed.successorSignatureHex,
+      })).toThrow('invalid_issuer_key_role');
+      expect(() => verifyPicoIdentityRotationSignatures(testSodium, {
+        predecessorIdentityKeyRecord: predecessor.keyRecord,
+        successorIdentityKeyRecord: impostor.keyRecord,
+        rotation: signed.record,
+        predecessorSignatureHex: signed.predecessorSignatureHex,
+        successorSignatureHex: signed.successorSignatureHex,
+      })).toThrow('invalid_issuer_key_role');
+    }
+  });
+
+  it('refuses malformed records before anything is signed or verified', () => {
+    const predecessor = signingFixture('pico_identity', 0x4a);
+    const successor = signingFixture('pico_identity', 0x4b);
+
+    // A root succeeding itself would end the authority it grants.
+    expect(() => buildPicoIdentityRotationSignatureInput(
+      rotation(predecessor, successor, {
+        successorIdentityKeyFingerprintHex: predecessor.fingerprintHex,
+      }),
+    )).toThrow('rotation_successor_equals_predecessor');
+    expect(() => buildPicoIdentityRotationSignatureInput(
+      rotation(predecessor, successor, { reasonCategory: 'because' as never }),
+    )).toThrow('invalid_reason_category');
+    expect(() => buildPicoIdentityRotationSignatureInput(
+      rotation(predecessor, successor, { rotatedAt: '2026-08-01T10:00:00Z' }),
+    )).toThrow('invalid_instant');
+    expect(() => buildPicoIdentityRotationSignatureInput(
+      rotation(predecessor, successor, { lifecycleOrder: '7' }),
+    )).toThrow('invalid_lifecycle_order');
+    expect(() => buildPicoIdentityRotationSignatureInput(
+      rotation(predecessor, successor, {
+        predecessorIdentityKeyFingerprintHex: predecessor.fingerprintHex.slice(0, 62),
+      }),
+    )).toThrow('invalid_fingerprint_length');
+    expect(() => buildPicoIdentityRotationSignatureInput({
+      ...rotation(predecessor, successor),
+      extra: true,
+    } as never)).toThrow('unexpected_field');
+  });
+
+  it('binds the suite into the signed bytes, so a downgrade is a different record', () => {
+    const predecessor = signingFixture('pico_identity', 0x4c);
+    const successor = signingFixture('pico_identity', 0x4d);
+    const signed = signedRotation(predecessor, successor);
+    const downgraded = {
+      ...signed.record,
+      suite: 'pico.suite.id.v0',
+    };
+
+    // The key records still verify as roots of the real suite, but the
+    // signatures were made over the real suite's bytes.
+    expect(verifyPicoIdentityRotationSignatures(testSodium, {
+      predecessorIdentityKeyRecord: predecessor.keyRecord,
+      successorIdentityKeyRecord: successor.keyRecord,
+      rotation: downgraded,
+      predecessorSignatureHex: signed.predecessorSignatureHex,
+      successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(false);
   });
 });
 

@@ -87,6 +87,7 @@ import {
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoIdentityRotationSignatureInput,
   buildPicoReaderCustodyDomainSignatureInput,
   buildPicoReaderCustodyItemSignatureInput,
   buildPicoReaderCustodyKekRotationSignatureInput,
@@ -383,12 +384,14 @@ describe('Pico protocol types', () => {
 
   it('exports ADR 0079 identity signature-input vocabulary', () => {
     expect(picoIdentitySuite).toBe('pico.suite.id.v1');
-    expect(picoIdentitySignatureInputFamilies).toEqual(['keyrecord', 'possession', 'delegation', 'revocation']);
+    expect(picoIdentitySignatureInputFamilies)
+      .toEqual(['keyrecord', 'possession', 'delegation', 'revocation', 'rotation']);
     expect(picoIdentitySignatureInputLabels).toEqual({
       keyrecord: 'pico.id.keyrecord.v1',
       possession: 'pico.id.possession.v1',
       delegation: 'pico.id.delegation.v1',
       revocation: 'pico.id.revocation.v1',
+      rotation: 'pico.identity.rotation.v1',
     });
     expect(picoIdentityKeyRoles).toEqual([
       'pico_identity',
@@ -842,6 +845,36 @@ describe('Pico protocol types', () => {
         expect(acceptedHexByCase.get(caseName)).not.toBe(acceptedHexByCase.get(other));
       }
     }
+  });
+
+  it('keeps the ADR 0114 T1 rotation vector byte-exact and published in its ADR', () => {
+    // Same discipline as the ADR 0079 G1 families: the bytes live in the ADR,
+    // and this fails if the layout ever moves without the ADR moving with it.
+    const record = {
+      suite: picoIdentitySuite,
+      rotationId: 'rot_01hzx8m9q4rt5v',
+      predecessorIdentityKeyFingerprintHex:
+        '66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616',
+      successorIdentityKeyFingerprintHex:
+        '9d1f2b7c4a05e83641bd2f90c7ae5138aa04f6b2c9d3e7f108526b4ac0d19e75',
+      reasonCategory: 'suspected_compromise',
+      rotatedAt: '2026-08-18T08:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+    } as const;
+    const bytes = buildPicoIdentityRotationSignatureInput(record);
+    const hex = Buffer.from(bytes).toString('hex');
+
+    expect(bytes.length).toBe(219);
+    const adrNoWhitespace = readRepoFile(
+      'docs/architecture/0114-identity-root-rotation-with-relationship-continuity.md',
+    ).replace(/\s+/g, '');
+    expect(adrNoWhitespace).toContain(hex);
+
+    // The label is element zero, so no other family's bytes can be replayed
+    // as a rotation (ADR 0079 I3).
+    expect(hex.startsWith(Buffer.from([0, 0, 0, 0x19]).toString('hex')
+      + Buffer.from(picoIdentitySignatureInputLabels.rotation, 'ascii').toString('hex')))
+      .toBe(true);
   });
 
   it('keeps Pico identity signature-input vectors byte-exact and aligned with ADR 0079 G1', () => {

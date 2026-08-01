@@ -112,7 +112,7 @@ Identity key rotation should be rare. It may be needed when:
 - a future algorithm or serialization format must be retired
 - a reviewed recovery path replaces lost identity material
 
-Identity replacement must preserve relationship continuity only through signed, verifiable transition records or another reviewed continuity mechanism.
+Identity replacement must preserve relationship continuity only through signed, verifiable transition records or another reviewed continuity mechanism. ADR `0114` supplies that record: `pico.identity.rotation.v1`, signed by the predecessor root as authorization and the successor root as possession, ending the predecessor's authority and making the successor eligible for re-issued relationships.
 
 It must not rely on:
 

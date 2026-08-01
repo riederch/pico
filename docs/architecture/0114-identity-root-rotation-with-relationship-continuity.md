@@ -1,0 +1,238 @@
+# 0114 - Identity Root Rotation with Relationship Continuity
+
+## Status
+
+Accepted; first gate implemented. Gate T1 - the canonical
+`pico.identity.rotation.v1` form, its verification and authoritative
+vectors - lands with this ADR; T2-T5 are open. This ADR closes the
+sharpest residual ADR 0110 named: today the only answer to a stolen
+Recovery Card is explicit identity replacement, which throws away every
+relationship the person had. Both decisions taken here were made
+explicitly by the user on 2026-08-01: rotation grants eligibility and
+issuers re-issue, and this block implements the canonical form.
+
+## Context
+
+ADR 0033 required that identity replacement "preserve relationship
+continuity only through signed, verifiable transition records or another
+reviewed continuity mechanism", and forbade resting it on Relay account
+control, Home host control, Home Host Pico authority, Move-In Code
+possession or transport identifiers. It never said what the record is.
+ADR 0079 deferred the mechanism on the grounds that it "needs the
+relationship layer to mean anything" - and that layer now exists:
+memberships, membership credentials, reader-custody domains, reader
+grants and device delegations all bind an identity fingerprint.
+
+ADR 0110 made the gap concrete. A Recovery Card is the identity root on
+paper behind a short PIN; a stolen card is root compromise, and the
+stated remedy - root rotation with continuity - "does not exist yet",
+so a stolen card forces explicit replacement.
+
+The hard part is not the record. It is that rotation exists *because*
+the old root may be compromised, while the only credential that can
+authorize "this new root continues that identity" is the old root
+itself. After a card theft two parties hold it, both can sign a
+rotation to a root they control, and a signature check cannot tell them
+apart.
+
+## Scope
+
+Covers: the rotation record and what it proves; what breaks the tie
+between two holders of the same root; what a verified rotation does to
+existing relationships and to the old root's authority; which identities
+may rotate this way; and the residuals.
+
+Does not cover:
+
+- rotating the founder's root, which changes the Home's own governance
+  root and is Home handover - ADR 0080's named non-goal, with the
+  membership status `transferred_or_reissued` already reserved for it;
+- device key rotation, which is delegation work and already possible;
+- domain content-key rotation (ADR 0078), which rotation may trigger but
+  does not replace;
+- cross-Home propagation, which needs a transport that does not exist
+  (ADR 0031 Relay stays future); and
+- any change to canonical bytes, approvals or custody outside the new
+  family.
+
+## Decision
+
+### One record, signed by both roots
+
+`pico.identity.rotation.v1` binds: suite, a fresh rotation id, the old
+identity-key fingerprint, the new one, the ordering context, and the
+rotation instant. The old root signs it - that is the authorization,
+and it is the only thing that can be. The new root signs the same bytes
+- that is possession, and without it the old root could name a key
+nobody holds. Both are full-length fingerprints over key records that
+bind suite and role (ADR 0079 I5), so a device key can never be named
+as the successor of a root.
+
+The record is a labeled, length-prefixed layout in the ADR 0073/0079
+style, verified with no parser in the trust path, and its bytes are
+published here before they carry any weight. The authoritative vector,
+for
+
+```json
+{
+  "suite": "pico.suite.id.v1",
+  "rotationId": "rot_01hzx8m9q4rt5v",
+  "predecessorIdentityKeyFingerprintHex":
+    "66e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616",
+  "successorIdentityKeyFingerprintHex":
+    "9d1f2b7c4a05e83641bd2f90c7ae5138aa04f6b2c9d3e7f108526b4ac0d19e75",
+  "reasonCategory": "suspected_compromise",
+  "rotatedAt": "2026-08-18T08:00:00.000Z",
+  "lifecycleOrder": "seq:0000000000000009"
+}
+```
+
+is 219 bytes:
+
+```text
+000000197069636f2e6964656e746974792e726f746174696f6e2e7631000000107069
+636f2e73756974652e69642e763100000012726f745f3031687a78386d39713472743576
+0000002066e6e80bcd9fc83d805ac5f7d9021aa10fb1166671c05ca9148bc92ac6e73616
+000000209d1f2b7c4a05e83641bd2f90c7ae5138aa04f6b2c9d3e7f108526b4ac0d19e75
+000000147375737065637465645f636f6d70726f6d69736500000018323032362d30382d
+31385430383a30303a30302e3030305a000000147365713a30303030303030303030303
+030303039
+```
+
+The test suite recomputes these bytes and fails if they ever move, the
+same discipline ADR 0079 G1 applies to its own families.
+
+### A living device breaks the tie, and a veto window makes the attempt loud
+
+A rotation additionally requires a co-signature from a device the
+identity currently has delegated and active, and it becomes effective
+only after a veto window during which any other active device of that
+identity may refuse it.
+
+This is deliberately the same shape as ADR 0110, because it is the same
+threat with the same asymmetry: a card thief holds the root but not the
+person's living devices. The consequence is a sequence rather than a
+shortcut - a thief who wants to rotate must first complete a recovery,
+which costs 48 hours, is alarmed to every living device, can be vetoed,
+and loudly revokes the legitimate device set on success. Rotation adds
+no quieter path to the same power.
+
+It also means an identity with zero active devices cannot rotate. That
+is correct rather than unfortunate: such a person recovers first (ADR
+0110 gives them exactly one device), and rotates afterwards.
+
+### Rotation grants eligibility; issuers re-issue
+
+A verified, effective rotation does two things and no more.
+
+It **ends the old root's authority** from the rotation instant. Every
+delegation the old root issued stops being honored; the old root can
+create no new authority. That is not the Home overriding anybody - the
+old root signed exactly this, so it is a mass revocation with the only
+authorization that could exist for it.
+
+It **makes the new root eligible** as the same person, so every issuer
+can re-issue its own records: the Home Host Pico re-issues membership
+through the existing ceremony, a domain owner re-issues reader grants,
+and the new root issues fresh device delegations. Nothing is silently
+rebound. A membership row keeps naming the subject its credential names,
+a reader grant keeps naming the reader its signature names, and no
+projection diverges from its evidence - the discipline the rest of this
+codebase holds.
+
+The cost is stated rather than hidden: a rotating member depends on the
+Home Host Pico acting, and where that is another person, the member
+waits for them. Rebinding the Home's own records automatically would
+remove that wait, and was rejected because it would put Home
+administration into identity continuity and make a projection disagree
+with the credential behind it.
+
+### What rotation does not repair
+
+A Recovery Card pins the identity root. Every card printed before a
+rotation restores a root that is no longer the identity, so rotation
+obsoletes them and issuing a new card is part of finishing it. Between
+the two there is a window with no valid card, and the product must say
+so rather than let a person discover it in an emergency.
+
+## Gates
+
+- **T1 - Canonical form and vectors (implemented with this ADR):**
+  `pico.identity.rotation.v1` layout, dual-signature verification, and
+  authoritative accept/reject vectors covering role swap, suite
+  downgrade, a foreign root as predecessor or successor, self-rotation,
+  fingerprint/key-record mismatch and ordering violations.
+- **T2 - Foundation projection (open):** durable rotation records, the
+  old root's authority ending at the rotation instant, the device
+  co-signature and veto window, and boot reconciliation that re-verifies
+  a stored rotation before honoring it.
+- **T3 - Re-issue path (open):** membership, reader-grant and delegation
+  re-issue against a rotated identity, including the rotation-debt
+  interaction with ADR 0078 domain rotation.
+- **T4 - Ceremonies and product surface (open):** the person-side
+  rotation ceremony with ADR 0106 rendering and ADR 0099 approvals, the
+  veto surface, and forced Recovery Card re-issue - as ADR 0112
+  surfaces, not as a terminal.
+- **T5 - Cross-Home honesty (open):** what a second Home that never saw
+  the rotation may assume, and whether anything short of a transport can
+  narrow it.
+
+## Threat ledger
+
+| Attacker | Posture |
+|---|---|
+| Card thief with the root but no device | Cannot rotate: the co-signature requires a currently delegated, active device. Getting one means completing an ADR 0110 recovery first - 48 hours, alarmed, vetoable, and loud on success. Rotation adds no quieter path. |
+| Card thief who already completed a recovery | Holds root and the one device that recovery left. Rotation is then possible, and the owner has already lost the identity at the recovery step; rotation changes nothing about that. The defence remains the recovery veto window, not this ADR. |
+| Owner and thief racing to rotate | Both hold the old root, so both can sign. The veto window plus the device requirement decide it: the owner's living devices see the attempt and can refuse it. Neither silently wins. |
+| Malicious Home host | Cannot mint, authorize or veto a rotation, and cannot rebind a relationship - re-issue is the issuer's act. It can withhold service, as always. |
+| Relying party that never saw the rotation | Still honors the old root. Cross-Home propagation has no transport, so a rotation is per-Home until one exists; T5 keeps that open and unclaimed. |
+| Holder of an old Recovery Card after rotation | Restores a root that is no longer the identity - the card is dead, not dangerous. |
+
+## Consequences
+
+Positive:
+
+- ADR 0110's sharpest residual gets an answer that keeps relationships,
+  instead of explicit replacement discarding them;
+- the answer reuses ADR 0110's proven asymmetry rather than inventing a
+  second trust mechanism;
+- ending the old root's authority is self-authorized, so no Home-side
+  power is created to do it;
+- projections keep matching their evidence, because nothing is rebound.
+
+Negative and residual:
+
+- a rotating member waits for its issuers, and where the Home Host Pico
+  is another person, on them;
+- rotation is per-Home until a transport exists; a second Home keeps
+  honoring the old root, which is an identity split this ADR names but
+  cannot close;
+- every Recovery Card is obsoleted, with a window before the new one is
+  printed;
+- the founder's root still cannot rotate - that stays Home handover;
+- a thief who has already completed a recovery is not stopped here, and
+  should not be: that battle is fought in ADR 0110's veto window.
+
+## Relationship to other ADRs
+
+- Realizes the continuity mechanism ADR `0033` required and left
+  unspecified, honoring its list of what continuity may not rest on.
+- Closes the rotation gap ADR `0079` deferred until a relationship layer
+  existed, and keeps its I5 full-length role-bound fingerprint rule.
+- Answers ADR `0110`'s stolen-card residual, and inherits its device
+  asymmetry, veto delay and loudness rather than duplicating them.
+- Leaves ADR `0080`'s handover non-goal intact: the founder's root is out
+  of scope, and `transferred_or_reissued` stays reserved for it.
+- Triggers ADR `0078` rotation debt where a rotated reader loses grants;
+  it does not replace domain-key rotation.
+- Surfaces through ADR `0112`, never through a terminal or the
+  Foundation HTTP surface.
+
+## References
+
+- [ADR 0033](0033-key-lifecycle-rotation-revocation-and-recovery.md)
+- [ADR 0078](0078-memory-domain-reader-membership-and-key-distribution-threat-model-and-direction.md)
+- [ADR 0079](0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md)
+- [ADR 0080](0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md)
+- [ADR 0110](0110-recovery-card-and-time-locked-zero-device-recovery.md)
+- [ADR 0112](0112-recovery-product-surfaces-in-the-background-companion.md)

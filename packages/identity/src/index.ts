@@ -4,6 +4,7 @@ import {
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoIdentityRotationSignatureInput,
   picoIdentityDelegationScopes,
   picoIdentitySuite,
 } from '@pico/protocol';
@@ -14,6 +15,7 @@ import type {
   PicoIdentityPossessionSignatureInput,
   PicoIdentityReaderKeyFreshnessSignatureInput,
   PicoIdentityRevocationSignatureInput,
+  PicoIdentityRotationSignatureInput,
 } from '@pico/protocol';
 
 export const picoIdentityLifecycleStatementKinds = [
@@ -73,6 +75,14 @@ export interface PicoIdentityDelegationVerificationInput {
   issuerIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   delegation: PicoIdentityDelegationSignatureInput;
   signatureHex: string;
+}
+
+export interface PicoIdentityRotationVerificationInput {
+  predecessorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  successorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  rotation: PicoIdentityRotationSignatureInput;
+  predecessorSignatureHex: string;
+  successorSignatureHex: string;
 }
 
 export interface PicoIdentityRevocationVerificationInput {
@@ -453,6 +463,50 @@ export function verifyPicoIdentityDelegationSignature(
   });
 }
 
+/**
+ * ADR 0114 T1. A rotation is only true if both roots said it.
+ *
+ * The predecessor's signature is the authorization - it is the only credential
+ * that can end its own authority and name a successor. The successor's
+ * signature is possession, without which a root could hand the identity to a
+ * key nobody holds. Both records must be `pico_identity` roots in this suite,
+ * and each fingerprint in the signed bytes must be the digest of the key
+ * record presented for it, so neither side can be swapped for a device key or
+ * a stranger's root.
+ */
+export function verifyPicoIdentityRotationSignatures(
+  sodium: IdentityVerificationSodium,
+  input: PicoIdentityRotationVerificationInput,
+): boolean {
+  assertIdentityIssuerKeyRecord(input.predecessorIdentityKeyRecord);
+  assertIdentityIssuerKeyRecord(input.successorIdentityKeyRecord);
+  const rotation = cloneRotation(input.rotation);
+  const signatureInput = buildPicoIdentityRotationSignatureInput(rotation);
+
+  if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+    keyRecord: input.predecessorIdentityKeyRecord,
+    expectedFingerprintHex: rotation.predecessorIdentityKeyFingerprintHex,
+  })) {
+    return false;
+  }
+  if (!verifyPicoIdentityKeyRecordFingerprint(sodium, {
+    keyRecord: input.successorIdentityKeyRecord,
+    expectedFingerprintHex: rotation.successorIdentityKeyFingerprintHex,
+  })) {
+    return false;
+  }
+
+  return verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: input.predecessorIdentityKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: input.predecessorSignatureHex,
+  }) && verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: input.successorIdentityKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: input.successorSignatureHex,
+  });
+}
+
 export function verifyPicoIdentityRevocationSignature(
   sodium: IdentityVerificationSodium,
   input: PicoIdentityRevocationVerificationInput,
@@ -666,6 +720,23 @@ function clonePossession(
     subjectKeyFingerprintHex: possession.subjectKeyFingerprintHex,
     verifierNonceHex: possession.verifierNonceHex,
     verifierContext: possession.verifierContext,
+  };
+}
+
+/** Cloned before use so a caller cannot mutate what was verified (ADR 0079 I3). */
+function cloneRotation(
+  rotation: PicoIdentityRotationSignatureInput,
+): PicoIdentityRotationSignatureInput {
+  return {
+    suite: rotation.suite,
+    rotationId: rotation.rotationId,
+    predecessorIdentityKeyFingerprintHex:
+      rotation.predecessorIdentityKeyFingerprintHex,
+    successorIdentityKeyFingerprintHex:
+      rotation.successorIdentityKeyFingerprintHex,
+    reasonCategory: rotation.reasonCategory,
+    rotatedAt: rotation.rotatedAt,
+    lifecycleOrder: rotation.lifecycleOrder,
   };
 }
 
