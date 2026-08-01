@@ -1,6 +1,8 @@
 import { execFile } from 'node:child_process';
-import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
-import type { PicoCompanionNotificationAdapter } from './alarm-carrier.js';
+import type {
+  PicoCompanionNotificationAdapter,
+  PicoCompanionPendingRecoveryAlarm,
+} from './alarm-carrier.js';
 
 /**
  * ADR 0112: the alarm is loud - color, symbol and text, interrupting, never
@@ -15,13 +17,19 @@ export interface LinuxNotifySendAdapterOptions {
 }
 
 export function renderPicoCompanionPendingRecoveryAlarm(
-  pending: PicoHomeDeviceRecoveryPendingView,
+  alarm: PicoCompanionPendingRecoveryAlarm,
 ): { title: string; body: string } {
+  const { pending } = alarm;
   return {
     title: 'Pico: device recovery pending',
-    body: 'Someone is recovering this identity onto another device. '
+    // ADR 0112 pins what this must state from the signed pending view: which
+    // identity, which target device, and when it becomes effective. A person
+    // with more than one Pico cannot act on an alarm that does not say whose
+    // it is.
+    body: `Identity ${displayFingerprint(alarm.picoIdentityFingerprintHex)} `
+      + 'is being recovered onto another device. '
       + `Target device ${displayFingerprint(pending.targetDeviceSigningKeyFingerprintHex)} `
-      + `becomes this identity's only device at ${pending.effectiveAt} `
+      + `becomes that identity's only device at ${pending.effectiveAt} `
       + 'and every other device is revoked then. '
       + 'If this is not you, veto now from any active device '
       + `(recovery ${pending.recoveryId}).`,
@@ -33,8 +41,8 @@ export function createLinuxNotifySendAdapter(
 ): PicoCompanionNotificationAdapter {
   const command = options.command ?? 'notify-send';
   return {
-    notifyPendingRecovery: async (pending) => {
-      const { title, body } = renderPicoCompanionPendingRecoveryAlarm(pending);
+    notifyPendingRecovery: async (alarm) => {
+      const { title, body } = renderPicoCompanionPendingRecoveryAlarm(alarm);
       await new Promise<void>((resolvePromise, rejectPromise) => {
         execFile(command, [
           '--urgency=critical',

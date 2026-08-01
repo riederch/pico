@@ -389,13 +389,15 @@ function readAnchorDocument(anchorPath: string): PicoHomeRecoveryAnchorDocument 
   return { ...document, seededAt: document.seededAt ?? null };
 }
 
+/**
+ * Durability is the whole point of this file, so a failed flush is reported
+ * rather than swallowed - the same rule the ADR 0090 reader-sync store
+ * follows. A caller that cannot fsync turns this into a refusal, which is the
+ * honest outcome: an anchor that only reached the page cache proves nothing
+ * about what survived the crash.
+ */
 function fsyncPath(path: string, directory = false): void {
-  let handle: number;
-  try {
-    handle = openSync(path, directory ? 'r' : 'r+');
-  } catch {
-    return;
-  }
+  const handle = openSync(path, directory ? 'r' : 'r+');
   try {
     fsyncSync(handle);
   } finally {

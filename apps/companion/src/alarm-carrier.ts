@@ -12,7 +12,19 @@ import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
  */
 
 export interface PicoCompanionLifecycleSnapshot {
+  /**
+   * The identity the read was performed as. ADR 0112 requires the alarm to
+   * state *which* identity is being recovered, and carrying it on the
+   * snapshot keeps that answer tied to the read it came from instead of to a
+   * separate setting that could drift.
+   */
+  picoIdentityFingerprintHex: string;
   pendingRecovery: PicoHomeDeviceRecoveryPendingView | null;
+}
+
+export interface PicoCompanionPendingRecoveryAlarm {
+  picoIdentityFingerprintHex: string;
+  pending: PicoHomeDeviceRecoveryPendingView;
 }
 
 export type PicoCompanionLifecycleReader =
@@ -20,7 +32,7 @@ export type PicoCompanionLifecycleReader =
 
 export interface PicoCompanionNotificationAdapter {
   notifyPendingRecovery(
-    pending: PicoHomeDeviceRecoveryPendingView,
+    alarm: PicoCompanionPendingRecoveryAlarm,
   ): void | Promise<void>;
 }
 
@@ -114,7 +126,10 @@ export async function startPicoCompanionAlarmCarrier(
     status.alarmActive = true;
     let notified = true;
     try {
-      await input.notifications.notifyPendingRecovery(pending);
+      await input.notifications.notifyPendingRecovery({
+        picoIdentityFingerprintHex: snapshot.picoIdentityFingerprintHex,
+        pending,
+      });
     } catch {
       // A broken notifier must not stop the carrier; the failure stays
       // visible and the next check tries again.

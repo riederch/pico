@@ -6,6 +6,7 @@ import {
   renderPicoCompanionPendingRecoveryAlarm,
 } from './notify.js';
 import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
+import type { PicoCompanionPendingRecoveryAlarm } from './alarm-carrier.js';
 
 const temporaryDirectories: string[] = [];
 
@@ -14,6 +15,12 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+const identityFingerprintHex = `ab${'99'.repeat(30)}cd`;
+
+function alarm(): PicoCompanionPendingRecoveryAlarm {
+  return { picoIdentityFingerprintHex: identityFingerprintHex, pending: pendingView() };
+}
 
 function pendingView(): PicoHomeDeviceRecoveryPendingView {
   return {
@@ -46,8 +53,10 @@ function fakeNotifySend(behavior: 'record' | 'fail'): { command: string; argvFil
 
 describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
   it('renders the loud alarm statement from the signed pending view', () => {
-    const { title, body } = renderPicoCompanionPendingRecoveryAlarm(pendingView());
+    const { title, body } = renderPicoCompanionPendingRecoveryAlarm(alarm());
     expect(title).toContain('recovery pending');
+    // ADR 0112 pins "which identity" as part of the statement.
+    expect(body).toContain('ab999999…999999cd');
     expect(body).toContain('bb111111…111111cc');
     expect(body).toContain('2026-08-02T10:00:00.000Z');
     expect(body).toContain('every other device is revoked');
@@ -58,7 +67,7 @@ describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
   it('spawns notify-send with critical urgency, icon and the rendered text', async () => {
     const fake = fakeNotifySend('record');
     const adapter = createLinuxNotifySendAdapter({ command: fake.command });
-    await adapter.notifyPendingRecovery(pendingView());
+    await adapter.notifyPendingRecovery(alarm());
 
     const argv = JSON.parse(readFileSync(fake.argvFile, 'utf8')) as string[];
     expect(argv[0]).toBe('--urgency=critical');
@@ -71,7 +80,7 @@ describe('Linux notify-send alarm adapter (ADR 0113 C1)', () => {
   it('surfaces a failing notifier as an error the carrier can count', async () => {
     const fake = fakeNotifySend('fail');
     const adapter = createLinuxNotifySendAdapter({ command: fake.command });
-    await expect(adapter.notifyPendingRecovery(pendingView()))
+    await expect(adapter.notifyPendingRecovery(alarm()))
       .rejects.toThrow('notify_send_failed');
   });
 });

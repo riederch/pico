@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { picoIdentitySuite } from '@pico/protocol';
 import {
@@ -547,7 +547,31 @@ describe('Transitional recovery ceremony CLI (ADR 0112 S1)', () => {
       const bytes = readFileSync(pdfPath);
       expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     }
-  }, 120_000);
+
+    // A re-issue writes over files that already exist, where `mode` no longer
+    // applies. These carry the identity root behind a PIN, so a world-readable
+    // leftover from an earlier run must not survive the second issuance.
+    for (const key of ['cardPrinterPdfPath', 'paperPrintablePdfPath'] as const) {
+      chmodSync(printed[key] as string, 0o644);
+    }
+    const reissue = await runCeremonyCli([
+      'ceremony', 'issue-recovery-card',
+      '--vault-home', daemon.vaultHomePath,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--pico-name', 'Mira',
+      '--home-name', 'Alpengasse 7',
+      '--home-id', 'home_recovery_cli_0001',
+      '--host-signing-fingerprint', '11'.repeat(32),
+      '--host-agreement-fingerprint', '22'.repeat(32),
+      '--host-agreement-public-key', '33'.repeat(32),
+      '--endpoint-hint', 'pico-link://recovery-cli',
+      '--output-dir', outputDir,
+    ], ['card42pin', 'card42pin']);
+    expect(reissue.code).toBe(0);
+    for (const key of ['cardPrinterPdfPath', 'paperPrintablePdfPath'] as const) {
+      expect(statSync(printed[key] as string).mode & 0o777).toBe(0o600);
+    }
+  }, 180_000);
 
   it('restores the identity from phrase and PIN over piped prompts, normalizing typed input', async () => {
     const session = openPicoVaultKeyfile(sodium, {

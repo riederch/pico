@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -1373,5 +1373,27 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     writeFileSync(fixture.anchorPath, '{"schema":"pico.home.recovery-anchor.v1"');
     expect(() => openPicoHomeRecoveryAnchor(fixture.anchorPath))
       .toThrow('unreadable_recovery_anchor');
+  });
+
+  it('reports a failed flush instead of claiming a durability it did not get', () => {
+    const fixture = createFixture();
+    fixture.store.close();
+    const anchor = openPicoHomeRecoveryAnchor(fixture.anchorPath);
+    // Durability is the entire point of this file, so a flush that cannot
+    // happen must surface as a refusal rather than a silent success - the
+    // rule the ADR 0090 reader-sync store already follows.
+    chmodSync(dirname(fixture.anchorPath), 0o500);
+    try {
+      expect(() => anchor.record({
+        recoveryId: 'recovery_r6_fsync',
+        claimDigestHex: 'aa'.repeat(32),
+        picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+        state: 'accepted',
+        expiresAt: '2099-01-01T00:00:00.000Z',
+      })).toThrow();
+      expect(anchor.lookup('recovery_r6_fsync')).toBeUndefined();
+    } finally {
+      chmodSync(dirname(fixture.anchorPath), 0o700);
+    }
   });
 });

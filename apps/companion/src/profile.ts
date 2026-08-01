@@ -1,4 +1,13 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -100,8 +109,33 @@ export function writePicoCompanionProfile(
 ): void {
   parsePicoCompanionProfile(profile);
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
-  writeFileSync(path, `${JSON.stringify(profile, null, 2)}\n`, { mode: 0o600 });
-  chmodSync(path, 0o600);
+  // Written the same way the recovery anchor is: a half-written profile would
+  // point this device at a partially described Home, and a crash mid-write
+  // must leave the previous one intact rather than a truncated file.
+  const temporaryPath = `${path}.tmp`;
+  writeFileSync(temporaryPath, `${JSON.stringify(profile, null, 2)}\n`, { mode: 0o600 });
+  chmodSync(temporaryPath, 0o600);
+  fsyncFile(temporaryPath);
+  renameSync(temporaryPath, path);
+  fsyncDirectory(dirname(path));
+}
+
+function fsyncFile(path: string): void {
+  const handle = openSync(path, 'r+');
+  try {
+    fsyncSync(handle);
+  } finally {
+    closeSync(handle);
+  }
+}
+
+function fsyncDirectory(path: string): void {
+  const handle = openSync(path, 'r');
+  try {
+    fsyncSync(handle);
+  } finally {
+    closeSync(handle);
+  }
 }
 
 const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;

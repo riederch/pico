@@ -4,6 +4,7 @@ import {
   picoCompanionAlarmCheckIntervalMs,
   startPicoCompanionAlarmCarrier,
   type PicoCompanionLifecycleSnapshot,
+  type PicoCompanionPendingRecoveryAlarm,
 } from './alarm-carrier.js';
 
 function pendingView(recoveryId: string): PicoHomeDeviceRecoveryPendingView {
@@ -19,24 +20,32 @@ function pendingView(recoveryId: string): PicoHomeDeviceRecoveryPendingView {
   };
 }
 
+const identityFingerprintHex = 'ab'.repeat(32);
+
 interface RecordingAdapter {
-  alarms: PicoHomeDeviceRecoveryPendingView[];
+  alarms: PicoCompanionPendingRecoveryAlarm[];
   failNext: boolean;
-  notifyPendingRecovery(pending: PicoHomeDeviceRecoveryPendingView): void;
+  notifyPendingRecovery(alarm: PicoCompanionPendingRecoveryAlarm): void;
 }
 
 function recordingAdapter(): RecordingAdapter {
   return {
     alarms: [],
     failNext: false,
-    notifyPendingRecovery(pending) {
+    notifyPendingRecovery(alarm) {
       if (this.failNext) {
         this.failNext = false;
         throw new Error('adapter_down');
       }
-      this.alarms.push(pending);
+      this.alarms.push(alarm);
     },
   };
+}
+
+function snapshot(
+  pendingRecovery: PicoHomeDeviceRecoveryPendingView | null,
+): PicoCompanionLifecycleSnapshot {
+  return { picoIdentityFingerprintHex: identityFingerprintHex, pendingRecovery };
 }
 
 describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () => {
@@ -50,10 +59,10 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
 
   it('checks on start, keeps the six-hour cadence and re-raises while pendency lasts', async () => {
     const responses: PicoCompanionLifecycleSnapshot[] = [
-      { pendingRecovery: null },
-      { pendingRecovery: pendingView('recovery_0001') },
-      { pendingRecovery: pendingView('recovery_0001') },
-      { pendingRecovery: null },
+      snapshot(null),
+      snapshot(pendingView('recovery_0001')),
+      snapshot(pendingView('recovery_0001')),
+      snapshot(null),
     ];
     let reads = 0;
     const adapter = recordingAdapter();
@@ -74,8 +83,12 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
     await vi.advanceTimersByTimeAsync(picoCompanionAlarmCheckIntervalMs);
     await vi.advanceTimersByTimeAsync(picoCompanionAlarmCheckIntervalMs);
     expect(reads).toBe(3);
-    expect(adapter.alarms.map((alarm) => alarm.recoveryId))
+    expect(adapter.alarms.map((alarm) => alarm.pending.recoveryId))
       .toEqual(['recovery_0001', 'recovery_0001']);
+    // ADR 0112: the alarm must say which identity is being recovered.
+    expect(adapter.alarms.every(
+      (alarm) => alarm.picoIdentityFingerprintHex === identityFingerprintHex,
+    )).toBe(true);
     expect(carrier.status().alarmActive).toBe(true);
 
     // Pendency resolved (vetoed, lapsed or consumed): the alarm disarms.
@@ -90,7 +103,7 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
 
   it('rejects an interval above the pinned six hours or otherwise invalid', async () => {
     const input = {
-      readLifecycle: async () => ({ pendingRecovery: null }),
+      readLifecycle: async () => snapshot(null),
       notifications: recordingAdapter(),
     };
     await expect(startPicoCompanionAlarmCarrier({
@@ -112,7 +125,7 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
           failReads -= 1;
           throw new Error('network_down');
         }
-        return { pendingRecovery: pendingView('recovery_0002') };
+        return snapshot(pendingView('recovery_0002'));
       },
       notifications: adapter,
     });
@@ -133,7 +146,7 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
     expect(carrier.status().lastCheck?.status).toBe('notify_failed');
 
     await vi.advanceTimersByTimeAsync(picoCompanionAlarmCheckIntervalMs);
-    expect(adapter.alarms.map((alarm) => alarm.recoveryId)).toEqual(['recovery_0002']);
+    expect(adapter.alarms.map((alarm) => alarm.pending.recoveryId)).toEqual(['recovery_0002']);
     expect(carrier.status().lastCheck?.status).toBe('pending_recovery');
     carrier.stop();
   });
@@ -153,7 +166,7 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
     });
     // Let the start check begin, then complete it.
     await vi.advanceTimersByTimeAsync(0);
-    resolveRead!({ pendingRecovery: null });
+    resolveRead!(snapshot(null));
     const carrier = await carrierPromise;
     expect(reads).toBe(1);
 
@@ -161,7 +174,7 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
     const first = carrier.checkNow();
     await vi.advanceTimersByTimeAsync(0);
     const second = carrier.checkNow();
-    resolveRead!({ pendingRecovery: pendingView('recovery_0003') });
+    resolveRead!(snapshot(pendingView('recovery_0003')));
     const [firstCheck, secondCheck] = await Promise.all([first, second]);
     expect(reads).toBe(2);
     expect(firstCheck).toBe(secondCheck);

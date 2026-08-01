@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -792,8 +792,16 @@ async function runDeviceRecoveryCli(
       mkdirSync(outputDir, { recursive: true, mode: 0o700 });
       const cardPrinterPdfPath = join(outputDir, 'pico-recovery-card-card-printer.pdf');
       const paperPrintablePdfPath = join(outputDir, 'pico-recovery-card-paper-printable.pdf');
-      writeFileSync(cardPrinterPdfPath, pdfs.cardPrinterPdf, { mode: 0o600 });
-      writeFileSync(paperPrintablePdfPath, pdfs.paperPrintablePdf, { mode: 0o600 });
+      // `mode` only applies when the file is created, so a re-issue over an
+      // existing, more permissive file would silently keep those permissions -
+      // on a file that is the identity root behind a PIN.
+      for (const [pdfPath, bytes] of [
+        [cardPrinterPdfPath, pdfs.cardPrinterPdf],
+        [paperPrintablePdfPath, pdfs.paperPrintablePdf],
+      ] as const) {
+        writeFileSync(pdfPath, bytes, { mode: 0o600 });
+        chmodSync(pdfPath, 0o600);
+      }
       process.stderr.write(
         'These PDFs are your identity root behind the Card PIN (ADR 0110): '
         + 'print and laminate now, then delete both files. Never photograph '

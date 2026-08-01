@@ -39,15 +39,25 @@ export async function createPicoCompanionLifecycleReader(input: {
     },
   });
 
-  return async () => await readPicoHomeDeviceLifecycle(linkClient, {
+  const sender = {
     identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
-    sponsor: {
+    identityPublicKeyHex: profile.identity.publicKeyHex,
+    deviceSigningKeyFingerprintHex: profile.device.signingKeyFingerprintHex,
+    deviceKeyAgreementKeyFingerprintHex:
+      profile.device.keyAgreementKeyFingerprintHex,
+    delegationId: profile.device.delegationId,
+  };
+
+  return async () => {
+    const view = await readPicoHomeDeviceLifecycle(linkClient, {
       identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
-      identityPublicKeyHex: profile.identity.publicKeyHex,
-      deviceSigningKeyFingerprintHex: profile.device.signingKeyFingerprintHex,
-      deviceKeyAgreementKeyFingerprintHex:
-        profile.device.keyAgreementKeyFingerprintHex,
-      delegationId: profile.device.delegationId,
-    },
-  });
+      sponsor: sender,
+    });
+    // The snapshot carries the identity it was read as, so the alarm can name
+    // it without a second source of truth (ADR 0112).
+    return {
+      picoIdentityFingerprintHex: profile.identity.keyFingerprintHex,
+      pendingRecovery: view.pendingRecovery,
+    };
+  };
 }

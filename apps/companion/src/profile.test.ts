@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -81,6 +81,22 @@ describe('Companion profile store (ADR 0113 C1)', () => {
       .toThrow('invalid_companion_core_url');
     expect(() => parsePicoCompanionProfile({ ...good, coreUrl: 'not a url' }))
       .toThrow('invalid_companion_core_url');
+  });
+
+  it('replaces the profile atomically and leaves no readable temporary behind', () => {
+    const directory = tempDir();
+    const path = join(directory, 'profile.json');
+    writePicoCompanionProfile(path, validProfile());
+
+    const replacement = {
+      ...validProfile(),
+      coreUrl: 'https://home.example.test:8443',
+    };
+    writePicoCompanionProfile(path, replacement);
+    expect(readPicoCompanionProfile(path)).toEqual(replacement);
+    // A leftover temporary would be a second, stale answer to "which Home
+    // does this device trust" sitting next to the real one.
+    expect(readdirSync(directory)).toEqual(['profile.json']);
   });
 
   it('refuses to write an invalid profile and to read a corrupt file', () => {
