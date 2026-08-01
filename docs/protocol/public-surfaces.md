@@ -80,7 +80,18 @@ head and active replacement set, `initiate` creates durable pending state only
 from a root-signed/target-co-signed total-replacement claim, and `complete`
 reveals state only after exact recovery id, claim digest and target binding
 match. `home.device.recovery.veto` remains normally authorized to a living
-same-identity device. These forms, the Recovery Card PDF generator and the
+same-identity device.
+
+ADR 0114 adds two further internal, unpublished operations,
+`home.identity.rotation.submit` and `home.identity.rotation.veto`. Both are
+normally authorized: a rotation must be carried by a currently delegated,
+active device of the rotating identity itself, and a veto by another such
+device. The submission carries the dual-signed `pico.identity.rotation.v1`
+record together with the successor root's own first-device delegation, and
+`home.device.lifecycle.read` reports a pending rotation the same way it
+reports a pending recovery, so the existing alarm carrier surfaces it without
+a new read surface. Accepting a rotation is a local act: a record accepted by
+another Home decides nothing here. These forms, the Recovery Card PDF generator and the
 Foundation state machine are local implementation surfaces, not Pico Link
 compatibility. A fully matching database backup from before consumption can
 still resurrect its in-window pending row until ADR 0110 R6 supplies an
@@ -201,6 +212,7 @@ home.share_envelope_removed
 home.device_recovered
 home.device_recovery_vetoed
 home.recovery_anchor_reseeded
+home.identity_root_rotation_vetoed
 ```
 
 Server-synthesized foundation event types (exported as `serverSynthesizedFoundationEventTypes`), appended by the server and never accepted on `POST /api/events`:
@@ -222,6 +234,7 @@ home.share_envelope_removed
 home.device_recovered
 home.device_recovery_vetoed
 home.recovery_anchor_reseeded
+home.identity_root_rotation_vetoed
 ```
 
 `memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller?, retentionPolicyRef? }`); an unknown `retentionPolicyRef` is rejected at write time, because the sweep's fail-safe rule would otherwise keep the item forever while the writer believed expiry was configured. The reference is stored with the item and does not appear in the event payload; the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.

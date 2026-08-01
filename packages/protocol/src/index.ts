@@ -22,6 +22,7 @@ export const foundationEventTypes = [
   'home.device_recovered',
   'home.device_recovery_vetoed',
   'home.recovery_anchor_reseeded',
+  'home.identity_root_rotation_vetoed',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -50,6 +51,7 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.device_recovered',
   'home.device_recovery_vetoed',
   'home.recovery_anchor_reseeded',
+  'home.identity_root_rotation_vetoed',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -250,6 +252,8 @@ export const picoLinkDirectOperations = [
   'home.device.lifecycle.submit',
   'home.device.recovery.submit',
   'home.device.recovery.veto',
+  'home.identity.rotation.submit',
+  'home.identity.rotation.veto',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];
@@ -1609,6 +1613,7 @@ export function validateFoundationEventPayload(
     || type === 'home.device_recovered'
     || type === 'home.device_recovery_vetoed'
     || type === 'home.recovery_anchor_reseeded'
+    || type === 'home.identity_root_rotation_vetoed'
   ) {
     const extraKey = firstUnexpectedKey(payload, []);
     if (extraKey !== undefined) {

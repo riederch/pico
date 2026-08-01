@@ -65,6 +65,7 @@ import {
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
+  type PicoIdentityRotationSignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
   type PicoReaderCustodyDomainRecord,
@@ -100,6 +101,7 @@ import {
   EventStore,
   type EventCursor,
   type PicoHomeClaimState,
+  type PicoIdentityRotationSuccessorFirstDevice,
   type PicoShareEnvelopeStoredRecord,
 } from './event-store.js';
 import type { MemoryContentCursor, MemoryItem, MemoryStore } from './memory-store.js';
@@ -1573,6 +1575,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                   store.picoHomeDeviceRecoveryPendingView(
                     principal.picoIdentityFingerprintHex,
                   ),
+                // ADR 0114 T4. A pending rotation ends this identity's whole
+                // device authority when its window runs out, so it belongs on
+                // the read the ADR 0112 carrier already performs - the alarm
+                // needs no second surface to find.
+                pendingRootRotation: store.picoIdentityRootRotationView(
+                  principal.picoIdentityFingerprintHex,
+                ),
               } as unknown as Record<string, unknown>,
             };
         }
@@ -1775,6 +1784,85 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             outcome: 'ok',
             result: { status: 'vetoed' },
           };
+        }
+        case 'home.identity.rotation.submit': {
+          if (
+            !hasExactKeys(args, [
+              'rotation',
+              'predecessorIdentityKeyRecord',
+              'successorIdentityKeyRecord',
+              'predecessorSignatureHex',
+              'successorSignatureHex',
+              'successorFirstDevice',
+            ])
+            || !isRecord(args.rotation)
+            || !isRecord(args.predecessorIdentityKeyRecord)
+            || !isRecord(args.successorIdentityKeyRecord)
+            || typeof args.predecessorSignatureHex !== 'string'
+            || typeof args.successorSignatureHex !== 'string'
+            || !isRecord(args.successorFirstDevice)
+          ) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const result = store.submitPicoIdentityRootRotation({
+            rotation: args.rotation as unknown as PicoIdentityRotationSignatureInput,
+            predecessorIdentityKeyRecord:
+              args.predecessorIdentityKeyRecord as unknown as PicoIdentityKeyRecordSignatureInput,
+            successorIdentityKeyRecord:
+              args.successorIdentityKeyRecord as unknown as PicoIdentityKeyRecordSignatureInput,
+            predecessorSignatureHex: args.predecessorSignatureHex,
+            successorSignatureHex: args.successorSignatureHex,
+            successorFirstDevice:
+              args.successorFirstDevice as unknown as PicoIdentityRotationSuccessorFirstDevice,
+            sender: principal,
+            sodium,
+          });
+          if (!result.ok) {
+            return { outcome: result.reason, result: {} };
+          }
+          app.log.warn(
+            {
+              rotationId: result.rotation.rotationId,
+              predecessorIdentityFingerprintHex:
+                result.rotation.predecessorIdentityFingerprintHex,
+              successorIdentityFingerprintHex:
+                result.rotation.successorIdentityFingerprintHex,
+              effectiveAt: result.rotation.effectiveAt,
+            },
+            'A Pico identity root rotation is pending; when its veto window '
+            + 'runs out the predecessor root authorizes nothing further.',
+          );
+          return {
+            outcome: 'rotation_pending',
+            result: { ...result.rotation } as unknown as Record<string, unknown>,
+          };
+        }
+        case 'home.identity.rotation.veto': {
+          if (
+            !hasExactKeys(args, ['rotationId'])
+            || typeof args.rotationId !== 'string'
+          ) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const result = store.vetoPicoIdentityRootRotation({
+            rotationId: args.rotationId,
+            sender: principal,
+            sodium,
+          });
+          if (!result.ok) {
+            return { outcome: result.reason, result: {} };
+          }
+          appendServerEvent('home.identity_root_rotation_vetoed', {});
+          app.log.warn(
+            {
+              rotationId: args.rotationId,
+              picoIdentityFingerprintHex:
+                principal.picoIdentityFingerprintHex,
+            },
+            'A pending Pico identity root rotation was vetoed by another '
+            + 'living device of the same identity.',
+          );
+          return { outcome: 'ok', result: { status: 'vetoed' } };
         }
         default: {
           return { outcome: 'unknown_operation', result: {} };

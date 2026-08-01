@@ -146,6 +146,7 @@ describe('Pico protocol types', () => {
       'home.device_recovered',
       'home.device_recovery_vetoed',
       'home.recovery_anchor_reseeded',
+      'home.identity_root_rotation_vetoed',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -164,6 +165,7 @@ describe('Pico protocol types', () => {
       'home.device_recovered',
       'home.device_recovery_vetoed',
       'home.recovery_anchor_reseeded',
+      'home.identity_root_rotation_vetoed',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');

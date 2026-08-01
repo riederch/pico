@@ -76,6 +76,7 @@ home.share_envelope_removed
 home.device_recovered
 home.device_recovery_vetoed
 home.recovery_anchor_reseeded
+home.identity_root_rotation_vetoed
 ```
 
 L1 does not imply sync compatibility, Pico Link compatibility, Pico Home hosting compatibility or commercial permission.

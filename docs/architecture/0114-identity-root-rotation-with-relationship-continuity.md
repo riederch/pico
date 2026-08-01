@@ -7,8 +7,9 @@ Accepted; partially implemented. Gate T1 - the canonical
 vectors - landed with this ADR, and gate T2 - the Foundation projection,
 the device co-signature, the veto window and boot re-verification - and
 gate T3 - the successor's first device and the re-issue debt - and gate
-T5 - what a second Home may assume - have since followed; T4 is open on
-ADR 0105 B2/B3. This ADR closes the
+T5 - what a second Home may assume - have since followed, as has T4's
+Foundation half; T4's person-side ceremonies stay open on ADR 0105
+B2/B3. This ADR closes the
 sharpest residual ADR 0110 named: today the only answer to a stolen
 Recovery Card is explicit identity replacement, which throws away every
 relationship the person had. Both decisions taken here were made
@@ -230,9 +231,19 @@ so rather than let a person discover it in an emergency.
   than a silence. Re-issue itself needs no new mechanism: the unchanged
   membership and read-grant ceremonies name the successor as their
   subject, and a grant the controller has not re-issued stays unreadable.
-- **T4 - Ceremonies and product surface (open):** the person-side
-  rotation ceremony with ADR 0106 rendering and ADR 0099 approvals, the
-  veto surface, and forced Recovery Card re-issue - as ADR 0112
+- **T4 - Ceremonies and product surface (Foundation half implemented;
+  person side open, needs ADR 0105 B2/B3):** the rotation and its veto
+  are reachable as authenticated Pico Link Direct operations
+  (`home.identity.rotation.submit`, `home.identity.rotation.veto`), both
+  normally authorized, so a device carries them exactly as it carries a
+  recovery veto. A pending rotation rides the lifecycle read the ADR
+  0112 alarm carrier already performs, rather than getting a second read
+  surface nobody would poll. Proven end to end through sealed envelopes
+  against a running Home: a member's device submits, another device sees
+  the alarm, the co-signing device is refused its own veto, the other
+  device vetoes, and the refusal is audited content-free. Open: the
+  person-side ceremony with ADR 0106 rendering and ADR 0099 approvals,
+  the veto surface, and forced Recovery Card re-issue - as ADR 0112
   surfaces, not as a terminal.
 - **T5 - Cross-Home honesty (implemented):** a rotation record names no
   Home, so it travels; the decision does not. Every read and write of a
@@ -302,7 +313,13 @@ Negative and residual:
 - Triggers ADR `0078` rotation debt where a rotated reader loses grants;
   it does not replace domain-key rotation.
 - Surfaces through ADR `0112`, never through a terminal or the
-  Foundation HTTP surface.
+  Foundation HTTP surface; its alarm rides the same authenticated
+  lifecycle read the recovery alarm does, so the carrier gains a case
+  rather than a surface.
+- Adds two operations to ADR `0107`'s closed Pico Link Direct set, both
+  normally authorized: neither is pre-authority, because a rotation
+  without a living device of the rotating identity is exactly what this
+  ADR refuses.
 
 ## References
 
@@ -311,4 +328,5 @@ Negative and residual:
 - [ADR 0079](0079-pico-identity-and-device-key-threat-model-and-primitive-direction.md)
 - [ADR 0080](0080-pico-home-host-key-and-move-in-claim-threat-model-and-ceremony-direction.md)
 - [ADR 0110](0110-recovery-card-and-time-locked-zero-device-recovery.md)
+- [ADR 0107](0107-pico-link-direct-envelopes-to-the-own-home.md)
 - [ADR 0112](0112-recovery-product-surfaces-in-the-background-companion.md)

@@ -27,6 +27,7 @@ import {
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoIdentityRotationSignatureInput,
   buildPicoLinkDirectRequestSignatureInput,
   buildPicoLinkDirectResponseSignatureInput,
   deviceSeenStatuses,
@@ -69,6 +70,7 @@ import {
   type PicoIdentityDelegationScope,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
   type PicoIdentityRevocationSignatureInput,
+  type PicoIdentityRotationSignatureInput,
   type PicoLinkDirectOperation,
   type PicoLinkDirectResponseSignatureInput,
 } from '@pico/protocol';
@@ -1995,6 +1997,287 @@ describe('Pico Home Core app', () => {
       socket.terminate();
       await app.close();
     }
+  });
+
+  it('carries a Pico identity root rotation and its veto over Pico Link Direct', async () => {
+    const app = await buildAppWithCapturedLog();
+    const { setup, sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const homeId = (claimResponse.claimState as { homeId: string }).homeId;
+    const operatorAuth = {
+      authorization: `Bearer ${(await app.inject({
+        method: 'POST',
+        url: '/api/auth/bootstrap',
+        payload: {
+          bootstrapCode: readBootstrapCode(app),
+          passphrase: OPERATOR_PASSPHRASE,
+        },
+      })).json().session as string}`,
+    };
+
+    const identityKey = (pair: { publicKey: Uint8Array }): PicoIdentityKeyRecordSignatureInput => ({
+      suite: picoIdentitySuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: bytesToHex(pair.publicKey),
+    });
+    // The rotating identity is a member: the founder's root is Home handover
+    // and ADR 0114 refuses it.
+    const member = sodium.crypto_sign_keypair();
+    const memberKeyRecord = identityKey(member);
+    const memberFingerprint = keyRecordFingerprintHex(memberKeyRecord);
+    const successor = sodium.crypto_sign_keypair();
+    const successorKeyRecord = identityKey(successor);
+
+    const membership: PicoHomeMembershipSignatureInput = {
+      suite: picoIdentitySuite,
+      credentialId: 'member_rotation_link_0001',
+      homeId,
+      issuerPicoIdentityFingerprintHex:
+        sealedClaim.claim.claimantIdentityKeyFingerprintHex,
+      subjectPicoIdentityFingerprintHex: memberFingerprint,
+      hostSigningKeyFingerprintHex: sealedClaim.claim.hostSigningKeyFingerprintHex,
+      role: 'home_member',
+      scopes: ['host.use', 'packet.receive'],
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validUntil: '2027-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000001',
+    };
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/home/memberships',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeMembershipCredentialSchema,
+        membership,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeMembershipSignatureInput(membership),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    })).statusCode).toBe(201);
+
+    const enrollDevice = async (index: number) => {
+      const signing = sodium.crypto_sign_keypair();
+      const signingKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+        suite: picoIdentitySuite,
+        keyRole: 'device_signing',
+        publicKeyHex: bytesToHex(signing.publicKey),
+      };
+      const agreement = sodium.crypto_box_keypair();
+      const agreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+        suite: picoIdentitySuite,
+        keyRole: 'device_key_agreement',
+        publicKeyHex: bytesToHex(agreement.publicKey),
+      };
+      const record: PicoIdentityDelegationSignatureInput = {
+        suite: picoIdentitySuite,
+        delegationId: `delegation_rotation_link_${index}`,
+        issuerIdentityKeyFingerprintHex: memberFingerprint,
+        subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(signingKeyRecord),
+        subjectKeyAgreementKeyFingerprintHex:
+          keyRecordFingerprintHex(agreementKeyRecord),
+        scopes: ['surface_session'],
+        validFrom: '2026-01-01T00:00:00.000Z',
+        validUntil: '2027-01-01T00:00:00.000Z',
+        lifecycleOrder: `seq:000000000000000${index + 2}`,
+      };
+      const signedDelegation = {
+        record,
+        signatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoIdentityDelegationSignatureInput(record),
+          member.privateKey,
+        )),
+      };
+      const challenge = (await app.inject({
+        method: 'POST',
+        url: '/api/auth/identity-challenges',
+      })).json() as { challengeId: string; verifierNonceHex: string; verifierContext: string };
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/auth/identity-session',
+        payload: {
+          challengeId: challenge.challengeId,
+          identityKeyRecord: memberKeyRecord,
+          deviceSigningKeyRecord: signingKeyRecord,
+          deviceKeyAgreementKeyRecord: agreementKeyRecord,
+          delegation: signedDelegation,
+          revocations: [],
+          possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoIdentityPossessionSignatureInput({
+              suite: picoIdentitySuite,
+              subjectKeyFingerprintHex: keyRecordFingerprintHex(signingKeyRecord),
+              verifierNonceHex: challenge.verifierNonceHex,
+              verifierContext: challenge.verifierContext,
+            }),
+            signing.privateKey,
+          )),
+        },
+      })).statusCode).toBe(201);
+      return {
+        signingKeyRecord,
+        signingPrivateKey: signing.privateKey,
+        agreementKeyRecord,
+        delegationId: record.delegationId,
+      };
+    };
+    const devices = [await enrollDevice(0), await enrollDevice(1)];
+
+    const linkRequest = async (
+      operation: PicoLinkDirectOperation,
+      args: Record<string, unknown>,
+      sender: (typeof devices)[number],
+    ): Promise<{
+      response: PicoLinkDirectResponseSignatureInput;
+      result: Record<string, unknown>;
+    }> => {
+      const replyKey = sodium.crypto_box_keypair();
+      const createdAtMs = Date.now();
+      const request = {
+        suite: picoIdentitySuite,
+        requestId: `linkreq_${randomHex(16)}`,
+        operation,
+        hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+        senderIdentityKeyFingerprintHex: memberFingerprint,
+        senderDeviceSigningKeyFingerprintHex:
+          keyRecordFingerprintHex(sender.signingKeyRecord),
+        senderDeviceKeyAgreementKeyFingerprintHex:
+          keyRecordFingerprintHex(sender.agreementKeyRecord),
+        senderDelegationId: sender.delegationId,
+        replyPublicKeyHex: bytesToHex(replyKey.publicKey),
+        argumentsDigestHex: picoLinkDirectPayloadDigestHex(sodium, args),
+        createdAt: new Date(createdAtMs).toISOString(),
+        expiresAt: new Date(createdAtMs + 30_000).toISOString(),
+      };
+      const linked = await app.inject({
+        method: 'POST',
+        url: '/api/home/link',
+        payload: {
+          schema: picoLinkDirectRequestEnvelopeSchema,
+          sealedRequestHex: bytesToHex(sodium.crypto_box_seal(
+            Buffer.from(JSON.stringify({
+              schema: picoLinkDirectRequestEnvelopeSchema,
+              request,
+              senderIdentityKeyRecord: memberKeyRecord,
+              senderDeviceSigningKeyRecord: sender.signingKeyRecord,
+              arguments: args,
+              senderSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+                buildPicoLinkDirectRequestSignatureInput(request),
+                sender.signingPrivateKey,
+              )),
+            }), 'utf8'),
+            hexToBytes(setup.host.keyAgreementPublicKeyHex),
+          )),
+        },
+      });
+      expect(linked.statusCode).toBe(200);
+      return JSON.parse(new TextDecoder().decode(sodium.crypto_box_seal_open(
+        hexToBytes((linked.json() as { sealedResponseHex: string }).sealedResponseHex),
+        replyKey.publicKey,
+        replyKey.privateKey,
+      ))) as {
+        response: PicoLinkDirectResponseSignatureInput;
+        result: Record<string, unknown>;
+      };
+    };
+
+    const firstDeviceDelegation: PicoIdentityDelegationSignatureInput = {
+      suite: picoIdentitySuite,
+      delegationId: 'delegation_rotation_link_successor',
+      issuerIdentityKeyFingerprintHex: keyRecordFingerprintHex(successorKeyRecord),
+      subjectSigningKeyFingerprintHex:
+        keyRecordFingerprintHex(devices[0].signingKeyRecord),
+      subjectKeyAgreementKeyFingerprintHex:
+        keyRecordFingerprintHex(devices[0].agreementKeyRecord),
+      scopes: ['surface_session'],
+      validFrom: '2026-01-01T00:00:00.000Z',
+      validUntil: '2027-01-01T00:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000009',
+    };
+    const rotation: PicoIdentityRotationSignatureInput = {
+      suite: picoIdentitySuite,
+      rotationId: 'rotation_link_0001',
+      predecessorIdentityKeyFingerprintHex: memberFingerprint,
+      successorIdentityKeyFingerprintHex:
+        keyRecordFingerprintHex(successorKeyRecord),
+      reasonCategory: 'suspected_compromise',
+      rotatedAt: new Date().toISOString(),
+      lifecycleOrder: 'seq:0000000000000009',
+    };
+    const rotationBytes = buildPicoIdentityRotationSignatureInput(rotation);
+    const rotationArguments = {
+      rotation,
+      predecessorIdentityKeyRecord: memberKeyRecord,
+      successorIdentityKeyRecord: successorKeyRecord,
+      predecessorSignatureHex: bytesToHex(
+        sodium.crypto_sign_detached(rotationBytes, member.privateKey),
+      ),
+      successorSignatureHex: bytesToHex(
+        sodium.crypto_sign_detached(rotationBytes, successor.privateKey),
+      ),
+      successorFirstDevice: {
+        delegation: {
+          record: firstDeviceDelegation,
+          signatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoIdentityDelegationSignatureInput(firstDeviceDelegation),
+            successor.privateKey,
+          )),
+        },
+        deviceKeyAgreementKeyRecord: devices[0].agreementKeyRecord,
+      },
+    };
+
+    const submitted = await linkRequest(
+      'home.identity.rotation.submit',
+      rotationArguments as unknown as Record<string, unknown>,
+      devices[0],
+    );
+    expect(submitted.response.outcome).toBe('rotation_pending');
+    expect(submitted.result).toMatchObject({
+      rotationId: 'rotation_link_0001',
+      status: 'pending',
+      successorFirstDeviceDelegationId: 'delegation_rotation_link_successor',
+    });
+
+    // The alarm rides the read the ADR 0112 carrier already performs, so a
+    // living device learns of the rotation without a second surface.
+    expect((await linkRequest('home.device.lifecycle.read', {}, devices[1])).result)
+      .toMatchObject({
+        homeId,
+        pendingRootRotation: { rotationId: 'rotation_link_0001', status: 'pending' },
+      });
+
+    // The device that authorized the rotation is not an independent objection
+    // to it, and the Link surface adds no exception to that.
+    expect((await linkRequest(
+      'home.identity.rotation.veto',
+      { rotationId: 'rotation_link_0001' },
+      devices[0],
+    )).response.outcome).toBe('veto_requires_another_device');
+
+    const vetoed = await linkRequest(
+      'home.identity.rotation.veto',
+      { rotationId: 'rotation_link_0001' },
+      devices[1],
+    );
+    expect(vetoed.response.outcome).toBe('ok');
+    expect(vetoed.result).toEqual({ status: 'vetoed' });
+    expect((await linkRequest('home.device.lifecycle.read', {}, devices[1])).result)
+      .toMatchObject({ pendingRootRotation: null });
+
+    const events = (await app.inject({
+      method: 'GET',
+      url: '/api/events',
+      headers: operatorAuth,
+    })).json().events as { type: string; payload: unknown }[];
+    const vetoEvents = events.filter(
+      (event) => event.type === 'home.identity_root_rotation_vetoed',
+    );
+    expect(vetoEvents).toHaveLength(1);
+    // Audited, but content-free: that a rotation was refused is operational
+    // history; who and which root are not the audit stream's business.
+    expect(vetoEvents[0].payload).toEqual({});
+
+    await app.close();
   });
 
   it('activates an issuer-signed membership credential and audits it content-free', async () => {
