@@ -2,14 +2,11 @@
 
 ## Status
 
-Accepted; partially implemented. Gate U1 - the continuity record over the
-published `pico.home.continuity.v1` bytes with triple-signature
-verification and vectors - and gate U2 - the Foundation projection with
-era-aware verification and boot re-proving - land with this ADR; U3's
-Foundation half - key staging, the two Link operations, the crash-safe
-custody swap and the audit - has since followed. U3's ceremony-client
-half (ADR 0106 rendering, ADR 0099 approval, the CLI wrapper) and U4
-(client re-pin) are open. The
+Accepted; partially implemented. Gates U1 (continuity record and
+verification), U2 (Foundation projection) and U3 (staging, Link
+operations, crash-safe custody swap, and the approval-gated ceremony
+through the transitional CLI) are implemented; U4 (client re-pin beyond
+the accepting client, member notification) is open. The
 era rule and this block's scope were decided explicitly by the user on
 2026-08-01: the accepted chain vouches for records of earlier eras, and
 clients re-pin in a later block.
@@ -49,9 +46,9 @@ rotation; what refuses a rotation; and boot re-proving.
 
 Does not cover:
 
-- the ceremony client - the Home Host Pico's ADR 0099 approval over ADR
-  0106 rendered statements and the transitional CLI wrapper (U3's open
-  half; staging, the Link operations and the custody swap are in);
+- a product ceremony surface - the transitional CLI is the interim
+  person surface, as with every ADR 0112 S1 wrapper; the companion
+  ceremony and the forced card re-issue prompt stay ADR 0112 S3 work;
 - client re-pin - how a vault daemon, companion or member device learns
   and verifies the new head (gate U4), including member notification,
   which stays the ADR 0080 M3 residual until then;
@@ -161,10 +158,19 @@ key never orphans the evidence it once signed.
   the proven head - and only toward it. The retired private keys go with
   the replaced files: nothing new is ever signed with them, and
   historical verification needs only the public keys the chain carries.
-  Open: the ceremony client - the Home Host Pico's acceptance as an ADR
-  0099 approval over ADR 0106 rendered statements, the transitional CLI
-  wrapper, and the forced Recovery Card re-issue prompt as an ADR 0112
-  surface rather than a result flag.
+  The ceremony client is implemented as `pico-vault ceremony
+  rotate-host-key` in the S1 idiom: link transport only, the acceptance
+  approval-gated over the ADR 0106 statement that names everything it
+  retires - including every printed Recovery Card going stale - and two
+  client-side trust checks a lying Core would otherwise slip past: the
+  acceptance must be the signer's own to give, and the proposal must
+  retire exactly the keys this client is pinned to. The reply to the
+  submit is deliberately the old era's last message: custody swaps only
+  after it is sealed and signed, so the client verifies it under the pin
+  it still holds - proven over real processes, because the daemon's Link
+  client refuses unverifiable replies. The printed `newHostPublicKeys`
+  re-pin the accepting client; the forced card re-issue *prompt* as a
+  product surface stays ADR 0112 S3 work, and the CLI warns instead.
 - **U4 - Client re-pin (open):** vault-daemon and companion profiles
   verify a presented chain against their existing pin and follow it;
   member devices learn of the rotation and re-accept; the Pico Link

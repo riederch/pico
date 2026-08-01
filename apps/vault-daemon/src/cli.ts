@@ -12,6 +12,8 @@ import {
   type VaultSodium,
 } from '@pico/vault';
 import {
+  picoHomeContinuityReasonCategories,
+  picoHomeContinuityRecordSchema,
   picoHomeMembershipCredentialSchema,
   picoHomeSignatureInputLabels,
   picoIdentityDelegationScopes,
@@ -36,6 +38,8 @@ import {
   type PicoIdentityDelegationScope,
   type PicoIdentityDelegationSignatureInput,
   type PicoHomeMembershipScope,
+  type PicoHomeContinuityReasonCategory,
+  type PicoHomeContinuitySignatureInput,
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
   type PicoIdentityReaderKeyFreshnessStatus,
@@ -91,6 +95,7 @@ const ceremonySubcommands = [
   'initiate-recovery',
   'complete-recovery',
   'veto-recovery',
+  'rotate-host-key',
 ] as const;
 type CeremonySubcommand = typeof ceremonySubcommands[number];
 
@@ -357,6 +362,20 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'target-delegation-id',
     'target-signing-fingerprint',
     'target-agreement-fingerprint',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'host-signing-public-key',
+    'host-agreement-public-key',
+  ],
+  'rotate-host-key': [
+    'vault-home',
+    'fingerprint',
+    'core-url',
+    'reason',
+    'transport',
+    'link-signing-fingerprint',
+    'link-agreement-fingerprint',
+    'link-delegation-id',
     'host-signing-fingerprint',
     'host-agreement-fingerprint',
     'host-signing-public-key',
@@ -1161,6 +1180,39 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
           delegation: readRecordFile(requireFlag(invocation.flags, 'delegation'), 'delegation'),
         }));
         process.stdout.write(`${JSON.stringify(opened)}\n`);
+        return;
+      }
+      if (invocation.ceremony === 'rotate-host-key') {
+        const reasonFlag = invocation.flags.get('reason') ?? 'host_key_rotated';
+        if (!(picoHomeContinuityReasonCategories as readonly string[]).includes(reasonFlag)) {
+          throw new Error('invalid_continuity_reason');
+        }
+        if (ceremonyTransport(invocation.flags) !== 'link') {
+          // Rotation is carried by the founder's own authenticated device;
+          // there is no local path to a Home's host keys on purpose.
+          throw new Error('rotate_host_key_requires_link_transport');
+        }
+        const rotated = await withClient(vaultHomePath, async (client) => {
+          const coreUrl = requireFlag(invocation.flags, 'core-url');
+          const linkClient = await createCeremonyLinkClient(
+            invocation.flags,
+            client,
+            sodium as unknown as VaultSodium,
+            coreUrl,
+          );
+          if (linkClient === undefined) {
+            throw new Error('rotate_host_key_requires_link_transport');
+          }
+          return await runRotateHostKeyCeremony({
+            client,
+            linkClient,
+            signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
+            pinnedHostSigningKeyFingerprintHex:
+              requireFlag(invocation.flags, 'host-signing-fingerprint'),
+            reasonCategory: reasonFlag as PicoHomeContinuityReasonCategory,
+          });
+        });
+        process.stdout.write(`${JSON.stringify(rotated)}\n`);
         return;
       }
       if (invocation.ceremony === 'issue-membership') {
@@ -2164,6 +2216,108 @@ async function runPublishCheckpointCeremony(input: {
  * Foundation and never in a Vault. So this command deliberately sends an
  * issuer statement, not a finished credential.
  */
+/**
+ * ADR 0115 U3. The person-side half of a host-key rotation.
+ *
+ * The Foundation stages the successor keys and returns a proposal already
+ * carrying both host signatures - custody signs what custody holds, so the
+ * only signature that can come back from here is the one custody cannot
+ * make: the Home Host Pico's acceptance, approval-gated over the ADR 0106
+ * statement that names everything the acceptance retires.
+ */
+async function runRotateHostKeyCeremony(input: {
+  client: PicoVaultDaemonClient;
+  linkClient: PicoLinkDirectClient;
+  signerKeyFingerprintHex: string;
+  pinnedHostSigningKeyFingerprintHex: string;
+  reasonCategory: PicoHomeContinuityReasonCategory;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('continuity_acceptor_not_unlocked');
+  }
+
+  const prepared = await input.linkClient.request('home.host.rotation.prepare', {
+    reasonCategory: input.reasonCategory,
+  });
+  if (prepared.outcome !== 'ok') {
+    throw new Error(`host_rotation_prepare_rejected:${prepared.outcome}`);
+  }
+  const proposalKeys = [
+    'continuity',
+    'outgoingHostSigningKeyRecord',
+    'incomingHostSigningKeyRecord',
+    'outgoingHostSignatureHex',
+    'incomingHostSignatureHex',
+  ];
+  const resultKeys = Object.keys(prepared.result);
+  if (resultKeys.length !== proposalKeys.length
+    || proposalKeys.some((key) => !(key in prepared.result))) {
+    throw new Error('host_rotation_proposal_malformed');
+  }
+  const proposal = prepared.result as unknown as {
+    continuity: PicoHomeContinuitySignatureInput;
+    outgoingHostSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    incomingHostSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    outgoingHostSignatureHex: string;
+    incomingHostSignatureHex: string;
+  };
+  // The acceptance about to be approved must be this root's to give, and it
+  // must retire exactly the keys this client is pinned to - a proposal that
+  // retires anything else is asking the person to approve a rotation of a
+  // Home they never trusted under that key.
+  if (proposal.continuity.homeHostPicoIdentityFingerprintHex
+    !== signer.keyFingerprintHex) {
+    throw new Error('host_rotation_acceptor_mismatch');
+  }
+  if (proposal.continuity.outgoingHostSigningKeyFingerprintHex
+    !== input.pinnedHostSigningKeyFingerprintHex) {
+    throw new Error('host_rotation_retires_unpinned_key');
+  }
+
+  process.stderr.write(
+    'Approve the host-key rotation on the terminal holding the identity '
+    + 'unlock. Approving retires the current host keys and makes every '
+    + 'printed Recovery Card stale.\n',
+  );
+  const acceptance = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    label: picoHomeSignatureInputLabels.continuity,
+    fields: proposal.continuity as unknown as Record<string, unknown>,
+  });
+
+  const submitted = await input.linkClient.request('home.host.continuity.submit', {
+    record: {
+      schema: picoHomeContinuityRecordSchema,
+      continuity: proposal.continuity,
+      outgoingHostSigningKeyRecord: proposal.outgoingHostSigningKeyRecord,
+      incomingHostSigningKeyRecord: proposal.incomingHostSigningKeyRecord,
+      homeHostPicoIdentityKeyRecord: {
+        suite: picoIdentitySuite,
+        keyRole: 'pico_identity',
+        publicKeyHex: signer.publicKeyHex,
+      },
+      outgoingHostSignatureHex: proposal.outgoingHostSignatureHex,
+      incomingHostSignatureHex: proposal.incomingHostSignatureHex,
+      homeHostPicoSignatureHex: acceptance.signatureHex,
+      createdAt: new Date().toISOString(),
+    },
+  });
+  if (submitted.outcome !== 'ok') {
+    throw new Error(`host_rotation_submit_rejected:${submitted.outcome}`);
+  }
+
+  process.stderr.write(
+    'Host keys rotated. Use the printed newHostPublicKeys for every future '
+    + 'invocation - the old pins are retired - and re-issue the Recovery '
+    + 'Card now (ADR 0110/0115).\n',
+  );
+  return submitted.result;
+}
+
 async function runIssueMembershipCeremony(input: {
   client: PicoVaultDaemonClient;
   coreUrl: string;

@@ -475,6 +475,12 @@ const signableLabelsByKeyRole: Record<PicoVaultPersonKeyRole, ReadonlySet<string
     // (`home-setup.ts`), never in a person's Vault.
     picoHomeSignatureInputLabels.membership,
     picoHomeSignatureInputLabels.membershipLifecycle,
+    // ADR 0115 (ADR 0080 H7): the acceptance half of host-key continuity.
+    // The two host signatures on the same bytes are custody's act and live in
+    // the Foundation; the acceptance is the person's - it is exactly the
+    // signature a thief of the host disk cannot produce, so it belongs to
+    // the identity root and to nothing else.
+    picoHomeSignatureInputLabels.continuity,
     picoIdentityReaderKeyFreshnessSignatureInputLabel,
     picoShareCanonicalLabels.envelope,
     picoReaderCustodyCanonicalLabels.domain,

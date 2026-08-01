@@ -1,4 +1,6 @@
 import {
+  buildPicoHomeContinuitySignatureInput,
+  picoHomeSignatureInputLabels,
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -11,6 +13,7 @@ import {
   type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceRecoveryClaimSignatureInput,
   type PicoHomeDeviceRecoveryPrepareSignatureInput,
+  type PicoHomeContinuitySignatureInput,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
@@ -74,6 +77,37 @@ describe('ADR 0109 device lifecycle approval rendering', () => {
     )).toBe(
       'Revoke delegation delegation_render_device_0001 (device_retired). '
       + 'Warning: this may close the last remote device path.',
+    );
+  });
+
+  it('renders the host-key rotation with its whole consequence (ADR 0115)', () => {
+    const continuity: PicoHomeContinuitySignatureInput = {
+      suite: picoIdentitySuite,
+      continuityId: 'hostrot_render_0001',
+      homeId: 'home_render_0001',
+      outgoingHostSigningKeyFingerprintHex: '44'.repeat(32),
+      outgoingHostKeyAgreementKeyFingerprintHex: '55'.repeat(32),
+      incomingHostSigningKeyFingerprintHex: '66'.repeat(32),
+      incomingHostKeyAgreementKeyFingerprintHex: '77'.repeat(32),
+      homeHostPicoIdentityFingerprintHex: '88'.repeat(32),
+      reasonCategory: 'host_key_rotated',
+      changedAt: '2026-08-02T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000002',
+    };
+
+    expect(buildPicoVaultSignatureInputFromFields(
+      picoHomeSignatureInputLabels.continuity,
+      continuity,
+    )).toEqual(buildPicoHomeContinuitySignatureInput(continuity));
+    // The acceptance is the one signature a stolen host disk cannot produce,
+    // so the sentence it approves must carry everything it retires.
+    expect(renderPicoVaultApprovalStatement(
+      picoHomeSignatureInputLabels.continuity,
+      continuity,
+    )).toBe(
+      'Rotate the host keys of Home home_render_0001 (host_key_rotated): '
+      + 'retire 444444444444… and accept 666666666666… as the only host key. '
+      + 'Every printed Recovery Card becomes stale and must be re-issued.',
     );
   });
 

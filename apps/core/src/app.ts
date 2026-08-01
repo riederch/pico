@@ -1578,6 +1578,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   app.post('/api/home/link', {
     bodyLimit: MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES,
   }, async (request, reply) => {
+    // ADR 0115 U3. The reply to a host-rotation submit is the last message of
+    // the old era: the client can only verify it under the pin it still
+    // holds, so custody must not swap until the response is sealed and
+    // signed. The handler schedules the swap; it runs after the envelope is
+    // built, and a crash in between is completed at the next boot.
+    let afterReply: (() => void) | undefined;
     const handled = await linkIntake.handle(request.body, async (operation, args, principal) => {
       switch (operation) {
         case 'home.setup.read': {
@@ -2054,10 +2060,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             return { outcome: recorded.reason, result: {} };
           }
           if (recorded.inserted) {
-            // The link is durable; now custody follows it. A crash between
-            // the two is completed at the next boot against the proven head.
-            homeHostKeyStore.promoteStagedRotation();
-            homeHostKeys = homeHostKeyStore.load(sodium);
+            // The link is durable; custody follows it only after the reply is
+            // sealed and signed, because that reply must verify under the
+            // retiring key - it is the old era's last message. A crash before
+            // the deferred swap is completed at the next boot against the
+            // proven head.
+            afterReply = () => {
+              homeHostKeyStore.promoteStagedRotation();
+              homeHostKeys = homeHostKeyStore.load(sodium);
+            };
             appendServerEvent('home.host_key_rotated', {});
             app.log.warn(
               {
@@ -2077,16 +2088,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               link: recorded.link,
               // The new public bundle rides the result so the accepting
               // client can re-pin without a second trust source: it is the
-              // same channel the acceptance traveled.
-              newHostPublicKeys: homeHostKeys === undefined ? null : {
-                signingPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
-                signingKeyFingerprintHex:
-                  homeHostKeys.publicBundle.signingKeyFingerprintHex,
-                keyAgreementPublicKeyHex:
-                  homeHostKeys.publicBundle.keyAgreementPublicKeyHex,
-                keyAgreementKeyFingerprintHex:
-                  homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
-              },
+              // same channel the acceptance traveled. Read from the staged
+              // (or already-promoted) pair - custody itself swaps only after
+              // this reply is sealed under the retiring key.
+              newHostPublicKeys: (() => {
+                const incoming = homeHostKeyStore.loadStagedRotation(sodium)
+                  ?? homeHostKeyStore.load(sodium);
+                return incoming === undefined ? null : {
+                  signingPublicKeyHex: incoming.publicBundle.signingPublicKeyHex,
+                  signingKeyFingerprintHex:
+                    incoming.publicBundle.signingKeyFingerprintHex,
+                  keyAgreementPublicKeyHex:
+                    incoming.publicBundle.keyAgreementPublicKeyHex,
+                  keyAgreementKeyFingerprintHex:
+                    incoming.publicBundle.keyAgreementKeyFingerprintHex,
+                };
+              })(),
               recoveryCardsStale: true,
             } as unknown as Record<string, unknown>,
           };
@@ -2104,6 +2121,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return sendNoStore(reply.code(400), { error: handled.reason });
     }
 
+    afterReply?.();
     return sendNoStore(reply.code(200), handled.envelope);
   });
 

@@ -2086,9 +2086,11 @@ describe('Pico Home Core app', () => {
       args: Record<string, unknown>,
       hostPins: {
         signingKeyFingerprintHex: string;
+        signingPublicKeyHex: string;
         keyAgreementPublicKeyHex: string;
       } = {
         signingKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+        signingPublicKeyHex: setup.host.signingPublicKeyHex,
         keyAgreementPublicKeyHex: setup.host.keyAgreementPublicKeyHex,
       },
     ): Promise<{
@@ -2145,7 +2147,16 @@ describe('Pico Home Core app', () => {
       ))) as {
         response: PicoLinkDirectResponseSignatureInput;
         result: Record<string, unknown>;
+        hostSignatureHex: string;
       };
+      // The client can only trust a response it can verify under the pin it
+      // holds - the rotation submit's reply is the old era's last message and
+      // must verify under the retiring key.
+      expect(sodium.crypto_sign_verify_detached(
+        hexToBytes(opened.hostSignatureHex),
+        buildPicoLinkDirectResponseSignatureInput(opened.response),
+        hexToBytes(hostPins.signingPublicKeyHex),
+      )).toBe(true);
       return { statusCode: 200, ...opened };
     };
 
@@ -2219,6 +2230,7 @@ describe('Pico Home Core app', () => {
       link: { chainPosition: number };
       newHostPublicKeys: {
         signingKeyFingerprintHex: string;
+        signingPublicKeyHex: string;
         keyAgreementPublicKeyHex: string;
       };
       recoveryCardsStale: boolean;
@@ -2233,6 +2245,8 @@ describe('Pico Home Core app', () => {
     const reRead = await linkRequest('home.device.lifecycle.read', {}, {
       signingKeyFingerprintHex:
         rotation.newHostPublicKeys.signingKeyFingerprintHex,
+      signingPublicKeyHex:
+        rotation.newHostPublicKeys.signingPublicKeyHex,
       keyAgreementPublicKeyHex:
         rotation.newHostPublicKeys.keyAgreementPublicKeyHex,
     });
@@ -2247,6 +2261,8 @@ describe('Pico Home Core app', () => {
     }, {
       signingKeyFingerprintHex:
         rotation.newHostPublicKeys.signingKeyFingerprintHex,
+      signingPublicKeyHex:
+        rotation.newHostPublicKeys.signingPublicKeyHex,
       keyAgreementPublicKeyHex:
         rotation.newHostPublicKeys.keyAgreementPublicKeyHex,
     })).response?.outcome).toBe('ok');

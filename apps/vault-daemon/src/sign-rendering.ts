@@ -1,4 +1,5 @@
 import {
+  buildPicoHomeContinuitySignatureInput,
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -31,6 +32,7 @@ import {
   picoReaderCustodyCanonicalLabels,
   picoShareCanonicalLabels,
   type PicoHomeClaimSignatureInput,
+  type PicoHomeContinuitySignatureInput,
   type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceRecoveryClaimSignatureInput,
   type PicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -115,6 +117,8 @@ const buildersByLabel: Record<string, (fields: object) => Uint8Array> = {
     buildPicoHomeFoundingSignatureInput(f as never),
   [picoHomeSignatureInputLabels.membership]: (f) =>
     buildPicoHomeMembershipSignatureInput(f as never),
+  [picoHomeSignatureInputLabels.continuity]: (f) =>
+    buildPicoHomeContinuitySignatureInput(f as never),
   [picoHomeSignatureInputLabels.membershipLifecycle]: (f) =>
     buildPicoHomeMembershipLifecycleSignatureInput(f as never),
   [picoShareCanonicalLabels.envelope]: (f) =>
@@ -182,6 +186,15 @@ const renderersByLabel: Record<string, (fields: object) => string> = {
   [picoHomeV2SignatureInputLabels.founding]: (f) => {
     const v = f as PicoHomeFoundingSignatureInput;
     return `Found Pico Home ${v.homeId} and bind first device ${short(v.firstDeviceSigningKeyFingerprintHex)} as Home Host authority.`;
+  },
+  [picoHomeSignatureInputLabels.continuity]: (f) => {
+    const v = f as PicoHomeContinuitySignatureInput;
+    // The whole consequence, not just the swap: acceptance retires every
+    // trust pin the old key carries, including the printed Recovery Cards.
+    return `Rotate the host keys of Home ${v.homeId} (${v.reasonCategory}): `
+      + `retire ${short(v.outgoingHostSigningKeyFingerprintHex)} and accept `
+      + `${short(v.incomingHostSigningKeyFingerprintHex)} as the only host key. `
+      + 'Every printed Recovery Card becomes stale and must be re-issued.';
   },
   [picoHomeSignatureInputLabels.membership]: (f) => {
     const v = f as PicoHomeMembershipSignatureInput;

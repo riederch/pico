@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   buildPicoHomeClaimSignatureInput,
+  buildPicoHomeClaimResponseSignatureInput,
   buildPicoHomeContinuitySignatureInput,
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeFoundingSignatureInput,
@@ -136,8 +137,10 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       )).toBe(true);
     }
 
-    // Continuity is a host statement; a person-role key never signs one.
-    expect(() => session.sign(buildPicoHomeContinuitySignatureInput({
+    // ADR 0115 (ADR 0080 H7): continuity acceptance is the person's half -
+    // it is exactly the signature a thief of the host disk cannot produce,
+    // so the identity root signs it. The two host halves stay in custody.
+    const continuity = buildPicoHomeContinuitySignatureInput({
       suite: picoIdentitySuite,
       continuityId: 'continuity_20260718_0001',
       homeId: 'home_20260718_0001',
@@ -149,6 +152,25 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       reasonCategory: 'host_key_rotated',
       changedAt: '2026-07-18T09:10:00.000Z',
       lifecycleOrder: 'seq:0000000000000002',
+    });
+    expect(sodium.crypto_sign_verify_detached(
+      session.sign(continuity),
+      continuity,
+      Buffer.from(created.publicKeyHex, 'hex'),
+    )).toBe(true);
+
+    // The claim response stays a host statement: a person-role key never
+    // acknowledges its own claim on the host's behalf.
+    expect(() => session.sign(buildPicoHomeClaimResponseSignatureInput({
+      suite: picoIdentitySuite,
+      claimId: 'claim_20260718_0001',
+      homeId: 'home_20260718_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      claimantIdentityKeyFingerprintHex: created.keyFingerprintHex,
+      claimantNonceHex: '33'.repeat(32),
+      hostNonceHex: '44'.repeat(32),
+      foundingRecordId: 'founding_20260718_0001',
     }))).toThrow('unknown_signature_input_label');
 
     // And a delegated device key stays inside the identity families.

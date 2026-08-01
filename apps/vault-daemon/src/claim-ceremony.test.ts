@@ -1741,6 +1741,94 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     await Promise.all([rootClient.close(), livingClient.close(), targetClient.close()]);
   }, 300_000);
 
+  it('rotates the host keys through the transitional CLI and re-pins from its output', async () => {
+    // ADR 0115 U3. The custody machine is proven in-process; what this
+    // proves is the ceremony a person actually reaches: the CLI prepares
+    // over Link, the acceptance is approval-gated on the terminal holding
+    // the identity unlock, the submit reply verifies under the retiring
+    // pin, and the printed newHostPublicKeys are sufficient to keep working
+    // - the old pins are refused from the next request on.
+    const core = await startCore({ restrictedLinkIntake: true });
+    const rootDaemon = await startDaemon();
+    await startApprover(rootDaemon);
+    await startApprover(rootDaemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(
+      rootDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const founded = await runLinkCeremony(rootDaemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const { firstDelegationId } = foundingFacts(founded.stdout);
+
+    const rotated = await runCli([
+      'ceremony', 'rotate-host-key',
+      '--vault-home', rootDaemon.vaultHomePath,
+      '--transport', 'link',
+      ...lifecycleLinkFlags(
+        core,
+        ownerSigning.keyFingerprintHex,
+        ownerAgreement.keyFingerprintHex,
+        firstDelegationId,
+      ),
+    ]);
+    expect(rotated.code, rotated.stderr).toBe(0);
+    const rotation = JSON.parse(rotated.stdout) as {
+      link: { chainPosition: number };
+      newHostPublicKeys: {
+        signingKeyFingerprintHex: string;
+        signingPublicKeyHex: string;
+        keyAgreementKeyFingerprintHex: string;
+        keyAgreementPublicKeyHex: string;
+      };
+      recoveryCardsStale: boolean;
+    };
+    expect(rotation.link.chainPosition).toBe(0);
+    expect(rotation.recoveryCardsStale).toBe(true);
+    expect(rotation.newHostPublicKeys.signingKeyFingerprintHex)
+      .not.toBe(core.hostSigningKeyFingerprintHex);
+    // The consequence is said where the person is: the CLI warns before the
+    // approval, and the rendered 0106 statement itself is pinned by the
+    // sign-rendering vectors.
+    expect(rotated.stderr).toContain('makes every printed Recovery Card stale');
+
+    // The printed bundle is the re-pin: the same read that worked before the
+    // rotation works with the new pins, and the retired pins are refused.
+    const inspectFlags = (pins: {
+      signingKeyFingerprintHex: string;
+      signingPublicKeyHex: string;
+      keyAgreementKeyFingerprintHex: string;
+      keyAgreementPublicKeyHex: string;
+    }) => [
+      'ceremony', 'inspect-device-lifecycle',
+      '--vault-home', rootDaemon.vaultHomePath,
+      '--identity-public-key', ownerIdentity.publicKeyHex,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--core-url', requireLinkBaseUrl(core),
+      '--link-signing-fingerprint', ownerSigning.keyFingerprintHex,
+      '--link-agreement-fingerprint', ownerAgreement.keyFingerprintHex,
+      '--link-delegation-id', firstDelegationId,
+      '--host-signing-fingerprint', pins.signingKeyFingerprintHex,
+      '--host-agreement-fingerprint', pins.keyAgreementKeyFingerprintHex,
+      '--host-signing-public-key', pins.signingPublicKeyHex,
+      '--host-agreement-public-key', pins.keyAgreementPublicKeyHex,
+    ];
+    const rePinned = await runCli(inspectFlags(rotation.newHostPublicKeys));
+    expect(rePinned.code, rePinned.stderr).toBe(0);
+    expect((JSON.parse(rePinned.stdout) as {
+      devices: { status: string }[];
+    }).devices.some((device) => device.status === 'active')).toBe(true);
+
+    const stalePinned = await runCli(inspectFlags({
+      signingKeyFingerprintHex: core.hostSigningKeyFingerprintHex,
+      signingPublicKeyHex: core.hostSigningPublicKeyHex,
+      keyAgreementKeyFingerprintHex: core.hostKeyAgreementKeyFingerprintHex,
+      keyAgreementPublicKeyHex: core.hostKeyAgreementPublicKeyHex,
+    }));
+    expect(stalePinned.code).not.toBe(0);
+  }, 240_000);
+
   it('drives initiate, veto and complete through the transitional recovery CLI', async () => {
     // ADR 0112 S1. The library ceremonies are proven above; what this proves
     // is the wrapper a person actually reaches - its flags, its transport
