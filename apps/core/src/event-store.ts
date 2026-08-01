@@ -6,6 +6,7 @@ import type {
   PicoEvent,
   PicoEventAppendResult,
   PicoHomeFirstDeviceEvidence,
+  PicoHomeContinuityRecord,
   PicoHomeFoundingRecord,
   PicoHomeMembershipRole,
   PicoHomeMembershipScope,
@@ -74,6 +75,7 @@ import {
 import {
   createVerifiedPicoIdentityLifecycleIndex,
   comparePicoIdentityLifecycleOrder,
+  verifyPicoHomeContinuityRecord,
   verifyPicoIdentityDetachedSignature,
   verifyPicoIdentityKeyRecordFingerprint,
   verifyPicoIdentityRotationSignatures,
@@ -402,6 +404,45 @@ export interface PicoIdentityRootRotationReconciliationResult {
   /** Rotations accepted by a different Home; they decide nothing here. */
   foreignRotations: number;
   quarantinedIdentities: string[];
+}
+
+export interface PicoHomeHostContinuityLinkView {
+  continuityId: string;
+  chainPosition: number;
+  outgoingHostSigningKeyFingerprintHex: string;
+  outgoingHostKeyAgreementKeyFingerprintHex: string;
+  incomingHostSigningKeyFingerprintHex: string;
+  incomingHostKeyAgreementKeyFingerprintHex: string;
+  reasonCategory: string;
+  changedAt: string;
+  lifecycleOrder: string;
+  acceptedAt: string;
+}
+
+export interface PicoHomeHostKeyHead {
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+}
+
+export type PicoHomeHostContinuityRecordResult =
+  | { ok: true; inserted: boolean; link: PicoHomeHostContinuityLinkView }
+  | {
+    ok: false;
+    reason:
+      | 'no_founding_record'
+      | 'foreign_home'
+      | 'invalid_continuity'
+      | 'chain_gap'
+      | 'stale_lifecycle_order'
+      | 'recovery_pending'
+      | 'conflicting_record';
+  };
+
+export interface PicoHomeHostContinuityReconciliationResult {
+  verifiedLinks: number;
+  droppedLinks: number;
+  repairedClaimState: boolean;
+  currentHostSigningKeyFingerprintHex: string | null;
 }
 
 export interface PicoHomeDeviceRecoveryReconciliationResult {
@@ -1161,9 +1202,15 @@ export class EventStore {
       return { ok: false, reason: 'no_founding_record' };
     }
 
+    const currentHead = this.currentPicoHomeHostKeyHead();
     const authority = verifyPicoHomeMembershipAuthority(params.sodium, {
       credential: params.credential,
       foundingRecord,
+      // ADR 0115: a new credential is activated by the Home as it is now, so
+      // it must name the current head - a retired key stamps nothing new.
+      acceptedHostSigningKeyFingerprintHexes: currentHead === undefined
+        ? undefined
+        : [currentHead.hostSigningKeyFingerprintHex],
     });
     if (!authority.ok) {
       return { ok: false, reason: authority.reason };
@@ -1380,7 +1427,14 @@ export class EventStore {
         const credential = this.picoHomeMembershipCredential(credentialId);
         const verification = credential === undefined || foundingRecord === undefined
           ? { ok: false as const, reason: 'no_founding_record' as const }
-          : verifyPicoHomeMembershipAuthority(sodium, { credential, foundingRecord });
+          : verifyPicoHomeMembershipAuthority(sodium, {
+            credential,
+            foundingRecord,
+            // ADR 0115: history is vouched for by the accepted chain - a
+            // rotation must not drop every credential of an earlier era.
+            acceptedHostSigningKeyFingerprintHexes:
+              this.acceptedPicoHomeHostSigningKeyFingerprintHexes(),
+          });
 
         if (!verification.ok) {
           this.dropPicoHomeMembershipCredential(credentialId);
@@ -2606,6 +2660,421 @@ export class EventStore {
             grant.controllerPicoIdentityFingerprintHex,
           validUntil: grant.validUntil,
         })),
+    };
+  }
+
+  private static readonly hostContinuityColumns = `
+        continuity_id AS continuityId,
+        chain_position AS chainPosition,
+        outgoing_host_signing_key_fingerprint_hex AS outgoingHostSigningKeyFingerprintHex,
+        outgoing_host_key_agreement_key_fingerprint_hex AS outgoingHostKeyAgreementKeyFingerprintHex,
+        incoming_host_signing_key_fingerprint_hex AS incomingHostSigningKeyFingerprintHex,
+        incoming_host_key_agreement_key_fingerprint_hex AS incomingHostKeyAgreementKeyFingerprintHex,
+        reason_category AS reasonCategory,
+        changed_at AS changedAt,
+        lifecycle_order AS lifecycleOrder,
+        accepted_at AS acceptedAt
+  `;
+
+  /**
+   * ADR 0115 (ADR 0080 H7). Accepts one link of the host-key chain.
+   *
+   * "Same Home" is proven, never asserted: the link must retire exactly the
+   * Home's current head, its acceptance must come from the Home Host Pico the
+   * founding names, and the projection moves the claim state's host pins in
+   * the same transaction - so there is no instant at which the Home claims
+   * two heads.
+   */
+  public recordPicoHomeHostContinuity(params: {
+    record: PicoHomeContinuityRecord;
+    sodium: IdentityVerificationSodium;
+    recordedAt?: string;
+  }): PicoHomeHostContinuityRecordResult {
+    this.ensureOpen();
+    const recordedAt = params.recordedAt ?? new Date().toISOString();
+    const continuity = params.record.continuity;
+
+    const foundingRecord = this.picoHomeFoundingRecord();
+    if (foundingRecord === undefined) {
+      return { ok: false, reason: 'no_founding_record' };
+    }
+    const founding = foundingRecord.founding;
+    if (continuity.homeId !== founding.homeId) {
+      return { ok: false, reason: 'foreign_home' };
+    }
+    // The acceptance must be the Home Host Pico's - the one signature a
+    // thief of the host disk cannot produce. Any other root is a stranger,
+    // however validly it signed.
+    if (
+      continuity.homeHostPicoIdentityFingerprintHex
+      !== founding.homeHostPicoIdentityFingerprintHex
+    ) {
+      return { ok: false, reason: 'invalid_continuity' };
+    }
+    try {
+      if (!verifyPicoHomeContinuityRecord(params.sodium, params.record)) {
+        return { ok: false, reason: 'invalid_continuity' };
+      }
+    } catch {
+      return { ok: false, reason: 'invalid_continuity' };
+    }
+
+    const recordJson = serializePayload(params.record);
+    const existing = this.db
+      .prepare(`
+        SELECT record_json AS recordJson, ${EventStore.hostContinuityColumns}
+        FROM pico_home_host_continuity
+        WHERE home_id = ? AND continuity_id = ?
+      `)
+      .get(founding.homeId, continuity.continuityId) as
+        | (PicoHomeHostContinuityLinkView & { recordJson: string })
+        | undefined;
+    if (existing !== undefined) {
+      if (existing.recordJson !== recordJson) {
+        return { ok: false, reason: 'conflicting_record' };
+      }
+      const { recordJson: _replayed, ...link } = existing;
+      return { ok: true, inserted: false, link };
+    }
+
+    // A pending recovery has embedded the current host pins in its claim; a
+    // rotation underneath it would leave a receipt no later boot could
+    // re-verify. The recovery is time-critical, the rotation is not - it
+    // waits.
+    if (tableExists(this.db, 'pico_home_device_recovery')
+      && this.db
+        .prepare(`
+          SELECT 1 AS present FROM pico_home_device_recovery
+          WHERE status = 'pending'
+          LIMIT 1
+        `)
+        .get() !== undefined) {
+      return { ok: false, reason: 'recovery_pending' };
+    }
+
+    const chainTail = this.picoHomeHostContinuityTail();
+    const head = this.currentPicoHomeHostKeyHead();
+    if (head === undefined
+      || continuity.outgoingHostSigningKeyFingerprintHex
+        !== head.hostSigningKeyFingerprintHex
+      || continuity.outgoingHostKeyAgreementKeyFingerprintHex
+        !== head.hostKeyAgreementKeyFingerprintHex) {
+      // Retiring anything but the current head would fork the chain - two
+      // presents, both "proven".
+      return { ok: false, reason: 'chain_gap' };
+    }
+    if (chainTail !== undefined
+      && comparePicoIdentityLifecycleOrder(
+        continuity.lifecycleOrder,
+        chainTail.lifecycleOrder,
+      ) <= 0) {
+      return { ok: false, reason: 'stale_lifecycle_order' };
+    }
+
+    const chainPosition = chainTail === undefined ? 0 : chainTail.chainPosition + 1;
+    this.db.transaction(() => {
+      this.db
+        .prepare(`
+          INSERT INTO pico_home_host_continuity (
+            continuity_id,
+            home_id,
+            chain_position,
+            outgoing_host_signing_key_fingerprint_hex,
+            outgoing_host_key_agreement_key_fingerprint_hex,
+            incoming_host_signing_key_fingerprint_hex,
+            incoming_host_key_agreement_key_fingerprint_hex,
+            reason_category,
+            changed_at,
+            lifecycle_order,
+            accepted_at,
+            record_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          continuity.continuityId,
+          founding.homeId,
+          chainPosition,
+          continuity.outgoingHostSigningKeyFingerprintHex,
+          continuity.outgoingHostKeyAgreementKeyFingerprintHex,
+          continuity.incomingHostSigningKeyFingerprintHex,
+          continuity.incomingHostKeyAgreementKeyFingerprintHex,
+          continuity.reasonCategory,
+          continuity.changedAt,
+          continuity.lifecycleOrder,
+          recordedAt,
+          recordJson,
+        );
+      this.db
+        .prepare(`
+          UPDATE pico_home_claim_state
+          SET host_signing_key_fingerprint_hex = ?,
+              host_key_agreement_key_fingerprint_hex = ?,
+              updated_at = ?
+          WHERE id = 1
+        `)
+        .run(
+          continuity.incomingHostSigningKeyFingerprintHex,
+          continuity.incomingHostKeyAgreementKeyFingerprintHex,
+          recordedAt,
+        );
+    })();
+
+    return {
+      ok: true,
+      inserted: true,
+      link: {
+        continuityId: continuity.continuityId,
+        chainPosition,
+        outgoingHostSigningKeyFingerprintHex:
+          continuity.outgoingHostSigningKeyFingerprintHex,
+        outgoingHostKeyAgreementKeyFingerprintHex:
+          continuity.outgoingHostKeyAgreementKeyFingerprintHex,
+        incomingHostSigningKeyFingerprintHex:
+          continuity.incomingHostSigningKeyFingerprintHex,
+        incomingHostKeyAgreementKeyFingerprintHex:
+          continuity.incomingHostKeyAgreementKeyFingerprintHex,
+        reasonCategory: continuity.reasonCategory,
+        changedAt: continuity.changedAt,
+        lifecycleOrder: continuity.lifecycleOrder,
+        acceptedAt: recordedAt,
+      },
+    };
+  }
+
+  /**
+   * ADR 0115. The founding-era host signing public key. Before any rotation
+   * it is custody's own key; afterwards custody holds the new keys, and the
+   * retired public key survives in the first chain link's outgoing key
+   * record - bound to the founding fingerprint by the link's own
+   * verification, so founding evidence stays re-verifiable forever.
+   */
+  public foundingEraHostSigningPublicKeyHex(): string | undefined {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_home_host_continuity')) {
+      return undefined;
+    }
+    const first = this.db
+      .prepare(`
+        SELECT record_json AS recordJson
+        FROM pico_home_host_continuity
+        ORDER BY chain_position ASC
+        LIMIT 1
+      `)
+      .get() as { recordJson: string } | undefined;
+    if (first === undefined) {
+      return undefined;
+    }
+    try {
+      return (JSON.parse(first.recordJson) as PicoHomeContinuityRecord)
+        .outgoingHostSigningKeyRecord.publicKeyHex;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The accepted host-key chain, founding-first. */
+  public picoHomeHostKeyChain(): PicoHomeHostContinuityLinkView[] {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_home_host_continuity')) {
+      return [];
+    }
+    const homeId = this.picoHomeFoundingRecord()?.founding.homeId;
+    if (homeId === undefined) {
+      return [];
+    }
+    return this.db
+      .prepare(`
+        SELECT ${EventStore.hostContinuityColumns}
+        FROM pico_home_host_continuity
+        WHERE home_id = ?
+        ORDER BY chain_position ASC
+      `)
+      .all(homeId) as PicoHomeHostContinuityLinkView[];
+  }
+
+  private picoHomeHostContinuityTail(): PicoHomeHostContinuityLinkView | undefined {
+    const chain = this.picoHomeHostKeyChain();
+    return chain[chain.length - 1];
+  }
+
+  /**
+   * ADR 0115. The host keys this Home currently answers to: the founding's
+   * until a continuity link retires them, then the newest link's incoming
+   * pair. New records bind to this head; history is vouched for by the chain.
+   */
+  public currentPicoHomeHostKeyHead(): PicoHomeHostKeyHead | undefined {
+    this.ensureOpen();
+    const founding = this.picoHomeFoundingRecord()?.founding;
+    if (founding === undefined) {
+      return undefined;
+    }
+    const tail = tableExists(this.db, 'pico_home_host_continuity')
+      ? this.picoHomeHostContinuityTail()
+      : undefined;
+    return tail === undefined
+      ? {
+        hostSigningKeyFingerprintHex: founding.hostSigningKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex:
+          founding.hostKeyAgreementKeyFingerprintHex,
+      }
+      : {
+        hostSigningKeyFingerprintHex: tail.incomingHostSigningKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex:
+          tail.incomingHostKeyAgreementKeyFingerprintHex,
+      };
+  }
+
+  /**
+   * ADR 0115. Every host signing key the accepted chain vouches for. A record
+   * activated under a key of its own era stays valid - the host activates and
+   * enforces, it never mints authority, so history needs no re-issue (ADR
+   * 0080's asymmetry). Only the head activates anything new.
+   */
+  public acceptedPicoHomeHostSigningKeyFingerprintHexes(): string[] {
+    this.ensureOpen();
+    const founding = this.picoHomeFoundingRecord()?.founding;
+    if (founding === undefined) {
+      return [];
+    }
+    return [
+      founding.hostSigningKeyFingerprintHex,
+      ...(tableExists(this.db, 'pico_home_host_continuity')
+        ? this.picoHomeHostKeyChain().map(
+          (link) => link.incomingHostSigningKeyFingerprintHex,
+        )
+        : []),
+    ];
+  }
+
+  /**
+   * ADR 0115. Boot re-verifies the whole chain from the founding before
+   * anything trusts it. A link that no longer verifies - or that no longer
+   * chains - is dropped together with everything after it, because a chain is
+   * only as proven as its weakest prefix, and the claim state's host pins are
+   * repaired to the verified head so a tampered row cannot leave the Home
+   * answering to a key nobody proved.
+   */
+  public reconcilePicoHomeHostContinuity(
+    sodium: IdentityVerificationSodium,
+  ): PicoHomeHostContinuityReconciliationResult {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_home_host_continuity')) {
+      return {
+        verifiedLinks: 0,
+        droppedLinks: 0,
+        repairedClaimState: false,
+        currentHostSigningKeyFingerprintHex: null,
+      };
+    }
+    const founding = this.picoHomeFoundingRecord()?.founding;
+    const rows = this.db
+      .prepare(`
+        SELECT record_json AS recordJson, home_id AS homeId,
+               ${EventStore.hostContinuityColumns}
+        FROM pico_home_host_continuity
+        ORDER BY chain_position ASC
+      `)
+      .all() as (PicoHomeHostContinuityLinkView & {
+        recordJson: string;
+        homeId: string;
+      })[];
+
+    if (founding === undefined) {
+      // Continuity without a founding chains off nothing.
+      this.db.prepare('DELETE FROM pico_home_host_continuity').run();
+      return {
+        verifiedLinks: 0,
+        droppedLinks: rows.length,
+        repairedClaimState: false,
+        currentHostSigningKeyFingerprintHex: null,
+      };
+    }
+
+    let expectedOutgoing: PicoHomeHostKeyHead = {
+      hostSigningKeyFingerprintHex: founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        founding.hostKeyAgreementKeyFingerprintHex,
+    };
+    let previousOrder: string | undefined;
+    let verified = 0;
+    for (const [index, row] of rows.entries()) {
+      let stored: PicoHomeContinuityRecord;
+      try {
+        stored = JSON.parse(row.recordJson) as PicoHomeContinuityRecord;
+        const continuity = stored.continuity;
+        if (
+          row.homeId !== founding.homeId
+          || continuity.homeId !== founding.homeId
+          || continuity.continuityId !== row.continuityId
+          || row.chainPosition !== index
+          || continuity.homeHostPicoIdentityFingerprintHex
+            !== founding.homeHostPicoIdentityFingerprintHex
+          || continuity.outgoingHostSigningKeyFingerprintHex
+            !== expectedOutgoing.hostSigningKeyFingerprintHex
+          || continuity.outgoingHostKeyAgreementKeyFingerprintHex
+            !== expectedOutgoing.hostKeyAgreementKeyFingerprintHex
+          || continuity.incomingHostSigningKeyFingerprintHex
+            !== row.incomingHostSigningKeyFingerprintHex
+          || continuity.incomingHostKeyAgreementKeyFingerprintHex
+            !== row.incomingHostKeyAgreementKeyFingerprintHex
+          || (previousOrder !== undefined
+            && comparePicoIdentityLifecycleOrder(
+              continuity.lifecycleOrder,
+              previousOrder,
+            ) <= 0)
+          || !verifyPicoHomeContinuityRecord(sodium, stored)
+        ) {
+          throw new Error('invalid_continuity_link');
+        }
+      } catch {
+        // The weakest prefix rule: this link and everything chained on it is
+        // unproven, and unproven links are dropped, not honored.
+        this.db
+          .prepare('DELETE FROM pico_home_host_continuity WHERE chain_position >= ?')
+          .run(row.chainPosition);
+        break;
+      }
+      verified += 1;
+      previousOrder = stored.continuity.lifecycleOrder;
+      expectedOutgoing = {
+        hostSigningKeyFingerprintHex:
+          stored.continuity.incomingHostSigningKeyFingerprintHex,
+        hostKeyAgreementKeyFingerprintHex:
+          stored.continuity.incomingHostKeyAgreementKeyFingerprintHex,
+      };
+    }
+
+    // The claim state's pins follow the verified head - projections reconcile
+    // toward evidence, never the other way around.
+    const claim = this.picoHomeClaimState();
+    let repaired = false;
+    if (claim.state === 'claimed'
+      && (claim.hostSigningKeyFingerprintHex
+        !== expectedOutgoing.hostSigningKeyFingerprintHex
+        || claim.hostKeyAgreementKeyFingerprintHex
+          !== expectedOutgoing.hostKeyAgreementKeyFingerprintHex)) {
+      this.db
+        .prepare(`
+          UPDATE pico_home_claim_state
+          SET host_signing_key_fingerprint_hex = ?,
+              host_key_agreement_key_fingerprint_hex = ?,
+              updated_at = ?
+          WHERE id = 1
+        `)
+        .run(
+          expectedOutgoing.hostSigningKeyFingerprintHex,
+          expectedOutgoing.hostKeyAgreementKeyFingerprintHex,
+          new Date().toISOString(),
+        );
+      repaired = true;
+    }
+
+    return {
+      verifiedLinks: verified,
+      droppedLinks: rows.length - verified,
+      repairedClaimState: repaired,
+      currentHostSigningKeyFingerprintHex:
+        expectedOutgoing.hostSigningKeyFingerprintHex,
     };
   }
 
@@ -4386,9 +4855,14 @@ export class EventStore {
       return { ok: false, reason: 'no_founding_record' };
     }
 
+    const intakeHead = this.currentPicoHomeHostKeyHead();
     const verification = verifyPicoHomeDomainReadGrant(params.sodium, {
       record: params.record,
       foundingRecord,
+      // ADR 0115: new grants are stamped by the Home as it is now.
+      acceptedHostSigningKeyFingerprintHexes: intakeHead === undefined
+        ? undefined
+        : [intakeHead.hostSigningKeyFingerprintHex],
     });
     if (!verification.ok) {
       return { ok: false, reason: verification.reason };
@@ -4599,6 +5073,8 @@ export class EventStore {
             && verifyPicoHomeDomainReadGrant(sodium, {
               record: candidate,
               foundingRecord,
+              acceptedHostSigningKeyFingerprintHexes:
+                this.acceptedPicoHomeHostSigningKeyFingerprintHexes(),
             }).ok) {
             grantRecord = candidate;
           }
@@ -4665,7 +5141,12 @@ export class EventStore {
       const record = this.picoHomeDomainReadGrantRecord(grantId);
       if (foundingRecord === undefined
         || record === undefined
-        || !verifyPicoHomeDomainReadGrant(sodium, { record, foundingRecord }).ok
+        || !verifyPicoHomeDomainReadGrant(sodium, {
+          record,
+          foundingRecord,
+          acceptedHostSigningKeyFingerprintHexes:
+            this.acceptedPicoHomeHostSigningKeyFingerprintHexes(),
+        }).ok
         || this.picoHomeDomainReadGrantView(grantId, at).status !== 'active'
         || !this.hasActivePicoHomeMembership(
           record.grant.readerPicoIdentityFingerprintHex,
@@ -5203,6 +5684,8 @@ export class EventStore {
     this.ensureOpen();
     return new ReaderCustodyStore(this.db, sodium, {
       foundingRecord: () => this.picoHomeFoundingRecord(),
+      currentHostSigningKeyFingerprintHex: () =>
+        this.currentPicoHomeHostKeyHead()?.hostSigningKeyFingerprintHex,
       hasActiveMembership: (picoIdentityFingerprintHex, homeId, at) =>
         this.hasActivePicoHomeMembership(
           picoIdentityFingerprintHex,

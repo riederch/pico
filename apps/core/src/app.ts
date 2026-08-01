@@ -676,6 +676,25 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       'Pico Home claim state was reconciled from founding evidence; setup mode remains closed after restore.',
     );
   }
+  // ADR 0115. The host-key chain is re-proven from the founding before
+  // anything trusts it: the custody guard below compares against its head,
+  // and every era-aware verifier reads the set it establishes.
+  const hostContinuityReconciliation =
+    store.reconcilePicoHomeHostContinuity(sodium);
+  if (hostContinuityReconciliation.droppedLinks > 0) {
+    app.log.error(
+      hostContinuityReconciliation,
+      'Pico Home host continuity links failed re-verification and were dropped '
+      + 'with everything chained on them; the Home answers to the last proven '
+      + 'head (ADR 0115).',
+    );
+  } else if (hostContinuityReconciliation.verifiedLinks > 0) {
+    app.log.warn(
+      hostContinuityReconciliation,
+      'Pico Home host keys have rotated; records of earlier eras stay vouched '
+      + 'for by the accepted continuity chain (ADR 0115).',
+    );
+  }
   const claimedHomeFoundingVerified = reconcileClaimedHomeHostKeyCustody();
   const persistedOperator = operators.get();
   if (persistedOperator !== undefined
@@ -960,25 +979,37 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     const host = restoredHomeHostKeys.publicBundle;
+    // ADR 0115. Custody must match the *proven chain head*, not the founding:
+    // after a rotation the founding keys are honestly retired, and custody
+    // still holding them - or holding keys no chain link ever accepted - is a
+    // half-completed rotation or a swapped disk, both of which stay closed.
+    const expectedHead = store.currentPicoHomeHostKeyHead() ?? {
+      hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+    };
     if (
-      host.signingKeyFingerprintHex !== foundingRecord.founding.hostSigningKeyFingerprintHex
-      || host.keyAgreementKeyFingerprintHex !== foundingRecord.founding.hostKeyAgreementKeyFingerprintHex
+      host.signingKeyFingerprintHex !== expectedHead.hostSigningKeyFingerprintHex
+      || host.keyAgreementKeyFingerprintHex !== expectedHead.hostKeyAgreementKeyFingerprintHex
     ) {
       app.log.error(
         {
           foundingId: foundingRecord.founding.foundingId,
           homeId: foundingRecord.founding.homeId,
-          expectedHostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
+          expectedHostSigningKeyFingerprintHex: expectedHead.hostSigningKeyFingerprintHex,
           actualHostSigningKeyFingerprintHex: host.signingKeyFingerprintHex,
-          expectedHostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
+          expectedHostKeyAgreementKeyFingerprintHex: expectedHead.hostKeyAgreementKeyFingerprintHex,
           actualHostKeyAgreementKeyFingerprintHex: host.keyAgreementKeyFingerprintHex,
         },
-        'Pico Home host key custody does not match founding evidence; setup mode remains closed.',
+        'Pico Home host key custody does not match the proven host-key chain head; setup mode remains closed.',
       );
       return false;
     }
 
-    const verification = verifyPicoHomeFoundingEvidence(foundingRecord, restoredHomeHostKeys);
+    const verification = verifyPicoHomeFoundingEvidence(
+      foundingRecord,
+      store.foundingEraHostSigningPublicKeyHex()
+        ?? restoredHomeHostKeys.publicBundle.signingPublicKeyHex,
+    );
     if (!verification.ok) {
       app.log.error(
         {
@@ -3629,10 +3660,12 @@ function createPendingPicoHomeClaim(params: {
 
 function verifyPicoHomeFoundingEvidence(
   record: PicoHomeFoundingRecord,
-  homeHostKeys: HomeHostKeyPairSet,
+  // ADR 0115: the founding was signed by the founding-era host key. Before a
+  // rotation that is custody's key; afterwards the retired public key comes
+  // from the first continuity link, or the founding could never re-verify.
+  hostSigningPublicKeyHex: string,
 ): { ok: true } | { ok: false; reason: string } {
   const claimantKey = record.claimantIdentityKeyRecord;
-  const hostSigningPublicKeyHex = homeHostKeys.publicBundle.signingPublicKeyHex;
 
   try {
     if (record.schema !== picoHomeFoundingRecordSchema

@@ -67,6 +67,8 @@ export const picoHomeDeviceRecoveryMigrationId =
   '0006_pico_home_device_recovery' as const;
 export const picoIdentityRootRotationMigrationId =
   '0007_pico_identity_root_rotation' as const;
+export const picoHomeHostContinuityMigrationId =
+  '0008_pico_home_host_continuity' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -777,6 +779,38 @@ const migrations: readonly MigrationDefinition[] = [
           predecessor_identity_fingerprint_hex
         )
         WHERE status = 'pending';
+      `);
+    },
+  },
+  {
+    id: picoHomeHostContinuityMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0115 (ADR 0080 H7). One row per accepted link of the host-key
+        -- chain. The chain starts at the founding record's host keys; each
+        -- link's outgoing keys must equal the previous link's incoming keys,
+        -- enforced by the recorder and re-verified at boot, so 'same Home'
+        -- stays proven rather than asserted.
+        CREATE TABLE pico_home_host_continuity (
+          continuity_id TEXT NOT NULL,
+          home_id TEXT NOT NULL,
+          chain_position INTEGER NOT NULL,
+          outgoing_host_signing_key_fingerprint_hex TEXT NOT NULL,
+          outgoing_host_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          incoming_host_signing_key_fingerprint_hex TEXT NOT NULL,
+          incoming_host_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          reason_category TEXT NOT NULL
+            CHECK (reason_category IN ('host_key_rotated', 'host_migrated', 'host_restored')),
+          changed_at TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          accepted_at TEXT NOT NULL,
+          record_json TEXT NOT NULL,
+          PRIMARY KEY (home_id, continuity_id)
+        );
+
+        CREATE UNIQUE INDEX idx_pico_home_host_continuity_position
+        ON pico_home_host_continuity (home_id, chain_position);
       `);
     },
   },

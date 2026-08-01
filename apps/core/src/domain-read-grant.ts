@@ -38,6 +38,7 @@ export function verifyPicoHomeDomainReadGrant(
   input: {
     record: PicoHomeDomainReadGrantRecord;
     foundingRecord: PicoHomeFoundingRecord;
+    acceptedHostSigningKeyFingerprintHexes?: readonly string[];
   },
 ): PicoHomeDomainReadGrantVerification {
   const { record, foundingRecord } = input;
@@ -53,7 +54,11 @@ export function verifyPicoHomeDomainReadGrant(
   if (grant.homeId !== founding.homeId) {
     return { ok: false, reason: 'foreign_home' };
   }
-  if (grant.hostSigningKeyFingerprintHex !== founding.hostSigningKeyFingerprintHex) {
+  // ADR 0115: era rule, same as membership - the chain vouches for history,
+  // only the head stamps anything new.
+  const acceptedHostKeys = input.acceptedHostSigningKeyFingerprintHexes
+    ?? [founding.hostSigningKeyFingerprintHex];
+  if (!acceptedHostKeys.includes(grant.hostSigningKeyFingerprintHex)) {
     return { ok: false, reason: 'foreign_host_key' };
   }
   if (grant.controllerPicoIdentityFingerprintHex !== founding.homeHostPicoIdentityFingerprintHex) {

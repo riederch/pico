@@ -1,4 +1,5 @@
 import {
+  buildPicoHomeContinuitySignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
@@ -7,8 +8,10 @@ import {
   buildPicoIdentityRotationSignatureInput,
   picoIdentityDelegationScopes,
   picoIdentitySuite,
+  picoHomeContinuityRecordSchema,
 } from '@pico/protocol';
 import type {
+  PicoHomeContinuityRecord,
   PicoIdentityDelegationScope,
   PicoIdentityDelegationSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
@@ -504,6 +507,79 @@ export function verifyPicoIdentityRotationSignatures(
     publicKeyHex: input.successorIdentityKeyRecord.publicKeyHex,
     signatureInput,
     signatureHex: input.successorSignatureHex,
+  });
+}
+
+/**
+ * ADR 0115 (ADR 0080 H7). One link of the host-key chain is true only if all
+ * three parties said it over the same bytes: the outgoing host key retiring
+ * itself, the incoming key proving it exists, and the Home Host Pico
+ * accepting the succession - the signature a thief of the host disk cannot
+ * produce. Chain linkage (that the outgoing key is the Home's current head)
+ * is deliberately not decided here: it needs the founding record and the
+ * prior chain, which are the verifier's context, not the record's.
+ */
+export function verifyPicoHomeContinuityRecord(
+  sodium: IdentityVerificationSodium,
+  record: PicoHomeContinuityRecord,
+): boolean {
+  if (record.schema !== picoHomeContinuityRecordSchema) {
+    return false;
+  }
+  const continuity = { ...record.continuity };
+  const signatureInput = buildPicoHomeContinuitySignatureInput(continuity);
+
+  for (const [keyRecord, role, expectedFingerprintHex] of [
+    [
+      record.outgoingHostSigningKeyRecord,
+      'home_host_signing',
+      continuity.outgoingHostSigningKeyFingerprintHex,
+    ],
+    [
+      record.incomingHostSigningKeyRecord,
+      'home_host_signing',
+      continuity.incomingHostSigningKeyFingerprintHex,
+    ],
+    [
+      record.homeHostPicoIdentityKeyRecord,
+      'pico_identity',
+      continuity.homeHostPicoIdentityFingerprintHex,
+    ],
+  ] as const) {
+    buildPicoIdentityKeyRecordSignatureInput(cloneKeyRecord(keyRecord));
+    if (
+      keyRecord.suite !== picoIdentitySuite
+      || keyRecord.keyRole !== role
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord,
+        expectedFingerprintHex,
+      })
+    ) {
+      return false;
+    }
+  }
+
+  // A rotation to the same key would be a continuity statement that changed
+  // nothing while looking like it changed everything.
+  if (
+    continuity.outgoingHostSigningKeyFingerprintHex
+    === continuity.incomingHostSigningKeyFingerprintHex
+  ) {
+    return false;
+  }
+
+  return verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: record.outgoingHostSigningKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: record.outgoingHostSignatureHex,
+  }) && verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: record.incomingHostSigningKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: record.incomingHostSignatureHex,
+  }) && verifyPicoIdentityDetachedSignature(sodium, {
+    publicKeyHex: record.homeHostPicoIdentityKeyRecord.publicKeyHex,
+    signatureInput,
+    signatureHex: record.homeHostPicoSignatureHex,
   });
 }
 

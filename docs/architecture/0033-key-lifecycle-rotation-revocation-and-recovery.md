@@ -184,7 +184,7 @@ It must not:
 - become a Move-In Code
 - become a Relay Routing Identity
 
-Host Key rotation or replacement must define:
+Host Key rotation or replacement must define (ADR `0115` supplies this: the `pico.home.continuity.v1` record signed by the outgoing key, the incoming key and the Home Host Pico, a verified chain with era-aware verification, and boot re-proving; ceremony and client re-pin are its open gates):
 
 - whether the Pico Home is the same Home with a rotated host key or a new Home
 - how Home Membership Credentials bind to the new host key

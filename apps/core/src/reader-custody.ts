@@ -41,6 +41,8 @@ import type {
 
 export interface ReaderCustodyAuthoritySource {
   foundingRecord(): PicoHomeFoundingRecord | undefined;
+  /** ADR 0115: the chain head; new reader-custody domains bind to it. */
+  currentHostSigningKeyFingerprintHex?(): string | undefined;
   hasActiveMembership(
     picoIdentityFingerprintHex: string,
     homeId: string,
@@ -1182,7 +1184,8 @@ export class ReaderCustodyStore {
         || domain.custodyClass !== 'reader_custody'
         || domain.homeId !== founding.founding.homeId
         || domain.hostSigningKeyFingerprintHex
-          !== founding.founding.hostSigningKeyFingerprintHex) {
+          !== (this.authority.currentHostSigningKeyFingerprintHex?.()
+            ?? founding.founding.hostSigningKeyFingerprintHex)) {
         return 'wrong_home';
       }
       buildPicoReaderCustodyDomainSignatureInput(domain);

@@ -63,6 +63,7 @@ export interface PicoHomeMembershipAuthorityInput {
    */
   credential: PicoHomeMembershipIssuerStatement;
   foundingRecord: PicoHomeFoundingRecord;
+  acceptedHostSigningKeyFingerprintHexes?: readonly string[];
 }
 
 export interface PicoHomeMembershipActivationInput {
@@ -102,7 +103,12 @@ export function verifyPicoHomeMembershipAuthority(
     return { ok: false, reason: 'foreign_home' };
   }
 
-  if (membership.hostSigningKeyFingerprintHex !== founding.hostSigningKeyFingerprintHex) {
+  // ADR 0115: the accepted host-key chain vouches for a credential's era.
+  // Callers pass the current head for new intake and the whole chain for
+  // boot re-verification; absent a chain, the founding key is the era.
+  const acceptedHostKeys = input.acceptedHostSigningKeyFingerprintHexes
+    ?? [founding.hostSigningKeyFingerprintHex];
+  if (!acceptedHostKeys.includes(membership.hostSigningKeyFingerprintHex)) {
     return { ok: false, reason: 'foreign_host_key' };
   }
 

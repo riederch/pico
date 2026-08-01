@@ -11,13 +11,17 @@ import type {
   PicoIdentityReaderKeyFreshnessSignatureInput,
   PicoIdentityRevocationSignatureInput,
   PicoIdentityRotationSignatureInput,
+  PicoHomeContinuityRecord,
+  PicoHomeContinuitySignatureInput,
 } from '@pico/protocol';
 import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
   buildPicoIdentityRevocationSignatureInput,
+  buildPicoHomeContinuitySignatureInput,
   buildPicoIdentityRotationSignatureInput,
+  picoHomeContinuityRecordSchema,
   picoIdentitySuite,
 } from '@pico/protocol';
 import type { IdentityVerificationSodium } from './index.js';
@@ -34,6 +38,7 @@ import {
   verifyPicoIdentityPossessionSignature,
   verifyPicoIdentityReaderKeyFreshnessSignature,
   verifyPicoIdentityRevocationSignature,
+  verifyPicoHomeContinuityRecord,
   verifyPicoIdentityRotationSignatures,
 } from './index.js';
 
@@ -829,6 +834,135 @@ describe('ADR 0114 T1 identity-root rotation records', () => {
       rotation: downgraded,
       predecessorSignatureHex: signed.predecessorSignatureHex,
       successorSignatureHex: signed.successorSignatureHex,
+    })).toBe(false);
+  });
+});
+
+describe('ADR 0115 host continuity records', () => {
+  function continuity(
+    outgoing: SigningFixture,
+    incoming: SigningFixture,
+    homeHostPico: SigningFixture,
+    overrides: Partial<PicoHomeContinuitySignatureInput> = {},
+  ): PicoHomeContinuitySignatureInput {
+    return {
+      suite: picoIdentitySuite,
+      continuityId: 'continuity_0001',
+      homeId: 'home_0001',
+      outgoingHostSigningKeyFingerprintHex: outgoing.fingerprintHex,
+      outgoingHostKeyAgreementKeyFingerprintHex: 'aa'.repeat(32),
+      incomingHostSigningKeyFingerprintHex: incoming.fingerprintHex,
+      incomingHostKeyAgreementKeyFingerprintHex: 'bb'.repeat(32),
+      homeHostPicoIdentityFingerprintHex: homeHostPico.fingerprintHex,
+      reasonCategory: 'host_key_rotated',
+      changedAt: '2026-08-02T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000002',
+      ...overrides,
+    };
+  }
+
+  function signedContinuity(
+    outgoing: SigningFixture,
+    incoming: SigningFixture,
+    homeHostPico: SigningFixture,
+    overrides: Partial<PicoHomeContinuitySignatureInput> = {},
+  ): PicoHomeContinuityRecord {
+    const record = continuity(outgoing, incoming, homeHostPico, overrides);
+    const signatureInput = buildPicoHomeContinuitySignatureInput(record);
+    return {
+      schema: picoHomeContinuityRecordSchema,
+      continuity: record,
+      outgoingHostSigningKeyRecord: outgoing.keyRecord,
+      incomingHostSigningKeyRecord: incoming.keyRecord,
+      homeHostPicoIdentityKeyRecord: homeHostPico.keyRecord,
+      outgoingHostSignatureHex: signHex(signatureInput, outgoing.privateKey),
+      incomingHostSignatureHex: signHex(signatureInput, incoming.privateKey),
+      homeHostPicoSignatureHex: signHex(signatureInput, homeHostPico.privateKey),
+      createdAt: '2026-08-02T10:00:00.000Z',
+    };
+  }
+
+  it('accepts a link only when all three parties signed the same bytes', () => {
+    const outgoing = signingFixture('home_host_signing', 0x61);
+    const incoming = signingFixture('home_host_signing', 0x62);
+    const homeHostPico = signingFixture('pico_identity', 0x63);
+    const record = signedContinuity(outgoing, incoming, homeHostPico);
+
+    expect(verifyPicoHomeContinuityRecord(testSodium, record)).toBe(true);
+
+    // Retirement without possession: the outgoing key may not hand the Home
+    // to a key nobody proves they hold - that bricks the Home at the instant
+    // of rotation.
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...record,
+      incomingHostSignatureHex: record.outgoingHostSignatureHex,
+    })).toBe(false);
+    // Possession without retirement: an incoming key cannot appoint itself.
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...record,
+      outgoingHostSignatureHex: record.incomingHostSignatureHex,
+    })).toBe(false);
+    // Host signatures without the person: the acceptance is exactly the
+    // signature a thief of the host disk cannot produce, so a record missing
+    // it authorizes nothing (ADR 0080 H7).
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...record,
+      homeHostPicoSignatureHex: record.outgoingHostSignatureHex,
+    })).toBe(false);
+  });
+
+  it('refuses a cooperating stranger substituted on any of the three sides', () => {
+    const outgoing = signingFixture('home_host_signing', 0x64);
+    const incoming = signingFixture('home_host_signing', 0x65);
+    const homeHostPico = signingFixture('pico_identity', 0x66);
+    const strangerHost = signingFixture('home_host_signing', 0x67);
+    const strangerRoot = signingFixture('pico_identity', 0x68);
+    const record = signedContinuity(outgoing, incoming, homeHostPico);
+    const signatureInput = buildPicoHomeContinuitySignatureInput(record.continuity);
+
+    // Each stranger signs the real bytes with their own key and presents
+    // their own key record - only the fingerprint binding refuses them.
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...record,
+      outgoingHostSigningKeyRecord: strangerHost.keyRecord,
+      outgoingHostSignatureHex: signHex(signatureInput, strangerHost.privateKey),
+    })).toBe(false);
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...record,
+      incomingHostSigningKeyRecord: strangerHost.keyRecord,
+      incomingHostSignatureHex: signHex(signatureInput, strangerHost.privateKey),
+    })).toBe(false);
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...record,
+      homeHostPicoIdentityKeyRecord: strangerRoot.keyRecord,
+      homeHostPicoSignatureHex: signHex(signatureInput, strangerRoot.privateKey),
+    })).toBe(false);
+  });
+
+  it('binds every party to its role and refuses self-succession', () => {
+    const outgoing = signingFixture('home_host_signing', 0x69);
+    const incoming = signingFixture('home_host_signing', 0x6a);
+    const homeHostPico = signingFixture('pico_identity', 0x6b);
+
+    // A person root may not stand where a host key belongs, nor a host key
+    // where the person's acceptance belongs: the roles carry different
+    // authority and the fingerprints bind them (ADR 0079 I5).
+    const rootAsOutgoing = signingFixture('pico_identity', 0x6c);
+    const asOutgoing = signedContinuity(rootAsOutgoing, incoming, homeHostPico);
+    expect(verifyPicoHomeContinuityRecord(testSodium, asOutgoing)).toBe(false);
+
+    const hostAsAcceptor = signingFixture('home_host_signing', 0x6d);
+    const asAcceptor = signedContinuity(outgoing, incoming, hostAsAcceptor);
+    expect(verifyPicoHomeContinuityRecord(testSodium, asAcceptor)).toBe(false);
+
+    // Rotation to the same key changes nothing while looking like it changed
+    // everything.
+    const toItself = signedContinuity(outgoing, outgoing, homeHostPico);
+    expect(verifyPicoHomeContinuityRecord(testSodium, toItself)).toBe(false);
+
+    expect(verifyPicoHomeContinuityRecord(testSodium, {
+      ...signedContinuity(outgoing, incoming, homeHostPico),
+      schema: 'pico.home.continuity-record.v0' as never,
     })).toBe(false);
   });
 });

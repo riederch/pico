@@ -186,6 +186,12 @@ export const picoHomeMembershipCredentialSchema = 'pico.home.membership-credenti
 
 export const picoHomeMembershipLifecycleRecordSchema = 'pico.home.membership-lifecycle-record.v1' as const;
 
+// ADR 0115. Host continuity is proven, never asserted (ADR 0080 H7): the
+// outgoing host key authorizes its own succession, the incoming key proves it
+// exists, and the Home Host Pico's acceptance is what a stolen host disk can
+// never produce.
+export const picoHomeContinuityRecordSchema = 'pico.home.continuity-record.v1' as const;
+
 export const picoHomeDomainReadGrantRecordSchema = 'pico.home.domain-read-grant-record.v1' as const;
 
 export const picoHomeDomainReadGrantLifecycleRecordSchema = 'pico.home.domain-read-grant-lifecycle-record.v1' as const;
@@ -1341,6 +1347,27 @@ export interface PicoHomeContinuitySignatureInput {
   reasonCategory: PicoHomeContinuityReasonCategory;
   changedAt: string;
   lifecycleOrder: string;
+}
+
+/**
+ * ADR 0115. The complete evidence for one link of the host-key chain. All
+ * three signatures cover the same canonical `pico.home.continuity.v1` bytes:
+ * the outgoing host key as authorization (only the key being retired can
+ * retire itself), the incoming host key as possession (a statement naming a
+ * key nobody holds would brick the Home at the rotation instant), and the
+ * Home Host Pico root as acceptance (ADR 0080 H7) - the one signature a
+ * thief of the host disk cannot produce.
+ */
+export interface PicoHomeContinuityRecord {
+  schema: typeof picoHomeContinuityRecordSchema;
+  continuity: PicoHomeContinuitySignatureInput;
+  outgoingHostSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  incomingHostSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  homeHostPicoIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  outgoingHostSignatureHex: string;
+  incomingHostSignatureHex: string;
+  homeHostPicoSignatureHex: string;
+  createdAt: string;
 }
 
 export interface PicoVaultKeyfileHeaderAadInput {
