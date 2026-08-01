@@ -22,6 +22,18 @@ export const picoCompanionProfileSchema = 'pico.companion.profile.v1' as const;
 export interface PicoCompanionProfile {
   schema: typeof picoCompanionProfileSchema;
   coreUrl: string;
+  /**
+   * ADR 0115 U4: the Home this device belongs to, beyond its key custody.
+   * The Home Host Pico fingerprint is the acceptor pin the continuity-chain
+   * verification binds every rotation acceptance to - without it a thief of
+   * a copied host disk forges the whole chain, acceptor included. It is not
+   * a host key, so it does not live under `host`, and unlike the host pins
+   * it never rotates with them (rotating the founder root is Home handover,
+   * ADR 0080's non-goal).
+   */
+  home: {
+    homeHostPicoIdentityFingerprintHex: string;
+  };
   host: {
     signingPublicKeyHex: string;
     signingKeyFingerprintHex: string;
@@ -50,6 +62,7 @@ export function parsePicoCompanionProfile(value: unknown): PicoCompanionProfile 
   const record = assertExactKeys(value, [
     'schema',
     'coreUrl',
+    'home',
     'host',
     'identity',
     'device',
@@ -58,6 +71,14 @@ export function parsePicoCompanionProfile(value: unknown): PicoCompanionProfile 
     throw new Error('invalid_companion_profile_schema');
   }
   assertCoreUrl(record.coreUrl);
+
+  const home = assertExactKeys(record.home, [
+    'homeHostPicoIdentityFingerprintHex',
+  ], 'profile_home');
+  assertHex32(
+    home.homeHostPicoIdentityFingerprintHex,
+    'invalid_home_host_pico_fingerprint',
+  );
 
   const host = assertExactKeys(record.host, [
     'signingPublicKeyHex',

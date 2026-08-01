@@ -35,6 +35,10 @@ importers:
       '@pico/vault-daemon':
         specifier: workspace:*
         version: link:../vault-daemon
+    devDependencies:
+      libsodium-wrappers-sumo:
+        specifier: ^0.8.4
+        version: 0.8.4
 
   apps/core:
     dependencies:
@@ -66,6 +70,9 @@ importers:
 
   apps/vault-daemon:
     dependencies:
+      '@pico/identity':
+        specifier: workspace:*
+        version: link:../../packages/identity
       '@pico/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

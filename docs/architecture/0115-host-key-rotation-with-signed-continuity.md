@@ -2,14 +2,15 @@
 
 ## Status
 
-Accepted; partially implemented. Gates U1 (continuity record and
-verification), U2 (Foundation projection) and U3 (staging, Link
-operations, crash-safe custody swap, and the approval-gated ceremony
-through the transitional CLI) are implemented; U4 (client re-pin beyond
-the accepting client, member notification) is open. The
-era rule and this block's scope were decided explicitly by the user on
-2026-08-01: the accepted chain vouches for records of earlier eras, and
-clients re-pin in a later block.
+Accepted; implemented (U1-U4). The era rule and the block scopes were
+decided explicitly by the user on 2026-08-01: the accepted chain vouches
+for records of earlier eras, and clients re-pin in the U4 block. The
+three U4 forks were likewise decided by the user on 2026-08-01: the
+unsealed chain read lives on the Foundation route table and is published
+beside the sealed intake by the restricted Link listener; it serves the
+full chain, strictly parameterless; and after a fully verified chain a
+client re-pins automatically and notifies the person loudly, instead of
+gating the re-pin behind an approval.
 
 ## Context
 
@@ -49,9 +50,6 @@ Does not cover:
 - a product ceremony surface - the transitional CLI is the interim
   person surface, as with every ADR 0112 S1 wrapper; the companion
   ceremony and the forced card re-issue prompt stay ADR 0112 S3 work;
-- client re-pin - how a vault daemon, companion or member device learns
-  and verifies the new head (gate U4), including member notification,
-  which stays the ADR 0080 M3 residual until then;
 - Recovery Card re-issue after rotation - the obligation is ADR 0110's
   and its product surface is ADR 0112's; U3 must trigger it;
 - rotating the Home Host Pico's root (ADR 0114's founder exclusion:
@@ -106,6 +104,47 @@ the new key's holder accepted the chain themselves.
 New records bind to the head only. A credential or grant naming a
 retired key is refused - a retired key stamps nothing new, however
 honestly it once served.
+
+### The stranded client reads the chain unsealed, from its own pin
+
+A client that missed the rotation cannot use the sealed channel at all:
+it seals to an agreement key whose private half was deleted at the
+custody swap, and it pins an audience the intake refuses before any
+dispatch. So the one read that can un-strand it is unsealed - `GET` on
+the Foundation route table, published beside the sealed intake as the
+restricted listener's second explicitly named target, full chain plus
+the current head bundle, strictly parameterless (a query string is a
+different target and is refused). Serving it plain is sound because
+nothing in the response asks to be trusted: the records carry their own
+signatures, and the head bundle counts only if both public keys hash to
+the fingerprints the client's own verification proved.
+
+That verification starts at the client's *own pin*, never at the
+founding, and needs a pin clients did not previously hold: the Home
+Host Pico fingerprint. Without it a thief of a copied host disk forges
+the entire continuation - the outgoing signature is genuine (they hold
+the retired key), the incoming is genuine (they minted it), and the
+acceptor is simply invented, because the served bytes name whatever
+fingerprint the thief chose to sign with. Server-side the founding
+comparison catches this; client-side only a pinned acceptor does. The
+companion profile therefore carries the Home Host Pico fingerprint as a
+required field, and the transitional CLI takes it as a flag. The walk
+itself refuses forks (two successors of one pair), skipped links, links
+accepted by any other root, non-advancing lifecycle order, a change of
+Home, and revisited pairs - a genuine revisit would need a possession
+signature from a private key deleted at its own retirement.
+
+After a fully verified chain the client re-pins automatically and tells
+the person loudly, rather than gating the re-pin behind an approval:
+the verification is cryptographically complete, a member cannot
+meaningfully refuse their Home's rotation anyway, and a prompt that
+checks nothing the mathematics has not already checked only trains
+blind confirmation. Anything the chain cannot prove - including a Home
+that refuses the very pin the served chain calls its head - leaves the
+pin untouched and raises the continuity alarm instead: staying stranded
+is the safe state, and the person must hear it. None of this needs an
+unlocked vault: chain read, verification and profile rewrite are all
+public-key work.
 
 ### Boot re-proves the chain or drops what it cannot prove
 
@@ -171,18 +210,40 @@ key never orphans the evidence it once signed.
   client refuses unverifiable replies. The printed `newHostPublicKeys`
   re-pin the accepting client; the forced card re-issue *prompt* as a
   product surface stays ADR 0112 S3 work, and the CLI warns instead.
-- **U4 - Client re-pin (open):** vault-daemon and companion profiles
-  verify a presented chain against their existing pin and follow it;
-  member devices learn of the rotation and re-accept; the Pico Link
-  audience pin follows custody. Until U4, a rotation strands existing
-  clients on the old pin - which is why U3 and U4 should land together
-  or nearly so.
+- **U4 - Client re-pin (implemented):** the unsealed continuity read
+  (`GET /api/home/link/continuity`, access class honestly `public`,
+  parameterless, no-store) serves the stored records verbatim with the
+  custody head bundle, and the restricted listener forwards it as its
+  second explicitly named `(method, target)` pair - publication stays an
+  explicit decision, and the refusal matrix (foreign targets, wrong
+  methods, query strings) is proven at the edge.
+  `followPicoHomeContinuityChain` in `@pico/identity` walks from the
+  client's own pin with hostile vectors for the forged acceptor (proven
+  to verify record-internally and be refused only by the pin), fork,
+  withheld link, tampered link, stale order, foreign Home and revisited
+  pair - every guard counter-proven, removing it fails exactly one
+  test. `pico-vault refresh-host-pins` (S1 idiom: pins ride flags, the
+  new `--home-host-pico-fingerprint` is the acceptor pin) fetches,
+  follows, binds the served bundle by fingerprint hash and prints the
+  proven head, exiting loudly on anything unproven - proven over real
+  processes against a really rotated Home: the stranded old pins yield
+  `repinned` with exactly the ceremony's printed head, the head works,
+  current pins yield `current`, and a wrong acceptor turns the same
+  served chain into a loud `unverified`. The companion profile carries
+  the required `home.homeHostPicoIdentityFingerprintHex`, and the
+  lifecycle reader self-heals on the strand shape (pre-authentication
+  seal/audience refusals, never network failures): verify, re-pin the
+  profile atomically, rebuild the Link client, retry once, and notify
+  the person loudly (ADR 0080 M3) through the same adapter that carries
+  the ADR 0112 alarm; `current`-but-refused and unverifiable chains
+  keep the pin and raise the continuity alarm instead. The audience pin
+  following custody was U3's half and stays proven there.
 
 ## Threat ledger
 
 | Attacker | Posture |
 |---|---|
-| Thief of a copied host disk | Holds the outgoing keys and can sign a continuity statement to keys they control - but not the Home Host Pico's acceptance, which lives in the person's Vault. Without it no link is accepted anywhere. The thief's copy keeps impersonating the *old* head to clients that never learn of a rotation - the stated ADR 0072-family residual, bounded by U4's re-pin and member notification, not closed here. |
+| Thief of a copied host disk | Holds the outgoing keys and can sign a continuity statement to keys they control - but not the Home Host Pico's acceptance, which lives in the person's Vault. Without it no link is accepted anywhere, and client-side the pinned acceptor fingerprint refuses the forged continuation even though every other signature on it is genuine. Residual after U4: the thief's copy still impersonates the *old* head to a client that only ever reaches the thief - such a client sees no provable continuation, stays on its pin and, from the first refused sealed read, raises the continuity alarm rather than healing silently. Reaching the real Home once resolves it. |
 | Malicious or compromised Home Host Pico | Can accept any rotation - they govern the Home, and host keys sign infrastructure, not people (ADR 0056). No new power: they could already deny service or re-found. |
 | Database writer forging a link | Boot re-proves every link; a forged or edited link is dropped with everything after it and the pins return to the last proven head. A forged chain cannot make custody match it, so the Home stays closed rather than answering to an unproven key. |
 | Old host key signing new records after retirement | A retired key stamps nothing new: intake binds to the head. Its era's existing records stay valid - they always carried the Home Host Pico's authority signature, which the thief never had. |
@@ -202,15 +263,20 @@ Positive:
 
 Negative and residual:
 
-- until U4, a rotation strands clients on the old pin: the submit
-  result carries the new public bundle over the same sealed channel the
-  acceptance traveled, which re-pins the accepting client, but every
-  other device learns nothing until U4;
-- the acceptance signature is produced without ADR 0099/0106 ceremony
-  until U3's client half lands - the Link operations are the machine,
-  not the consent surface;
-- a stolen host disk keeps impersonating the old head to clients that
-  never see the chain - the ADR 0072 residual, bounded only by U4;
+- the unsealed chain read widens the published surface by one
+  unauthenticated read-only endpoint: anyone who can reach the intake
+  port learns the Home's rotation history - public-key material,
+  fingerprints, the coarse reason category and timestamps. Accepted
+  deliberately (user decision 2026-08-01): the material is
+  self-authenticating, the reason categories are coarse by design, and
+  the endpoint does no private-key work per request;
+- a stolen host disk keeps impersonating the old head to a client that
+  never reaches the real Home's endpoint - narrowed by U4 from "until
+  someone re-pins" to "while the client is partitioned from the real
+  Home", and made loud instead of silent;
+- the loud rotation notice and continuity alarm ride the transitional
+  notify-send adapter; the product notification surface stays ADR 0113
+  C2+ shell work, like the ADR 0112 alarm it shares the adapter with;
 - the Recovery Card's printed pins go stale on rotation (ADR 0110);
   U3 must force the re-issue prompt;
 - a pending recovery delays rotation, deliberately;
@@ -221,8 +287,9 @@ Negative and residual:
 ## Relationship to other ADRs
 
 - Realizes ADR `0080` H7's continuity statement and its "signed or
-  absent" rule; the M3 member re-acceptance residual stays open until
-  U4.
+  absent" rule; U4 carries the M3 member-notification residual: member
+  devices verify the chain from their own pin, re-pin, and the person
+  is told loudly.
 - Supplies the host-key half ADR `0033` required; the person-root half
   is ADR `0114`.
 - Applies ADR `0114`'s possession lesson to the incoming host key and

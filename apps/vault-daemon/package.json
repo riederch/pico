@@ -17,6 +17,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@pico/identity": "workspace:*",
     "@pico/protocol": "workspace:*",
     "@pico/vault": "workspace:*",
     "libsodium-wrappers-sumo": "^0.8.4",

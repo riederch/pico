@@ -251,10 +251,14 @@ separate later decision. The ADR 0042-0066 drafts stay drafts.
   a port.
 
   The second listener owns no authority and no parallel handler. It forwards
-  only the exact request target `POST /api/home/link` into the same Fastify
-  instance; every other path, query variant and method is refused before
+  only explicitly named exact request targets into the same Fastify
+  instance - originally only `POST /api/home/link`; ADR 0115 U4 later added
+  `GET /api/home/link/continuity`, the unsealed continuity read that serves
+  self-authenticating public-key material to clients a host-key rotation
+  stranded. Every other path, query variant and method is refused before
   Fastify routing. Consequently a future Foundation route cannot become
-  remotely reachable by accident. Header-count, header-time, request-time,
+  remotely reachable by accident: publishing a target here stays an explicit
+  decision. Header-count, header-time, request-time,
   keep-alive, requests-per-socket and Link-specific body limits bound the
   carrier edge before the intake's shape check and first seal-open.
 

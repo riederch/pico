@@ -583,6 +583,168 @@ export function verifyPicoHomeContinuityRecord(
   });
 }
 
+export interface PicoHomeContinuityChainFollowInput {
+  /** The served chain, order irrelevant: linkage is proven, never assumed. */
+  records: readonly PicoHomeContinuityRecord[];
+  /** The host pins this client currently trusts - the walk starts here. */
+  pinnedHostSigningKeyFingerprintHex: string;
+  pinnedHostKeyAgreementKeyFingerprintHex: string;
+  /**
+   * The Home Host Pico this client pinned when it joined. Without it a thief
+   * of a copied host disk forges the whole continuation: the outgoing
+   * signature is genuine (they hold the retired key), the incoming is genuine
+   * (they minted it), and the acceptor is simply invented - the served bytes
+   * name whatever fingerprint the thief chose to sign with. Only a pin the
+   * client already holds makes the acceptance mean anything.
+   */
+  pinnedHomeHostPicoIdentityFingerprintHex: string;
+}
+
+export type PicoHomeContinuityChainHaltReason =
+  | 'invalid_link'
+  | 'foreign_acceptor'
+  | 'forked_chain'
+  | 'cyclic_chain'
+  | 'stale_lifecycle_order'
+  | 'foreign_home';
+
+export interface PicoHomeContinuityChainFollowResult {
+  /** True once at least one link was proven; the head then differs from the pin. */
+  rotated: boolean;
+  followedLinks: number;
+  head: {
+    hostSigningKeyFingerprintHex: string;
+    hostKeyAgreementKeyFingerprintHex: string;
+    /**
+     * The proven head's signing public key, carried by the last followed
+     * link's own incoming key record. Absent when no link was followed - the
+     * client already holds the public key of its own pin.
+     */
+    hostSigningPublicKeyHex?: string;
+  };
+  /**
+   * Why the walk stopped short of the served material, if it did. The result
+   * is still the furthest proven head: what to do about an unproven remainder
+   * is the caller's decision (re-pin to the proven head, retry, alarm), not
+   * this function's - it reports evidence, it does not decide trust.
+   */
+  halt?: { reason: PicoHomeContinuityChainHaltReason };
+}
+
+/**
+ * ADR 0115 U4. Follows a served continuity chain from the client's own pin -
+ * never from the founding, which the client has no reason to trust more than
+ * the pin it already holds - and returns the furthest head it can prove.
+ *
+ * Every step must be the unique link retiring exactly the current cursor
+ * pair, fully verified, accepted by the pinned Home Host Pico, in the same
+ * Home, with strictly advancing lifecycle order. Duplicate successors are a
+ * fork ("two presents, both proven" is what H7 exists to prevent), and a walk
+ * that revisits a pair is refused outright: a genuine revisit would need a
+ * possession signature from a private key deleted at its own retirement.
+ */
+export function followPicoHomeContinuityChain(
+  sodium: IdentityVerificationSodium,
+  input: PicoHomeContinuityChainFollowInput,
+): PicoHomeContinuityChainFollowResult {
+  let cursor = {
+    signingKeyFingerprintHex: input.pinnedHostSigningKeyFingerprintHex,
+    keyAgreementKeyFingerprintHex: input.pinnedHostKeyAgreementKeyFingerprintHex,
+  };
+  let signingPublicKeyHex: string | undefined;
+  let previousLifecycleOrder: string | undefined;
+  let homeId: string | undefined;
+  let followedLinks = 0;
+  let halt: PicoHomeContinuityChainFollowResult['halt'];
+  const visitedPairs = new Set<string>([
+    `${cursor.signingKeyFingerprintHex}:${cursor.keyAgreementKeyFingerprintHex}`,
+  ]);
+
+  for (;;) {
+    const candidates = input.records.filter((record) =>
+      isRecordLike(record)
+      && isRecordLike(record.continuity)
+      && record.continuity.outgoingHostSigningKeyFingerprintHex
+        === cursor.signingKeyFingerprintHex
+      && record.continuity.outgoingHostKeyAgreementKeyFingerprintHex
+        === cursor.keyAgreementKeyFingerprintHex);
+    if (candidates.length > 1) {
+      halt = { reason: 'forked_chain' };
+      break;
+    }
+    const record = candidates[0];
+    if (record === undefined) {
+      break;
+    }
+    const continuity = record.continuity;
+
+    // The acceptor pin first: it is the check the whole read exists for, and
+    // it needs no cryptography - a stranger's acceptance is a stranger's
+    // however validly it signed.
+    if (continuity.homeHostPicoIdentityFingerprintHex
+      !== input.pinnedHomeHostPicoIdentityFingerprintHex) {
+      halt = { reason: 'foreign_acceptor' };
+      break;
+    }
+    if (homeId !== undefined && continuity.homeId !== homeId) {
+      halt = { reason: 'foreign_home' };
+      break;
+    }
+    if (previousLifecycleOrder !== undefined
+      && comparePicoIdentityLifecycleOrder(
+        continuity.lifecycleOrder,
+        previousLifecycleOrder,
+      ) <= 0) {
+      halt = { reason: 'stale_lifecycle_order' };
+      break;
+    }
+    let verified = false;
+    try {
+      verified = verifyPicoHomeContinuityRecord(sodium, record);
+    } catch {
+      verified = false;
+    }
+    if (!verified) {
+      halt = { reason: 'invalid_link' };
+      break;
+    }
+
+    const nextPair = `${continuity.incomingHostSigningKeyFingerprintHex}`
+      + `:${continuity.incomingHostKeyAgreementKeyFingerprintHex}`;
+    if (visitedPairs.has(nextPair)) {
+      halt = { reason: 'cyclic_chain' };
+      break;
+    }
+    visitedPairs.add(nextPair);
+    cursor = {
+      signingKeyFingerprintHex: continuity.incomingHostSigningKeyFingerprintHex,
+      keyAgreementKeyFingerprintHex:
+        continuity.incomingHostKeyAgreementKeyFingerprintHex,
+    };
+    signingPublicKeyHex = record.incomingHostSigningKeyRecord.publicKeyHex;
+    previousLifecycleOrder = continuity.lifecycleOrder;
+    homeId = continuity.homeId;
+    followedLinks += 1;
+  }
+
+  return {
+    rotated: followedLinks > 0,
+    followedLinks,
+    head: {
+      hostSigningKeyFingerprintHex: cursor.signingKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex: cursor.keyAgreementKeyFingerprintHex,
+      ...(signingPublicKeyHex === undefined
+        ? {}
+        : { hostSigningPublicKeyHex: signingPublicKeyHex }),
+    },
+    ...(halt === undefined ? {} : { halt }),
+  };
+}
+
+function isRecordLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 export function verifyPicoIdentityRevocationSignature(
   sodium: IdentityVerificationSodium,
   input: PicoIdentityRevocationVerificationInput,

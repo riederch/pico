@@ -21,7 +21,16 @@ export type {
 } from './alarm-carrier.js';
 export {
   createLinuxNotifySendAdapter,
+  renderPicoCompanionHostContinuityAlarm,
+  renderPicoCompanionHostRotationNotice,
   renderPicoCompanionPendingRecoveryAlarm,
 } from './notify.js';
 export type { LinuxNotifySendAdapterOptions } from './notify.js';
+export { repinPicoCompanionHostKeys } from './host-repin.js';
+export type {
+  PicoCompanionHostContinuityAlarm,
+  PicoCompanionHostContinuityNotifications,
+  PicoCompanionHostRepinOutcome,
+  PicoCompanionHostRotationNotice,
+} from './host-repin.js';
 export { createPicoCompanionLifecycleReader } from './lifecycle-reader.js';

@@ -21,6 +21,7 @@ import {
   picoHomeSealedClaimPayloadV2Schema,
   buildPicoHomeContinuitySignatureInput,
   buildPicoHomeMembershipSignatureInput,
+  picoHomeContinuityChainSchema,
   picoHomeContinuityReasonCategories,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
@@ -68,6 +69,7 @@ import {
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
   type PicoIdentityRotationSignatureInput,
+  type PicoHomeContinuityChainResponse,
   type PicoHomeContinuityRecord,
   type PicoHomeContinuityReasonCategory,
   type PicoHomeContinuitySignatureInput,
@@ -157,6 +159,7 @@ import {
   type PicoLinkDirectExecution,
   type PicoLinkDirectPrincipal,
 } from './link-direct.js';
+import { PICO_LINK_CONTINUITY_READ_PATH } from './link-intake-listener.js';
 import {
   PicoShareEnvelopeIssuer,
   type PicoShareEnvelopePrepareInput,
@@ -1268,6 +1271,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('POST', '/api/auth/bootstrap', 'setup-bootstrap');
   // ADR 0107: one route, envelopes only. Every class above it stays local.
   accessClasses.register('POST', '/api/home/link', 'link-intake');
+  // ADR 0115 U4: honestly `public`, not `link-intake` - there is no
+  // authentication one layer in, and there must not be: the read exists for
+  // clients the sealed channel refuses. It serves only self-authenticating
+  // material. Publication beyond the host stays the restricted listener's
+  // explicit decision, not this class's.
+  accessClasses.register('GET', PICO_LINK_CONTINUITY_READ_PATH, 'public');
   accessClasses.register('GET', '/api/home/setup', 'setup-bootstrap');
   accessClasses.register('POST', '/api/home/claim', 'setup-bootstrap');
   accessClasses.register('POST', '/api/auth/session', 'public');
@@ -2123,6 +2132,44 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     afterReply?.();
     return sendNoStore(reply.code(200), handled.envelope);
+  });
+
+  /**
+   * ADR 0115 U4, decided by the user on 2026-08-01: the unsealed continuity
+   * chain read, published beside the sealed intake by the restricted
+   * listener. A stranded client seals to a deleted agreement key and pins a
+   * refused audience, so the one read that can un-strand it cannot ride the
+   * sealed channel. Serving it plain is sound because nothing in the
+   * response asks to be trusted: the records carry their own signatures and
+   * the client verifies them from the pin it already holds; the head bundle
+   * is accepted only if it hashes to the fingerprints that verification
+   * proved. Deliberately parameterless - the full chain, no query surface.
+   */
+  app.get(PICO_LINK_CONTINUITY_READ_PATH, async (request, reply) => {
+    // A query string is a different target. The restricted listener refuses
+    // it by exact match before routing; local delivery refuses it here the
+    // same way, so the two surfaces cannot drift.
+    if (request.raw.url !== PICO_LINK_CONTINUITY_READ_PATH) {
+      return sendNoStore(reply.code(404), { error: 'Not found.' });
+    }
+    if (store.picoHomeFoundingRecord() === undefined || homeHostKeys === undefined) {
+      return sendNoStore(reply.code(409), {
+        error: 'Pico Home continuity is not available before founding.',
+      });
+    }
+    const response: PicoHomeContinuityChainResponse = {
+      schema: picoHomeContinuityChainSchema,
+      records: store.picoHomeHostContinuityRecords(),
+      head: {
+        suite: homeHostKeys.publicBundle.suite,
+        signingPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+        signingKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        keyAgreementPublicKeyHex: homeHostKeys.publicBundle.keyAgreementPublicKeyHex,
+        keyAgreementKeyFingerprintHex:
+          homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+      },
+    };
+    return sendNoStore(reply.code(200), response);
   });
 
   /** Shared with `GET /api/home/setup` so the link cannot drift from it. */

@@ -38,6 +38,7 @@ import {
   verifyPicoIdentityPossessionSignature,
   verifyPicoIdentityReaderKeyFreshnessSignature,
   verifyPicoIdentityRevocationSignature,
+  followPicoHomeContinuityChain,
   verifyPicoHomeContinuityRecord,
   verifyPicoIdentityRotationSignatures,
 } from './index.js';
@@ -964,6 +965,227 @@ describe('ADR 0115 host continuity records', () => {
       ...signedContinuity(outgoing, incoming, homeHostPico),
       schema: 'pico.home.continuity-record.v0' as never,
     })).toBe(false);
+  });
+});
+
+describe('ADR 0115 U4 continuity chain follow', () => {
+  interface Era {
+    signing: SigningFixture;
+    agreementFingerprintHex: string;
+  }
+
+  function era(seedByte: number): Era {
+    return {
+      signing: signingFixture('home_host_signing', seedByte),
+      agreementFingerprintHex: seedByte.toString(16).padStart(2, '0').repeat(32),
+    };
+  }
+
+  function chainLink(
+    outgoing: Era,
+    incoming: Era,
+    homeHostPico: SigningFixture,
+    overrides: Partial<PicoHomeContinuitySignatureInput> = {},
+  ): PicoHomeContinuityRecord {
+    const continuity: PicoHomeContinuitySignatureInput = {
+      suite: picoIdentitySuite,
+      continuityId: `continuity_${outgoing.signing.fingerprintHex.slice(0, 8)}`,
+      homeId: 'home_u4',
+      outgoingHostSigningKeyFingerprintHex: outgoing.signing.fingerprintHex,
+      outgoingHostKeyAgreementKeyFingerprintHex: outgoing.agreementFingerprintHex,
+      incomingHostSigningKeyFingerprintHex: incoming.signing.fingerprintHex,
+      incomingHostKeyAgreementKeyFingerprintHex: incoming.agreementFingerprintHex,
+      homeHostPicoIdentityFingerprintHex: homeHostPico.fingerprintHex,
+      reasonCategory: 'host_key_rotated',
+      changedAt: '2026-08-02T10:00:00.000Z',
+      lifecycleOrder: 'seq:0000000000000002',
+      ...overrides,
+    };
+    const signatureInput = buildPicoHomeContinuitySignatureInput(continuity);
+    return {
+      schema: picoHomeContinuityRecordSchema,
+      continuity,
+      outgoingHostSigningKeyRecord: outgoing.signing.keyRecord,
+      incomingHostSigningKeyRecord: incoming.signing.keyRecord,
+      homeHostPicoIdentityKeyRecord: homeHostPico.keyRecord,
+      outgoingHostSignatureHex: signHex(signatureInput, outgoing.signing.privateKey),
+      incomingHostSignatureHex: signHex(signatureInput, incoming.signing.privateKey),
+      homeHostPicoSignatureHex: signHex(signatureInput, homeHostPico.privateKey),
+      createdAt: '2026-08-02T10:00:00.000Z',
+    };
+  }
+
+  function follow(
+    records: readonly PicoHomeContinuityRecord[],
+    pin: Era,
+    acceptor: SigningFixture,
+  ): ReturnType<typeof followPicoHomeContinuityChain> {
+    return followPicoHomeContinuityChain(testSodium, {
+      records,
+      pinnedHostSigningKeyFingerprintHex: pin.signing.fingerprintHex,
+      pinnedHostKeyAgreementKeyFingerprintHex: pin.agreementFingerprintHex,
+      pinnedHomeHostPicoIdentityFingerprintHex: acceptor.fingerprintHex,
+    });
+  }
+
+  it('follows from the own pin, not the founding, and proves the head public key', () => {
+    const eraA = era(0x70);
+    const eraB = era(0x71);
+    const eraC = era(0x72);
+    const homeHostPico = signingFixture('pico_identity', 0x73);
+    const records = [
+      chainLink(eraA, eraB, homeHostPico, { lifecycleOrder: 'seq:0000000000000002' }),
+      chainLink(eraB, eraC, homeHostPico, { lifecycleOrder: 'seq:0000000000000003' }),
+    ];
+
+    const fromFounding = follow(records, eraA, homeHostPico);
+    expect(fromFounding).toEqual({
+      rotated: true,
+      followedLinks: 2,
+      head: {
+        hostSigningKeyFingerprintHex: eraC.signing.fingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: eraC.agreementFingerprintHex,
+        hostSigningPublicKeyHex: eraC.signing.keyRecord.publicKeyHex,
+      },
+    });
+
+    // A mid-era pin follows only its own suffix - proof the walk starts at
+    // the pin rather than re-deriving everything from the first record.
+    expect(follow(records, eraB, homeHostPico).followedLinks).toBe(1);
+
+    // A pin already at the head has nothing to follow and no new public key
+    // to learn.
+    expect(follow(records, eraC, homeHostPico)).toEqual({
+      rotated: false,
+      followedLinks: 0,
+      head: {
+        hostSigningKeyFingerprintHex: eraC.signing.fingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: eraC.agreementFingerprintHex,
+      },
+    });
+  });
+
+  it('proves nothing from a chain that never retires the pin', () => {
+    const eraA = era(0x74);
+    const eraB = era(0x75);
+    const eraC = era(0x76);
+    const homeHostPico = signingFixture('pico_identity', 0x77);
+    // The A-to-B link is withheld: a served chain with a gap below the pin's
+    // successor ends the walk at the pin, however valid its remainder is.
+    const records = [
+      chainLink(eraB, eraC, homeHostPico, { lifecycleOrder: 'seq:0000000000000003' }),
+    ];
+
+    const result = follow(records, eraA, homeHostPico);
+    expect(result.rotated).toBe(false);
+    expect(result.head.hostSigningKeyFingerprintHex).toBe(eraA.signing.fingerprintHex);
+    expect(result.halt).toBeUndefined();
+  });
+
+  it('binds every acceptance to the pinned Home Host Pico - the stolen-disk forgery', () => {
+    const eraA = era(0x78);
+    const thiefEra = era(0x79);
+    const homeHostPico = signingFixture('pico_identity', 0x7a);
+    const thiefRoot = signingFixture('pico_identity', 0x7b);
+    // The thief holds the retired outgoing key, mints the incoming one and
+    // invents the acceptor: the record is internally beyond reproach.
+    const forged = chainLink(eraA, thiefEra, thiefRoot, {
+      lifecycleOrder: 'seq:0000000000000002',
+    });
+    expect(verifyPicoHomeContinuityRecord(testSodium, forged)).toBe(true);
+
+    // Only the pin the client already holds refuses it.
+    const result = follow([forged], eraA, homeHostPico);
+    expect(result.rotated).toBe(false);
+    expect(result.head.hostSigningKeyFingerprintHex).toBe(eraA.signing.fingerprintHex);
+    expect(result.halt).toEqual({ reason: 'foreign_acceptor' });
+  });
+
+  it('refuses two successors of the same pair as a fork', () => {
+    const eraA = era(0x7c);
+    const eraB = era(0x7d);
+    const eraB2 = era(0x7e);
+    const homeHostPico = signingFixture('pico_identity', 0x7f);
+    const records = [
+      chainLink(eraA, eraB, homeHostPico, { lifecycleOrder: 'seq:0000000000000002' }),
+      chainLink(eraA, eraB2, homeHostPico, { lifecycleOrder: 'seq:0000000000000003' }),
+    ];
+
+    const result = follow(records, eraA, homeHostPico);
+    expect(result.rotated).toBe(false);
+    expect(result.head.hostSigningKeyFingerprintHex).toBe(eraA.signing.fingerprintHex);
+    expect(result.halt).toEqual({ reason: 'forked_chain' });
+  });
+
+  it('halts at the first link that does not verify and keeps the proven prefix', () => {
+    const eraA = era(0x60);
+    const eraB = era(0x59);
+    const eraC = era(0x58);
+    const homeHostPico = signingFixture('pico_identity', 0x57);
+    const tampered = chainLink(eraB, eraC, homeHostPico, {
+      lifecycleOrder: 'seq:0000000000000003',
+    });
+    const records = [
+      chainLink(eraA, eraB, homeHostPico, { lifecycleOrder: 'seq:0000000000000002' }),
+      { ...tampered, incomingHostSignatureHex: tampered.outgoingHostSignatureHex },
+    ];
+
+    const result = follow(records, eraA, homeHostPico);
+    expect(result.rotated).toBe(true);
+    expect(result.followedLinks).toBe(1);
+    expect(result.head.hostSigningKeyFingerprintHex).toBe(eraB.signing.fingerprintHex);
+    expect(result.halt).toEqual({ reason: 'invalid_link' });
+  });
+
+  it('requires the lifecycle order to advance along the walk', () => {
+    const eraA = era(0x56);
+    const eraB = era(0x55);
+    const eraC = era(0x54);
+    const homeHostPico = signingFixture('pico_identity', 0x53);
+    const records = [
+      chainLink(eraA, eraB, homeHostPico, { lifecycleOrder: 'seq:0000000000000003' }),
+      chainLink(eraB, eraC, homeHostPico, { lifecycleOrder: 'seq:0000000000000003' }),
+    ];
+
+    const result = follow(records, eraA, homeHostPico);
+    expect(result.followedLinks).toBe(1);
+    expect(result.halt).toEqual({ reason: 'stale_lifecycle_order' });
+  });
+
+  it('refuses a continuation that changes the Home', () => {
+    const eraA = era(0x52);
+    const eraB = era(0x51);
+    const eraC = era(0x50);
+    const homeHostPico = signingFixture('pico_identity', 0x4f);
+    const records = [
+      chainLink(eraA, eraB, homeHostPico, { lifecycleOrder: 'seq:0000000000000002' }),
+      chainLink(eraB, eraC, homeHostPico, {
+        homeId: 'home_other',
+        lifecycleOrder: 'seq:0000000000000003',
+      }),
+    ];
+
+    const result = follow(records, eraA, homeHostPico);
+    expect(result.followedLinks).toBe(1);
+    expect(result.halt).toEqual({ reason: 'foreign_home' });
+  });
+
+  it('refuses a walk that revisits a pair - a genuine revisit is impossible', () => {
+    const eraA = era(0x4e);
+    const eraB = era(0x4b);
+    const homeHostPico = signingFixture('pico_identity', 0x4a);
+    // Signable only in a test, where the retired private key still exists;
+    // in the runtime it is deleted at promotion, so the possession signature
+    // of a returning pair cannot be made.
+    const records = [
+      chainLink(eraA, eraB, homeHostPico, { lifecycleOrder: 'seq:0000000000000002' }),
+      chainLink(eraB, eraA, homeHostPico, { lifecycleOrder: 'seq:0000000000000003' }),
+    ];
+
+    const result = follow(records, eraA, homeHostPico);
+    expect(result.followedLinks).toBe(1);
+    expect(result.head.hostSigningKeyFingerprintHex).toBe(eraB.signing.fingerprintHex);
+    expect(result.halt).toEqual({ reason: 'cyclic_chain' });
   });
 });
 

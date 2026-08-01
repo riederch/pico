@@ -194,6 +194,13 @@ export const picoHomeMembershipLifecycleRecordSchema = 'pico.home.membership-lif
 // never produce.
 export const picoHomeContinuityRecordSchema = 'pico.home.continuity-record.v1' as const;
 
+// ADR 0115 U4. The unsealed chain read: a stranded client seals to a deleted
+// agreement key and pins a refused audience, so the one read that can un-strand
+// it must not require the sealed channel. Serving it is safe because the chain
+// is self-authenticating - the response carries only public-key material and
+// signatures the client verifies from its own pin.
+export const picoHomeContinuityChainSchema = 'pico.home.continuity-chain.v1' as const;
+
 export const picoHomeDomainReadGrantRecordSchema = 'pico.home.domain-read-grant-record.v1' as const;
 
 export const picoHomeDomainReadGrantLifecycleRecordSchema = 'pico.home.domain-read-grant-lifecycle-record.v1' as const;
@@ -2151,6 +2158,27 @@ export interface PicoHomePendingClaimResponse {
   pendingClaim: {
     claimResponse: PicoHomeClaimResponseRecord;
     founding: PicoHomeFoundingSignatureInput;
+  };
+}
+
+/**
+ * ADR 0115 U4. The unsealed continuity-chain response. `records` is the
+ * accepted chain founding-first, served verbatim so every signature stays
+ * verifiable; `head` is the public bundle custody currently answers with.
+ * Nothing in this response is trusted as served: a client verifies the
+ * records from its own pin, binds every acceptance to its pinned Home Host
+ * Pico fingerprint, and accepts the head bundle only if both key records
+ * hash to the fingerprints its own verified chain head names.
+ */
+export interface PicoHomeContinuityChainResponse {
+  schema: typeof picoHomeContinuityChainSchema;
+  records: PicoHomeContinuityRecord[];
+  head: {
+    suite: typeof picoIdentitySuite;
+    signingPublicKeyHex: string;
+    signingKeyFingerprintHex: string;
+    keyAgreementPublicKeyHex: string;
+    keyAgreementKeyFingerprintHex: string;
   };
 }
 

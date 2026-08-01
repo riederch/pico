@@ -26,6 +26,9 @@ function validProfile(): PicoCompanionProfile {
   return {
     schema: 'pico.companion.profile.v1',
     coreUrl: 'http://127.0.0.1:8321',
+    home: {
+      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
+    },
     host: {
       signingPublicKeyHex: '11'.repeat(32),
       signingKeyFingerprintHex: '22'.repeat(32),
@@ -77,6 +80,17 @@ describe('Companion profile store (ADR 0113 C1)', () => {
       ...good,
       device: { ...good.device, delegationId: 'no spaces allowed' },
     })).toThrow('invalid_device_delegation_id');
+    // ADR 0115 U4: without the acceptor pin the continuity-chain follow has
+    // nothing to bind acceptances to, so a profile missing it is invalid -
+    // never quietly tolerated.
+    expect(() => parsePicoCompanionProfile({
+      ...good,
+      home: { homeHostPicoIdentityFingerprintHex: '99'.repeat(31) },
+    })).toThrow('invalid_home_host_pico_fingerprint');
+    expect(() => parsePicoCompanionProfile({
+      ...good,
+      home: {},
+    })).toThrow('missing_companion_profile_home_field');
     expect(() => parsePicoCompanionProfile({ ...good, coreUrl: 'file:///etc/passwd' }))
       .toThrow('invalid_companion_core_url');
     expect(() => parsePicoCompanionProfile({ ...good, coreUrl: 'not a url' }))

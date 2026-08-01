@@ -444,11 +444,13 @@ pnpm dev:core
 
 Both Link variables are required together, the port must differ from
 `PICO_PORT`, and this restricted listener cannot be combined with
-`direct-token`. It accepts exactly `POST /api/home/link`; dashboard, health,
-diagnostics, Foundation APIs, WebSocket, query variants and other methods are
-not routed. This is a controlled direct/LAN validation path, not a public
-reverse-proxy or port-forwarding product model. Remote product reachability
-still belongs to Pico Relay.
+`direct-token`. It accepts exactly `POST /api/home/link` plus the unsealed
+ADR 0115 continuity read `GET /api/home/link/continuity` (self-authenticating
+public-key material only, for clients stranded by a host-key rotation);
+dashboard, health, diagnostics, Foundation APIs, WebSocket, query variants and
+other methods are not routed. This is a controlled direct/LAN validation path,
+not a public reverse-proxy or port-forwarding product model. Remote product
+reachability still belongs to Pico Relay.
 
 Mint a short-lived realtime ticket for browser WebSocket access:
 

@@ -1827,6 +1827,62 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       keyAgreementPublicKeyHex: core.hostKeyAgreementPublicKeyHex,
     }));
     expect(stalePinned.code).not.toBe(0);
+
+    // ADR 0115 U4. Every client beyond the accepting one is exactly here:
+    // stranded on the retired pins, unable to use the sealed channel at all.
+    // The unsealed chain read on the same restricted listener plus the
+    // acceptor pin is what un-strands it - proven over the real processes.
+    const refreshFlags = (acceptorFingerprintHex: string) => [
+      'refresh-host-pins',
+      '--core-url', requireLinkBaseUrl(core),
+      '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+      '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+      '--home-host-pico-fingerprint', acceptorFingerprintHex,
+    ];
+    const refreshed = await runCli(refreshFlags(ownerIdentity.keyFingerprintHex));
+    expect(refreshed.code, refreshed.stderr).toBe(0);
+    const refresh = JSON.parse(refreshed.stdout) as {
+      status: string;
+      followedLinks?: number;
+      head: {
+        signingPublicKeyHex: string;
+        signingKeyFingerprintHex: string;
+        keyAgreementPublicKeyHex: string;
+        keyAgreementKeyFingerprintHex: string;
+      };
+    };
+    expect(refresh.status).toBe('repinned');
+    expect(refresh.followedLinks).toBe(1);
+    expect(refresh.head).toEqual({
+      signingPublicKeyHex: rotation.newHostPublicKeys.signingPublicKeyHex,
+      signingKeyFingerprintHex: rotation.newHostPublicKeys.signingKeyFingerprintHex,
+      keyAgreementPublicKeyHex: rotation.newHostPublicKeys.keyAgreementPublicKeyHex,
+      keyAgreementKeyFingerprintHex:
+        rotation.newHostPublicKeys.keyAgreementKeyFingerprintHex,
+    });
+    // The verified head is a working pin, not just a printout.
+    const chainRePinned = await runCli(inspectFlags(refresh.head));
+    expect(chainRePinned.code, chainRePinned.stderr).toBe(0);
+
+    // Already-current pins get `current`, never an invented rotation.
+    const current = await runCli([
+      'refresh-host-pins',
+      '--core-url', requireLinkBaseUrl(core),
+      '--host-signing-fingerprint', refresh.head.signingKeyFingerprintHex,
+      '--host-agreement-fingerprint', refresh.head.keyAgreementKeyFingerprintHex,
+      '--home-host-pico-fingerprint', ownerIdentity.keyFingerprintHex,
+    ]);
+    expect(current.code, current.stderr).toBe(0);
+    expect((JSON.parse(current.stdout) as { status: string }).status)
+      .toBe('current');
+
+    // A wrong acceptor pin makes the same served chain prove nothing: the
+    // stolen-disk defence, exercised against the real Home. The client
+    // stays on its pins and exits loudly.
+    const foreignAcceptor = await runCli(refreshFlags('ab'.repeat(32)));
+    expect(foreignAcceptor.code).not.toBe(0);
+    expect((JSON.parse(foreignAcceptor.stdout) as { status: string }).status)
+      .toBe('unverified');
   }, 240_000);
 
   it('drives initiate, veto and complete through the transitional recovery CLI', async () => {

@@ -20,6 +20,7 @@ import {
   type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
 import { buildPicoIdentityKeyRecordSignatureInput } from '@pico/protocol';
+import { followPicoHomeContinuityChain } from '@pico/identity';
 import { EventStore } from './event-store.js';
 
 const tempDirs: string[] = [];
@@ -316,6 +317,47 @@ describe('ADR 0115 host-key continuity chain', () => {
       currentHostSigningKeyFingerprintHex: fixture.hostB.fingerprintHex,
     });
     reopened.close();
+  });
+
+  it('serves the stored records verbatim, and a stranded pin can follow them (U4)', () => {
+    const fixture = createFixture();
+    const { store } = fixture;
+    const hostC = createSigningKey('home_host_signing');
+    expect(store.picoHomeHostContinuityRecords()).toEqual([]);
+
+    const first = continuityRecord(fixture, {});
+    const second = continuityRecord(fixture, {
+      continuityId: 'continuity_0002',
+      outgoing: { signing: fixture.hostB, agreementFingerprintHex: 'bb'.repeat(32) },
+      incoming: { signing: hostC, agreementFingerprintHex: 'cc'.repeat(32) },
+      lifecycleOrder: 'seq:0000000000000003',
+    });
+    expect(store.recordPicoHomeHostContinuity({ record: first, sodium }).ok).toBe(true);
+    expect(store.recordPicoHomeHostContinuity({ record: second, sodium }).ok).toBe(true);
+
+    // Verbatim and founding-first: the unsealed read exists for clients that
+    // verify, so anything less than the full signed records would be an
+    // assertion.
+    expect(store.picoHomeHostContinuityRecords()).toEqual([first, second]);
+
+    // The Foundation projection and the client verification agree: a client
+    // still pinned to the founding era follows the served records to the
+    // current head - this is the pair of halves U4 consists of.
+    expect(followPicoHomeContinuityChain(sodium, {
+      records: store.picoHomeHostContinuityRecords(),
+      pinnedHostSigningKeyFingerprintHex: fixture.hostA.fingerprintHex,
+      pinnedHostKeyAgreementKeyFingerprintHex: 'aa'.repeat(32),
+      pinnedHomeHostPicoIdentityFingerprintHex: fixture.founder.fingerprintHex,
+    })).toEqual({
+      rotated: true,
+      followedLinks: 2,
+      head: {
+        hostSigningKeyFingerprintHex: hostC.fingerprintHex,
+        hostKeyAgreementKeyFingerprintHex: 'cc'.repeat(32),
+        hostSigningPublicKeyHex: hostC.publicKeyHex,
+      },
+    });
+    fixture.store.close();
   });
 });
 

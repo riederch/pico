@@ -53,6 +53,7 @@ import {
   createPicoLinkDirectClient,
   type PicoLinkDirectClient,
 } from './link-direct-client.js';
+import { refreshPicoHomeHostPins } from './host-pin-refresh.js';
 import {
   enrollPicoHomeDevice,
   readPicoHomeDeviceLifecycle,
@@ -66,7 +67,16 @@ import {
 } from './device-recovery-ceremony.js';
 import { generatePicoRecoveryCardPdfs } from './recovery-card-pdf.js';
 
-const cliCommands = ['daemon', 'create', 'status', 'unlock', 'lock', 'sign', 'ceremony'] as const;
+const cliCommands = [
+  'daemon',
+  'create',
+  'status',
+  'unlock',
+  'lock',
+  'sign',
+  'refresh-host-pins',
+  'ceremony',
+] as const;
 type CliCommand = typeof cliCommands[number];
 
 /**
@@ -106,6 +116,15 @@ const flagNamesByCommand: Record<CliCommand, readonly string[]> = {
   unlock: ['vault-home', 'role', 'fingerprint'],
   lock: ['vault-home'],
   sign: ['vault-home', 'fingerprint', 'label', 'fields-json'],
+  // ADR 0115 U4: pure verification, no vault and no daemon - a stranded
+  // client must be able to heal without an unlock. The acceptor flag is what
+  // makes the chain walk mean anything (see host-pin-refresh.ts).
+  'refresh-host-pins': [
+    'core-url',
+    'host-signing-fingerprint',
+    'host-agreement-fingerprint',
+    'home-host-pico-fingerprint',
+  ],
   ceremony: [],
 };
 
@@ -1042,6 +1061,40 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
       process.stdout.write(`${JSON.stringify(locked)}\n`);
       return;
     }
+    case 'refresh-host-pins': {
+      // ADR 0115 U4, transitional S1 idiom: verify the Home's continuity
+      // chain from this client's existing pins and print the proven head.
+      // The daemon is pin-stateless (pins ride flags), so "re-pin" here means
+      // handing the caller pins it may now use; the durable profile is the
+      // companion's.
+      await sodium.ready;
+      const refreshed = await refreshPicoHomeHostPins(
+        sodium as unknown as VaultSodium,
+        {
+          coreUrl: requireFlag(invocation.flags, 'core-url'),
+          pinnedHostSigningKeyFingerprintHex:
+            requireFlag(invocation.flags, 'host-signing-fingerprint'),
+          pinnedHostKeyAgreementKeyFingerprintHex:
+            requireFlag(invocation.flags, 'host-agreement-fingerprint'),
+          pinnedHomeHostPicoIdentityFingerprintHex:
+            requireFlag(invocation.flags, 'home-host-pico-fingerprint'),
+        },
+      );
+      process.stdout.write(`${JSON.stringify(refreshed)}\n`);
+      if (refreshed.status === 'unverified') {
+        // The endpoint claims a head the chain walk could not prove. Staying
+        // on the old pin is the safe state; the nonzero exit is the alarm.
+        throw new Error('host_pins_unverified');
+      }
+      if (refreshed.status === 'repinned') {
+        process.stderr.write(
+          'Host keys rotated: re-pin this device with the printed head and '
+          + 'treat printed Recovery Cards for the old keys as stale (ADR '
+          + '0110/0115).\n',
+        );
+      }
+      return;
+    }
     case 'sign': {
       const label = invocation.flags.get('label');
       const fieldsJson = invocation.flags.get('fields-json');
@@ -1460,12 +1513,12 @@ if (isMainModule) {
     (error: unknown) => {
       process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       process.stderr.write(
-        'usage: pico-vault <daemon|create|status|unlock|lock|sign> '
+        'usage: pico-vault <daemon|create|status|unlock|lock|sign|refresh-host-pins> '
         + '| pico-vault ceremony <claim-home|create-domain|rotate-domain|grant-reader'
         + '|publish-checkpoint|issue-membership|delegate-device|open-identity-session'
         + '|enroll-device|renew-device|revoke-device|inspect-device-lifecycle'
         + '|issue-recovery-card|restore-identity|initiate-recovery'
-        + '|complete-recovery|veto-recovery> [flags]\n'
+        + '|complete-recovery|veto-recovery|rotate-host-key> [flags]\n'
         + '[--vault-home <path>] [--foundation-data <path>] [--foundation-backup <path>] '
         + '[--role <keyRole>] [--fingerprint <hex>]\n',
       );

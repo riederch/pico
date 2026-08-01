@@ -2892,6 +2892,42 @@ export class EventStore {
       .all(homeId) as PicoHomeHostContinuityLinkView[];
   }
 
+  /**
+   * ADR 0115 U4. The accepted chain verbatim, founding-first: the stored
+   * records with every signature, because the unsealed chain read exists for
+   * clients that verify - a view without the signatures would be an
+   * assertion, and assertions are exactly what a stranded client must not
+   * accept. A row that no longer parses is omitted rather than served
+   * broken; boot reconciliation is where such a row is dropped for good.
+   */
+  public picoHomeHostContinuityRecords(): PicoHomeContinuityRecord[] {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_home_host_continuity')) {
+      return [];
+    }
+    const homeId = this.picoHomeFoundingRecord()?.founding.homeId;
+    if (homeId === undefined) {
+      return [];
+    }
+    const rows = this.db
+      .prepare(`
+        SELECT record_json AS recordJson
+        FROM pico_home_host_continuity
+        WHERE home_id = ?
+        ORDER BY chain_position ASC
+      `)
+      .all(homeId) as { recordJson: string }[];
+    const records: PicoHomeContinuityRecord[] = [];
+    for (const row of rows) {
+      try {
+        records.push(JSON.parse(row.recordJson) as PicoHomeContinuityRecord);
+      } catch {
+        // Skip: the chain walk on the client ends at its proven prefix.
+      }
+    }
+    return records;
+  }
+
   private picoHomeHostContinuityTail(): PicoHomeHostContinuityLinkView | undefined {
     const chain = this.picoHomeHostKeyChain();
     return chain[chain.length - 1];

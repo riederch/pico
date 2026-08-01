@@ -4,6 +4,12 @@ import type { FastifyInstance } from 'fastify';
 import type { PicoLinkIntakeBinding } from './config.js';
 
 export const PICO_LINK_INTAKE_PATH = '/api/home/link';
+// ADR 0115 U4, decided by the user on 2026-08-01: the unsealed continuity
+// chain read is published beside the sealed intake, because a stranded client
+// seals to a deleted agreement key and pins a refused audience - the sealed
+// channel is structurally unusable for exactly the read that would un-strand
+// it. Strictly this exact target, GET only, query strings refused.
+export const PICO_LINK_CONTINUITY_READ_PATH = '/api/home/link/continuity';
 export const PICO_LINK_INTAKE_REQUEST_TIMEOUT_MS = 10_000;
 export const PICO_LINK_INTAKE_HEADERS_TIMEOUT_MS = 5_000;
 export const PICO_LINK_INTAKE_KEEP_ALIVE_TIMEOUT_MS = 5_000;
@@ -20,12 +26,13 @@ export interface PicoLinkIntakeListener {
  * ADR 0107 D4: a second HTTP listener that can be published without publishing
  * the Foundation API.
  *
- * This adapter owns no route table and no authority. It forwards exactly one
- * method and request target into the already-built Fastify application, so the
- * request runs the same parser, `link-intake` access class, verifier, replay
- * state and operation handlers as local delivery. Everything else is refused
- * before Fastify routing, which means adding a Foundation route can never widen
- * this listener by accident.
+ * This adapter owns no route table and no authority. It forwards exactly two
+ * named (method, target) pairs into the already-built Fastify application -
+ * the sealed Link intake and the unsealed ADR 0115 U4 continuity read - so
+ * each request runs the same parser, access class, verifier, replay state and
+ * operation handlers as local delivery. Everything else is refused before
+ * Fastify routing, which means adding a Foundation route can never widen this
+ * listener by accident: publishing a target here stays an explicit decision.
  */
 export async function startPicoLinkIntakeListener(
   app: FastifyInstance,
@@ -33,13 +40,23 @@ export async function startPicoLinkIntakeListener(
 ): Promise<PicoLinkIntakeListener> {
   await app.ready();
 
+  // The exact-match comparison is load-bearing: a query string makes the URL
+  // a different target, so `?anything` is refused as 404 at this edge.
+  const allowedMethodByTarget = new Map<string, 'POST' | 'GET'>([
+    [PICO_LINK_INTAKE_PATH, 'POST'],
+    [PICO_LINK_CONTINUITY_READ_PATH, 'GET'],
+  ]);
+
   const server = createServer((request, response) => {
-    if (request.url !== PICO_LINK_INTAKE_PATH) {
+    const allowedMethod = request.url === undefined
+      ? undefined
+      : allowedMethodByTarget.get(request.url);
+    if (allowedMethod === undefined) {
       refuse(request, response, 404, 'Not found.');
       return;
     }
-    if (request.method !== 'POST') {
-      response.setHeader('allow', 'POST');
+    if (request.method !== allowedMethod) {
+      response.setHeader('allow', allowedMethod);
       refuse(request, response, 405, 'Method not allowed.');
       return;
     }

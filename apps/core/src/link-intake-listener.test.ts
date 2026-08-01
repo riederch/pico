@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES } from './link-direct.js';
 import {
+  PICO_LINK_CONTINUITY_READ_PATH,
   PICO_LINK_INTAKE_PATH,
   startPicoLinkIntakeListener,
 } from './link-intake-listener.js';
@@ -25,6 +26,29 @@ describe('restricted Pico Link intake listener (ADR 0107 D4)', () => {
     });
   });
 
+  it('forwards the unsealed continuity read as its second named target (ADR 0115 U4)', async () => {
+    await withListener(async (baseUrl) => {
+      // The fresh test Home is unfounded, so the route itself answers 409 -
+      // which proves the request reached the real Foundation route through
+      // this listener rather than being refused at the edge.
+      const response = await fetch(`${baseUrl}${PICO_LINK_CONTINUITY_READ_PATH}`);
+      expect(response.status).toBe(409);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual({
+        error: 'Pico Home continuity is not available before founding.',
+      });
+
+      for (const method of ['POST', 'PUT', 'DELETE', 'OPTIONS']) {
+        const refused = await fetch(`${baseUrl}${PICO_LINK_CONTINUITY_READ_PATH}`, {
+          method,
+        });
+        expect(refused.status, method).toBe(405);
+        expect(refused.headers.get('allow')).toBe('GET');
+        expect(refused.headers.get('cache-control')).toBe('no-store');
+      }
+    });
+  });
+
   it('cannot expose Foundation routes, diagnostics, static files or target variants', async () => {
     await withListener(async (baseUrl) => {
       for (const probe of [
@@ -35,6 +59,11 @@ describe('restricted Pico Link intake listener (ADR 0107 D4)', () => {
         { method: 'POST', path: '/api/events' },
         { method: 'POST', path: `${PICO_LINK_INTAKE_PATH}/` },
         { method: 'POST', path: `${PICO_LINK_INTAKE_PATH}?operation=status` },
+        // The continuity read is deliberately parameterless: a query string
+        // is a different target and never reaches routing (user decision,
+        // ADR 0115 U4).
+        { method: 'GET', path: `${PICO_LINK_CONTINUITY_READ_PATH}/` },
+        { method: 'GET', path: `${PICO_LINK_CONTINUITY_READ_PATH}?from=abc` },
       ]) {
         const response = await fetch(`${baseUrl}${probe.path}`, {
           method: probe.method,

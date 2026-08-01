@@ -328,11 +328,14 @@ function fromHex(value: string, bytes: number | undefined, reason: string): Uint
   return Uint8Array.from(Buffer.from(value, 'hex'));
 }
 
-async function readBoundedResponseText(response: Response): Promise<string> {
+export async function readBoundedResponseText(
+  response: Response,
+  maxChars: number = MAX_PICO_LINK_DIRECT_CLIENT_RESPONSE_CHARS,
+): Promise<string> {
   const statedLength = response.headers.get('content-length');
   if (statedLength !== null
     && Number.isSafeInteger(Number(statedLength))
-    && Number(statedLength) > MAX_PICO_LINK_DIRECT_CLIENT_RESPONSE_CHARS) {
+    && Number(statedLength) > maxChars) {
     await response.body?.cancel();
     throw new Error('link_response_too_large');
   }
@@ -350,7 +353,7 @@ async function readBoundedResponseText(response: Response): Promise<string> {
         break;
       }
       length += next.value.byteLength;
-      if (length > MAX_PICO_LINK_DIRECT_CLIENT_RESPONSE_CHARS) {
+      if (length > maxChars) {
         await reader.cancel();
         throw new Error('link_response_too_large');
       }

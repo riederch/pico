@@ -79,6 +79,16 @@ export type {
   PicoLinkDirectSender,
 } from './link-direct-client.js';
 export {
+  fetchPicoHomeContinuityChain,
+  refreshPicoHomeHostPins,
+  MAX_PICO_HOME_CONTINUITY_CHAIN_RESPONSE_CHARS,
+  PICO_HOME_CONTINUITY_READ_PATH,
+} from './host-pin-refresh.js';
+export type {
+  PicoHomeHostPinRefreshResult,
+  RefreshPicoHomeHostPinsInput,
+} from './host-pin-refresh.js';
+export {
   connectPicoVaultDaemonSyncTransport,
   createPicoVaultDaemonReaderAccessUnlockPort,
   openPicoVaultDaemonReaderAccessSession,
