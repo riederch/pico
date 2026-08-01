@@ -5,6 +5,11 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 export function registerWebDashboard(app: FastifyInstance, webRootPath: string): void {
   app.get('/', async (_request, reply) => sendStaticFile(reply, webRootPath, 'index.html'));
 
+  // The dashboard stylesheet is a real asset instead of an inline <style>
+  // block so the surface-wide CSP can stay `default-src 'self'` without an
+  // 'unsafe-inline' carve-out.
+  app.get('/styles.css', async (_request, reply) => sendStaticFile(reply, webRootPath, 'styles.css'));
+
   app.get('/dist/:asset', async (request, reply) => {
     const params = request.params as { asset?: string };
 

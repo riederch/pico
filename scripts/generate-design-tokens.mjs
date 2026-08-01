@@ -11,9 +11,12 @@ const outputs = {
   vaultDaemonTypescript:
     'apps/vault-daemon/src/pico-design-tokens.generated.ts',
 };
-const dashboardPath = 'apps/web/index.html';
-const dashboardStart = '      /* pico-design-tokens:start */';
-const dashboardEnd = '      /* pico-design-tokens:end */';
+// The dashboard styles live in a real stylesheet instead of an inline
+// <style> block so the Foundation surface can serve a strict CSP
+// (`default-src 'self'`) without an 'unsafe-inline' carve-out.
+const dashboardPath = 'apps/web/styles.css';
+const dashboardStart = '/* pico-design-tokens:start */';
+const dashboardEnd = '/* pico-design-tokens:end */';
 const write = process.argv.includes('--write');
 
 if (!write && !process.argv.includes('--check')) {
@@ -343,25 +346,20 @@ function cssValue(token) {
   }
 }
 
-function injectDashboardCss(html, css) {
-  const start = html.indexOf(dashboardStart);
-  const end = html.indexOf(dashboardEnd);
+function injectDashboardCss(stylesheet, css) {
+  const start = stylesheet.indexOf(dashboardStart);
+  const end = stylesheet.indexOf(dashboardEnd);
   if (start === -1 || end === -1 || end < start) {
     errors.push(`${dashboardPath}: missing generated token markers.`);
     fail(errors);
   }
-  const indented = css
-    .trimEnd()
-    .split('\n')
-    .map((line) => line.length === 0 ? '' : `      ${line}`)
-    .join('\n');
   return [
-    html.slice(0, start),
+    stylesheet.slice(0, start),
     dashboardStart,
     '\n',
-    indented,
+    css.trimEnd(),
     '\n',
-    html.slice(end),
+    stylesheet.slice(end),
   ].join('');
 }
 

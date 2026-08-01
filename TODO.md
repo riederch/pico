@@ -19,19 +19,13 @@ Formulierungen.** Die zwei Stellen mit dem meisten Gewicht sind
 Bis dahin keine Aussenkommunikation, die die neue Erlaubnis als rechtlich
 geprueft darstellt.
 
-## Security-Initiative: offener Backlog
+## Security-Initiative: Backlog abgearbeitet
 
-ADR 0116 und ADR 0117 sind entschieden (Gates W1-W6 und X1-X5, alle
-offen); `SECURITY.md` existiert seit 2026-08-01. Dieser Backlog sammelt
-die noch nicht entschiedenen Folge-Themen der Initiative, priorisiert:
-
-1. **Mechanik-Rest.** HTTP-Security-Header auf der Foundation-Flaeche
-   (CSP `default-src 'self'`, `X-Content-Type-Options`,
-   `frame-ancestors` - beruehrt `app.ts`, wartet auf den
-   U4-Abschluss). Die CI-Supply-Chain-Haelfte ist mit ADR 0122
-   entschieden (Gates Y1/Y4) und hier gestrichen.
-
-Naechster Code-Block der Initiative ist Gate W1 (Einstieg in
-`.agent-context.md`) - nach ADR 0115 U4, wegen der
-`app.ts`-Ueberschneidung.
-
+Der offene Backlog der Initiative ist vollstaendig ueberfuehrt: ADRs
+0118-0123 sind entschieden, die Appliance-Plattform-Anforderungen sind
+als Gates IM1-IM3 in ADR 0027 gehoben, und der Mechanik-Rest
+(HTTP-Security-Header samt Umzug der Dashboard-Styles nach
+`apps/web/styles.css`) ist implementiert. Offene Arbeit sind jetzt
+Implementierungs-Gates in den ADRs selbst (W, X, O, Q, N, J, Y, Z,
+IM), nicht mehr unentschiedene Vorhaben; Einstieg und Reihenfolge
+stehen in `.agent-context.md`.

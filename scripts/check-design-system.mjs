@@ -116,9 +116,12 @@ if (
   errors.push('Starter Kit must import the canonical generated CSS tokens.');
 }
 
-const dashboard = stripGeneratedDashboardTokens(read('apps/web/index.html'));
+const dashboard = stripGeneratedDashboardTokens(read('apps/web/styles.css'));
 if (/#[0-9a-f]{3,8}\b/iu.test(dashboard)) {
-  errors.push('apps/web/index.html contains a copied color literal outside the generated token block.');
+  errors.push('apps/web/styles.css contains a copied color literal outside the generated token block.');
+}
+if (/#[0-9a-f]{3,8}\b/iu.test(read('apps/web/index.html'))) {
+  errors.push('apps/web/index.html contains a copied color literal; styles belong in styles.css.');
 }
 const recoveryPdf = read('apps/vault-daemon/src/recovery-card-pdf.ts');
 if (/rgb\(\s*(?:[0-9]|\.)/u.test(recoveryPdf)) {

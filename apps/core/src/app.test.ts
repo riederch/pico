@@ -221,6 +221,41 @@ describe('Pico Home Core app', () => {
     await app.close();
   });
 
+  it('sends baseline security headers on every response and serves the stylesheet', async () => {
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+    });
+
+    const dashboard = await app.inject({ method: 'GET', url: '/' });
+    expect(dashboard.statusCode).toBe(200);
+    // The strict CSP is only honest because the dashboard carries no inline
+    // style or script; its styles are a real asset.
+    expect(dashboard.body).not.toContain('<style>');
+    expect(dashboard.body).toContain('href="./styles.css"');
+
+    const styles = await app.inject({ method: 'GET', url: '/styles.css' });
+    expect(styles.statusCode).toBe(200);
+    expect(styles.headers['content-type']).toContain('text/css');
+    expect(styles.body).toContain('pico-design-tokens:start');
+
+    const health = await app.inject({ method: 'GET', url: '/health' });
+    expect(health.statusCode).toBe(200);
+
+    const missing = await app.inject({ method: 'GET', url: '/no-such-route' });
+    expect(missing.statusCode).toBe(404);
+
+    for (const response of [dashboard, styles, health, missing]) {
+      expect(response.headers['content-security-policy'])
+        .toBe("default-src 'self'; frame-ancestors 'self'");
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+    }
+
+    await app.close();
+  });
+
   it('serves the foundation dashboard shell and built assets', async () => {
     const app = await buildApp({
       host: '127.0.0.1',

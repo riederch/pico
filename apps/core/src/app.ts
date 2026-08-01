@@ -394,6 +394,23 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     bodyLimit: REQUEST_BODY_LIMIT_BYTES,
   });
   await app.register(websocket);
+
+  /**
+   * Baseline security headers on every Foundation HTTP response. The CSP can
+   * be strict because the dashboard is framework-free with no inline script
+   * and its styles live in `/styles.css` rather than an inline block, so no
+   * 'unsafe-inline' carve-out exists to grow stale. `frame-ancestors 'self'`
+   * instead of 'none' because Home Assistant ingress embeds the dashboard as
+   * a same-origin iframe of the Home Assistant frontend; direct access never
+   * frames it. This is transport-surface hardening only — it grants nothing
+   * and is not part of any authority decision (ADR 0030/0038).
+   */
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('content-security-policy', "default-src 'self'; frame-ancestors 'self'");
+    reply.header('x-content-type-options', 'nosniff');
+    return payload;
+  });
+
   registerWebDashboard(app, config.webRootPath ?? defaultWebRootPath());
 
   const store = await EventStore.open(config.databasePath, {
