@@ -646,6 +646,13 @@ function createRecoverySubmission(
     recoveryId: string;
     target: ReturnType<typeof createDeviceKeys>;
     coverActive?: boolean;
+    /** Set when a recovery follows an earlier one and the head has moved. */
+    revokesDelegationId?: string;
+    delegationLifecycleOrder?: string;
+    revocationLifecycleOrder?: string;
+    observedLifecycleOrder?: string;
+    createdAt?: string;
+    expiresAt?: string;
   },
 ): PicoHomeDeviceRecoverySubmission {
   const targetDelegation = delegation({
@@ -653,7 +660,7 @@ function createRecoverySubmission(
     identityFingerprintHex: fixture.identity.fingerprintHex,
     signingFingerprintHex: input.target.signing.fingerprintHex,
     agreementFingerprintHex: input.target.agreement.fingerprintHex,
-    lifecycleOrder: 'seq:0000000000000002',
+    lifecycleOrder: input.delegationLifecycleOrder ?? 'seq:0000000000000002',
   });
   const revocation: PicoIdentityRevocationSignatureInput = {
     suite: picoIdentitySuite,
@@ -661,10 +668,10 @@ function createRecoverySubmission(
       `revocation_${input.recoveryId}_delegation_sponsor`,
     issuerIdentityKeyFingerprintHex: fixture.identity.fingerprintHex,
     subjectKind: 'delegation',
-    subjectRef: fixture.sponsor.delegationId,
+    subjectRef: input.revokesDelegationId ?? fixture.sponsor.delegationId,
     reasonCategory: 'lost_device',
     revokedAt: acceptedAt,
-    lifecycleOrder: 'seq:0000000000000003',
+    lifecycleOrder: input.revocationLifecycleOrder ?? 'seq:0000000000000003',
   };
   const evidence: PicoHomeDeviceRecoverySubmission['evidence'] = {
     identityKeyRecord: fixture.identity.keyRecord,
@@ -699,9 +706,9 @@ function createRecoverySubmission(
       input.target.agreement.fingerprintHex,
     evidenceDigestHex:
       picoHomeDeviceRecoveryEvidenceDigestHex(sodium, evidence),
-    observedLifecycleOrder: 'seq:0000000000000001',
-    createdAt: '2026-07-31T09:59:00.000Z',
-    expiresAt: '2026-07-31T10:04:00.000Z',
+    observedLifecycleOrder: input.observedLifecycleOrder ?? 'seq:0000000000000001',
+    createdAt: input.createdAt ?? '2026-07-31T09:59:00.000Z',
+    expiresAt: input.expiresAt ?? '2026-07-31T10:04:00.000Z',
   };
   const signatureInput =
     buildPicoHomeDeviceRecoveryClaimSignatureInput(claim);
@@ -977,23 +984,32 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
   function acceptRecovery(
     fixture: ReturnType<typeof createFixture>,
     recoveryId: string,
+    options: {
+      acceptedAt?: string;
+      submission?: Partial<Parameters<typeof createRecoverySubmission>[1]>;
+    } = {},
   ): {
     claimDigestHex: string;
     sender: PicoHomeDeviceLifecycleSponsor;
+    target: ReturnType<typeof createDeviceKeys>;
   } {
     const target = createDeviceKeys();
-    const submission = createRecoverySubmission(fixture, { recoveryId, target });
+    const submission = createRecoverySubmission(fixture, {
+      recoveryId,
+      target,
+      ...options.submission,
+    });
     const sender = recoverySender(fixture, submission);
     const initiated = fixture.store.initiatePicoHomeDeviceRecovery({
       submission,
       sender,
       sodium,
-      acceptedAt,
+      acceptedAt: options.acceptedAt ?? acceptedAt,
     });
     if (!initiated.ok) {
       throw new Error(`accept_failed:${initiated.reason}`);
     }
-    return { claimDigestHex: initiated.pending.claimDigestHex, sender };
+    return { claimDigestHex: initiated.pending.claimDigestHex, sender, target };
   }
 
   it('refuses to let a restored snapshot resurrect and re-consume a spent recovery', () => {
@@ -1140,6 +1156,186 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     anchorless.close();
   });
 
+  it('clears the projection of an identity whose consumed recovery the rollback erased', () => {
+    const fixture = createFixture();
+    // A first recovery completes, so the database really carries projected
+    // device authority - the state a restore would otherwise leave standing.
+    const first = acceptRecovery(fixture, 'recovery_r6_first');
+    expect(fixture.store.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_first',
+      claimDigestHex: first.claimDigestHex,
+      sender: first.sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt,
+    }).ok).toBe(true);
+    const projected = new Database(fixture.databasePath)
+      .prepare('SELECT delegation_id FROM pico_identity_delegation')
+      .all() as { delegation_id: string }[];
+    expect(projected.map((row) => row.delegation_id))
+      .toContain('delegation_recovery_r6_first');
+
+    // The backup an operator would restore: taken between the two recoveries.
+    const restoreBetween = snapshotDatabase(fixture);
+
+    const second = acceptRecovery(fixture, 'recovery_r6_second', {
+      acceptedAt: '2026-08-02T11:00:00.000Z',
+      submission: {
+        revokesDelegationId: 'delegation_recovery_r6_first',
+        delegationLifecycleOrder: 'seq:0000000000000004',
+        revocationLifecycleOrder: 'seq:0000000000000005',
+        observedLifecycleOrder: 'seq:0000000000000003',
+        createdAt: '2026-08-02T10:59:00.000Z',
+        expiresAt: '2026-08-02T11:04:00.000Z',
+      },
+    });
+    expect(fixture.store.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_second',
+      claimDigestHex: second.claimDigestHex,
+      sender: second.sender,
+      hostSigningKeyRecord: fixture.host.keyRecord,
+      signHostReceipt: fixture.host.sign,
+      sodium,
+      completedAt: '2026-08-04T11:00:00.000Z',
+    }).ok).toBe(true);
+    fixture.store.close();
+
+    // Restoring rewinds past the second recovery's very existence: its row is
+    // gone, so nothing in the database can be corrected - only the anchor
+    // still knows it happened.
+    restoreBetween();
+    const rolledBack = reopen(fixture);
+    const reconciliation = rolledBack.reconcilePicoHomeDeviceRecoveries(
+      sodium,
+      '2026-08-04T12:00:00.000Z',
+    );
+    expect(reconciliation).toMatchObject({
+      anchorStatus: 'rollback_detected',
+      resurrectedRecoveryIds: ['recovery_r6_second'],
+      quarantinedIdentities: [fixture.identity.fingerprintHex],
+    });
+    // Quarantine has to mean something: this Home is showing a device set it
+    // can no longer prove, so the projection goes rather than being reported
+    // as quarantined while staying live.
+    expect(new Database(fixture.databasePath)
+      .prepare('SELECT delegation_id FROM pico_identity_delegation')
+      .all()).toEqual([]);
+    expect(rolledBack.hasActivePicoIdentityDelegation({
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      deviceSigningKeyFingerprintHex: first.target.signing.fingerprintHex,
+      deviceKeyAgreementKeyFingerprintHex: first.target.agreement.fingerprintHex,
+      delegationId: 'delegation_recovery_r6_first',
+      sodium,
+      at: '2026-08-04T12:00:00.000Z',
+    })).toBe(false);
+    rolledBack.close();
+  });
+
+  it('restores a rolled-back veto without quarantining an identity that never lost authority', () => {
+    const fixture = createFixture();
+    acceptRecovery(fixture, 'recovery_r6_veto_scope');
+    const restorePreVeto = snapshotDatabase(fixture);
+    expect(fixture.store.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_veto_scope',
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      vetoedAt: '2026-07-31T12:00:00.000Z',
+    })).toEqual({ ok: true });
+    fixture.store.close();
+
+    restorePreVeto();
+    const rolledBack = reopen(fixture);
+    expect(rolledBack.reconcilePicoHomeDeviceRecoveries(sodium, completedAt))
+      .toMatchObject({
+        anchorStatus: 'rollback_detected',
+        resurrectedRecoveryIds: ['recovery_r6_veto_scope'],
+        quarantinedIdentities: [],
+      });
+    // The sponsor device never lost its authority: a veto changes no device
+    // set, so an operator's restore must not cost the identity its projection.
+    expect(rolledBack.hasActivePicoIdentityDelegation({
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      deviceSigningKeyFingerprintHex: fixture.sponsorSigning.fingerprintHex,
+      deviceKeyAgreementKeyFingerprintHex: fixture.sponsorAgreement.fingerprintHex,
+      delegationId: 'delegation_sponsor',
+      sodium,
+      at: completedAt,
+    })).toBe(true);
+    rolledBack.close();
+  });
+
+  it('lets a re-seeded Home veto and re-initiate the recovery its anchor never saw', () => {
+    const fixture = createFixture();
+    acceptRecovery(fixture, 'recovery_r6_reseed_flow');
+    fixture.store.close();
+    rmSync(dirname(fixture.anchorPath), { recursive: true, force: true });
+
+    const reseeded = reopen(fixture);
+    expect(reseeded.reconcilePicoHomeDeviceRecoveries(sodium, acceptedAt).anchorStatus)
+      .toBe('anchor_lost');
+    expect(reseeded.reseedPicoHomeRecoveryAnchor()).toEqual({ ok: true, seededEntries: 0 });
+
+    // The living device can silence the alarm it is being shown, even though
+    // the re-seed deliberately left that recovery unknown to the anchor.
+    expect(reseeded.vetoPicoHomeDeviceRecovery({
+      recoveryId: 'recovery_r6_reseed_flow',
+      picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
+      vetoedAt: '2026-07-31T12:00:00.000Z',
+    })).toEqual({ ok: true });
+    reseeded.close();
+
+    // And a fresh recovery is possible without waiting out the old window -
+    // this is the person who lost every device, so a lockout here would
+    // defeat the feature.
+    const revived = reopen(fixture);
+    const second = createDeviceKeys();
+    const submission = createRecoverySubmission(fixture, {
+      recoveryId: 'recovery_r6_reseed_second',
+      target: second,
+    });
+    const initiated = revived.initiatePicoHomeDeviceRecovery({
+      submission,
+      sender: recoverySender(fixture, submission),
+      sodium,
+      acceptedAt,
+    });
+    expect(initiated).toMatchObject({ ok: true, status: 'pending' });
+    revived.close();
+  });
+
+  it('prunes anchor entries once their completion window has passed (ADR 0110 A9)', () => {
+    const fixture = createFixture();
+    acceptRecovery(fixture, 'recovery_r6_pruned');
+    fixture.store.close();
+
+    // Still inside the window: the entry is load-bearing and stays.
+    const live = openPicoHomeRecoveryAnchor(fixture.anchorPath, {
+      now: () => new Date(completedAt),
+    });
+    expect(live.lookup('recovery_r6_pruned')?.state).toBe('accepted');
+
+    // Past the window a restored row lapses on the Home clock anyway, so
+    // keeping the entry would only grow an unbounded file.
+    const afterWindow = openPicoHomeRecoveryAnchor(fixture.anchorPath, {
+      now: () => new Date('2026-08-09T10:00:00.001Z'),
+    });
+    expect(afterWindow.lookup('recovery_r6_pruned')).toBeUndefined();
+    // The counter never rewinds, so a pruned id can never be re-accepted
+    // under an older sequence.
+    expect(afterWindow.document().sequence).toBe(1);
+    // And a Home that simply had no recovery for nine days must not read as
+    // an anchor-less one: pruning may not turn quiet into fail-closed.
+    expect(afterWindow.isEmpty()).toBe(false);
+    const quiet = new EventStore(fixture.databasePath, {
+      recoveryAnchor: afterWindow,
+    });
+    expect(quiet.reconcilePicoHomeDeviceRecoveries(
+      sodium,
+      '2026-08-09T10:00:00.001Z',
+    ).anchorStatus).toBe('live');
+    quiet.close();
+  });
+
   it('keeps the anchor monotonic: terminal states never walk back and a torn anchor fails closed', () => {
     const fixture = createFixture();
     acceptRecovery(fixture, 'recovery_r6_monotonic');
@@ -1153,6 +1349,7 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
       claimDigestHex: entry!.claimDigestHex,
       picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
       state: 'consumed',
+      expiresAt: entry!.expiresAt,
     });
     // Terminal is terminal: no rewind, no swap, no second resolution.
     for (const state of ['accepted', 'vetoed', 'superseded'] as const) {
@@ -1161,6 +1358,7 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
         claimDigestHex: entry!.claimDigestHex,
         picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
         state,
+        expiresAt: entry!.expiresAt,
       })).toThrow(/terminal|already_accepted/);
     }
     // A different claim digest under a known id is a substitution attempt.
@@ -1169,6 +1367,7 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
       claimDigestHex: 'ff'.repeat(32),
       picoIdentityFingerprintHex: fixture.identity.fingerprintHex,
       state: 'consumed',
+      expiresAt: entry!.expiresAt,
     })).toThrow('recovery_anchor_claim_digest_conflict');
 
     writeFileSync(fixture.anchorPath, '{"schema":"pico.home.recovery-anchor.v1"');

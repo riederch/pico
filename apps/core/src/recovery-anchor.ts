@@ -69,6 +69,14 @@ export interface PicoHomeRecoveryAnchorEntry {
   /** Increases on every accepted state change; never reused, never rewound. */
   sequence: number;
   updatedAt: string;
+  /**
+   * The recovery's completion window end. Once it passes, a restored row
+   * lapses against the Home clock on its own, so anchor knowledge about it
+   * buys nothing and the entry is pruned - which is what keeps ADR 0110 A9
+   * true here: a root holder cycling initiations cannot grow this file
+   * without bound.
+   */
+  expiresAt: string;
 }
 
 export interface PicoHomeRecoveryAnchorDocument {
@@ -113,7 +121,11 @@ export interface PicoHomeRecoveryAnchor {
     homeId: string | null;
     entries: PicoHomeRecoveryAnchorRecordInput[];
   }): void;
-  /** True only for an anchor that has never been seeded and holds nothing. */
+  /**
+   * True only for an anchor that never took ownership - neither seeded nor
+   * ever written to. An anchor whose entries have all been pruned is not
+   * empty in this sense, or a quiet Home would fail closed after nine days.
+   */
   isEmpty(): boolean;
 }
 
@@ -144,7 +156,9 @@ export function assertPicoHomeRecoveryAnchorSeparation(input: {
 
 export function openPicoHomeRecoveryAnchor(
   anchorPath: string,
+  options: { now?: () => Date } = {},
 ): PicoHomeRecoveryAnchor {
+  const now = options.now ?? (() => new Date());
   mkdirSync(dirname(anchorPath), { recursive: true, mode: 0o700 });
   let document = readAnchorDocument(anchorPath);
 
@@ -158,6 +172,8 @@ export function openPicoHomeRecoveryAnchor(
     fsyncPath(dirname(anchorPath), true);
     document = next;
   };
+
+  pruneExpiredEntries();
 
   return {
     record: (input) => {
@@ -181,9 +197,13 @@ export function openPicoHomeRecoveryAnchor(
         if (input.state === 'accepted') {
           throw new Error('recovery_anchor_already_accepted');
         }
-      } else if (input.state !== 'accepted') {
-        throw new Error('recovery_anchor_unknown_recovery');
       }
+      // A terminal state may be recorded for a recovery this anchor never
+      // accepted. That happens after a re-seed, where restored pending rows
+      // are deliberately left unknown: without this, superseding or vetoing
+      // such a row would be impossible and the person would stay locked out
+      // of recovery until the old row lapsed. It grants nothing - an entry
+      // born terminal is never `isCompletable`, so this can only refuse more.
       const sequence = document.sequence + 1;
       const entry: PicoHomeRecoveryAnchorEntry = {
         recoveryId: input.recoveryId,
@@ -191,10 +211,19 @@ export function openPicoHomeRecoveryAnchor(
         picoIdentityFingerprintHex: input.picoIdentityFingerprintHex,
         state: input.state,
         sequence,
-        updatedAt: input.updatedAt ?? new Date().toISOString(),
+        updatedAt: input.updatedAt ?? now().toISOString(),
+        // The window is set once, at acceptance; a later transition may not
+        // extend how long this entry survives.
+        expiresAt: existing?.expiresAt ?? input.expiresAt,
       };
       persist({
         ...document,
+        // Recording is ownership too. Without this, pruning the last expired
+        // entry would make a long-running Home look like a never-initialized
+        // one on the next boot - and an anchor that reports itself missing
+        // blocks every recovery, which is the opposite of what pruning is
+        // for.
+        seededAt: document.seededAt ?? entry.updatedAt,
         sequence,
         entries: [
           ...document.entries.filter(
@@ -236,19 +265,40 @@ export function openPicoHomeRecoveryAnchor(
           picoIdentityFingerprintHex: entry.picoIdentityFingerprintHex,
           state: entry.state,
           sequence,
-          updatedAt: entry.updatedAt ?? new Date().toISOString(),
+          updatedAt: entry.updatedAt ?? now().toISOString(),
+          expiresAt: entry.expiresAt,
         };
       });
       persist({
         schema: picoHomeRecoveryAnchorSchema,
         homeId: input.homeId,
-        seededAt: new Date().toISOString(),
+        seededAt: now().toISOString(),
         sequence,
         entries,
       });
     },
     isEmpty: () => document.seededAt === null && document.entries.length === 0,
   };
+
+  /**
+   * ADR 0110 A9. Entries are dropped once their completion window has passed:
+   * a restored row beyond its window lapses against the Home clock anyway, so
+   * keeping the entry adds no refusal, and dropping it stops a root holder
+   * from growing this file by cycling initiations. The sequence counter is
+   * never rewound - only entries leave.
+   */
+  function pruneExpiredEntries(): void {
+    if (document.entries.length === 0) {
+      return;
+    }
+    const nowMs = now().getTime();
+    const surviving = document.entries.filter(
+      (entry) => Date.parse(entry.expiresAt) > nowMs,
+    );
+    if (surviving.length !== document.entries.length) {
+      persist({ ...document, entries: surviving });
+    }
+  }
 }
 
 const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
@@ -275,6 +325,12 @@ function assertRecordInput(input: PicoHomeRecoveryAnchorRecordInput): void {
     && (typeof input.updatedAt !== 'string' || input.updatedAt.length === 0)
   ) {
     throw new Error('invalid_recovery_anchor_instant');
+  }
+  if (
+    typeof input.expiresAt !== 'string'
+    || Number.isNaN(Date.parse(input.expiresAt))
+  ) {
+    throw new Error('invalid_recovery_anchor_expiry');
   }
 }
 

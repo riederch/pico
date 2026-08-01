@@ -1877,6 +1877,7 @@ export class EventStore {
           picoIdentityFingerprintHex: claim.picoIdentityFingerprintHex,
           state: 'superseded',
           updatedAt: acceptedAt,
+          expiresAt: existing.completionExpiresAt,
         });
       }
       anchor.record({
@@ -1885,6 +1886,7 @@ export class EventStore {
         picoIdentityFingerprintHex: claim.picoIdentityFingerprintHex,
         state: 'accepted',
         updatedAt: acceptedAt,
+        expiresAt: completionExpiresAt,
       });
     } catch {
       return { ok: false, reason: 'recovery_anchor_unavailable' };
@@ -1971,6 +1973,7 @@ export class EventStore {
       .prepare(`
         SELECT pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
                claim_digest_hex AS claimDigestHex,
+               completion_expires_at AS completionExpiresAt,
                status
         FROM pico_home_device_recovery
         WHERE recovery_id = ?
@@ -1978,6 +1981,7 @@ export class EventStore {
       .get(params.recoveryId) as {
         picoIdentityFingerprintHex: string;
         claimDigestHex: string;
+        completionExpiresAt: string;
         status: PicoHomeDeviceRecoveryRow['status'];
       } | undefined;
     if (row === undefined) {
@@ -1992,12 +1996,18 @@ export class EventStore {
     // ADR 0110 R6. A veto that only lands in the database is undone by the
     // restore that resurrects the recovery it vetoed.
     const anchor = this.recoveryAnchor;
-    const anchored = anchor?.lookup(params.recoveryId);
+    if (anchor === undefined) {
+      return { ok: false, reason: 'recovery_anchor_unavailable' };
+    }
+    const anchored = anchor.lookup(params.recoveryId);
+    // A veto only ever removes a recovery's ability to complete, so it is
+    // allowed even where the anchor never saw the recovery - the case a
+    // re-seed leaves behind. Refusing it there would leave a living device
+    // staring at an alarm it cannot silence.
     if (
-      anchor === undefined
-      || anchored === undefined
-      || anchored.state !== 'accepted'
-      || anchored.claimDigestHex !== row.claimDigestHex
+      anchored !== undefined
+      && (anchored.state !== 'accepted'
+        || anchored.claimDigestHex !== row.claimDigestHex)
     ) {
       return { ok: false, reason: 'recovery_anchor_unavailable' };
     }
@@ -2009,6 +2019,7 @@ export class EventStore {
         picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
         state: 'vetoed',
         updatedAt: vetoedAt,
+        expiresAt: row.completionExpiresAt,
       });
     } catch {
       return { ok: false, reason: 'recovery_anchor_unavailable' };
@@ -2188,6 +2199,7 @@ export class EventStore {
         picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
         state: 'consumed',
         updatedAt: completedAt,
+        expiresAt: row.completionExpiresAt,
       });
     } catch {
       return { ok: false, reason: 'recovery_anchor_unavailable' };
@@ -3190,7 +3202,11 @@ export class EventStore {
       row: PicoHomeDeviceRecoveryRow;
       record: PicoHomeDeviceRecoveryRecord;
     }[] = [];
-    const quarantined = new Set<string>();
+    // Seeded from the anchor pass so that the projection-clearing transaction
+    // below actually covers rollback victims. Reporting an identity as
+    // quarantined while leaving its delegations and reader keys projected
+    // would be the worst of both worlds.
+    const quarantined = new Set<string>(anchorReconciliation.quarantinedIdentities);
 
     for (const row of rows) {
       try {
@@ -3287,10 +3303,6 @@ export class EventStore {
       }
     })();
 
-    for (const identity of anchorReconciliation.quarantinedIdentities) {
-      quarantined.add(identity);
-    }
-
     return {
       verifiedRecoveries: verified.length,
       reprojectedRecoveries: verified.filter(
@@ -3366,16 +3378,28 @@ export class EventStore {
           | { status: PicoHomeDeviceRecoveryRow['status']; claimDigestHex: string }
           | undefined;
       if (row === undefined) {
-        // The rows were rewound past this recovery's very existence. Nothing
-        // can be re-applied, and this Home no longer holds the evidence for
-        // whatever that recovery projected.
+        // The rows were rewound past this recovery's very existence, so
+        // nothing can be re-applied here at all.
         resurrected.push(entry.recoveryId);
-        quarantined.add(entry.picoIdentityFingerprintHex);
+        if (entry.state === 'consumed') {
+          quarantined.add(entry.picoIdentityFingerprintHex);
+        }
         continue;
       }
-      if (row.claimDigestHex !== entry.claimDigestHex || row.status === 'pending') {
+      const substituted = row.claimDigestHex !== entry.claimDigestHex;
+      if (substituted || row.status === 'pending') {
         resurrected.push(entry.recoveryId);
-        quarantined.add(entry.picoIdentityFingerprintHex);
+        // Quarantine follows lost evidence, not mere rewinding. A consumed
+        // recovery changed the device set, and a database that no longer
+        // carries its record cannot prove the projection it is showing - so
+        // that identity's authority goes. A vetoed or superseded recovery
+        // never changed device authority, so restoring its resolution is
+        // enough; quarantining there would punish an identity for an
+        // operator's restore. A claim-digest substitution is quarantined
+        // regardless, because the id no longer denotes what the anchor saw.
+        if (entry.state === 'consumed' || substituted) {
+          quarantined.add(entry.picoIdentityFingerprintHex);
+        }
         this.db
           .prepare(`
             UPDATE pico_home_device_recovery
@@ -3421,7 +3445,8 @@ export class EventStore {
                claim_digest_hex AS claimDigestHex,
                pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
                status,
-               resolved_at AS resolvedAt
+               resolved_at AS resolvedAt,
+               completion_expires_at AS completionExpiresAt
         FROM pico_home_device_recovery
         WHERE status IN ('consumed', 'vetoed', 'superseded')
         ORDER BY resolved_at ASC, recovery_id ASC
@@ -3432,6 +3457,7 @@ export class EventStore {
         picoIdentityFingerprintHex: string;
         status: 'consumed' | 'vetoed' | 'superseded';
         resolvedAt: string | null;
+        completionExpiresAt: string;
       }[];
     anchor.seed({
       homeId: this.picoHomeClaimState().homeId ?? null,
@@ -3441,6 +3467,7 @@ export class EventStore {
         picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
         state: row.status,
         updatedAt: row.resolvedAt ?? new Date().toISOString(),
+        expiresAt: row.completionExpiresAt,
       })),
     });
     return { ok: true, seededEntries: rows.length };

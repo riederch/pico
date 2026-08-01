@@ -601,10 +601,18 @@ authorize, approve or veto another identity's recovery.
   written to the anchor with fsync *before* the matching database
   transaction, and completion requires that this anchor accepted that exact
   claim digest and has not resolved it. Boot reconciliation re-applies
-  resolutions the rows no longer carry and quarantines those identities; a
-  fresh Home seeds silently; a Home with recovery history but no anchor fails
-  closed until an operator re-seeds explicitly, and that re-seed rebuilds
-  terminal knowledge only - it never blesses a restored pending row. The
+  resolutions the rows no longer carry and quarantines the identities whose
+  consumed evidence the rollback erased - a rewound veto or supersession has
+  its resolution restored without costing an identity its projection, because
+  neither ever changed a device set. A fresh Home seeds silently; a Home with
+  recovery history but no anchor fails closed until an operator re-seeds
+  explicitly, and that re-seed rebuilds terminal knowledge only - it never
+  blesses a restored pending row. A recovery the anchor never accepted may
+  still be vetoed or superseded, so a re-seed does not strand the person
+  behind a pending row it deliberately left unknown. Entries are pruned once
+  their completion window has passed, which is what keeps A9 true here: past
+  that window a restored row lapses on the Home clock anyway, so the anchor
+  cannot be grown without bound by cycling initiations. The
   anchor can only refuse: it creates no device authority and replaces no root
   signature or possession proof, so Home administration stays outside
   identity authority. Honest boundary, also in the ledger: a whole-filesystem
