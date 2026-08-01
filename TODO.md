@@ -37,16 +37,12 @@ die noch nicht entschiedenen Folge-Themen der Initiative, priorisiert:
    was memzero, 0600/0700 und die Prozessgrenze (ADR 0097) leisten und
    was Residuum bleibt; billige Mitigationen: Core-Dumps aus,
    verschluesselter Swap als Anforderung ans Pico-Home-Image (ADR 0027).
-3. **Audit-Integritaet (Absatz-Entscheidung vor Action History).** Die
-   `auth.*`-Records sind append-only, aber nicht manipulationsevident.
-   Vor dem Bau von ADR 0011s Produkt-Audit entscheiden, ob
-   Hash-Chaining oder signierte Checkpoints noetig sind.
-4. **Mechanik-Rest.** HTTP-Security-Header auf der Foundation-Flaeche
+3. **Mechanik-Rest.** HTTP-Security-Header auf der Foundation-Flaeche
    (CSP `default-src 'self'`, `X-Content-Type-Options`,
    `frame-ancestors` - beruehrt `app.ts`, wartet auf den
    U4-Abschluss) und CI-Supply-Chain (Actions auf Commit-SHAs pinnen,
    Dependency-Audit-/Provenance-Gate neben `release:verify`).
-5. **TPM-Plattform-Anker** als explizites Gate in ADR 0027 heben statt
+4. **TPM-Plattform-Anker** als explizites Gate in ADR 0027 heben statt
    verstreuter Fussnoten (R6-Rollback- und
    Matching-Backup-Residuum).
 
