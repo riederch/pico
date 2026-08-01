@@ -744,6 +744,14 @@ const migrations: readonly MigrationDefinition[] = [
           effective_at TEXT NOT NULL,
           resolved_at TEXT NULL,
           co_signing_delegation_id TEXT NOT NULL,
+          -- ADR 0114 T3. A rotation revokes every device the old root
+          -- delegated, so it must name the successor's first device or it
+          -- strands the person it was meant to protect. Not nullable for
+          -- exactly that reason.
+          successor_first_device_delegation_id TEXT NOT NULL,
+          successor_first_device_signing_key_fingerprint_hex TEXT NOT NULL,
+          successor_first_device_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          successor_first_device_projected_at TEXT NULL,
           record_json TEXT NOT NULL
         );
 

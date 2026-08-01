@@ -5,14 +5,17 @@ import Database from 'better-sqlite3';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
+  buildPicoHomeDomainReadGrantSignatureInput,
   buildPicoHomeMembershipSignatureInput,
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityRotationSignatureInput,
   picoHomeClaimResponseRecordSchema,
+  picoHomeDomainReadGrantRecordSchema,
   picoHomeFoundingRecordSchema,
   picoHomeMembershipCredentialSchema,
   picoIdentitySuite,
+  type PicoHomeDomainReadGrantRecord,
   type PicoHomeFoundingRecord,
   type PicoHomeMembershipCredential,
   type PicoHomeMembershipSignatureInput,
@@ -24,6 +27,7 @@ import {
   EventStore,
   PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS,
   type PicoHomeDeviceLifecycleSponsor,
+  type PicoIdentityRotationSuccessorFirstDevice,
 } from './event-store.js';
 
 const tempDirs: string[] = [];
@@ -91,6 +95,12 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
           Date.parse(acceptedAt) + PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS,
         ).toISOString(),
         coSigningDelegationId: 'delegation_device_0',
+        successorFirstDeviceDelegationId: 'delegation_successor_first',
+        successorFirstDeviceSigningKeyFingerprintHex:
+          fixture.devices[0]!.signing.fingerprintHex,
+        successorFirstDeviceKeyAgreementKeyFingerprintHex:
+          fixture.devices[0]!.agreement.fingerprintHex,
+        successorFirstDeviceProjectedAt: null,
       },
     });
     fixture.store.close();
@@ -113,6 +123,7 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       successorIdentityKeyRecord: fixture.successor.keyRecord,
       predecessorSignatureHex: fixture.founder.sign(input),
       successorSignatureHex: fixture.successor.sign(input),
+      successorFirstDevice: successorFirstDevice(fixture),
       sender: {
         ...fixture.devices[0]!.sender,
         picoIdentityFingerprintHex: fixture.founder.fingerprintHex,
@@ -232,6 +243,7 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       .toEqual({
         verifiedRotations: 1,
         effectiveRotations: 1,
+        projectedSuccessorDevices: 1,
         quarantinedIdentities: [],
       });
     expect(fixture.store.picoIdentityRootRotationView(
@@ -281,6 +293,7 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       .toEqual({
         verifiedRotations: 0,
         effectiveRotations: 0,
+        projectedSuccessorDevices: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     // The forged rotation is neither honored nor silently dropped: the
@@ -320,6 +333,309 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       .toEqual({
         verifiedRotations: 0,
         effectiveRotations: 0,
+        projectedSuccessorDevices: 0,
+        quarantinedIdentities: [fixture.member.fingerprintHex],
+      });
+    reopened.close();
+  });
+});
+
+describe('ADR 0114 T3 re-issue after a root rotation', () => {
+  it('accepts only a first device the successor root itself delegated', () => {
+    const fixture = createFixture();
+    const signed = signRotation(fixture);
+
+    // The predecessor may authorize the succession, never the successor's
+    // devices - otherwise a card thief could name a device the new root
+    // never agreed to hold.
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signed,
+      successorFirstDevice: successorFirstDevice(fixture, fixture.member),
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    })).toEqual({ ok: false, reason: 'invalid_successor_first_device' });
+
+    // The agreement key record must be the one the delegation names, or the
+    // device that ends up readable is not the device that was authorized.
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signed,
+      successorFirstDevice: {
+        ...signed.successorFirstDevice,
+        deviceKeyAgreementKeyRecord: fixture.devices[1]!.agreement.keyRecord,
+      },
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    })).toEqual({ ok: false, reason: 'invalid_successor_first_device' });
+    fixture.store.close();
+  });
+
+  it('hands the successor its first device and states what the issuers still owe', () => {
+    const fixture = createFixture();
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signRotation(fixture),
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+
+    const successorSender: PicoHomeDeviceLifecycleSponsor = {
+      picoIdentityFingerprintHex: fixture.successor.fingerprintHex,
+      deviceSigningKeyFingerprintHex: fixture.devices[0]!.signing.fingerprintHex,
+      deviceKeyAgreementKeyFingerprintHex:
+        fixture.devices[0]!.agreement.fingerprintHex,
+      delegationId: 'delegation_successor_first',
+    };
+
+    // A domain the person could read before the rotation. Its controller is
+    // the only one who can grant it again - the Home cannot rebind it.
+    fixture.store.memory().create({
+      memoryItemId: 'memory_root_rotation',
+      privacyDomain: 'household',
+      owner: 'test',
+      controller: 'test',
+      contentType: 'text/plain',
+      content: 'shared',
+    });
+    expect(fixture.store.recordPicoHomeDomainReadGrant({
+      sodium,
+      record: issueReadGrant(fixture, {
+        grantId: 'grant_before_rotation',
+        readerPicoIdentityFingerprintHex: fixture.member.fingerprintHex,
+      }),
+    }).ok).toBe(true);
+
+    expect(fixture.store.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toMatchObject({ effectiveRotations: 1, projectedSuccessorDevices: 1 });
+
+    // The delegation is the successor root's own act and stands at once; the
+    // reader key waits for the Home Host Pico, so the device is not yet
+    // authorized. That wait is the stated cost of rotation, and it is named.
+    let debt = fixture.store.picoIdentityRotationDebtView(
+      fixture.successor.fingerprintHex,
+      afterWindow,
+    );
+    expect(debt).toMatchObject({
+      rotationId: 'rotation_0001',
+      status: 'effective',
+      successorFirstDevice: {
+        delegationId: 'delegation_successor_first',
+        delegated: true,
+        readerKeyRegistered: false,
+      },
+      membershipsToReissue: [{ membershipId: expect.any(String) }],
+      readGrantsToReissue: [{
+        grantId: 'grant_before_rotation',
+        privacyDomain: 'household',
+      }],
+    });
+    expect(fixture.store.hasActivePicoIdentityDelegation({
+      ...successorSender,
+      sodium,
+      at: afterWindow,
+    })).toBe(false);
+
+    // The Home Host Pico re-issues membership through the unchanged ceremony -
+    // nothing is rebound, a new credential is issued naming the new subject.
+    expect(fixture.store.recordPicoHomeMembershipCredential({
+      sodium,
+      credential: createMembershipCredential(
+        fixture.founder,
+        fixture.host,
+        fixture.successor,
+        'member_root_rotation_reissued',
+      ),
+      hostSigningPublicKeyHex: fixture.host.publicKeyHex,
+      recordedAt: afterWindow,
+    }).ok).toBe(true);
+
+    // That single act is enough: the person's device works again without a
+    // restart, and the debt it settled is gone from the view.
+    expect(fixture.store.hasActivePicoIdentityDelegation({
+      ...successorSender,
+      sodium,
+      at: afterWindow,
+    })).toBe(true);
+    debt = fixture.store.picoIdentityRotationDebtView(
+      fixture.successor.fingerprintHex,
+      afterWindow,
+    );
+    expect(debt).toMatchObject({
+      successorFirstDevice: { readerKeyRegistered: true },
+      membershipsToReissue: [],
+      // Still owed: the domain controller has not acted yet, and no Home-side
+      // act can stand in for it.
+      readGrantsToReissue: [{ grantId: 'grant_before_rotation' }],
+    });
+    expect(fixture.store.mayReadDomain(
+      fixture.successor.fingerprintHex,
+      'household',
+      HOME_ID,
+      afterWindow,
+    )).toBe(false);
+
+    expect(fixture.store.recordPicoHomeDomainReadGrant({
+      sodium,
+      record: issueReadGrant(fixture, {
+        grantId: 'grant_after_rotation',
+        readerPicoIdentityFingerprintHex: fixture.successor.fingerprintHex,
+        lifecycleOrder: 'seq:0000000000000002',
+      }),
+    }).ok).toBe(true);
+    expect(fixture.store.picoIdentityRotationDebtView(
+      fixture.successor.fingerprintHex,
+      afterWindow,
+    )).toMatchObject({ readGrantsToReissue: [] });
+    expect(fixture.store.mayReadDomain(
+      fixture.successor.fingerprintHex,
+      'household',
+      HOME_ID,
+      afterWindow,
+    )).toBe(true);
+
+    // The predecessor's devices stay dead: re-issue restores the person, not
+    // the root that was rotated away.
+    expect(fixture.store.hasActivePicoIdentityDelegation({
+      ...fixture.devices[1]!.sender,
+      sodium,
+      at: afterWindow,
+    })).toBe(false);
+    fixture.store.close();
+  });
+
+  it('does not project the successor device before the window passes', () => {
+    const fixture = createFixture();
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signRotation(fixture),
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+
+    // A pending rotation hands out nothing - the successor gets its device
+    // when the objection window has run, not while it is still open.
+    expect(fixture.store.reconcilePicoIdentityRootRotations(sodium, beforeWindow))
+      .toMatchObject({ effectiveRotations: 0, projectedSuccessorDevices: 0 });
+    expect(fixture.store.picoIdentityRotationDebtView(
+      fixture.successor.fingerprintHex,
+      beforeWindow,
+    )).toMatchObject({
+      status: 'pending',
+      successorFirstDevice: { delegated: false, readerKeyRegistered: false },
+    });
+
+    // Projection is idempotent: a second reconciliation neither duplicates
+    // the device nor reports it as new work.
+    expect(fixture.store.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toMatchObject({ projectedSuccessorDevices: 1 });
+    expect(fixture.store.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toMatchObject({ projectedSuccessorDevices: 0, quarantinedIdentities: [] });
+    fixture.store.close();
+  });
+
+  it('quarantines a first-device column that its own evidence does not name', () => {
+    const fixture = createFixture();
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signRotation(fixture),
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+    fixture.store.close();
+
+    // The column decides which device the Home hands the reader key to; the
+    // evidence decides which device the successor actually signed for. They
+    // must be the same device, and a row that says otherwise is not honored
+    // in either direction.
+    const tampering = new Database(fixture.databasePath);
+    tampering
+      .prepare(`
+        UPDATE pico_identity_root_rotation
+        SET successor_first_device_signing_key_fingerprint_hex = ?
+      `)
+      .run(fixture.devices[1]!.signing.fingerprintHex);
+    tampering.close();
+
+    const reopened = new EventStore(fixture.databasePath);
+    expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toEqual({
+        verifiedRotations: 0,
+        effectiveRotations: 0,
+        projectedSuccessorDevices: 0,
+        quarantinedIdentities: [fixture.member.fingerprintHex],
+      });
+    reopened.close();
+  });
+
+  it('quarantines a stored first device whose terms no longer match its signature', () => {
+    const fixture = createFixture();
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signRotation(fixture),
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+    fixture.store.close();
+
+    // No column mirrors the delegation's validity, so only the signature
+    // stands between the stored evidence and a device whose terms somebody
+    // rewrote - here, one that outlives what the successor root signed for.
+    const tampering = new Database(fixture.databasePath);
+    const stored = JSON.parse((tampering
+      .prepare('SELECT record_json AS json FROM pico_identity_root_rotation')
+      .get() as { json: string }).json) as {
+        successorFirstDevice: { delegation: { record: { validUntil: string } } };
+      };
+    stored.successorFirstDevice.delegation.record.validUntil =
+      '2099-01-01T00:00:00.000Z';
+    tampering
+      .prepare('UPDATE pico_identity_root_rotation SET record_json = ?')
+      .run(JSON.stringify(stored));
+    tampering.close();
+
+    const reopened = new EventStore(fixture.databasePath);
+    expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toEqual({
+        verifiedRotations: 0,
+        effectiveRotations: 0,
+        projectedSuccessorDevices: 0,
+        quarantinedIdentities: [fixture.member.fingerprintHex],
+      });
+    reopened.close();
+  });
+
+  it('quarantines the successor when the stored first device was swapped', () => {
+    const fixture = createFixture();
+    expect(fixture.store.submitPicoIdentityRootRotation({
+      ...signRotation(fixture),
+      sender: fixture.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+    fixture.store.close();
+
+    // Swapping the device inside the evidence is how somebody would take over
+    // the identity the rotation was meant to save.
+    const tampering = new Database(fixture.databasePath);
+    const stored = JSON.parse((tampering
+      .prepare('SELECT record_json AS json FROM pico_identity_root_rotation')
+      .get() as { json: string }).json) as {
+        successorFirstDevice: { delegation: { record: { subjectSigningKeyFingerprintHex: string } } };
+      };
+    stored.successorFirstDevice.delegation.record.subjectSigningKeyFingerprintHex =
+      fixture.devices[1]!.signing.fingerprintHex;
+    tampering
+      .prepare('UPDATE pico_identity_root_rotation SET record_json = ?')
+      .run(JSON.stringify(stored));
+    tampering.close();
+
+    const reopened = new EventStore(fixture.databasePath);
+    expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toEqual({
+        verifiedRotations: 0,
+        effectiveRotations: 0,
+        projectedSuccessorDevices: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     reopened.close();
@@ -434,6 +750,34 @@ function signRotation(
     successorIdentityKeyRecord: fixture.successor.keyRecord,
     predecessorSignatureHex: fixture.member.sign(input),
     successorSignatureHex: fixture.successor.sign(input),
+    successorFirstDevice: successorFirstDevice(fixture),
+  };
+}
+
+/**
+ * The device the successor root will hold. It re-uses the person's existing
+ * device keys under a fresh delegation from the new root - the hardware does
+ * not change, its authority does.
+ */
+function successorFirstDevice(
+  fixture: ReturnType<typeof createFixture>,
+  issuer: ReturnType<typeof createSigningKey> = fixture.successor,
+): PicoIdentityRotationSuccessorFirstDevice {
+  const record = delegation({
+    delegationId: 'delegation_successor_first',
+    identityFingerprintHex: issuer.fingerprintHex,
+    signingFingerprintHex: fixture.devices[0]!.signing.fingerprintHex,
+    agreementFingerprintHex: fixture.devices[0]!.agreement.fingerprintHex,
+    lifecycleOrder: 'seq:0000000000000009',
+  });
+  return {
+    delegation: {
+      record,
+      signatureHex: issuer.sign(
+        buildPicoIdentityDelegationSignatureInput(record),
+      ),
+    },
+    deviceKeyAgreementKeyRecord: fixture.devices[0]!.agreement.keyRecord,
   };
 }
 
@@ -502,10 +846,11 @@ function createMembershipCredential(
   founder: ReturnType<typeof createSigningKey>,
   host: ReturnType<typeof createSigningKey>,
   member: ReturnType<typeof createSigningKey>,
+  credentialId = 'member_root_rotation',
 ): PicoHomeMembershipCredential {
   const membership: PicoHomeMembershipSignatureInput = {
     suite: picoIdentitySuite,
-    credentialId: 'member_root_rotation',
+    credentialId,
     homeId: HOME_ID,
     issuerPicoIdentityFingerprintHex: founder.fingerprintHex,
     subjectPicoIdentityFingerprintHex: member.fingerprintHex,
@@ -523,6 +868,34 @@ function createMembershipCredential(
     issuerIdentityKeyRecord: founder.keyRecord,
     issuerSignatureHex: founder.sign(input),
     hostActivationSignatureHex: host.sign(input),
+    createdAt: foundedAt,
+  };
+}
+
+function issueReadGrant(
+  fixture: ReturnType<typeof createFixture>,
+  overrides: Partial<PicoHomeDomainReadGrantRecord['grant']>,
+): PicoHomeDomainReadGrantRecord {
+  const grant: PicoHomeDomainReadGrantRecord['grant'] = {
+    suite: picoIdentitySuite,
+    grantId: 'grant_root_rotation',
+    homeId: HOME_ID,
+    hostSigningKeyFingerprintHex: fixture.host.fingerprintHex,
+    privacyDomain: 'household',
+    controllerPicoIdentityFingerprintHex: fixture.founder.fingerprintHex,
+    readerPicoIdentityFingerprintHex: fixture.founder.fingerprintHex,
+    validFrom: foundedAt,
+    validUntil: '2027-07-19T10:00:00.000Z',
+    lifecycleOrder: 'seq:0000000000000001',
+    ...overrides,
+  };
+  return {
+    schema: picoHomeDomainReadGrantRecordSchema,
+    grant,
+    issuerIdentityKeyRecord: fixture.founder.keyRecord,
+    issuerSignatureHex: fixture.founder.sign(
+      buildPicoHomeDomainReadGrantSignatureInput(grant),
+    ),
     createdAt: foundedAt,
   };
 }

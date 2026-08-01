@@ -309,6 +309,17 @@ export type PicoHomeDeviceRecoveryVetoResult =
 
 export const PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS = 48 * 60 * 60 * 1_000;
 
+/**
+ * ADR 0114 T3. The device the successor root will hold once the rotation is
+ * effective. It is named at submission, not afterwards, so the devices that
+ * may veto see the whole consequence - which root, and which device it
+ * leaves - while they still can object.
+ */
+export interface PicoIdentityRotationSuccessorFirstDevice {
+  delegation: PicoIdentitySignedDelegation;
+  deviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
+}
+
 export interface PicoIdentityRootRotationView {
   rotationId: string;
   predecessorIdentityFingerprintHex: string;
@@ -319,6 +330,42 @@ export interface PicoIdentityRootRotationView {
   acceptedAt: string;
   effectiveAt: string;
   coSigningDelegationId: string;
+  successorFirstDeviceDelegationId: string;
+  successorFirstDeviceSigningKeyFingerprintHex: string;
+  successorFirstDeviceKeyAgreementKeyFingerprintHex: string;
+  successorFirstDeviceProjectedAt: string | null;
+}
+
+/**
+ * ADR 0114 T3. What an effective rotation still owes the person, per issuer.
+ * Nothing here is rebound by the Home: the successor is eligible, and each
+ * issuer re-issues its own records. Making the debt visible is what keeps
+ * "you wait for your issuers" an honest statement instead of a silence.
+ */
+export interface PicoIdentityRotationDebtView {
+  rotationId: string;
+  predecessorIdentityFingerprintHex: string;
+  successorIdentityFingerprintHex: string;
+  status: 'pending' | 'vetoed' | 'effective';
+  effectiveAt: string;
+  successorFirstDevice: {
+    delegationId: string;
+    deviceSigningKeyFingerprintHex: string;
+    delegated: boolean;
+    readerKeyRegistered: boolean;
+  };
+  membershipsToReissue: {
+    membershipId: string;
+    homeId: string;
+    role: string;
+    validUntil: string | null;
+  }[];
+  readGrantsToReissue: {
+    grantId: string;
+    privacyDomain: string;
+    controllerPicoIdentityFingerprintHex: string;
+    validUntil: string;
+  }[];
 }
 
 export type PicoIdentityRootRotationSubmissionResult =
@@ -333,6 +380,7 @@ export type PicoIdentityRootRotationSubmissionResult =
       | 'rotation_already_pending'
       | 'predecessor_already_rotated'
       | 'co_signing_device_not_active'
+      | 'invalid_successor_first_device'
       | 'conflicting_record';
   };
 
@@ -350,6 +398,7 @@ export type PicoIdentityRootRotationVetoResult =
 export interface PicoIdentityRootRotationReconciliationResult {
   verifiedRotations: number;
   effectiveRotations: number;
+  projectedSuccessorDevices: number;
   quarantinedIdentities: string[];
 }
 
@@ -1176,11 +1225,25 @@ export class EventStore {
           params.credential.createdAt,
         );
 
-      return this.projectPicoHomeMemberMembership(
+      const result = this.projectPicoHomeMemberMembership(
         membership.homeId,
         membership.subjectPicoIdentityFingerprintHex,
         recordedAt,
       );
+
+      // ADR 0114 T3. Re-issuing membership to a rotated identity is the moment
+      // its first device can finally read. Doing it here rather than at the
+      // next boot is the difference between "your Pico works again" and "your
+      // Pico works again after you restart your Home".
+      if (result?.status === 'active') {
+        this.registerPicoIdentityRotationSuccessorReaderKey(
+          params.sodium,
+          membership.subjectPicoIdentityFingerprintHex,
+          recordedAt,
+        );
+      }
+
+      return result;
     });
 
     const projected = write();
@@ -2112,6 +2175,7 @@ export class EventStore {
     successorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
     predecessorSignatureHex: string;
     successorSignatureHex: string;
+    successorFirstDevice: PicoIdentityRotationSuccessorFirstDevice;
     sender: PicoHomeDeviceLifecycleSponsor;
     sodium: PicoHomeDeviceLifecycleSodium;
     acceptedAt?: string;
@@ -2168,6 +2232,36 @@ export class EventStore {
       }
     } catch {
       return { ok: false, reason: 'invalid_rotation' };
+    }
+
+    // ADR 0114 T3. The successor's first device must be delegated by the
+    // successor root itself - the one authority that exists for it - and the
+    // agreement key must be the one that delegation names, so the device the
+    // person ends up holding is the device the veto window showed.
+    //
+    // That the delegation names the successor as issuer needs no separate
+    // check: the delegation verifier binds it to the key record presented
+    // here, and the rotation verification above bound that record to the
+    // successor fingerprint.
+    const firstDevice = params.successorFirstDevice.delegation.record;
+    try {
+      if (
+        params.successorFirstDevice.deviceKeyAgreementKeyRecord.keyRole
+          !== 'device_key_agreement'
+        || !verifyPicoIdentityKeyRecordFingerprint(params.sodium, {
+          keyRecord: params.successorFirstDevice.deviceKeyAgreementKeyRecord,
+          expectedFingerprintHex: firstDevice.subjectKeyAgreementKeyFingerprintHex,
+        })
+      ) {
+        return { ok: false, reason: 'invalid_successor_first_device' };
+      }
+      createVerifiedPicoIdentityLifecycleIndex(params.sodium, {
+        issuerIdentityKeyRecord: params.successorIdentityKeyRecord,
+        signedDelegations: [params.successorFirstDevice.delegation],
+        signedRevocations: [],
+      });
+    } catch {
+      return { ok: false, reason: 'invalid_successor_first_device' };
     }
 
     const existing = this.db
@@ -2230,8 +2324,11 @@ export class EventStore {
             accepted_at,
             effective_at,
             co_signing_delegation_id,
+            successor_first_device_delegation_id,
+            successor_first_device_signing_key_fingerprint_hex,
+            successor_first_device_key_agreement_key_fingerprint_hex,
             record_json
-          ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
           rotation.rotationId,
@@ -2244,12 +2341,16 @@ export class EventStore {
           acceptedAt,
           effectiveAt,
           params.sender.delegationId,
+          firstDevice.delegationId,
+          firstDevice.subjectSigningKeyFingerprintHex,
+          firstDevice.subjectKeyAgreementKeyFingerprintHex,
           serializePayload({
             rotation,
             predecessorIdentityKeyRecord: params.predecessorIdentityKeyRecord,
             successorIdentityKeyRecord: params.successorIdentityKeyRecord,
             predecessorSignatureHex: params.predecessorSignatureHex,
             successorSignatureHex: params.successorSignatureHex,
+            successorFirstDevice: params.successorFirstDevice,
           }),
         );
     } catch {
@@ -2270,6 +2371,12 @@ export class EventStore {
         acceptedAt,
         effectiveAt,
         coSigningDelegationId: params.sender.delegationId,
+        successorFirstDeviceDelegationId: firstDevice.delegationId,
+        successorFirstDeviceSigningKeyFingerprintHex:
+          firstDevice.subjectSigningKeyFingerprintHex,
+        successorFirstDeviceKeyAgreementKeyFingerprintHex:
+          firstDevice.subjectKeyAgreementKeyFingerprintHex,
+        successorFirstDeviceProjectedAt: null,
       },
     };
   }
@@ -2348,7 +2455,13 @@ export class EventStore {
                rotated_at AS rotatedAt,
                accepted_at AS acceptedAt,
                effective_at AS effectiveAt,
-               co_signing_delegation_id AS coSigningDelegationId
+               co_signing_delegation_id AS coSigningDelegationId,
+               successor_first_device_delegation_id AS successorFirstDeviceDelegationId,
+               successor_first_device_signing_key_fingerprint_hex
+                 AS successorFirstDeviceSigningKeyFingerprintHex,
+               successor_first_device_key_agreement_key_fingerprint_hex
+                 AS successorFirstDeviceKeyAgreementKeyFingerprintHex,
+               successor_first_device_projected_at AS successorFirstDeviceProjectedAt
         FROM pico_identity_root_rotation
         WHERE predecessor_identity_fingerprint_hex = ?
           AND status IN ('pending', 'effective')
@@ -2359,6 +2472,134 @@ export class EventStore {
         | PicoIdentityRootRotationView
         | undefined;
     return row ?? null;
+  }
+
+  /**
+   * ADR 0114 T3. What an effective rotation still owes, per issuer.
+   *
+   * Rotation grants eligibility, it does not rebind anything: the Home Host
+   * Pico re-issues membership, each domain controller re-issues its own read
+   * grants, and the successor root issues any further devices itself. That is
+   * a deliberate cost - a rotating member waits for their issuers - and this
+   * view is what keeps the wait honest instead of silent. Debt already
+   * settled disappears from it, so an empty list means finished, not unknown.
+   */
+  public picoIdentityRotationDebtView(
+    successorIdentityFingerprintHex: string,
+    at: string = new Date().toISOString(),
+  ): PicoIdentityRotationDebtView | null {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_identity_root_rotation')) {
+      return null;
+    }
+    const row = this.db
+      .prepare(`
+        SELECT rotation_id AS rotationId,
+               predecessor_identity_fingerprint_hex AS predecessorIdentityFingerprintHex,
+               successor_identity_fingerprint_hex AS successorIdentityFingerprintHex,
+               status,
+               effective_at AS effectiveAt,
+               successor_first_device_delegation_id AS delegationId,
+               successor_first_device_signing_key_fingerprint_hex
+                 AS deviceSigningKeyFingerprintHex,
+               successor_first_device_projected_at AS projectedAt
+        FROM pico_identity_root_rotation
+        WHERE successor_identity_fingerprint_hex = ?
+          AND status IN ('pending', 'effective')
+        ORDER BY effective_at DESC, rotation_id ASC
+        LIMIT 1
+      `)
+      .get(successorIdentityFingerprintHex) as {
+        rotationId: string;
+        predecessorIdentityFingerprintHex: string;
+        successorIdentityFingerprintHex: string;
+        status: 'pending' | 'effective';
+        effectiveAt: string;
+        delegationId: string;
+        deviceSigningKeyFingerprintHex: string;
+        projectedAt: string | null;
+      } | undefined;
+    if (row === undefined) {
+      return null;
+    }
+
+    const readerKeyRegistered = this.db
+      .prepare(`
+        SELECT 1 AS present
+        FROM pico_identity_reader_key
+        WHERE delegation_id = ?
+          AND pico_identity_fingerprint_hex = ?
+      `)
+      .get(row.delegationId, row.successorIdentityFingerprintHex) !== undefined;
+
+    const homeId = this.picoHomeClaimState().homeId ?? undefined;
+    const memberships = homeId === undefined || !tableExists(this.db, 'pico_home_membership')
+      ? []
+      : (this.db
+        .prepare(`
+          SELECT membership_id AS membershipId,
+                 home_id AS homeId,
+                 role,
+                 valid_until AS validUntil
+          FROM pico_home_membership
+          WHERE home_id = ?
+            AND pico_identity_fingerprint_hex = ?
+            AND status = 'active'
+            AND valid_from <= ?
+            AND (valid_until IS NULL OR valid_until > ?)
+          ORDER BY membership_id
+        `)
+        .all(homeId, row.predecessorIdentityFingerprintHex, at, at) as {
+          membershipId: string;
+          homeId: string;
+          role: string;
+          validUntil: string | null;
+        }[])
+        // Only what the successor does not already hold: an issuer that has
+        // acted owes nothing further.
+        .filter(() => !this.hasActivePicoHomeMembership(
+          row.successorIdentityFingerprintHex,
+          homeId,
+          at,
+        ));
+
+    const grants = this.picoHomeDomainReadGrants(at);
+    const successorDomains = new Set(
+      grants
+        .filter((grant) => grant.status === 'active'
+          && grant.readerPicoIdentityFingerprintHex
+            === row.successorIdentityFingerprintHex)
+        .map((grant) => `${grant.privacyDomain}\u0000${grant.controllerPicoIdentityFingerprintHex}`),
+    );
+
+    return {
+      rotationId: row.rotationId,
+      predecessorIdentityFingerprintHex: row.predecessorIdentityFingerprintHex,
+      successorIdentityFingerprintHex: row.successorIdentityFingerprintHex,
+      status: row.status,
+      effectiveAt: row.effectiveAt,
+      successorFirstDevice: {
+        delegationId: row.delegationId,
+        deviceSigningKeyFingerprintHex: row.deviceSigningKeyFingerprintHex,
+        delegated: row.projectedAt !== null,
+        readerKeyRegistered,
+      },
+      membershipsToReissue: memberships,
+      readGrantsToReissue: grants
+        .filter((grant) => grant.status === 'active'
+          && grant.readerPicoIdentityFingerprintHex
+            === row.predecessorIdentityFingerprintHex
+          && !successorDomains.has(
+            `${grant.privacyDomain}\u0000${grant.controllerPicoIdentityFingerprintHex}`,
+          ))
+        .map((grant) => ({
+          grantId: grant.grantId,
+          privacyDomain: grant.privacyDomain,
+          controllerPicoIdentityFingerprintHex:
+            grant.controllerPicoIdentityFingerprintHex,
+          validUntil: grant.validUntil,
+        })),
+    };
   }
 
   /**
@@ -3782,6 +4023,69 @@ export class EventStore {
   }
 
   /**
+   * ADR 0114 T3. Registers the reader key of a rotated identity's first
+   * device once that identity has a membership again.
+   *
+   * The delegation is the successor root's own act and stands immediately;
+   * the reader key additionally needs an active membership, which only the
+   * Home Host Pico can re-issue. Being unable to register yet is therefore
+   * the stated cost of rotation - the person waits for their issuer - and is
+   * reported as debt, not as failure. Returns false only for an anomaly that
+   * no re-issue can fix.
+   */
+  private registerPicoIdentityRotationSuccessorReaderKey(
+    sodium: PicoHomeDeviceLifecycleSodium,
+    successorIdentityFingerprintHex: string,
+    at: string,
+  ): boolean {
+    const row = this.db
+      .prepare(`
+        SELECT successor_first_device_delegation_id AS delegationId,
+               successor_first_device_signing_key_fingerprint_hex
+                 AS deviceSigningKeyFingerprintHex,
+               record_json AS recordJson
+        FROM pico_identity_root_rotation
+        WHERE successor_identity_fingerprint_hex = ?
+          AND status = 'effective'
+          AND successor_first_device_projected_at IS NOT NULL
+        ORDER BY effective_at DESC, rotation_id ASC
+        LIMIT 1
+      `)
+      .get(successorIdentityFingerprintHex) as {
+        delegationId: string;
+        deviceSigningKeyFingerprintHex: string;
+        recordJson: string;
+      } | undefined;
+    if (row === undefined) {
+      return true;
+    }
+
+    let deviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    try {
+      deviceKeyAgreementKeyRecord = (JSON.parse(row.recordJson) as {
+        successorFirstDevice: PicoIdentityRotationSuccessorFirstDevice;
+      }).successorFirstDevice.deviceKeyAgreementKeyRecord;
+    } catch {
+      return false;
+    }
+
+    const registered = this.registerPicoIdentityReaderKey({
+      sodium,
+      picoIdentityFingerprintHex: successorIdentityFingerprintHex,
+      deviceSigningKeyFingerprintHex: row.deviceSigningKeyFingerprintHex,
+      delegationId: row.delegationId,
+      deviceKeyAgreementKeyRecord,
+      at,
+      registeredAt: at,
+    });
+    return registered.ok
+      // Owed, not broken: the issuer has not acted yet, or the delegation's
+      // own validity window has not opened.
+      || registered.reason === 'identity_is_not_active_member'
+      || registered.reason === 'inactive_reader_delegation';
+  }
+
+  /**
    * ADR 0114 T2. Boot re-verifies every stored rotation before honoring it and
    * promotes those whose veto window has passed.
    *
@@ -3801,6 +4105,7 @@ export class EventStore {
       return {
         verifiedRotations: 0,
         effectiveRotations: 0,
+        projectedSuccessorDevices: 0,
         quarantinedIdentities: [],
       };
     }
@@ -3812,6 +4117,12 @@ export class EventStore {
                successor_identity_fingerprint_hex AS successorIdentityFingerprintHex,
                status,
                effective_at AS effectiveAt,
+               successor_first_device_delegation_id AS successorFirstDeviceDelegationId,
+               successor_first_device_signing_key_fingerprint_hex
+                 AS successorFirstDeviceSigningKeyFingerprintHex,
+               successor_first_device_key_agreement_key_fingerprint_hex
+                 AS successorFirstDeviceKeyAgreementKeyFingerprintHex,
+               successor_first_device_projected_at AS successorFirstDeviceProjectedAt,
                record_json AS recordJson
         FROM pico_identity_root_rotation
         WHERE status IN ('pending', 'effective')
@@ -3823,13 +4134,23 @@ export class EventStore {
         successorIdentityFingerprintHex: string;
         status: 'pending' | 'effective';
         effectiveAt: string;
+        successorFirstDeviceDelegationId: string;
+        successorFirstDeviceSigningKeyFingerprintHex: string;
+        successorFirstDeviceKeyAgreementKeyFingerprintHex: string;
+        successorFirstDeviceProjectedAt: string | null;
         recordJson: string;
       }[];
 
     const quarantined = new Set<string>();
     const promotions: typeof rows = [];
+    const projections: {
+      row: (typeof rows)[number];
+      stored: { successorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+        successorFirstDevice: PicoIdentityRotationSuccessorFirstDevice; };
+    }[] = [];
     let verified = 0;
     let effective = 0;
+    let projected = 0;
 
     for (const row of rows) {
       let stored: {
@@ -3838,15 +4159,30 @@ export class EventStore {
         successorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
         predecessorSignatureHex: string;
         successorSignatureHex: string;
+        successorFirstDevice: PicoIdentityRotationSuccessorFirstDevice;
       };
       try {
         stored = JSON.parse(row.recordJson) as typeof stored;
+        const firstDevice = stored.successorFirstDevice.delegation.record;
+        // The successor's first device is the person's way back in, so it is
+        // re-verified with the same suspicion as the rotation itself: a device
+        // swapped here would hand the identity to whoever edited the row.
+        createVerifiedPicoIdentityLifecycleIndex(sodium, {
+          issuerIdentityKeyRecord: stored.successorIdentityKeyRecord,
+          signedDelegations: [stored.successorFirstDevice.delegation],
+          signedRevocations: [],
+        });
         if (
           stored.rotation.rotationId !== row.rotationId
           || stored.rotation.predecessorIdentityKeyFingerprintHex
             !== row.predecessorIdentityFingerprintHex
           || stored.rotation.successorIdentityKeyFingerprintHex
             !== row.successorIdentityFingerprintHex
+          || firstDevice.delegationId !== row.successorFirstDeviceDelegationId
+          || firstDevice.subjectSigningKeyFingerprintHex
+            !== row.successorFirstDeviceSigningKeyFingerprintHex
+          || firstDevice.subjectKeyAgreementKeyFingerprintHex
+            !== row.successorFirstDeviceKeyAgreementKeyFingerprintHex
           || !verifyPicoIdentityRotationSignatures(sodium, {
             predecessorIdentityKeyRecord: stored.predecessorIdentityKeyRecord,
             successorIdentityKeyRecord: stored.successorIdentityKeyRecord,
@@ -3868,6 +4204,9 @@ export class EventStore {
         if (row.status !== 'effective') {
           promotions.push(row);
         }
+        if (row.successorFirstDeviceProjectedAt === null) {
+          projections.push({ row, stored });
+        }
       }
     }
 
@@ -3887,6 +4226,42 @@ export class EventStore {
           .run(row.effectiveAt, row.rotationId);
       }
 
+      // ADR 0114 T3. The rotation revoked every device the old root delegated,
+      // so the same commit hands the successor the one device the record
+      // named. Without this the person is locked out of their own Home by the
+      // ceremony that was supposed to save them.
+      for (const { row, stored } of projections) {
+        const lifecycle = this.recordPicoIdentityLifecycleEvidence({
+          sodium,
+          identityKeyRecord: stored.successorIdentityKeyRecord,
+          delegation: stored.successorFirstDevice.delegation,
+          revocations: [],
+          recordedAt: row.effectiveAt,
+        });
+        if (!lifecycle.ok) {
+          // The successor's own device set is what is in doubt here, so it is
+          // the successor whose authority is withdrawn - the predecessor's
+          // already ended with the rotation.
+          quarantined.add(row.successorIdentityFingerprintHex);
+          continue;
+        }
+        projected += 1;
+        this.db
+          .prepare(`
+            UPDATE pico_identity_root_rotation
+            SET successor_first_device_projected_at = ?
+            WHERE rotation_id = ?
+          `)
+          .run(row.effectiveAt, row.rotationId);
+        if (!this.registerPicoIdentityRotationSuccessorReaderKey(
+          sodium,
+          row.successorIdentityFingerprintHex,
+          reconciledAt,
+        )) {
+          quarantined.add(row.successorIdentityFingerprintHex);
+        }
+      }
+
       // A rotation whose evidence no longer verifies must not decide anything
       // - neither for nor against the identity - so its device authority is
       // withdrawn until a human looks (the ADR 0109 rule).
@@ -3903,6 +4278,7 @@ export class EventStore {
     return {
       verifiedRotations: verified,
       effectiveRotations: effective,
+      projectedSuccessorDevices: projected,
       quarantinedIdentities: [...quarantined].sort(),
     };
   }

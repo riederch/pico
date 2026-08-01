@@ -5,8 +5,9 @@
 Accepted; partially implemented. Gate T1 - the canonical
 `pico.identity.rotation.v1` form, its verification and authoritative
 vectors - landed with this ADR, and gate T2 - the Foundation projection,
-the device co-signature, the veto window and boot re-verification - has
-since followed; T3-T5 are open. This ADR closes the
+the device co-signature, the veto window and boot re-verification - and
+gate T3 - the successor's first device and the re-issue debt - have
+since followed; T4-T5 are open. This ADR closes the
 sharpest residual ADR 0110 named: today the only answer to a stolen
 Recovery Card is explicit identity replacement, which throws away every
 relationship the person had. Both decisions taken here were made
@@ -177,9 +178,23 @@ so rather than let a person discover it in an emergency.
   outright as ADR 0080 handover. A stored record that no longer verifies
   against its own columns and signatures withdraws that identity's
   device authority instead of being honored or silently dropped.
-- **T3 - Re-issue path (open):** membership, reader-grant and delegation
-  re-issue against a rotated identity, including the rotation-debt
-  interaction with ADR 0078 domain rotation.
+- **T3 - Re-issue path (implemented):** the successor's first device and
+  the re-issue debt. Because the rotation revokes every device the old
+  root delegated, the record must name the device the successor root will
+  hold, delegated by that root itself - otherwise the ceremony meant to
+  save the person locks them out, and no path back exists: enrollment
+  needs an active sponsor device of the same identity, and a fresh root
+  has none. Naming it at submission rather than afterwards also means the
+  devices that may veto see the whole consequence - which root, and which
+  device it leaves - while they can still object. It is projected when
+  the window passes, re-verified on boot with the same suspicion as the
+  rotation itself, and its reader key follows the moment membership is
+  re-issued rather than at the next restart. What each issuer still owes
+  - membership, reader grants, the pending reader key - is a view, so
+  "you wait for your issuers" is a statement the product can make rather
+  than a silence. Re-issue itself needs no new mechanism: the unchanged
+  membership and read-grant ceremonies name the successor as their
+  subject, and a grant the controller has not re-issued stays unreadable.
 - **T4 - Ceremonies and product surface (open):** the person-side
   rotation ceremony with ADR 0106 rendering and ADR 0099 approvals, the
   veto surface, and forced Recovery Card re-issue - as ADR 0112
@@ -199,6 +214,7 @@ so rather than let a person discover it in an emergency.
 | Anybody with write access to the database | Editing a rotation row is the way to end an identity's whole device authority without ever holding its root. Boot re-verifies every stored record against its own columns and both signatures; one that fails withdraws that identity's device authority until a human re-establishes it, so the forgery decides nothing either way. Write access to the Foundation database remains a compromise of the Home, not a defended position. |
 | Relying party that never saw the rotation | Still honors the old root. Cross-Home propagation has no transport, so a rotation is per-Home until one exists; T5 keeps that open and unclaimed. |
 | Holder of an old Recovery Card after rotation | Restores a root that is no longer the identity - the card is dead, not dangerous. |
+| Somebody naming the successor's first device | Cannot: the delegation must verify under the successor root's own key record, which the rotation binds to the successor fingerprint, so a predecessor-signed device is refused. The agreement key must be the one that delegation names, so the device that becomes readable is the device that was authorized. |
 
 ## Consequences
 
@@ -215,7 +231,11 @@ Positive:
 Negative and residual:
 
 - a rotating member waits for its issuers, and where the Home Host Pico
-  is another person, on them;
+  is another person, on them - the wait is named by a debt view rather
+  than left for the person to discover;
+- a rotation cannot be submitted without naming the successor's first
+  device: one more thing to have ready at the ceremony, and the price of
+  never stranding the person it was meant to protect;
 - rotation is per-Home until a transport exists; a second Home keeps
   honoring the old root, which is an identity split this ADR names but
   cannot close;
