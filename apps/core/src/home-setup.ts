@@ -24,6 +24,16 @@ const HOST_SIGNING_KEY_FILE = 'home_host_signing.key.json';
 const HOST_KEY_AGREEMENT_KEY_FILE = 'home_host_key_agreement.key.json';
 
 export const HOME_RESET_MARKER_FILENAME = 'home-reset';
+/**
+ * ADR 0110 R6. Re-seeding the recovery anchor after anchor loss is an
+ * operator decision, and it takes the same shape as the other drastic host
+ * actions: a file placed beside the database, consumed once at startup. That
+ * keeps it off the Foundation HTTP surface - which ADR 0112 pins as
+ * diagnosis, never a product surface - and requires exactly the authority it
+ * implies, local access to the Home host. It grants nothing: the re-seed can
+ * only rebuild terminal knowledge the rows already carry.
+ */
+export const RECOVERY_ANCHOR_RESEED_MARKER_FILENAME = 'recovery-anchor-reseed';
 
 export interface MoveInCodeConsumeResult {
   ok: boolean;
@@ -262,6 +272,22 @@ export function homeResetMarkerPath(databasePath: string): string {
 
 export function consumeHomeResetMarker(databasePath: string): boolean {
   const markerPath = homeResetMarkerPath(databasePath);
+
+  if (!existsSync(markerPath)) {
+    return false;
+  }
+
+  rmSync(markerPath, { force: true });
+
+  return true;
+}
+
+export function recoveryAnchorReseedMarkerPath(databasePath: string): string {
+  return join(dirname(databasePath), RECOVERY_ANCHOR_RESEED_MARKER_FILENAME);
+}
+
+export function consumeRecoveryAnchorReseedMarker(databasePath: string): boolean {
+  const markerPath = recoveryAnchorReseedMarkerPath(databasePath);
 
   if (!existsSync(markerPath)) {
     return false;

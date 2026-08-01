@@ -21,6 +21,7 @@ export const foundationEventTypes = [
   'home.share_envelope_removed',
   'home.device_recovered',
   'home.device_recovery_vetoed',
+  'home.recovery_anchor_reseeded',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -48,6 +49,7 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.share_envelope_removed',
   'home.device_recovered',
   'home.device_recovery_vetoed',
+  'home.recovery_anchor_reseeded',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -1579,6 +1581,7 @@ export function validateFoundationEventPayload(
     type === 'device.registered'
     || type === 'home.device_recovered'
     || type === 'home.device_recovery_vetoed'
+    || type === 'home.recovery_anchor_reseeded'
   ) {
     const extraKey = firstUnexpectedKey(payload, []);
     if (extraKey !== undefined) {

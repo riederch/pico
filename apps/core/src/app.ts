@@ -133,6 +133,8 @@ import { defaultWebRootPath, type CoreConfig } from './config.js';
 import {
   assertHomeHostKeyStoreSeparation,
   consumeHomeResetMarker,
+  consumeRecoveryAnchorReseedMarker,
+  recoveryAnchorReseedMarkerPath,
   HomeHostKeyStore,
   MoveInCode,
   type HomeHostKeyPairSet,
@@ -734,12 +736,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         + 'and the identities quarantined; the recoveries cannot be completed again.',
       );
     } else if (deviceRecoveryReconciliation.anchorStatus === 'anchor_lost') {
-      app.log.error(
-        deviceRecoveryReconciliation,
-        'Pico Home recovery anchor is empty although recovery history exists. '
-        + 'A wiped anchor cannot be told apart from a rollback, so device recovery '
-        + 'stays closed until it is re-seeded explicitly (ADR 0110 R6).',
-      );
+      // ADR 0110 R6. The operator's way out, in the same shape as the other
+      // drastic host actions: a marker file beside the database, consumed
+      // once. It rebuilds terminal knowledge from rows that are already
+      // there and deliberately leaves restored pending rows unknown, so it
+      // restores service without reviving anything.
+      if (consumeRecoveryAnchorReseedMarker(config.databasePath)) {
+        const reseeded = store.reseedPicoHomeRecoveryAnchor();
+        if (reseeded.ok) {
+          appendServerEvent('home.recovery_anchor_reseeded', {});
+          app.log.warn(
+            reseeded,
+            'Pico Home recovery anchor was re-seeded from the local reset marker. '
+            + 'Terminal recoveries were carried over; any pending recovery must be '
+            + 'initiated again, and recoveries resolved before the anchor was lost '
+            + 'cannot be re-detected (ADR 0110 R6).',
+          );
+        } else {
+          app.log.error(
+            reseeded,
+            'Pico Home recovery anchor re-seed was requested but refused.',
+          );
+        }
+      } else {
+        app.log.error(
+          deviceRecoveryReconciliation,
+          'Pico Home recovery anchor is empty although recovery history exists. '
+          + 'A wiped anchor cannot be told apart from a rollback, so device recovery '
+          + 'stays closed until it is re-seeded explicitly: create the file '
+          + `${recoveryAnchorReseedMarkerPath(config.databasePath)} and restart `
+          + '(ADR 0110 R6).',
+        );
+      }
     }
   }
   const grantReconciliation = store.reconcilePicoHomeDomainReadGrants(sodium);

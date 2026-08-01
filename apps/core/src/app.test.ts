@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { Writable } from 'node:stream';
@@ -85,7 +85,11 @@ import {
   readerCustodyMultiReaderRotationMigrationId,
 } from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
-import { HomeHostKeyStore, homeResetMarkerPath } from './home-setup.js';
+import {
+  HomeHostKeyStore,
+  homeResetMarkerPath,
+  recoveryAnchorReseedMarkerPath,
+} from './home-setup.js';
 
 const tempDirs: string[] = [];
 const RESERVED_EVENT_ERROR = 'This event type is reserved for a later Pico Rules, Action Runner or Pico Home API.';
@@ -116,6 +120,80 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+describe('ADR 0110 R6 recovery anchor re-seed marker', () => {
+  it('blocks until an operator places the marker, then restores service without reviving anything', async () => {
+    const databasePath = createDatabasePath();
+    const anchorPath = join(dirname(databasePath), 'recovery-anchor', 'anchor.json');
+
+    // A real founded Home: the anchor cross-check only runs for one, and a
+    // fabricated claim state would prove nothing about the startup path.
+    const founding = await buildAppWithCapturedLog({ databasePath });
+    await claimHomeThroughSealedFlow(founding);
+    await founding.close();
+    // The anchor is seeded by the first boot that finds a claimed Home; the
+    // boot that founded it started out unclaimed.
+    const seeding = await buildAppWithCapturedLog({ databasePath });
+    await seeding.close();
+    expect(existsSync(anchorPath)).toBe(true);
+
+    // What a Supervisor restore leaves behind: rows with recovery history,
+    // no anchor - because the anchor is deliberately backup-excluded.
+    rmSync(dirname(anchorPath), { recursive: true, force: true });
+    const database = new Database(databasePath);
+    const identityFingerprintHex = (database
+      .prepare('SELECT host_admin_pico_id AS id FROM pico_home_claim_state')
+      .get() as { id: string }).id.replace('pico:identity:', '');
+    database.prepare(`
+      INSERT INTO pico_home_device_recovery (
+        recovery_id, home_id, pico_identity_fingerprint_hex, status,
+        target_delegation_id, target_device_signing_key_fingerprint_hex,
+        target_device_key_agreement_key_fingerprint_hex, observed_lifecycle_order,
+        evidence_digest_hex, claim_digest_hex, submission_json,
+        accepted_at, effective_at, completion_expires_at, resolved_at
+      ) VALUES (
+        'recovery_reseed_marker', 'home_reseed', ?, 'vetoed',
+        'delegation_reseed', ?, ?, 'seq:0000000000000001',
+        ?, ?, '{}',
+        '2026-07-31T10:00:00.000Z', '2026-08-02T10:00:00.000Z',
+        '2099-08-09T10:00:00.000Z', '2026-07-31T12:00:00.000Z'
+      )
+    `).run(
+      identityFingerprintHex,
+      '22'.repeat(32),
+      '33'.repeat(32),
+      '44'.repeat(32),
+      '55'.repeat(32),
+    );
+    database.close();
+
+    const blocked = await buildAppWithCapturedLog({ databasePath });
+    const blockedLog = readCapturedLog(blocked);
+    expect(blockedLog).toContain('stays closed until it is re-seeded explicitly');
+    // Fail-closed is only usable if it says how to get out again.
+    expect(blockedLog).toContain(recoveryAnchorReseedMarkerPath(databasePath));
+    expect(existsSync(anchorPath)).toBe(false);
+    await blocked.close();
+
+    writeFileSync(recoveryAnchorReseedMarkerPath(databasePath), '');
+    const reseeded = await buildAppWithCapturedLog({ databasePath });
+    const reseededLog = readCapturedLog(reseeded);
+    expect(reseededLog).toContain('was re-seeded from the local reset marker');
+    expect(reseededLog).toContain('must be initiated again');
+    // Consumed once: a restart must not silently re-seed a second time.
+    expect(existsSync(recoveryAnchorReseedMarkerPath(databasePath))).toBe(false);
+
+    // Terminal knowledge carried over, so the vetoed recovery stays refused:
+    // the re-seed restored service, not the recovery.
+    const anchorDocument = JSON.parse(readFileSync(anchorPath, 'utf8')) as {
+      entries: { recoveryId: string; state: string }[];
+    };
+    expect(anchorDocument.entries).toEqual([
+      expect.objectContaining({ recoveryId: 'recovery_reseed_marker', state: 'vetoed' }),
+    ]);
+    await reseeded.close();
+  });
 });
 
 describe('Pico Home Core app', () => {
@@ -3869,6 +3947,10 @@ async function buildAppWithCapturedLog(
   capturedLogLines.set(app, lines);
 
   return app;
+}
+
+function readCapturedLog(app: Awaited<ReturnType<typeof buildApp>>): string {
+  return (capturedLogLines.get(app) ?? []).join('');
 }
 
 function readBootstrapCode(app: Awaited<ReturnType<typeof buildApp>>): string {

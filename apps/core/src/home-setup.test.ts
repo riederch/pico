@@ -8,6 +8,8 @@ import {
   HomeHostKeyStore,
   MoveInCode,
   consumeHomeResetMarker,
+  consumeRecoveryAnchorReseedMarker,
+  recoveryAnchorReseedMarkerPath,
   homeResetMarkerPath,
 } from './home-setup.js';
 
@@ -111,5 +113,25 @@ describe('home reset marker', () => {
 
     expect(consumeHomeResetMarker(databasePath)).toBe(true);
     expect(consumeHomeResetMarker(databasePath)).toBe(false);
+  });
+});
+
+describe('recovery anchor re-seed marker (ADR 0110 R6)', () => {
+  it('is consumed exactly once and never shares a file with the home reset', () => {
+    const databasePath = join(createTempDir(), 'pico.sqlite');
+    const markerPath = recoveryAnchorReseedMarkerPath(databasePath);
+    mkdirSync(join(markerPath, '..'), { recursive: true });
+
+    expect(consumeRecoveryAnchorReseedMarker(databasePath)).toBe(false);
+    writeFileSync(markerPath, '');
+    expect(consumeRecoveryAnchorReseedMarker(databasePath)).toBe(true);
+    expect(consumeRecoveryAnchorReseedMarker(databasePath)).toBe(false);
+
+    // Distinct markers: re-seeding the anchor must never be a side effect of
+    // resetting the Home, and vice versa.
+    expect(markerPath).not.toBe(homeResetMarkerPath(databasePath));
+    writeFileSync(homeResetMarkerPath(databasePath), '');
+    expect(consumeRecoveryAnchorReseedMarker(databasePath)).toBe(false);
+    expect(consumeHomeResetMarker(databasePath)).toBe(true);
   });
 });

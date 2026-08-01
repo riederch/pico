@@ -386,17 +386,16 @@ evidence quarantines that issuer's device authority (the ADR 0109 rule).
 Pending records survive restarts - the time lock must not be resettable by
 crashing the Home. Reconciliation verifies the recovery state present in
 the supplied database snapshot and lapses a pending row older than its
-window. It cannot distinguish a fully matching old snapshot captured
-before consumption from the legitimate state at that earlier time: such a
-restore can resurrect the then-pending row while it remains in-window.
-Restore-proof one-use semantics therefore require an external monotonic
-consumption floor or equivalent platform anchor; R6 keeps that claim open.
-`home.device_recovered` and
-`home.device_recovery_vetoed` are reserved as server-synthesized,
+window. On its own it cannot distinguish a fully matching old snapshot
+captured before consumption from the legitimate state at that earlier
+time, which is why one-use does not rest on the snapshot at all: the R6
+anchor below lives outside it and decides whether a recovery may still be
+completed. `home.device_recovered`, `home.device_recovery_vetoed` and
+`home.recovery_anchor_reseeded` are reserved as server-synthesized,
 content-free append-only event types; initiations, supersessions and
 lapses stay in bounded operational logging plus the durable pending row,
-so a root holder cannot grow the undeletable log by cycling initiations
-(A9).
+and the anchor prunes its own entries once their window passes, so a root
+holder cannot grow either undeletable store by cycling initiations (A9).
 
 ### Approval and rendering boundaries
 
@@ -556,7 +555,7 @@ authorize, approve or veto another identity's recovery.
   veto operation, implicit cancel on any accepted lifecycle transition,
   the ordered atomic completion commit with injected-failure rollback
   proof, restart/snapshot reconciliation, issuer quarantine and bounded
-  operational logging with the two reserved append-only events. One-use no
+  operational logging with the reserved append-only events. One-use no
   longer stops at the snapshot boundary: R6's anchor carries it across a
   restore, within the substrate limits stated there.
 - **R3 - Vault ceremonies and the export exception (implemented):** the
@@ -606,8 +605,13 @@ authorize, approve or veto another identity's recovery.
   its resolution restored without costing an identity its projection, because
   neither ever changed a device set. A fresh Home seeds silently; a Home with
   recovery history but no anchor fails closed until an operator re-seeds
-  explicitly, and that re-seed rebuilds terminal knowledge only - it never
-  blesses a restored pending row. A recovery the anchor never accepted may
+  explicitly. That re-seed takes the shape the other drastic host actions
+  already have - a marker file beside the database, consumed once at startup,
+  logged and appended as `home.recovery_anchor_reseeded` - which keeps it off
+  the Foundation HTTP surface and asks for exactly the authority it implies:
+  local access to the Home host. The refusal names the marker path, because a
+  fail-closed state without a way out is a dead end. The re-seed rebuilds
+  terminal knowledge only - it never blesses a restored pending row. A recovery the anchor never accepted may
   still be vetoed or superseded, so a re-seed does not strand the person
   behind a pending row it deliberately left unknown. Entries are pruned once
   their completion window has passed, which is what keeps A9 true here: past
