@@ -30,9 +30,6 @@ die noch nicht entschiedenen Folge-Themen der Initiative, priorisiert:
    `frame-ancestors` - beruehrt `app.ts`, wartet auf den
    U4-Abschluss). Die CI-Supply-Chain-Haelfte ist mit ADR 0122
    entschieden (Gates Y1/Y4) und hier gestrichen.
-2. **TPM-Plattform-Anker** als explizites Gate in ADR 0027 heben statt
-   verstreuter Fussnoten (R6-Rollback- und
-   Matching-Backup-Residuum).
 
 Naechster Code-Block der Initiative ist Gate W1 (Einstieg in
 `.agent-context.md`) - nach ADR 0115 U4, wegen der

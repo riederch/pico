@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted as a product and installation-path concept.
+Accepted as a product and installation-path concept. On 2026-08-01 the
+appliance platform gates IM1-IM3 were added, lifting requirements that
+later ADRs (0110, 0120, 0121, 0122, 0123) had placed on the future
+image as scattered footnotes into one explicit, checkable list. All
+three are open.
 
 ## Context
 
@@ -149,6 +153,37 @@ Before implementing a public claim write path, the project should define at leas
 - audit representation
 - compatibility capability flag or protocol versioning, if exposed over Pico Home Link
 
+## Appliance platform gates
+
+The image is the one deployment path where Pico chooses the operating
+system, and several decided residuals stay open precisely because the
+add-on and generic-host paths cannot choose it. What only the image
+can provide is therefore gated here, once, instead of living as
+footnotes in the ADRs that need it.
+
+- **IM1 - Platform anchor.** The image provides a platform-backed,
+  rollback-resistant substrate - a TPM NV counter or equivalent secure
+  element - for the ADR 0110 R6 anchor, replacing the filesystem
+  substrate through the interface that was built for exactly this
+  swap, without touching a caller. The anchor has since become
+  load-bearing three times over: recovery consumption (ADR 0110), the
+  time floor for objection windows (ADR 0120) and the audit checkpoint
+  heads (ADR 0121). IM1 closes, on this path only, the
+  whole-filesystem-rollback residual all three name and the
+  matching-backup residual of ADRs 0087/0090/0092/0093/0094. Hardware
+  without a TPM or secure element does not become a lesser appliance
+  by silent downgrade: the image states at setup whether the platform
+  anchor is active, and the filesystem substrate with its stated
+  residuals remains the honest fallback.
+- **IM2 - Encrypted or absent swap.** Decided in ADR 0123 Z3: the
+  image runs with encrypted swap or none, so the memory-exposure
+  posture does not depend on an operator remembering a mount option.
+- **IM3 - Verifying updater.** Decided in ADR 0122: the image's update
+  path verifies the release attestation and switches by digest - the
+  first consumption path that gates on ADR 0122 Y2 instead of merely
+  auditing it, closing the unverified-Supervisor residual for this
+  path.
+
 ## Current implementation status
 
 The current foundation implementation only has an internal Pico Home claim-state skeleton and a minimal claim-state diagnostic in `GET /api/system/status`.
@@ -202,5 +237,19 @@ This ADR extends and constrains:
 
 - `0024-server-bootstrap-tenancy-and-eviction.md`
 - `0026-product-terminology-and-naming.md`
+
+The appliance platform gates carry requirements decided elsewhere:
+
+- IM1 realizes the platform-anchor substrate ADR
+  `0110-recovery-card-and-time-locked-zero-device-recovery.md` R6
+  designed for, which ADR
+  `0120-time-authority-and-conservative-window-evaluation.md` and ADR
+  `0121-tamper-evident-audit-records-and-anchored-checkpoints.md`
+  extended.
+- IM2 carries ADR
+  `0123-runtime-key-hygiene-and-memory-exposure-limits.md` Z3.
+- IM3 carries ADR
+  `0122-update-and-release-integrity-threat-model-and-hardening-gates.md`
+  Y2/Y3 verification onto the first path that can gate on it.
 
 Use product terms where humans interact with the setup flow. Keep technical names stable where protocol compatibility requires them.
