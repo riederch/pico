@@ -23,6 +23,7 @@ import type {
   PicoHomeDeviceRecoverySubmission,
   PicoHomeDeviceRecoveryReceiptSignatureInput,
   PicoIdentityKeyRecordSignatureInput,
+  PicoIdentityRotationSignatureInput,
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
@@ -75,6 +76,7 @@ import {
   comparePicoIdentityLifecycleOrder,
   verifyPicoIdentityDetachedSignature,
   verifyPicoIdentityKeyRecordFingerprint,
+  verifyPicoIdentityRotationSignatures,
   type IdentityVerificationSodium,
   type PicoIdentitySignedDelegation,
   type PicoIdentitySignedRevocation,
@@ -304,6 +306,52 @@ export type PicoHomeDeviceRecoveryVetoResult =
       | 'identity_mismatch'
       | 'recovery_anchor_unavailable';
   };
+
+export const PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS = 48 * 60 * 60 * 1_000;
+
+export interface PicoIdentityRootRotationView {
+  rotationId: string;
+  predecessorIdentityFingerprintHex: string;
+  successorIdentityFingerprintHex: string;
+  status: 'pending' | 'vetoed' | 'effective';
+  reasonCategory: string;
+  rotatedAt: string;
+  acceptedAt: string;
+  effectiveAt: string;
+  coSigningDelegationId: string;
+}
+
+export type PicoIdentityRootRotationSubmissionResult =
+  | { ok: true; rotation: PicoIdentityRootRotationView }
+  | {
+    ok: false;
+    reason:
+      | 'identity_is_not_active_member'
+      | 'invalid_rotation'
+      | 'founder_root_rotation_unsupported'
+      | 'rotation_id_reused'
+      | 'rotation_already_pending'
+      | 'predecessor_already_rotated'
+      | 'co_signing_device_not_active'
+      | 'conflicting_record';
+  };
+
+export type PicoIdentityRootRotationVetoResult =
+  | { ok: true }
+  | {
+    ok: false;
+    reason:
+      | 'rotation_not_found'
+      | 'rotation_not_pending'
+      | 'identity_mismatch'
+      | 'veto_requires_another_device';
+  };
+
+export interface PicoIdentityRootRotationReconciliationResult {
+  verifiedRotations: number;
+  effectiveRotations: number;
+  quarantinedIdentities: string[];
+}
 
 export interface PicoHomeDeviceRecoveryReconciliationResult {
   verifiedRecoveries: number;
@@ -1658,6 +1706,13 @@ export class EventStore {
       `)
       .all(homeId, params.picoIdentityFingerprintHex) as PicoIdentityReaderKeyRow[];
 
+    // ADR 0114: once the root's rotation is effective its delegations are no
+    // longer active. The devices stay visible - a person needs to see what
+    // the rotation cost them - but none of them is `active` any more.
+    const rootAuthorityEnded = this.picoIdentityRootAuthorityEnded(
+      params.picoIdentityFingerprintHex,
+      at,
+    );
     const devices = rows.flatMap((row): PicoHomeDeviceLifecycleDeviceView[] => {
       const lookup = lifecycle.lookupDelegation(row.delegationId, {
         at,
@@ -1677,7 +1732,9 @@ export class EventStore {
         deviceKeyAgreementKeyFingerprintHex: row.deviceKeyAgreementKeyFingerprintHex,
         lifecycleOrder: lookup.delegation.lifecycleOrder,
         validUntil: lookup.delegation.validUntil,
-        status: lookup.status as PicoHomeDeviceLifecycleDeviceView['status'],
+        status: rootAuthorityEnded && lookup.status === 'active'
+          ? 'revoked'
+          : lookup.status as PicoHomeDeviceLifecycleDeviceView['status'],
       }];
     });
 
@@ -2034,6 +2091,302 @@ export class EventStore {
       `)
       .run(vetoedAt, params.recoveryId);
     return { ok: true };
+  }
+
+  /**
+   * ADR 0114 T2. Accepts a dual-signed root rotation from a living device.
+   *
+   * Unlike recovery this is not a pre-authority operation: an identity that
+   * can rotate still has an active device by definition, so the carrier is a
+   * normally authorized sender and the Link surface does not grow. The device
+   * co-signature is what a card thief lacks - to get one they must first
+   * complete a recovery, which is loud, delayed and vetoable (ADR 0110).
+   *
+   * Nothing takes effect here. The rotation becomes effective only after its
+   * veto window, and only if no other active device of the identity refuses
+   * it in the meantime.
+   */
+  public submitPicoIdentityRootRotation(params: {
+    rotation: PicoIdentityRotationSignatureInput;
+    predecessorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    successorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    predecessorSignatureHex: string;
+    successorSignatureHex: string;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    sodium: PicoHomeDeviceLifecycleSodium;
+    acceptedAt?: string;
+  }): PicoIdentityRootRotationSubmissionResult {
+    this.ensureOpen();
+    const acceptedAt = params.acceptedAt ?? new Date().toISOString();
+    const rotation = params.rotation;
+    const claimState = this.picoHomeClaimState();
+    const homeId = claimState.homeId ?? undefined;
+
+    // The rotating identity must be the sender's own: nobody rotates another
+    // identity's root, and no host role stands in for one.
+    if (
+      params.sender.picoIdentityFingerprintHex
+      !== rotation.predecessorIdentityKeyFingerprintHex
+    ) {
+      return { ok: false, reason: 'invalid_rotation' };
+    }
+
+    // ADR 0114 scope. The founder's root is the Home's own governance root;
+    // replacing it is Home handover (ADR 0080's named non-goal), not identity
+    // continuity. Refused here rather than left to the ceremony, because the
+    // record would otherwise verify and end the Home's own authority.
+    const founderIdentityFingerprintHex =
+      this.picoHomeFoundingRecord()?.founding.homeHostPicoIdentityFingerprintHex
+      ?? claimState.hostAdminPicoId?.replace(/^pico:identity:/, '');
+    if (
+      founderIdentityFingerprintHex
+      === rotation.predecessorIdentityKeyFingerprintHex
+    ) {
+      return { ok: false, reason: 'founder_root_rotation_unsupported' };
+    }
+
+    if (
+      homeId === undefined
+      || !this.hasActivePicoHomeMembership(
+        rotation.predecessorIdentityKeyFingerprintHex,
+        homeId,
+        acceptedAt,
+      )
+    ) {
+      return { ok: false, reason: 'identity_is_not_active_member' };
+    }
+
+    try {
+      if (!verifyPicoIdentityRotationSignatures(params.sodium, {
+        predecessorIdentityKeyRecord: params.predecessorIdentityKeyRecord,
+        successorIdentityKeyRecord: params.successorIdentityKeyRecord,
+        rotation,
+        predecessorSignatureHex: params.predecessorSignatureHex,
+        successorSignatureHex: params.successorSignatureHex,
+      })) {
+        return { ok: false, reason: 'invalid_rotation' };
+      }
+    } catch {
+      return { ok: false, reason: 'invalid_rotation' };
+    }
+
+    const existing = this.db
+      .prepare(`
+        SELECT rotation_id AS rotationId, status
+        FROM pico_identity_root_rotation
+        WHERE predecessor_identity_fingerprint_hex = ?
+      `)
+      .all(rotation.predecessorIdentityKeyFingerprintHex) as {
+        rotationId: string;
+        status: 'pending' | 'vetoed' | 'effective';
+      }[];
+    if (existing.some((row) => row.rotationId === rotation.rotationId)) {
+      return { ok: false, reason: 'rotation_id_reused' };
+    }
+    if (existing.some((row) => row.status === 'effective')) {
+      // A rotated root has no authority left to authorize a second rotation.
+      return { ok: false, reason: 'predecessor_already_rotated' };
+    }
+    if (existing.some((row) => row.status === 'pending')) {
+      // Refused rather than superseded: letting a root holder replace the
+      // pending successor would let a thief restart the window at will.
+      return { ok: false, reason: 'rotation_already_pending' };
+    }
+
+    // The co-signing device must be active right now under the predecessor's
+    // own authority - the asymmetry the whole design rests on.
+    const view = this.picoHomeDeviceLifecycleView({
+      picoIdentityFingerprintHex: rotation.predecessorIdentityKeyFingerprintHex,
+      sodium: params.sodium,
+      at: acceptedAt,
+    });
+    const coSigner = view?.devices.find(
+      (device) => device.delegationId === params.sender.delegationId
+        && device.status === 'active'
+        && device.deviceSigningKeyFingerprintHex
+          === params.sender.deviceSigningKeyFingerprintHex
+        && device.deviceKeyAgreementKeyFingerprintHex
+          === params.sender.deviceKeyAgreementKeyFingerprintHex,
+    );
+    if (coSigner === undefined) {
+      return { ok: false, reason: 'co_signing_device_not_active' };
+    }
+
+    const effectiveAt = new Date(
+      Date.parse(acceptedAt) + PICO_IDENTITY_ROOT_ROTATION_VETO_WINDOW_MS,
+    ).toISOString();
+    try {
+      this.db
+        .prepare(`
+          INSERT INTO pico_identity_root_rotation (
+            rotation_id,
+            home_id,
+            predecessor_identity_fingerprint_hex,
+            successor_identity_fingerprint_hex,
+            status,
+            reason_category,
+            lifecycle_order,
+            rotated_at,
+            accepted_at,
+            effective_at,
+            co_signing_delegation_id,
+            record_json
+          ) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(
+          rotation.rotationId,
+          homeId,
+          rotation.predecessorIdentityKeyFingerprintHex,
+          rotation.successorIdentityKeyFingerprintHex,
+          rotation.reasonCategory,
+          rotation.lifecycleOrder,
+          rotation.rotatedAt,
+          acceptedAt,
+          effectiveAt,
+          params.sender.delegationId,
+          serializePayload({
+            rotation,
+            predecessorIdentityKeyRecord: params.predecessorIdentityKeyRecord,
+            successorIdentityKeyRecord: params.successorIdentityKeyRecord,
+            predecessorSignatureHex: params.predecessorSignatureHex,
+            successorSignatureHex: params.successorSignatureHex,
+          }),
+        );
+    } catch {
+      return { ok: false, reason: 'conflicting_record' };
+    }
+
+    return {
+      ok: true,
+      rotation: {
+        rotationId: rotation.rotationId,
+        predecessorIdentityFingerprintHex:
+          rotation.predecessorIdentityKeyFingerprintHex,
+        successorIdentityFingerprintHex:
+          rotation.successorIdentityKeyFingerprintHex,
+        status: 'pending',
+        reasonCategory: rotation.reasonCategory,
+        rotatedAt: rotation.rotatedAt,
+        acceptedAt,
+        effectiveAt,
+        coSigningDelegationId: params.sender.delegationId,
+      },
+    };
+  }
+
+  /**
+   * ADR 0114 T2. Any *other* active device of the identity may refuse a
+   * pending rotation. The co-signing device is excluded on purpose: a device
+   * that authorized the rotation cannot also be the independent objection to
+   * it, and allowing that would make the window look like a safeguard it is
+   * not.
+   */
+  public vetoPicoIdentityRootRotation(params: {
+    rotationId: string;
+    sender: PicoHomeDeviceLifecycleSponsor;
+    sodium: PicoHomeDeviceLifecycleSodium;
+    vetoedAt?: string;
+  }): PicoIdentityRootRotationVetoResult {
+    this.ensureOpen();
+    const vetoedAt = params.vetoedAt ?? new Date().toISOString();
+    const row = this.db
+      .prepare(`
+        SELECT predecessor_identity_fingerprint_hex AS predecessorIdentityFingerprintHex,
+               co_signing_delegation_id AS coSigningDelegationId,
+               status
+        FROM pico_identity_root_rotation
+        WHERE rotation_id = ?
+      `)
+      .get(params.rotationId) as {
+        predecessorIdentityFingerprintHex: string;
+        coSigningDelegationId: string;
+        status: 'pending' | 'vetoed' | 'effective';
+      } | undefined;
+    if (row === undefined) {
+      return { ok: false, reason: 'rotation_not_found' };
+    }
+    if (
+      row.predecessorIdentityFingerprintHex
+      !== params.sender.picoIdentityFingerprintHex
+    ) {
+      return { ok: false, reason: 'identity_mismatch' };
+    }
+    if (row.status !== 'pending') {
+      return { ok: false, reason: 'rotation_not_pending' };
+    }
+    if (row.coSigningDelegationId === params.sender.delegationId) {
+      return { ok: false, reason: 'veto_requires_another_device' };
+    }
+
+    this.db
+      .prepare(`
+        UPDATE pico_identity_root_rotation
+        SET status = 'vetoed',
+            resolved_at = ?
+        WHERE rotation_id = ?
+          AND status = 'pending'
+      `)
+      .run(vetoedAt, params.rotationId);
+    return { ok: true };
+  }
+
+  /** The rotation this identity's root is subject to at `at`, if any. */
+  public picoIdentityRootRotationView(
+    predecessorIdentityFingerprintHex: string,
+  ): PicoIdentityRootRotationView | null {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_identity_root_rotation')) {
+      return null;
+    }
+    const row = this.db
+      .prepare(`
+        SELECT rotation_id AS rotationId,
+               predecessor_identity_fingerprint_hex AS predecessorIdentityFingerprintHex,
+               successor_identity_fingerprint_hex AS successorIdentityFingerprintHex,
+               status,
+               reason_category AS reasonCategory,
+               rotated_at AS rotatedAt,
+               accepted_at AS acceptedAt,
+               effective_at AS effectiveAt,
+               co_signing_delegation_id AS coSigningDelegationId
+        FROM pico_identity_root_rotation
+        WHERE predecessor_identity_fingerprint_hex = ?
+          AND status IN ('pending', 'effective')
+        ORDER BY accepted_at DESC, rotation_id ASC
+        LIMIT 1
+      `)
+      .get(predecessorIdentityFingerprintHex) as
+        | PicoIdentityRootRotationView
+        | undefined;
+    return row ?? null;
+  }
+
+  /**
+   * ADR 0114. True once this root's rotation has passed its veto window: from
+   * that instant every delegation it issued stops being honored. The record
+   * is self-authorized - the predecessor signed exactly this - so the Home
+   * gains no power by enforcing it.
+   */
+  private picoIdentityRootAuthorityEnded(
+    predecessorIdentityFingerprintHex: string,
+    at: string,
+  ): boolean {
+    if (!tableExists(this.db, 'pico_identity_root_rotation')) {
+      return false;
+    }
+    const row = this.db
+      .prepare(`
+        SELECT effective_at AS effectiveAt
+        FROM pico_identity_root_rotation
+        WHERE predecessor_identity_fingerprint_hex = ?
+          AND status IN ('pending', 'effective')
+          AND effective_at <= ?
+        LIMIT 1
+      `)
+      .get(predecessorIdentityFingerprintHex, at) as
+        | { effectiveAt: string }
+        | undefined;
+    return row !== undefined;
   }
 
   public completePicoHomeDeviceRecovery(params: {
@@ -2775,6 +3128,16 @@ export class EventStore {
         })) {
         return false;
       }
+      const at = params.at ?? new Date().toISOString();
+      // ADR 0114: a rotated root authorizes nothing further, so every device
+      // it delegated stops here - the single choke point Link authorization
+      // and identity sessions both pass through.
+      if (this.picoIdentityRootAuthorityEnded(
+        params.picoIdentityFingerprintHex,
+        at,
+      )) {
+        return false;
+      }
       const index = this.picoIdentityLifecycleIndex(
         params.sodium,
         params.picoIdentityFingerprintHex,
@@ -2784,7 +3147,7 @@ export class EventStore {
       }
 
       return index.lookupDelegation(params.delegationId, {
-        at: params.at ?? new Date().toISOString(),
+        at,
         requiredScopes: ['surface_session'],
       }).status === 'active';
     } catch {
@@ -3414,6 +3777,132 @@ export class EventStore {
     return {
       anchorStatus: resurrected.length > 0 ? 'rollback_detected' : 'live',
       resurrectedRecoveryIds: resurrected.sort(),
+      quarantinedIdentities: [...quarantined].sort(),
+    };
+  }
+
+  /**
+   * ADR 0114 T2. Boot re-verifies every stored rotation before honoring it and
+   * promotes those whose veto window has passed.
+   *
+   * A rotation ends an identity's whole device authority, so a tampered record
+   * would be a way to lock someone out of their own Home by editing a row.
+   * Both signatures and both key records are therefore checked again from the
+   * stored evidence, exactly as ADR 0109 does for lifecycle receipts, and a
+   * record that no longer verifies quarantines that identity rather than
+   * being honored or silently dropped.
+   */
+  public reconcilePicoIdentityRootRotations(
+    sodium: PicoHomeDeviceLifecycleSodium,
+    reconciledAt: string = new Date().toISOString(),
+  ): PicoIdentityRootRotationReconciliationResult {
+    this.ensureOpen();
+    if (!tableExists(this.db, 'pico_identity_root_rotation')) {
+      return {
+        verifiedRotations: 0,
+        effectiveRotations: 0,
+        quarantinedIdentities: [],
+      };
+    }
+
+    const rows = this.db
+      .prepare(`
+        SELECT rotation_id AS rotationId,
+               predecessor_identity_fingerprint_hex AS predecessorIdentityFingerprintHex,
+               successor_identity_fingerprint_hex AS successorIdentityFingerprintHex,
+               status,
+               effective_at AS effectiveAt,
+               record_json AS recordJson
+        FROM pico_identity_root_rotation
+        WHERE status IN ('pending', 'effective')
+        ORDER BY accepted_at ASC, rotation_id ASC
+      `)
+      .all() as {
+        rotationId: string;
+        predecessorIdentityFingerprintHex: string;
+        successorIdentityFingerprintHex: string;
+        status: 'pending' | 'effective';
+        effectiveAt: string;
+        recordJson: string;
+      }[];
+
+    const quarantined = new Set<string>();
+    const promotions: typeof rows = [];
+    let verified = 0;
+    let effective = 0;
+
+    for (const row of rows) {
+      let stored: {
+        rotation: PicoIdentityRotationSignatureInput;
+        predecessorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+        successorIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+        predecessorSignatureHex: string;
+        successorSignatureHex: string;
+      };
+      try {
+        stored = JSON.parse(row.recordJson) as typeof stored;
+        if (
+          stored.rotation.rotationId !== row.rotationId
+          || stored.rotation.predecessorIdentityKeyFingerprintHex
+            !== row.predecessorIdentityFingerprintHex
+          || stored.rotation.successorIdentityKeyFingerprintHex
+            !== row.successorIdentityFingerprintHex
+          || !verifyPicoIdentityRotationSignatures(sodium, {
+            predecessorIdentityKeyRecord: stored.predecessorIdentityKeyRecord,
+            successorIdentityKeyRecord: stored.successorIdentityKeyRecord,
+            rotation: stored.rotation,
+            predecessorSignatureHex: stored.predecessorSignatureHex,
+            successorSignatureHex: stored.successorSignatureHex,
+          })
+        ) {
+          throw new Error('invalid_rotation_record');
+        }
+      } catch {
+        quarantined.add(row.predecessorIdentityFingerprintHex);
+        continue;
+      }
+      verified += 1;
+
+      if (Date.parse(row.effectiveAt) <= Date.parse(reconciledAt)) {
+        effective += 1;
+        if (row.status !== 'effective') {
+          promotions.push(row);
+        }
+      }
+    }
+
+    // Promotion and quarantine are one decision, so they commit together: no
+    // reader may observe a rotation already in force while the identity whose
+    // evidence failed is still authorized.
+    this.db.transaction(() => {
+      for (const row of promotions) {
+        this.db
+          .prepare(`
+            UPDATE pico_identity_root_rotation
+            SET status = 'effective',
+                resolved_at = COALESCE(resolved_at, ?)
+            WHERE rotation_id = ?
+              AND status = 'pending'
+          `)
+          .run(row.effectiveAt, row.rotationId);
+      }
+
+      // A rotation whose evidence no longer verifies must not decide anything
+      // - neither for nor against the identity - so its device authority is
+      // withdrawn until a human looks (the ADR 0109 rule).
+      for (const identity of quarantined) {
+        this.db
+          .prepare(`
+            DELETE FROM pico_identity_reader_key
+            WHERE pico_identity_fingerprint_hex = ?
+          `)
+          .run(identity);
+      }
+    })();
+
+    return {
+      verifiedRotations: verified,
+      effectiveRotations: effective,
       quarantinedIdentities: [...quarantined].sort(),
     };
   }

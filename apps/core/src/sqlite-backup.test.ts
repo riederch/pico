@@ -8,6 +8,7 @@ import {
   listAppliedMigrations,
   picoHomeDeviceLifecycleMigrationId,
   picoHomeDeviceRecoveryMigrationId,
+  picoIdentityRootRotationMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
@@ -245,6 +246,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoHomeDeviceRecoveryMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoIdentityRootRotationMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

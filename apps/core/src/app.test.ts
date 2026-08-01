@@ -80,6 +80,7 @@ import {
   foundationOperatorHomeBindingMigrationId,
   picoHomeDeviceLifecycleMigrationId,
   picoHomeDeviceRecoveryMigrationId,
+  picoIdentityRootRotationMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
   readerCustodyMultiReaderRotationMigrationId,
@@ -337,6 +338,7 @@ describe('Pico Home Core app', () => {
           { id: picoHomeFoundingFirstDeviceEvidenceMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeDeviceLifecycleMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeDeviceRecoveryMigrationId, appliedAt: expect.any(String) },
+          { id: picoIdentityRootRotationMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });

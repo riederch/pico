@@ -725,6 +725,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           : 'Expired pending Pico Home device recoveries were lapsed during startup.',
       );
     }
+    // ADR 0114 T2. A rotation ends an identity's whole device authority, so
+    // boot re-verifies its evidence before honoring it and promotes those
+    // whose veto window has passed.
+    const rootRotationReconciliation =
+      store.reconcilePicoIdentityRootRotations(sodium);
+    if (rootRotationReconciliation.quarantinedIdentities.length > 0) {
+      app.log.error(
+        rootRotationReconciliation,
+        'Pico identity root rotation evidence failed verification; affected identity '
+        + 'device authority was withdrawn until it is re-established (ADR 0114).',
+      );
+    } else if (rootRotationReconciliation.effectiveRotations > 0) {
+      app.log.warn(
+        rootRotationReconciliation,
+        'Pico identity root rotations passed their veto window; the predecessor roots '
+        + 'authorize nothing further and their relationships must be re-issued.',
+      );
+    }
     // ADR 0110 R6. Both anchor faults are loud: a rollback is an attack
     // signature, and a lost anchor blocks every completion until an operator
     // re-seeds, so neither may be discovered by a person waiting for recovery.

@@ -2,9 +2,11 @@
 
 ## Status
 
-Accepted; first gate implemented. Gate T1 - the canonical
+Accepted; partially implemented. Gate T1 - the canonical
 `pico.identity.rotation.v1` form, its verification and authoritative
-vectors - lands with this ADR; T2-T5 are open. This ADR closes the
+vectors - landed with this ADR, and gate T2 - the Foundation projection,
+the device co-signature, the veto window and boot re-verification - has
+since followed; T3-T5 are open. This ADR closes the
 sharpest residual ADR 0110 named: today the only answer to a stolen
 Recovery Card is explicit identity replacement, which throws away every
 relationship the person had. Both decisions taken here were made
@@ -46,7 +48,8 @@ Does not cover:
 
 - rotating the founder's root, which changes the Home's own governance
   root and is Home handover - ADR 0080's named non-goal, with the
-  membership status `transferred_or_reissued` already reserved for it;
+  membership status `transferred_or_reissued` already reserved for it,
+  and refused by the projection rather than merely left unbuilt;
 - device key rotation, which is delegation work and already possible;
 - domain content-key rotation (ADR 0078), which rotation may trigger but
   does not replace;
@@ -162,10 +165,18 @@ so rather than let a person discover it in an emergency.
   authoritative accept/reject vectors covering role swap, suite
   downgrade, a foreign root as predecessor or successor, self-rotation,
   fingerprint/key-record mismatch and ordering violations.
-- **T2 - Foundation projection (open):** durable rotation records, the
-  old root's authority ending at the rotation instant, the device
-  co-signature and veto window, and boot reconciliation that re-verifies
-  a stored rotation before honoring it.
+- **T2 - Foundation projection (implemented):** durable rotation
+  records, the old root's authority ending at the rotation instant, the
+  device co-signature and veto window, and boot reconciliation that
+  re-verifies a stored rotation before honoring it. Authority ends at
+  the single choke point every device authorization already passes
+  through, so no surface can be granted separately; the lifecycle view
+  reports the affected devices as revoked rather than hiding them. The
+  co-signing device may not veto its own rotation, a pending rotation is
+  refused rather than superseded, and the founder's root is refused
+  outright as ADR 0080 handover. A stored record that no longer verifies
+  against its own columns and signatures withdraws that identity's
+  device authority instead of being honored or silently dropped.
 - **T3 - Re-issue path (open):** membership, reader-grant and delegation
   re-issue against a rotated identity, including the rotation-debt
   interaction with ADR 0078 domain rotation.
@@ -185,6 +196,7 @@ so rather than let a person discover it in an emergency.
 | Card thief who already completed a recovery | Holds root and the one device that recovery left. Rotation is then possible, and the owner has already lost the identity at the recovery step; rotation changes nothing about that. The defence remains the recovery veto window, not this ADR. |
 | Owner and thief racing to rotate | Both hold the old root, so both can sign. The veto window plus the device requirement decide it: the owner's living devices see the attempt and can refuse it. Neither silently wins. |
 | Malicious Home host | Cannot mint, authorize or veto a rotation, and cannot rebind a relationship - re-issue is the issuer's act. It can withhold service, as always. |
+| Anybody with write access to the database | Editing a rotation row is the way to end an identity's whole device authority without ever holding its root. Boot re-verifies every stored record against its own columns and both signatures; one that fails withdraws that identity's device authority until a human re-establishes it, so the forgery decides nothing either way. Write access to the Foundation database remains a compromise of the Home, not a defended position. |
 | Relying party that never saw the rotation | Still honors the old root. Cross-Home propagation has no transport, so a rotation is per-Home until one exists; T5 keeps that open and unclaimed. |
 | Holder of an old Recovery Card after rotation | Restores a root that is no longer the identity - the card is dead, not dangerous. |
 

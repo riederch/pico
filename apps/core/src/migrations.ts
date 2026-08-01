@@ -65,6 +65,8 @@ export const picoHomeDeviceLifecycleMigrationId =
   '0005_pico_home_device_lifecycle' as const;
 export const picoHomeDeviceRecoveryMigrationId =
   '0006_pico_home_device_recovery' as const;
+export const picoIdentityRootRotationMigrationId =
+  '0007_pico_identity_root_rotation' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -719,6 +721,44 @@ const migrations: readonly MigrationDefinition[] = [
 
         CREATE UNIQUE INDEX idx_pico_home_device_recovery_one_pending
         ON pico_home_device_recovery (pico_identity_fingerprint_hex)
+        WHERE status = 'pending';
+      `);
+    },
+  },
+  {
+    id: picoIdentityRootRotationMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_identity_root_rotation (
+          rotation_id TEXT PRIMARY KEY,
+          home_id TEXT NOT NULL,
+          predecessor_identity_fingerprint_hex TEXT NOT NULL,
+          successor_identity_fingerprint_hex TEXT NOT NULL,
+          status TEXT NOT NULL
+            CHECK (status IN ('pending', 'vetoed', 'effective')),
+          reason_category TEXT NOT NULL,
+          lifecycle_order TEXT NOT NULL,
+          rotated_at TEXT NOT NULL,
+          accepted_at TEXT NOT NULL,
+          effective_at TEXT NOT NULL,
+          resolved_at TEXT NULL,
+          co_signing_delegation_id TEXT NOT NULL,
+          record_json TEXT NOT NULL
+        );
+
+        CREATE INDEX idx_pico_identity_root_rotation_predecessor
+        ON pico_identity_root_rotation (
+          predecessor_identity_fingerprint_hex,
+          status,
+          effective_at
+        );
+
+        -- One identity may have at most one rotation awaiting its veto window.
+        -- A second submission supersedes nothing silently; it is refused, so a
+        -- root holder cannot flood the window with competing successors.
+        CREATE UNIQUE INDEX idx_pico_identity_root_rotation_one_pending
+        ON pico_identity_root_rotation (predecessor_identity_fingerprint_hex)
         WHERE status = 'pending';
       `);
     },
