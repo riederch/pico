@@ -948,8 +948,23 @@ function runIssueMembership(
   ]);
 }
 
-function runCli(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [CLI, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+function runCli(
+  args: string[],
+  options: { nowMs?: number } = {},
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  // A CLI run that has to agree with a Foundation whose clock was moved
+  // forward needs the same clock, or its own envelope freshness bounds put it
+  // outside the window it is talking to.
+  const child = spawn(process.execPath, [
+    ...(options.nowMs === undefined ? [] : ['--require', TEST_FIXED_CLOCK]),
+    CLI,
+    ...args,
+  ], {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    ...(options.nowMs === undefined
+      ? {}
+      : { env: { ...process.env, PICO_TEST_NOW_MS: String(options.nowMs) } }),
+  });
   childProcesses.push(child);
 
   let stdout = '';
@@ -1724,6 +1739,173 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
     expect(core.log()).toContain('accepted_device_lifecycle_transition');
 
     await Promise.all([rootClient.close(), livingClient.close(), targetClient.close()]);
+  }, 300_000);
+
+  it('drives initiate, veto and complete through the transitional recovery CLI', async () => {
+    // ADR 0112 S1. The library ceremonies are proven above; what this proves
+    // is the wrapper a person actually reaches - its flags, its transport
+    // construction, its file handoff and its output - over real processes.
+    const core = await startCore({ restrictedLinkIntake: true });
+    const rootDaemon = await startDaemon();
+    await startApprover(rootDaemon);
+    await startApprover(rootDaemon, ownerSigning, 'device_signing', SIGNING_PASSPHRASE);
+    await startApprover(
+      rootDaemon,
+      ownerAgreement,
+      'device_key_agreement',
+      AGREEMENT_PASSPHRASE,
+    );
+    const targetDaemon = await startTargetDaemon();
+    await startApprover(targetDaemon, targetSigning, 'device_signing', TARGET_PASSPHRASE);
+    await startApprover(
+      targetDaemon,
+      targetAgreement,
+      'device_key_agreement',
+      TARGET_PASSPHRASE,
+    );
+
+    const founded = await runLinkCeremony(rootDaemon, core);
+    expect(founded.code, founded.stderr).toBe(0);
+    const { homeId, firstDelegationId } = foundingFacts(founded.stdout);
+    const targetDelegationId = 'delegation_recovery_cli';
+    const recoveryFlags = [
+      '--vault-home', rootDaemon.vaultHomePath,
+      '--target-vault-home', targetDaemon.vaultHomePath,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--core-url', requireLinkBaseUrl(core),
+      '--home-id', homeId,
+      '--target-delegation-id', targetDelegationId,
+      '--target-signing-fingerprint', targetSigning.keyFingerprintHex,
+      '--target-agreement-fingerprint', targetAgreement.keyFingerprintHex,
+      '--valid-until', new Date(Date.now() + (365 * 24 * 60 * 60 * 1_000)).toISOString(),
+      '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+      '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+      '--host-signing-public-key', core.hostSigningPublicKeyHex,
+      '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
+    ];
+
+    const initiated = await runCli(['ceremony', 'initiate-recovery', ...recoveryFlags]);
+    expect(initiated.code, initiated.stderr).toBe(0);
+    const firstPending = (JSON.parse(initiated.stdout) as {
+      pending: { recoveryId: string; effectiveAt: string };
+      preparationView: { activeDevices: unknown[] };
+    });
+    // The Home still has its founding device, so this is the thief's shape:
+    // a root-signed recovery against a living identity.
+    expect(firstPending.preparationView.activeDevices).toHaveLength(1);
+
+    // The living device vetoes through the CLI. Nothing else may.
+    const vetoed = await runCli([
+      'ceremony', 'veto-recovery',
+      '--vault-home', rootDaemon.vaultHomePath,
+      '--identity-public-key', ownerIdentity.publicKeyHex,
+      '--recovery-id', firstPending.pending.recoveryId,
+      ...lifecycleLinkFlags(
+        core,
+        ownerSigning.keyFingerprintHex,
+        ownerAgreement.keyFingerprintHex,
+        firstDelegationId,
+      ),
+    ]);
+    expect(vetoed.code, vetoed.stderr).toBe(0);
+    expect(JSON.parse(vetoed.stdout)).toEqual({ status: 'vetoed' });
+
+    // A vetoed recovery is spent: completing it must fail even before the
+    // clock is anywhere near its window.
+    const pendingPath = join(tempDir('pico-claim-pending-'), 'pending.json');
+    writeFileSync(pendingPath, JSON.stringify(firstPending.pending));
+    const completeVetoed = await runCli([
+      'ceremony', 'complete-recovery',
+      '--vault-home', targetDaemon.vaultHomePath,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--identity-public-key', ownerIdentity.publicKeyHex,
+      '--core-url', requireLinkBaseUrl(core),
+      '--pending-file', pendingPath,
+      '--target-delegation-id', targetDelegationId,
+      '--target-signing-fingerprint', targetSigning.keyFingerprintHex,
+      '--target-agreement-fingerprint', targetAgreement.keyFingerprintHex,
+      '--host-signing-fingerprint', core.hostSigningKeyFingerprintHex,
+      '--host-agreement-fingerprint', core.hostKeyAgreementKeyFingerprintHex,
+      '--host-signing-public-key', core.hostSigningPublicKeyHex,
+      '--host-agreement-public-key', core.hostKeyAgreementPublicKeyHex,
+    ]);
+    expect(completeVetoed.code).toBe(1);
+    expect(completeVetoed.stderr).toContain('recovery_vetoed');
+
+    // The owner's own recovery: a second initiation, completed after the
+    // delay from the same target device.
+    const second = await runCli(['ceremony', 'initiate-recovery', ...recoveryFlags]);
+    expect(second.code, second.stderr).toBe(0);
+    const secondPending = (JSON.parse(second.stdout) as {
+      pending: { recoveryId: string; effectiveAt: string };
+    }).pending;
+    expect(secondPending.recoveryId).not.toBe(firstPending.pending.recoveryId);
+    writeFileSync(pendingPath, JSON.stringify(secondPending));
+
+    // The Foundation is restarted below and comes back on a fresh port, so
+    // the flags are derived from whichever Core is being talked to.
+    const completionFlags = (target: RunningCore): string[] => [
+      'ceremony', 'complete-recovery',
+      '--vault-home', targetDaemon.vaultHomePath,
+      '--fingerprint', ownerIdentity.keyFingerprintHex,
+      '--identity-public-key', ownerIdentity.publicKeyHex,
+      '--core-url', requireLinkBaseUrl(target),
+      '--pending-file', pendingPath,
+      '--target-delegation-id', targetDelegationId,
+      '--target-signing-fingerprint', targetSigning.keyFingerprintHex,
+      '--target-agreement-fingerprint', targetAgreement.keyFingerprintHex,
+      '--host-signing-fingerprint', target.hostSigningKeyFingerprintHex,
+      '--host-agreement-fingerprint', target.hostKeyAgreementKeyFingerprintHex,
+      '--host-signing-public-key', target.hostSigningPublicKeyHex,
+      '--host-agreement-public-key', target.hostKeyAgreementPublicKeyHex,
+    ];
+    const tooEarly = await runCli(completionFlags(core));
+    expect(tooEarly.code).toBe(1);
+    expect(tooEarly.stderr).toContain('recovery_not_effective');
+
+    // Move the Home past the veto window; the CLI has to carry the same
+    // clock or its envelope bounds fall outside it.
+    const effectiveNowMs = Date.parse(secondPending.effectiveAt) + 1_000;
+    await stopCore(core);
+    const laterCore = await startCore({
+      restrictedLinkIntake: true,
+      dataDir: core.dataDir,
+      restoredFrom: core,
+      nowMs: effectiveNowMs,
+    });
+    const completed = await runCli(completionFlags(laterCore), { nowMs: effectiveNowMs });
+    expect(completed.code, completed.stderr).toBe(0);
+    expect(JSON.parse(completed.stdout)).toMatchObject({
+      status: 'consumed',
+      record: {
+        receipt: {
+          recoveryId: secondPending.recoveryId,
+          leavesExactlyOneActiveDevice: true,
+        },
+      },
+    });
+
+    // Total replacement really happened: the target is the only device left,
+    // and the founding device is dead.
+    const inspected = await runCli([
+      'ceremony', 'inspect-device-lifecycle',
+      '--vault-home', targetDaemon.vaultHomePath,
+      '--identity-public-key', ownerIdentity.publicKeyHex,
+      ...lifecycleLinkFlags(
+        laterCore,
+        targetSigning.keyFingerprintHex,
+        targetAgreement.keyFingerprintHex,
+        targetDelegationId,
+      ),
+    ], { nowMs: effectiveNowMs });
+    expect(inspected.code, inspected.stderr).toBe(0);
+    const view = JSON.parse(inspected.stdout) as {
+      pendingRecovery: unknown;
+      devices: { delegationId: string; status: string }[];
+    };
+    expect(view.pendingRecovery).toBeNull();
+    expect(view.devices.filter((device) => device.status === 'active'))
+      .toEqual([expect.objectContaining({ delegationId: targetDelegationId })]);
   }, 300_000);
 
   it('lapses an uncompleted recovery across a future Foundation restart', async () => {

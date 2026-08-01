@@ -153,10 +153,15 @@ transitional for the same reason the other twelve are.
 
 ## Gates
 
-- **S1 - Transitional CLI wrappers (implemented with this ADR):** the
-  five subcommands over the unchanged library ceremonies, secrets only
-  via prompts, PDFs written person-side, public-metadata-only stdout,
-  covered by CLI-level tests.
+- **S1 - Transitional CLI wrappers (implemented):** the five subcommands
+  over the unchanged library ceremonies, secrets only via prompts, PDFs
+  written person-side with private modes enforced on re-issue,
+  public-metadata-only stdout. Proven as processes, not just parsed:
+  issuance under a real approval and phrase/PIN restore with wrong-PIN
+  refusal, plus a founded Home where the CLI initiates a recovery, a
+  living device vetoes it, the spent recovery refuses completion, a
+  second recovery refuses completion before its window and succeeds
+  after it, and the resulting device set is read back through the CLI.
 - **S2 - Background alarm carrier (core implemented via ADR 0113 C1):**
   the long-running service performing the authenticated lifecycle read
   on the pinned cadence, raising the loud alarm and keeping it armed
