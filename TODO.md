@@ -32,26 +32,21 @@ die noch nicht entschiedenen Folge-Themen der Initiative, priorisiert:
    (ADR 0016: keine eigene Krypto), Downgrade-Schutz beim Update,
    non-root Container, AppArmor-Profil fuers Add-on. ADR 0005 nennt die
    Luecken bereits als fehlend.
-2. **Zeit-Autoritaet (kleiner ADR).** Veto-, Recovery-, Freshness- und
-   Expiry-Fenster haengen an der Host-Uhr; ein Angreifer mit
-   Uhrenkontrolle kann Veto-Fenster vorspulen. Entscheiden, welche
-   Fenster monotone Anker brauchen ("platform monotonic anchors" sind
-   in den Sync-ADRs bereits als offen benannt).
-3. **Key-Hygiene zur Laufzeit (ehrlicher kleiner ADR).** Node kann kein
+2. **Key-Hygiene zur Laufzeit (ehrlicher kleiner ADR).** Node kann kein
    mlock; GC-Kopien, Swap und Core-Dumps sind ungeregelt. Festhalten,
    was memzero, 0600/0700 und die Prozessgrenze (ADR 0097) leisten und
    was Residuum bleibt; billige Mitigationen: Core-Dumps aus,
    verschluesselter Swap als Anforderung ans Pico-Home-Image (ADR 0027).
-4. **Audit-Integritaet (Absatz-Entscheidung vor Action History).** Die
+3. **Audit-Integritaet (Absatz-Entscheidung vor Action History).** Die
    `auth.*`-Records sind append-only, aber nicht manipulationsevident.
    Vor dem Bau von ADR 0011s Produkt-Audit entscheiden, ob
    Hash-Chaining oder signierte Checkpoints noetig sind.
-5. **Mechanik-Rest.** HTTP-Security-Header auf der Foundation-Flaeche
+4. **Mechanik-Rest.** HTTP-Security-Header auf der Foundation-Flaeche
    (CSP `default-src 'self'`, `X-Content-Type-Options`,
    `frame-ancestors` - beruehrt `app.ts`, wartet auf den
    U4-Abschluss) und CI-Supply-Chain (Actions auf Commit-SHAs pinnen,
    Dependency-Audit-/Provenance-Gate neben `release:verify`).
-6. **TPM-Plattform-Anker** als explizites Gate in ADR 0027 heben statt
+5. **TPM-Plattform-Anker** als explizites Gate in ADR 0027 heben statt
    verstreuter Fussnoten (R6-Rollback- und
    Matching-Backup-Residuum).
 
