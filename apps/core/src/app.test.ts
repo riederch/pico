@@ -2056,7 +2056,13 @@ describe('Pico Home Core app', () => {
       },
     })).statusCode).toBe(201);
 
-    const enrollDevice = async (index: number) => {
+    const enrollDevice = async (
+      index: number,
+      identity: {
+        keyRecord: PicoIdentityKeyRecordSignatureInput;
+        privateKey: Uint8Array;
+      } = { keyRecord: memberKeyRecord, privateKey: member.privateKey },
+    ) => {
       const signing = sodium.crypto_sign_keypair();
       const signingKeyRecord: PicoIdentityKeyRecordSignatureInput = {
         suite: picoIdentitySuite,
@@ -2072,7 +2078,7 @@ describe('Pico Home Core app', () => {
       const record: PicoIdentityDelegationSignatureInput = {
         suite: picoIdentitySuite,
         delegationId: `delegation_rotation_link_${index}`,
-        issuerIdentityKeyFingerprintHex: memberFingerprint,
+        issuerIdentityKeyFingerprintHex: keyRecordFingerprintHex(identity.keyRecord),
         subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(signingKeyRecord),
         subjectKeyAgreementKeyFingerprintHex:
           keyRecordFingerprintHex(agreementKeyRecord),
@@ -2085,7 +2091,7 @@ describe('Pico Home Core app', () => {
         record,
         signatureHex: bytesToHex(sodium.crypto_sign_detached(
           buildPicoIdentityDelegationSignatureInput(record),
-          member.privateKey,
+          identity.privateKey,
         )),
       };
       const challenge = (await app.inject({
@@ -2097,7 +2103,7 @@ describe('Pico Home Core app', () => {
         url: '/api/auth/identity-session',
         payload: {
           challengeId: challenge.challengeId,
-          identityKeyRecord: memberKeyRecord,
+          identityKeyRecord: identity.keyRecord,
           deviceSigningKeyRecord: signingKeyRecord,
           deviceKeyAgreementKeyRecord: agreementKeyRecord,
           delegation: signedDelegation,
@@ -2114,6 +2120,7 @@ describe('Pico Home Core app', () => {
         },
       })).statusCode).toBe(201);
       return {
+        identityKeyRecord: identity.keyRecord,
         signingKeyRecord,
         signingPrivateKey: signing.privateKey,
         agreementKeyRecord,
@@ -2137,7 +2144,8 @@ describe('Pico Home Core app', () => {
         requestId: `linkreq_${randomHex(16)}`,
         operation,
         hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
-        senderIdentityKeyFingerprintHex: memberFingerprint,
+        senderIdentityKeyFingerprintHex:
+          keyRecordFingerprintHex(sender.identityKeyRecord),
         senderDeviceSigningKeyFingerprintHex:
           keyRecordFingerprintHex(sender.signingKeyRecord),
         senderDeviceKeyAgreementKeyFingerprintHex:
@@ -2157,7 +2165,7 @@ describe('Pico Home Core app', () => {
             Buffer.from(JSON.stringify({
               schema: picoLinkDirectRequestEnvelopeSchema,
               request,
-              senderIdentityKeyRecord: memberKeyRecord,
+              senderIdentityKeyRecord: sender.identityKeyRecord,
               senderDeviceSigningKeyRecord: sender.signingKeyRecord,
               arguments: args,
               senderSignatureHex: bytesToHex(sodium.crypto_sign_detached(
@@ -2276,6 +2284,96 @@ describe('Pico Home Core app', () => {
     // Audited, but content-free: that a rotation was refused is operational
     // history; who and which root are not the audit stream's business.
     expect(vetoEvents[0].payload).toEqual({});
+
+    // A vetoed rotation blocks nothing later: the person tries again.
+    const secondRotation: PicoIdentityRotationSignatureInput = {
+      ...rotation,
+      rotationId: 'rotation_link_0002',
+      rotatedAt: new Date().toISOString(),
+    };
+    const secondBytes = buildPicoIdentityRotationSignatureInput(secondRotation);
+    expect((await linkRequest(
+      'home.identity.rotation.submit',
+      {
+        ...rotationArguments,
+        rotation: secondRotation,
+        predecessorSignatureHex: bytesToHex(
+          sodium.crypto_sign_detached(secondBytes, member.privateKey),
+        ),
+        successorSignatureHex: bytesToHex(
+          sodium.crypto_sign_detached(secondBytes, successor.privateKey),
+        ),
+      } as unknown as Record<string, unknown>,
+      devices[0],
+    )).response.outcome).toBe('rotation_pending');
+
+    // Until the Home Host Pico re-admits the successor, its device is refused
+    // like any non-member - deliberately. The only step that exists in that
+    // window belongs to the issuer, and the device's waiting surface runs on
+    // its own signed submission receipt, not on Home state the Home would
+    // have to reveal to a key its issuer has not re-admitted.
+    const successorMembership: PicoHomeMembershipSignatureInput = {
+      ...membership,
+      credentialId: 'member_rotation_link_0002',
+      subjectPicoIdentityFingerprintHex:
+        keyRecordFingerprintHex(successorKeyRecord),
+      lifecycleOrder: 'seq:0000000000000002',
+    };
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/home/memberships',
+      headers: operatorAuth,
+      payload: {
+        schema: picoHomeMembershipCredentialSchema,
+        membership: successorMembership,
+        issuerIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+        issuerSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+          buildPicoHomeMembershipSignatureInput(successorMembership),
+          sealedClaim.claimantPrivateKey,
+        )),
+      },
+    })).statusCode).toBe(201);
+
+    // Re-admitted - even mid-window - the successor reads its own debt on the
+    // same lifecycle read everything else rides. No new surface, no restart.
+    const successorDevice = await enrollDevice(7, {
+      keyRecord: successorKeyRecord,
+      privateKey: successor.privateKey,
+    });
+    const successorRead = await linkRequest(
+      'home.device.lifecycle.read',
+      {},
+      successorDevice,
+    );
+    expect(successorRead.response.outcome).toBe('ok');
+    expect(successorRead.result).toMatchObject({
+      // The successor is nobody's predecessor: the alarm field stays clean.
+      pendingRootRotation: null,
+      rotationDebt: {
+        rotationId: 'rotation_link_0002',
+        status: 'pending',
+        successorFirstDevice: {
+          delegationId: 'delegation_rotation_link_successor',
+          delegated: false,
+          readerKeyRegistered: false,
+        },
+        // The one debt the issuer could settle early, it already has.
+        membershipsToReissue: [],
+        readGrantsToReissue: [],
+      },
+    });
+
+    // The debt is the principal's own, never somebody else's to read: the
+    // predecessor's device sees the pending alarm, not the successor's debt.
+    const memberRead = await linkRequest(
+      'home.device.lifecycle.read',
+      {},
+      devices[1],
+    );
+    expect(memberRead.result).toMatchObject({
+      pendingRootRotation: { rotationId: 'rotation_link_0002' },
+      rotationDebt: null,
+    });
 
     await app.close();
   });

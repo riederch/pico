@@ -187,6 +187,40 @@ residual, unchanged, and the reason the rotation should be carried to
 every Home the person uses. Absence of a rotation is a Home saying "not
 here", never "not anywhere".
 
+### Before re-admission, the refusal is the answer
+
+Between a rotation taking effect and the Home Host Pico re-issuing
+membership, the successor's device can authenticate nothing - and that
+is decided, not residual. A pre-authority read of the rotation debt was
+considered and refused, for three reasons that reinforce each other.
+
+First, the only step that exists in that window belongs to the issuer.
+A Home that discussed the predecessor's memberships and grants with a
+key its own issuer has not re-admitted would be acting on the
+continuity before the issuer did - the exact rebinding T3 refuses,
+performed conversationally.
+
+Second, the information has no action value before membership. The
+device's one honest statement is "waiting for your Home Host", and it
+can make that statement from what it already holds: the Home-signed
+submission receipt naming the rotation and its effective instant, plus
+the absence of successful authorization since. The moment membership is
+re-issued, the very next carrier read succeeds and carries the debt -
+so the wait ends by the read working, not by a message saying it will.
+
+Third, the debt names the predecessor's memberships and read-grant
+domains. Revealing that metadata to a not-yet-re-admitted key is a
+small leak with no compensating value, taken exactly when the Home has
+the least reason to talk to that key.
+
+The authorization choke point therefore stays whole: one rule, no
+identity-shaped exception. From the first authorized read after
+re-admission, the identity's own rotation debt rides the same lifecycle
+read the alarm rides - keyed to the principal, so debt is only ever
+read by the identity it is owed to. The issuer-side counterpart - the
+Home Host Pico's companion prompting "this member rotated; re-issue
+their membership" - is person-side T4 work on ADR 0105 B2/B3.
+
 ### What rotation does not repair
 
 A Recovery Card pins the identity root. Every card printed before a
@@ -241,7 +275,10 @@ so rather than let a person discover it in an emergency.
   surface nobody would poll. Proven end to end through sealed envelopes
   against a running Home: a member's device submits, another device sees
   the alarm, the co-signing device is refused its own veto, the other
-  device vetoes, and the refusal is audited content-free. Open: the
+  device vetoes, and the refusal is audited content-free. The rotation
+  debt rides the same lifecycle read from the first authorized moment
+  after re-admission, keyed to the principal; before re-admission the
+  successor's device is refused whole, per the decision above. Open: the
   person-side ceremony with ADR 0106 rendering and ADR 0099 approvals,
   the veto surface, and forced Recovery Card re-issue - as ADR 0112
   surfaces, not as a terminal.
@@ -268,6 +305,7 @@ so rather than let a person discover it in an emergency.
 | Relying party that never saw the rotation | Still honors the old root, and says "not here" rather than "not anywhere". Cross-Home propagation has no transport; the record can be carried by hand and re-decided locally, which is all that is claimed. |
 | Thief presenting a stolen rotation at every Home | Gains nothing without a living device at each: the retirement half is not honored on its own, precisely so that one stolen card cannot lock a person out of every Home at once. |
 | Holder of an old Recovery Card after rotation | Restores a root that is no longer the identity - the card is dead, not dangerous. |
+| Successor's device before re-admission | Authenticates nothing and reads nothing; its waiting surface runs on the Home-signed submission receipt it already holds. A pre-authority debt read was considered and refused: it would reveal the predecessor's membership and grant metadata to a key the issuer has not re-admitted, and would have the Home act on the continuity before its issuer did. |
 | Somebody naming the successor's first device | Cannot: the delegation must verify under the successor root's own key record, which the rotation binds to the successor fingerprint, so a predecessor-signed device is refused. The agreement key must be the one that delegation names, so the device that becomes readable is the device that was authorized. |
 
 ## Consequences

@@ -90,7 +90,11 @@ device. The submission carries the dual-signed `pico.identity.rotation.v1`
 record together with the successor root's own first-device delegation, and
 `home.device.lifecycle.read` reports a pending rotation the same way it
 reports a pending recovery, so the existing alarm carrier surfaces it without
-a new read surface. Accepting a rotation is a local act: a record accepted by
+a new read surface, and reports the principal's own rotation debt from the
+first authorized read after the Home Host Pico re-admits the successor.
+Before re-admission the successor's device is refused whole - deliberately,
+so the Home never discusses the predecessor's relationships with a key its
+issuer has not re-admitted. Accepting a rotation is a local act: a record accepted by
 another Home decides nothing here. These forms, the Recovery Card PDF generator and the
 Foundation state machine are local implementation surfaces, not Pico Link
 compatibility. A fully matching database backup from before consumption can

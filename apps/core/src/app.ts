@@ -1582,6 +1582,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 pendingRootRotation: store.picoIdentityRootRotationView(
                   principal.picoIdentityFingerprintHex,
                 ),
+                // ADR 0114 T3/T4. What this identity's own rotation still owes
+                // it, readable from the first authorized moment - which is the
+                // instant the Home Host Pico re-admits the successor, not one
+                // restart later. Before that moment the successor's device is
+                // refused like any non-member, deliberately: the only step
+                // that exists then belongs to the issuer, and a Home that
+                // discussed the predecessor's memberships with a key its
+                // issuer has not re-admitted would be acting on the
+                // continuity before the issuer did.
+                rotationDebt: store.picoIdentityRotationDebtView(
+                  principal.picoIdentityFingerprintHex,
+                ),
               } as unknown as Record<string, unknown>,
             };
         }
