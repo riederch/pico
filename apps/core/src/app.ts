@@ -19,7 +19,9 @@ import {
   picoHomeFoundingRecordV2Schema,
   picoHomeSealedClaimPayloadSchema,
   picoHomeSealedClaimPayloadV2Schema,
+  buildPicoHomeContinuitySignatureInput,
   buildPicoHomeMembershipSignatureInput,
+  picoHomeContinuityReasonCategories,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeMembershipCredentialSchema,
@@ -66,6 +68,9 @@ import {
   type PicoIdentityKeyRecordSignatureInput,
   type PicoIdentityRevocationSignatureInput,
   type PicoIdentityRotationSignatureInput,
+  type PicoHomeContinuityRecord,
+  type PicoHomeContinuityReasonCategory,
+  type PicoHomeContinuitySignatureInput,
   type PicoMemoryContentItem,
   type PicoMemoryContentListResponse,
   type PicoReaderCustodyDomainRecord,
@@ -694,6 +699,31 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       'Pico Home host keys have rotated; records of earlier eras stay vouched '
       + 'for by the accepted continuity chain (ADR 0115).',
     );
+  }
+  // ADR 0115 U3. A crash between recording the link and promoting the staged
+  // keys leaves custody one step behind the proven head; the staged files can
+  // complete it, and only they can - anything else stays closed.
+  {
+    const provenHead = store.currentPicoHomeHostKeyHead();
+    if (provenHead !== undefined) {
+      try {
+        const custody = homeHostKeyStore.load(sodium);
+        if (custody !== undefined
+          && (custody.publicBundle.signingKeyFingerprintHex
+            !== provenHead.hostSigningKeyFingerprintHex
+            || custody.publicBundle.keyAgreementKeyFingerprintHex
+              !== provenHead.hostKeyAgreementKeyFingerprintHex)
+          && homeHostKeyStore.completeInterruptedRotation(sodium, provenHead)) {
+          app.log.warn(
+            provenHead,
+            'Pico Home host-key rotation was interrupted before the key swap '
+            + 'and has been completed against the proven chain head (ADR 0115).',
+          );
+        }
+      } catch {
+        // Unreadable custody is the custody guard's case to report.
+      }
+    }
   }
   const claimedHomeFoundingVerified = reconcileClaimedHomeHostKeyCustody();
   const persistedOperator = operators.get();
@@ -1906,6 +1936,160 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             + 'living device of the same identity.',
           );
           return { outcome: 'ok', result: { status: 'vetoed' } };
+        }
+        case 'home.host.rotation.prepare': {
+          // Host keys are the Home's own infrastructure; only its governance
+          // root may rotate them (ADR 0080), and the acceptance signature the
+          // record needs is that root's anyway - this early check just keeps
+          // a member from staging keys nobody could ever accept.
+          const foundingRecord = store.picoHomeFoundingRecord();
+          if (foundingRecord === undefined || homeHostKeys === undefined) {
+            return { outcome: 'no_founding_record', result: {} };
+          }
+          if (principal.picoIdentityFingerprintHex
+            !== foundingRecord.founding.homeHostPicoIdentityFingerprintHex) {
+            return { outcome: 'sender_is_not_home_host_pico', result: {} };
+          }
+          if (
+            !hasExactKeys(args, ['reasonCategory'])
+            || typeof args.reasonCategory !== 'string'
+            || !(picoHomeContinuityReasonCategories as readonly string[])
+              .includes(args.reasonCategory)
+          ) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const staged = homeHostKeyStore.stageRotation(sodium);
+          const chain = store.picoHomeHostKeyChain();
+          const tailOrder = chain[chain.length - 1]?.lifecycleOrder
+            ?? foundingRecord.founding.lifecycleOrder;
+          const continuity: PicoHomeContinuitySignatureInput = {
+            suite: picoIdentitySuite,
+            continuityId: `hostrot_${bytesToHexString(sodium.randombytes_buf(16))}`,
+            homeId: foundingRecord.founding.homeId,
+            outgoingHostSigningKeyFingerprintHex:
+              homeHostKeys.publicBundle.signingKeyFingerprintHex,
+            outgoingHostKeyAgreementKeyFingerprintHex:
+              homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+            incomingHostSigningKeyFingerprintHex:
+              staged.publicBundle.signingKeyFingerprintHex,
+            incomingHostKeyAgreementKeyFingerprintHex:
+              staged.publicBundle.keyAgreementKeyFingerprintHex,
+            homeHostPicoIdentityFingerprintHex:
+              foundingRecord.founding.homeHostPicoIdentityFingerprintHex,
+            reasonCategory:
+              args.reasonCategory as PicoHomeContinuityReasonCategory,
+            changedAt: new Date().toISOString(),
+            lifecycleOrder: nextLifecycleOrder(tailOrder),
+          };
+          const signatureInput =
+            buildPicoHomeContinuitySignatureInput(continuity);
+          // Both host signatures are custody's own act; what comes back must
+          // carry the one signature custody cannot make - the acceptance.
+          return {
+            outcome: 'ok',
+            result: {
+              continuity,
+              outgoingHostSigningKeyRecord: {
+                suite: picoIdentitySuite,
+                keyRole: 'home_host_signing',
+                publicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+              },
+              incomingHostSigningKeyRecord: {
+                suite: picoIdentitySuite,
+                keyRole: 'home_host_signing',
+                publicKeyHex: staged.publicBundle.signingPublicKeyHex,
+              },
+              outgoingHostSignatureHex:
+                homeHostKeyStore.signWithHostSigningKey(sodium, signatureInput),
+              incomingHostSignatureHex:
+                homeHostKeyStore.signWithStagedSigningKey(sodium, signatureInput),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        case 'home.host.continuity.submit': {
+          const foundingRecord = store.picoHomeFoundingRecord();
+          if (foundingRecord === undefined) {
+            return { outcome: 'no_founding_record', result: {} };
+          }
+          if (principal.picoIdentityFingerprintHex
+            !== foundingRecord.founding.homeHostPicoIdentityFingerprintHex) {
+            return { outcome: 'sender_is_not_home_host_pico', result: {} };
+          }
+          if (!hasExactKeys(args, ['record']) || !isRecord(args.record)) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const record = args.record as unknown as PicoHomeContinuityRecord;
+          const continuity = record?.continuity;
+          if (!isRecord(continuity)) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+
+          // Only a link custody can serve is recorded: the incoming keys must
+          // be exactly the staged pair - otherwise a validly signed record
+          // for keys this host never held would strand the Home the moment
+          // it was accepted. A replay of the already-promoted head skips the
+          // check, because custody already serves it.
+          const alreadyHead = store.currentPicoHomeHostKeyHead();
+          const isReplayOfHead = alreadyHead !== undefined
+            && alreadyHead.hostSigningKeyFingerprintHex
+              === continuity.incomingHostSigningKeyFingerprintHex
+            && alreadyHead.hostKeyAgreementKeyFingerprintHex
+              === continuity.incomingHostKeyAgreementKeyFingerprintHex;
+          if (!isReplayOfHead) {
+            const staged = homeHostKeyStore.loadStagedRotation(sodium);
+            if (staged === undefined
+              || continuity.incomingHostSigningKeyFingerprintHex
+                !== staged.publicBundle.signingKeyFingerprintHex
+              || continuity.incomingHostKeyAgreementKeyFingerprintHex
+                !== staged.publicBundle.keyAgreementKeyFingerprintHex) {
+              return { outcome: 'incoming_keys_not_staged', result: {} };
+            }
+          }
+
+          const recorded = store.recordPicoHomeHostContinuity({
+            record,
+            sodium,
+          });
+          if (!recorded.ok) {
+            return { outcome: recorded.reason, result: {} };
+          }
+          if (recorded.inserted) {
+            // The link is durable; now custody follows it. A crash between
+            // the two is completed at the next boot against the proven head.
+            homeHostKeyStore.promoteStagedRotation();
+            homeHostKeys = homeHostKeyStore.load(sodium);
+            appendServerEvent('home.host_key_rotated', {});
+            app.log.warn(
+              {
+                continuityId: recorded.link.continuityId,
+                chainPosition: recorded.link.chainPosition,
+                incomingHostSigningKeyFingerprintHex:
+                  recorded.link.incomingHostSigningKeyFingerprintHex,
+              },
+              'Pico Home host keys rotated. Every printed Recovery Card pins '
+              + 'the retired keys and is stale; re-issue is required (ADR '
+              + '0110/0115).',
+            );
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              link: recorded.link,
+              // The new public bundle rides the result so the accepting
+              // client can re-pin without a second trust source: it is the
+              // same channel the acceptance traveled.
+              newHostPublicKeys: homeHostKeys === undefined ? null : {
+                signingPublicKeyHex: homeHostKeys.publicBundle.signingPublicKeyHex,
+                signingKeyFingerprintHex:
+                  homeHostKeys.publicBundle.signingKeyFingerprintHex,
+                keyAgreementPublicKeyHex:
+                  homeHostKeys.publicBundle.keyAgreementPublicKeyHex,
+                keyAgreementKeyFingerprintHex:
+                  homeHostKeys.publicBundle.keyAgreementKeyFingerprintHex,
+              },
+              recoveryCardsStale: true,
+            } as unknown as Record<string, unknown>,
+          };
         }
         default: {
           return { outcome: 'unknown_operation', result: {} };
@@ -3656,6 +3840,17 @@ function createPendingPicoHomeClaim(params: {
     expiresAtMs: Date.now() + PENDING_HOME_CLAIM_TTL_MS,
     attempts: 0,
   };
+}
+
+/** ADR 0115 U3. The next chain order after the given one ('seq:%016d'). */
+function nextLifecycleOrder(previous: string): string {
+  const match = /^seq:(\d{16})$/.exec(previous);
+  const next = match === null ? 1 : Number.parseInt(match[1], 10) + 1;
+  return `seq:${String(next).padStart(16, '0')}`;
+}
+
+function bytesToHexString(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('hex');
 }
 
 function verifyPicoHomeFoundingEvidence(

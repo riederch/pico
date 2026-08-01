@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sodium from 'libsodium-wrappers-sumo';
@@ -101,6 +101,79 @@ describe('HomeHostKeyStore', () => {
       ...params,
       homeHostKeyStorePath: join(params.keyStorePath, 'home-host-keys'),
     })).toThrow('PICO_HOME_HOST_KEY_STORE_PATH must be separate from PICO_KEY_STORE_PATH');
+  });
+});
+
+describe('HomeHostKeyStore rotation staging (ADR 0115 U3)', () => {
+  it('stages once, signs with the staged key, and promotes atomically', () => {
+    const store = new HomeHostKeyStore(join(createTempDir(), 'host-keys'));
+    const active = store.ensure(sodium);
+    const staged = store.stageRotation(sodium);
+
+    // Staging is idempotent: re-staging would silently invalidate a
+    // possession signature already made over the first staged keys.
+    expect(store.stageRotation(sodium).publicBundle.signingKeyFingerprintHex)
+      .toBe(staged.publicBundle.signingKeyFingerprintHex);
+    // Staging changes nothing about active custody.
+    expect(store.load(sodium)?.publicBundle.signingKeyFingerprintHex)
+      .toBe(active.publicBundle.signingKeyFingerprintHex);
+
+    const message = new TextEncoder().encode('possession');
+    expect(sodium.crypto_sign_verify_detached(
+      Buffer.from(store.signWithStagedSigningKey(sodium, message), 'hex'),
+      message,
+      Buffer.from(staged.publicBundle.signingPublicKeyHex, 'hex'),
+    )).toBe(true);
+
+    store.promoteStagedRotation();
+    const promoted = store.load(sodium);
+    expect(promoted?.publicBundle.signingKeyFingerprintHex)
+      .toBe(staged.publicBundle.signingKeyFingerprintHex);
+    expect(promoted?.publicBundle.keyAgreementKeyFingerprintHex)
+      .toBe(staged.publicBundle.keyAgreementKeyFingerprintHex);
+    // The staged slot is empty again; the retired private keys went with the
+    // replaced files.
+    expect(store.loadStagedRotation(sodium)).toBeUndefined();
+  });
+
+  it('completes an interrupted promotion only toward the proven head', () => {
+    const dir = join(createTempDir(), 'host-keys');
+    const store = new HomeHostKeyStore(dir);
+    store.ensure(sodium);
+    const staged = store.stageRotation(sodium);
+    const head = {
+      hostSigningKeyFingerprintHex: staged.publicBundle.signingKeyFingerprintHex,
+      hostKeyAgreementKeyFingerprintHex:
+        staged.publicBundle.keyAgreementKeyFingerprintHex,
+    };
+
+    // Simulate a crash half way: only the signing file was renamed.
+    renameSync(
+      join(dir, 'home_host_signing.staged.key.json'),
+      join(dir, 'home_host_signing.key.json'),
+    );
+
+    // A head nobody staged completes nothing and renames nothing.
+    expect(store.completeInterruptedRotation(sodium, {
+      hostSigningKeyFingerprintHex: 'ee'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: 'ff'.repeat(32),
+    })).toBe(false);
+    // The proven head is completable from what active and staged hold.
+    expect(store.completeInterruptedRotation(sodium, head)).toBe(true);
+    expect(store.load(sodium)?.publicBundle.keyAgreementKeyFingerprintHex)
+      .toBe(head.hostKeyAgreementKeyFingerprintHex);
+    // Idempotent once custody already matches.
+    expect(store.completeInterruptedRotation(sodium, head)).toBe(true);
+  });
+
+  it('discards an abandoned staging without touching active custody', () => {
+    const store = new HomeHostKeyStore(join(createTempDir(), 'host-keys'));
+    const active = store.ensure(sodium);
+    store.stageRotation(sodium);
+    store.discardStagedRotation();
+    expect(store.loadStagedRotation(sodium)).toBeUndefined();
+    expect(store.load(sodium)?.publicBundle.signingKeyFingerprintHex)
+      .toBe(active.publicBundle.signingKeyFingerprintHex);
   });
 });
 

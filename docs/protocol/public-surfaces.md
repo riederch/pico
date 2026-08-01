@@ -95,7 +95,17 @@ first authorized read after the Home Host Pico re-admits the successor.
 Before re-admission the successor's device is refused whole - deliberately,
 so the Home never discusses the predecessor's relationships with a key its
 issuer has not re-admitted. Accepting a rotation is a local act: a record accepted by
-another Home decides nothing here. These forms, the Recovery Card PDF generator and the
+another Home decides nothing here.
+
+ADR 0115 adds two further founder-only operations for the Home's own
+host keys: `home.host.rotation.prepare` stages successor keys and returns
+the dual-host-signed continuity proposal, and `home.host.continuity.submit`
+accepts the completed record - carrying the Home Host Pico's acceptance,
+the one signature a stolen host disk cannot produce - then atomically
+swaps custody and answers to the new audience pin without a restart. The
+submit result returns the new host public bundle so the accepting client
+can re-pin over the same sealed channel; every other client stays on the
+old pin until ADR 0115 U4. These forms, the Recovery Card PDF generator and the
 Foundation state machine are local implementation surfaces, not Pico Link
 compatibility. A fully matching database backup from before consumption can
 still resurrect its in-window pending row until ADR 0110 R6 supplies an
@@ -217,6 +227,7 @@ home.device_recovered
 home.device_recovery_vetoed
 home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
+home.host_key_rotated
 ```
 
 Server-synthesized foundation event types (exported as `serverSynthesizedFoundationEventTypes`), appended by the server and never accepted on `POST /api/events`:
@@ -239,6 +250,7 @@ home.device_recovered
 home.device_recovery_vetoed
 home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
+home.host_key_rotated
 ```
 
 `memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller?, retentionPolicyRef? }`); an unknown `retentionPolicyRef` is rejected at write time, because the sweep's fail-safe rule would otherwise keep the item forever while the writer believed expiry was configured. The reference is stored with the item and does not appear in the event payload; the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.

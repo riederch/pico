@@ -5,8 +5,11 @@
 Accepted; partially implemented. Gate U1 - the continuity record over the
 published `pico.home.continuity.v1` bytes with triple-signature
 verification and vectors - and gate U2 - the Foundation projection with
-era-aware verification and boot re-proving - land with this ADR. U3
-(ceremony and key-custody swap) and U4 (client re-pin) are open. The
+era-aware verification and boot re-proving - land with this ADR; U3's
+Foundation half - key staging, the two Link operations, the crash-safe
+custody swap and the audit - has since followed. U3's ceremony-client
+half (ADR 0106 rendering, ADR 0099 approval, the CLI wrapper) and U4
+(client re-pin) are open. The
 era rule and this block's scope were decided explicitly by the user on
 2026-08-01: the accepted chain vouches for records of earlier eras, and
 clients re-pin in a later block.
@@ -46,8 +49,9 @@ rotation; what refuses a rotation; and boot re-proving.
 
 Does not cover:
 
-- the rotation ceremony itself - key generation and staging, the Home
-  Host Pico's ADR 0099 approval, and the key-store swap (gate U3);
+- the ceremony client - the Home Host Pico's ADR 0099 approval over ADR
+  0106 rendered statements and the transitional CLI wrapper (U3's open
+  half; staging, the Link operations and the custody swap are in);
 - client re-pin - how a vault daemon, companion or member device learns
   and verifies the new head (gate U4), including member notification,
   which stays the ADR 0080 M3 residual until then;
@@ -140,11 +144,27 @@ key never orphans the evidence it once signed.
   middle-era membership surviving a second rotation), head-bound
   reader-custody intake, boot re-proving with weakest-prefix drop and
   pin repair, and the founding-era public key surviving in the chain.
-- **U3 - Rotation ceremony (open):** key generation and staging in the
-  host key store, the Home Host Pico's acceptance as an ADR 0099
-  approval over ADR 0106 rendered statements, the atomic key-store swap
-  against the accepted link, audit, and the forced Recovery Card
-  re-issue prompt (ADR 0110/0112).
+- **U3 - Rotation ceremony (Foundation half implemented; ceremony
+  client open):** staging is durable and idempotent - re-staging would
+  silently invalidate a possession signature already made - and two
+  founder-only Link operations carry the ceremony:
+  `home.host.rotation.prepare` stages keys and returns the proposal with
+  both host signatures already on it, so what comes back must carry the
+  one signature custody cannot make; `home.host.continuity.submit`
+  accepts only a link custody can serve (`incoming_keys_not_staged`
+  otherwise - the store would accept any validly signed link, and a link
+  custody cannot serve stands between the person and their own Home),
+  records it, promotes the staged pair by atomic per-file renames,
+  refreshes the live audience pin without a restart, audits
+  content-free, and flags every printed Recovery Card stale. A crash
+  between recording and promotion is completed at the next boot against
+  the proven head - and only toward it. The retired private keys go with
+  the replaced files: nothing new is ever signed with them, and
+  historical verification needs only the public keys the chain carries.
+  Open: the ceremony client - the Home Host Pico's acceptance as an ADR
+  0099 approval over ADR 0106 rendered statements, the transitional CLI
+  wrapper, and the forced Recovery Card re-issue prompt as an ADR 0112
+  surface rather than a result flag.
 - **U4 - Client re-pin (open):** vault-daemon and companion profiles
   verify a presented chain against their existing pin and follow it;
   member devices learn of the rotation and re-accept; the Pico Link
@@ -176,9 +196,13 @@ Positive:
 
 Negative and residual:
 
-- until U3/U4, a rotation is possible in the Foundation but strands
-  clients on the old pin and has no ceremony - the projection refuses
-  nothing about that, so U3 must gate the actual key-store swap;
+- until U4, a rotation strands clients on the old pin: the submit
+  result carries the new public bundle over the same sealed channel the
+  acceptance traveled, which re-pins the accepting client, but every
+  other device learns nothing until U4;
+- the acceptance signature is produced without ADR 0099/0106 ceremony
+  until U3's client half lands - the Link operations are the machine,
+  not the consent surface;
 - a stolen host disk keeps impersonating the old head to clients that
   never see the chain - the ADR 0072 residual, bounded only by U4;
 - the Recovery Card's printed pins go stale on rotation (ADR 0110);

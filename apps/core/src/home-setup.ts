@@ -1,5 +1,5 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   buildPicoIdentityKeyRecordSignatureInput,
@@ -22,6 +22,11 @@ const MAX_MOVE_IN_CODE_ATTEMPTS = 10;
 const HOST_KEY_SCHEMA = 'pico.home.host-keypair.v1' as const;
 const HOST_SIGNING_KEY_FILE = 'home_host_signing.key.json';
 const HOST_KEY_AGREEMENT_KEY_FILE = 'home_host_key_agreement.key.json';
+// ADR 0115 U3. Staged successor keys live beside the active pair until the
+// continuity link is accepted; promotion is two atomic per-file renames, and
+// an interrupted promotion is completed at boot against the proven chain head.
+const STAGED_HOST_SIGNING_KEY_FILE = 'home_host_signing.staged.key.json';
+const STAGED_HOST_KEY_AGREEMENT_KEY_FILE = 'home_host_key_agreement.staged.key.json';
 
 export const HOME_RESET_MARKER_FILENAME = 'home-reset';
 /**
@@ -248,6 +253,119 @@ export class HomeHostKeyStore {
       sodium.memzero(message);
       sodium.memzero(recipient);
     }
+  }
+
+  /**
+   * ADR 0115 U3. Creates (or returns) the staged successor key pair. Staging
+   * is durable and idempotent: a ceremony may span a restart, and re-staging
+   * would silently invalidate a possession signature already made over the
+   * first staged keys.
+   */
+  public stageRotation(sodium: HomeHostKeyStoreSodium, now: Date = new Date()): HomeHostKeyPairSet {
+    const existing = this.loadStagedRotation(sodium);
+    if (existing !== undefined) {
+      return existing;
+    }
+    mkdirSync(this.storePath, { recursive: true, mode: 0o700 });
+    const createdAt = now.toISOString();
+    const signing = createStoredKeyPair(sodium, 'home_host_signing', sodium.crypto_sign_keypair(), createdAt);
+    const keyAgreement = createStoredKeyPair(sodium, 'home_host_key_agreement', sodium.crypto_box_keypair(), createdAt);
+    writeStoredKeyPair(this.keyPath(STAGED_HOST_SIGNING_KEY_FILE), signing);
+    writeStoredKeyPair(this.keyPath(STAGED_HOST_KEY_AGREEMENT_KEY_FILE), keyAgreement);
+    return toKeyPairSet(signing, keyAgreement);
+  }
+
+  public loadStagedRotation(sodium: HomeHostKeyStoreSodium): HomeHostKeyPairSet | undefined {
+    const signingPath = this.keyPath(STAGED_HOST_SIGNING_KEY_FILE);
+    const agreementPath = this.keyPath(STAGED_HOST_KEY_AGREEMENT_KEY_FILE);
+    if (!existsSync(signingPath) || !existsSync(agreementPath)) {
+      return undefined;
+    }
+    return toKeyPairSet(
+      readStoredKeyPair(sodium, signingPath, 'home_host_signing'),
+      readStoredKeyPair(sodium, agreementPath, 'home_host_key_agreement'),
+    );
+  }
+
+  public discardStagedRotation(): void {
+    rmSync(this.keyPath(STAGED_HOST_SIGNING_KEY_FILE), { force: true });
+    rmSync(this.keyPath(STAGED_HOST_KEY_AGREEMENT_KEY_FILE), { force: true });
+  }
+
+  public signWithStagedSigningKey(sodium: HomeHostKeyStoreSodium, signatureInput: Uint8Array): string {
+    const signing = readStoredKeyPair(sodium, this.keyPath(STAGED_HOST_SIGNING_KEY_FILE), 'home_host_signing');
+    const privateKey = hexToBytes(signing.privateKeyHex);
+    try {
+      return bytesToHex(sodium.crypto_sign_detached(signatureInput, privateKey));
+    } finally {
+      sodium.memzero(privateKey);
+    }
+  }
+
+  /**
+   * Promotes the staged pair to active: one atomic rename per file, each
+   * idempotent, and the retired private keys go with the replaced files -
+   * nothing new is ever signed with them, and historical verification needs
+   * only the public keys the continuity chain carries.
+   */
+  public promoteStagedRotation(): void {
+    for (const [staged, active] of [
+      [STAGED_HOST_SIGNING_KEY_FILE, HOST_SIGNING_KEY_FILE],
+      [STAGED_HOST_KEY_AGREEMENT_KEY_FILE, HOST_KEY_AGREEMENT_KEY_FILE],
+    ] as const) {
+      if (existsSync(this.keyPath(staged))) {
+        renameSync(this.keyPath(staged), this.keyPath(active));
+      }
+    }
+  }
+
+  /**
+   * ADR 0115 U3. Completes a promotion the process died in the middle of.
+   * The chain link is recorded before the swap, so after a crash the proven
+   * head may name keys that are still staged - or half-promoted. Whatever
+   * combination of active and staged files can form the head is renamed into
+   * place; anything else is left untouched and reported false, and the
+   * custody guard keeps the Home closed.
+   */
+  public completeInterruptedRotation(
+    sodium: HomeHostKeyStoreSodium,
+    head: { hostSigningKeyFingerprintHex: string; hostKeyAgreementKeyFingerprintHex: string },
+  ): boolean {
+    const roles = [
+      {
+        staged: STAGED_HOST_SIGNING_KEY_FILE,
+        active: HOST_SIGNING_KEY_FILE,
+        keyRole: 'home_host_signing' as const,
+        expected: head.hostSigningKeyFingerprintHex,
+      },
+      {
+        staged: STAGED_HOST_KEY_AGREEMENT_KEY_FILE,
+        active: HOST_KEY_AGREEMENT_KEY_FILE,
+        keyRole: 'home_host_key_agreement' as const,
+        expected: head.hostKeyAgreementKeyFingerprintHex,
+      },
+    ];
+    // Decide completely before renaming anything: a half-completable head
+    // must not become more half-completed by the attempt.
+    const pending: { from: string; to: string }[] = [];
+    for (const role of roles) {
+      const activePath = this.keyPath(role.active);
+      if (existsSync(activePath)
+        && readStoredKeyPair(sodium, activePath, role.keyRole).keyFingerprintHex === role.expected) {
+        continue;
+      }
+      const stagedPath = this.keyPath(role.staged);
+      if (existsSync(stagedPath)
+        && readStoredKeyPair(sodium, stagedPath, role.keyRole).keyFingerprintHex === role.expected) {
+        pending.push({ from: stagedPath, to: activePath });
+        continue;
+      }
+      return false;
+    }
+    for (const rename of pending) {
+      renameSync(rename.from, rename.to);
+    }
+    return true;
   }
 
   public signWithHostSigningKey(sodium: HomeHostKeyStoreSodium, signatureInput: Uint8Array): string {
