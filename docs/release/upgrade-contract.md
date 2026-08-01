@@ -87,8 +87,19 @@ manifest unknown` on a real install.
 
    `200` means ready. `404` means the tag build has not finished or did not
    run — Home Assistant will offer the update and then fail to install it.
-5. `ha supervisor reload` on the host.
-6. Install the update and confirm the add-on actually starts. "Update
+5. Record the image digest in the release's `pico_core/CHANGELOG.md` entry
+   (ADR 0122 Y3). This is what makes a later re-tag detectable and what a
+   digest-pinned rollback pulls:
+
+   ```bash
+   curl -sI -H "Authorization: Bearer $TOKEN" \
+     -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
+     https://ghcr.io/v2/riederch/pico/core/manifests/<version> \
+     | tr -d '\r' | grep -i '^docker-content-digest'
+   ```
+
+6. `ha supervisor reload` on the host.
+7. Install the update and confirm the add-on actually starts. "Update
    installed" is not the same as "add-on running": the Supervisor reports a
    successful update and then refuses to start it on invalid options.
 
@@ -96,7 +107,19 @@ manifest unknown` on a real install.
 
 Honest limits, because rollback is where the exclusions bite.
 
-- **Image**: pulling an older semver tag works; the tags are immutable.
+- **Image**: pulling an older semver tag works — as policy, not as a registry
+  property. GHCR tags are mutable; anyone with `packages: write` could
+  re-point one. What makes a tag trustworthy is ADR 0122: a published version
+  tag is never re-pushed (the pipeline check is gate Y4), and the digest
+  recorded per release makes a moved tag detectable. A rollback that must not
+  trust the tag pins the digest instead:
+
+  ```bash
+  docker pull ghcr.io/riederch/pico/core@sha256:<digest-from-the-changelog>
+  ```
+
+  Once ADR 0122 Y2 attestations exist, a moved tag additionally fails
+  attestation verification from any machine.
 - **Database**: only across a migration boundary with a matching backup. An
   older Core must not reinterpret migrations it does not know.
 - **Keys**: `backup_exclude` keeps `/data/keys` and `/data/home-host-keys` out
@@ -120,4 +143,6 @@ that a host loss is a data loss.
 - The Supervisor's option validation cannot be reproduced locally; the smoke
   tests mount a finished `/data/options.json` and bypass it.
 - No rollback automation, no update health check, no update audit event. ADR
-  0005 names all three as goals; none is implemented.
+  0005 names all three as goals; none is implemented. The update audit event
+  is now decided as ADR 0122 Y6 (boot-time version-change record), still
+  unbuilt.
