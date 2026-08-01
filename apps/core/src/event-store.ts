@@ -399,6 +399,8 @@ export interface PicoIdentityRootRotationReconciliationResult {
   verifiedRotations: number;
   effectiveRotations: number;
   projectedSuccessorDevices: number;
+  /** Rotations accepted by a different Home; they decide nothing here. */
+  foreignRotations: number;
   quarantinedIdentities: string[];
 }
 
@@ -2268,9 +2270,10 @@ export class EventStore {
       .prepare(`
         SELECT rotation_id AS rotationId, status
         FROM pico_identity_root_rotation
-        WHERE predecessor_identity_fingerprint_hex = ?
+        WHERE home_id = ?
+          AND predecessor_identity_fingerprint_hex = ?
       `)
-      .all(rotation.predecessorIdentityKeyFingerprintHex) as {
+      .all(homeId, rotation.predecessorIdentityKeyFingerprintHex) as {
         rotationId: string;
         status: 'pending' | 'vetoed' | 'effective';
       }[];
@@ -2403,8 +2406,9 @@ export class EventStore {
                status
         FROM pico_identity_root_rotation
         WHERE rotation_id = ?
+          AND home_id = ?
       `)
-      .get(params.rotationId) as {
+      .get(params.rotationId, this.picoHomeRotationScope()) as {
         predecessorIdentityFingerprintHex: string;
         coSigningDelegationId: string;
         status: 'pending' | 'vetoed' | 'effective';
@@ -2431,9 +2435,10 @@ export class EventStore {
         SET status = 'vetoed',
             resolved_at = ?
         WHERE rotation_id = ?
+          AND home_id = ?
           AND status = 'pending'
       `)
-      .run(vetoedAt, params.rotationId);
+      .run(vetoedAt, params.rotationId, this.picoHomeRotationScope());
     return { ok: true };
   }
 
@@ -2463,12 +2468,13 @@ export class EventStore {
                  AS successorFirstDeviceKeyAgreementKeyFingerprintHex,
                successor_first_device_projected_at AS successorFirstDeviceProjectedAt
         FROM pico_identity_root_rotation
-        WHERE predecessor_identity_fingerprint_hex = ?
+        WHERE home_id = ?
+          AND predecessor_identity_fingerprint_hex = ?
           AND status IN ('pending', 'effective')
         ORDER BY accepted_at DESC, rotation_id ASC
         LIMIT 1
       `)
-      .get(predecessorIdentityFingerprintHex) as
+      .get(this.picoHomeRotationScope(), predecessorIdentityFingerprintHex) as
         | PicoIdentityRootRotationView
         | undefined;
     return row ?? null;
@@ -2504,12 +2510,13 @@ export class EventStore {
                  AS deviceSigningKeyFingerprintHex,
                successor_first_device_projected_at AS projectedAt
         FROM pico_identity_root_rotation
-        WHERE successor_identity_fingerprint_hex = ?
+        WHERE home_id = ?
+          AND successor_identity_fingerprint_hex = ?
           AND status IN ('pending', 'effective')
         ORDER BY effective_at DESC, rotation_id ASC
         LIMIT 1
       `)
-      .get(successorIdentityFingerprintHex) as {
+      .get(this.picoHomeRotationScope(), successorIdentityFingerprintHex) as {
         rotationId: string;
         predecessorIdentityFingerprintHex: string;
         successorIdentityFingerprintHex: string;
@@ -2603,6 +2610,19 @@ export class EventStore {
   }
 
   /**
+   * ADR 0114 T5. The Home a rotation may decide in.
+   *
+   * A rotation record carries no Home - that is what makes it portable, and a
+   * person can hand-carry it to their other Homes. Accepting one stays a local
+   * act, so every read is scoped to the Home that accepted it. A row that
+   * arrived some other way - a database restored from another Home, two
+   * databases merged - decides nothing here, in either direction.
+   */
+  private picoHomeRotationScope(): string {
+    return this.picoHomeClaimState().homeId ?? '';
+  }
+
+  /**
    * ADR 0114. True once this root's rotation has passed its veto window: from
    * that instant every delegation it issued stops being honored. The record
    * is self-authorized - the predecessor signed exactly this - so the Home
@@ -2619,12 +2639,13 @@ export class EventStore {
       .prepare(`
         SELECT effective_at AS effectiveAt
         FROM pico_identity_root_rotation
-        WHERE predecessor_identity_fingerprint_hex = ?
+        WHERE home_id = ?
+          AND predecessor_identity_fingerprint_hex = ?
           AND status IN ('pending', 'effective')
           AND effective_at <= ?
         LIMIT 1
       `)
-      .get(predecessorIdentityFingerprintHex, at) as
+      .get(this.picoHomeRotationScope(), predecessorIdentityFingerprintHex, at) as
         | { effectiveAt: string }
         | undefined;
     return row !== undefined;
@@ -4045,13 +4066,14 @@ export class EventStore {
                  AS deviceSigningKeyFingerprintHex,
                record_json AS recordJson
         FROM pico_identity_root_rotation
-        WHERE successor_identity_fingerprint_hex = ?
+        WHERE home_id = ?
+          AND successor_identity_fingerprint_hex = ?
           AND status = 'effective'
           AND successor_first_device_projected_at IS NOT NULL
         ORDER BY effective_at DESC, rotation_id ASC
         LIMIT 1
       `)
-      .get(successorIdentityFingerprintHex) as {
+      .get(this.picoHomeRotationScope(), successorIdentityFingerprintHex) as {
         delegationId: string;
         deviceSigningKeyFingerprintHex: string;
         recordJson: string;
@@ -4106,6 +4128,7 @@ export class EventStore {
         verifiedRotations: 0,
         effectiveRotations: 0,
         projectedSuccessorDevices: 0,
+        foreignRotations: 0,
         quarantinedIdentities: [],
       };
     }
@@ -4125,10 +4148,11 @@ export class EventStore {
                successor_first_device_projected_at AS successorFirstDeviceProjectedAt,
                record_json AS recordJson
         FROM pico_identity_root_rotation
-        WHERE status IN ('pending', 'effective')
+        WHERE home_id = ?
+          AND status IN ('pending', 'effective')
         ORDER BY accepted_at ASC, rotation_id ASC
       `)
-      .all() as {
+      .all(this.picoHomeRotationScope()) as {
         rotationId: string;
         predecessorIdentityFingerprintHex: string;
         successorIdentityFingerprintHex: string;
@@ -4140,6 +4164,17 @@ export class EventStore {
         successorFirstDeviceProjectedAt: string | null;
         recordJson: string;
       }[];
+
+    // ADR 0114 T5. Rows that belong to another Home are counted, not acted on:
+    // they decide nothing here, and staying silent about them would make a
+    // merged or misrestored database look like an empty one.
+    const foreignRotations = (this.db
+      .prepare(`
+        SELECT COUNT(*) AS count
+        FROM pico_identity_root_rotation
+        WHERE home_id IS NOT ?
+      `)
+      .get(this.picoHomeRotationScope()) as { count: number }).count;
 
     const quarantined = new Set<string>();
     const promotions: typeof rows = [];
@@ -4221,9 +4256,10 @@ export class EventStore {
             SET status = 'effective',
                 resolved_at = COALESCE(resolved_at, ?)
             WHERE rotation_id = ?
+              AND home_id = ?
               AND status = 'pending'
           `)
-          .run(row.effectiveAt, row.rotationId);
+          .run(row.effectiveAt, row.rotationId, this.picoHomeRotationScope());
       }
 
       // ADR 0114 T3. The rotation revoked every device the old root delegated,
@@ -4251,8 +4287,9 @@ export class EventStore {
             UPDATE pico_identity_root_rotation
             SET successor_first_device_projected_at = ?
             WHERE rotation_id = ?
+              AND home_id = ?
           `)
-          .run(row.effectiveAt, row.rotationId);
+          .run(row.effectiveAt, row.rotationId, this.picoHomeRotationScope());
         if (!this.registerPicoIdentityRotationSuccessorReaderKey(
           sodium,
           row.successorIdentityFingerprintHex,
@@ -4279,6 +4316,7 @@ export class EventStore {
       verifiedRotations: verified,
       effectiveRotations: effective,
       projectedSuccessorDevices: projected,
+      foreignRotations,
       quarantinedIdentities: [...quarantined].sort(),
     };
   }

@@ -743,6 +743,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         + 'authorize nothing further and their relationships must be re-issued.',
       );
     }
+    // ADR 0114 T5. Rotations belonging to another Home decide nothing here.
+    // They should not exist in this database at all, so say so rather than
+    // let a merged or misrestored database pass for an empty one.
+    if (rootRotationReconciliation.foreignRotations > 0) {
+      app.log.warn(
+        rootRotationReconciliation,
+        'This database holds Pico identity root rotations accepted by a different '
+        + 'Home; they are ignored here. Accepting a rotation is a local act, so a '
+        + 'rotation carried in from elsewhere must be presented to this Home.',
+      );
+    }
     // ADR 0110 R6. Both anchor faults are loud: a rollback is an attack
     // signature, and a lost anchor blocks every completion until an operator
     // re-seeds, so neither may be discovered by a person waiting for recovery.

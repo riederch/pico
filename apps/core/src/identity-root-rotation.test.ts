@@ -244,6 +244,7 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
         verifiedRotations: 1,
         effectiveRotations: 1,
         projectedSuccessorDevices: 1,
+        foreignRotations: 0,
         quarantinedIdentities: [],
       });
     expect(fixture.store.picoIdentityRootRotationView(
@@ -294,6 +295,7 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
         verifiedRotations: 0,
         effectiveRotations: 0,
         projectedSuccessorDevices: 0,
+        foreignRotations: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     // The forged rotation is neither honored nor silently dropped: the
@@ -334,6 +336,7 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
         verifiedRotations: 0,
         effectiveRotations: 0,
         projectedSuccessorDevices: 0,
+        foreignRotations: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     reopened.close();
@@ -563,6 +566,7 @@ describe('ADR 0114 T3 re-issue after a root rotation', () => {
         verifiedRotations: 0,
         effectiveRotations: 0,
         projectedSuccessorDevices: 0,
+        foreignRotations: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     reopened.close();
@@ -600,6 +604,7 @@ describe('ADR 0114 T3 re-issue after a root rotation', () => {
         verifiedRotations: 0,
         effectiveRotations: 0,
         projectedSuccessorDevices: 0,
+        foreignRotations: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     reopened.close();
@@ -636,13 +641,185 @@ describe('ADR 0114 T3 re-issue after a root rotation', () => {
         verifiedRotations: 0,
         effectiveRotations: 0,
         projectedSuccessorDevices: 0,
+        foreignRotations: 0,
         quarantinedIdentities: [fixture.member.fingerprintHex],
       });
     reopened.close();
   });
 });
 
-function createFixture() {
+/**
+ * The identity itself, independent of any Home. Sharing it across two
+ * fixtures is what makes a cross-Home test possible: one person, one root,
+ * two Homes that decide separately.
+ */
+describe('ADR 0114 T5 a rotation is decided per Home', () => {
+  const laterAt = '2026-08-02T10:00:00.000Z';
+  const afterLaterWindow = '2026-08-04T10:00:00.001Z';
+
+  it('lets two Homes decide the same signed rotation independently', () => {
+    const identity = createIdentity();
+    const homeA = createFixture({ identity });
+    const homeB = createFixture({ homeId: 'home_root_rotation_b', identity });
+
+    // One record, no Home named in it - that absence is what lets a person
+    // carry it to their other Homes at all.
+    const signed = signRotation(homeA);
+
+    expect(homeA.store.submitPicoIdentityRootRotation({
+      ...signed,
+      sender: homeA.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+
+    // The second Home has not seen it. It must not guess: it keeps honoring
+    // the root it knows, and says nothing about a rotation it never got.
+    expect(homeB.store.picoIdentityRootRotationView(
+      identity.member.fingerprintHex,
+    )).toBeNull();
+    expect(homeB.store.hasActivePicoIdentityDelegation({
+      ...homeB.devices[1]!.sender,
+      sodium,
+      at: afterWindow,
+    })).toBe(true);
+    expect(homeA.store.hasActivePicoIdentityDelegation({
+      ...homeA.devices[1]!.sender,
+      sodium,
+      at: afterWindow,
+    })).toBe(false);
+
+    // Presenting the same record to the second Home is a fresh local
+    // ceremony: its own window, decided by the devices this Home knows.
+    expect(homeB.store.submitPicoIdentityRootRotation({
+      ...signed,
+      sender: homeB.devices[0]!.sender,
+      sodium,
+      acceptedAt: laterAt,
+    })).toMatchObject({
+      ok: true,
+      rotation: { effectiveAt: '2026-08-04T10:00:00.000Z' },
+    });
+
+    // Accepted at one Home, refused at the other - and neither decision
+    // reaches across. This is the identity split the ADR names: the same
+    // person is rotated here and not there, and no code can hide that.
+    expect(homeB.store.vetoPicoIdentityRootRotation({
+      rotationId: 'rotation_0001',
+      sender: homeB.devices[1]!.sender,
+      sodium,
+      vetoedAt: laterAt,
+    })).toEqual({ ok: true });
+    expect(homeB.store.hasActivePicoIdentityDelegation({
+      ...homeB.devices[1]!.sender,
+      sodium,
+      at: afterLaterWindow,
+    })).toBe(true);
+    expect(homeA.store.picoIdentityRootRotationView(
+      identity.member.fingerprintHex,
+    )).toMatchObject({ status: 'pending', rotationId: 'rotation_0001' });
+
+    // Each Home owes its own re-issue: the debt is local, because the
+    // issuers are.
+    expect(homeA.store.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toMatchObject({ effectiveRotations: 1, foreignRotations: 0 });
+    expect(homeA.store.picoIdentityRotationDebtView(
+      identity.successor.fingerprintHex,
+      afterWindow,
+    )).toMatchObject({ membershipsToReissue: [{ homeId: HOME_ID }] });
+    expect(homeB.store.picoIdentityRotationDebtView(
+      identity.successor.fingerprintHex,
+      afterWindow,
+    )).toBeNull();
+
+    homeA.store.close();
+    homeB.store.close();
+  });
+
+  it('ignores a rotation that arrived as data instead of as a ceremony', () => {
+    const identity = createIdentity();
+    const homeA = createFixture({ identity });
+    const homeB = createFixture({ homeId: 'home_root_rotation_b', identity });
+    expect(homeA.store.submitPicoIdentityRootRotation({
+      ...signRotation(homeA),
+      sender: homeA.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+    homeA.store.close();
+    homeB.store.close();
+
+    // A database restored from the wrong Home, or two merged. The row is
+    // genuine and every signature in it verifies - it simply was not
+    // accepted here, and accepting is the local act.
+    const source = new Database(homeA.databasePath);
+    const row = source
+      .prepare('SELECT * FROM pico_identity_root_rotation')
+      .get() as Record<string, unknown>;
+    source.close();
+    const target = new Database(homeB.databasePath);
+    const columns = Object.keys(row);
+    target
+      .prepare(`
+        INSERT INTO pico_identity_root_rotation (${columns.join(', ')})
+        VALUES (${columns.map(() => '?').join(', ')})
+      `)
+      .run(...columns.map((column) => row[column]));
+    target.close();
+
+    const reopened = new EventStore(homeB.databasePath);
+    // Ignored, but not silently: a merged database must not read as an empty
+    // one, so the row is counted and named at boot.
+    expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
+      .toMatchObject({
+        verifiedRotations: 0,
+        effectiveRotations: 0,
+        foreignRotations: 1,
+        quarantinedIdentities: [],
+      });
+    expect(reopened.picoIdentityRootRotationView(
+      identity.member.fingerprintHex,
+    )).toBeNull();
+    // Nor may it invent work: naming a debt for a rotation that decides
+    // nothing here would send the person to issuers who owe them nothing.
+    expect(reopened.picoIdentityRotationDebtView(
+      identity.successor.fingerprintHex,
+      afterWindow,
+    )).toBeNull();
+    expect(reopened.hasActivePicoIdentityDelegation({
+      ...homeB.devices[1]!.sender,
+      sodium,
+      at: afterWindow,
+    })).toBe(true);
+
+    // The person can still rotate here - the carried-in row neither blocks
+    // the ceremony nor stands in for it.
+    expect(reopened.submitPicoIdentityRootRotation({
+      ...signRotation(homeB),
+      sender: homeB.devices[0]!.sender,
+      sodium,
+      acceptedAt,
+    }).ok).toBe(true);
+    reopened.close();
+  });
+});
+
+function createIdentity() {
+  return {
+    member: createSigningKey('pico_identity'),
+    successor: createSigningKey('pico_identity'),
+    deviceKeys: [0, 1].map(() => ({
+      signing: createSigningKey('device_signing'),
+      agreement: createAgreementKey(),
+    })),
+  };
+}
+
+function createFixture(options: {
+  homeId?: string;
+  identity?: ReturnType<typeof createIdentity>;
+} = {}) {
+  const homeId = options.homeId ?? HOME_ID;
   const dir = mkdtempSync(join(tmpdir(), 'pico-root-rotation-test-'));
   tempDirs.push(dir);
   const databasePath = join(dir, 'pico.sqlite');
@@ -650,12 +827,12 @@ function createFixture() {
 
   const founder = createSigningKey('pico_identity');
   const host = createSigningKey('home_host_signing');
-  const member = createSigningKey('pico_identity');
-  const successor = createSigningKey('pico_identity');
+  const identity = options.identity ?? createIdentity();
+  const { member, successor } = identity;
 
-  const founding = createFoundingRecord(founder, host);
+  const founding = createFoundingRecord(founder, host, homeId);
   store.claimPicoHome({
-    homeId: HOME_ID,
+    homeId,
     hostAdminPicoId: `pico:identity:${founder.fingerprintHex}`,
     hostSigningKeyFingerprintHex: host.fingerprintHex,
     hostKeyAgreementKeyFingerprintHex:
@@ -668,15 +845,20 @@ function createFixture() {
   // Home handover and out of ADR 0114's scope.
   expect(store.recordPicoHomeMembershipCredential({
     sodium,
-    credential: createMembershipCredential(founder, host, member),
+    credential: createMembershipCredential(
+      founder,
+      host,
+      member,
+      'member_root_rotation',
+      homeId,
+    ),
     hostSigningPublicKeyHex: host.publicKeyHex,
   }).ok).toBe(true);
 
   // Two delegated devices: one co-signs the rotation, the other is the
   // independent objection the veto window exists for.
-  const devices = [0, 1].map((index) => {
-    const signing = createSigningKey('device_signing');
-    const agreement = createAgreementKey();
+  const devices = identity.deviceKeys.map((keys, index) => {
+    const { signing, agreement } = keys;
     const record = delegation({
       delegationId: `delegation_device_${index}`,
       identityFingerprintHex: member.fingerprintHex,
@@ -716,7 +898,10 @@ function createFixture() {
     };
   });
 
-  return { databasePath, store, founder, host, member, successor, devices };
+  return {
+    databasePath, store, homeId, founder, host, member, successor, devices,
+    identity,
+  };
 }
 
 function rotationRecord(
@@ -847,11 +1032,12 @@ function createMembershipCredential(
   host: ReturnType<typeof createSigningKey>,
   member: ReturnType<typeof createSigningKey>,
   credentialId = 'member_root_rotation',
+  homeId = HOME_ID,
 ): PicoHomeMembershipCredential {
   const membership: PicoHomeMembershipSignatureInput = {
     suite: picoIdentitySuite,
     credentialId,
-    homeId: HOME_ID,
+    homeId,
     issuerPicoIdentityFingerprintHex: founder.fingerprintHex,
     subjectPicoIdentityFingerprintHex: member.fingerprintHex,
     hostSigningKeyFingerprintHex: host.fingerprintHex,
@@ -903,13 +1089,14 @@ function issueReadGrant(
 function createFoundingRecord(
   founder: ReturnType<typeof createSigningKey>,
   host: ReturnType<typeof createSigningKey>,
+  homeId = HOME_ID,
 ): PicoHomeFoundingRecord {
   return {
     schema: picoHomeFoundingRecordSchema,
     founding: {
       suite: picoIdentitySuite,
       foundingId: 'founding_root_rotation',
-      homeId: HOME_ID,
+      homeId,
       hostSigningKeyFingerprintHex: host.fingerprintHex,
       hostKeyAgreementKeyFingerprintHex: 'aa'.repeat(32),
       homeHostPicoIdentityFingerprintHex: founder.fingerprintHex,
@@ -925,7 +1112,7 @@ function createFoundingRecord(
       claimResponse: {
         suite: picoIdentitySuite,
         claimId: 'claim_root_rotation',
-        homeId: HOME_ID,
+        homeId,
         hostSigningKeyFingerprintHex: host.fingerprintHex,
         hostKeyAgreementKeyFingerprintHex: 'aa'.repeat(32),
         claimantIdentityKeyFingerprintHex: founder.fingerprintHex,

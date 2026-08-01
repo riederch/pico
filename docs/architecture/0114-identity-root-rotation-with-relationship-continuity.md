@@ -6,8 +6,9 @@ Accepted; partially implemented. Gate T1 - the canonical
 `pico.identity.rotation.v1` form, its verification and authoritative
 vectors - landed with this ADR, and gate T2 - the Foundation projection,
 the device co-signature, the veto window and boot re-verification - and
-gate T3 - the successor's first device and the re-issue debt - have
-since followed; T4-T5 are open. This ADR closes the
+gate T3 - the successor's first device and the re-issue debt - and gate
+T5 - what a second Home may assume - have since followed; T4 is open on
+ADR 0105 B2/B3. This ADR closes the
 sharpest residual ADR 0110 named: today the only answer to a stolen
 Recovery Card is explicit identity replacement, which throws away every
 relationship the person had. Both decisions taken here were made
@@ -55,7 +56,8 @@ Does not cover:
 - domain content-key rotation (ADR 0078), which rotation may trigger but
   does not replace;
 - cross-Home propagation, which needs a transport that does not exist
-  (ADR 0031 Relay stays future); and
+  (ADR 0031 Relay stays future) - what a second Home may assume in the
+  meantime is decided below, and it is not propagation; and
 - any change to canonical bytes, approvals or custody outside the new
   family.
 
@@ -151,6 +153,39 @@ remove that wait, and was rejected because it would put Home
 administration into identity continuity and make a projection disagree
 with the credential behind it.
 
+### A second Home decides for itself, and says so
+
+The rotation record names no Home. That absence is deliberate and is the
+whole of what can be done without a transport: the record is
+self-authenticating, so a person can carry it to their other Homes by
+any means at all - a file, a scan, a re-run of the ceremony - and each
+Home can verify it with no channel to the first.
+
+What does not travel is the *decision*. A rotation presented to a second
+Home runs that Home's own test: a device that Home currently knows as
+delegated and active must co-sign, and that Home's own veto window must
+pass, during which that Home's other devices may refuse. A rotation
+accepted elsewhere confers nothing here, and a row that arrived as data
+rather than as a ceremony - a database restored from another Home, two
+databases merged - decides nothing in either direction. It is ignored,
+counted and named at boot, because a merged database must not read as an
+empty one.
+
+The tempting shortcut is to honor the retirement half alone: the old
+root signed "I am no longer authoritative", so a second Home could act
+on that without any local device. It is refused. A card thief would
+otherwise hold a cheap global lockout - present the rotation everywhere,
+and the owner loses every Home at once, exactly where they have the
+least ability to object. The same asymmetry that decides this at the
+first Home decides it at every other one.
+
+The consequence is stated rather than smoothed: a person can be rotated
+at one Home and not at another, and no code can hide that. A Home that
+never saw the rotation keeps honoring the old root - which is the
+residual, unchanged, and the reason the rotation should be carried to
+every Home the person uses. Absence of a rotation is a Home saying "not
+here", never "not anywhere".
+
 ### What rotation does not repair
 
 A Recovery Card pins the identity root. Every card printed before a
@@ -199,9 +234,16 @@ so rather than let a person discover it in an emergency.
   rotation ceremony with ADR 0106 rendering and ADR 0099 approvals, the
   veto surface, and forced Recovery Card re-issue - as ADR 0112
   surfaces, not as a terminal.
-- **T5 - Cross-Home honesty (open):** what a second Home that never saw
-  the rotation may assume, and whether anything short of a transport can
-  narrow it.
+- **T5 - Cross-Home honesty (implemented):** a rotation record names no
+  Home, so it travels; the decision does not. Every read and write of a
+  rotation is scoped to the Home that accepted it, the row identity is
+  the pair, and a rotation carried in as data is ignored, counted and
+  named at boot rather than honored or hidden. Presenting the same
+  signed record to a second Home is a fresh local ceremony with its own
+  window and its own vetoing devices - proven with two independent Homes
+  where the same record takes effect at one and is vetoed at the other.
+  The bare retirement half is deliberately not honored without the local
+  test, because a card thief would otherwise hold a global lockout.
 
 ## Threat ledger
 
@@ -212,7 +254,8 @@ so rather than let a person discover it in an emergency.
 | Owner and thief racing to rotate | Both hold the old root, so both can sign. The veto window plus the device requirement decide it: the owner's living devices see the attempt and can refuse it. Neither silently wins. |
 | Malicious Home host | Cannot mint, authorize or veto a rotation, and cannot rebind a relationship - re-issue is the issuer's act. It can withhold service, as always. |
 | Anybody with write access to the database | Editing a rotation row is the way to end an identity's whole device authority without ever holding its root. Boot re-verifies every stored record against its own columns and both signatures; one that fails withdraws that identity's device authority until a human re-establishes it, so the forgery decides nothing either way. Write access to the Foundation database remains a compromise of the Home, not a defended position. |
-| Relying party that never saw the rotation | Still honors the old root. Cross-Home propagation has no transport, so a rotation is per-Home until one exists; T5 keeps that open and unclaimed. |
+| Relying party that never saw the rotation | Still honors the old root, and says "not here" rather than "not anywhere". Cross-Home propagation has no transport; the record can be carried by hand and re-decided locally, which is all that is claimed. |
+| Thief presenting a stolen rotation at every Home | Gains nothing without a living device at each: the retirement half is not honored on its own, precisely so that one stolen card cannot lock a person out of every Home at once. |
 | Holder of an old Recovery Card after rotation | Restores a root that is no longer the identity - the card is dead, not dangerous. |
 | Somebody naming the successor's first device | Cannot: the delegation must verify under the successor root's own key record, which the rotation binds to the successor fingerprint, so a predecessor-signed device is refused. The agreement key must be the one that delegation names, so the device that becomes readable is the device that was authorized. |
 
@@ -237,8 +280,9 @@ Negative and residual:
   device: one more thing to have ready at the ceremony, and the price of
   never stranding the person it was meant to protect;
 - rotation is per-Home until a transport exists; a second Home keeps
-  honoring the old root, which is an identity split this ADR names but
-  cannot close;
+  honoring the old root until the record is carried there and decided
+  locally, which is an identity split this ADR names, enforces honestly
+  and cannot close;
 - every Recovery Card is obsoleted, with a window before the new one is
   printed;
 - the founder's root still cannot rotate - that stays Home handover;

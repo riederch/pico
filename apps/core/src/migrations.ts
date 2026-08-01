@@ -731,7 +731,7 @@ const migrations: readonly MigrationDefinition[] = [
     up(db) {
       db.exec(`
         CREATE TABLE pico_identity_root_rotation (
-          rotation_id TEXT PRIMARY KEY,
+          rotation_id TEXT NOT NULL,
           home_id TEXT NOT NULL,
           predecessor_identity_fingerprint_hex TEXT NOT NULL,
           successor_identity_fingerprint_hex TEXT NOT NULL,
@@ -752,11 +752,17 @@ const migrations: readonly MigrationDefinition[] = [
           successor_first_device_signing_key_fingerprint_hex TEXT NOT NULL,
           successor_first_device_key_agreement_key_fingerprint_hex TEXT NOT NULL,
           successor_first_device_projected_at TEXT NULL,
-          record_json TEXT NOT NULL
+          record_json TEXT NOT NULL,
+          -- ADR 0114 T5. A rotation record names no Home; deciding it is a
+          -- local act. The row identity is therefore the pair, so a record
+          -- carried in from another Home cannot occupy the name a local
+          -- ceremony needs.
+          PRIMARY KEY (home_id, rotation_id)
         );
 
         CREATE INDEX idx_pico_identity_root_rotation_predecessor
         ON pico_identity_root_rotation (
+          home_id,
           predecessor_identity_fingerprint_hex,
           status,
           effective_at
@@ -766,7 +772,10 @@ const migrations: readonly MigrationDefinition[] = [
         -- A second submission supersedes nothing silently; it is refused, so a
         -- root holder cannot flood the window with competing successors.
         CREATE UNIQUE INDEX idx_pico_identity_root_rotation_one_pending
-        ON pico_identity_root_rotation (predecessor_identity_fingerprint_hex)
+        ON pico_identity_root_rotation (
+          home_id,
+          predecessor_identity_fingerprint_hex
+        )
         WHERE status = 'pending';
       `);
     },
