@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 – 2026-08-02
+
+- Erste Character-Production-Assets: Home-Assistant-Add-on-Icon (256×256) und -Logo (250×100) sind Zuschnitte der registrierten neutralen Character-Referenz und ersetzen die vorher neu gezeichneten Bestandsdateien
+- Asset-Registry auf Schema v2: Pfade tragen ihre Auflösungsbasis, Production-Assets nennen Ableitungsquelle samt Hash, Zuschnittrechteck, Methode, Oberfläche, Zustand und Größe
+- Der Gate prüft die Ableitung: Ein Production-Asset, dessen Quelle keine registrierte Referenz ist oder dessen Ableitungshash veraltet, lässt den Check fehlschlagen
+- `pico_core/icon.svg` und `pico_core/logo.svg` speisen nichts Ausgeliefertes mehr und bleiben als Altlast gepinnt; ein Vektornachbau wäre das verbotene Neuzeichnen
+
 ## 1.0.3 – 2026-08-02
 
 - Legacy-Asset-Register ist maschinenlesbar (`legacy-character-assets.json`) und gepinnt; ein stiller Austausch eines ausgelieferten Bildes lässt den Gate fehlschlagen

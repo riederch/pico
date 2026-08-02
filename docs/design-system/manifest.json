@@ -1,6 +1,6 @@
 {
   "name": "PICO Product Design System",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "characterDependency": "PICO Character Design v3.2.1",
   "releasedOn": "2026-08-02",
   "sourceArchive": {
@@ -67,7 +67,7 @@
     {
       "path": "01_Foundations/tokens/pico.tokens.json",
       "bytes": 9384,
-      "sha256": "a41a2cd7722463ada151e5b2d76b9ce78ee9e63a7be45a4b6675412309f54cd8"
+      "sha256": "ea1cc53aa3ff57fbae2c2ef16f5710b4558761e2147cc25c6553f65fba9305d4"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.scss",
@@ -281,8 +281,8 @@
     },
     {
       "path": "07_Governance/approved-character-assets.json",
-      "bytes": 1280,
-      "sha256": "2cf199d803e7c85b89f5c15749d79a716dcb0920392cc6f5ba74d27095316431"
+      "bytes": 3321,
+      "sha256": "9a8990ab15bf2dbb25b71980924292fee67c308f7654ab8e2cbdc1420147adf5"
     },
     {
       "path": "07_Governance/Character_Standard_v3.2.1.md",
@@ -296,13 +296,13 @@
     },
     {
       "path": "07_Governance/Legacy_Asset_Register.md",
-      "bytes": 2410,
-      "sha256": "602d235632601ae394d4b561174c8a2d4785ec36fde12e202cc02466b2fe1803"
+      "bytes": 2840,
+      "sha256": "87c5b43911e025386a5f05d7d01973ec5aae3a5f6b54731ab4e98caada4e6fd1"
     },
     {
       "path": "07_Governance/legacy-character-assets.json",
-      "bytes": 2838,
-      "sha256": "bac0eb0379d66324d517317158605724efaa6d6b079f7afaf049c913206c72a3"
+      "bytes": 2641,
+      "sha256": "7bba81372e97d687cca982558b0f86e9eb377820ddcc918f4c42374d17e4dbfa"
     },
     {
       "path": "07_Governance/QA_Checklist.md",
@@ -361,8 +361,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 2332,
-      "sha256": "682e99215387147231173271201313caab9d3afd2f58b7a9a10eaa9a9c327829"
+      "bytes": 3090,
+      "sha256": "c4504c03bb2b9ad496597674fe23ef5fdccf729e378dc08ce8f6315aca80772f"
     },
     {
       "path": "LICENSE_NOTICE.md",
@@ -377,7 +377,7 @@
     {
       "path": "VERSION.txt",
       "bytes": 85,
-      "sha256": "867d3f1e7fb4235017228f5deb5c0b2e0d8dbc672e60efd09c9bc635bde5de52"
+      "sha256": "1680bf3cd54dcdc90ec756a05b993047e81f810f81662ea068334af9588e747c"
     }
   ]
 }

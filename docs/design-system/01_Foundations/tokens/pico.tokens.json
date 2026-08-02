@@ -3,7 +3,7 @@
   "$extensions": {
     "org.pico.design-system": {
       "name": "PICO Product Design System",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "characterStandard": "PICO Character Design v3.2.1",
       "format": "DTCG 2025.10"
     }

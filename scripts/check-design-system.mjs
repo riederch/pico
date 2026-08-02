@@ -19,7 +19,7 @@ const tokens = readJson(
 const version = read('docs/design-system/VERSION.txt');
 const source = read('docs/design-system/SOURCE.md');
 
-const expectedVersion = '1.0.3';
+const expectedVersion = '1.1.0';
 const characterStandard = 'PICO Character Design v3.2.1';
 const sourceArchive = 'PICO_Product_Design_System_v1.0.zip';
 const sourceArchiveSha =
@@ -75,18 +75,84 @@ if (!source.includes(sourceArchive) || !source.includes(sourceArchiveSha)) {
   errors.push('docs/design-system/SOURCE.md does not pin the source archive and hash.');
 }
 
-for (const asset of registry.assets ?? []) {
-  const path = join(designRoot, asset.path ?? '');
+assertEqual(registry.schema, 'pico.character.assets.v2', 'character asset registry schema');
+assertEqual(
+  legacyRegistry.schema,
+  'pico.character.legacy-assets.v1',
+  'legacy asset registry schema',
+);
+
+// A production asset lives outside the design system package, so entries now
+// carry the base their path is resolved against instead of assuming one.
+const approvedAssets = Array.isArray(registry.assets) ? registry.assets : [];
+const referenceHashes = new Map();
+const registeredOutsideDesignSystem = new Set();
+const registeredInsideDesignSystem = new Set();
+
+for (const asset of approvedAssets) {
+  const assetPath = asset.path ?? '';
+  const base = asset.pathBase;
+  if (base !== 'design-system' && base !== 'repository-root') {
+    errors.push(`Character asset lacks a valid pathBase: ${assetPath}.`);
+    continue;
+  }
+  if (base === 'design-system') {
+    registeredInsideDesignSystem.add(assetPath);
+  } else {
+    registeredOutsideDesignSystem.add(assetPath);
+  }
+  const path = base === 'design-system'
+    ? join(designRoot, assetPath)
+    : join(repoRoot, assetPath);
   if (!isFile(path)) {
-    errors.push(`Character asset registry path is missing: ${asset.path}.`);
+    errors.push(`Character asset registry path is missing: ${assetPath}.`);
     continue;
   }
   const actual = sha256(readFileSync(path));
   if (actual !== asset.sha256) {
-    errors.push(`Character asset changed without registry approval: ${asset.path}.`);
+    errors.push(`Character asset changed without registry approval: ${assetPath}.`);
   }
   if (!Array.isArray(asset.productionUses)) {
-    errors.push(`Character asset lacks a productionUses array: ${asset.path}.`);
+    errors.push(`Character asset lacks a productionUses array: ${assetPath}.`);
+  }
+  if (asset.class !== 'production_asset') {
+    referenceHashes.set(assetPath, asset.sha256);
+  }
+}
+
+// Step 1 of the Character approval process: a production asset's derivation is
+// traced back to a registered reference. That stays checkable only while the
+// reference it names still has the bytes it was derived from.
+for (const asset of approvedAssets) {
+  if (asset.class !== 'production_asset') {
+    continue;
+  }
+  const derived = asset.derivedFrom;
+  if (!derived || typeof derived.path !== 'string') {
+    errors.push(
+      `Production asset does not name its derivation source: ${asset.path}.`,
+    );
+    continue;
+  }
+  const expected = referenceHashes.get(derived.path);
+  if (expected === undefined) {
+    errors.push(
+      `Production asset ${asset.path} derives from ${derived.path}, which is no `
+      + 'registered character reference.',
+    );
+  } else if (expected !== derived.sha256) {
+    errors.push(
+      `Production asset ${asset.path} records a derivation hash that no longer `
+      + `matches its source ${derived.path}.`,
+    );
+  }
+  for (const field of ['surface', 'state', 'size']) {
+    if (typeof asset[field] !== 'string') {
+      errors.push(`Production asset must name its ${field}: ${asset.path}.`);
+    }
+  }
+  if (typeof derived.method !== 'string') {
+    errors.push(`Production asset must describe its derivation: ${asset.path}.`);
   }
 }
 
@@ -109,14 +175,19 @@ assertEqual(
 const legacyAssets = Array.isArray(legacyRegistry.assets)
   ? legacyRegistry.assets
   : [];
-const registeredOutsideDesignSystem = new Set();
 for (const asset of legacyAssets) {
   const assetPath = asset.path ?? '';
+  if (registeredOutsideDesignSystem.has(assetPath)) {
+    errors.push(
+      `Asset is registered as both approved and legacy: ${assetPath}.`,
+    );
+    continue;
+  }
+  registeredOutsideDesignSystem.add(assetPath);
   if (!isFile(join(repoRoot, assetPath))) {
     errors.push(`Legacy asset registry path is missing: ${assetPath}.`);
     continue;
   }
-  registeredOutsideDesignSystem.add(assetPath);
   if (sha256(readFileSync(join(repoRoot, assetPath))) !== asset.sha256) {
     errors.push(
       `Legacy character asset changed without a registry decision: ${assetPath}. `
@@ -158,22 +229,11 @@ for (const path of shippedImages) {
 // the Character Standard's home for character references. Anything new landing
 // there needs a role and a production decision, not just a manifest hash.
 const characterAssetDirectory = '08_Starter_Kit/assets';
-const registeredInsideDesignSystem = new Set(
-  (registry.assets ?? []).map((asset) => asset.path),
-);
 for (const path of listFiles(join(designRoot, characterAssetDirectory))) {
   const designRelative = relative(designRoot, path);
   if (imagePattern.test(designRelative) && !registeredInsideDesignSystem.has(designRelative)) {
     errors.push(
       `Character asset directory holds an unregistered image: ${designRelative}.`,
-    );
-  }
-}
-
-for (const asset of legacyAssets) {
-  if (registeredInsideDesignSystem.has(asset.path)) {
-    errors.push(
-      `Asset is registered as both approved and legacy: ${asset.path}.`,
     );
   }
 }

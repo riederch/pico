@@ -1,2 +1,2 @@
-PICO Product Design System v1.0.3
+PICO Product Design System v1.1.0
 Character dependency: PICO Character Design v3.2.1

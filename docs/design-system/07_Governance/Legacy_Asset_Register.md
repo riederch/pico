@@ -11,8 +11,7 @@ Tabelle ist die lesbare Fassung derselben Einträge:
 
 | Pfad | Aktuelle Verwendung | Offene Migration |
 |---|---|---|
-| `pico_core/icon.svg`, `pico_core/icon.png` | Home-Assistant-Add-on-Icon | durch freigegebenen Character-3.2.1-Kopf-/Visier-Export ersetzen |
-| `pico_core/logo.svg`, `pico_core/logo.png` | Home-Assistant-Add-on-Logo | durch freigegebenen Character-3.2.1-Export ersetzen |
+| `pico_core/icon.svg`, `pico_core/logo.svg` | nichts mehr; nicht mehr die Quelle der ausgelieferten PNG | Entscheidung offen: entfernen oder als nicht-normative Altlast behalten |
 | `docs/assets/pico-design-concept.png` | README-Konzeptbild | nur historische Präsentation; Urdesign liegt im Design-System-Paket |
 | `docs/assets/pico-ha-icon.png` | Präsentationsasset | nicht als Production-Asset wiederverwenden |
 | `docs/assets/pico-readme-hero.png` | README-Hero | bei nächster visueller Revision aus freigegebenen Production-Assets neu zusammensetzen |
@@ -34,6 +33,16 @@ daher:
 - Im Character-Asset-Verzeichnis `08_Starter_Kit/assets/` darf kein Bild
   liegen, das `approved-character-assets.json` nicht kennt.
 - Kein Pfad darf gleichzeitig als freigegeben und als Legacy geführt werden.
+
+## Warum die beiden SVG nicht einfach ersetzt wurden
+
+`pico_core/icon.png` und `pico_core/logo.png` sind seit dem 2026-08-02
+freigegebene Production-Assets und stehen in `approved-character-assets.json`.
+Ihre SVG-Gegenstücke konnten nicht mitwandern: Die verbindlichen
+Character-Referenzen sind Renderings, und ein Vektornachbau davon wäre genau
+das verbotene Neuzeichnen. Die beiden Dateien speisen deshalb nichts mehr, was
+ausgeliefert wird, und bleiben bis zu einer ausdrücklichen Entscheidung als
+Altlast gepinnt.
 
 Neue Oberflächen und neue Character-Assets dürfen diesen Legacy-Stand nicht
 kopieren. Eine Migration wird erst abgeschlossen behauptet, wenn der Ersatz im

@@ -1,5 +1,5 @@
 {
-  "schema": "pico.character.assets.v1",
+  "schema": "pico.character.assets.v2",
   "characterStandard": "PICO Character Design v3.2.1",
   "sourceArchive": {
     "name": "PICO_Product_Design_System_v1.0.zip",
@@ -8,6 +8,7 @@
   "assets": [
     {
       "path": "08_Starter_Kit/assets/PICO_Designboard_Original.png",
+      "pathBase": "design-system",
       "sha256": "fce76fd8e3cc78525551f3c158200e482520ac3347ea5190e01fafbcc3ec2696",
       "class": "character_reference",
       "role": "canonical_visual_origin",
@@ -15,6 +16,7 @@
     },
     {
       "path": "08_Starter_Kit/assets/PICO_Basis_Avatar.png",
+      "pathBase": "design-system",
       "sha256": "360cf8b06d933d659bb1a5a1000aa18fdb17f321a92c3c7f1f7dd1d98f9cfb8e",
       "class": "character_reference",
       "role": "canonical_neutral_full_body_reference",
@@ -22,6 +24,7 @@
     },
     {
       "path": "08_Starter_Kit/assets/PICO_Regression_15er_v3.2.1.png",
+      "pathBase": "design-system",
       "sha256": "862e88fceed5cfce70d0c0121c712567dac554be674081af7dc4b13abdd42e0a",
       "class": "diagnostic_reference",
       "role": "character_and_status_regression_board",
@@ -31,6 +34,45 @@
         "energy_context_mixed_status_group"
       ],
       "productionUses": []
+    },
+    {
+      "path": "pico_core/icon.png",
+      "pathBase": "repository-root",
+      "sha256": "fb48e9c17f74d3e1f727d8aea58a093b5d446449d28002b1cb92f181bd59ebd4",
+      "class": "production_asset",
+      "role": "home_assistant_add_on_icon",
+      "approvedOn": "2026-08-02",
+      "derivedFrom": {
+        "path": "08_Starter_Kit/assets/PICO_Basis_Avatar.png",
+        "pathBase": "design-system",
+        "sha256": "360cf8b06d933d659bb1a5a1000aa18fdb17f321a92c3c7f1f7dd1d98f9cfb8e",
+        "cropBox": [147, 24, 334, 200],
+        "method": "Figur freigestellt, Zuschnitt Kopf mit Antenne, 78 Prozent Fuellgrad, zentriert auf quadratischer Flaeche in color.background.deep. Kein Neuzeichnen, keine Vereinfachung der Geometrie."
+      },
+      "surface": "Home Assistant Add-on Store",
+      "state": "neutral",
+      "size": "256x256",
+      "productionUses": ["Home-Assistant-Add-on-Icon 256x256"]
+    },
+    {
+      "path": "pico_core/logo.png",
+      "pathBase": "repository-root",
+      "sha256": "6b283b620b11b3e82e0648a831e70e2ee963f064bb0607d7646926b7dc4c3413",
+      "class": "production_asset",
+      "role": "home_assistant_add_on_logo",
+      "approvedOn": "2026-08-02",
+      "derivedFrom": {
+        "path": "08_Starter_Kit/assets/PICO_Basis_Avatar.png",
+        "pathBase": "design-system",
+        "sha256": "360cf8b06d933d659bb1a5a1000aa18fdb17f321a92c3c7f1f7dd1d98f9cfb8e",
+        "cropBox": [147, 24, 334, 200],
+        "method": "Derselbe freigestellte Kopfzuschnitt links auf 76 px Hoehe, rechts die Wortmarke 'Pico Core' in color.text.primary auf color.background.deep. Kein Fliesstext, kein Panel."
+      },
+      "surface": "Home Assistant Add-on Store",
+      "state": "neutral",
+      "size": "250x100",
+      "wordmarkFont": "Systemnaher Sans-Serif-Fallback (Noto Sans SemiBold); Inter war auf dem erzeugenden System nicht verfuegbar.",
+      "productionUses": ["Home-Assistant-Add-on-Logo 250x100"]
     }
   ]
 }

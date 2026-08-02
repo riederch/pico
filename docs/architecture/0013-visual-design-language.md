@@ -128,7 +128,9 @@ Because the group is baked into an approved Character production asset, a state 
 
 Color, spacing, radius and motion values live canonically in the DTCG-2025.10 JSON under `docs/design-system/01_Foundations/tokens/`. CSS, SCSS and TypeScript are deterministic, complete generated outputs. Product code and generated artifacts read or import those outputs instead of copying values, because copies drift silently and a design system that is only prose is not enforceable. Typography is Inter or an equivalent system sans; the package ships no font files, so a deployment either provides Inter under its own license terms or accepts the fallback.
 
-The release gate verifies DTCG value shapes, generated-output equality, manifest completeness, source/asset hashes and the token imports used by the Foundation dashboard and Recovery Card PDF. Existing pre-standard presentation and Home Assistant character assets remain explicitly registered as Legacy until purpose-bound Character production exports replace them.
+The release gate verifies DTCG value shapes, generated-output equality, manifest completeness, source/asset hashes and the token imports used by the Foundation dashboard and Recovery Card PDF. It also measures the contrast pairs the product system promises, in both themes, so a published ratio cannot outlive the token it describes.
+
+Every image the repository ships is registered. The Home Assistant add-on icon and logo are approved production assets derived from the neutral Character reference by crop, and the registry records the source, its hash, the crop box and the derivation method, so the derivation stays checkable rather than asserted. The remaining pre-standard presentation art stays registered as Legacy with pinned hashes until purpose-bound Character production exports replace it; replacing one of those files is a Character migration with a registry decision, not a file swap.
 
 ## Avatar states
 
@@ -169,17 +171,14 @@ For Home Assistant and app icons:
 - preserve the cyan core glow for default state
 - avoid overly detailed status miniatures
 
-The Home Assistant add-on icon is expected at:
+The Home Assistant add-on icon and logo are expected at:
 
 ```text
 pico_core/icon.png
+pico_core/logo.png
 ```
 
-The SVG source version is kept at:
-
-```text
-pico_core/icon.svg
-```
+They have no vector source, and that is a consequence of the rule rather than an oversight: the binding Character references are renderings, so a vector version could only be produced by redrawing Pico, which is exactly what the character standard forbids. `pico_core/icon.svg` and `pico_core/logo.svg` are the pre-standard redrawn shapes. They no longer feed anything that ships and stay registered as Legacy until they are removed or explicitly kept as non-normative history.
 
 ## Decorative origin marker
 
@@ -256,7 +255,7 @@ The origin marker must remain separate from all of them.
 
 Large README or landing-page assets may use the richer companion scene with panels and feature cards.
 
-Small repo, add-on, and app icons should use their registered neutral Character production crop. The current Home Assistant add-on icon is a documented pre-standard Legacy asset, not a reference for new work.
+Small repo, add-on, and app icons should use their registered neutral Character production crop. The Home Assistant add-on icon and logo are exactly that: a head-and-antenna crop of the registered neutral reference on a token background, approved for that surface and size. A production asset is not a Character reference, so neither of them is a source for new work.
 
 ## Authority boundary
 
