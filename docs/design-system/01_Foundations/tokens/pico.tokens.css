@@ -7,9 +7,10 @@
   --pico-surface-2: #112a3e;
   --pico-surface-3: #17344a;
   --pico-border: #27475d;
+  --pico-border-strong: #6a808f;
   --pico-text-primary: #e8f3fa;
   --pico-text-secondary: #a7bdcb;
-  --pico-text-muted: #718999;
+  --pico-text-muted: #8a9dab;
   --pico-text-disabled: #536876;
   --pico-text-on-primary: #03111c;
   --pico-primary: #2ccfff;
@@ -59,9 +60,11 @@
   --pico-surface-2: #edf4f8;
   --pico-surface-3: #e0edf3;
   --pico-border: #aac2cf;
+  --pico-border-strong: #778790;
   --pico-text-primary: #0a2132;
   --pico-text-secondary: #355568;
-  --pico-text-muted: #5d7888;
+  --pico-text-muted: #546c7b;
   --pico-text-disabled: #8ba0ac;
   --pico-primary-soft: #d7f4fc;
+  --pico-focus: #118cbb;
 }

@@ -1,28 +1,99 @@
+/* pico-design-tokens:start */
+/* Generated from pico.tokens.json; do not edit by hand. */
 :root {
   color-scheme: dark;
+  --pico-bg-deep: #04101c;
+  --pico-bg-base: #071827;
+  --pico-surface-1: #0c2032;
+  --pico-surface-2: #112a3e;
+  --pico-surface-3: #17344a;
+  --pico-border: #27475d;
+  --pico-border-strong: #6a808f;
+  --pico-text-primary: #e8f3fa;
+  --pico-text-secondary: #a7bdcb;
+  --pico-text-muted: #8a9dab;
+  --pico-text-disabled: #536876;
+  --pico-text-on-primary: #03111c;
+  --pico-primary: #2ccfff;
+  --pico-primary-strong: #15aee8;
+  --pico-primary-soft: #123e55;
+  --pico-focus: #72e1ff;
+  --pico-status-active: #2ccfff;
+  --pico-status-listening: #348cff;
+  --pico-status-thinking: #9a70ff;
+  --pico-status-warning: #ffb13b;
+  --pico-status-blocked: #ff4e5d;
+  --pico-status-success: #59e579;
+  --pico-context-technology: #358dff;
+  --pico-context-water: #26d3d0;
+  --pico-context-fire: #e84b42;
+  --pico-context-organization: #49cdb1;
+  --pico-context-smart-home: #ff963d;
+  --pico-context-communication: #29cff2;
+  --pico-context-energy: #f5a62e;
+  --pico-context-focus: #8767e8;
+  --pico-space-1: 4px;
+  --pico-space-2: 8px;
+  --pico-space-3: 12px;
+  --pico-space-4: 16px;
+  --pico-space-5: 24px;
+  --pico-space-6: 32px;
+  --pico-space-7: 48px;
+  --pico-space-8: 64px;
+  --pico-radius-chip: 10px;
+  --pico-radius-button: 14px;
+  --pico-radius-input: 14px;
+  --pico-radius-message: 20px;
+  --pico-radius-card: 20px;
+  --pico-radius-dialog: 24px;
+  --pico-radius-illustration: 30px;
+  --pico-motion-fast: 150ms;
+  --pico-motion-normal: 240ms;
+  --pico-motion-slow: 360ms;
+  --pico-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --pico-bg-deep: #eaf3f8;
+  --pico-bg-base: #f5f9fc;
+  --pico-surface-1: #ffffff;
+  --pico-surface-2: #edf4f8;
+  --pico-surface-3: #e0edf3;
+  --pico-border: #aac2cf;
+  --pico-border-strong: #778790;
+  --pico-text-primary: #0a2132;
+  --pico-text-secondary: #355568;
+  --pico-text-muted: #546c7b;
+  --pico-text-disabled: #8ba0ac;
+  --pico-primary-soft: #d7f4fc;
+  --pico-focus: #118cbb;
+}
+/* pico-design-tokens:end */
+:root {
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  background: #04101C;
-  color: #E8F3FA;
+  background: var(--pico-bg-deep);
+  color: var(--pico-text-primary);
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-height: 100vh; background: #04101C; }
+body { margin: 0; min-height: 100vh; background: var(--pico-bg-deep); }
 main { max-width: 44rem; margin: 0 auto; padding: 3rem 2rem 2rem; }
-.eyebrow { color: #2CCFFF; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.eyebrow { color: var(--pico-primary); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 h1 { margin: .3rem 0 2rem; font-size: 2rem; }
-.status { display: grid; grid-template-columns: auto 1fr; gap: 1rem; padding: 1.5rem; border: 1px solid #27475D; border-radius: 1.25rem; background: #0C2032; }
-.symbol { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; color: #03111C; background: #2CCFFF; font-size: 1.5rem; font-weight: 800; }
-.status[data-severity="warning"] .symbol { background: #FFB13B; }
-.status[data-severity="blocked"] .symbol { background: #FF4E5D; }
+.status { display: grid; grid-template-columns: auto 1fr; gap: 1rem; padding: 1.5rem; border: 1px solid var(--pico-border); border-radius: var(--pico-radius-card); background: var(--pico-surface-1); }
+.symbol { display: grid; place-items: center; width: 3rem; height: 3rem; border-radius: 50%; color: var(--pico-text-on-primary); background: var(--pico-status-active); font-size: 1.5rem; font-weight: 800; }
+.status[data-severity="warning"] .symbol { background: var(--pico-status-warning); }
+.status[data-severity="blocked"] .symbol { background: var(--pico-status-blocked); }
 h2 { margin: 0 0 .75rem; font-size: 1.25rem; }
-#body { margin: 0; color: #A7BDCB; line-height: 1.6; overflow-wrap: anywhere; }
-.scope { margin: 1rem 0 0; padding: 1rem; border-left: .25rem solid #FFB13B; color: #A7BDCB; line-height: 1.5; }
+#body { margin: 0; color: var(--pico-text-secondary); line-height: 1.6; overflow-wrap: anywhere; }
+.scope { margin: 1rem 0 0; padding: 1rem; border-left: .25rem solid var(--pico-status-warning); color: var(--pico-text-secondary); line-height: 1.5; }
 .actions { display: flex; gap: .75rem; margin-top: 2rem; }
-button { min-height: 2.75rem; padding: 0 1.1rem; border: 0; border-radius: .875rem; background: #2CCFFF; color: #03111C; font: inherit; font-weight: 700; cursor: pointer; }
-button.secondary { border: 1px solid #27475D; background: #112A3E; color: #E8F3FA; }
-button:focus-visible { outline: 3px solid #72E1FF; outline-offset: 3px; }
+button { min-height: 2.75rem; padding: 0 1.1rem; border: 0; border-radius: var(--pico-radius-button); background: var(--pico-primary); color: var(--pico-text-on-primary); font: inherit; font-weight: 700; cursor: pointer; }
+button.secondary { border: 1px solid var(--pico-border-strong); background: var(--pico-surface-2); color: var(--pico-text-primary); }
+button:focus-visible { outline: 3px solid var(--pico-focus); outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: wait; }
 
 @media (prefers-reduced-motion: no-preference) {
-  button { transition: background-color 150ms cubic-bezier(.2, .8, .2, 1); }
+  button { transition: background-color var(--pico-motion-fast) var(--pico-ease); }
 }

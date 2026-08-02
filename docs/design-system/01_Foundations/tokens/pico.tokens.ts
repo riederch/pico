@@ -11,12 +11,13 @@ export const picoTokens = {
       "active": "#17344A"
     },
     "border": {
-      "subtle": "#27475D"
+      "subtle": "#27475D",
+      "strong": "#6A808F"
     },
     "text": {
       "primary": "#E8F3FA",
       "secondary": "#A7BDCB",
-      "muted": "#718999",
+      "muted": "#8A9DAB",
       "disabled": "#536876",
       "onPrimary": "#03111C"
     },
@@ -88,16 +89,18 @@ export const picoTokens = {
           "active": "#E0EDF3"
         },
         "border": {
-          "subtle": "#AAC2CF"
+          "subtle": "#AAC2CF",
+          "strong": "#778790"
         },
         "text": {
           "primary": "#0A2132",
           "secondary": "#355568",
-          "muted": "#5D7888",
+          "muted": "#546C7B",
           "disabled": "#8BA0AC"
         },
         "brand": {
-          "primarySoft": "#D7F4FC"
+          "primarySoft": "#D7F4FC",
+          "focus": "#118CBB"
         }
       }
     }

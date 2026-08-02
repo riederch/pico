@@ -16,7 +16,7 @@ const tokens = readJson(
 const version = read('docs/design-system/VERSION.txt');
 const source = read('docs/design-system/SOURCE.md');
 
-const expectedVersion = '1.0.1';
+const expectedVersion = '1.0.2';
 const characterStandard = 'PICO Character Design v3.2.1';
 const sourceArchive = 'PICO_Product_Design_System_v1.0.zip';
 const sourceArchiveSha =
@@ -116,12 +116,30 @@ if (
   errors.push('Starter Kit must import the canonical generated CSS tokens.');
 }
 
-const dashboard = stripGeneratedDashboardTokens(read('apps/web/styles.css'));
-if (/#[0-9a-f]{3,8}\b/iu.test(dashboard)) {
-  errors.push('apps/web/styles.css contains a copied color literal outside the generated token block.');
+// Every surface that renders PICO colors reads them from the generated
+// outputs. A copied literal drifts silently, so the gate rejects one wherever
+// a stylesheet or a window option could hold it.
+const literalFreeStylesheets = [
+  'apps/web/styles.css',
+  'apps/companion-shell/src/renderer/styles.css',
+];
+for (const path of literalFreeStylesheets) {
+  if (/#[0-9a-f]{3,8}\b/iu.test(stripGeneratedTokens(read(path)))) {
+    errors.push(`${path} contains a copied color literal outside the generated token block.`);
+  }
 }
-if (/#[0-9a-f]{3,8}\b/iu.test(read('apps/web/index.html'))) {
-  errors.push('apps/web/index.html contains a copied color literal; styles belong in styles.css.');
+const literalFreeMarkupAndCode = [
+  ['apps/web/index.html', 'styles belong in styles.css'],
+  ['apps/companion-shell/src/renderer/index.html', 'styles belong in styles.css'],
+  ['apps/companion-shell/src/window-options.ts', 'read the generated PICO design tokens instead'],
+];
+for (const [path, remedy] of literalFreeMarkupAndCode) {
+  if (/#[0-9a-f]{3,8}\b/iu.test(read(path))) {
+    errors.push(`${path} contains a copied color literal; ${remedy}.`);
+  }
+}
+if (!read('apps/companion-shell/src/window-options.ts').includes("from './pico-design-tokens.generated.js'")) {
+  errors.push('apps/companion-shell/src/window-options.ts does not import generated PICO design tokens.');
 }
 const recoveryPdf = read('apps/vault-daemon/src/recovery-card-pdf.ts');
 if (/rgb\(\s*(?:[0-9]|\.)/u.test(recoveryPdf)) {
@@ -143,7 +161,7 @@ console.log(
   `Design system consistency check passed for ${expectedVersion} / Character 3.2.1.`,
 );
 
-function stripGeneratedDashboardTokens(html) {
+function stripGeneratedTokens(html) {
   return html.replace(
     /\/\* pico-design-tokens:start \*\/[\s\S]*?\/\* pico-design-tokens:end \*\//u,
     '',

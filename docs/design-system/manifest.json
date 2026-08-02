@@ -1,8 +1,8 @@
 {
   "name": "PICO Product Design System",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "characterDependency": "PICO Character Design v3.2.1",
-  "releasedOn": "2026-07-31",
+  "releasedOn": "2026-08-02",
   "sourceArchive": {
     "name": "PICO_Product_Design_System_v1.0.zip",
     "sha256": "6229e3374856960790f384bf99fbcc7282ea2de29bfc8a38896534ec679e4146"
@@ -61,23 +61,23 @@
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.css",
-      "bytes": 1951,
-      "sha256": "a651c948118efb1914e187cdb631555d9575d7c956abb6c05ce9f7b5ea6e385f"
+      "bytes": 2042,
+      "sha256": "9095fb0ccb7c5299b9f67bdb0056c7fed86b845002780d8490d9bdc091c5fa1b"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.json",
-      "bytes": 8869,
-      "sha256": "48058d909c496b0812b17bd1bcd3f60cc219305808b172e9a57b765711a27e30"
+      "bytes": 9384,
+      "sha256": "66250fc53912161af9cb37495147918419860fe29f525d81cce60d688935f6b5"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.scss",
-      "bytes": 1435,
-      "sha256": "301f33f2edaec35c64d57a26d2009eb47f96ead3269f3777e7e860820e4a794d"
+      "bytes": 1505,
+      "sha256": "37a5150fb96cfc90a17b3bb7d36500f6335c75ec5bbdeeb49961acec2b4ef6c3"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.ts",
-      "bytes": 2211,
-      "sha256": "bc18add636bec07564fa28317d1c4cc68dbb7acc6b0f4025fc0ff2a7d4b81502"
+      "bytes": 2299,
+      "sha256": "f0d0231b9b3d93818b2dcafa4677e7f662d2ad4869d85566ff5bbffe6a44ca3b"
     },
     {
       "path": "01_Foundations/Typography.md",
@@ -266,8 +266,8 @@
     },
     {
       "path": "06_Accessibility/Contrast_Report.md",
-      "bytes": 866,
-      "sha256": "9dfbd211ce238721660b8d2bec01d1b783d34e97aa0a8b337c64b679154ebf62"
+      "bytes": 5695,
+      "sha256": "2f1bbde4095fd9ca2cdb2702782225aa10a1cad8d07073b75eec9313d0e2358c"
     },
     {
       "path": "06_Accessibility/Reduced_Motion.md",
@@ -356,8 +356,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 1009,
-      "sha256": "991dd7783c2f334ed1d6e3d8b0b69bf025a5a81de8fcb696b695edece971d06c"
+      "bytes": 1835,
+      "sha256": "acdd09436548bf69bbf15c7991d59cd384cfe3f2c893172341bcde3fe6d83c11"
     },
     {
       "path": "LICENSE_NOTICE.md",
@@ -372,7 +372,7 @@
     {
       "path": "VERSION.txt",
       "bytes": 85,
-      "sha256": "9d8f7e6d2fd1a813364cf97350a3b78399bff25c2694168a7dc0e227a424cbb8"
+      "sha256": "00bc607e3e6759d9ddba79d7127f70cf4de8046c59c195d59cec333c834633af"
     }
   ]
 }

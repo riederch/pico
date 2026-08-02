@@ -8,9 +8,10 @@
   --pico-surface-2: #112a3e;
   --pico-surface-3: #17344a;
   --pico-border: #27475d;
+  --pico-border-strong: #6a808f;
   --pico-text-primary: #e8f3fa;
   --pico-text-secondary: #a7bdcb;
-  --pico-text-muted: #718999;
+  --pico-text-muted: #8a9dab;
   --pico-text-disabled: #536876;
   --pico-text-on-primary: #03111c;
   --pico-primary: #2ccfff;
@@ -60,11 +61,13 @@
   --pico-surface-2: #edf4f8;
   --pico-surface-3: #e0edf3;
   --pico-border: #aac2cf;
+  --pico-border-strong: #778790;
   --pico-text-primary: #0a2132;
   --pico-text-secondary: #355568;
-  --pico-text-muted: #5d7888;
+  --pico-text-muted: #546c7b;
   --pico-text-disabled: #8ba0ac;
   --pico-primary-soft: #d7f4fc;
+  --pico-focus: #118cbb;
 }
 /* pico-design-tokens:end */
 :root { font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--pico-bg-deep); color: var(--pico-text-primary); }
@@ -83,9 +86,10 @@ h2 { margin: 0; font-size: 17px; line-height: 1.3; letter-spacing: 0; }
 .form-hint[data-state="active"] { color: var(--pico-status-success); }
 .form-hint[data-state="error"] { color: var(--pico-status-blocked); }
 .control-row { display: flex; gap: 8px; }
-input, select { width: 100%; min-height: 44px; border: 1px solid var(--pico-border); border-radius: var(--pico-radius-input); padding: 10px 12px; background: var(--pico-surface-1); color: var(--pico-text-primary); }
+input, select { width: 100%; min-height: 44px; border: 1px solid var(--pico-border-strong); border-radius: var(--pico-radius-input); padding: 10px 12px; background: var(--pico-surface-1); color: var(--pico-text-primary); }
 button { cursor: pointer; min-height: 44px; border: 1px solid var(--pico-primary); border-radius: var(--pico-radius-button); padding: 10px 16px; background: var(--pico-primary); color: var(--pico-text-on-primary); font-weight: 700; }
 button:disabled { cursor: wait; opacity: 0.64; }
+:focus-visible { outline: 3px solid var(--pico-focus); outline-offset: 2px; }
 .security-banner { margin-bottom: 16px; border: 1px solid var(--pico-status-warning); border-radius: var(--pico-radius-card); padding: 12px 14px; background: color-mix(in srgb, var(--pico-status-warning) 14%, var(--pico-bg-deep)); color: var(--pico-status-warning); font-weight: 700; line-height: 1.4; }
 .error-banner { margin-bottom: 16px; border: 1px solid var(--pico-status-blocked); border-radius: var(--pico-radius-card); padding: 12px 14px; background: color-mix(in srgb, var(--pico-status-blocked) 14%, var(--pico-bg-deep)); color: var(--pico-text-primary); }
 [hidden] { display: none !important; }
@@ -95,14 +99,14 @@ button:disabled { cursor: wait; opacity: 0.64; }
 .card-header { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 14px; align-items: baseline; }
 .card-count { color: var(--pico-text-secondary); font-size: 13px; }
 .card-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
-.secondary-button { border-color: var(--pico-border); background: var(--pico-bg-deep); color: var(--pico-text-primary); }
+.secondary-button { border-color: var(--pico-border-strong); background: var(--pico-bg-deep); color: var(--pico-text-primary); }
 .item-list { display: grid; }
 .metric-row { display: grid; grid-template-columns: minmax(120px, 0.6fr) minmax(0, 1fr); gap: 16px; padding: 11px 0; border-top: 1px solid var(--pico-border); }
 .metric-row:first-child { border-top: 0; padding-top: 0; }
 .metric-row:last-child { padding-bottom: 0; }
 .metric-key { color: var(--pico-text-secondary); }
 .metric-value { color: var(--pico-text-primary); text-align: right; overflow-wrap: anywhere; }
-.status-pill { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; justify-content: center; border-radius: var(--pico-radius-chip); padding: 6px 10px; background: var(--pico-bg-deep); color: var(--pico-text-secondary); border: 1px solid var(--pico-border); font-size: 13px; }
+.status-pill { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; justify-content: center; border-radius: var(--pico-radius-chip); padding: 6px 10px; background: var(--pico-bg-deep); color: var(--pico-text-secondary); border: 1px solid var(--pico-border-strong); font-size: 13px; }
 .status-dot { display: inline-grid; width: 18px; height: 18px; place-items: center; border-radius: 50%; background: var(--pico-text-disabled); color: var(--pico-bg-deep); font-size: 12px; font-weight: 800; }
 .status-dot::before { content: "·"; }
 .status-pill[data-status="connected"] .status-dot { background: var(--pico-status-success); }
@@ -118,7 +122,7 @@ button:disabled { cursor: wait; opacity: 0.64; }
 .danger-card { border-color: var(--pico-status-blocked); }
 .danger-note { margin: 0 0 14px; border: 1px solid var(--pico-status-blocked); border-radius: var(--pico-radius-card); padding: 10px 12px; background: color-mix(in srgb, var(--pico-status-blocked) 14%, var(--pico-bg-deep)); color: var(--pico-text-primary); font-size: 13px; line-height: 1.4; }
 .danger-button { border-color: var(--pico-status-blocked); background: var(--pico-status-blocked); color: var(--pico-bg-deep); }
-.row-button { min-height: 34px; padding: 6px 12px; font-size: 13px; }
+.row-button { min-height: 44px; padding: 6px 12px; font-size: 13px; }
 .table-wrap { overflow: auto; border: 1px solid var(--pico-border); border-radius: var(--pico-radius-card); }
 .event-toolbar { display: grid; grid-template-columns: minmax(160px, 0.7fr) minmax(180px, 1fr) minmax(180px, 1fr); gap: 10px; margin-bottom: 14px; }
 .event-notice { margin: -4px 0 14px; border: 1px solid var(--pico-status-warning); border-radius: var(--pico-radius-card); padding: 10px 12px; background: color-mix(in srgb, var(--pico-status-warning) 14%, var(--pico-bg-deep)); color: var(--pico-status-warning); font-size: 13px; line-height: 1.4; }

@@ -10,13 +10,20 @@ const outputs = {
   typescript: 'docs/design-system/01_Foundations/tokens/pico.tokens.ts',
   vaultDaemonTypescript:
     'apps/vault-daemon/src/pico-design-tokens.generated.ts',
+  companionShellTypescript:
+    'apps/companion-shell/src/pico-design-tokens.generated.ts',
+  contrastReport: 'docs/design-system/06_Accessibility/Contrast_Report.md',
 };
-// The dashboard styles live in a real stylesheet instead of an inline
-// <style> block so the Foundation surface can serve a strict CSP
-// (`default-src 'self'`) without an 'unsafe-inline' carve-out.
-const dashboardPath = 'apps/web/styles.css';
-const dashboardStart = '/* pico-design-tokens:start */';
-const dashboardEnd = '/* pico-design-tokens:end */';
+// These styles live in real stylesheets instead of inline <style> blocks so
+// both surfaces can serve a strict CSP (`default-src 'self'` for the
+// Foundation dashboard, `style-src 'self'` for the companion renderer)
+// without an 'unsafe-inline' carve-out.
+const stylesheetPaths = [
+  'apps/web/styles.css',
+  'apps/companion-shell/src/renderer/styles.css',
+];
+const stylesheetStart = '/* pico-design-tokens:start */';
+const stylesheetEnd = '/* pico-design-tokens:end */';
 const write = process.argv.includes('--write');
 
 if (!write && !process.argv.includes('--check')) {
@@ -41,6 +48,7 @@ const cssNames = new Map([
   ['color.surface.secondary', 'surface-2'],
   ['color.surface.active', 'surface-3'],
   ['color.border.subtle', 'border'],
+  ['color.border.strong', 'border-strong'],
   ['color.text.primary', 'text-primary'],
   ['color.text.secondary', 'text-secondary'],
   ['color.text.muted', 'text-muted'],
@@ -85,6 +93,45 @@ const cssNames = new Map([
   ['motion.easeStandard', 'ease'],
 ]);
 
+const themes = ['dark', 'light'];
+const surfacePaths = [
+  'color.background.deep',
+  'color.background.base',
+  'color.surface.primary',
+  'color.surface.secondary',
+  'color.surface.active',
+];
+// Binding contrast pairs. A ratio below the minimum fails generation, so the
+// contrast report can never publish a number the tokens do not actually hold.
+// Text tokens are checked against every surface they may sit on, not just the
+// app background, because a card is exactly where muted text ends up.
+const contrastContract = [
+  { foreground: 'color.text.primary', backgrounds: surfacePaths, minimum: 4.5 },
+  { foreground: 'color.text.secondary', backgrounds: surfacePaths, minimum: 4.5 },
+  { foreground: 'color.text.muted', backgrounds: surfacePaths, minimum: 4.5 },
+  { foreground: 'color.brand.focus', backgrounds: surfacePaths, minimum: 3 },
+  { foreground: 'color.border.strong', backgrounds: surfacePaths, minimum: 3 },
+  {
+    foreground: 'color.text.onPrimary',
+    backgrounds: ['color.brand.primary'],
+    minimum: 4.5,
+  },
+];
+// Reported without enforcement. Status colors belong to the Character status
+// light group and carry their meaning through symbol and text as well, so the
+// product system may not silently darken them for a light surface; that needs
+// a Character decision. `border.subtle` separates panels instead of bounding a
+// control, which is what `border.strong` is for.
+const contrastNotes = [
+  { foreground: 'color.status.active', backgrounds: ['color.surface.primary'] },
+  { foreground: 'color.status.listening', backgrounds: ['color.surface.primary'] },
+  { foreground: 'color.status.thinking', backgrounds: ['color.surface.primary'] },
+  { foreground: 'color.status.warning', backgrounds: ['color.surface.primary'] },
+  { foreground: 'color.status.blocked', backgrounds: ['color.surface.primary'] },
+  { foreground: 'color.status.success', backgrounds: ['color.surface.primary'] },
+  { foreground: 'color.border.subtle', backgrounds: ['color.surface.primary'] },
+];
+
 const baseTokens = tokens.filter((token) => !token.path.startsWith('theme.'));
 const lightTokens = tokens.filter((token) =>
   token.path.startsWith('theme.light.')
@@ -106,6 +153,9 @@ for (const token of lightTokens) {
   }
 }
 
+if (errors.length === 0) {
+  validateContrast();
+}
 if (errors.length > 0) {
   fail(errors);
 }
@@ -113,14 +163,17 @@ if (errors.length > 0) {
 const css = renderCss(baseTokens, lightTokens);
 const scss = renderScss(baseTokens, lightTokens);
 const typescript = renderTypeScript(source);
-const dashboard = injectDashboardCss(read(dashboardPath), css);
 const expected = new Map([
   [outputs.css, css],
   [outputs.scss, scss],
   [outputs.typescript, typescript],
   [outputs.vaultDaemonTypescript, typescript],
-  [dashboardPath, dashboard],
+  [outputs.companionShellTypescript, typescript],
+  [outputs.contrastReport, renderContrastReport()],
 ]);
+for (const path of stylesheetPaths) {
+  expected.set(path, injectGeneratedCss(read(path), css, path));
+}
 
 if (write) {
   for (const [path, content] of expected) {
@@ -346,21 +399,156 @@ function cssValue(token) {
   }
 }
 
-function injectDashboardCss(stylesheet, css) {
-  const start = stylesheet.indexOf(dashboardStart);
-  const end = stylesheet.indexOf(dashboardEnd);
+function injectGeneratedCss(stylesheet, css, path) {
+  const start = stylesheet.indexOf(stylesheetStart);
+  const end = stylesheet.indexOf(stylesheetEnd);
   if (start === -1 || end === -1 || end < start) {
-    errors.push(`${dashboardPath}: missing generated token markers.`);
+    errors.push(`${path}: missing generated token markers.`);
     fail(errors);
   }
   return [
     stylesheet.slice(0, start),
-    dashboardStart,
+    stylesheetStart,
     '\n',
     css.trimEnd(),
     '\n',
     stylesheet.slice(end),
   ].join('');
+}
+
+function themedColor(path, theme) {
+  const token = theme === 'light'
+    ? tokenMap.get(`theme.light.${path}`) ?? tokenMap.get(path)
+    : tokenMap.get(path);
+  return token?.value?.hex;
+}
+
+function relativeLuminance(hex) {
+  const [red, green, blue] = hex
+    .slice(1)
+    .match(/../g)
+    .map((pair) => Number.parseInt(pair, 16) / 255)
+    .map((channel) =>
+      channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+    );
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+}
+
+function contrastRatio(foreground, background) {
+  const [lighter, darker] = [
+    relativeLuminance(foreground),
+    relativeLuminance(background),
+  ].sort((left, right) => right - left);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function themedRatio(foreground, background, theme) {
+  return contrastRatio(
+    themedColor(foreground, theme),
+    themedColor(background, theme),
+  );
+}
+
+function validateContrast() {
+  for (const theme of themes) {
+    for (const { foreground, backgrounds, minimum } of contrastContract) {
+      for (const background of backgrounds) {
+        const ratio = themedRatio(foreground, background, theme);
+        // Compare the published two-decimal value so a report row can never
+        // read as passing while the check treats it as a failure.
+        if (Number.parseFloat(ratio.toFixed(2)) < minimum) {
+          errors.push(
+            `${theme} theme: ${foreground} on ${background} reaches only `
+            + `${ratio.toFixed(2)}:1, below the required ${minimum}:1.`,
+          );
+        }
+      }
+    }
+  }
+}
+
+function shortTokenPath(path) {
+  return path.startsWith('color.') ? path.slice('color.'.length) : path;
+}
+
+function renderContrastReport() {
+  const lines = [
+    '# Kontrastbericht',
+    '',
+    'Erzeugt aus `01_Foundations/tokens/pico.tokens.json` durch',
+    '`pnpm design-system:generate`. Nicht von Hand bearbeiten.',
+    '',
+    'Die verbindlichen Paare sind Teil des Release-Gates: Ein Verhaeltnis',
+    'unterhalb des Ziels laesst die Token-Generierung fehlschlagen. Dieser',
+    'Bericht kann daher keinen Wert behaupten, den die Tokens nicht einhalten.',
+    '',
+    'Textfarben werden gegen jede Flaeche geprueft, auf der sie stehen duerfen,',
+    'nicht nur gegen den App-Hintergrund. Zielniveau ist WCAG 2.2 AA: 4,5:1 fuer',
+    'normalen Text, 3:1 fuer Fokusanzeige und Steuerungsraender.',
+    '',
+  ];
+  for (const theme of themes) {
+    lines.push(`## ${theme === 'dark' ? 'Dark Mode' : 'Light Mode'}`, '');
+    lines.push('### Verbindlich geprueft', '');
+    lines.push('| Vordergrund | Hintergrund | Ziel | Verhaeltnis | Bewertung |');
+    lines.push('|---|---|---:|---:|---|');
+    for (const { foreground, backgrounds, minimum } of contrastContract) {
+      for (const background of backgrounds) {
+        const ratio = themedRatio(foreground, background, theme);
+        lines.push(
+          `| ${shortTokenPath(foreground)} | ${shortTokenPath(background)} `
+          + `| ${minimum.toFixed(1)}:1 | ${ratio.toFixed(2)}:1 `
+          + `| ${contrastVerdict(ratio, minimum)} |`,
+        );
+      }
+    }
+    lines.push('');
+    lines.push('### Nachrichtlich, nicht erzwungen', '');
+    lines.push('| Vordergrund | Hintergrund | Verhaeltnis |');
+    lines.push('|---|---|---:|');
+    for (const { foreground, backgrounds } of contrastNotes) {
+      for (const background of backgrounds) {
+        const ratio = themedRatio(foreground, background, theme);
+        lines.push(
+          `| ${shortTokenPath(foreground)} | ${shortTokenPath(background)} `
+          + `| ${ratio.toFixed(2)}:1 |`,
+        );
+      }
+    }
+    lines.push('');
+  }
+  lines.push(
+    '## Warum die nachrichtlichen Werte nicht erzwungen werden',
+    '',
+    'Statusfarben gehoeren zur Statuslichtgruppe aus PICO Character Design',
+    'v3.2.1. Das Produktsystem darf sie nicht eigenmaechtig fuer eine helle',
+    'Flaeche abdunkeln; das waere eine Character-Entscheidung. Statusbedeutung',
+    'wird zusaetzlich durch Symbol und Text getragen, und fuer kleinen',
+    'Fliesstext ist stets eine gepruefte Textfarbe zu verwenden.',
+    '',
+    '`border.subtle` trennt Panels und Tabellenzeilen; die sichtbare Begrenzung',
+    'eines Bedienelements ist `border.strong` und wird verbindlich geprueft.',
+    '',
+    '### Offener Punkt',
+    '',
+    'Im Light Mode erreichen mehrere Statusfarben als Vordergrund auf heller',
+    'Flaeche kein Verhaeltnis von 3:1. Solange keine Produktoberflaeche den',
+    'Light Mode als Statusflaeche nutzt, bleibt das folgenlos. Vor der ersten',
+    'hellen Statusoberflaeche braucht es eine Character-Entscheidung ueber',
+    'eigene Status-Vordergrundfarben fuer helle Flaechen.',
+    '',
+  );
+  return lines.join('\n');
+}
+
+function contrastVerdict(ratio, minimum) {
+  if (Number.parseFloat(ratio.toFixed(2)) < minimum) {
+    return 'unter Ziel';
+  }
+  if (minimum >= 4.5) {
+    return ratio >= 7 ? 'AAA' : 'AA';
+  }
+  return 'erfuellt';
 }
 
 function read(path) {
