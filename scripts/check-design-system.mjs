@@ -10,17 +10,30 @@ const manifest = readJson('docs/design-system/manifest.json');
 const registry = readJson(
   'docs/design-system/07_Governance/approved-character-assets.json',
 );
+const legacyRegistry = readJson(
+  'docs/design-system/07_Governance/legacy-character-assets.json',
+);
 const tokens = readJson(
   'docs/design-system/01_Foundations/tokens/pico.tokens.json',
 );
 const version = read('docs/design-system/VERSION.txt');
 const source = read('docs/design-system/SOURCE.md');
 
-const expectedVersion = '1.0.2';
+const expectedVersion = '1.0.3';
 const characterStandard = 'PICO Character Design v3.2.1';
 const sourceArchive = 'PICO_Product_Design_System_v1.0.zip';
 const sourceArchiveSha =
   '6229e3374856960790f384bf99fbcc7282ea2de29bfc8a38896534ec679e4146';
+const imagePattern = /\.(?:png|jpe?g|webp|gif|svg|ico|avif)$/iu;
+// Build output and dependency trees are not shipped repository content; they
+// are reproduced from the sources this check already pins.
+const ignoredDirectories = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'coverage',
+  'data',
+]);
 
 assertEqual(manifest.name, 'PICO Product Design System', 'manifest name');
 assertEqual(manifest.version, expectedVersion, 'manifest version');
@@ -74,6 +87,94 @@ for (const asset of registry.assets ?? []) {
   }
   if (!Array.isArray(asset.productionUses)) {
     errors.push(`Character asset lacks a productionUses array: ${asset.path}.`);
+  }
+}
+
+// The Character Standard governs what may be shipped, but the registry above
+// only reaches the three reference images inside the design system. Everything
+// PICO actually ships its face on lives outside it, so a redrawn add-on icon
+// used to pass unnoticed. Every shipped image must now be registered, and its
+// bytes must match, whether it is approved or a pinned legacy holdover.
+assertEqual(
+  legacyRegistry.characterStandard,
+  characterStandard,
+  'legacy asset registry character standard',
+);
+assertEqual(
+  legacyRegistry.pathBase,
+  'repository-root',
+  'legacy asset registry path base',
+);
+
+const legacyAssets = Array.isArray(legacyRegistry.assets)
+  ? legacyRegistry.assets
+  : [];
+const registeredOutsideDesignSystem = new Set();
+for (const asset of legacyAssets) {
+  const assetPath = asset.path ?? '';
+  if (!isFile(join(repoRoot, assetPath))) {
+    errors.push(`Legacy asset registry path is missing: ${assetPath}.`);
+    continue;
+  }
+  registeredOutsideDesignSystem.add(assetPath);
+  if (sha256(readFileSync(join(repoRoot, assetPath))) !== asset.sha256) {
+    errors.push(
+      `Legacy character asset changed without a registry decision: ${assetPath}. `
+      + 'A replacement is a Character migration, not a file swap.',
+    );
+  }
+  if (asset.class !== 'legacy_asset') {
+    errors.push(`Legacy asset must carry class "legacy_asset": ${assetPath}.`);
+  }
+  if (typeof asset.currentUse !== 'string' || typeof asset.openMigration !== 'string') {
+    errors.push(
+      `Legacy asset must name its current use and open migration: ${assetPath}.`,
+    );
+  }
+  if (assetPath.startsWith('docs/design-system/')) {
+    errors.push(
+      `Legacy asset belongs outside the design system package: ${assetPath}.`,
+    );
+  }
+}
+
+// A shipped image that no registry names is exactly the case the Character
+// Standard forbids: new PICO geometry arriving through product work.
+const shippedImages = listFiles(repoRoot, isIgnoredDirectory)
+  .map((path) => relative(repoRoot, path))
+  .filter((path) => imagePattern.test(path))
+  .filter((path) => !path.startsWith('docs/design-system/'))
+  .sort((left, right) => left.localeCompare(right));
+for (const path of shippedImages) {
+  if (!registeredOutsideDesignSystem.has(path)) {
+    errors.push(
+      `Shipped image is in no character asset registry: ${path}. Register it as `
+      + 'an approved production asset or as a pinned legacy asset first.',
+    );
+  }
+}
+
+// Inside the package, the manifest pins every byte, but only this directory is
+// the Character Standard's home for character references. Anything new landing
+// there needs a role and a production decision, not just a manifest hash.
+const characterAssetDirectory = '08_Starter_Kit/assets';
+const registeredInsideDesignSystem = new Set(
+  (registry.assets ?? []).map((asset) => asset.path),
+);
+for (const path of listFiles(join(designRoot, characterAssetDirectory))) {
+  const designRelative = relative(designRoot, path);
+  if (imagePattern.test(designRelative) && !registeredInsideDesignSystem.has(designRelative)) {
+    errors.push(
+      `Character asset directory holds an unregistered image: ${designRelative}.`,
+    );
+  }
+}
+
+for (const asset of legacyAssets) {
+  if (registeredInsideDesignSystem.has(asset.path)) {
+    errors.push(
+      `Asset is registered as both approved and legacy: ${asset.path}.`,
+    );
   }
 }
 
@@ -168,17 +269,24 @@ function stripGeneratedTokens(html) {
   );
 }
 
-function listFiles(directory) {
+function listFiles(directory, skipDirectory) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) {
-      files.push(...listFiles(path));
+      if (skipDirectory?.(entry.name)) {
+        continue;
+      }
+      files.push(...listFiles(path, skipDirectory));
     } else if (entry.isFile()) {
       files.push(path);
     }
   }
   return files;
+}
+
+function isIgnoredDirectory(name) {
+  return name.startsWith('.') || ignoredDirectories.has(name);
 }
 
 function isFile(path) {

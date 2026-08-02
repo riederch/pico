@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.3 – 2026-08-02
+
+- Legacy-Asset-Register ist maschinenlesbar (`legacy-character-assets.json`) und gepinnt; ein stiller Austausch eines ausgelieferten Bildes lässt den Gate fehlschlagen
+- Jedes Bild, das ausserhalb des Design-System-Pakets ausgeliefert wird, muss in einer der beiden Character-Registries stehen
+- Im Character-Asset-Verzeichnis darf kein Bild liegen, das die Freigabe-Registry nicht kennt
+- Ein Pfad kann nicht gleichzeitig als freigegeben und als Legacy geführt werden
+
 ## 1.0.2 – 2026-08-02
 
 - Kontrastbericht wird aus den Tokens erzeugt und verbindlich geprüft; ein Wert unter Ziel lässt die Generierung fehlschlagen

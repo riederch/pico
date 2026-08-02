@@ -1,6 +1,6 @@
 {
   "name": "PICO Product Design System",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "characterDependency": "PICO Character Design v3.2.1",
   "releasedOn": "2026-08-02",
   "sourceArchive": {
@@ -67,7 +67,7 @@
     {
       "path": "01_Foundations/tokens/pico.tokens.json",
       "bytes": 9384,
-      "sha256": "66250fc53912161af9cb37495147918419860fe29f525d81cce60d688935f6b5"
+      "sha256": "a41a2cd7722463ada151e5b2d76b9ce78ee9e63a7be45a4b6675412309f54cd8"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.scss",
@@ -296,8 +296,13 @@
     },
     {
       "path": "07_Governance/Legacy_Asset_Register.md",
-      "bytes": 1242,
-      "sha256": "940c2e58f973efbb2c1cab3c54c8502e0f29d587fcc9b1d1b3fd4482d1f7cdca"
+      "bytes": 2410,
+      "sha256": "602d235632601ae394d4b561174c8a2d4785ec36fde12e202cc02466b2fe1803"
+    },
+    {
+      "path": "07_Governance/legacy-character-assets.json",
+      "bytes": 2838,
+      "sha256": "bac0eb0379d66324d517317158605724efaa6d6b079f7afaf049c913206c72a3"
     },
     {
       "path": "07_Governance/QA_Checklist.md",
@@ -356,8 +361,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 1835,
-      "sha256": "acdd09436548bf69bbf15c7991d59cd384cfe3f2c893172341bcde3fe6d83c11"
+      "bytes": 2332,
+      "sha256": "682e99215387147231173271201313caab9d3afd2f58b7a9a10eaa9a9c327829"
     },
     {
       "path": "LICENSE_NOTICE.md",
@@ -372,7 +377,7 @@
     {
       "path": "VERSION.txt",
       "bytes": 85,
-      "sha256": "00bc607e3e6759d9ddba79d7127f70cf4de8046c59c195d59cec333c834633af"
+      "sha256": "867d3f1e7fb4235017228f5deb5c0b2e0d8dbc672e60efd09c9bc635bde5de52"
     }
   ]
 }
