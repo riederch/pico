@@ -14,6 +14,7 @@ const requiredFiles = [
 const packageFiles = [
   'package.json',
   'apps/companion/package.json',
+  'apps/companion-shell/package.json',
   'apps/core/package.json',
   'apps/vault-daemon/package.json',
   'apps/web/package.json',

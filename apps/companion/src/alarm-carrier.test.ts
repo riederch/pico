@@ -24,13 +24,16 @@ const identityFingerprintHex = 'ab'.repeat(32);
 
 interface RecordingAdapter {
   alarms: PicoCompanionPendingRecoveryAlarm[];
+  clears: number;
   failNext: boolean;
   notifyPendingRecovery(alarm: PicoCompanionPendingRecoveryAlarm): void;
+  clearPendingRecovery(): void;
 }
 
 function recordingAdapter(): RecordingAdapter {
   return {
     alarms: [],
+    clears: 0,
     failNext: false,
     notifyPendingRecovery(alarm) {
       if (this.failNext) {
@@ -38,6 +41,9 @@ function recordingAdapter(): RecordingAdapter {
         throw new Error('adapter_down');
       }
       this.alarms.push(alarm);
+    },
+    clearPendingRecovery() {
+      this.clears += 1;
     },
   };
 }
@@ -95,6 +101,7 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
     await vi.advanceTimersByTimeAsync(picoCompanionAlarmCheckIntervalMs);
     expect(carrier.status().alarmActive).toBe(false);
     expect(adapter.alarms).toHaveLength(2);
+    expect(adapter.clears).toBe(2);
 
     carrier.stop();
     await vi.advanceTimersByTimeAsync(10 * picoCompanionAlarmCheckIntervalMs);

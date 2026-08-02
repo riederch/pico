@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
 const packageFiles = [
   'apps/companion/package.json',
+  'apps/companion-shell/package.json',
   'apps/core/package.json',
   'apps/vault-daemon/package.json',
   'apps/web/package.json',

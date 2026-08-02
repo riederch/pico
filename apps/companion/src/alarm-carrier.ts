@@ -34,6 +34,12 @@ export interface PicoCompanionNotificationAdapter {
   notifyPendingRecovery(
     alarm: PicoCompanionPendingRecoveryAlarm,
   ): void | Promise<void>;
+  /**
+   * Optional shell presentation hook. It is deliberately narrower than a
+   * generic state channel: a successful lifecycle read may disarm only the
+   * pending-recovery presentation it previously raised.
+   */
+  clearPendingRecovery?(): void | Promise<void>;
 }
 
 export interface StartPicoCompanionAlarmCarrierInput {
@@ -114,6 +120,14 @@ export async function startPicoCompanionAlarmCarrier(
     const pending = snapshot.pendingRecovery;
     if (pending === null) {
       status.alarmActive = false;
+      try {
+        await input.notifications.clearPendingRecovery?.();
+      } catch {
+        // Clearing presentation state is notification work too. A failed
+        // shell adapter is visible and retried on the next successful read;
+        // it must not turn a clear signed lifecycle view into an active alarm.
+        status.notifyFailures += 1;
+      }
       const check: PicoCompanionAlarmCheck = {
         status: 'clear',
         pendingRecovery: null,

@@ -1,0 +1,26 @@
+{
+  "name": "@pico/companion-shell",
+  "version": "0.1.9",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-renderer.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "start": "electron dist/main.js",
+    "test:electron": "electron --headless dist/electron-smoke.js",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@pico/companion": "workspace:*",
+    "@pico/vault": "workspace:*",
+    "@pico/vault-daemon": "workspace:*",
+    "libsodium-wrappers-sumo": "^0.8.4"
+  },
+  "devDependencies": {
+    "@pico/core": "workspace:*",
+    "electron": "43.2.0"
+  }
+}

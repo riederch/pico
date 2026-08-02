@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'">
+  <title>Pico</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">Pico companion</p>
+      <h1>Home status</h1>
+    </header>
+    <section id="status" class="status" data-severity="active" aria-live="assertive">
+      <div id="symbol" class="symbol" aria-hidden="true">●</div>
+      <div>
+        <h2 id="title">Pico is starting</h2>
+        <p id="body">Connecting to this device's Pico service core.</p>
+      </div>
+    </section>
+    <p id="scope" class="scope" hidden>
+      Recovery decisions arrive with the ADR 0112 S3 ceremony. This C2 surface
+      raises the alarm and identifies the signed recovery; it does not pretend
+      that closing this window vetoes anything.
+    </p>
+    <div class="actions">
+      <button id="check" type="button">Check now</button>
+      <button id="close" class="secondary" type="button">Close</button>
+    </div>
+  </main>
+  <script type="module" src="../renderer.js"></script>
+</body>
+</html>

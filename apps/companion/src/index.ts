@@ -17,6 +17,7 @@ export type {
   PicoCompanionLifecycleReader,
   PicoCompanionLifecycleSnapshot,
   PicoCompanionNotificationAdapter,
+  PicoCompanionPendingRecoveryAlarm,
   StartPicoCompanionAlarmCarrierInput,
 } from './alarm-carrier.js';
 export {
