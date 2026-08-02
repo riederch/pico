@@ -118,18 +118,19 @@ Geplant ist, das Repository in einen Webchat einzuspielen und dort zu
 arbeiten. Diese Sitzung ist dort nicht dabei, also existiert nur, was im
 Repository liegt. Offen sind daher:
 
-- **Messinstrument nach `tools/`** und die vermessene Referenzgeometrie als
-  normatives Dokument: Maszkonvention Kopfbreite gleich 1 mit Kopfmitte als
-  Ursprung, Hals 0,52 bei y -0,363, breiteste Kopfstelle bei -0,06,
-  Rumpfkernprofil, Armmittellinie, Brustkern, Schwebering.
-- **Das Messprotokoll**: Hologramm-Panel, Titelzeile und Leuchtelemente
-  ausschliessen, Kern getrennt von den Armen messen. Jeder dieser Punkte war
-  erst ein Fehler; ohne sie sind die Zahlen falsch und niemand merkt es.
-- **Ein Modellierauftrag** in der Form der bestehenden Briefs.
-- **Ein schmaler Einstiegspunkt**, der einer frischen Sitzung sagt, welche
-  drei Dokumente sie liest und welche 124 ADRs nicht.
-- **Zustandssatz und Kamerasatz** als Umfang der Beauftragung. Beides
-  bestimmt den externen Aufwand und ist noch nicht entschieden.
+Erledigt am 2026-08-02: Architektur als ADR 0124, Messwerte und Messprotokoll
+als `Character_Geometry_Measurements.md`, Beauftragung als
+`Character_Core_Modeling_Brief.md`, Messinstrument als
+`tools/character-silhouette/`, Einstiegspunkt in `.agent-context.md`.
+
+Offen bleibt nur noch:
+
+- **`character:measure` als Skript in `package.json`.** Nicht ergaenzt, weil
+  die Datei derzeit die unfertigen ADR-0113-C3-Aenderungen traegt und ein
+  Commit sie mitnehmen wuerde. Nachziehen, sobald C3 abgeschlossen ist.
+- **Der C3-Block selbst.** Solange er offen im Baum liegt, ist
+  `release:verify` rot, und eine frische Sitzung wuerde fremde Fehler
+  diagnostizieren.
 
 ### Verhaeltnis zum PAS-Auftrag
 
