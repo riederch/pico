@@ -78,6 +78,7 @@ export {
 export {
   compareCustomAssetReferencesV1,
   customAssetFallbackClothingFamiliesV1,
+  deriveCompatibilityClothingV1,
   customAssetKindIdsV1,
   customAssetKindsV1,
   customAssetMediaTypeIdsV1,
@@ -98,8 +99,10 @@ export {
 } from './appearance-document-v1.js';
 
 export {
+  assertAppearanceDocumentRenderableV1,
   createAppearanceDocumentV1,
   validateAppearanceDocumentV1,
+  type PicoSupportedAppearanceExtensionV1,
 } from './appearance-document-v1-validation.js';
 
 export {
@@ -113,6 +116,7 @@ export {
 export {
   appearanceCacheKeyRendererVersionPattern,
   createPicoAppearanceCacheKeyV1,
+  createPicoAppearanceDocumentCacheKeyV1,
   type PicoAppearanceLevelOfDetail,
 } from './appearance-cache-key-v1.js';
 

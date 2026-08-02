@@ -6,7 +6,10 @@ import {
   type PicoAppearanceDocumentV1,
   type PicoCanonicalAppearanceProfile,
 } from './appearance-document-v1.js';
-import { validateAppearanceDocumentV1 } from './appearance-document-v1-validation.js';
+import {
+  validateAppearanceDocumentV1,
+  validateAppearanceDocumentV1WithOptions,
+} from './appearance-document-v1-validation.js';
 import { decodeAppearanceProfileV1, encodeAppearanceProfileV1 } from './appearance-profile-v1-codec.js';
 import {
   compatibilityCoreV1PayloadByteLength,
@@ -157,6 +160,7 @@ export function decodeAppearanceDocumentV1(bytes: Uint8Array): PicoAppearanceDoc
   let compatibilityCore: PicoAppearanceCompatibilityCoreV1 | undefined;
   let canonicalProfile: PicoCanonicalAppearanceProfile | undefined;
   let coreModelVersion = 0;
+  let clothingConsistencyVerifiable = true;
   const customAssets: PicoCustomAppearanceAssetReferenceV1[] = [];
   const extensions: PicoAppearanceExtensionV1[] = [];
   let offset = envelopeHeaderByteLength;
@@ -216,6 +220,10 @@ export function decodeAppearanceDocumentV1(bytes: Uint8Array): PicoAppearanceDoc
         throw new PicoAppearanceError('invalid_record_flags', 'custom asset reference records are never critical');
       }
       if (version !== 1) {
+        // Skipped like any unknown optional record — but the clothing block
+        // of the core can no longer be recomputed, so its consistency check
+        // is relaxed and the embedded fallback is accepted as-is.
+        clothingConsistencyVerifiable = false;
         continue;
       }
       customAssets.push(decodeCustomAssetReferenceV1(Uint8Array.from(payload)));
@@ -240,14 +248,14 @@ export function decodeAppearanceDocumentV1(bytes: Uint8Array): PicoAppearanceDoc
   }
   customAssets.sort(compareCustomAssetReferencesV1);
   extensions.sort(compareAppearanceExtensionsV1);
-  return validateAppearanceDocumentV1({
+  return validateAppearanceDocumentV1WithOptions({
     appearanceEnvelopeVersion: 1,
     coreModelVersion,
     compatibilityCore,
     canonicalProfile,
     customAssets,
     extensions,
-  });
+  }, { clothingConsistencyVerifiable });
 }
 
 export function formatAppearanceDocumentV1(document: PicoAppearanceDocumentV1): string {
@@ -258,7 +266,10 @@ export function parseAppearanceDocumentV1(value: string): PicoAppearanceDocument
   if (typeof value !== 'string' || !value.startsWith(appearanceDocumentV1TextPrefix)) {
     throw new PicoAppearanceError('invalid_text_format', 'document text must start with the exact prefix pad1_');
   }
-  return decodeAppearanceDocumentV1(decodeBase64Url(value.slice(appearanceDocumentV1TextPrefix.length)));
+  return decodeAppearanceDocumentV1(decodeBase64Url(
+    value.slice(appearanceDocumentV1TextPrefix.length),
+    appearanceDocumentV1Limits.maximumTotalByteLength,
+  ));
 }
 
 function encodeCanonicalProfilePayload(

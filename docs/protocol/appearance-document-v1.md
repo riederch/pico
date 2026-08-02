@@ -36,6 +36,12 @@ the document; transport and presentation axes never do.
 The appearance envelope version is deliberately independent of
 `picoProtocolVersion` in `@pico/protocol`.
 
+In Parametric Profile V1 only `generatorVersion` travels in the payload: the
+generator id (`pico.appearance.head-generator`) is fixed by the profile
+family, the head kind and the official generator registry. A future profile
+version may introduce an explicit generator id field; V1 deliberately does
+not.
+
 ## Text representation
 
 ```text
@@ -45,6 +51,10 @@ pad1_<base64url-without-padding>
 - `pad1` stands for PICO Appearance Document Envelope V1. The prefix is
   exact: no padding characters, no alternative casing, no whitespace.
 - Encode → decode → encode is byte-identical.
+- Decoders bound the binary size from the text length **before** decoding:
+  a text that would decode to more than the applicable byte limit (4096 for
+  `pad1_`, 38 for `pa1_`) is refused as `size_limit_exceeded` without
+  allocating a decode buffer.
 - The isolated profile payload keeps its own `pa1_<base64url-without-padding>`
   form. `pa1_` carries only the 18/38-byte profile; `pad1_` carries the full
   document including the compatibility core. The two are not interchangeable.
@@ -192,6 +202,30 @@ An unknown ID is never interpreted as a known family
 wherever semantically possible; a new family is added only when none fits.
 The family is a fallback description, never a full generator description.
 
+### Core V1 is the permanent legacy fallback
+
+Compatibility Core V1 is frozen and mandatory forever:
+
+1. The Core V1 fields, IDs and family lists above are closed. New semantic
+   families are **not** added to Core V1; a future module that fits no
+   existing family projects to `custom_fallback`.
+2. Record `0x01` keeps record version `1` permanently. Richer compatibility
+   data arrives as an additional optional record type or a namespaced
+   extension, never as a revision of this record.
+3. Every future official appearance document, of any envelope or profile
+   version, keeps carrying Core V1, so a first-generation client always
+   renders a recognizable PICO.
+
+Target model:
+
+```text
+Compatibility Core V1       permanently mandatory
+Compatibility Detail V2+    optional additional records
+Canonical Profile Vn        full current representation
+```
+
+Not admissible: a `Compatibility Core V2` replacing V1.
+
 ## Canonical Profile record (`0x02`)
 
 | Field | Type |
@@ -229,16 +263,26 @@ compatibility core and must be able to re-encode the exact original payload
 ## Compatibility core consistency
 
 When a document is created, the compatibility core is always computed from
-the full profile via the normative projection — never supplied by hand.
+the full document content — profile plus custom-asset references — via the
+normative projection, never supplied by hand.
 
-When a document is decoded and the profile version is locally understood, the
-embedded core must equal the normative projection of the profile. On any
-difference the document is rejected as inconsistent
-(`compatibility_core_mismatch`); neither value is silently preferred and no
-profile byte is modified. When the profile version is unknown, the core is
-used as-is — an old client cannot recompute a projection it does not know.
+When a document is decoded and its content is locally understood, the
+embedded core must equal the normative projection. On any difference the
+document is rejected as inconsistent (`compatibility_core_mismatch`);
+neither value is silently preferred and no profile byte is modified. When
+the profile version is unknown, the core is used as-is — an old client
+cannot recompute a projection it does not know.
 
-## Projection V1: Profile V1 → Compatibility Core V1
+Partial understanding of custom assets: a decoder that skipped custom-asset
+records of an **unknown version** cannot recompute the clothing derivation.
+It accepts the clothing block of the embedded core as-is (that block exists
+for exactly this situation) while still enforcing every other consistency
+rule. Such a partially understood document is not canonically
+re-emittable — the strict validation used by encoders refuses a clothing
+claim its visible content cannot support — so it is forwarded as its
+original bytes, never re-encoded.
+
+## Projection V1: Profile V1 + custom assets → Compatibility Core V1
 
 Deterministic, integer-only, no renderer/device/locale/time dependency.
 These rules and constants are normative for projection version 1 and are
@@ -247,8 +291,16 @@ frozen by `docs/design-system/07_Governance/parametric-appearance-v1-vectors.jso
 - `shell = { hue, chroma, lightness }` from the profile shell (drop `gloss`);
 - `face = { hue, blackLevel }` (drop `tint`, `reflectivity`);
 - `trim = { hue, chroma }` (drop `metalness`);
-- clothing is always `{ kind: none, family: none, primaryHue: 0, secondaryHue: 0 }`
-  because Profile V1 defines no clothing;
+- clothing derives from the custom-asset references, because Profile V1
+  itself defines no clothing:
+  - no `custom_clothing` reference →
+    `{ kind: none, family: none, primaryHue: 0, secondaryHue: 0 }`;
+  - exactly one `custom_clothing` reference →
+    `{ kind: custom_fallback, family: fallback.clothingFamily, primaryHue: fallback.primaryHue, secondaryHue: fallback.secondaryHue }`,
+    so an older client renders the intended clothing fallback instead of a
+    naked PICO;
+  - more than one `custom_clothing` reference is invalid in V1
+    (`invalid_custom_asset_reference`), which also refuses duplicates;
 - standard antenna: `{ kind: standard_antenna, family: standard_antenna, primaryHue: 0, length: 0, volume: 0, parting: 0 }`;
 - procedural head module:
   - `primaryHue = material.hue`;
@@ -289,6 +341,13 @@ Rules:
 
 - no URL field and no embedded image bytes in the canonical identity record;
 - the asset is addressed by SHA-256 only;
+- V1 allows at most one `custom_clothing` reference per document; a second
+  one — including a duplicate — is refused
+  (`invalid_custom_asset_reference`), because the clothing derivation of the
+  compatibility core must stay unambiguous;
+- the reference's fallback drives the clothing block of the compatibility
+  core (see the projection section), so the fallback is not merely present
+  but actually reaches old clients;
 - the fallback family must be a renderable standard family — `none` and
   `custom_fallback` are refused (`invalid_custom_asset_reference`), so a
   missing, refused or invalid asset never yields an invisible or broken PICO;
@@ -328,6 +387,15 @@ Rules:
   claimed; decoding alone does not execute anything;
 - extension payloads are canonically opaque bytes whose own semantics need
   their own version.
+
+The transport decoder cannot know what an application understands, so the
+critical-extension contract is enforced by a separate renderability check:
+`assertAppearanceDocumentRenderableV1(document, { supportedExtensions })`
+in `@pico/appearance` accepts unknown optional extensions, refuses unknown
+critical extensions and refuses known critical extensions in unsupported
+versions (`unsupported_critical_record`). Rendering the compatibility core
+alone stays allowed either way, because a critical extension must never
+bypass the mandatory core.
 
 ## Error classes
 
@@ -402,6 +470,23 @@ record source/target versions and the migration algorithm version, and never
 happen silently through a software update. The V1/V2 vectors pinned by this
 milestone are the first permanent historical basis; fixtures of released
 versions are never deleted or edited.
+
+## Cache keys
+
+Rendered artifacts are fully derived state and may be deleted at any time.
+Two key shapes exist in `@pico/appearance`, both without status, context or
+presentation-quality identity:
+
+```text
+pico-appearance:pa1:<base64url(profile bytes)>:<rendererVersion>:<lod>
+pico-appearance:pad1:<base64url(canonical document bytes)>:<rendererVersion>:<lod>
+```
+
+The `pa1` key covers the profile alone: documents sharing a profile but
+differing in custom assets, extensions or the core model pin share it. Any
+artifact derived from the full document uses the `pad1` key, which covers
+the complete canonical bytes. `rendererVersion` is restricted to
+`[a-z0-9.-]+` so the colon-separated segments stay unambiguous.
 
 ## Golden vectors and fixtures
 

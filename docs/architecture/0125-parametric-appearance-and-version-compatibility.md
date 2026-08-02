@@ -128,13 +128,24 @@ record, byte-for-byte unchanged, and keeps its isolated `pa1_` text form.
 
 Every document carries, besides the full profile, a small permanently stable
 semantic projection: shell/face/trim base colours, a coarse semantic head
-family with hue/length/volume/parting, and a clothing family (currently
-`none`; the clothing families exist now so later custom clothing never
-leaves an old client without a fallback). Family IDs are published, never
-reused, never reordered. The projection from Profile V1 is deterministic,
-integer-only, has published thresholds and is frozen by golden vectors — the
-thresholds live in the protocol specification and the governance vector
-file, not only in code.
+family with hue/length/volume/parting, and a clothing block. The clothing
+block derives from the custom-asset references, because Profile V1 defines
+no clothing: without a custom clothing reference it is `none`, with exactly
+one it carries `custom_fallback` plus that reference's fallback family and
+hues — so the fallback actually reaches old clients instead of merely being
+declared. More than one custom clothing reference is invalid in V1. Family
+IDs are published, never reused, never reordered. The projection over
+profile and custom assets is deterministic, integer-only, has published
+thresholds and is frozen by golden vectors — the thresholds live in the
+protocol specification and the governance vector file, not only in code.
+
+Core V1 is the permanent, mandatory legacy fallback and is frozen as such:
+its fields and family lists are closed forever, new generators project into
+an existing family or `custom_fallback`, richer compatibility data arrives
+as additional optional records or extensions, a future core revision never
+replaces the V1 record, and every future official appearance document keeps
+carrying Core V1. A first-generation client must always be able to render a
+recognizable PICO from it.
 
 ### Backward compatibility is cumulative
 
@@ -155,10 +166,14 @@ An older runtime that does not know a newer profile version renders the
 compatibility core: correct base colours, a similar head-module family, a
 usable clothing fallback. The codec carries the unknown profile payload
 opaquely and re-encodes it byte-identically, so forwarding and storage lose
-nothing. When the profile version *is* understood, the embedded core must
-equal the normative projection; a mismatch rejects the document
-(`compatibility_core_mismatch`) rather than silently preferring either
-value.
+nothing. When the document content *is* understood, the embedded core must
+equal the normative projection over profile and custom assets; a mismatch
+rejects the document (`compatibility_core_mismatch`) rather than silently
+preferring either value. A decoder that skipped custom-asset records of an
+unknown version cannot recompute the clothing derivation: it accepts the
+embedded clothing fallback as-is — that block exists for exactly this case —
+and such a partially understood document is forwarded as its original bytes,
+never re-encoded as canonical.
 
 ### Fork claims and namespaces
 
@@ -188,11 +203,14 @@ a character approval: in this milestone the head generator stays `proposed`.
 
 Custom assets (initially custom clothing) are referenced by SHA-256 with a
 media type and a parametric fallback (renderable clothing family plus hues).
-No URLs, no embedded image bytes, no download in this milestone. A missing,
-refused or invalid asset renders the fallback; it never yields an invisible
-or broken PICO, never overwrites the profile, and never replaces core,
-visor, status light group or rig. Custom assets carry no authority, policy
-or trust meaning.
+No URLs, no embedded image bytes, no download in this milestone. V1 allows
+at most one custom clothing reference per document, so the clothing
+derivation of the compatibility core stays unambiguous, and that fallback is
+projected into the core rather than merely declared. A missing, refused or
+invalid asset renders the fallback; it never yields an invisible or broken
+PICO, never overwrites the profile, and never replaces core, visor, status
+light group or rig. Custom assets carry no authority, policy or trust
+meaning.
 
 ### Presentation quality and animation stay separate
 

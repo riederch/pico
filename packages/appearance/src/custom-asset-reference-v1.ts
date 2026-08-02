@@ -2,6 +2,7 @@ import { PicoAppearanceError } from './appearance-errors.js';
 import {
   picoSemanticClothingFamiliesV1,
   picoSemanticClothingFamilyIdsV1,
+  type PicoCompatibilityCoreClothingKindV1,
   type PicoSemanticClothingFamilyV1,
 } from './compatibility-core-v1.js';
 import {
@@ -145,6 +146,42 @@ export function decodeCustomAssetReferenceV1(bytes: Uint8Array): PicoCustomAppea
       secondaryHue: (bytes[37] << 8) | bytes[38],
     },
   });
+}
+
+/**
+ * Normative clothing derivation for the compatibility core (ADR 0125): no
+ * custom clothing reference projects to `none`; exactly one projects to
+ * `custom_fallback` with that reference's fallback family and hues, so an
+ * older client renders the intended clothing fallback instead of a naked
+ * PICO. V1 allows at most one `custom_clothing` reference — a second one
+ * would make the derivation ambiguous and is refused, which also refuses
+ * duplicates.
+ */
+export function deriveCompatibilityClothingV1(
+  customAssets: readonly PicoCustomAppearanceAssetReferenceV1[],
+): Readonly<{
+  kind: PicoCompatibilityCoreClothingKindV1;
+  family: PicoSemanticClothingFamilyV1;
+  primaryHue: number;
+  secondaryHue: number;
+}> {
+  const clothingReferences = customAssets.filter((reference) => reference.kind === 'custom_clothing');
+  if (clothingReferences.length > 1) {
+    throw new PicoAppearanceError(
+      'invalid_custom_asset_reference',
+      `V1 allows at most one custom_clothing reference, got ${clothingReferences.length}`,
+    );
+  }
+  if (clothingReferences.length === 0) {
+    return { kind: 'none', family: 'none', primaryHue: 0, secondaryHue: 0 };
+  }
+  const { fallback } = clothingReferences[0];
+  return {
+    kind: 'custom_fallback',
+    family: fallback.clothingFamily,
+    primaryHue: fallback.primaryHue,
+    secondaryHue: fallback.secondaryHue,
+  };
 }
 
 /**

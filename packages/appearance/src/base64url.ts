@@ -33,9 +33,20 @@ export function encodeBase64Url(bytes: Uint8Array): string {
   return output;
 }
 
-export function decodeBase64Url(text: string): Uint8Array {
+export function decodeBase64Url(text: string, maximumByteLength?: number): Uint8Array {
   if (text.length % 4 === 1) {
     throw new PicoAppearanceError('invalid_text_format', 'base64url length is not decodable');
+  }
+  const remainder = text.length % 4;
+  const byteLength = Math.floor(text.length / 4) * 3
+    + (remainder === 2 ? 1 : remainder === 3 ? 2 : 0);
+  // Bound the work before any allocation: an oversized foreign text must not
+  // cost a decode buffer it can never legally fill.
+  if (maximumByteLength !== undefined && byteLength > maximumByteLength) {
+    throw new PicoAppearanceError(
+      'size_limit_exceeded',
+      `text encodes ${byteLength} bytes, limit is ${maximumByteLength}`,
+    );
   }
   const values: number[] = [];
   for (const character of text) {
@@ -45,9 +56,6 @@ export function decodeBase64Url(text: string): Uint8Array {
     }
     values.push(value);
   }
-  const remainder = values.length % 4;
-  const byteLength = Math.floor(values.length / 4) * 3
-    + (remainder === 2 ? 1 : remainder === 3 ? 2 : 0);
   const bytes = new Uint8Array(byteLength);
   let write = 0;
   for (let offset = 0; offset + 4 <= values.length; offset += 4) {
@@ -57,7 +65,7 @@ export function decodeBase64Url(text: string): Uint8Array {
     bytes[write + 2] = chunk & 0xff;
     write += 3;
   }
-  const tail = values.length - remainder;
+  const tail = values.length - (values.length % 4);
   if (remainder === 2) {
     const chunk = (values[tail] << 6) | values[tail + 1];
     if ((chunk & 0x0f) !== 0) {

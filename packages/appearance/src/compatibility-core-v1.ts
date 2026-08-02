@@ -7,6 +7,14 @@ import { requireInteger, requirePlainObject, requireString } from './validation-
  * without knowing newer profile versions or generators. IDs and value
  * meanings published here are immutable; removed IDs stay reserved and are
  * never reused.
+ *
+ * Core V1 is the permanent, mandatory legacy fallback of the appearance
+ * document: the family lists below are closed forever, new generators map
+ * into an existing family or `custom_fallback`, and richer compatibility
+ * data arrives as additional optional records or extensions — never as a
+ * replacement of this record. Every future official appearance document
+ * keeps carrying Core V1, so a first-generation client can always render a
+ * recognizable PICO.
  */
 export const picoSemanticHeadFamiliesV1 = [
   'standard_antenna',

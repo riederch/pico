@@ -4,7 +4,7 @@
   "stage": "governance_golden_vectors",
   "status": "proposed",
   "characterDependency": "PICO Character Design v3.2.1",
-  "disclaimer": "Golden vectors freezing the Parametric Appearance Profile V1 codec, the pa1_ text form, the projection to Compatibility Core V1 and its family thresholds (ADR 0125). They grant no character approval, render nothing and publish no runtime, sync or conformance-runner contract.",
+  "disclaimer": "Golden vectors freezing the Parametric Appearance Profile V1 codec, the pa1_ text form, the projection to Compatibility Core V1 (including the custom-asset clothing fallback derivation) and its family thresholds (ADR 0125). They grant no character approval, render nothing and publish no runtime, sync or conformance-runner contract.",
   "projectionThresholds": {
     "asymmetricMinimumAbsoluteSide": 56,
     "longMinimumLength": 176,
@@ -1626,6 +1626,82 @@
         }
       },
       "compatibilityCoreHex": "00d212e000dc3400d724010700c6647a0000000000000000"
+    }
+  ],
+  "customAssetFallbackVectors": [
+    {
+      "name": "custom-clothing-workwear-fallback",
+      "description": "Projection of the neutral antenna profile plus one custom clothing reference: the core clothing block carries the custom_fallback family and hues so an old client never renders a naked PICO.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "customAssets": [
+        {
+          "customAssetSchemaVersion": 1,
+          "kind": "custom_clothing",
+          "sha256Hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+          "mediaType": "image/png",
+          "fallback": {
+            "clothingFamily": "workwear",
+            "primaryHue": 30,
+            "secondaryHue": 200
+          }
+        }
+      ],
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "custom_fallback",
+          "family": "workwear",
+          "primaryHue": 30,
+          "secondaryHue": 200
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724000000000000000203001e00c800"
     }
   ],
   "invalidProfileVectors": [

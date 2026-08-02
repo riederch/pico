@@ -5,6 +5,11 @@ import {
   type PicoAppearanceCompatibilityCoreV1,
   type PicoSemanticHeadFamilyV1,
 } from './compatibility-core-v1.js';
+import {
+  deriveCompatibilityClothingV1,
+  validateCustomAssetReferenceV1,
+  type PicoCustomAppearanceAssetReferenceV1,
+} from './custom-asset-reference-v1.js';
 
 /**
  * Normative thresholds of the Profile V1 -> Compatibility Core V1 projection.
@@ -26,11 +31,12 @@ export const compatibilityProjectionV1Thresholds = Object.freeze({
 });
 
 /**
- * Deterministic, integer-only projection of the full profile onto the stable
- * compatibility core (ADR 0125). No renderer, device, locale, time or random
- * dependency: the same profile always yields the same core, and a document's
- * embedded core must equal this projection whenever the profile version is
- * locally understood.
+ * Deterministic, integer-only projection of the document content — the full
+ * profile plus its custom-asset references — onto the stable compatibility
+ * core (ADR 0125). No renderer, device, locale, time or random dependency:
+ * the same content always yields the same core, and a document's embedded
+ * core must equal this projection whenever its content is locally
+ * understood.
  *
  * Version 1 rules:
  * - shell/face/trim copy their stable colour components and drop the purely
@@ -41,14 +47,20 @@ export const compatibilityProjectionV1Thresholds = Object.freeze({
  *   thresholds (first matching rule wins, see `deriveSemanticHeadFamilyV1`),
  *   `volume` is the integer mean of `width` and `rootSpread`, and `parting`
  *   is `partOffset` when a part seam exists (`partDepth > 0`), otherwise 0;
- * - clothing is always `none` because Profile V1 defines no clothing; the
- *   clothing families exist so later versions keep a fallback on old clients;
+ * - clothing derives from the custom-asset references, because Profile V1
+ *   itself defines no clothing: no `custom_clothing` reference projects to
+ *   `none`, exactly one projects to `custom_fallback` with that reference's
+ *   fallback family and hues, and more than one is invalid in V1 — this is
+ *   what keeps an old client from showing a naked PICO although a clothing
+ *   fallback exists;
  * - status, context and presentation values are never projected.
  */
 export function projectAppearanceProfileV1ToCompatibilityCoreV1(
   profile: PicoAppearanceProfileV1,
+  customAssets: readonly PicoCustomAppearanceAssetReferenceV1[] = [],
 ): PicoAppearanceCompatibilityCoreV1 {
   const validated = validateAppearanceProfileV1(profile);
+  const validatedAssets = customAssets.map((reference) => validateCustomAssetReferenceV1(reference));
   const { shell, face, trim } = validated.surface;
   const head = validated.headIdentity.kind === 'standard_antenna'
     ? {
@@ -66,7 +78,7 @@ export function projectAppearanceProfileV1ToCompatibilityCoreV1(
     face: { hue: face.hue, blackLevel: face.blackLevel },
     trim: { hue: trim.hue, chroma: trim.chroma },
     head,
-    clothing: { kind: 'none', family: 'none', primaryHue: 0, secondaryHue: 0 },
+    clothing: deriveCompatibilityClothingV1(validatedAssets),
   });
 }
 

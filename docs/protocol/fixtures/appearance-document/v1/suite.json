@@ -14,7 +14,7 @@
     "status": "none"
   },
   "compatibilityLevel": "authoritative-codec-vectors",
-  "disclaimer": "Authoritative byte vectors for the PICO Appearance Document Envelope V1 (pad1_) including canonical encoding, safe skipping of unknown optional records, rejection of unknown critical records and the compatibility-core consistency check (ADR 0025 / ADR 0125). No runner, no Pico Link runtime surface, no rendering, no L4 certification and no commercial permission.",
+  "disclaimer": "Authoritative byte vectors for the PICO Appearance Document Envelope V1 (pad1_) including canonical encoding, safe skipping of unknown optional records, rejection of unknown critical records, the custom-asset clothing fallback derivation and the compatibility-core consistency check (ADR 0025 / ADR 0125). No runner, no Pico Link runtime surface, no rendering, no L4 certification and no commercial permission.",
   "positive": [
     {
       "name": "document-antenna-neutral",
@@ -36,9 +36,15 @@
     },
     {
       "name": "document-custom-asset-fallback",
-      "description": "Document carrying a custom clothing asset reference with its mandatory parametric fallback.",
-      "canonicalHex": "504101000073000301010001001800d212e000dc3400d724000000000000000000000000000002010001001a000100010000001201000100d20012e0d6dc00143480d70024c60300000100270000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f03001e00c8",
-      "text": "pad1_UEEBAABzAAMBAQABABgA0hLgANw0ANckAAAAAAAAAAAAAAAAAAACAQABABoAAQABAAAAEgEAAQDSABLg1twAFDSA1wAkxgMAAAEAJwAAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8DAB4AyA"
+      "description": "Document carrying a custom clothing asset reference; the compatibility core clothing block carries that reference's custom_fallback family and hues.",
+      "canonicalHex": "504101000073000301010001001800d212e000dc3400d724000000000000000203001e00c80002010001001a000100010000001201000100d20012e0d6dc00143480d70024c60300000100270000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f03001e00c8",
+      "text": "pad1_UEEBAABzAAMBAQABABgA0hLgANw0ANckAAAAAAAAAAIDAB4AyAACAQABABoAAQABAAAAEgEAAQDSABLg1twAFDSA1wAkxgMAAAEAJwAAAAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8DAB4AyA"
+    },
+    {
+      "name": "document-unknown-custom-asset-version",
+      "description": "A custom-asset record of an unknown version is skipped; the embedded clothing fallback is accepted as-is, and the partially understood document is not canonically re-emittable.",
+      "inputHex": "504101000073000301010001001800d212e000dc3400d724000000000000000203001e00c80002010001001a000100010000001201000100d20012e0d6dc00143480d70024c60300000200270000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f03001e00c8",
+      "partialUnderstanding": true
     },
     {
       "name": "document-unknown-optional-fork-extension",
@@ -189,6 +195,21 @@
       "name": "profile-length-contradiction",
       "bytesHex": "504101000046000201010001001800d212e000dc3400d724000000000000000000000000000002010001001a000100010000001101000100d20012e0d6dc00143480d70024c6",
       "expectedErrorCode": "invalid_length"
+    },
+    {
+      "name": "duplicate-custom-clothing-references",
+      "bytesHex": "5041010000a0000401010001001800d212e000dc3400d724000000000000000203001e00c80002010001001a000100010000001201000100d20012e0d6dc00143480d70024c60300000100270000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f03001e00c80300000100270000fffefdfcfbfaf9f8f7f6f5f4f3f2f1f0efeeedecebeae9e8e7e6e5e4e3e2e1e004000a0014",
+      "expectedErrorCode": "invalid_custom_asset_reference"
+    },
+    {
+      "name": "clothing-fallback-without-custom-asset",
+      "bytesHex": "504101000046000201010001001800d212e000dc3400d724000000000000000203001e00c80002010001001a000100010000001201000100d20012e0d6dc00143480d70024c6",
+      "expectedErrorCode": "compatibility_core_mismatch"
+    },
+    {
+      "name": "clothing-fallback-missing-despite-custom-asset",
+      "bytesHex": "504101000073000301010001001800d212e000dc3400d724000000000000000000000000000002010001001a000100010000001201000100d20012e0d6dc00143480d70024c60300000100270000000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f03001e00c8",
+      "expectedErrorCode": "compatibility_core_mismatch"
     }
   ]
 }

@@ -9,7 +9,7 @@
       "status": "proposed",
       "specPath": "docs/protocol/appearance-document-v1.md",
       "testVectorPath": "docs/design-system/07_Governance/parametric-appearance-v1-vectors.json",
-      "normativeSha256Hex": "eb64e5bd169bd49cc15cbc65e23db0dae0be97920ab43f0577bc516021b2bac5",
+      "normativeSha256Hex": "998ac750d6d3698d239fd68e46f5d0028e3023b3b8d6659b67d75e64e4963db4",
       "firstReleaseVersion": null,
       "supportStatus": "pre_release",
       "parameterDomain": "docs/development/briefs/parametric-appearance-system.md",

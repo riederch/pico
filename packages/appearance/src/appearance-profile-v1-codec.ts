@@ -163,7 +163,10 @@ export function parseAppearanceProfileV1(value: string): PicoAppearanceProfileV1
   if (typeof value !== 'string' || !value.startsWith(appearanceProfileV1TextPrefix)) {
     throw new PicoAppearanceError('invalid_text_format', 'profile text must start with the exact prefix pa1_');
   }
-  return decodeAppearanceProfileV1(decodeBase64Url(value.slice(appearanceProfileV1TextPrefix.length)));
+  return decodeAppearanceProfileV1(decodeBase64Url(
+    value.slice(appearanceProfileV1TextPrefix.length),
+    appearanceProfileV1HeadModuleByteLength,
+  ));
 }
 
 function writeUint16LittleEndian(bytes: Uint8Array, offset: number, value: number): void {

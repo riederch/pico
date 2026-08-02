@@ -56,8 +56,23 @@ interface InvalidProfileVector {
 interface DocumentPositive {
   name: string;
   inputHex?: string;
-  canonicalHex: string;
+  canonicalHex?: string;
   text?: string;
+  partialUnderstanding?: boolean;
+}
+
+interface CustomAssetFallbackVector {
+  name: string;
+  profile: unknown;
+  customAssets: {
+    customAssetSchemaVersion: number;
+    kind: string;
+    sha256Hex: string;
+    mediaType: string;
+    fallback: { clothingFamily: string; primaryHue: number; secondaryHue: number };
+  }[];
+  compatibilityCore: unknown;
+  compatibilityCoreHex: string;
 }
 
 interface DocumentNegative {
@@ -110,6 +125,27 @@ describe('governance golden vectors', () => {
         continue;
       }
       expect(covered.has(family), family).toBe(true);
+    }
+  });
+
+  it('freezes the custom-asset clothing fallback derivation', () => {
+    const vectors = suite.customAssetFallbackVectors as CustomAssetFallbackVector[];
+    expect(vectors.length).toBeGreaterThanOrEqual(1);
+    for (const vector of vectors) {
+      const assets = vector.customAssets.map((asset) => ({
+        customAssetSchemaVersion: asset.customAssetSchemaVersion,
+        kind: asset.kind,
+        sha256: hexToBytes(asset.sha256Hex),
+        mediaType: asset.mediaType,
+        fallback: asset.fallback,
+      }));
+      const core = projectAppearanceProfileV1ToCompatibilityCoreV1(
+        validateAppearanceProfileV1(vector.profile),
+        assets as never,
+      );
+      expect(core, vector.name).toEqual(vector.compatibilityCore);
+      expect(bytesToHex(encodeCompatibilityCoreV1(core)), vector.name).toBe(vector.compatibilityCoreHex);
+      expect(core.clothing.kind, vector.name).toBe('custom_fallback');
     }
   });
 
@@ -176,22 +212,32 @@ describe('appearance document fixture suite', () => {
   it('decodes every positive fixture to its canonical bytes and text', () => {
     expect(positives.length).toBeGreaterThanOrEqual(9);
     for (const fixture of positives) {
-      const input = hexToBytes(fixture.inputHex ?? fixture.canonicalHex);
+      if (fixture.partialUnderstanding) {
+        // A partially understood document decodes and renders from the core,
+        // but must not be canonically re-emittable.
+        const document = decodeAppearanceDocumentV1(hexToBytes(fixture.inputHex as string));
+        expect(document.compatibilityCore.clothing.kind, fixture.name).toBe('custom_fallback');
+        expect(document.customAssets, fixture.name).toHaveLength(0);
+        expectAppearanceError(() => encodeAppearanceDocumentV1(document), 'compatibility_core_mismatch');
+        continue;
+      }
+      const canonicalHex = fixture.canonicalHex as string;
+      const input = hexToBytes(fixture.inputHex ?? canonicalHex);
       const document = decodeAppearanceDocumentV1(input);
-      expect(bytesToHex(encodeAppearanceDocumentV1(document)), fixture.name).toBe(fixture.canonicalHex);
+      expect(bytesToHex(encodeAppearanceDocumentV1(document)), fixture.name).toBe(canonicalHex);
       if (fixture.text !== undefined) {
         expect(formatAppearanceDocumentV1(document), fixture.name).toBe(fixture.text);
         expect(
           bytesToHex(encodeAppearanceDocumentV1(parseAppearanceDocumentV1(fixture.text))),
           fixture.name,
-        ).toBe(fixture.canonicalHex);
+        ).toBe(canonicalHex);
       }
     }
   });
 
   it('rejects every negative fixture with its pinned error code', () => {
     expect(negatives.length).toBeGreaterThanOrEqual(22);
-    const canonical = positives[0].canonicalHex;
+    const canonical = positives[0].canonicalHex as string;
     for (const fixture of negatives) {
       if (fixture.kind === 'json') {
         const document = decodeAppearanceDocumentV1(hexToBytes(canonical));

@@ -317,12 +317,12 @@
     {
       "path": "07_Governance/official-appearance-generators.json",
       "bytes": 695,
-      "sha256": "0862e64a4fb7546f5df4cc2443fff3c8859a60343012afb847a1eb5e4c584fea"
+      "sha256": "8c306f48c0e0574866722863d82029cb0d90832a1e8844a9d4b6616915fd45e4"
     },
     {
       "path": "07_Governance/parametric-appearance-v1-vectors.json",
-      "bytes": 51900,
-      "sha256": "eb64e5bd169bd49cc15cbc65e23db0dae0be97920ab43f0577bc516021b2bac5"
+      "bytes": 54034,
+      "sha256": "998ac750d6d3698d239fd68e46f5d0028e3023b3b8d6659b67d75e64e4963db4"
     },
     {
       "path": "07_Governance/QA_Checklist.md",
