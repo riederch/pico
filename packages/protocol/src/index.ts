@@ -1450,6 +1450,31 @@ export const messageCreatedRoles = [
 
 export type MessageCreatedRole = typeof messageCreatedRoles[number];
 
+// ADR 0116 W1: `system` and `tool` are reserved at the client write path,
+// exactly like the action vocabulary, until a dedicated write path exists
+// whose authority actually is the system or a completed tool run. The full
+// role vocabulary above stays valid for reads and future server writers; the
+// subset below is what `POST /api/events` accepts.
+export const clientWritableMessageCreatedRoles = [
+  'user',
+  'assistant',
+] as const;
+
+// ADR 0116 W2 direction: server-assigned, authorization-relevant provenance.
+// The closed vocabulary is fixed by the ADR; the current runtime (W1) only
+// ever assigns `unattributed`, and only the server assigns at all - a client
+// asserting an origin is refused at the write path.
+export const picoEventOriginClasses = [
+  'person_present',
+  'own_pico',
+  'home_member',
+  'remote_pico',
+  'external_content',
+  'unattributed',
+] as const;
+
+export type PicoEventOriginClass = typeof picoEventOriginClasses[number];
+
 export interface MessageCreatedPayload {
   role: MessageCreatedRole;
   text: string;
@@ -2085,6 +2110,10 @@ export interface PicoEvent<TPayload = unknown> {
   // Additive, optional (ADR 0014 / ADR 0067). Absent is treated as
   // `inline_operational`; existing events stay valid without change.
   payloadPosture?: PayloadPosture;
+  // Additive, optional (ADR 0116 W1). Server-assigned at intake from the
+  // authenticated write authority, never client-assertable. Absent means the
+  // row predates origin labeling or awaits a W2 class - never "trusted".
+  origin?: PicoEventOriginClass;
 }
 
 export interface PicoHealthResponse {

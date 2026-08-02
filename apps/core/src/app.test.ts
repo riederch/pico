@@ -33,6 +33,7 @@ import {
   buildPicoLinkDirectRequestSignatureInput,
   buildPicoLinkDirectResponseSignatureInput,
   deviceSeenStatuses,
+  clientWritableMessageCreatedRoles,
   messageCreatedRoles,
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
@@ -87,6 +88,7 @@ import {
   picoHomeDeviceLifecycleMigrationId,
   picoHomeDeviceRecoveryMigrationId,
   picoIdentityRootRotationMigrationId,
+  picoEventOriginMigrationId,
   picoHomeHostContinuityMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
@@ -382,6 +384,7 @@ describe('Pico Home Core app', () => {
           { id: picoHomeDeviceRecoveryMigrationId, appliedAt: expect.any(String) },
           { id: picoIdentityRootRotationMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeHostContinuityMigrationId, appliedAt: expect.any(String) },
+          { id: picoEventOriginMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
@@ -1804,7 +1807,7 @@ describe('Pico Home Core app', () => {
       expect(response.statusCode).toBe(201);
     }
 
-    for (const role of messageCreatedRoles) {
+    for (const role of clientWritableMessageCreatedRoles) {
       const response = await app.inject({
         method: 'POST',
         url: '/api/events',
@@ -1816,6 +1819,23 @@ describe('Pico Home Core app', () => {
       });
 
       expect(response.statusCode).toBe(201);
+    }
+
+    // ADR 0116 W1: the remaining roles of the full vocabulary are reserved at
+    // the client write path, exactly like the action vocabulary.
+    for (const role of messageCreatedRoles.filter((candidate) => !(clientWritableMessageCreatedRoles as readonly string[]).includes(candidate))) {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'message.created',
+          payload: { role, text: `Message role ${role}` },
+        },
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: 'This message.created role is reserved for a later system or tool write path.' });
     }
 
     for (const mode of avatarModes) {
@@ -1875,6 +1895,69 @@ describe('Pico Home Core app', () => {
     }
 
     await app.close();
+  });
+
+  it('labels unauthenticated writes durably unattributed and refuses a client-asserted origin (ADR 0116 W1)', async () => {
+    // Trusted-local pre-claim path: no token, no operator - `unattributed`.
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath: createDatabasePath(), deviceId: 'test-core' });
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'unattributed row' } },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().event.origin).toBe('unattributed');
+
+    // Durable, not response cosmetics: the label survives into the read path.
+    const listed = await app.inject({ method: 'GET', url: '/api/events?limit=100' });
+    const storedEvent = (listed.json().events as Array<{ eventId: string; origin?: string }>)
+      .find((candidate) => candidate.eventId === created.json().event.eventId);
+    expect(storedEvent?.origin).toBe('unattributed');
+
+    // Origin is server-assigned, never client-assertable - refused loudly.
+    const asserted = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'sneaky' }, origin: 'person_present' },
+    });
+    expect(asserted.statusCode).toBe(400);
+    expect(asserted.json()).toEqual({ error: 'origin is assigned by the server and cannot be written.' });
+
+    await app.close();
+
+    // The static diagnostic token: `unattributed`, per the gate's own words.
+    const tokenApp = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath: createDatabasePath(),
+      deviceId: 'test-core',
+      foundationToken: 'dev-token',
+    });
+    const tokenWrite = await tokenApp.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: { authorization: 'Bearer dev-token' },
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'token row' } },
+    });
+    expect(tokenWrite.statusCode).toBe(201);
+    expect(tokenWrite.json().event.origin).toBe('unattributed');
+    await tokenApp.close();
+
+    // An operator session stays unlabeled until ADR 0116 W2 assigns its
+    // class; absent must never be read as "trusted".
+    const operatorApp = await bootstrappedApp();
+    const login = await operatorApp.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: OPERATOR_PASSPHRASE } });
+    expect(login.statusCode).toBe(201);
+    const operatorWrite = await operatorApp.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${login.json().session as string}` },
+      payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'operator row' } },
+    });
+    expect(operatorWrite.statusCode).toBe(201);
+    expect(operatorWrite.json().event.origin).toBeUndefined();
+    await operatorApp.close();
   });
 
   it('rejects reserved product event types on the foundation API', async () => {

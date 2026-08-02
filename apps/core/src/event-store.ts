@@ -5,6 +5,7 @@ import type {
   PayloadPosture,
   PicoEvent,
   PicoEventAppendResult,
+  PicoEventOriginClass,
   PicoHomeFirstDeviceEvidence,
   PicoHomeContinuityRecord,
   PicoHomeFoundingRecord,
@@ -644,8 +645,9 @@ export class EventStore {
         payload_json,
         signature,
         payload_posture,
+        origin,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     statement.run(
@@ -659,6 +661,7 @@ export class EventStore {
       payloadJson,
       event.signature ?? null,
       event.payloadPosture ?? null,
+      event.origin ?? null,
       new Date().toISOString(),
     );
 
@@ -5968,6 +5971,7 @@ export class EventStore {
       payload: JSON.parse(row.payload_json) as unknown,
       signature: row.signature ?? undefined,
       ...(row.payload_posture ? { payloadPosture: row.payload_posture as PayloadPosture } : {}),
+      ...(row.origin ? { origin: row.origin as PicoEventOriginClass } : {}),
     };
   }
 }
@@ -5987,6 +5991,7 @@ interface EventRow {
   payload_json: string;
   signature: string | null;
   payload_posture: string | null;
+  origin: string | null;
 }
 
 interface PicoHomeClaimStateRow {
@@ -6286,6 +6291,11 @@ function isSameStoredEvent(row: EventRow, event: PicoEvent, payloadJson: string)
     && serializeStoredPayload(row.payload_json) === payloadJson
     && row.signature === (event.signature ?? null)
     && row.payload_posture === (event.payloadPosture ?? null);
+  // `origin` is deliberately absent from this comparison: it is server-assigned
+  // provenance, not client payload. Origin sticks to the content at first
+  // intake (ADR 0116) - an idempotent retry of the same bytes under a
+  // different authority, or across the labeling upgrade, is still the same
+  // event, and a replay never relabels the stored row.
 }
 
 function assertStoredEvent(event: PicoEvent): void {

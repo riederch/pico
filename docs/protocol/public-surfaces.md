@@ -305,6 +305,26 @@ system
 tool
 ```
 
+ADR 0116 W1: `system` and `tool` are reserved at the client write path,
+exactly like the action vocabulary — `POST /api/events` refuses them until a
+dedicated write path exists whose authority actually is the system or a
+completed tool run. The client-writable subset is exported as
+`clientWritableMessageCreatedRoles` (`user`, `assistant`).
+
+#### Event `origin` (ADR 0116 W1)
+
+Stored events carry an additive, optional `origin` field from the closed
+vocabulary `picoEventOriginClasses` (`person_present`, `own_pico`,
+`home_member`, `remote_pico`, `external_content`, `unattributed`). It is
+assigned by the server from the authenticated write authority and is never
+client-assertable; a request body carrying `origin` is refused. The current
+runtime assigns only `unattributed` — to writes under the static diagnostic
+token and to writes on the pre-claim trusted-local path with no credential.
+Operator- and identity-session writes stay unlabeled until ADR 0116 W2
+assigns their classes; an absent `origin` never means "trusted". On a
+duplicate append the stored origin wins: origin sticks to the content at
+first intake, and a replay never relabels the stored row.
+
 #### `avatar.state_changed.payload.mode`
 
 ```text

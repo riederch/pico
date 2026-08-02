@@ -28,12 +28,15 @@ import {
   picoHomeMembershipCredentialSchema,
   picoIdentitySuite,
   protocolCapabilities,
+  clientWritableMessageCreatedRoles,
   memoryRetentionModes,
   realtimeMessageType,
   writablePayloadPostures,
   type FoundationEventPayload,
   type FoundationEventType,
   type MemoryRecordedPayload,
+  type MessageCreatedPayload,
+  type PicoEventOriginClass,
   type MemoryRetentionMode,
   type MemoryTombstonePayload,
   type PayloadPosture,
@@ -202,6 +205,9 @@ interface IncomingEventBody {
   lamport?: unknown;
   payload?: unknown;
   payloadPosture?: unknown;
+  // Never accepted; present so the refusal of a client-asserted origin
+  // (ADR 0116 W1) reads the field instead of casting.
+  origin?: unknown;
 }
 
 interface ValidatedIncomingEventBody {
@@ -3240,6 +3246,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   app.post('/api/events', async (request, reply) => {
     const body = request.body as IncomingEventBody | undefined;
 
+    // ADR 0116 W1: origin is assigned by the server from the write authority
+    // and is never client-assertable - a client that tries is refused loudly
+    // rather than silently corrected.
+    if (isRecord(body) && body.origin !== undefined) {
+      return sendNoStore(reply.code(400), { error: 'origin is assigned by the server and cannot be written.' });
+    }
+
+    // W1's durable label: a row written under the static token - or on the
+    // pre-claim trusted-local path with no credential at all - is
+    // `unattributed`. Operator and identity writes stay unlabeled until ADR
+    // 0116 W2 assigns their classes; absent never means "trusted".
+    const authority = resolveAuthority(request.headers.authorization);
+    const origin: PicoEventOriginClass | undefined =
+      authority.kind === 'operator' || authority.kind === 'pico-identity' ? undefined : 'unattributed';
+
     // memory.recorded is content-splitting and server-derived (ADR 0069): the
     // request carries content, the server stores it and records a reference-only
     // event that never holds the content. It cannot use the generic event path.
@@ -3287,15 +3308,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         ...(request_.summary === undefined ? {} : { summary: request_.summary }),
       };
 
-      const recordedEvent = factory.create({
-        deviceId: request_.deviceId,
-        sessionId: request_.sessionId,
-        type: 'memory.recorded',
-        stream: request_.stream,
-        payload: recordedPayload,
-        remoteLamport: request_.lamport,
-        payloadPosture: 'reference_only',
-      });
+      const recordedEvent = {
+        ...factory.create({
+          deviceId: request_.deviceId,
+          sessionId: request_.sessionId,
+          type: 'memory.recorded',
+          stream: request_.stream,
+          payload: recordedPayload,
+          remoteLamport: request_.lamport,
+          payloadPosture: 'reference_only',
+        }),
+        ...(origin === undefined ? {} : { origin }),
+      };
 
       const recordedAppend = store.append(recordedEvent);
       if (recordedAppend === 'inserted') {
@@ -3312,15 +3336,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return sendNoStore(reply.code(400), { error: validation.error });
     }
 
-    const event = factory.create({
-      deviceId: validation.body.deviceId,
-      sessionId: validation.body.sessionId,
-      type: validation.body.type,
-      stream: validation.body.stream,
-      payload: validation.body.payload,
-      remoteLamport: validation.body.lamport,
-      payloadPosture: validation.body.payloadPosture,
-    });
+    const event = {
+      ...factory.create({
+        deviceId: validation.body.deviceId,
+        sessionId: validation.body.sessionId,
+        type: validation.body.type,
+        stream: validation.body.stream,
+        payload: validation.body.payload,
+        remoteLamport: validation.body.lamport,
+        payloadPosture: validation.body.payloadPosture,
+      }),
+      ...(origin === undefined ? {} : { origin }),
+    };
 
     const appendResult = store.append(event);
 
@@ -4582,6 +4609,17 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
 
   if (!payloadResult.ok) {
     return { ok: false, error: payloadResult.error };
+  }
+
+  // ADR 0116 W1: `system` and `tool` are reserved exactly like the action
+  // vocabulary. A role is earned at the write path, not asserted in the
+  // payload; these two return once a write path exists whose authority
+  // actually is the system or a completed tool run.
+  if (type === 'message.created') {
+    const role = (payloadResult.payload as MessageCreatedPayload).role;
+    if (!(clientWritableMessageCreatedRoles as readonly string[]).includes(role)) {
+      return { ok: false, error: 'This message.created role is reserved for a later system or tool write path.' };
+    }
   }
 
   if (body.payloadPosture !== undefined) {
