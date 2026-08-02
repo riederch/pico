@@ -48,9 +48,8 @@ Vor dem Schreiben zu entscheiden:
   (mit `riskClass` und `requiresConfirmation`) muss darauf aufbauen statt
   denselben Namen zweimal zu vergeben. Auch ADR 0010 (Tool-Policy und
   Executor) und ADR 0048 (Model-Capability-Delegation) sind zu pruefen.
-- **ADR-Nummer.** Die naechste freie Nummer ist 0124, die der
-  PAS-Arbeitsauftrag ebenfalls beansprucht. Wer zuerst schreibt, nimmt 0124;
-  der andere Block nimmt 0125. Nicht doppelt vergeben.
+- **ADR-Nummer 0126.** 0124 ist an die Character-Architektur vergeben, 0125
+  an PAS.
 - **Verhaeltnis zu ADR 0113.** Der Companion ist heute eine einzelne
   Desktop-Praesenz. Ob C1/C2 rueckwirkend als Praesenz beschrieben wird oder
   erst kuenftige Blocks, ist eine bewusste Entscheidung.
@@ -67,16 +66,18 @@ jede PICO-Darstellung im Repository ein Zuschnitt **desselben einen
 Renderings** mit 303x347 Pixeln. Daher stammen zwei bekannte Grenzen: die
 Aufloesungsdecke und die acht Avatar-Zustaende ohne ein einziges Asset.
 
-**Entschieden am 2026-08-02: Weg 3.** Iteration mit dem Auge des Eigentuemers
-in der Schleife, Silhouettenmessung als Gate. Nicht Weg 1 (mehr Referenz-
-ansichten existieren nicht) und nicht Weg 2 (3D-Artist), auch wenn Weg 2 als
-Ergaenzung offen bleibt.
+**Entschieden am 2026-08-02: extern modellieren.** Das Modell entsteht in
+einem Modellierwerkzeug ausserhalb des Repositories; die Silhouettenmessung
+wird damit vom Iterationswerkzeug zur Abnahmepruefung. Die Architektur steht
+als ADR 0124.
 
 ### Was vorliegt
 
-Wegwerf-Prototyp und Messinstrument in `~/Downloads/pico-sdf-prototyp/`,
-bewusst ausserhalb des Repositories: Der Asset-Gate aus dem Design-System
-wuerde ein unregistriertes PICO-Bild zu Recht ablehnen.
+Wegwerf-Prototyp und Messinstrument liegen bislang nur in
+`~/Downloads/pico-sdf-prototyp/`, also unversioniert. Der Prototyp darf dort
+bleiben, das Messinstrument nicht: Es ist die Abnahmepruefung fuer das extern
+modellierte Modell und gehoert nach `tools/`. Ablehnen wuerde der Asset-Gate
+nur die gerenderten Bilder, nicht die Skripte.
 
 - `pico-sdf3.mjs`: PICO als Signed Distance Field, CPU-Raymarching, rund 200
   Zeilen ohne Abhaengigkeiten. Weiche Schatten, Verdeckungsverschattung,
@@ -111,6 +112,25 @@ wuerde ein unregistriertes PICO-Bild zu Recht ablehnen.
 - Messzeiten einkernig, unoptimiert: 256 px rund 1,6 s, 512 px rund 7,8 s,
   Laufzeit-Mimik im Mikrosekundenbereich.
 
+### Vor der Uebergabe an eine frische Sitzung
+
+Geplant ist, das Repository in einen Webchat einzuspielen und dort zu
+arbeiten. Diese Sitzung ist dort nicht dabei, also existiert nur, was im
+Repository liegt. Offen sind daher:
+
+- **Messinstrument nach `tools/`** und die vermessene Referenzgeometrie als
+  normatives Dokument: Maszkonvention Kopfbreite gleich 1 mit Kopfmitte als
+  Ursprung, Hals 0,52 bei y -0,363, breiteste Kopfstelle bei -0,06,
+  Rumpfkernprofil, Armmittellinie, Brustkern, Schwebering.
+- **Das Messprotokoll**: Hologramm-Panel, Titelzeile und Leuchtelemente
+  ausschliessen, Kern getrennt von den Armen messen. Jeder dieser Punkte war
+  erst ein Fehler; ohne sie sind die Zahlen falsch und niemand merkt es.
+- **Ein Modellierauftrag** in der Form der bestehenden Briefs.
+- **Ein schmaler Einstiegspunkt**, der einer frischen Sitzung sagt, welche
+  drei Dokumente sie liest und welche 124 ADRs nicht.
+- **Zustandssatz und Kamerasatz** als Umfang der Beauftragung. Beides
+  bestimmt den externen Aufwand und ist noch nicht entschieden.
+
 ### Verhaeltnis zum PAS-Auftrag
 
 `PICO_Parametric_Appearance_System_Coding_Agent_Brief_v1.0.md` (Fassung 1.1)
@@ -125,9 +145,9 @@ Firefighter, Water). Das Design-System kennt nur die Kontextachse mit acht
 Kontexten; die Preset-Achse steht nirgends. Ersetzt Appearance sie, oder ist
 es eine vierte Achse?
 
-ADR-Nummern: 0124 ist die naechste freie und wird derzeit von drei Vorhaben
-beansprucht (PAS, Multi-Presence, Character-Core-Generator). Wer zuerst
-schreibt, nimmt 0124; nicht doppelt vergeben.
+ADR-Nummern sind vergeben: **0124** ist die Architektur (autorierter
+Character Core und gestufte Darstellung, angelegt 2026-08-02), **0125** ist
+PAS, **0126** ist Multi-Presence.
 
 ## Security-Initiative: Backlog abgearbeitet
 
