@@ -470,12 +470,33 @@ Pico compatibility has at least two different surfaces.
 |---|---|
 | Pico Link | peer communication, client communication, relayed messages, identity-level interaction |
 | Pico Home Link | host claim, move-in, residency, eviction, sync, routing and privacy-domain handling |
+| PICO Appearance | durable parametric appearance identity, its compatibility core and semantic fallbacks |
 
 A project may be compatible with one surface and not the other.
 
 For example, a client may implement Pico Link but not host a Pico Home.
 
 A server may implement Pico Home Link but not act as a peer companion.
+
+### PICO Appearance surface status
+
+The appearance document surface (ADR 0125,
+[`appearance-document-v1.md`](appearance-document-v1.md)) is, after the
+current milestone, implemented only as a package/codec contract:
+`@pico/appearance` encodes, decodes, validates and projects the `pad1_`
+appearance document and the `pa1_` profile payload, with authoritative
+fixtures under `fixtures/appearance-document/v1/`. Honest boundary: nothing
+synchronizes appearance profiles over Pico Link or Pico Home Link, no
+Foundation route reads or writes them, no runtime capability advertises
+them, no companion or web surface renders a full PICO from them, no custom
+asset bytes are transferred and no generator is character-approved. The
+appearance envelope carries its own version axis and is deliberately not
+coupled to the Pico protocol version. Capability names
+(`pico.appearance.document.v1`, `pico.appearance.compatibility-core.v1`,
+`pico.appearance.profile.parametric.v1`, `pico.appearance.head-generator.v2`,
+`pico.appearance.custom-asset-reference.v1`) and the typed claim shape
+`PicoAppearanceCompatibilityClaimV1` are defined in `@pico/protocol` as
+name/type contracts only.
 
 ## Experimental versus stable
 

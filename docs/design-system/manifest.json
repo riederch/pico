@@ -315,6 +315,16 @@
       "sha256": "7bba81372e97d687cca982558b0f86e9eb377820ddcc918f4c42374d17e4dbfa"
     },
     {
+      "path": "07_Governance/official-appearance-generators.json",
+      "bytes": 695,
+      "sha256": "0862e64a4fb7546f5df4cc2443fff3c8859a60343012afb847a1eb5e4c584fea"
+    },
+    {
+      "path": "07_Governance/parametric-appearance-v1-vectors.json",
+      "bytes": 51900,
+      "sha256": "eb64e5bd169bd49cc15cbc65e23db0dae0be97920ab43f0577bc516021b2bac5"
+    },
+    {
       "path": "07_Governance/QA_Checklist.md",
       "bytes": 1092,
       "sha256": "70ceea3785c4a5b987d4821f9df94ab8cd9113f443210940646b6c42caa03404"

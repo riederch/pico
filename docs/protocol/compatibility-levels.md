@@ -166,6 +166,42 @@ L5 may require:
 - commercial permission where relevant
 - operational commitments for hosted services
 
+## Compatibility surfaces and claim qualifiers
+
+L0-L5 keep describing the trust and verification grade of a compatibility
+claim. A claim must additionally name the concrete surface and version it is
+about; a level without a surface is not a claim.
+
+Appearance (ADR 0125, [`appearance-document-v1.md`](appearance-document-v1.md))
+is its own claim surface, separate from Pico Link and Pico Home Link. A
+project can support Appearance Compatibility Core v1 without implementing
+Pico Home Link. An L4 claim for appearance presupposes the published
+appearance conformance vectors; an L5 claim stays explicitly bound to
+recognition by the designated Pico rights holder.
+
+Acceptable examples:
+
+```text
+Experimental L1 support for PICO Appearance Compatibility Core v1.
+
+L4 conformance-tested PICO Appearance Document v1 and
+Parametric Appearance Profile v1 support; Head Generator v2 supported.
+
+PICO-derived custom renderer with no PICO appearance compatibility claim.
+```
+
+Not acceptable without the exact surface, version and test basis:
+
+```text
+Fully PICO-compatible appearance renderer.
+
+Supports every PICO design.
+```
+
+There is no appearance fidelity scale replacing L0-L5. If a diagnostic
+fidelity term is ever documented, it may only describe the result of a
+single rendering and never substitutes for a compatibility claim.
+
 ## Commercial hosting
 
 Paid hosting, managed Pico Home services, Pico Home rental, multi-tenant Pico Home operation for money, SaaS operation and commercial support require permission regardless of compatibility level.

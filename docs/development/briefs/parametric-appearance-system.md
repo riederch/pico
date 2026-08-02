@@ -1,12 +1,13 @@
 # PICO Parametric Appearance System (PAS)
 
 **Implementierungsauftrag für den Coding Agenten**  
-**Dokumentversion:** 1.2  
+**Dokumentversion:** 1.3  
 **Datum:** 2026-08-02  
 **Zielrepository:** `pico`  
 **Empfohlenes Modell:** Codex `gpt-5.6-sol + xhigh`  
-**Empfohlener ADR:** `docs/architecture/0125-parametric-appearance-system.md`  
-**Empfohlenes Package:** `packages/appearance` / `@pico/appearance`
+**ADR:** `docs/architecture/0125-parametric-appearance-and-version-compatibility.md`  
+**Protocol-Spezifikation:** `docs/protocol/appearance-document-v1.md`  
+**Package:** `packages/appearance` / `@pico/appearance`
 
 ---
 
@@ -569,6 +570,14 @@ pa1_<base64url-ohne-padding>
 
 Das Präfix gehört nicht zu den Binärbytes.
 
+`pa1_` bleibt das isolierte Profilformat für genau die 18/38 Profilbytes.
+Das portable, versionsübergreifende Appearance-Dokument verwendet zusätzlich
+das Envelope-Format `pad1_...` (ADR 0125,
+`docs/protocol/appearance-document-v1.md`): es trägt denselben Profilpayload
+unverändert als Canonical-Profile-Record plus den verpflichtenden
+Compatibility Core und optionale Records. Beide Formate sind nicht
+austauschbar und dürfen nicht verwechselt werden.
+
 ### 12.6 Codec-Invarianten
 
 Der Codec muss:
@@ -704,10 +713,13 @@ Der Cache ist vollständig abgeleitet und darf jederzeit gelöscht werden.
 
 ### 15.2 Übertragung
 
-Später übertragen werden nur:
-
-- 18 oder 38 Profilbytes;
-- gegebenenfalls eine äußere Protokollversion.
+Die 18/38 Byte sind der vollständige **Profilpayload**, nicht die
+Übertragungseinheit. Später übertragen wird das portable
+Appearance-Dokument (`pad1_`-Envelope nach ADR 0125): kanonischer
+Profilpayload plus Compatibility Core plus optionale Custom-Asset-Referenzen
+und namespaced Extensions, innerhalb der dort festgelegten Größenlimits.
+Der Compatibility Core hält das Dokument auch für Clients lesbar, die die
+Profilversion nicht kennen.
 
 Nicht übertragen werden:
 
@@ -760,32 +772,20 @@ Freigegeben werden:
 
 Ein einzelnes gültiges Profil benötigt danach keinen eigenen Asset-Registry-Eintrag.
 
-### 16.2 Empfohlene Registry
+### 16.2 Registry
+
+Umgesetzt als versionsorientierte Registry nach ADR 0125:
 
 ```text
-docs/design-system/07_Governance/approved-character-generators.json
+docs/design-system/07_Governance/official-appearance-generators.json
 ```
 
-Beispiel:
-
-```json
-{
-  "schemaVersion": 1,
-  "generators": [
-    {
-      "id": "pico-parametric-appearance",
-      "profileVersion": 1,
-      "headGeneratorVersion": 2,
-      "surfaceVersion": 1,
-      "status": "proposed",
-      "characterVersion": "3.3.0",
-      "spec": "07_Governance/Parametric_Appearance_System_v1.0.md",
-      "package": "@pico/appearance",
-      "testVectors": "07_Governance/parametric-appearance-v1-vectors.json"
-    }
-  ]
-}
-```
+Sie führt Generator-ID, Generatorversion, Profile-/Core-Model-Anforderungen,
+Status (`proposed`/`approved`/`deprecated`/`withdrawn`), Spezifikations- und
+Testvektorpfad, den SHA-256-Pin der normativen Vektordatei, Release- und
+Supportstatus, Parameterdomäne und Fallback-Projektionsversion. Der
+Head-Generator v2 steht dort `proposed`; die Registry erteilt keine
+Character-Freigabe.
 
 ### 16.3 Originalreferenzen
 
@@ -807,14 +807,20 @@ ADR 0125 muss ausdrücklich festhalten:
 
 ### 17.1 Dokumentation
 
-Neu anlegen:
+Neu anlegen (umgesetzter Stand):
 
 ```text
-docs/architecture/0125-parametric-appearance-system.md
-docs/design-system/07_Governance/Parametric_Appearance_System_v1.0.md
-docs/design-system/07_Governance/approved-character-generators.json
+docs/architecture/0125-parametric-appearance-and-version-compatibility.md
+docs/protocol/appearance-document-v1.md
+docs/protocol/fixtures/appearance-document/v1/suite.json
+docs/design-system/07_Governance/official-appearance-generators.json
 docs/design-system/07_Governance/parametric-appearance-v1-vectors.json
 ```
+
+Die normativen Parameterdomänen stehen in diesem Brief, die Envelope-,
+Compatibility-Core- und Projektionsregeln in der Protocol-Spezifikation;
+ein separates `Parametric_Appearance_System_v1.0.md` ist dadurch nicht
+erforderlich.
 
 Später nach formaler Designfreigabe:
 
@@ -1081,13 +1087,16 @@ LOD darf weder Silhouette noch Segmentzahl oder Scheitelposition semantisch ver�
 
 ## 22. Milestone-Plan
 
-### Milestone A — Architektur und Governance
+### Milestone A — Architektur, Governance und Kompatibilitätsvertrag
 
 Liefern:
 
 - ADR 0125 im Status `Proposed`;
 - ausdrückliche Erweiterungsklausel gegenüber ADR 0013 und dem Character-Freigabeprozess samt Token-Abgrenzung nach Abschnitt 16.4;
-- Governance-Spezifikation;
+- Erweiterung von ADR 0025 um die Appearance-Kompatibilitätsfläche;
+- Claim-Qualifier in `docs/protocol/compatibility-levels.md` ohne neue L-Stufen;
+- ehrlicher Implementierungsstand in `docs/protocol/public-surfaces.md`;
+- Protocol-Spezifikation `docs/protocol/appearance-document-v1.md`;
 - neue Generator-Registry im Status `proposed`;
 - Antenne-/Kopfmodul-Exklusivität;
 - Zonenmodell;
@@ -1095,21 +1104,30 @@ Liefern:
 - Binärlayout;
 - ausdrückliche Nichtfreigabe als Production Character.
 
-### Milestone B — Package, Codec und Validierung
+### Milestone B — Package, Codecs, Projektion und Conformance
 
 Im selben zusammenhängenden Arbeitsblock wie A liefern:
 
 - `@pico/appearance`;
 - öffentliche Typen;
 - strikte JSON-Validierung;
-- 18-/38-Byte-Codec;
-- Textformat `pa1_...`;
+- 18-/38-Byte-Profilcodec und Textformat `pa1_...`;
+- Compatibility Core V1 mit 24-Byte-Codec;
+- deterministische Projektion Profile V1 → Compatibility Core V1;
+- Appearance-Dokument-Envelope V1 mit Textformat `pad1_...`;
+- Extensions- und Custom-Asset-Referenz-Verträge;
+- Capability-/Claim-Typen in `@pico/protocol`;
 - Cache-Key;
-- Testvektoren;
-- vollständige Unit-Tests;
+- Governance- und Protocol-Testvektoren (Conformance Fixtures);
+- vollständige Unit-, Vektor- und Robustheitstests;
 - Release-Gate erfolgreich.
 
-**Danach stoppen.** Noch keinen Renderer, kein UI, keine Profile-Persistenz und keine Protocol-Änderung.
+**Danach stoppen.** Noch keinen Renderer, kein UI, keine Profile-Persistenz
+und keine Runtime-Protocol-Änderung. Keine Kleidung in
+`PicoAppearanceProfileV1`; Kleidung bleibt vorerst Compatibility-/Custom-
+Asset-Fallbackfläche. Bestehende Bytepositionen des 18-/38-Byte-Profils
+werden nie umgedeutet, und keine grafische Generatorfreigabe wird
+vorgezogen.
 
 ### Milestone C — Deterministischer Geometriekern
 
@@ -1396,6 +1414,19 @@ Erwartete Semantik:
 ---
 
 ## 28. Änderungen
+
+- **1.3 (2026-08-02):** An den Versions- und Kompatibilitätsauftrag
+  (`docs/development/briefs/appearance-versioning-and-adr-0025.md`, ADR 0125)
+  angeglichen. ADR-Titel und -Pfad auf
+  `0125-parametric-appearance-and-version-compatibility.md` umgestellt; die
+  Aussage „später nur 18 oder 38 Byte plus äußere Protokollversion
+  übertragen" ersetzt: die 18/38 Byte sind der vollständige Profilpayload,
+  das portable Appearance-Dokument (`pad1_`) trägt zusätzlich Compatibility
+  Core und Envelope; `pa1_` bleibt als isoliertes Profilformat erhalten;
+  Registry als `official-appearance-generators.json` umgesetzt; Milestones
+  A/B um ADR-0025-, Protocol- und Conformance-Arbeit erweitert. Keine
+  Kleidung im Profil V1, keine Bytepositions-Umdeutung, keine vorgezogene
+  Generatorfreigabe.
 
 - **1.2 (2026-08-02):** ADR-Nummer von 0124 auf **0125** korrigiert; 0124 ist seit demselben Tag an die Character-Architektur vergeben. Der dort beschlossene autorierte Character Core liefert genau die Volumina, gegen die Abschnitt 13.3 seine Kollisionstests fordert — PAS setzt ADR 0124 damit voraus und kommt nach ihm. Brief ins Repository uebernommen unter `docs/development/briefs/`.
 

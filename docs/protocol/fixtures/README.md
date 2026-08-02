@@ -286,6 +286,21 @@ share-envelope/pico.suite.share.v1/canonicalization-negative/wrap-truncated-kek/
 share-envelope/pico.suite.share.v1/canonicalization-negative/envelope-cross-family-label/
 ```
 
+## Current appearance document fixtures
+
+These fixtures carry the authoritative byte vectors for the PICO Appearance
+Document Envelope V1 (`pad1_`, ADR 0125): canonical encoding, non-canonical
+input order, safe skipping of unknown optional records, rejection of unknown
+critical records, duplicate/missing required records, size limits, custom
+asset fallback enforcement and the compatibility-core consistency check. The
+appearance envelope carries its own version axis and is not the Pico protocol
+version. The vectors publish no rendering, no Pico Link sync surface, no L4
+certification and no commercial permission.
+
+```text
+appearance-document/v1/suite.json
+```
+
 ## Current draft Pico Link fixtures
 
 These fixtures are in a separate draft suite and are not part of the Foundation seed suite.

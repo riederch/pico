@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "generators": [
+    {
+      "generatorId": "pico.appearance.head-generator",
+      "generatorVersion": 2,
+      "appearanceProfileVersion": 1,
+      "requiredCoreModelVersion": 0,
+      "status": "proposed",
+      "specPath": "docs/protocol/appearance-document-v1.md",
+      "testVectorPath": "docs/design-system/07_Governance/parametric-appearance-v1-vectors.json",
+      "normativeSha256Hex": "eb64e5bd169bd49cc15cbc65e23db0dae0be97920ab43f0577bc516021b2bac5",
+      "firstReleaseVersion": null,
+      "supportStatus": "pre_release",
+      "parameterDomain": "docs/development/briefs/parametric-appearance-system.md",
+      "fallbackProjectionVersion": 1
+    }
+  ]
+}

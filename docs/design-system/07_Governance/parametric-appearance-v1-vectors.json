@@ -1,0 +1,1967 @@
+{
+  "schema": "pico.appearance.parametric.v1.vector.suite",
+  "schemaVersion": 1,
+  "stage": "governance_golden_vectors",
+  "status": "proposed",
+  "characterDependency": "PICO Character Design v3.2.1",
+  "disclaimer": "Golden vectors freezing the Parametric Appearance Profile V1 codec, the pa1_ text form, the projection to Compatibility Core V1 and its family thresholds (ADR 0125). They grant no character approval, render nothing and publish no runtime, sync or conformance-runner contract.",
+  "projectionThresholds": {
+    "asymmetricMinimumAbsoluteSide": 56,
+    "longMinimumLength": 176,
+    "rearRibbonMinimumSweep": 64,
+    "sideSweptMinimumAbsoluteSide": 24,
+    "topStructuredMinimumLift": 144,
+    "midMinimumLength": 96,
+    "shortSegmentedMinimumSegments": 6
+  },
+  "profileVectors": [
+    {
+      "name": "antenna-neutral-bright",
+      "description": "Standard antenna with the neutral bright surface profile.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100d20012e0d6dc00143480d70024c6",
+      "text": "pa1_AQABANIAEuDW3AAUNIDXACTG",
+      "cacheKeyFragment": "AQABANIAEuDW3AAUNIDXACTG",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d7240000000000000000000000000000"
+    },
+    {
+      "name": "antenna-cool-shell",
+      "description": "Standard antenna with a cool tinted shell.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 225,
+            "chroma": 40,
+            "lightness": 230,
+            "gloss": 210
+          },
+          "face": {
+            "hue": 230,
+            "tint": 22,
+            "blackLevel": 50,
+            "reflectivity": 120
+          },
+          "trim": {
+            "hue": 220,
+            "chroma": 30,
+            "metalness": 200
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100e10028e6d2e600163278dc001ec8",
+      "text": "pa1_AQABAOEAKObS5gAWMnjcAB7I",
+      "cacheKeyFragment": "AQABAOEAKObS5gAWMnjcAB7I",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 225,
+          "chroma": 40,
+          "lightness": 230
+        },
+        "face": {
+          "hue": 230,
+          "blackLevel": 50
+        },
+        "trim": {
+          "hue": 220,
+          "chroma": 30
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00e128e600e63200dc1e0000000000000000000000000000"
+    },
+    {
+      "name": "antenna-warm-shell",
+      "description": "Standard antenna with a warm tinted shell.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 40,
+            "chroma": 36,
+            "lightness": 232,
+            "gloss": 200
+          },
+          "face": {
+            "hue": 40,
+            "tint": 18,
+            "blackLevel": 56,
+            "reflectivity": 110
+          },
+          "trim": {
+            "hue": 38,
+            "chroma": 44,
+            "metalness": 190
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100280024e8c8280012386e26002cbe",
+      "text": "pa1_AQABACgAJOjIKAASOG4mACy-",
+      "cacheKeyFragment": "AQABACgAJOjIKAASOG4mACy-",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 40,
+          "chroma": 36,
+          "lightness": 232
+        },
+        "face": {
+          "hue": 40,
+          "blackLevel": 56
+        },
+        "trim": {
+          "hue": 38,
+          "chroma": 44
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "002824e800283800262c0000000000000000000000000000"
+    },
+    {
+      "name": "antenna-darkest-face",
+      "description": "Darkest allowed face display black level.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 12,
+            "blackLevel": 0,
+            "reflectivity": 90
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100d20012e0d6dc000c005ad70024c6",
+      "text": "pa1_AQABANIAEuDW3AAMAFrXACTG",
+      "cacheKeyFragment": "AQABANIAEuDW3AAMAFrXACTG",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 0
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc0000d7240000000000000000000000000000"
+    },
+    {
+      "name": "antenna-brightest-face",
+      "description": "Brightest allowed face display black level (still a dark-corridor undertone by mapping).",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 12,
+            "blackLevel": 255,
+            "reflectivity": 90
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100d20012e0d6dc000cff5ad70024c6",
+      "text": "pa1_AQABANIAEuDW3AAM_1rXACTG",
+      "cacheKeyFragment": "AQABANIAEuDW3AAM_1rXACTG",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 255
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dcff00d7240000000000000000000000000000"
+    },
+    {
+      "name": "antenna-minimum-trim-metalness",
+      "description": "Minimum trim metalness.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 0
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100d20012e0d6dc00143480d7002400",
+      "text": "pa1_AQABANIAEuDW3AAUNIDXACQA",
+      "cacheKeyFragment": "AQABANIAEuDW3AAUNIDXACQA",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d7240000000000000000000000000000"
+    },
+    {
+      "name": "antenna-maximum-trim-metalness",
+      "description": "Maximum trim metalness.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 255
+          }
+        }
+      },
+      "byteLength": 18,
+      "bytesHex": "01000100d20012e0d6dc00143480d70024ff",
+      "text": "pa1_AQABANIAEuDW3AAUNIDXACT_",
+      "cacheKeyFragment": "AQABANIAEuDW3AAUNIDXACT_",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "standard_antenna",
+          "family": "standard_antenna",
+          "primaryHue": 0,
+          "length": 0,
+          "volume": 0,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d7240000000000000000000000000000"
+    },
+    {
+      "name": "head-compact-unparted",
+      "description": "Compact undivided crown tuft; partDepth 0 keeps the root seamless.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 48,
+              "lift": 120,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200520030780c0676cc0404c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSADB4DAZ2zAQExgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSADB4DAZ2zAQExgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_cap",
+          "primaryHue": 198,
+          "length": 48,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010100c6307a0000000000000000"
+    },
+    {
+      "name": "head-center-part",
+      "description": "Compact crown with a visible centre part seam (work-order example 26.2).",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 54,
+              "lift": 174,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 108,
+              "crownBias": -48,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 205,
+            "chroma": 24,
+            "lightness": 226,
+            "gloss": 220
+          },
+          "face": {
+            "hue": 225,
+            "tint": 26,
+            "blackLevel": 46,
+            "reflectivity": 142
+          },
+          "trim": {
+            "hue": 210,
+            "chroma": 42,
+            "metalness": 206
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0404c6008aa8006cd07e",
+      "text": "pa1_AQEBAM0AGOLc4QAaLo7SACrOAgBSADauDAZ2zAQExgCKqABs0H4",
+      "cacheKeyFragment": "AQEBAM0AGOLc4QAaLo7SACrOAgBSADauDAZ2zAQExgCKqABs0H4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 205,
+          "chroma": 24,
+          "lightness": 226
+        },
+        "face": {
+          "hue": 225,
+          "blackLevel": 46
+        },
+        "trim": {
+          "hue": 210,
+          "chroma": 42
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "top_structured",
+          "primaryHue": 198,
+          "length": 54,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00cd18e200e12e00d22a010400c6367a0000000000000000"
+    },
+    {
+      "name": "head-left-part",
+      "description": "Left part seam inside the shared root zone.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 90,
+              "lift": 100,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 5,
+              "partOffset": -34,
+              "partDepth": 96,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c6020052005a640c0676cc0405c6008aa8de60007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSAFpkDAZ2zAQFxgCKqN5gAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSAFpkDAZ2zAQFxgCKqN5gAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_cap",
+          "primaryHue": 198,
+          "length": 90,
+          "volume": 122,
+          "parting": -34
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010100c65a7ade00000000000000"
+    },
+    {
+      "name": "head-right-part",
+      "description": "Right part seam inside the shared root zone.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 90,
+              "lift": 100,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 5,
+              "partOffset": 40,
+              "partDepth": 96,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c6020052005a640c0676cc0405c6008aa82860007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSAFpkDAZ2zAQFxgCKqChgAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSAFpkDAZ2zAQFxgCKqChgAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_cap",
+          "primaryHue": 198,
+          "length": 90,
+          "volume": 122,
+          "parting": 40
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010100c65a7a2800000000000000"
+    },
+    {
+      "name": "head-flat-side-sweep",
+      "description": "Flat sweep with a moderate lateral direction.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 30,
+              "length": 80,
+              "lift": 60,
+              "sweep": 40,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200521e503c280676cc0404c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSHlA8KAZ2zAQExgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSHlA8KAZ2zAQExgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "side_swept",
+          "primaryHue": 198,
+          "length": 80,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010300c6507a0000000000000000"
+    },
+    {
+      "name": "head-raised-crown",
+      "description": "Raised crown volume.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 70,
+              "lift": 200,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200520046c80c0676cc0404c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSAEbIDAZ2zAQExgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSAEbIDAZ2zAQExgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "top_structured",
+          "primaryHue": 198,
+          "length": 70,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010400c6467a0000000000000000"
+    },
+    {
+      "name": "head-short-rear-flow",
+      "description": "Short rearward flow.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 120,
+              "lift": 80,
+              "sweep": 70,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 5,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 62,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c6020052007850460676cc0405c6008aa800003e7e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSAHhQRgZ2zAQFxgCKqAAAPn4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSAHhQRgZ2zAQFxgCKqAAAPn4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_segmented",
+          "primaryHue": 198,
+          "length": 120,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010200c6787a0000000000000000"
+    },
+    {
+      "name": "head-long-neon-tail",
+      "description": "Long violet neon tail with a lateral part seam (work-order example 26.3).",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 208,
+              "side": 18,
+              "length": 230,
+              "lift": 188,
+              "sweep": 110,
+              "curl": 72,
+              "width": 112,
+              "taper": 216,
+              "twist": -20,
+              "segments": 8,
+              "partOffset": -34,
+              "partDepth": 82,
+              "crownBias": 62,
+              "rootSpread": 146
+            },
+            "material": {
+              "hue": 286,
+              "chroma": 156,
+              "translucency": 184
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 282,
+            "chroma": 34,
+            "lightness": 218,
+            "gloss": 208
+          },
+          "face": {
+            "hue": 258,
+            "tint": 34,
+            "blackLevel": 42,
+            "reflectivity": 150
+          },
+          "trim": {
+            "hue": 286,
+            "chroma": 62,
+            "metalness": 214
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "010101001a0122dad00201222a961e013ed60200d012e6bc6e4870d8ec081e019cb8de523e92",
+      "text": "pa1_AQEBABoBItrQAgEiKpYeAT7WAgDQEua8bkhw2OwIHgGcuN5SPpI",
+      "cacheKeyFragment": "AQEBABoBItrQAgEiKpYeAT7WAgDQEua8bkhw2OwIHgGcuN5SPpI",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 282,
+          "chroma": 34,
+          "lightness": 218
+        },
+        "face": {
+          "hue": 258,
+          "blackLevel": 42
+        },
+        "trim": {
+          "hue": 286,
+          "chroma": 62
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "rear_ribbon",
+          "primaryHue": 286,
+          "length": 230,
+          "volume": 129,
+          "parting": -34
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "011a22da01022a011e3e0106011ee681de00000000000000"
+    },
+    {
+      "name": "head-three-segments",
+      "description": "Minimum segment count.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 40,
+              "lift": 40,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 3,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200520028280c0676cc0403c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSACgoDAZ2zAQDxgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSACgoDAZ2zAQDxgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_cap",
+          "primaryHue": 198,
+          "length": 40,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010100c6287a0000000000000000"
+    },
+    {
+      "name": "head-nine-segments",
+      "description": "Maximum segment count.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 40,
+              "lift": 40,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 9,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200520028280c0676cc0409c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSACgoDAZ2zAQJxgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSACgoDAZ2zAQJxgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_segmented",
+          "primaryHue": 198,
+          "length": 40,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010200c6287a0000000000000000"
+    },
+    {
+      "name": "head-minimum-width",
+      "description": "Minimum lamella width on a long module.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 180,
+              "lift": 60,
+              "sweep": 0,
+              "curl": 6,
+              "width": 0,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c602005200b43c000600cc0404c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSALQ8AAYAzAQExgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSALQ8AAYAzAQExgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "long_segmented",
+          "primaryHue": 198,
+          "length": 180,
+          "volume": 63,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010500c6b43f0000000000000000"
+    },
+    {
+      "name": "head-maximum-width",
+      "description": "Maximum lamella width on a mid-length module.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 100,
+              "lift": 100,
+              "sweep": 12,
+              "curl": 6,
+              "width": 255,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200520064640c06ffcc0404c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSAGRkDAb_zAQExgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSAGRkDAb_zAQExgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "short_segmented",
+          "primaryHue": 198,
+          "length": 100,
+          "volume": 190,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010200c664be0000000000000000"
+    },
+    {
+      "name": "head-asymmetric-side",
+      "description": "Strong lateral displacement dominating the family derivation.",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 80,
+              "length": 100,
+              "lift": 100,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "byteLength": 38,
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c60200525064640c0676cc0404c6008aa80000007e",
+      "text": "pa1_AQEBANIAEuDW3AAUNIDXACTGAgBSUGRkDAZ2zAQExgCKqAAAAH4",
+      "cacheKeyFragment": "AQEBANIAEuDW3AAUNIDXACTGAgBSUGRkDAZ2zAQExgCKqAAAAH4",
+      "compatibilityCore": {
+        "compatibilityCoreVersion": 1,
+        "shell": {
+          "hue": 210,
+          "chroma": 18,
+          "lightness": 224
+        },
+        "face": {
+          "hue": 220,
+          "blackLevel": 52
+        },
+        "trim": {
+          "hue": 215,
+          "chroma": 36
+        },
+        "head": {
+          "kind": "semantic_head_module",
+          "family": "asymmetric",
+          "primaryHue": 198,
+          "length": 100,
+          "volume": 122,
+          "parting": 0
+        },
+        "clothing": {
+          "kind": "none",
+          "family": "none",
+          "primaryHue": 0,
+          "secondaryHue": 0
+        }
+      },
+      "compatibilityCoreHex": "00d212e000dc3400d724010700c6647a0000000000000000"
+    }
+  ],
+  "invalidProfileVectors": [
+    {
+      "name": "wrong-profile-version",
+      "kind": "bytes",
+      "bytesHex": "02000100d20012e0d6dc00143480d70024c6",
+      "expectedErrorCode": "unsupported_profile_version"
+    },
+    {
+      "name": "unknown-head-kind",
+      "kind": "bytes",
+      "bytesHex": "01030100d20012e0d6dc00143480d70024c6",
+      "expectedErrorCode": "invalid_shape"
+    },
+    {
+      "name": "unknown-flags",
+      "kind": "bytes",
+      "bytesHex": "01000101d20012e0d6dc00143480d70024c6",
+      "expectedErrorCode": "unknown_flags"
+    },
+    {
+      "name": "length-17",
+      "kind": "bytes",
+      "bytesHex": "01000100d20012e0d6dc00143480d70024",
+      "expectedErrorCode": "invalid_length"
+    },
+    {
+      "name": "length-19",
+      "kind": "bytes",
+      "bytesHex": "01000100d20012e0d6dc00143480d70024c600",
+      "expectedErrorCode": "invalid_length"
+    },
+    {
+      "name": "length-37",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0404c6008aa8006cd0",
+      "expectedErrorCode": "invalid_length"
+    },
+    {
+      "name": "length-39",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0404c6008aa8006cd07e00",
+      "expectedErrorCode": "invalid_length"
+    },
+    {
+      "name": "antenna-with-head-block",
+      "kind": "bytes",
+      "bytesHex": "01000100d20012e0d6dc00143480d70024c60000000000000000000000000000000000000000",
+      "expectedErrorCode": "head_length_mismatch"
+    },
+    {
+      "name": "hair-without-head-block",
+      "kind": "bytes",
+      "bytesHex": "01010100d20012e0d6dc00143480d70024c6",
+      "expectedErrorCode": "head_length_mismatch"
+    },
+    {
+      "name": "shell-hue-360",
+      "kind": "bytes",
+      "bytesHex": "01000100680112e0d6dc00143480d70024c6",
+      "expectedErrorCode": "value_out_of_range"
+    },
+    {
+      "name": "segments-2",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0402c6008aa8006cd07e",
+      "expectedErrorCode": "value_out_of_range"
+    },
+    {
+      "name": "segments-10",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc040ac6008aa8006cd07e",
+      "expectedErrorCode": "value_out_of_range"
+    },
+    {
+      "name": "part-depth-193",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0404c6008aa800c1d07e",
+      "expectedErrorCode": "value_out_of_range"
+    },
+    {
+      "name": "root-spread-47",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0404c6008aa8006cd02f",
+      "expectedErrorCode": "value_out_of_range"
+    },
+    {
+      "name": "root-spread-193",
+      "kind": "bytes",
+      "bytesHex": "01010100cd0018e2dce1001a2e8ed2002ace0200520036ae0c0676cc0404c6008aa8006cd0c1",
+      "expectedErrorCode": "value_out_of_range"
+    },
+    {
+      "name": "float-value",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210.5,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "expectedErrorCode": "invalid_integer"
+    },
+    {
+      "name": "numeric-string-value",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": "210",
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "expectedErrorCode": "invalid_integer"
+    },
+    {
+      "name": "unknown-json-field",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        },
+        "vendorExtra": true
+      },
+      "expectedErrorCode": "invalid_shape"
+    },
+    {
+      "name": "status-color-in-profile",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        },
+        "statusColor": "green"
+      },
+      "expectedErrorCode": "invalid_shape"
+    },
+    {
+      "name": "context-in-profile",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        },
+        "context": "firefighter"
+      },
+      "expectedErrorCode": "invalid_shape"
+    },
+    {
+      "name": "antenna-with-recipe",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "standard_antenna",
+          "recipe": {
+            "generatorVersion": 2,
+            "geometry": {
+              "anchor": 82,
+              "side": 0,
+              "length": 54,
+              "lift": 120,
+              "sweep": 12,
+              "curl": 6,
+              "width": 118,
+              "taper": 204,
+              "twist": 4,
+              "segments": 4,
+              "partOffset": 0,
+              "partDepth": 0,
+              "crownBias": 0,
+              "rootSpread": 126
+            },
+            "material": {
+              "hue": 198,
+              "chroma": 138,
+              "translucency": 168
+            }
+          }
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "expectedErrorCode": "invalid_shape"
+    },
+    {
+      "name": "hair-missing-recipe",
+      "kind": "json",
+      "profile": {
+        "profileVersion": 1,
+        "headIdentity": {
+          "kind": "procedural_neon_hair"
+        },
+        "surface": {
+          "surfaceVersion": 1,
+          "shell": {
+            "hue": 210,
+            "chroma": 18,
+            "lightness": 224,
+            "gloss": 214
+          },
+          "face": {
+            "hue": 220,
+            "tint": 20,
+            "blackLevel": 52,
+            "reflectivity": 128
+          },
+          "trim": {
+            "hue": 215,
+            "chroma": 36,
+            "metalness": 198
+          }
+        }
+      },
+      "expectedErrorCode": "invalid_shape"
+    }
+  ]
+}

@@ -23,7 +23,11 @@ The fixture layout should let future implementations test:
 The current authoritative local suites also include
 `fixtures/home-device-lifecycle/suite.json`, which pins ADR 0109 activation,
 evidence/submission digest and host-receipt forms without publishing a Pico
-Link compatibility contract.
+Link compatibility contract, and
+`fixtures/appearance-document/v1/suite.json`, which pins the ADR 0125
+appearance document envelope codec (canonical encoding, unknown-record
+handling and compatibility-core consistency) without publishing a Pico Link
+runtime surface or rendering contract.
 
 The immediate goal is to define where and how such fixtures should be organized and to keep the first Foundation examples small enough to review.
 

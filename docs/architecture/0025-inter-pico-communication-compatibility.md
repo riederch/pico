@@ -27,6 +27,9 @@ This is especially important for:
 - service and emergency access
 - trust-signal exchange
 - future signed or encrypted event transport
+- appearance and presentation profiles, animation intents and custom-asset
+  fallbacks, where a compatible fork or a newer official version must not
+  silently reinterpret the same wire semantics
 
 ## Decision
 
@@ -45,6 +48,10 @@ Breaking communication changes must not be hidden behind the same protocol versi
 Operational form:
 
 > A modified Pico or permitted fork server may be different internally. If it claims compatibility with a Pico protocol version, it must speak that protocol faithfully or clearly negotiate a different version or extension.
+
+For appearance:
+
+> A modified implementation may render differently internally. If it claims compatibility with a published PICO appearance profile, core model or generator version, it must preserve that version's canonical identity semantics and compatibility fallback behaviour.
 
 ## License boundary
 
@@ -75,8 +82,18 @@ Pico compatibility has at least two public surfaces:
 |---|---|---|
 | Inter-Pico communication | communication between Pico identities, peers, Full Clients, Light Clients or relayed peers | same message semantics for the advertised protocol version |
 | Pico Home / Core Host interface | communication between a Pico and the host it can claim, join, reside on, sync with or leave | same host claim, residency, eviction, sync, routing and privacy-domain semantics for the advertised protocol version |
+| PICO Appearance / Presentation Profile | exchange of durable parametric appearance identity and its semantic fallbacks | same envelope, profile, compatibility-core and generator semantics for the explicitly claimed versions |
 
 These surfaces may share transport and message formats, but they must be tested as separate compatibility contracts.
+
+Appearance compatibility is testable separately from Pico Link and Pico Home
+Link: a project can support, for example, Appearance Compatibility Core v1
+without implementing Pico Home Link at all. The general L0-L5 claim levels in
+`../protocol/compatibility-levels.md` remain unchanged; appearance adds a
+claim surface, not a new level scale. ADR
+[0125](0125-parametric-appearance-and-version-compatibility.md) and
+`../protocol/appearance-document-v1.md` define the concrete appearance
+contract.
 
 ## Pico Home / Core Host compatibility
 
@@ -111,6 +128,19 @@ A Pico-compatible implementation must:
 - avoid reusing existing message names for incompatible meanings
 - avoid downgrading security or privacy semantics while claiming the same compatibility level
 
+A compatible appearance implementer must additionally:
+
+- preserve the required appearance records
+- interpret claimed versions exactly
+- produce and read the compatibility core correctly
+- skip unknown optional records
+- reject unknown critical records
+- never reuse a generator ID
+- never change a parameter meaning
+- preserve custom-asset fallbacks
+- never confuse presentation quality with identity
+- never treat visual similarity as an identity or trust statement
+
 ## Breaking changes
 
 Breaking changes require at least one of:
@@ -134,6 +164,14 @@ Examples of breaking changes:
 - changing host claim or eviction semantics
 - changing Pico Home residency semantics
 - changing trust-signal evidence classes
+- changing the meaning of an appearance parameter
+- changing the compatibility-core projection
+- changing the semantic family behind an existing family ID
+- changing canonical colour or rounding rules
+- changing a released generator under the same version
+- removing historical official generator support from a newer official runtime
+- making a custom asset mandatory that previously had a fallback
+- treating a formerly optional unknown extension as required
 
 ## Extensions
 
@@ -149,6 +187,12 @@ Extensions should be:
 
 An extension must not redefine the meaning of an existing core field, event type or host operation.
 
+Appearance extensions must additionally be namespaced, versioned,
+length-prefixed, capability-advertised, and either optional or explicitly
+critical; an unknown optional appearance extension must be safely ignorable.
+A critical extension must never be used to bypass the mandatory
+compatibility core.
+
 Example direction:
 
 ```json
@@ -158,6 +202,19 @@ Example direction:
     "pico.core.events.v1": true,
     "pico.home.residency.v1": true,
     "example.fork.custom_visuals.v1": true
+  }
+}
+```
+
+Appearance fork example:
+
+```json
+{
+  "capabilities": {
+    "pico.appearance.document.v1": true,
+    "pico.appearance.compatibility-core.v1": true,
+    "pico.appearance.profile.parametric.v1": true,
+    "example.fork.crystal-head-module.v1": true
   }
 }
 ```
@@ -182,6 +239,24 @@ A release that changes protocol behaviour should add or update tests for:
 - permitted fork-server compatibility expectations
 - relay-safe transport assumptions
 
+Appearance conformance must additionally cover:
+
+- canonical encode/decode roundtrips
+- the compatibility-core projection
+- unknown optional records
+- unknown critical records
+- duplicate required records
+- historical official profiles
+- generator golden vectors
+- custom-asset fallbacks
+- capability claims
+- downgrade to the compatibility core
+- separation of identity and presentation tier
+
+The first authoritative appearance vectors live in
+`../protocol/fixtures/appearance-document/v1/suite.json` and the governance
+vector file pinned by the official generator registry.
+
 The long-term rule should be:
 
 ```text
@@ -201,6 +276,13 @@ Allowed differences:
 - different programming language
 - different internal module layout
 - additional optional features
+
+"Different rendering" stays allowed internally, with one boundary: without
+an appearance claim a fork designs freely; with a compatibility-core claim
+the semantic fallback must be correct; with a concrete generator claim the
+canonical identity of that generator version must be correct. Different
+shaders, LODs and rendering technologies remain allowed as long as the
+claimed design identity is preserved.
 
 Not allowed under the same compatibility claim:
 
@@ -233,6 +315,8 @@ This ADR constrains future implementation of:
 - `0018-presence-context-and-location-sharing.md`
 - `0024-server-bootstrap-tenancy-and-eviction.md`
 - `0034-canonicalization-signature-inputs-and-test-vectors.md`
+- `0124-authored-character-core-and-tiered-presentation.md`
+- `0125-parametric-appearance-and-version-compatibility.md`
 
 It reinforces that interoperability is part of Pico's safety model.
 
@@ -247,6 +331,8 @@ This ADR does not define:
 - final trademark policy
 - final extension registry
 - final backwards compatibility duration
+- the concrete appearance binary codec or its parameter domains, which live
+  in ADR 0125 and `../protocol/appearance-document-v1.md`
 
 ## Open questions
 

@@ -9,6 +9,7 @@ const packageFiles = [
   'apps/core/package.json',
   'apps/vault-daemon/package.json',
   'apps/web/package.json',
+  'packages/appearance/package.json',
   'packages/identity/package.json',
   'packages/protocol/package.json',
   'packages/sync/package.json',

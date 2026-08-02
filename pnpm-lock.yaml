@@ -127,6 +127,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
 
+  packages/appearance: {}
+
   packages/identity:
     dependencies:
       '@pico/protocol':
