@@ -66,7 +66,7 @@ assert(!desktopEntry.includes('\nIcon='),
   'Desktop entry must not invent an unregistered production app icon.');
 
 const packagedApp = JSON.parse(readFileSync(join(appResources, 'package.json'), 'utf8'));
-assert(packagedApp.main === 'dist/main.js'
+assert(packagedApp.main === 'apps/companion-shell/dist/main.js'
   && packagedApp.version === packageJson.version
   && packagedApp.type === 'module', 'Packaged Electron app metadata is invalid.');
 assert(!fileNames(appResources).some((name) => (
@@ -159,7 +159,33 @@ function assertRuntimeOnlyPicoPackages(root) {
     && !names.includes('node_modules/.pnpm/lock.yaml')
     && !names.includes('node_modules/.bin'),
   'Package contains pnpm deployment metadata or build-only command links.');
-  const picoPackageFiles = names.filter((name) => name.includes('/node_modules/@pico/'));
+  for (const workspacePath of [
+    'apps/companion-shell',
+    'apps/companion',
+    'apps/vault-daemon',
+    'packages/identity',
+    'packages/protocol',
+    'packages/vault',
+  ]) {
+    assert(names.includes(`${workspacePath}/package.json`)
+      && names.includes(`${workspacePath}/dist`),
+    `Package is missing the runtime workspace ${workspacePath}.`);
+  }
+  assert(!names.some((name) => (
+    name === 'apps/core'
+    || name.startsWith('apps/core/')
+    || name === 'apps/web'
+    || name.startsWith('apps/web/')
+    || name === 'packages/appearance'
+    || name.startsWith('packages/appearance/')
+    || name === 'packages/sync'
+    || name.startsWith('packages/sync/')
+  )), 'Package contains a workspace outside the companion production closure.');
+  const picoPackageFiles = names.filter((name) => (
+    name.startsWith('apps/')
+    || name.startsWith('packages/')
+    || name.includes('/node_modules/@pico/')
+  ));
   assert(!picoPackageFiles.some((name) => (
     name.includes('/src/')
     || name.includes('/scripts/')

@@ -21,6 +21,14 @@ const scriptPath = fileURLToPath(import.meta.url);
 const appRoot = join(dirname(scriptPath), '..');
 const repoRoot = join(appRoot, '..', '..');
 const packageJson = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8'));
+const productionWorkspacePaths = [
+  'apps/companion-shell',
+  'apps/companion',
+  'apps/vault-daemon',
+  'packages/identity',
+  'packages/protocol',
+  'packages/vault',
+];
 
 export function buildPicoCompanionLinuxPackage() {
   assertLinuxAmd64();
@@ -35,7 +43,7 @@ export function buildPicoCompanionLinuxPackage() {
   );
 
   try {
-    deployProductionWorkspace(deployedApp);
+    assembleProductionWorkspace(workRoot, deployedApp);
     sanitizeDeployedApp(deployedApp);
     mkdirSync(installRoot, { recursive: true });
     cpSync(dirname(electronExecutable), installRoot, {
@@ -98,79 +106,84 @@ function assertLinuxAmd64() {
   }
 }
 
-function deployProductionWorkspace(target) {
+function assembleProductionWorkspace(workRoot, target) {
   const modulesYaml = readFileSync(join(repoRoot, 'node_modules', '.modules.yaml'), 'utf8');
   const installedStore = /^storeDir:\s*(.+)$/m.exec(modulesYaml)?.[1]?.trim();
   if (installedStore === undefined) {
     throw new Error('Cannot locate the pnpm store used by the installed workspace.');
   }
   const storeDir = installedStore.replace(/\/v\d+$/, '');
+  const workspace = join(workRoot, 'workspace');
+  const metadataCache = join(workRoot, 'pnpm-metadata-cache');
+  mkdirSync(workspace, { recursive: true });
+  mkdirSync(metadataCache);
+  for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
+    cpSync(join(repoRoot, path), join(workspace, path));
+  }
+  for (const path of productionWorkspacePaths) {
+    const source = join(repoRoot, path);
+    const destination = join(workspace, path);
+    mkdirSync(destination, { recursive: true });
+    cpSync(join(source, 'package.json'), join(destination, 'package.json'));
+    cpSync(join(source, 'dist'), join(destination, 'dist'), {
+      recursive: true,
+      preserveTimestamps: true,
+    });
+  }
+
+  // pnpm v9 deploy resolves package metadata independently of the frozen
+  // lockfile. A filtered production install consumes the committed lockfile,
+  // while an intentionally empty metadata cache proves that packaging does
+  // not depend on a warmed CI-runner cache.
   run('pnpm', [
     '--offline',
+    '--frozen-lockfile',
     '--store-dir',
     storeDir,
     '--filter',
-    '@pico/companion-shell',
-    'deploy',
+    '@pico/companion-shell...',
+    'install',
     '--prod',
-    target,
-  ], {}, 'inherit');
+    '--ignore-scripts',
+  ], {
+    npm_config_cache_dir: metadataCache,
+  }, 'inherit', workspace);
+
+  mkdirSync(target, { recursive: true });
+  cpSync(join(workspace, 'node_modules'), join(target, 'node_modules'), {
+    recursive: true,
+    preserveTimestamps: true,
+    verbatimSymlinks: true,
+  });
+  for (const path of productionWorkspacePaths) {
+    cpSync(join(workspace, path), join(target, path), {
+      recursive: true,
+      preserveTimestamps: true,
+      verbatimSymlinks: true,
+    });
+  }
 }
 
 function sanitizeDeployedApp(target) {
-  for (const path of ['src', 'scripts', 'tsconfig.json']) {
-    rmSync(join(target, path), { recursive: true, force: true });
-  }
-  // pnpm deploy retains a convenience link back to the selected workspace
-  // package. It is never needed at runtime and would leak the build path.
-  rmSync(
-    join(target, 'node_modules', '.pnpm', 'node_modules', '@pico', 'companion-shell'),
-    { force: true },
-  );
   rmSync(join(target, 'node_modules', '.modules.yaml'), { force: true });
   rmSync(join(target, 'node_modules', '.bin'), { recursive: true, force: true });
   rmSync(join(target, 'node_modules', '.pnpm', 'lock.yaml'), { force: true });
-  removeBuildOnlyFiles(join(target, 'dist'));
-  sanitizeDeployedPicoPackages(target);
+  for (const path of productionWorkspacePaths) {
+    rmSync(join(target, path, 'node_modules', '.bin'), {
+      recursive: true,
+      force: true,
+    });
+    removeBuildOnlyFiles(join(target, path, 'dist'));
+  }
   writeFileSync(join(target, 'package.json'), `${JSON.stringify({
     name: 'pico-companion',
     version: packageJson.version,
     private: true,
     license: packageJson.license,
     type: 'module',
-    main: 'dist/main.js',
+    main: 'apps/companion-shell/dist/main.js',
   }, null, 2)}\n`);
   cpSync(join(repoRoot, 'LICENSE'), join(target, 'LICENSE'));
-}
-
-function sanitizeDeployedPicoPackages(target) {
-  const virtualStore = join(target, 'node_modules', '.pnpm');
-  for (const entry of readdirSync(virtualStore, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith('@pico+')) {
-      continue;
-    }
-    const scopeRoot = join(virtualStore, entry.name, 'node_modules', '@pico');
-    if (!existsSync(scopeRoot)) {
-      continue;
-    }
-    for (const packageEntry of readdirSync(scopeRoot, { withFileTypes: true })) {
-      if (!packageEntry.isDirectory() && !packageEntry.isSymbolicLink()) {
-        continue;
-      }
-      const packageRoot = join(scopeRoot, packageEntry.name);
-      for (const path of ['src', 'scripts', 'tsconfig.json']) {
-        rmSync(join(packageRoot, path), { recursive: true, force: true });
-      }
-      rmSync(join(packageRoot, 'node_modules', '.bin'), {
-        recursive: true,
-        force: true,
-      });
-      const dist = join(packageRoot, 'dist');
-      if (existsSync(dist)) {
-        removeBuildOnlyFiles(dist);
-      }
-    }
-  }
 }
 
 function removeBuildOnlyFiles(directory) {
@@ -268,9 +281,15 @@ function sourceDateEpoch() {
   return run('git', ['show', '-s', '--format=%ct', 'HEAD']).stdout.trim();
 }
 
-function run(command, args, extraEnvironment = {}, stdio = 'pipe') {
+function run(
+  command,
+  args,
+  extraEnvironment = {},
+  stdio = 'pipe',
+  workingDirectory = repoRoot,
+) {
   const result = spawnSync(command, args, {
-    cwd: repoRoot,
+    cwd: workingDirectory,
     encoding: 'utf8',
     env: { ...process.env, ...extraEnvironment },
     stdio,

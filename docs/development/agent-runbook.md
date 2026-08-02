@@ -90,7 +90,15 @@ sind Struktur-, Link- und Diff-Pruefung ausreichend.
 ## Linux-Companion-Paket
 
 Das installierbare Linux-amd64-Artefakt wird ohne Netzwerkzugriff aus dem
-gebauten Workspace und dem vorhandenen pnpm-Store erzeugt:
+gebauten Workspace, `pnpm-lock.yaml` und dem vorhandenen pnpm-Store erzeugt.
+Der Paketpfad baut dazu einen reduzierten Produktions-Workspace auf und fuehrt
+einen gefilterten `--offline --frozen-lockfile --prod`-Install mit deaktivierten
+Install-Skripten aus. Ein frischer, leerer pnpm-Metadaten-Cache ist Teil jedes
+Paketlaufs; ein warmer Runner-Cache ist deshalb keine versteckte Voraussetzung.
+Das pnpm-v9-`deploy` wird bewusst nicht verwendet, weil dessen Aufloesung den
+Lockfile nicht als alleinige Autoritaet behandelt.
+
+Der Einstieg bleibt:
 
 ```bash
 npx pnpm@9.0.0 --filter @pico/companion-shell package:linux

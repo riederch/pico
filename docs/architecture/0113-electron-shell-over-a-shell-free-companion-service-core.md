@@ -192,11 +192,14 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   raises its blocked presentation on the first authenticated read.
 - **C3 - Packaging and budget (implemented):** the Linux-amd64 build emits
   a deterministic Debian package plus SHA-256 sidecar. It carries only
-  built runtime files and internal dependency links, installs the Electron
-  shell under `/opt`, registers its desktop entry and system-wide XDG
-  autostart, retains Chromium's root-owned setuid sandbox helper, and owns
-  neither a person's profile nor Vault data. A temporary-root lifecycle
-  proof performs install, synthetic upgrade, remove and purge while
+  built runtime files and internal dependency links. The production closure
+  is installed offline from the committed frozen lockfile and existing pnpm
+  store under an intentionally empty metadata cache, rather than through the
+  pnpm-v9 deploy path whose resolution is not lockfile-authoritative. The
+  package installs the Electron shell under `/opt`, registers its desktop
+  entry and system-wide XDG autostart, retains Chromium's root-owned setuid
+  sandbox helper, and owns neither a person's profile nor Vault data. A
+  temporary-root lifecycle proof performs install, synthetic upgrade, remove and purge while
   byte-and-mode sentinels prove profile and keyfile preservation. The
   packaged launcher sets both soft and hard core-dump limits to zero before
   `exec`, and the real packaged tray probe proves those inherited limits.
