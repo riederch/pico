@@ -84,13 +84,15 @@ this product form rather than a refinement of it.
 
 - **B1 - Recorded: Done.** The product form is written down, so later work
   stops inheriting the CLI as an assumption.
-- **B2 - Background service: Decided and started.** ADR 0113 decides the
-  shell (Electron over a shell-free service core) and lands the service
-  core with the ADR 0112 alarm carrier as its C1 gate; the shell wiring
-  and packaging are ADR 0113 C2/C3.
-- **B3 - Avatar interaction: Open.** The surface itself, with channel
-  detection and graceful degradation to what the device has; it starts
-  at ADR 0113 C2 with the renderer and its typed bridge.
+- **B2 - Background service: Partially implemented.** ADR 0113 decides the
+  shell (Electron over a shell-free service core), lands the service core
+  in C1 and hosts it in the Electron main process in C2. Packaging,
+  autostart, measured tray budget and owning the Vault-unlock interaction
+  remain C3/later work.
+- **B3 - Avatar interaction: Started.** ADR 0113 C2 supplies the first
+  sandboxed renderer and its closed typed bridge for status/alarm
+  presentation. Channel detection, approvals, settings, ceremonies,
+  graceful degradation and an approved Character asset remain open.
 - **B4 - Approval rendering: Done.** ADR 0106 makes the daemon build both
   canonical signature input and human statement from the same fields.
 - **B5 - Transport: Partially implemented.** ADR 0107 D1-D5 supplies the
@@ -119,8 +121,8 @@ Positive:
 Negative and residual:
 
 - the distance between this product form and the current state remains
-  larger than any single gate suggests; B2 has started (ADR 0113), the
-  interaction surface has not;
+  larger than any single gate suggests; B2 is not packaged and B3's first
+  status surface is not yet the broader avatar interaction model;
 - the ADR 0103 ceremony commands are transitional, and their CLI surface
   will be replaced even though their logic survives;
 - ADR 0097's platform order was reasoned about a daemon, not about a

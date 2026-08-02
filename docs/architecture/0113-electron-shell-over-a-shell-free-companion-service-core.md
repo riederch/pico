@@ -5,9 +5,10 @@
 Accepted; partially implemented. This ADR makes the ADR 0105 B2 shell
 decision the previous ADRs deliberately left open: the person-side
 background companion ships as an Electron application whose main process
-hosts a shell-free service core. Gate C1 - the service core with the ADR
-0112 alarm carrier - lands with this ADR; C2-C4 (shell wiring, packaging,
-further platforms) are open. Both decisions in here - Electron, and
+hosts a shell-free service core. Gates C1 and C2 - the service core plus
+the Linux-first Electron wiring and real-process alarm proof - are
+implemented; C3-C4 (packaging/budget and further platforms) are open.
+Both decisions in here - Electron, and
 service-core-first for the attached milestone - were made explicitly by
 the user on 2026-07-31.
 
@@ -164,12 +165,24 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   recovery exists, resilient to read failures. Deterministic-clock tests
   for cadence and re-arming; a real spawned-process proof for the Linux
   notify-send adapter; the boundary check wired into `release:verify`.
-- **C2 - Shell wiring and real-process alarm (open, network-capable
-  environment):** the Electron main process hosting the service core;
-  tray, notification and wake/network triggers as adapters; the
-  renderer with its typed bridge rendering ADR 0106 statements (B3
-  start); and the alarm carrier proven against a real founded Home the
-  way the recovery suite proves its ceremonies.
+- **C2 - Shell wiring and real-process alarm (implemented):**
+  `apps/companion-shell` pins Electron 43.2.0 and hosts C1 in the main
+  process over the existing profile, Vault-daemon socket and Link client.
+  Tray, critical desktop notifications, resume and false-to-true network
+  regain are adapters around `checkNow`; the default state owns no window,
+  and an interaction/alarm creates a strict sandboxed BrowserWindow that is
+  destroyed on close. The preload exposes only presentation get/subscribe,
+  lifecycle check and window close; renderer-reachable code has no Node or
+  Electron import, parses a closed display-only state, uses textContent and
+  a no-network/no-inline CSP, and renders color+symbol+text without inventing
+  a Character asset. The shell adapter carries all three existing loud
+  statements (pending recovery, verified host rotation, unverified Home
+  continuity), while raw errors are reduced to public categories before IPC.
+  Static boundary checks and an actual Electron smoke prove
+  `contextIsolation`, sandboxing, absent Node/`require` and the exact four
+  bridge methods. A spawned Foundation, a founded Home and two real Vault
+  daemons prove that a real pending recovery reaches the hosted carrier and
+  raises its blocked presentation on the first authenticated read.
 - **C3 - Packaging and budget (open):** Linux packaging first,
   autostart, the measured tray-mode memory budget, and the Electron
   currency check as release obligations.
@@ -193,22 +206,19 @@ Negative and residual:
 
 - Chromium's disk weight and security cadence are now Pico's to carry,
   and the cadence is a standing release obligation;
-- the Electron binary cannot be installed in restricted environments
-  like this one, so shell wiring and packaging (C2/C3) happen on a
-  network-capable machine - the service core is deliberately the part
-  that does not need it;
-- the alarm carrier's end-to-end proof against a real founded Home is
-  deferred to C2; C1 proves cadence, re-arming and the notification
-  path, not the full transport chain;
+- the exact Electron binary is now a pinned build dependency and its
+  Chromium security cadence is operational debt; C3 still has to turn the
+  workspace into a distributable Linux artifact and enforce currency;
 - the service core depends on `@pico/vault-daemon` for the daemon and
   Link clients; extracting those clients into a dedicated package is
   legitimate later hygiene, not a product gate;
 - nobody writes the profile in production yet - enrollment, onboarding
-  and restore gain that duty with their product surfaces (C2/S3).
+  and restore gain that duty with their product surfaces (S3).
 
 ## Relationship to other ADRs
 
-- Decides ADR `0105` B2's shell and starts B2 itself; B3 begins at C2.
+- Decides ADR `0105` B2's shell and implements its first hosted background
+  runtime; B3 has begun with the status renderer and typed bridge.
   The CLI remains transitional tooling.
 - Implements the core of ADR `0112` S2; the cadence and loudness
   contract lives there, the carrier lives here.

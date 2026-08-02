@@ -3,9 +3,9 @@
 ## Status
 
 Accepted; partially implemented. The transitional CLI wrappers (gate S1)
-landed with this ADR; ADR 0113 C1 has since implemented the S2 alarm
-carrier's core, while the shell wiring and the remaining companion
-surfaces (S3/S4) stay open on ADR 0105 B2/B3. This ADR takes over the product half of ADR 0110's R5:
+landed with this ADR; ADR 0113 C1/C2 have since implemented S2's alarm
+carrier, Electron adapters and real-process proof, while the remaining
+companion surfaces (S3/S4) stay open on ADR 0105 B2/B3. This ADR takes over the product half of ADR 0110's R5:
 where a person actually issues a card, restores from it, sees a pending
 alarm, vetoes, and completes a recovery. It deliberately does not choose
 the client shell technology - that choice belongs to the ADR that starts
@@ -162,13 +162,17 @@ transitional for the same reason the other twelve are.
   living device vetoes it, the spent recovery refuses completion, a
   second recovery refuses completion before its window and succeeds
   after it, and the resulting device set is read back through the CLI.
-- **S2 - Background alarm carrier (core implemented via ADR 0113 C1):**
+- **S2 - Background alarm carrier (implemented via ADR 0113 C1/C2):**
   the long-running service performing the authenticated lifecycle read
   on the pinned cadence, raising the loud alarm and keeping it armed
   through pendency. The carrier, its cadence/re-arm behavior and the
-  Linux notification path exist as the tested companion service core;
-  the shell wiring and the end-to-end proof against a real founded Home
-  are ADR 0113 C2.
+  Linux notification path exist as the tested companion service core.
+  The Electron main process now hosts it with tray, critical notification,
+  wake and network-regain adapters; a strict display-only renderer raises
+  the color+symbol+text alarm. The full path is process-proven against a
+  real founded Home and real Vault daemons with pending recovery. Closing
+  the C2 window does not claim to veto; that one-decision ceremony remains
+  S3.
 - **S3 - Companion ceremonies (open, needs ADR 0105 B2/B3):** issuance
   in onboarding, restore as first-run path, veto one decision from the
   alarm, automatic completion with receipt summary - all rendering ADR
@@ -198,14 +202,14 @@ Negative and residual:
 - the six-hour cadence is a product default pinned here; making it a
   per-identity Pico setting is legitimate ADR 0104 work later, never
   host configuration;
-- the shell decision is still open, and S2/S3 stay blocked until an ADR
-  with an implementation milestone makes it.
+- S3 still lacks onboarding/profile creation, restore, veto and completion
+  surfaces; C2 deliberately exposes no fake decision behind window close.
 
 ## Relationship to other ADRs
 
 - Executes ADR `0105` for the recovery slice: the background service and
-  avatar are the surfaces; the CLI stays a transitional tool; B2/B3
-  remain the implementation gates.
+  first typed renderer surface exist; the CLI stays a transitional tool;
+  B2 packaging/unlock ownership and the broader B3 avatar flow remain.
 - Takes over the product half of ADR `0110` R5; its documentation-honesty
   half stays in ADR 0110. The veto residual and 48-hour default are
   unchanged.
