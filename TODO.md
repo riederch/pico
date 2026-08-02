@@ -21,8 +21,8 @@ geprueft darstellt.
 
 ## Mehrere gleichzeitige Praesenzen einer PICO-Identitaet
 
-Arbeitsauftrag liegt vor (`PICO_Multi_Presence_ADR_Arbeitsauftrag.md`, Stand
-2026-08-02). Ziel ist eine Architektur, in der eine PICO-Identitaet
+Arbeitsauftrag liegt als `docs/development/briefs/multi-presence.md` vor
+(Stand 2026-08-02). Ziel ist eine Architektur, in der eine PICO-Identitaet
 gleichzeitig ueber mehrere Geraete und Laufzeitumgebungen praesent ist:
 Mobilgeraet, Desktop, stationaere Installation, eingebettetes System,
 Fahrzeug, verkoerperte Robotik. Leitsatz: eine Praesenz ist keine eigene
@@ -121,24 +121,18 @@ Repository liegt. Offen sind daher:
 Erledigt am 2026-08-02: Architektur als ADR 0124, Messwerte und Messprotokoll
 als `Character_Geometry_Measurements.md`, Beauftragung als
 `Character_Core_Modeling_Brief.md`, Messinstrument als
-`tools/character-silhouette/`, Einstiegspunkt in `.agent-context.md`.
-
-Offen bleibt nur noch:
-
-- **`character:measure` als Skript in `package.json`.** Nicht ergaenzt, weil
-  die Datei derzeit die unfertigen ADR-0113-C3-Aenderungen traegt und ein
-  Commit sie mitnehmen wuerde. Nachziehen, sobald C3 abgeschlossen ist.
-- **Der C3-Block selbst.** Solange er offen im Baum liegt, ist
-  `release:verify` rot, und eine frische Sitzung wuerde fremde Fehler
-  diagnostizieren.
+`tools/character-silhouette/`, Einstiegspunkt in `.agent-context.md` und der
+Root-Aufruf `pnpm character:measure`. Der zuvor blockierende ADR-0113-C3-Block
+ist mit Runtime-Commit `842b7f8` abgeschlossen und `release:verify` wieder
+gruen.
 
 ### Verhaeltnis zum PAS-Auftrag
 
-`PICO_Parametric_Appearance_System_Coding_Agent_Brief_v1.0.md` (Fassung 1.1)
-setzt einen Character Core voraus, den es geometrisch nicht gibt: Die
+`docs/development/briefs/parametric-appearance-system.md` (Fassung 1.2)
+setzte einen Character Core voraus, den es geometrisch nicht gab: Die
 Kollisionstests in Abschnitt 13.3 pruefen gegen Visier, Seitenmodule und
-Schulterraum, also gegen Volumina ohne Repraesentation. PAS parametrisiert
-Haar und Materialfarben, nicht PICO. Der Core gehoert deshalb **vor** PAS.
+Schulterraum. ADR 0124 liefert diese Volumina jetzt. PAS parametrisiert Haar
+und Materialfarben, nicht PICO, und kommt deshalb **nach** dem Core.
 
 Offen zu entscheiden ist ausserdem, wie sich Appearance zu den Style-Presets
 aus ADR 0013 verhaelt (Standard, Technical, Soft, Focus, Night, Work, Home,
