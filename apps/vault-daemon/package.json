@@ -6,6 +6,31 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./device-lifecycle-ceremony": {
+      "types": "./dist/device-lifecycle-ceremony.d.ts",
+      "import": "./dist/device-lifecycle-ceremony.js"
+    },
+    "./host-pin-refresh": {
+      "types": "./dist/host-pin-refresh.d.ts",
+      "import": "./dist/host-pin-refresh.js"
+    },
+    "./link-direct-client": {
+      "types": "./dist/link-direct-client.d.ts",
+      "import": "./dist/link-direct-client.js"
+    }
+  },
   "bin": {
     "pico-vault": "dist/cli.js"
   },

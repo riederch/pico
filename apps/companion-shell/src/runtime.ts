@@ -1,15 +1,17 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import {
-  createPicoCompanionLifecycleReader,
-  defaultPicoCompanionProfilePath,
-  readPicoCompanionProfile,
   startPicoCompanionAlarmCarrier,
   type PicoCompanionAlarmCheck,
   type PicoCompanionAlarmCarrierStatus,
-} from '@pico/companion';
+} from '@pico/companion/alarm-carrier';
+import { createPicoCompanionLifecycleReader } from '@pico/companion/lifecycle-reader';
+import {
+  defaultPicoCompanionProfilePath,
+  readPicoCompanionProfile,
+} from '@pico/companion/profile';
 import type { VaultSodium } from '@pico/vault';
-import { connectPicoVaultDaemonClient } from '@pico/vault-daemon';
+import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { PicoCompanionShellNotifications } from './presentation-adapter.js';
 
 export interface PicoCompanionShellRuntime {

@@ -36,8 +36,11 @@ for (const file of listSourceFiles(join(companionRoot, 'src'))) {
 }
 
 const shellPackageJson = JSON.parse(readFileSync(join(shellRoot, 'package.json'), 'utf8'));
-if (shellPackageJson.devDependencies?.electron !== '43.2.0') {
-  errors.push('apps/companion-shell must pin the reviewed Electron 43.2.0 runtime exactly.');
+const electronSupport = JSON.parse(
+  readFileSync(join(shellRoot, 'electron-support.json'), 'utf8'),
+);
+if (shellPackageJson.devDependencies?.electron !== electronSupport.latestStableVersion) {
+  errors.push('apps/companion-shell must pin the reviewed Electron runtime exactly.');
 }
 for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
   if (shellPackageJson[section]?.electron !== undefined) {

@@ -1,5 +1,5 @@
 import type { VaultSodium } from '@pico/vault';
-import { refreshPicoHomeHostPins } from '@pico/vault-daemon';
+import { refreshPicoHomeHostPins } from '@pico/vault-daemon/host-pin-refresh';
 import { writePicoCompanionProfile, type PicoCompanionProfile } from './profile.js';
 
 /**

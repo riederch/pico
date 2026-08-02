@@ -6,6 +6,35 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./alarm-carrier": {
+      "types": "./dist/alarm-carrier.d.ts",
+      "import": "./dist/alarm-carrier.js"
+    },
+    "./host-repin": {
+      "types": "./dist/host-repin.d.ts",
+      "import": "./dist/host-repin.js"
+    },
+    "./lifecycle-reader": {
+      "types": "./dist/lifecycle-reader.d.ts",
+      "import": "./dist/lifecycle-reader.js"
+    },
+    "./notify": {
+      "types": "./dist/notify.d.ts",
+      "import": "./dist/notify.js"
+    },
+    "./profile": {
+      "types": "./dist/profile.d.ts",
+      "import": "./dist/profile.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "check": "tsc -p tsconfig.json --noEmit",

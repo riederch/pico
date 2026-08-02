@@ -1,10 +1,10 @@
 import type { VaultSodium } from '@pico/vault';
 import {
   createPicoLinkDirectClient,
-  readPicoHomeDeviceLifecycle,
   type PicoLinkDirectClient,
-  type PicoVaultDaemonClient,
-} from '@pico/vault-daemon';
+} from '@pico/vault-daemon/link-direct-client';
+import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
+import { readPicoHomeDeviceLifecycle } from '@pico/vault-daemon/device-lifecycle-ceremony';
 import type {
   PicoCompanionLifecycleReader,
   PicoCompanionLifecycleSnapshot,

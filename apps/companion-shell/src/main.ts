@@ -30,12 +30,20 @@ import {
   type PicoCompanionShellRuntime,
 } from './runtime.js';
 import { picoCompanionPublicServiceErrorReason } from './public-error.js';
+import {
+  picoLinuxProcessTreeMemory,
+  readPicoLinuxCoreDumpLimits,
+  readPicoLinuxProcessTable,
+} from './linux-process-tree.js';
 import { picoCompanionWindowOptions } from './window-options.js';
 
 const rendererPath = join(import.meta.dirname, 'renderer', 'index.html');
 const rendererUrl = pathToFileURL(rendererPath).href;
 const preloadPath = join(import.meta.dirname, 'preload.cjs');
 const assetPath = join(import.meta.dirname, 'assets');
+const trayPssBudgetBytes = 225_000_000;
+const trayPrivateBudgetBytes = 110_000_000;
+const trayMemoryProbe = process.env.PICO_COMPANION_RELEASE_PROBE === 'tray-memory-v1';
 
 let presentation: PicoCompanionPresentation = parsePicoCompanionPresentation({
   kind: 'starting',
@@ -49,6 +57,9 @@ let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let runtime: PicoCompanionShellRuntime | null = null;
 let quitting = false;
+
+app.disableHardwareAcceleration();
+Menu.setApplicationMenu(null);
 
 const presentationPort: PicoCompanionPresentationPort = {
   present(state) {
@@ -85,11 +96,22 @@ if (!app.requestSingleInstanceLock()) {
     // Tray process remains alive; windows are interaction/alarm surfaces only.
   });
   app.whenReady().then(start).catch((error: unknown) => {
+    if (trayMemoryProbe) {
+      const reason = error instanceof Error ? error.message : 'unknown_probe_error';
+      process.stderr.write(`Pico tray memory probe failed: ${reason}\n`);
+      tray?.destroy();
+      app.exit(2);
+      return;
+    }
     presentServiceError(error);
   });
 }
 
 async function start(): Promise<void> {
+  if (trayMemoryProbe) {
+    await runTrayMemoryProbe();
+    return;
+  }
   lockDownRendererSession();
   registerIpc();
   createTray();
@@ -113,6 +135,56 @@ async function start(): Promise<void> {
     runtime = await startPicoCompanionShellRuntime({ notifications, sodium });
   } catch (error) {
     presentServiceError(error);
+  }
+}
+
+async function runTrayMemoryProbe(): Promise<void> {
+  createTray();
+  process.stderr.write('Pico tray memory probe: tray ready.\n');
+  await waitForSodiumReady();
+  process.stderr.write('Pico tray memory probe: sodium ready.\n');
+  await new Promise((resolve) => setTimeout(resolve, 5_000));
+  process.stderr.write('Pico tray memory probe: measuring process tree.\n');
+  const memory = picoLinuxProcessTreeMemory(
+    readPicoLinuxProcessTable('/proc', process.pid),
+    process.pid,
+  );
+  const coreDumpLimits = readPicoLinuxCoreDumpLimits();
+  const underBudget = memory.proportionalBytes < trayPssBudgetBytes
+    && memory.privateBytes < trayPrivateBudgetBytes;
+  process.stdout.write(`${JSON.stringify({
+    schema: 'pico.companion.tray-memory.v1',
+    electronVersion: process.versions.electron,
+    packaged: app.isPackaged,
+    processCount: memory.processCount,
+    rssBytes: memory.rssBytes,
+    proportionalBytes: memory.proportionalBytes,
+    privateBytes: memory.privateBytes,
+    proportionalBudgetBytes: trayPssBudgetBytes,
+    privateBudgetBytes: trayPrivateBudgetBytes,
+    underBudget,
+    coreDumpSoftLimitBytes: coreDumpLimits.softBytes,
+    coreDumpHardLimitBytes: coreDumpLimits.hardBytes,
+  })}\n`);
+  tray?.destroy();
+  app.exit(underBudget ? 0 : 1);
+}
+
+async function waitForSodiumReady(): Promise<void> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      sodium.ready,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => {
+          reject(new Error('tray_memory_probe_sodium_timeout'));
+        }, 10_000);
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
   }
 }
 

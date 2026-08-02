@@ -1,13 +1,17 @@
 import {
+  type PicoCompanionNotificationAdapter,
+  type PicoCompanionPendingRecoveryAlarm,
+} from '@pico/companion/alarm-carrier';
+import {
+  type PicoCompanionHostContinuityAlarm,
+  type PicoCompanionHostContinuityNotifications,
+  type PicoCompanionHostRotationNotice,
+} from '@pico/companion/host-repin';
+import {
   renderPicoCompanionHostContinuityAlarm,
   renderPicoCompanionHostRotationNotice,
   renderPicoCompanionPendingRecoveryAlarm,
-  type PicoCompanionHostContinuityAlarm,
-  type PicoCompanionHostRotationNotice,
-  type PicoCompanionNotificationAdapter,
-  type PicoCompanionPendingRecoveryAlarm,
-} from '@pico/companion';
-import type { PicoCompanionHostContinuityNotifications } from '@pico/companion';
+} from '@pico/companion/notify';
 import {
   parsePicoCompanionPresentation,
   picoCompanionIdlePresentation,

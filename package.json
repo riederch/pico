@@ -18,8 +18,9 @@
     "version:check": "node scripts/check-version.mjs",
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:coverage": "pnpm -r test:coverage",
-    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm companion:check && pnpm build && pnpm check && pnpm test",
-    "companion:check": "node scripts/check-companion-boundary.mjs"
+    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm companion:check && pnpm build && pnpm companion:release-check && pnpm check && pnpm test",
+    "companion:check": "node scripts/check-companion-boundary.mjs && node scripts/check-electron-support.mjs",
+    "companion:release-check": "pnpm --filter @pico/companion-shell verify:linux"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
