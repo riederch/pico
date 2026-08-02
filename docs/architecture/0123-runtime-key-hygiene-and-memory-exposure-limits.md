@@ -5,8 +5,10 @@
 Accepted as an honest statement of what a garbage-collected runtime
 can and cannot promise about secrets in memory, plus the cheap
 mitigations worth taking; the initiative and its scope were chosen by
-the user on 2026-08-01. Gates Z1-Z4 are open. This ADR is deliberately
-small: it decides rules and platform requirements, not new machinery.
+the user on 2026-08-01. Z3 is partially implemented for the ADR 0113 C3
+Linux companion package; Z1, Z2 and Z4 plus the remaining Z3 artifacts are
+open. This ADR is deliberately small: it decides rules and platform
+requirements, not new machinery.
 
 ## Context
 
@@ -35,11 +37,12 @@ anything that crosses it - including reader-access payloads and, on
 some internal seams, key bytes hex-encoded - exists as an
 unzeroizable string on both sides of the socket.
 
-Unregulated today: core dumps (no packaging artifact sets
-`LimitCORE`/`ulimit -c`, so a crash can write every secret the process
-held to disk), swap (no requirement anywhere that a host encrypts
-it), and the claims other documents might someday make about
-"wiping" keys.
+The ADR 0113 C3 Linux companion package now launches with both soft and hard
+core-dump limits at zero and proves the inherited limits in a real packaged
+process. The add-on entrypoint and future appliance/Vault-service artifacts
+do not yet carry that control. Swap remains unregulated (no requirement
+anywhere that a generic host encrypts it), as do the claims other documents
+might someday make about "wiping" keys.
 
 ADR 0097's threat table already concedes the endgame: malware with
 the person's uid reads daemon memory via ptrace or `/proc/pid/mem`,
@@ -149,8 +152,9 @@ P3, not before.
   and the ADR 0102 M6 backlog):** new flows host key-material
   computations in the daemon; a consumer-side raw-key use requires a
   stated impossibility argument in its ADR or review.
-- **Z3 - Platform floor shipped (binds ADR 0113 C3 packaging, the
-  add-on entrypoint and ADR 0027):** core dumps disabled in every
+- **Z3 - Platform floor shipped (partially implemented for the ADR 0113 C3
+  Linux companion package; still binds the add-on entrypoint and ADR 0027):**
+  core dumps disabled in every
   artifact that ships a secret-holding process; encrypted-or-absent
   swap becomes a named requirement gate of the ADR 0027 image;
   deployment docs state the swap lever for hosts Pico does not image.
@@ -162,7 +166,7 @@ P3, not before.
 
 | Attacker | Posture |
 |---|---|
-| Reads a core dump after a crash | Z3 closes the supported paths: no artifact Pico ships permits one. A host with its own crash tooling reopens it - operator lever, named. |
+| Reads a core dump after a crash | Z3 closes the shipped Linux companion path and proves its runtime limits; add-on and future appliance/Vault-service artifacts remain open. A host with its own crash tooling reopens even a closed path - operator lever, named. |
 | Reads swap or a hibernation image from a stolen disk | Closed on the ADR 0027 image by requirement; open and stated on generic hosts. The bounded session means what was swappable is mostly *sealed* material, but unlock windows are real. |
 | Live ptrace / `/proc/pid/mem` with the person's uid | Conceded in ADR 0097, unchanged: endpoint compromise wins. The daemon bounds it to one process and a bounded window; nothing here claims more. |
 | Harvests GC copies from a memory snapshot | The copies exist; discipline cannot zero what GC duplicated. Bounded by session lifetime and by Z2 shrinking how many processes ever held the bytes. This row is why Z4 bans erasure claims. |

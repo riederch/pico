@@ -5,9 +5,9 @@
 Accepted; partially implemented. This ADR makes the ADR 0105 B2 shell
 decision the previous ADRs deliberately left open: the person-side
 background companion ships as an Electron application whose main process
-hosts a shell-free service core. Gates C1 and C2 - the service core plus
-the Linux-first Electron wiring and real-process alarm proof - are
-implemented; C3-C4 (packaging/budget and further platforms) are open.
+hosts a shell-free service core. Gates C1-C3 - the service core, the
+Linux-first Electron wiring and real-process alarm proof, and the Linux
+package/release budget - are implemented; C4 (further platforms) is open.
 Both decisions in here - Electron, and
 service-core-first for the attached milestone - were made explicitly by
 the user on 2026-07-31.
@@ -98,8 +98,15 @@ The companion's default state is tray-only with the window destroyed,
 not hidden - one renderer window exists only during interaction or an
 active alarm. Avatar animation runs only while the window is visible and
 respects reduced motion (design system). The budget is part of the C3
-gate, not prose: tray-mode RSS under 100 MB on the reference Linux
-build, measured, with the measurement kept in the release checks.
+gate, not prose: tray-mode proportional set size (PSS) stays below
+225,000,000 bytes and private resident memory below 110,000,000 bytes on
+the reference Linux build, measured from `/proc/*/smaps_rollup` across the
+whole Electron process tree and retained by the release check. Summed RSS
+is reported but not gated because it counts shared pages once per process
+and therefore does not describe the tree's physical memory cost. This
+metric refinement and the two limits were chosen explicitly by the user on
+2026-08-02 after the packaged process measurement made the original literal
+sub-100-MB summed-RSS target physically false.
 
 ### Chromium currency is a release obligation
 
@@ -183,9 +190,23 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   bridge methods. A spawned Foundation, a founded Home and two real Vault
   daemons prove that a real pending recovery reaches the hosted carrier and
   raises its blocked presentation on the first authenticated read.
-- **C3 - Packaging and budget (open):** Linux packaging first,
-  autostart, the measured tray-mode memory budget, and the Electron
-  currency check as release obligations.
+- **C3 - Packaging and budget (implemented):** the Linux-amd64 build emits
+  a deterministic Debian package plus SHA-256 sidecar. It carries only
+  built runtime files and internal dependency links, installs the Electron
+  shell under `/opt`, registers its desktop entry and system-wide XDG
+  autostart, retains Chromium's root-owned setuid sandbox helper, and owns
+  neither a person's profile nor Vault data. A temporary-root lifecycle
+  proof performs install, synthetic upgrade, remove and purge while
+  byte-and-mode sentinels prove profile and keyfile preservation. The
+  packaged launcher sets both soft and hard core-dump limits to zero before
+  `exec`, and the real packaged tray probe proves those inherited limits.
+  The same probe measures all seven Electron processes without a window;
+  the 2026-08-02 reference run reported 203,916,288 bytes PSS and
+  101,384,192 private bytes below the 225,000,000/110,000,000 gates, with
+  summed RSS 516,308,992 bytes retained as informational evidence. Static
+  upstream evidence pins Electron 43.2.0 as the reviewed latest stable
+  version and expires at the next scheduled stable-major date, so stale
+  currency evidence blocks `release:verify`.
 - **C4 - Further desktop platforms (open):** Windows and macOS from the
   same codebase and discipline.
 
@@ -206,9 +227,9 @@ Negative and residual:
 
 - Chromium's disk weight and security cadence are now Pico's to carry,
   and the cadence is a standing release obligation;
-- the exact Electron binary is now a pinned build dependency and its
-  Chromium security cadence is operational debt; C3 still has to turn the
-  workspace into a distributable Linux artifact and enforce currency;
+- the exact Electron binary and its Chromium security cadence remain
+  operational debt; C3 turns that debt into an expiring release check, so
+  every scheduled stable-major transition requires a fresh upstream review;
 - the service core depends on `@pico/vault-daemon` for the daemon and
   Link clients; extracting those clients into a dedicated package is
   legitimate later hygiene, not a product gate;

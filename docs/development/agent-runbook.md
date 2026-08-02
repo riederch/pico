@@ -13,6 +13,8 @@ Pico ist ein pnpm-/TypeScript-Monorepo. Aktuelle Workspace-Pakete:
   (ADR 0097/0098). Die ADR-0098-E2E-Tests starten den gebauten
   `dist/cli.js` als Kindprozess, weil die synchrone Bridge den aufrufenden
   Thread blockiert; ein `pretest`-Build erzwingt das passende `dist/`.
+- `apps/companion` - shellfreier Lifecycle-, Alarm- und Host-Pin-Servicekern
+- `apps/companion-shell` - Linux-first Electron-Host und Debian-Paketierung
 - `apps/web` - frameworkfreier Foundation-Webclient
 - `packages/protocol` - gemeinsame Runtime-Typen und canonical-byte Builder
 - `packages/sync` - Lamport-/Version-Vector-Grundlagen
@@ -54,7 +56,8 @@ npx pnpm@9.0.0 release:verify
 Enthalten sind:
 
 ```text
-license:check -> version:check -> addon:check -> design-system:check -> build -> check -> test
+license:check -> version:check -> addon:check -> design-system:check ->
+companion:check -> build -> companion:release-check -> check -> test
 ```
 
 Fokussierte Beispiele:
@@ -68,6 +71,9 @@ npx pnpm@9.0.0 --filter @pico/identity test
 npx pnpm@9.0.0 --filter @pico/vault test
 npx pnpm@9.0.0 --filter @pico/vault-daemon test
 npx pnpm@9.0.0 --filter @pico/web test
+npx pnpm@9.0.0 --filter @pico/companion-shell check
+npx pnpm@9.0.0 --filter @pico/companion-shell test
+npx pnpm@9.0.0 character:measure /path/to/candidate.png --core
 ```
 
 Vor jedem Commit mindestens:
@@ -80,6 +86,32 @@ git status --short --branch
 Code-, Protocol-, Release- und produktbezogene Dokumentationsmilestones muessen
 den vollen Release-Gate bestehen. Bei einer rein internen Agent-Doku-Aenderung
 sind Struktur-, Link- und Diff-Pruefung ausreichend.
+
+## Linux-Companion-Paket
+
+Das installierbare Linux-amd64-Artefakt wird ohne Netzwerkzugriff aus dem
+gebauten Workspace und dem vorhandenen pnpm-Store erzeugt:
+
+```bash
+npx pnpm@9.0.0 --filter @pico/companion-shell package:linux
+```
+
+Debian-Paket und SHA-256-Sidecar liegen danach im ignorierten Verzeichnis
+`apps/companion-shell/out/`. Der Release-Check baut das Paket erneut, prueft
+Inhalt, XDG-Autostart, interne Links und fehlende Build-/Profildaten, fuehrt in
+einer temporaeren `fakeroot`-Installation Install, Upgrade, Remove und Purge
+durch und startet das extrahierte Electron real im Tray-only-Modus:
+
+```bash
+npx pnpm@9.0.0 --filter @pico/companion-shell verify:linux
+```
+
+Dafuer werden Linux amd64, `dpkg-deb`, `fakeroot` und entweder eine laufende
+Display-Session oder `xvfb-run` benoetigt. Der Probe schreibt seinen letzten
+Messbericht nach `apps/companion-shell/out/tray-memory-linux-amd64.json`; PSS
+und private residente Bytes sind die Gates, summiertes RSS ist wegen mehrfach
+gezaehlter Shared Pages nur informativ. Alle temporaeren Paket-, Lifecycle- und
+Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
 
 ## Container- und Runtime-Smokes
 
