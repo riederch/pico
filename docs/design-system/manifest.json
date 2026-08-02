@@ -285,6 +285,16 @@
       "sha256": "9a8990ab15bf2dbb25b71980924292fee67c308f7654ab8e2cbdc1420147adf5"
     },
     {
+      "path": "07_Governance/Character_Core_Modeling_Brief.md",
+      "bytes": 6289,
+      "sha256": "0e169df593649bc8ca8e4179418ca5d1f2e356cea25f07cfe48741c19b648533"
+    },
+    {
+      "path": "07_Governance/Character_Geometry_Measurements.md",
+      "bytes": 5664,
+      "sha256": "d64165e53e25348d85fcbefb29f24e8bd304c8ef3f62e47848b7a959bf02a6d3"
+    },
+    {
       "path": "07_Governance/Character_Standard_v3.2.1.md",
       "bytes": 3394,
       "sha256": "679c839c08e2065e5135e758d001900161188e56284ebb445377340d5fa5df84"

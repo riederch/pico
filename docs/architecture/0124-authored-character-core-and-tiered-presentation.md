@@ -137,6 +137,26 @@ contain it. When it arrives:
   plus the renderer plus the parameter domain, the `procedural_generator` class
   proposed for the appearance system, generalised to the core.
 
+### Pose is the bake axis, not state
+
+Seven of the eight avatar states in ADR 0013 change only the status colour and
+the face drawing, both of which the runtime already owns. They need no bake of
+their own. What forces a new bake is a change the runtime cannot fake: a
+different arm position, because a rotated part layer keeps the light it was
+baked with and its joint breaks.
+
+The bake set is therefore sized by pose, and stays small while status stays
+what the design system says it is - colour, symbol and text rather than
+posture.
+
+### A bake is replaced, not versioned
+
+A new bake of an existing pose and camera overwrites the old one. The registry
+pins its hash, so any shipped state stays provable through the registry entry
+and the commit that carried it; keeping superseded bakes beside the current one
+would grow the repository by the full set on every re-bake and buy nothing the
+history does not already give.
+
 ### Baking happens outside the release gate
 
 Bakes are produced by the modeling pipeline, not by the build. A 3D toolchain
