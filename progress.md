@@ -6,7 +6,7 @@
 | --- | --- |
 | Standdatum | 2026-08-02 |
 | Analysierter Branch | main |
-| Analysierter Commit | 5541f85e45db6cc35ffd747d05df232df8f3fb7b |
+| Analysierter Commit | 001ecdd6819d178c9a999229dfd6de2e20ee2b95 |
 | Hinweis | Alle Prozentangaben sind Schätzungen auf Basis des Repository-Stands. |
 
 ## Gesamtstatus
