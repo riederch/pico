@@ -47,6 +47,7 @@ describe('Linux process-tree memory measurement', () => {
       processMemory({
         pid: 11, parentPid: 10, role: 'zygote', rssBytes: 20_000,
         proportionalBytes: 8_000, privateCleanBytes: 2_000, privateDirtyBytes: 4_000,
+        privateHugetlbBytes: 500,
       }),
       processMemory({
         pid: 12, parentPid: 11, role: 'utility', rssBytes: 30_000,
@@ -62,23 +63,27 @@ describe('Linux process-tree memory measurement', () => {
       proportionalBytes: 23_000,
       privateCleanBytes: 6_000,
       privateDirtyBytes: 11_000,
-      privateHugetlbBytes: 0,
-      privateBytes: 17_000,
+      privateHugetlbBytes: 500,
+      privateDirtyAndHugetlbBytes: 11_500,
+      privateBytes: 17_500,
       processMemoryByRole: [
         {
           role: 'browser', processCount: 1, rssBytes: 10_000,
           proportionalBytes: 5_000, privateCleanBytes: 1_000,
-          privateDirtyBytes: 3_000, privateHugetlbBytes: 0, privateBytes: 4_000,
+          privateDirtyBytes: 3_000, privateHugetlbBytes: 0,
+          privateDirtyAndHugetlbBytes: 3_000, privateBytes: 4_000,
         },
         {
           role: 'zygote', processCount: 1, rssBytes: 20_000,
           proportionalBytes: 8_000, privateCleanBytes: 2_000,
-          privateDirtyBytes: 4_000, privateHugetlbBytes: 0, privateBytes: 6_000,
+          privateDirtyBytes: 4_000, privateHugetlbBytes: 500,
+          privateDirtyAndHugetlbBytes: 4_500, privateBytes: 6_500,
         },
         {
           role: 'utility', processCount: 1, rssBytes: 30_000,
           proportionalBytes: 10_000, privateCleanBytes: 3_000,
-          privateDirtyBytes: 4_000, privateHugetlbBytes: 0, privateBytes: 7_000,
+          privateDirtyBytes: 4_000, privateHugetlbBytes: 0,
+          privateDirtyAndHugetlbBytes: 4_000, privateBytes: 7_000,
         },
       ],
     });
@@ -98,6 +103,7 @@ describe('Linux process-tree memory measurement', () => {
       processCount: 2,
       rssBytes: 12_000,
       proportionalBytes: 6_000,
+      privateDirtyAndHugetlbBytes: 3_500,
       privateBytes: 4_500,
       processMemoryByRole: [
         expect.objectContaining({ role: 'browser', processCount: 1 }),

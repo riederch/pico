@@ -31,6 +31,7 @@ export interface PicoLinuxProcessRoleMemory {
   privateCleanBytes: number;
   privateDirtyBytes: number;
   privateHugetlbBytes: number;
+  privateDirtyAndHugetlbBytes: number;
   privateBytes: number;
 }
 
@@ -41,6 +42,7 @@ export interface PicoLinuxProcessTreeMemory {
   privateCleanBytes: number;
   privateDirtyBytes: number;
   privateHugetlbBytes: number;
+  privateDirtyAndHugetlbBytes: number;
   privateBytes: number;
   processMemoryByRole: PicoLinuxProcessRoleMemory[];
 }
@@ -143,6 +145,7 @@ export function picoLinuxProcessTreeMemory(
   let privateCleanBytes = 0;
   let privateDirtyBytes = 0;
   let privateHugetlbBytes = 0;
+  let privateDirtyAndHugetlbBytes = 0;
   let privateBytes = 0;
   let processCount = 0;
   const roleMemory = new Map<PicoLinuxProcessRole, PicoLinuxProcessRoleMemory>();
@@ -153,6 +156,8 @@ export function picoLinuxProcessTreeMemory(
       privateCleanBytes += process.privateCleanBytes;
       privateDirtyBytes += process.privateDirtyBytes;
       privateHugetlbBytes += process.privateHugetlbBytes;
+      privateDirtyAndHugetlbBytes += process.privateDirtyBytes
+        + process.privateHugetlbBytes;
       privateBytes += process.privateBytes;
       processCount += 1;
       const role = roleMemory.get(process.role) ?? emptyRoleMemory(process.role);
@@ -162,6 +167,8 @@ export function picoLinuxProcessTreeMemory(
       role.privateCleanBytes += process.privateCleanBytes;
       role.privateDirtyBytes += process.privateDirtyBytes;
       role.privateHugetlbBytes += process.privateHugetlbBytes;
+      role.privateDirtyAndHugetlbBytes += process.privateDirtyBytes
+        + process.privateHugetlbBytes;
       role.privateBytes += process.privateBytes;
       roleMemory.set(process.role, role);
     }
@@ -173,6 +180,7 @@ export function picoLinuxProcessTreeMemory(
     privateCleanBytes,
     privateDirtyBytes,
     privateHugetlbBytes,
+    privateDirtyAndHugetlbBytes,
     privateBytes,
     processMemoryByRole: processRoleOrder
       .flatMap((role) => roleMemory.has(role) ? [roleMemory.get(role)!] : []),
@@ -199,6 +207,7 @@ function emptyRoleMemory(role: PicoLinuxProcessRole): PicoLinuxProcessRoleMemory
     privateCleanBytes: 0,
     privateDirtyBytes: 0,
     privateHugetlbBytes: 0,
+    privateDirtyAndHugetlbBytes: 0,
     privateBytes: 0,
   };
 }

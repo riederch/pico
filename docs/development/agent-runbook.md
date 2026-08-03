@@ -141,15 +141,18 @@ Display-Session oder `xvfb-run` benoetigt. Der root-eigene CI-Modus benoetigt
 ausserdem passwortloses `sudo` fuer die begrenzte Extraktion und Rueckgabe des
 exakten temporaeren Verzeichnisses. Der Probe schreibt seinen letzten
 Messbericht nach `apps/companion-shell/out/tray-memory-linux-amd64.json`; PSS
-und private residente Bytes sind die Gates, summiertes RSS ist wegen mehrfach
-gezaehlter Shared Pages nur informativ. Private residente Bytes werden zusaetzlich
-in Clean, Dirty und Hugetlb getrennt und nach den geschlossenen Electron-Rollen
+und die Summe aus `Private_Dirty` plus `Private_Hugetlb` sind die v2-Gates.
+Summiertes RSS, `Private_Clean` und die gesamte private residente Summe bleiben
+informativ, weil Shared Pages im RSS mehrfach und Clean Pages je nach aktueller
+Dateiseitenteilung unterschiedlich als private klassifiziert werden. Der Bericht
+nennt `privateDirtyAndHugetlbBytes` und dessen 110.000.000-Byte-Budget explizit;
+Clean, Dirty und Hugetlb werden ausserdem nach den geschlossenen Electron-Rollen
 aggregiert. Die von `app.getAppMetrics()` gemeldeten PIDs ergaenzen den
 Parent-/Child-Walk, damit ein vom Sandbox-Start umgehaengter App-Prozess nicht
-aus der Messung faellt. Der JSON-Bericht wird vor den unveraenderten
-Budgetassertions geschrieben und ausgegeben, sodass auch ein fehlgeschlagener
-CI-Lauf die entscheidungsfaehige Evidenz enthaelt. Alle temporaeren Paket-,
-Lifecycle- und Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
+aus der Messung faellt. Der JSON-Bericht wird vor den Budgetassertions
+geschrieben und ausgegeben, sodass auch ein fehlgeschlagener CI-Lauf die
+entscheidungsfaehige Evidenz enthaelt. Alle temporaeren Paket-, Lifecycle- und
+Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
 
 ## Container- und Runtime-Smokes
 

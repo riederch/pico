@@ -43,8 +43,8 @@ const rendererUrl = pathToFileURL(rendererPath).href;
 const preloadPath = join(import.meta.dirname, 'preload.cjs');
 const assetPath = join(import.meta.dirname, 'assets');
 const trayPssBudgetBytes = 225_000_000;
-const trayPrivateBudgetBytes = 110_000_000;
-const trayMemoryProbe = process.env.PICO_COMPANION_RELEASE_PROBE === 'tray-memory-v1';
+const trayPrivateDirtyAndHugetlbBudgetBytes = 110_000_000;
+const trayMemoryProbe = process.env.PICO_COMPANION_RELEASE_PROBE === 'tray-memory-v2';
 
 let presentation: PicoCompanionPresentation = parsePicoCompanionPresentation({
   kind: 'starting',
@@ -157,9 +157,9 @@ async function runTrayMemoryProbe(): Promise<void> {
   );
   const coreDumpLimits = readPicoLinuxCoreDumpLimits();
   const underBudget = memory.proportionalBytes < trayPssBudgetBytes
-    && memory.privateBytes < trayPrivateBudgetBytes;
+    && memory.privateDirtyAndHugetlbBytes < trayPrivateDirtyAndHugetlbBudgetBytes;
   process.stdout.write(`${JSON.stringify({
-    schema: 'pico.companion.tray-memory.v1',
+    schema: 'pico.companion.tray-memory.v2',
     electronVersion: process.versions.electron,
     packaged: app.isPackaged,
     processCount: memory.processCount,
@@ -168,10 +168,11 @@ async function runTrayMemoryProbe(): Promise<void> {
     privateCleanBytes: memory.privateCleanBytes,
     privateDirtyBytes: memory.privateDirtyBytes,
     privateHugetlbBytes: memory.privateHugetlbBytes,
+    privateDirtyAndHugetlbBytes: memory.privateDirtyAndHugetlbBytes,
     privateBytes: memory.privateBytes,
     processMemoryByRole: memory.processMemoryByRole,
     proportionalBudgetBytes: trayPssBudgetBytes,
-    privateBudgetBytes: trayPrivateBudgetBytes,
+    privateDirtyAndHugetlbBudgetBytes: trayPrivateDirtyAndHugetlbBudgetBytes,
     underBudget,
     coreDumpSoftLimitBytes: coreDumpLimits.softBytes,
     coreDumpHardLimitBytes: coreDumpLimits.hardBytes,

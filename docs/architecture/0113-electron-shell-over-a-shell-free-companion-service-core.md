@@ -99,21 +99,26 @@ not hidden - one renderer window exists only during interaction or an
 active alarm. Avatar animation runs only while the window is visible and
 respects reduced motion (design system). The budget is part of the C3
 gate, not prose: tray-mode proportional set size (PSS) stays below
-225,000,000 bytes and private resident memory below 110,000,000 bytes on
-the reference Linux build, measured from `/proc/*/smaps_rollup` across the
-whole Electron process tree and retained by the release check. Summed RSS
-is reported but not gated because it counts shared pages once per process
-and therefore does not describe the tree's physical memory cost. This
-metric refinement and the two limits were chosen explicitly by the user on
-2026-08-02 after the packaged process measurement made the original literal
-sub-100-MB summed-RSS target physically false.
+225,000,000 bytes and the sum of private dirty plus private hugetlb pages stays
+below 110,000,000 bytes on the reference Linux build. Both are measured from
+`/proc/*/smaps_rollup` across the whole Electron process tree and retained by
+the release check. Summed RSS and total private resident memory remain
+diagnostic: RSS counts shared pages once per process, while the observed
+private-clean classification changes substantially with the runner's current
+file-page sharing despite nearly stable PSS. Neither therefore defines the
+second gate. The PSS refinement and both numeric limits were chosen explicitly
+by the user on 2026-08-02 after the packaged process measurement made the
+original literal sub-100-MB summed-RSS target physically false. The exact
+second class was refined explicitly on 2026-08-03 after the root-owned SUID
+runner separated clean, dirty and hugetlb evidence.
 
-The retained report separates private clean, dirty and huge pages and groups
-the same measurements by Electron's closed process roles. Electron's own
-`app.getAppMetrics()` PID set supplements the live parent/child walk so a
-sandbox-reparented app process cannot silently disappear from the total. The
-report is written and emitted before either unchanged budget assertion, making
-a failed reference-build measurement actionable without weakening the gate.
+The v2 retained report separates private clean, dirty and huge pages, states
+the exact dirty-plus-hugetlb budgeted total and groups the same measurements by
+Electron's closed process roles. Electron's own `app.getAppMetrics()` PID set
+supplements the live parent/child walk so a sandbox-reparented app process
+cannot silently disappear from the total. The report is written and emitted
+before either budget assertion, making a failed reference-build measurement
+actionable without weakening the gate.
 
 ### Chromium currency is a release obligation
 
@@ -232,10 +237,14 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   browser, zygote, GPU, utility, renderer, sandbox and unknown-role processes;
   Electron-associated PIDs remain included even if sandboxing reparents them.
   Failed budget runs emit this evidence before refusing the release.
-  The sandboxed extracted probe has a seven-process topology; the 2026-08-03
-  full-gate run reported 199,299,072 bytes PSS and 98,140,160 private bytes
-  below the unchanged 225,000,000/110,000,000 gates, with summed RSS
-  515,047,424 bytes retained as informational evidence. Static
+  The local user-namespace probe has a seven-process topology; the 2026-08-03
+  v2 full-gate run reported 198,276,096 bytes PSS and 94,138,368 private
+  dirty-plus-hugetlb bytes below the unchanged 225,000,000/110,000,000 numeric
+  gates. Total private memory was 97,947,648 bytes including 3,809,280 clean
+  bytes, and summed RSS was 514,224,128 bytes. The preceding root-owned SUID
+  runner reported comparably stable 204,954,624-byte PSS but 82,874,368 private
+  clean versus 55,267,328 dirty bytes; this evidence is why clean pages remain
+  visible but do not decide the v2 private gate. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.
@@ -293,3 +302,5 @@ Negative and residual:
 - [ADR 0105](0105-pico-runs-as-a-background-companion-not-a-cli.md)
 - [ADR 0106](0106-approval-rendering-from-the-signed-bytes.md)
 - [ADR 0112](0112-recovery-product-surfaces-in-the-background-companion.md)
+- [Linux `/proc` memory accounting](https://www.kernel.org/doc/html/v6.15/filesystems/proc.html)
+- [Chromium MemoryInfra](https://chromium.googlesource.com/chromium/src/+/7bf60df60dea0/docs/memory-infra/)

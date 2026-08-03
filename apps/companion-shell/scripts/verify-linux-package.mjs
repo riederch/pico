@@ -114,12 +114,12 @@ if (process.env.DISPLAY === undefined && process.env.WAYLAND_DISPLAY === undefin
 // its signed-off JSON before the release assertion reports the exact metrics.
 const probe = run(command, args, {
   ...sandboxProbe.environment,
-  PICO_COMPANION_RELEASE_PROBE: 'tray-memory-v1',
+  PICO_COMPANION_RELEASE_PROBE: 'tray-memory-v2',
   XDG_CACHE_HOME: join(probeRoot, 'cache'),
   XDG_CONFIG_HOME: join(probeRoot, 'config'),
 }, 'pipe', 30_000, [0, 1]);
 const reportLine = probe.stdout.split('\n').find((line) => (
-  line.includes('"schema":"pico.companion.tray-memory.v1"')
+  line.includes('"schema":"pico.companion.tray-memory.v2"')
 ));
 assert(reportLine !== undefined, `Tray memory probe emitted no report: ${probe.stdout}`);
 const report = JSON.parse(reportLine);
@@ -130,10 +130,16 @@ assert(report.packaged === true,
 assert(report.processCount >= 1, 'Tray memory probe measured no processes.');
 assert(report.coreDumpSoftLimitBytes === 0 && report.coreDumpHardLimitBytes === 0,
   'Packaged companion launch did not inherit a zero soft and hard core-dump limit.');
+assert(report.privateBytes === report.privateCleanBytes
+  + report.privateDirtyBytes + report.privateHugetlbBytes,
+  'Tray memory report private total does not match its clean/dirty/hugetlb classes.');
+assert(report.privateDirtyAndHugetlbBytes === report.privateDirtyBytes
+  + report.privateHugetlbBytes,
+  'Tray memory report budgeted private total does not match dirty plus hugetlb.');
 
 const retainedReport = {
   ...report,
-  schema: 'pico.companion.tray-memory-release.v1',
+  schema: 'pico.companion.tray-memory-release.v2',
   measuredAt: new Date().toISOString(),
   platform: 'linux',
   architecture: 'amd64',
@@ -148,16 +154,17 @@ writeFileSync(
 );
 process.stdout.write(`${JSON.stringify(retainedReport)}\n`);
 const memoryContext = `sandbox ${sandboxProbe.mode}, ${report.processCount} processes; `
-  + `private clean ${report.privateCleanBytes}, dirty ${report.privateDirtyBytes}, `
-  + `hugetlb ${report.privateHugetlbBytes}`;
+  + `private total ${report.privateBytes}, clean ${report.privateCleanBytes}, `
+  + `dirty ${report.privateDirtyBytes}, hugetlb ${report.privateHugetlbBytes}`;
 
 assert(report.proportionalBudgetBytes === 225_000_000
   && report.proportionalBytes < report.proportionalBudgetBytes,
 `Tray PSS ${report.proportionalBytes} bytes exceeds the strict 225 MB budget `
   + `(summed RSS ${report.rssBytes}, private ${report.privateBytes}; ${memoryContext}).`);
-assert(report.privateBudgetBytes === 110_000_000
-  && report.privateBytes < report.privateBudgetBytes,
-`Tray private memory ${report.privateBytes} bytes exceeds the strict 110 MB budget `
+assert(report.privateDirtyAndHugetlbBudgetBytes === 110_000_000
+  && report.privateDirtyAndHugetlbBytes < report.privateDirtyAndHugetlbBudgetBytes,
+`Tray private dirty plus hugetlb memory ${report.privateDirtyAndHugetlbBytes} bytes `
+  + 'exceeds the strict 110 MB budget '
   + `(summed RSS ${report.rssBytes}, PSS ${report.proportionalBytes}; ${memoryContext}).`);
 assert(report.underBudget === true,
   'Tray memory probe did not pass its own PSS/private budget gates.');
