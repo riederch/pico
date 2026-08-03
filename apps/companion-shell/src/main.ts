@@ -24,7 +24,9 @@ import {
 } from '@pico/companion/profile';
 import type {
   PicoCompanionAutomaticVaultUnlock,
+  PicoCompanionPlatformSecretPort,
 } from '@pico/companion/platform-unlock';
+import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
 import {
   openPicoCompanionVaultProductSession,
 } from '@pico/companion/vault-product-session';
@@ -33,9 +35,11 @@ import type {
 } from '@pico/companion/approval-carrier';
 import type { PicoVaultDaemonApprovalRequestDescriptor } from '@pico/vault-daemon';
 import {
+  parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionRecoveryCardSetupInput,
   parsePicoCompanionPresentation,
   picoCompanionIpcChannels,
+  type PicoCompanionFirstRunScanSource,
   type PicoCompanionPresentation,
 } from './contract.js';
 import { startPicoCompanionNetworkRegainMonitor } from './network-monitor.js';
@@ -163,10 +167,28 @@ async function start(): Promise<void> {
     void runtime?.stop();
   });
 
+  await startServiceCore();
+}
+
+/**
+ * Runs once the device has a profile. A device without one has nothing to
+ * watch yet: that is a first run, not a broken install, and must not read like
+ * one - so it is offered the first-run surface instead of a service error.
+ */
+async function startServiceCore(): Promise<void> {
   try {
     await sodium.ready;
     const notifications = createPicoCompanionPresentationAdapter(presentationPort);
     const profilePath = defaultPicoCompanionProfilePath();
+    // Dynamic, like the Platform Keystore adapter beside it: the ADR 0113 C3
+    // tray budget is measured on a probe that never reaches this line, and a
+    // static import would put the whole recovery ceremony runtime into it.
+    const { readPicoCompanionFirstRunNeed } =
+      await import('@pico/companion/first-run');
+    if (readPicoCompanionFirstRunNeed({ profilePath }).need !== 'nothing') {
+      await presentFirstRun();
+      return;
+    }
     const profile = readPicoCompanionProfile(profilePath);
     const {
       createPicoCompanionAutomaticVaultUnlock,
@@ -340,6 +362,24 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.beginFirstRun,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (productOperationActive || presentation.decision !== 'begin_first_run') {
+        return;
+      }
+      try {
+        const source = parsePicoCompanionFirstRunScanSource(value);
+        productOperationActive = true;
+        await runFirstRun(source);
+      } catch (error) {
+        await presentFirstRunFailure(error);
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.getPresentation,
     (event: IpcMainInvokeEvent) => {
       assertRendererSender(event);
@@ -390,6 +430,230 @@ function registerIpc(): void {
       window?.close();
     },
   );
+}
+
+async function presentFirstRun(): Promise<void> {
+  const { readPicoCompanionFirstRunNeed } =
+    await import('@pico/companion/first-run');
+  const need = readPicoCompanionFirstRunNeed({
+    profilePath: defaultPicoCompanionProfilePath(),
+  });
+  if (need.need === 'nothing') {
+    return;
+  }
+  presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'first_run',
+    severity: 'warning',
+    symbol: '!',
+    decision: 'begin_first_run',
+    title: need.need === 'card_and_secrets'
+      ? 'Set this device up from your Recovery Card'
+      : 'Finish setting this device up',
+    body: need.need === 'card_and_secrets'
+      ? 'This device belongs to no Home yet. Your Recovery Card restores your identity here and asks your Home to replace your devices with this one. Your Home waits out an objection window first, so any device you still have can stop it.'
+      : `Your identity is already restored on this device and your Home ${
+        need.step === 'submitted'
+          ? 'is holding the objection window open'
+          : 'has not been asked yet'
+      }. Pico needs the Vault passphrase you chose to continue; the Recovery Card is not needed again.`,
+    observedAt: new Date().toISOString(),
+  }));
+  showWindow();
+}
+
+/**
+ * The whole first run happens in the main process. The card, its PIN and the
+ * passphrase are collected here - by camera decoder or by main-process
+ * keystroke capture - and the renderer only ever learns which source was
+ * chosen and how the attempt ended.
+ */
+async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<void> {
+  if (window === null || window.isDestroyed()) {
+    throw new Error('companion_window_unavailable');
+  }
+  const profilePath = defaultPicoCompanionProfilePath();
+  const { readPicoCompanionFirstRunNeed, runPicoCompanionFirstRun } =
+    await import('@pico/companion/first-run');
+  const need = readPicoCompanionFirstRunNeed({ profilePath });
+  if (need.need === 'nothing') {
+    return;
+  }
+
+  let cardTransport: string | undefined;
+  let pin: string | undefined;
+  if (need.need === 'card_and_secrets') {
+    cardTransport = source === 'camera'
+      ? await scanCardWithCamera()
+      : await captureSecret({
+        title: 'Scan or type the Recovery Card code',
+        instruction: 'Use a USB scanner, or type the code printed under the QR block, then press Enter.',
+        maximumLength: 8_192,
+        validate: (value: string) => value.startsWith('pico-recovery-card-v2:'),
+      });
+    pin = await captureSecret({
+      title: 'Enter the Card PIN',
+      instruction: 'Type the PIN you chose when this card was printed, then press Enter.',
+      maximumLength: 64,
+      validate: (value: string) => /^[0-9a-z]{6,64}$/u.test(value),
+    });
+  }
+  const passphrase = await captureSecret({
+    title: need.need === 'card_and_secrets'
+      ? 'Choose this device\'s Vault passphrase'
+      : 'Enter this device\'s Vault passphrase',
+    instruction: need.need === 'card_and_secrets'
+      ? 'This passphrase protects the keys Pico is about to create on this device. It is not the Card PIN.'
+      : 'Type the Vault passphrase you chose when this device started its setup, then press Enter.',
+    maximumLength: 1_024,
+    validate: (value: string) => value.length > 0,
+  });
+
+  const outcome = await runPicoCompanionFirstRun({
+    profilePath,
+    sodium,
+    socketPath: defaultPicoVaultDaemonSocketPath(),
+    secrets: {
+      ...(cardTransport === undefined ? {} : { cardTransport }),
+      ...(pin === undefined ? {} : { pin }),
+      passphrase,
+    },
+    notifications: createPicoCompanionPresentationAdapter(presentationPort),
+    decisions: approvalDecisionPort,
+    ...(await firstRunPlatformSecrets()),
+  });
+  await presentFirstRunOutcome(outcome);
+  if (outcome.status === 'complete') {
+    await startServiceCore();
+  }
+}
+
+/**
+ * A keystore that cannot seal is not a reason to refuse the run: the profile
+ * is what makes the device real, and automatic unlock is an optimisation the
+ * journal records the absence of.
+ */
+async function firstRunPlatformSecrets(): Promise<{
+  platformSecrets?: PicoCompanionPlatformSecretPort;
+}> {
+  try {
+    const [electronModule, platformKeystoreModule] = await Promise.all([
+      import('electron'),
+      import('./platform-keystore.js'),
+    ]);
+    const platformSecrets = platformKeystoreModule
+      .createLinuxElectronPlatformSecretPort(electronModule.safeStorage);
+    return platformSecrets.isEncryptionAvailable()
+      ? { platformSecrets }
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+async function scanCardWithCamera(): Promise<string> {
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'secure_input',
+    severity: 'warning',
+    symbol: '!',
+    decision: 'none',
+    title: 'Hold the card in front of the camera',
+    body: 'Pico is reading the QR block through the system camera. The code is decoded outside this page and never reaches it.',
+    observedAt: new Date().toISOString(),
+  }));
+  const { scanPicoRecoveryCardWithCamera } = await import('./camera-scan.js');
+  return await scanPicoRecoveryCardWithCamera();
+}
+
+async function captureSecret(prompt: {
+  title: string;
+  instruction: string;
+  maximumLength: number;
+  validate: (value: string) => boolean;
+}): Promise<string> {
+  if (window === null || window.isDestroyed()) {
+    throw new Error('companion_window_unavailable');
+  }
+  return await collectPicoCompanionSecureInput({
+    window,
+    prompt,
+    presentCount: async (count, invalid) => {
+      await presentSecureInput(prompt, count, invalid);
+    },
+  });
+}
+
+async function presentFirstRunOutcome(
+  outcome: PicoCompanionFirstRunOutcome,
+): Promise<void> {
+  if (outcome.status === 'awaiting_window') {
+    await presentationPort.present(parsePicoCompanionPresentation({
+      kind: 'recovery_waiting',
+      severity: 'warning',
+      symbol: '!',
+      decision: 'none',
+      title: 'Your Home is holding the objection window open',
+      body: `Any device you still have can stop this until ${outcome.pending.effectiveAt}. Come back after that and Pico will finish setting this device up; it will ask for the Vault passphrase again, and nothing else.`,
+      observedAt: new Date().toISOString(),
+    }));
+    return;
+  }
+  if (outcome.status === 'blocked') {
+    await presentProductError(
+      'This device was not set up',
+      outcome.reason === 'completion_window_lapsed'
+        ? 'The window to finish has passed, so your Home refused the replacement. Print a fresh Recovery Card from a device you still have, or start again from this one.'
+        : 'Pico could not finish with your Home. Nothing changed there. Check that your Home is reachable, then try again.',
+    );
+    return;
+  }
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'recovery_completed',
+    severity: 'active',
+    symbol: '●',
+    decision: 'none',
+    title: 'This device is now your Pico',
+    body: `Your Home replaced every earlier device with this one. ${
+      outcome.platformUnlockBound
+        ? 'Pico will unlock this device\'s keys for you after you sign in.'
+        : 'Automatic unlock is off on this device, so Pico will ask for the Vault passphrase when it needs the keys.'
+    }`,
+    observedAt: new Date().toISOString(),
+  }));
+}
+
+/**
+ * Every failure returns to the first-run offer, because the person's next step
+ * is always the same: try again. The distinctions worth making are the ones
+ * that change what they should do - a card this device cannot use, a camera
+ * that is not there, or a cancelled entry - and each keeps its own words while
+ * the reason string stays public.
+ */
+async function presentFirstRunFailure(error: unknown): Promise<void> {
+  const message = error instanceof Error ? error.message : '';
+  const body = message.startsWith('invalid_recovery_card_scan')
+    || message.startsWith('noncanonical_recovery_card')
+    ? 'That code is not a Pico Recovery Card this device can use. A card printed before your Home pinned its acceptor cannot start a device on its own.'
+    : message.startsWith('camera_scan_')
+      ? message === 'camera_scan_unavailable'
+        ? 'Pico found no camera decoder on this system. Install zbar-tools, or use a USB scanner or typing instead.'
+        : 'Pico did not read a card from the camera. Try again, or use a USB scanner or typing instead.'
+      : message === 'secure_input_cancelled'
+        ? 'Setup was cancelled. Nothing was sent to your Home.'
+        : message.startsWith('first_run_home_unverified')
+          ? 'This device could not verify that the Home on the card is really your Home, so it did nothing. Check that you are on the right network and try again.'
+          : `Pico could not set this device up (${
+            picoCompanionPublicServiceErrorReason(error)
+          }). Nothing was changed at your Home.`;
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'first_run',
+    severity: 'blocked',
+    symbol: '×',
+    decision: 'begin_first_run',
+    title: 'This device was not set up',
+    body,
+    observedAt: new Date().toISOString(),
+  }));
+  showWindow();
 }
 
 async function runRecoveryCardIssuance(

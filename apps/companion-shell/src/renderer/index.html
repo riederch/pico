@@ -40,6 +40,15 @@
         print job and is not saved by Pico.</p>
       <button id="submit-recovery-card" type="button">Continue securely</button>
     </section>
+    <section id="first-run" class="form-card" hidden>
+      <p>Hold the Recovery Card's QR code in front of the camera, or use a USB
+        scanner or type the code. Pico then asks for the Card PIN and a new
+        Vault passphrase; none of the three reaches this page.</p>
+      <div class="actions">
+        <button id="scan-camera" type="button">Scan with camera</button>
+        <button id="scan-typed" class="secondary" type="button">Scanner or typing</button>
+      </div>
+    </section>
     <div class="actions">
       <button id="veto" class="danger" type="button" hidden>Veto recovery</button>
       <button id="approve" type="button" hidden>Approve</button>

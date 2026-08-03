@@ -57,6 +57,14 @@
     "./platform-unlock": {
       "types": "./dist/platform-unlock.d.ts",
       "import": "./dist/platform-unlock.js"
+    },
+    "./first-run-journal": {
+      "types": "./dist/first-run-journal.d.ts",
+      "import": "./dist/first-run-journal.js"
+    },
+    "./first-run": {
+      "types": "./dist/first-run.d.ts",
+      "import": "./dist/first-run.js"
     }
   },
   "scripts": {

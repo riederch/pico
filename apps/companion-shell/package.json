@@ -22,6 +22,7 @@
   ],
   "dependencies": {
     "@pico/companion": "workspace:*",
+    "@pico/protocol": "workspace:*",
     "@pico/vault": "workspace:*",
     "@pico/vault-daemon": "workspace:*",
     "libsodium-wrappers-sumo": "^0.8.4"

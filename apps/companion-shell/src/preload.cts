@@ -8,6 +8,7 @@ const channels = Object.freeze({
   openRecoveryCard: 'pico:recovery-card:open',
   submitRecoveryCard: 'pico:recovery-card:submit',
   decideApproval: 'pico:approval:decide',
+  beginFirstRun: 'pico:first-run:begin',
   closeWindow: 'pico:window:close',
 });
 
@@ -36,6 +37,11 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   },
   decideApproval: async (approved: boolean): Promise<void> => {
     await ipcRenderer.invoke(channels.decideApproval, approved);
+  },
+  // Only the source travels. The card, its PIN and the passphrase are
+  // collected in the main process and never cross this bridge.
+  beginFirstRun: async (source: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.beginFirstRun, source);
   },
   closeWindow: (): void => {
     ipcRenderer.send(channels.closeWindow);

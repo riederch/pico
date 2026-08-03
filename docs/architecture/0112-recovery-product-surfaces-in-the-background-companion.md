@@ -10,8 +10,10 @@ approval rendering and durable pull-completion/receipt state. Card v2 now
 carries ADR 0115's acceptor pin, the Vault daemon can bootstrap a fresh Vault
 from its strictly parsed canonical payload, and the Linux companion has a
 fail-closed Platform Keystore unlock owner for the target device keys.
-First-run profile creation, scanner/phrase capture and recovery initiation
-remain open, as does S4 on ADR 0105 B3. This ADR takes over the product half
+First run is a proven vertical: a scanned or camera-decoded v2 card, secrets
+captured in Main, a crash-replay journal, the unchanged initiation ceremony,
+and a committed profile with its keystore binding. A trusted v1 acceptor-pin
+fallback remains open, as does S4 on ADR 0105 B3. This ADR takes over the product half
 of ADR 0110's R5:
 where a person actually issues a card, restores from it, sees a pending
 alarm, vetoes, and completes a recovery. It deliberately does not choose
@@ -195,9 +197,47 @@ transitional for the same reason the other twelve are.
   daemon bootstrap and Linux
   libsecret/KWallet-backed device-session owner now provide the custody
   prerequisites without changing the daemon's bounded unlock ceilings.
-  Still open: the first-run scanner/phrase surface, trusted v1 acceptor-pin
-  fallback, recovery initiation, journaled profile/pending commit, and the
-  onboarding call that creates the Platform Keystore binding.
+
+  First run is now a vertical rather than a prerequisite. A v2 card reaches
+  Electron Main as a fixed ASCII transport whose parser is intolerant by
+  construction - exact prefix, unpadded base64url only, and a re-encode
+  comparison that refuses the second spelling a tolerant decoder would accept -
+  and it arrives either from an external camera decoder or from the same
+  main-process keystroke capture the Card PIN uses, so the renderer learns only
+  which source was chosen. A device with no profile is offered that surface
+  instead of a service error.
+
+  The run itself crosses one irreversible step, the fresh-Vault daemon
+  bootstrap, and several that must end up wholly done or plainly unfinished.
+  A private atomic journal records which step was reached and lets a restart
+  resume forward: it holds public facts only, never the card, PIN or
+  passphrase, refuses to move backwards or to change its binding, and is
+  dropped only once the profile it produced reads back. Because the passphrase
+  is deliberately not journaled, a resumed run asks for it again and never for
+  the card, which has already been spent. Recovery initiation runs the
+  unchanged ADR 0110 ceremony over Link Direct, and completion reuses the same
+  controller the ordinary cadence uses rather than a first-run copy of it.
+  Every signature still travels the ADR 0099 hold channel; first run owns no
+  approval exemption. The commit writes the profile first, because that is
+  what makes the device real, and records whether the Platform Keystore
+  binding was written beside it - a crash that took the passphrase leaves
+  automatic unlock off and says so.
+
+  Proven as processes against a real founded Home, a real approval-gated card
+  issuance and a real fresh vault: scan to submitted, restart mid-window
+  resuming forward on the passphrase alone, the Home restarted past its own
+  veto delay, completion, committed profile, and a spent vault refusing a
+  second bootstrap. A card naming host keys the endpoint cannot prove is
+  refused before the vault is touched.
+
+  Still open: trusted v1 acceptor-pin fallback, and S4.
+
+  Honest limit worth stating: at first run the card is the trust root for all
+  three pins it carries. A wrong acceptor pin is undetectable here, because on
+  a Home that has not yet rotated its host key the continuity chain is empty
+  and the acceptor constrains nothing; it binds rotation *acceptance*, so a
+  card carrying a wrong one produces a device that fails closed at its Home's
+  next rotation rather than at first run.
 - **S4 - Character visuals (open, needs registered production assets):**
   avatar renderings for alarm/veto/completion states, each gated on a
   purpose-registered Character 3.2.1 production asset.

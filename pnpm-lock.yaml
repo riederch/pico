@@ -45,6 +45,9 @@ importers:
       '@pico/companion':
         specifier: workspace:*
         version: link:../companion
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
       '@pico/vault':
         specifier: workspace:*
         version: link:../../packages/vault

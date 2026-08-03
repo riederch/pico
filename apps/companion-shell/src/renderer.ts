@@ -18,6 +18,7 @@ declare global {
         form: 'paper' | 'card_printer';
       }): Promise<void>;
       decideApproval(approved: boolean): Promise<void>;
+      beginFirstRun(source: 'camera' | 'typed'): Promise<void>;
       closeWindow(): void;
     }>;
   }
@@ -35,6 +36,9 @@ const recoveryCardForm = requireElement('recovery-card-form');
 const submitRecoveryCard = requireButton('submit-recovery-card');
 const approve = requireButton('approve');
 const deny = requireButton('deny');
+const firstRun = requireElement('first-run');
+const scanCamera = requireButton('scan-camera');
+const scanTyped = requireButton('scan-typed');
 const close = requireButton('close');
 
 function render(value: unknown): void {
@@ -50,10 +54,23 @@ function render(value: unknown): void {
   recoveryCardForm.hidden = state.decision !== 'recovery_card_details';
   approve.hidden = state.decision !== 'approve_or_deny';
   deny.hidden = state.decision !== 'approve_or_deny';
+  firstRun.hidden = state.decision !== 'begin_first_run';
   check.hidden = state.kind === 'recovery_card_setup'
     || state.kind === 'secure_input'
     || state.kind === 'approval'
+    || state.kind === 'first_run'
     || state.kind === 'starting';
+}
+
+async function beginFirstRun(source: 'camera' | 'typed'): Promise<void> {
+  scanCamera.disabled = true;
+  scanTyped.disabled = true;
+  try {
+    await window.picoCompanion.beginFirstRun(source);
+  } finally {
+    scanCamera.disabled = false;
+    scanTyped.disabled = false;
+  }
 }
 
 check.addEventListener('click', async () => {
@@ -101,6 +118,8 @@ veto.addEventListener('click', async () => {
     veto.disabled = false;
   }
 });
+scanCamera.addEventListener('click', () => void beginFirstRun('camera'));
+scanTyped.addEventListener('click', () => void beginFirstRun('typed'));
 close.addEventListener('click', () => window.picoCompanion.closeWindow());
 const unsubscribe = window.picoCompanion.onPresentationChanged(render);
 window.addEventListener('beforeunload', unsubscribe, { once: true });

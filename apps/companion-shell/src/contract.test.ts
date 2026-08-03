@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionPresentation,
   parsePicoCompanionRecoveryCardSetupInput,
   picoCompanionIdlePresentation,
@@ -34,6 +35,29 @@ describe('companion renderer presentation contract', () => {
       ...valid,
       decision: 'approve_or_deny',
     })).toThrow('invalid_companion_presentation_decision_binding');
+    expect(() => parsePicoCompanionPresentation({
+      ...valid,
+      decision: 'begin_first_run',
+    })).toThrow('invalid_companion_presentation_decision_binding');
+  });
+
+  it('binds the first-run decision to its own kind and closes the scan sources', () => {
+    const firstRun = parsePicoCompanionPresentation({
+      ...picoCompanionIdlePresentation(new Date('2026-08-02T12:00:00Z')),
+      kind: 'first_run',
+      severity: 'warning',
+      symbol: '!',
+      decision: 'begin_first_run',
+    });
+    expect(firstRun.kind).toBe('first_run');
+    expect(Object.isFrozen(firstRun)).toBe(true);
+
+    expect(parsePicoCompanionFirstRunScanSource('camera')).toBe('camera');
+    expect(parsePicoCompanionFirstRunScanSource('typed')).toBe('typed');
+    for (const rejected of ['file', '', 'CAMERA', null, 7]) {
+      expect(() => parsePicoCompanionFirstRunScanSource(rejected))
+        .toThrow('invalid_first_run_scan_source');
+    }
   });
 
   it('accepts only the exact public Recovery Card setup shape', () => {

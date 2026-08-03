@@ -24,6 +24,7 @@ async function smoke(): Promise<void> {
   ipcMain.handle(picoCompanionIpcChannels.openRecoveryCard, () => undefined);
   ipcMain.handle(picoCompanionIpcChannels.submitRecoveryCard, () => undefined);
   ipcMain.handle(picoCompanionIpcChannels.decideApproval, () => undefined);
+  ipcMain.handle(picoCompanionIpcChannels.beginFirstRun, () => undefined);
   ipcMain.on(picoCompanionIpcChannels.closeWindow, () => undefined);
 
   const window = new BrowserWindow(picoCompanionWindowOptions(preloadPath));
@@ -40,6 +41,7 @@ async function smoke(): Promise<void> {
     processType: 'undefined',
     requireType: 'undefined',
     bridgeKeys: [
+      'beginFirstRun',
       'closeWindow',
       'decideApproval',
       'getPresentation',

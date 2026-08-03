@@ -12,6 +12,17 @@ import {
 
 export const picoRecoveryCardSchema = 'pico.recovery.card.v1' as const;
 export const picoRecoveryCardV2Schema = 'pico.recovery.card.v2' as const;
+
+/**
+ * ADR 0110 R5: the fixed ASCII transport a commodity camera or USB scanner
+ * returns for a v2 card. V1 keeps its raw canonical QR bytes, so the prefix
+ * belongs to v2 alone. It lives beside the canonical form rather than beside
+ * the issuing PDF writer because the scanning side must be able to read a card
+ * without depending on the side that printed it.
+ */
+export const picoRecoveryCardV2ScanPrefix = 'pico-recovery-card-v2:' as const;
+
+const maxPicoRecoveryCardCanonicalBytes = 4_096;
 export const picoHomeDeviceRecoverySubmissionSchema =
   'pico.home.device-recovery-submission.v1' as const;
 export const picoHomeDeviceRecoveryRecordSchema =
@@ -310,7 +321,11 @@ export function buildPicoRecoveryCardPayload(
 export function parsePicoRecoveryCardPayload(
   canonicalPayload: Uint8Array,
 ): PicoRecoveryCardPayload {
-  const elements = parseCanonicalElements(canonicalPayload, 14, 4_096);
+  const elements = parseCanonicalElements(
+    canonicalPayload,
+    14,
+    maxPicoRecoveryCardCanonicalBytes,
+  );
   const label = decodeAsciiElement(elements[0], 'invalid_recovery_card_schema');
   const v2 = label === picoRecoveryCardV2Schema;
   if (label !== picoRecoveryCardSchema && !v2) {
@@ -355,6 +370,70 @@ export function parsePicoRecoveryCardPayload(
     throw new Error('noncanonical_recovery_card_payload');
   }
   return Object.freeze(payload);
+}
+
+export interface PicoRecoveryCardV2Scan {
+  canonicalPayload: Uint8Array;
+  payload: PicoRecoveryCardPayloadV2;
+}
+
+/**
+ * The single writer of the v2 scan transport. Issuing surfaces call it so the
+ * printed string and the accepted string can never drift apart.
+ */
+export function buildPicoRecoveryCardV2ScanTransport(
+  canonicalPayload: Uint8Array,
+): string {
+  if (!(canonicalPayload instanceof Uint8Array)
+    || canonicalPayload.byteLength === 0
+    || canonicalPayload.byteLength > maxPicoRecoveryCardCanonicalBytes) {
+    throw new Error('invalid_recovery_card_payload_length');
+  }
+  return `${picoRecoveryCardV2ScanPrefix}${encodeBase64Url(canonicalPayload)}`;
+}
+
+/**
+ * Strict inverse of the v2 scan transport, and deliberately intolerant: the
+ * exact prefix, the unpadded base64url alphabet only, and a re-encode
+ * byte-comparison that refuses a body whose final unused bits are non-zero -
+ * the variant a tolerant decoder would silently accept as a second spelling of
+ * the same card. Whitespace is not trimmed; a transport adapter must hand over
+ * exactly what the scanner produced, minus its own framing.
+ *
+ * A v1 canonical payload wrapped in this prefix is refused rather than parsed.
+ * V1 has its own raw-byte QR, so accepting it here would invent a second
+ * representation for a frozen card, and v1 cannot carry the ADR 0115 acceptor
+ * pin a first-run profile needs anyway.
+ */
+export function parsePicoRecoveryCardV2ScanTransport(
+  transport: string,
+): PicoRecoveryCardV2Scan {
+  if (typeof transport !== 'string'
+    || transport.length <= picoRecoveryCardV2ScanPrefix.length
+    || transport.length > maxPicoRecoveryCardV2ScanChars) {
+    throw new Error('invalid_recovery_card_scan_length');
+  }
+  if (!transport.startsWith(picoRecoveryCardV2ScanPrefix)) {
+    throw new Error('invalid_recovery_card_scan_prefix');
+  }
+  const body = transport.slice(picoRecoveryCardV2ScanPrefix.length);
+  if (!base64UrlPattern.test(body)) {
+    throw new Error('invalid_recovery_card_scan_charset');
+  }
+  // A remainder of one leaves six bits that encode no byte, so no canonical
+  // encoder can produce it.
+  if (body.length % 4 === 1) {
+    throw new Error('invalid_recovery_card_scan_length');
+  }
+  const canonicalPayload = decodeBase64Url(body);
+  if (encodeBase64Url(canonicalPayload) !== body) {
+    throw new Error('noncanonical_recovery_card_scan');
+  }
+  const payload = parsePicoRecoveryCardPayload(canonicalPayload);
+  if (payload.schema !== picoRecoveryCardV2Schema) {
+    throw new Error('invalid_recovery_card_scan_schema');
+  }
+  return Object.freeze({ canonicalPayload, payload });
 }
 
 export function buildPicoHomeDeviceRecoveryEvidenceDigestInput(
@@ -763,6 +842,57 @@ function parseCanonicalElements(
     offset += length;
   }
   return elements;
+}
+
+/**
+ * Written out rather than delegated to a runtime decoder: `Buffer` and `atob`
+ * both accept padding, the standard `+/` alphabet and in places stray
+ * characters, which would give one card several accepted spellings. The rest
+ * of this module has no runtime dependency either.
+ */
+const base64UrlAlphabet =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
+const maxPicoRecoveryCardV2ScanChars = picoRecoveryCardV2ScanPrefix.length
+  + Math.ceil(maxPicoRecoveryCardCanonicalBytes / 3) * 4;
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  let output = '';
+  for (let offset = 0; offset < bytes.byteLength; offset += 3) {
+    const remaining = bytes.byteLength - offset;
+    const chunk = (bytes[offset] << 16)
+      | ((remaining > 1 ? bytes[offset + 1] : 0) << 8)
+      | (remaining > 2 ? bytes[offset + 2] : 0);
+    output += base64UrlAlphabet[(chunk >>> 18) & 0x3f];
+    output += base64UrlAlphabet[(chunk >>> 12) & 0x3f];
+    if (remaining > 1) {
+      output += base64UrlAlphabet[(chunk >>> 6) & 0x3f];
+    }
+    if (remaining > 2) {
+      output += base64UrlAlphabet[chunk & 0x3f];
+    }
+  }
+  return output;
+}
+
+function decodeBase64Url(body: string): Uint8Array {
+  const bytes = new Uint8Array(Math.floor((body.length * 3) / 4));
+  let written = 0;
+  let accumulator = 0;
+  let bits = 0;
+  for (const character of body) {
+    const value = base64UrlAlphabet.indexOf(character);
+    if (value < 0) {
+      throw new Error('invalid_recovery_card_scan_charset');
+    }
+    accumulator = (accumulator << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes[written++] = (accumulator >>> bits) & 0xff;
+    }
+  }
+  return bytes.subarray(0, written);
 }
 
 function decodeUtf8Element(value: Uint8Array): string {

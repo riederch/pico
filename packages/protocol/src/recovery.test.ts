@@ -7,7 +7,9 @@ import {
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
   buildPicoHomeDeviceRecoveryReceiptSignatureInput,
   buildPicoRecoveryCardPayload,
+  buildPicoRecoveryCardV2ScanTransport,
   parsePicoRecoveryCardPayload,
+  parsePicoRecoveryCardV2ScanTransport,
   picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeDeviceRecoveryClaimDigestHex,
   picoHomeDeviceRecoveryEvidenceDigestHex,
@@ -16,6 +18,7 @@ import {
   picoHomeDeviceRecoveryTiming,
   picoProtocolVersion,
   picoRecoveryCardSchema,
+  picoRecoveryCardV2ScanPrefix,
   picoRecoveryCardV2Schema,
   type PicoHomeDeviceRecoveryClaimSignatureInput,
   type PicoHomeDeviceRecoveryPrepareSignatureInput,
@@ -107,6 +110,72 @@ describe('ADR 0110 recovery protocol forms', () => {
       canonical.subarray(0, canonical.byteLength - 1),
     )).toThrow('invalid_recovery_card_canonical_length');
     expect(() => parsePicoRecoveryCardPayload(new Uint8Array(4_097)))
+      .toThrow('invalid_recovery_card_payload_length');
+  });
+
+  it('pins the v2 scan transport and refuses every alternate spelling', () => {
+    const vector = fixtureCardV2();
+    const canonical = buildPicoRecoveryCardPayload(vector.fields);
+    const transport = buildPicoRecoveryCardV2ScanTransport(canonical);
+
+    expect(transport).toBe(vector.scanTransport);
+    expect(transport.startsWith(picoRecoveryCardV2ScanPrefix)).toBe(true);
+    const scan = parsePicoRecoveryCardV2ScanTransport(transport);
+    expect(scan.payload).toEqual(vector.fields);
+    expect(Buffer.from(scan.canonicalPayload).toString('hex'))
+      .toBe(vector.canonicalPayloadHex);
+
+    const body = transport.slice(picoRecoveryCardV2ScanPrefix.length);
+    // Padding, the standard alphabet and surrounding whitespace are all
+    // spellings a tolerant decoder would accept for these same bytes.
+    expect(() => parsePicoRecoveryCardV2ScanTransport(`${transport}=`))
+      .toThrow('invalid_recovery_card_scan_charset');
+    for (const outside of ['+', '/', '=', ' ', 'ä']) {
+      expect(() => parsePicoRecoveryCardV2ScanTransport(
+        picoRecoveryCardV2ScanPrefix + body.slice(0, -1) + outside,
+      )).toThrow('invalid_recovery_card_scan_charset');
+    }
+    expect(() => parsePicoRecoveryCardV2ScanTransport(`${transport}\n`))
+      .toThrow('invalid_recovery_card_scan_charset');
+    expect(() => parsePicoRecoveryCardV2ScanTransport(` ${transport}`))
+      .toThrow('invalid_recovery_card_scan_prefix');
+    expect(() => parsePicoRecoveryCardV2ScanTransport(
+      `pico-recovery-card-v1:${body}`,
+    )).toThrow('invalid_recovery_card_scan_prefix');
+    expect(() => parsePicoRecoveryCardV2ScanTransport(
+      `PICO-RECOVERY-CARD-V2:${body}`,
+    )).toThrow('invalid_recovery_card_scan_prefix');
+    expect(() => parsePicoRecoveryCardV2ScanTransport(
+      picoRecoveryCardV2ScanPrefix,
+    )).toThrow('invalid_recovery_card_scan_length');
+    expect(() => parsePicoRecoveryCardV2ScanTransport(`${transport}A`))
+      .toThrow('invalid_recovery_card_scan_length');
+
+    // A body of length 4n+3 carries two bits that encode nothing. Flipping
+    // them yields a different string that a tolerant decoder maps to the very
+    // same bytes - the second spelling this parser has to refuse.
+    const short = Buffer.from(body.slice(0, -1), 'base64url')
+      .toString('base64url');
+    expect(short.length % 4).toBe(3);
+    const alternate = `${short.slice(0, -1)}${flipUnusedBits(short.slice(-1))}`;
+    expect(alternate).not.toBe(short);
+    expect(Buffer.from(alternate, 'base64url'))
+      .toEqual(Buffer.from(short, 'base64url'));
+    expect(() => parsePicoRecoveryCardV2ScanTransport(
+      picoRecoveryCardV2ScanPrefix + alternate,
+    )).toThrow('noncanonical_recovery_card_scan');
+
+    // A v1 card has its own raw-byte QR; wrapping it here would give a frozen
+    // card a second representation.
+    const v1 = (fixtureSuite().card as JsonRecord)
+      .fields as unknown as PicoRecoveryCardPayload;
+    expect(() => parsePicoRecoveryCardV2ScanTransport(
+      buildPicoRecoveryCardV2ScanTransport(buildPicoRecoveryCardPayload(v1)),
+    )).toThrow('invalid_recovery_card_scan_schema');
+
+    expect(() => buildPicoRecoveryCardV2ScanTransport(new Uint8Array(4_097)))
+      .toThrow('invalid_recovery_card_payload_length');
+    expect(() => buildPicoRecoveryCardV2ScanTransport(new Uint8Array(0)))
       .toThrow('invalid_recovery_card_payload_length');
   });
 
@@ -220,9 +289,17 @@ function fixtureSuite(): JsonRecord {
   ), 'utf8')) as JsonRecord;
 }
 
+const base64UrlAlphabet =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+function flipUnusedBits(character: string): string {
+  return base64UrlAlphabet[base64UrlAlphabet.indexOf(character) ^ 1];
+}
+
 function fixtureCardV2(): {
   fields: PicoRecoveryCardPayloadV2;
   canonicalPayloadHex: string;
+  scanTransport: string;
 } {
   return JSON.parse(readFileSync(resolve(
     process.cwd(),
@@ -230,5 +307,6 @@ function fixtureCardV2(): {
   ), 'utf8')) as {
     fields: PicoRecoveryCardPayloadV2;
     canonicalPayloadHex: string;
+    scanTransport: string;
   };
 }

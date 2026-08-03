@@ -203,16 +203,18 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   Tray, critical desktop notifications, resume and false-to-true network
   regain are adapters around `checkNow`; the default state owns no window,
   and an interaction/alarm creates a strict sandboxed BrowserWindow that is
-  destroyed on close. The preload exposes only eight named methods:
+  destroyed on close. The preload exposes only nine named methods:
   presentation get/subscribe, lifecycle check, window close, recovery veto,
-  Card open/submit and approval decide; renderer-reachable code has no Node or
+  Card open/submit, approval decide and first-run begin - the last carrying
+  nothing but the chosen scan source, since ADR 0112 S3 collects the card, its
+  PIN and the passphrase in Main; renderer-reachable code has no Node or
   Electron import, parses a closed display-only state, uses textContent and
   a no-network/no-inline CSP, and renders color+symbol+text without inventing
   a Character asset. The shell adapter carries all three existing loud
   statements (pending recovery, verified host rotation, unverified Home
   continuity), while raw errors are reduced to public categories before IPC.
   Static boundary checks and an actual Electron smoke prove
-  `contextIsolation`, sandboxing, absent Node/`require` and the exact eight
+  `contextIsolation`, sandboxing, absent Node/`require` and the exact nine
   bridge methods. A spawned Foundation, a founded Home and two real Vault
   daemons prove that a real pending recovery reaches the hosted carrier and
   raises its blocked presentation on the first authenticated read.

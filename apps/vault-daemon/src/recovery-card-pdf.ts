@@ -1,5 +1,7 @@
 import {
   buildPicoRecoveryCardPayload,
+  buildPicoRecoveryCardV2ScanTransport,
+  picoRecoveryCardV2ScanPrefix,
   type PicoRecoveryCardPayload,
 } from '@pico/protocol';
 import type { PicoVaultRecoveryCard } from '@pico/vault';
@@ -26,8 +28,11 @@ export const PICO_RECOVERY_CARD_PDF_LAYOUT = {
   qrQuietZoneModules: 4,
 } as const;
 
-export const PICO_RECOVERY_CARD_V2_QR_PREFIX =
-  'pico-recovery-card-v2:' as const;
+/**
+ * The transport contract itself is protocol, not presentation: the scanning
+ * side must not import the PDF writer to know what it is reading.
+ */
+export const PICO_RECOVERY_CARD_V2_QR_PREFIX = picoRecoveryCardV2ScanPrefix;
 
 export interface PicoRecoveryCardPdfOptions {
   /**
@@ -61,7 +66,7 @@ export function picoRecoveryCardQrPayload(
   const canonical = hexToBytes(card.canonicalPayloadHex);
   if (card.payload.schema === 'pico.recovery.card.v2') {
     return new TextEncoder().encode(
-      `${PICO_RECOVERY_CARD_V2_QR_PREFIX}${Buffer.from(canonical).toString('base64url')}`,
+      buildPicoRecoveryCardV2ScanTransport(canonical),
     );
   }
   return canonical;

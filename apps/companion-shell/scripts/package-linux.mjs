@@ -252,6 +252,7 @@ Architecture: amd64
 Installed-Size: ${Math.ceil(installedBytes / 1_024)}
 Maintainer: Pico Project
 Depends: libasound2 | libasound2t64, libatspi2.0-0, libdrm2, libgbm1, libgtk-3-0 | libgtk-3-0t64, libnotify4, libnss3, libsecret-1-0, libxss1, libxtst6, xdg-utils
+Recommends: zbar-tools
 Description: Local-first Pico companion shell
  Background tray shell for the local Pico companion service core.
 `, { mode: 0o644 });

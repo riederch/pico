@@ -89,3 +89,30 @@ export type {
   PicoCompanionLinuxKeystoreBackend,
   PicoCompanionPlatformSecretPort,
 } from './platform-unlock.js';
+export {
+  advancePicoCompanionFirstRunJournal,
+  clearPicoCompanionFirstRunJournal,
+  defaultPicoCompanionFirstRunJournalPath,
+  parsePicoCompanionFirstRunJournal,
+  picoCompanionFirstRunJournalSchema,
+  picoCompanionFirstRunProfile,
+  picoCompanionFirstRunStepOrder,
+  picoCompanionFirstRunSteps,
+  readPicoCompanionFirstRunJournal,
+} from './first-run-journal.js';
+export type {
+  PicoCompanionFirstRunBinding,
+  PicoCompanionFirstRunJournal,
+  PicoCompanionFirstRunStep,
+} from './first-run-journal.js';
+export {
+  picoCompanionFirstRunDelegationValidityMs,
+  readPicoCompanionFirstRunNeed,
+  runPicoCompanionFirstRun,
+} from './first-run.js';
+export type {
+  PicoCompanionFirstRunNeed,
+  PicoCompanionFirstRunOutcome,
+  PicoCompanionFirstRunSecrets,
+  RunPicoCompanionFirstRunInput,
+} from './first-run.js';

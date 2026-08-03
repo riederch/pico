@@ -11,11 +11,13 @@ export const picoCompanionIpcChannels = Object.freeze({
   openRecoveryCard: 'pico:recovery-card:open',
   submitRecoveryCard: 'pico:recovery-card:submit',
   decideApproval: 'pico:approval:decide',
+  beginFirstRun: 'pico:first-run:begin',
   closeWindow: 'pico:window:close',
 });
 
 export type PicoCompanionPresentationKind =
   | 'starting'
+  | 'first_run'
   | 'idle'
   | 'pending_recovery'
   | 'recovery_waiting'
@@ -34,7 +36,19 @@ export type PicoCompanionPresentationDecision =
   | 'none'
   | 'veto_recovery'
   | 'recovery_card_details'
-  | 'approve_or_deny';
+  | 'approve_or_deny'
+  | 'begin_first_run';
+
+/**
+ * How the Recovery Card reaches Electron Main. Both sources deliver into the
+ * main process only - the camera through an external decoder, the scanner and
+ * the typed fallback through main-process keystroke capture - so the renderer
+ * chooses the source and never sees the result.
+ */
+export const picoCompanionFirstRunScanSources = ['camera', 'typed'] as const;
+
+export type PicoCompanionFirstRunScanSource =
+  typeof picoCompanionFirstRunScanSources[number];
 
 export interface PicoCompanionRecoveryCardSetupInput {
   picoName: string;
@@ -55,6 +69,7 @@ export interface PicoCompanionPresentation {
 
 const kinds = new Set<PicoCompanionPresentationKind>([
   'starting',
+  'first_run',
   'idle',
   'pending_recovery',
   'recovery_waiting',
@@ -79,6 +94,7 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
   'veto_recovery',
   'recovery_card_details',
   'approve_or_deny',
+  'begin_first_run',
 ]);
 
 export function parsePicoCompanionPresentation(value: unknown): PicoCompanionPresentation {
@@ -128,7 +144,9 @@ function assertDecisionKind(
       ? 'recovery_card_setup'
       : decision === 'approve_or_deny'
         ? 'approval'
-        : undefined;
+        : decision === 'begin_first_run'
+          ? 'first_run'
+          : undefined;
   if (expectedKind !== undefined && kind !== expectedKind) {
     throw new Error('invalid_companion_presentation_decision_binding');
   }
@@ -172,6 +190,18 @@ export function parsePicoCompanionRecoveryCardSetupInput(
     throw new Error('invalid_recovery_card_print_form');
   }
   return Object.freeze({ ...record }) as unknown as PicoCompanionRecoveryCardSetupInput;
+}
+
+export function parsePicoCompanionFirstRunScanSource(
+  value: unknown,
+): PicoCompanionFirstRunScanSource {
+  if (typeof value !== 'string'
+    || !picoCompanionFirstRunScanSources.includes(
+      value as PicoCompanionFirstRunScanSource,
+    )) {
+    throw new Error('invalid_first_run_scan_source');
+  }
+  return value as PicoCompanionFirstRunScanSource;
 }
 
 function assertDisplayText(value: unknown, maximum: number): void {
