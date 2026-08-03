@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Materialize pinned Electron distribution
+        run: pnpm --filter @pico/companion-shell exec node -e "require('electron')"
+
       - name: Install Electron sandbox helper for packaged probe
         run: sudo install --owner=root --group=root --mode=4755 apps/companion-shell/node_modules/electron/dist/chrome-sandbox /usr/local/sbin/pico-companion-chrome-sandbox
 

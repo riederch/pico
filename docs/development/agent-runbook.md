@@ -117,8 +117,9 @@ npx pnpm@9.0.0 --filter @pico/companion-shell verify:linux
 Der Ressourcen-Probe laeuft aus einem unprivilegiert extrahierten, noch nicht
 installierten Paket. Deshalb kann sein im Archiv korrekt root-eigener
 Setuid-Helper dort nicht wirken; auf Ubuntu 23.10+ blockiert AppArmor zugleich
-den User-Namespace-Fallback. Der CI-Workflow kopiert dort den Helper der
-tatsaechlich gepinnten Electron-Distribution nach
+den User-Namespace-Fallback. Da Electron 43 die binaere Distribution erst beim
+ersten Package-Import laedt, materialisiert der CI-Workflow sie explizit nach
+dem `pnpm install`. Erst danach kopiert er deren Helper nach
 `/usr/local/sbin/pico-companion-chrome-sandbox` und installiert ihn als
 `root:root` mit Modus `4755`. Der Gate akzeptiert den explizit ueber
 `PICO_COMPANION_CHROMIUM_SANDBOX_HELPER` konfigurierten absoluten Pfad nur als

@@ -203,8 +203,9 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   `--no-sandbox`. Its resource probe runs the package extracted rather than
   root-installed, so the archived SUID helper has no usable privilege there.
   On an AppArmor-restricted host such as the GitHub Ubuntu runner, the verifier
-  instead receives a dedicated helper copied from the exact pinned Electron
-  distribution and installed as `root:root` mode `4755`. The verifier accepts
+  first materializes Electron's lazy binary download through the pinned package
+  import, then receives a dedicated helper copied from that exact distribution
+  and installed as `root:root` mode `4755`. The verifier accepts
   its explicitly configured absolute path only when it is a regular file and
   its SHA-256 equals the helper inside the generated package, then passes that
   path through `CHROME_DEVEL_SANDBOX`. On hosts without an explicitly
@@ -220,9 +221,9 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   packaged launcher sets both soft and hard core-dump limits to zero before
   `exec`, and the real packaged tray probe proves those inherited limits.
   The sandboxed extracted probe has a seven-process topology; the 2026-08-03
-  full-gate run reported 197,868,544 bytes PSS and 97,169,408 private bytes
+  full-gate run reported 198,958,080 bytes PSS and 97,705,984 private bytes
   below the unchanged 225,000,000/110,000,000 gates, with summed RSS
-  514,539,520 bytes retained as informational evidence. Static
+  514,416,640 bytes retained as informational evidence. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.
