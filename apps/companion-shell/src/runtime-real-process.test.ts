@@ -170,6 +170,13 @@ describe('Electron-hosted companion runtime against real processes', () => {
     });
     expect(presented.at(-1)?.body).toContain(recovery.pending.recoveryId);
     expect(notified).toHaveLength(1);
+    await runtime.vetoPendingRecovery();
+    expect(runtime.status()).toMatchObject({
+      alarmActive: false,
+      checks: 2,
+      readFailures: 0,
+    });
+    expect(presented.at(-1)?.kind).toBe('idle');
     await runtime.stop();
   }, 180_000);
 });

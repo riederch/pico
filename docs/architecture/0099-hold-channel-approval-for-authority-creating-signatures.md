@@ -57,11 +57,19 @@ and any network surface.
 
 ### Approval travels as a long-poll, not as a server push
 
-The hold connection asks to be told. It issues `approval.wait`, whose
+The hold connection asks to be told. It registers readiness once through
+`approval.watch`, then issues `approval.wait`, whose
 response the daemon parks until either an approval is needed or the wait
 window elapses; the person then answers with `approval.decide`, and the loop
 repeats. Every frame the daemon writes remains a response to a frame the
 client sent, so the ADR 0097 contract keeps its shape exactly.
+
+`approval.watch` is synchronization, not an approval and not a second event
+channel. It is accepted only on the connection holding the unlock and returns
+one acknowledgement, allowing a product consumer to start only after the
+approval surface is registered. The same connection must immediately maintain
+the ordinary long poll and alone may decide. Registration without a decision
+can at most park and then time out a gated request; it can never authorize one.
 
 The rejected alternative was an unsolicited push frame on the hold
 connection. It is the obvious design and it is wrong here for a specific
@@ -100,7 +108,8 @@ person to approve a backlog they cannot individually attribute.
 
 ### Fail-closed in every direction
 
-- **No watcher, no signature.** If no `approval.wait` is parked when a gated
+- **No watcher, no signature.** If the live unlock holder has neither
+  registered the product watcher nor parked `approval.wait` when a gated
   request arrives, the request is refused immediately. A consumer cannot
   obtain a founding-record signature while nobody is watching the channel.
 - **Timeout denies.** An undecided approval is denied when its window
@@ -207,12 +216,14 @@ safe to leave open.
 - **P5 — In-flight discipline: Done.** Per-connection in-flight tracking
   rejects a second request before its predecessor is answered, across
   reads.
-- **P6 — CLI and tests: Done.** The `unlock` command runs the approval loop
+- **P6 — Product/CLI carriers and tests: Done.** The `unlock` command runs the approval loop
   and prompts on the person's TTY; real-crypto tests cover exempt signing,
   approved signing, denial, timeout, digest mismatch, foreign-connection
   decisions, no-watcher refusal, second-approval refusal, hold loss during
   a pending approval, the in-flight violation and ADR 0109's exact
-  role-aware activation boundary.
+  role-aware activation boundary. The companion uses the acknowledged
+  watcher before opening its separate ceremony consumer; tests prove the
+  acknowledgement authorizes nothing and exact id/digest denial still binds.
 - **P7 — Done for the implemented families:** ADR 0106 derives statements
   from the signed fields, and claim, checkpoint, envelope, rotation and
   device-lifecycle consumers now use the daemon boundary. Any additional

@@ -4,6 +4,10 @@ const channels = Object.freeze({
   getPresentation: 'pico:presentation:get',
   presentationChanged: 'pico:presentation:changed',
   requestCheck: 'pico:lifecycle:check',
+  vetoRecovery: 'pico:recovery:veto',
+  openRecoveryCard: 'pico:recovery-card:open',
+  submitRecoveryCard: 'pico:recovery-card:submit',
+  decideApproval: 'pico:approval:decide',
   closeWindow: 'pico:window:close',
 });
 
@@ -20,6 +24,18 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   },
   requestCheck: async (): Promise<void> => {
     await ipcRenderer.invoke(channels.requestCheck);
+  },
+  vetoRecovery: async (): Promise<void> => {
+    await ipcRenderer.invoke(channels.vetoRecovery);
+  },
+  openRecoveryCard: async (): Promise<void> => {
+    await ipcRenderer.invoke(channels.openRecoveryCard);
+  },
+  submitRecoveryCard: async (details: unknown): Promise<void> => {
+    await ipcRenderer.invoke(channels.submitRecoveryCard, details);
+  },
+  decideApproval: async (approved: boolean): Promise<void> => {
+    await ipcRenderer.invoke(channels.decideApproval, approved);
   },
   closeWindow: (): void => {
     ipcRenderer.send(channels.closeWindow);

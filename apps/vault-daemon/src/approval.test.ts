@@ -549,6 +549,33 @@ describe('Approval decision binding (ADR 0099 P2/P4)', () => {
 });
 
 describe('Approval channel authority (ADR 0099 P4/P5)', () => {
+  it('acknowledges a product watcher before the first long poll without widening approval', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    await expect(hold.approvalWatch()).resolves.toEqual({ watching: true });
+    expect(audit.join('')).toContain('approval_watch_started');
+
+    // The acknowledgement authorizes nothing: the gated consumer still
+    // parks until this exact hold connection long-polls and decides.
+    const signing = settle(consumer.sign({
+      keyFingerprintHex: identityFixture.keyFingerprintHex,
+      ...gatedSign(),
+    }));
+    const pending = (await hold.approvalWait()).pending;
+    expect(pending?.statement).toBeTruthy();
+    await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: false,
+    });
+    expect(await signing).toEqual({ ok: false, reason: 'approval_denied' });
+
+    await expect(consumer.approvalWatch())
+      .rejects.toThrow('approval_wait_forbidden');
+  }, 30_000);
+
   it('refuses a gated signature when nobody is watching the channel', async () => {
     const { daemon, audit } = await startDaemon();
     await holdUnlock(daemon);

@@ -13,6 +13,9 @@ import {
   renderPicoCompanionPendingRecoveryAlarm,
 } from '@pico/companion/notify';
 import {
+  type PicoCompanionRecoveryNotifications,
+} from '@pico/companion/recovery-controller';
+import {
   parsePicoCompanionPresentation,
   picoCompanionIdlePresentation,
   type PicoCompanionPresentation,
@@ -24,7 +27,8 @@ export interface PicoCompanionPresentationPort {
 }
 
 export type PicoCompanionShellNotifications = PicoCompanionNotificationAdapter
-  & PicoCompanionHostContinuityNotifications;
+  & PicoCompanionHostContinuityNotifications
+  & PicoCompanionRecoveryNotifications;
 
 export function createPicoCompanionPresentationAdapter(
   port: PicoCompanionPresentationPort,
@@ -51,6 +55,7 @@ export function createPicoCompanionPresentationAdapter(
         kind: 'pending_recovery',
         severity: 'blocked',
         symbol: '×',
+        decision: 'veto_recovery',
         ...rendered,
         observedAt: now().toISOString(),
       }, true);
@@ -66,6 +71,7 @@ export function createPicoCompanionPresentationAdapter(
         kind: 'host_keys_rotated',
         severity: 'warning',
         symbol: '!',
+        decision: 'none',
         ...rendered,
         observedAt: now().toISOString(),
       }, true);
@@ -78,9 +84,52 @@ export function createPicoCompanionPresentationAdapter(
         kind: 'host_continuity_unverified',
         severity: 'blocked',
         symbol: '×',
+        decision: 'none',
         ...rendered,
         observedAt: now().toISOString(),
       }, true);
     },
+    presentRecoveryWaiting: async ({ picoIdentityFingerprintHex, pending }) => {
+      await publish({
+        kind: 'recovery_waiting',
+        severity: 'warning',
+        symbol: '!',
+        decision: 'none',
+        title: 'Pico recovery is waiting for the time lock',
+        body: `Recovery ${pending.recoveryId} for identity ${shortFingerprint(picoIdentityFingerprintHex)} becomes effective at ${pending.effectiveAt}. Nothing can hurry this wait. Completion will revoke every other device of this identity.`,
+        observedAt: now().toISOString(),
+      }, false);
+    },
+    notifyRecoveryCompleted: async ({ picoIdentityFingerprintHex, receipt }) => {
+      await publish({
+        kind: 'recovery_completed',
+        severity: 'active',
+        symbol: '●',
+        decision: 'none',
+        title: 'Pico recovery completed',
+        body: `Recovery ${receipt.recoveryId} for identity ${shortFingerprint(picoIdentityFingerprintHex)} completed at ${receipt.completedAt}. Exactly one active device remains: ${shortFingerprint(receipt.targetDeviceSigningKeyFingerprintHex)}. Every other device was revoked and surviving hardware must re-enroll.`,
+        observedAt: now().toISOString(),
+      }, true);
+    },
+    notifyRecoveryCompletionBlocked: async ({ pending, reason }) => {
+      const explanation = reason === 'vault_locked'
+        ? 'Unlock this device\'s Pico Vault; Pico will retry automatically on the next check.'
+        : reason === 'completion_window_lapsed'
+          ? 'The completion window has lapsed. Recovery must be started again from the Recovery Card.'
+          : 'Completion failed safely. The pending recovery remains unchanged and Pico will retry on the next check.';
+      await publish({
+        kind: 'recovery_completion_blocked',
+        severity: 'blocked',
+        symbol: '×',
+        decision: 'none',
+        title: 'Pico recovery needs attention',
+        body: `Recovery ${pending.recoveryId} could not complete. ${explanation}`,
+        observedAt: now().toISOString(),
+      }, true);
+    },
   };
+}
+
+function shortFingerprint(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-8)}`;
 }

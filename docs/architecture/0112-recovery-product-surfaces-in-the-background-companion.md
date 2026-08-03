@@ -4,8 +4,11 @@
 
 Accepted; partially implemented. The transitional CLI wrappers (gate S1)
 landed with this ADR; ADR 0113 C1/C2 have since implemented S2's alarm
-carrier, Electron adapters and real-process proof, while the remaining
-companion surfaces (S3/S4) stay open on ADR 0105 B2/B3. This ADR takes over the product half of ADR 0110's R5:
+carrier, Electron adapters and real-process proof. S3 now has a first bounded
+product vertical: one-decision veto, on-demand Recovery Card re-issue,
+approval rendering and durable pull-completion/receipt state. First-run
+profile creation, phrase/QR restore and recovery initiation remain open, as
+does S4 on ADR 0105 B3. This ADR takes over the product half of ADR 0110's R5:
 where a person actually issues a card, restores from it, sees a pending
 alarm, vetoes, and completes a recovery. It deliberately does not choose
 the client shell technology - that choice belongs to the ADR that starts
@@ -173,10 +176,21 @@ transitional for the same reason the other twelve are.
   real founded Home and real Vault daemons with pending recovery. Closing
   the C2 window does not claim to veto; that one-decision ceremony remains
   S3.
-- **S3 - Companion ceremonies (open, needs ADR 0105 B2/B3):** issuance
-  in onboarding, restore as first-run path, veto one decision from the
-  alarm, automatic completion with receipt summary - all rendering ADR
-  0106 statements through the avatar.
+- **S3 - Companion ceremonies (partially implemented):** the alarm exposes
+  exactly one authenticated veto decision, and a real founded Home proves the
+  pending alarm and veto through the hosted runtime. The settings surface can
+  re-issue the approval-gated Card directly to Linux CUPS without a
+  companion-owned PDF; passphrase and Card PIN are captured in Electron Main
+  before renderer delivery, and generated PDF byte arrays are zeroed after the
+  print call. The product approval carrier renders the daemon's ADR 0106
+  statement and echoes only the exact id/digest decision. A private atomic
+  continuation file carries only the signed public pending view or public
+  receipt summary; before `effectiveAt` it renders the honest wait, and on a
+  later authenticated check it attempts exact-target completion and records
+  the exactly-one-device receipt. Still open: issuance at the end of
+  onboarding, productive profile creation, the first-run new-identity/card
+  choice, phrase/QR restore into a fresh Vault, recovery initiation, and
+  durable product unlock ownership across the 48-hour wait.
 - **S4 - Character visuals (open, needs registered production assets):**
   avatar renderings for alarm/veto/completion states, each gated on a
   purpose-registered Character 3.2.1 production asset.
@@ -202,8 +216,11 @@ Negative and residual:
 - the six-hour cadence is a product default pinned here; making it a
   per-identity Pico setting is legitimate ADR 0104 work later, never
   host configuration;
-- S3 still lacks onboarding/profile creation, restore, veto and completion
-  surfaces; C2 deliberately exposes no fake decision behind window close.
+- S3 still lacks onboarding/profile creation and first-run restore/initiation;
+  automatic completion can run only while the exact target device key is
+  unlocked, so durable product unlock ownership remains explicit rather than
+  being hidden behind the implemented continuation state. Window close never
+  means veto, and closing an approval surface denies rather than consents.
 
 ## Relationship to other ADRs
 

@@ -29,6 +29,7 @@ export const picoVaultDaemonRequestFamilies = {
   readerAccessOpenPayload: 'pico.vault.daemon.reader-access.open-payload.v1',
   readerAccessDecryptItem: 'pico.vault.daemon.reader-access.decrypt-item.v1',
   readerAccessClose: 'pico.vault.daemon.reader-access.close.v1',
+  approvalWatch: 'pico.vault.daemon.approval.watch.v1',
   approvalWait: 'pico.vault.daemon.approval.wait.v1',
   approvalDecide: 'pico.vault.daemon.approval.decide.v1',
   ceremonyCreateDomain: 'pico.vault.daemon.ceremony.create-domain.v1',
@@ -294,6 +295,16 @@ export interface PicoVaultDaemonApprovalWaitRequest {
   requestId: string;
 }
 
+/**
+ * ADR 0112 S3 product synchronisation for ADR 0099's hold channel. It only
+ * acknowledges that the live unlock holder is ready to receive long polls;
+ * approvals themselves still travel exclusively through `approval.wait`.
+ */
+export interface PicoVaultDaemonApprovalWatchRequest {
+  family: typeof picoVaultDaemonRequestFamilies.approvalWatch;
+  requestId: string;
+}
+
 export interface PicoVaultDaemonApprovalDecideRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalDecide;
   requestId: string;
@@ -313,6 +324,7 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonReaderAccessCloseRequest
   | PicoVaultDaemonReaderAccessOpenPayloadRequest
   | PicoVaultDaemonReaderAccessDecryptItemRequest
+  | PicoVaultDaemonApprovalWatchRequest
   | PicoVaultDaemonApprovalWaitRequest
   | PicoVaultDaemonApprovalDecideRequest
   | PicoVaultDaemonCeremonyCreateDomainRequest
@@ -425,6 +437,10 @@ export interface PicoVaultDaemonCeremonyRotateDomainResult {
 
 export interface PicoVaultDaemonApprovalWaitResult {
   pending: PicoVaultDaemonApprovalRequestDescriptor | null;
+}
+
+export interface PicoVaultDaemonApprovalWatchResult {
+  watching: true;
 }
 
 export interface PicoVaultDaemonApprovalDecideResult {
@@ -810,6 +826,10 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
     case picoVaultDaemonRequestFamilies.approvalWait: {
       assertExactKeys(parsed, ['family', 'requestId']);
       return { family: picoVaultDaemonRequestFamilies.approvalWait, requestId };
+    }
+    case picoVaultDaemonRequestFamilies.approvalWatch: {
+      assertExactKeys(parsed, ['family', 'requestId']);
+      return { family: picoVaultDaemonRequestFamilies.approvalWatch, requestId };
     }
     case picoVaultDaemonRequestFamilies.approvalDecide: {
       assertExactKeys(parsed, [

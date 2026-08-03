@@ -21,11 +21,30 @@
       </div>
     </section>
     <p id="scope" class="scope" hidden>
-      Recovery decisions arrive with the ADR 0112 S3 ceremony. This C2 surface
-      raises the alarm and identifies the signed recovery; it does not pretend
-      that closing this window vetoes anything.
+      Closing this window does not veto anything. Choose Veto recovery to send
+      the authenticated decision from this living device.
     </p>
+    <section id="recovery-card-form" class="form-card" hidden>
+      <label for="pico-name">Pico name</label>
+      <input id="pico-name" maxlength="256" autocomplete="off">
+      <label for="home-name">Home name</label>
+      <input id="home-name" maxlength="256" autocomplete="off">
+      <label for="home-id">Exact Home ID</label>
+      <input id="home-id" maxlength="1024" autocomplete="off" spellcheck="false">
+      <label for="print-form">Print form</label>
+      <select id="print-form">
+        <option value="paper">A4 paper, folded</option>
+        <option value="card_printer">ID-1 card printer</option>
+      </select>
+      <p>Direct printing uses the default system printer. The PDF is sent as a
+        print job and is not saved by Pico.</p>
+      <button id="submit-recovery-card" type="button">Continue securely</button>
+    </section>
     <div class="actions">
+      <button id="veto" class="danger" type="button" hidden>Veto recovery</button>
+      <button id="approve" type="button" hidden>Approve</button>
+      <button id="deny" class="danger" type="button" hidden>Deny</button>
+      <button id="recovery-card" type="button" hidden>Recovery Card</button>
       <button id="check" type="button">Check now</button>
       <button id="close" class="secondary" type="button">Close</button>
     </div>

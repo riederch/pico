@@ -43,6 +43,7 @@ import {
   type PicoVaultDaemonApprovalDecideRequest,
   type PicoVaultDaemonApprovalRequestDescriptor,
   type PicoVaultDaemonApprovalWaitRequest,
+  type PicoVaultDaemonApprovalWatchRequest,
   type PicoVaultDaemonKeyfileDescriptor,
   type PicoVaultDaemonSignRequest,
   type PicoVaultDaemonReaderAccessDecryptItemRequest,
@@ -512,6 +513,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleApprovalWait(socket, state, request);
         return;
       }
+      case picoVaultDaemonRequestFamilies.approvalWatch: {
+        this.#handleApprovalWatch(socket, state, request);
+        return;
+      }
       case picoVaultDaemonRequestFamilies.approvalDecide: {
         this.#handleApprovalDecide(socket, request);
         return;
@@ -948,7 +953,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
   ): void {
     // Any hold connection may wait; an approval is routed to the hold
     // connection of the session whose key would create the authority.
-    const held = this.#sessionHeldBy(socket);
+    const held = this.#registerApprovalWatch(socket, state);
     if (held === null) {
       this.#respondError(socket, request.requestId, 'approval_wait_forbidden');
       return;
@@ -959,13 +964,6 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     // between long polls; requests may park but cannot approve themselves.
     // Auditing that transition makes unavailability diagnosable and keeps the
     // repeating poll from turning one standing terminal into many records.
-    if (!state.approvalWatchAudited) {
-      state.approvalWatchAudited = true;
-      this.#audit('approval_watch_started', {
-        keyFingerprintHex: held.keyFingerprintHex,
-        keyRole: held.keyRole,
-      });
-    }
     const pending = this.#pendingApproval;
     if (pending !== null && pending.signerHoldSocket === socket) {
       this.#respondOk(socket, request.requestId, {
@@ -983,6 +981,36 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       }
     }, this.#approvalWaitMs);
     state.approvalWaitTimer.unref();
+  }
+
+  #handleApprovalWatch(
+    socket: Socket,
+    state: ConnectionState,
+    request: PicoVaultDaemonApprovalWatchRequest,
+  ): void {
+    if (this.#registerApprovalWatch(socket, state) === null) {
+      this.#respondError(socket, request.requestId, 'approval_wait_forbidden');
+      return;
+    }
+    this.#respondOk(socket, request.requestId, { watching: true });
+  }
+
+  #registerApprovalWatch(
+    socket: Socket,
+    state: ConnectionState,
+  ): UnlockedState | null {
+    const held = this.#sessionHeldBy(socket);
+    if (held === null) {
+      return null;
+    }
+    if (!state.approvalWatchAudited) {
+      state.approvalWatchAudited = true;
+      this.#audit('approval_watch_started', {
+        keyFingerprintHex: held.keyFingerprintHex,
+        keyRole: held.keyRole,
+      });
+    }
+    return held;
   }
 
   #handleApprovalDecide(

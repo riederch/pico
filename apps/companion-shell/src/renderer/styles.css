@@ -88,9 +88,14 @@ h1 { margin: .3rem 0 2rem; font-size: 2rem; }
 h2 { margin: 0 0 .75rem; font-size: 1.25rem; }
 #body { margin: 0; color: var(--pico-text-secondary); line-height: 1.6; overflow-wrap: anywhere; }
 .scope { margin: 1rem 0 0; padding: 1rem; border-left: .25rem solid var(--pico-status-warning); color: var(--pico-text-secondary); line-height: 1.5; }
+.form-card { margin-top: 1rem; padding: 1.25rem; border: 1px solid var(--pico-border); border-radius: var(--pico-radius-card); background: var(--pico-surface-1); }
+.form-card label { display: block; margin: .85rem 0 .35rem; color: var(--pico-text-secondary); font-weight: 700; }
+.form-card input, .form-card select { width: 100%; min-height: 2.75rem; padding: 0 .8rem; border: 1px solid var(--pico-border-strong); border-radius: var(--pico-radius-input); background: var(--pico-surface-2); color: var(--pico-text-primary); font: inherit; }
+.form-card p { color: var(--pico-text-secondary); line-height: 1.5; }
 .actions { display: flex; gap: .75rem; margin-top: 2rem; }
 button { min-height: 2.75rem; padding: 0 1.1rem; border: 0; border-radius: var(--pico-radius-button); background: var(--pico-primary); color: var(--pico-text-on-primary); font: inherit; font-weight: 700; cursor: pointer; }
 button.secondary { border: 1px solid var(--pico-border-strong); background: var(--pico-surface-2); color: var(--pico-text-primary); }
+button.danger { background: var(--pico-status-blocked); color: var(--pico-text-primary); }
 button:focus-visible { outline: 3px solid var(--pico-focus); outline-offset: 3px; }
 button:disabled { opacity: .55; cursor: wait; }
 

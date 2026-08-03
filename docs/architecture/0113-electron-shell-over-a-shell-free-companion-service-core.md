@@ -89,8 +89,12 @@ to the main process only over a narrow, typed IPC bridge that carries
 rendered statements (ADR 0106), presentation state and the person's
 decisions - never key material, never a Recovery Phrase or PIN, never
 raw socket access. Recovery Card PDFs render in the main process and go
-direct to the printer (ADR 0112); the renderer sees only the public
-front metadata.
+direct to the printer (ADR 0112); the renderer sees only public setup/front
+metadata. S3 extends the original four display methods with four named
+recovery methods: veto, open/submit the public Card setup, and one-bit approval.
+Each main-process handler is bound to the exact current presentation decision;
+there is no generic command or raw-payload bridge. Secret keystrokes are
+prevented in Main before renderer delivery, and only their count is rendered.
 
 ### Tray discipline and the memory budget
 
@@ -190,15 +194,16 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   Tray, critical desktop notifications, resume and false-to-true network
   regain are adapters around `checkNow`; the default state owns no window,
   and an interaction/alarm creates a strict sandboxed BrowserWindow that is
-  destroyed on close. The preload exposes only presentation get/subscribe,
-  lifecycle check and window close; renderer-reachable code has no Node or
+  destroyed on close. The preload exposes only eight named methods:
+  presentation get/subscribe, lifecycle check, window close, recovery veto,
+  Card open/submit and approval decide; renderer-reachable code has no Node or
   Electron import, parses a closed display-only state, uses textContent and
   a no-network/no-inline CSP, and renders color+symbol+text without inventing
   a Character asset. The shell adapter carries all three existing loud
   statements (pending recovery, verified host rotation, unverified Home
   continuity), while raw errors are reduced to public categories before IPC.
   Static boundary checks and an actual Electron smoke prove
-  `contextIsolation`, sandboxing, absent Node/`require` and the exact four
+  `contextIsolation`, sandboxing, absent Node/`require` and the exact eight
   bridge methods. A spawned Foundation, a founded Home and two real Vault
   daemons prove that a real pending recovery reaches the hosted carrier and
   raises its blocked presentation on the first authenticated read.
@@ -276,7 +281,8 @@ Negative and residual:
   Link clients; extracting those clients into a dedicated package is
   legitimate later hygiene, not a product gate;
 - nobody writes the profile in production yet - enrollment, onboarding
-  and restore gain that duty with their product surfaces (S3).
+  and restore gain that duty with their product surfaces (S3); the current
+  Card surface is re-issue from an already bound profile.
 
 ## Relationship to other ADRs
 
@@ -285,8 +291,9 @@ Negative and residual:
   The CLI remains transitional tooling.
 - Implements the core of ADR `0112` S2; the cadence and loudness
   contract lives there, the carrier lives here.
-- Leaves ADR `0099`/`0106` untouched: the main process is the hold
-  channel, approvals render from the signed bytes, the avatar asks.
+- Keeps ADR `0099`/`0106` approval semantics unchanged: the main process
+  acknowledges its watcher before opening the ceremony consumer, approvals
+  render from the signed bytes, and the avatar returns only the exact decision.
 - Applies ADR `0013` and the design system to the future renderer;
   character visuals stay gated on registered production assets.
 - Applies ADR `0104`: the profile is deployment/binding data; person

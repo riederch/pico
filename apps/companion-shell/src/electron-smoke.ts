@@ -20,6 +20,10 @@ async function smoke(): Promise<void> {
   );
   ipcMain.handle(picoCompanionIpcChannels.getPresentation, () => expectedState);
   ipcMain.handle(picoCompanionIpcChannels.requestCheck, () => undefined);
+  ipcMain.handle(picoCompanionIpcChannels.vetoRecovery, () => undefined);
+  ipcMain.handle(picoCompanionIpcChannels.openRecoveryCard, () => undefined);
+  ipcMain.handle(picoCompanionIpcChannels.submitRecoveryCard, () => undefined);
+  ipcMain.handle(picoCompanionIpcChannels.decideApproval, () => undefined);
   ipcMain.on(picoCompanionIpcChannels.closeWindow, () => undefined);
 
   const window = new BrowserWindow(picoCompanionWindowOptions(preloadPath));
@@ -37,9 +41,13 @@ async function smoke(): Promise<void> {
     requireType: 'undefined',
     bridgeKeys: [
       'closeWindow',
+      'decideApproval',
       'getPresentation',
       'onPresentationChanged',
+      'openRecoveryCard',
       'requestCheck',
+      'submitRecoveryCard',
+      'vetoRecovery',
     ],
     state: expectedState,
   };

@@ -16,6 +16,21 @@ import {
 } from 'electron';
 import sodium from 'libsodium-wrappers-sumo';
 import {
+  issuePicoCompanionRecoveryCard,
+} from '@pico/companion/recovery-card';
+import {
+  defaultPicoCompanionProfilePath,
+  readPicoCompanionProfile,
+} from '@pico/companion/profile';
+import {
+  openPicoCompanionVaultProductSession,
+} from '@pico/companion/vault-product-session';
+import type {
+  PicoCompanionApprovalDecisionPort,
+} from '@pico/companion/approval-carrier';
+import type { PicoVaultDaemonApprovalRequestDescriptor } from '@pico/vault-daemon';
+import {
+  parsePicoCompanionRecoveryCardSetupInput,
   parsePicoCompanionPresentation,
   picoCompanionIpcChannels,
   type PicoCompanionPresentation,
@@ -26,6 +41,7 @@ import {
   type PicoCompanionPresentationPort,
 } from './presentation-adapter.js';
 import {
+  defaultPicoVaultDaemonSocketPath,
   startPicoCompanionShellRuntime,
   type PicoCompanionShellRuntime,
 } from './runtime.js';
@@ -37,6 +53,8 @@ import {
   readPicoLinuxProcessTable,
 } from './linux-process-tree.js';
 import { picoCompanionWindowOptions } from './window-options.js';
+import { collectPicoCompanionSecureInput } from './secure-input.js';
+import { createLinuxLpRecoveryCardPrinter } from './linux-print.js';
 
 const rendererPath = join(import.meta.dirname, 'renderer', 'index.html');
 const rendererUrl = pathToFileURL(rendererPath).href;
@@ -50,6 +68,7 @@ let presentation: PicoCompanionPresentation = parsePicoCompanionPresentation({
   kind: 'starting',
   severity: 'active',
   symbol: '●',
+  decision: 'none',
   title: 'Pico is starting',
   body: 'Connecting to this device\'s Pico service core.',
   observedAt: new Date().toISOString(),
@@ -58,6 +77,8 @@ let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let runtime: PicoCompanionShellRuntime | null = null;
 let quitting = false;
+let productOperationActive = false;
+let pendingApprovalDecision: ((approved: boolean) => void) | null = null;
 
 app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null);
@@ -209,6 +230,73 @@ function lockDownRendererSession(): void {
 
 function registerIpc(): void {
   ipcMain.handle(
+    picoCompanionIpcChannels.openRecoveryCard,
+    (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (
+        productOperationActive
+        || (presentation.kind !== 'idle'
+          && presentation.kind !== 'recovery_card_printed')
+      ) {
+        return;
+      }
+      presentationPort.present(parsePicoCompanionPresentation({
+        kind: 'recovery_card_setup',
+        severity: 'warning',
+        symbol: '!',
+        decision: 'recovery_card_details',
+        title: 'Print a Pico Recovery Card',
+        body: 'This exports your identity root once for printing. Choose the exact Home and print form; Pico will collect the Vault passphrase and Card PIN without sending either through the renderer.',
+        observedAt: new Date().toISOString(),
+      }));
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.submitRecoveryCard,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (productOperationActive || presentation.decision !== 'recovery_card_details') {
+        return;
+      }
+      try {
+        const details = parsePicoCompanionRecoveryCardSetupInput(value);
+        productOperationActive = true;
+        await runRecoveryCardIssuance(details);
+      } catch {
+        await presentRecoveryCardRetry();
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.decideApproval,
+    (event: IpcMainInvokeEvent, approved: unknown) => {
+      assertRendererSender(event);
+      if (
+        typeof approved !== 'boolean'
+        || pendingApprovalDecision === null
+        || presentation.decision !== 'approve_or_deny'
+      ) {
+        return;
+      }
+      const decide = pendingApprovalDecision;
+      pendingApprovalDecision = null;
+      decide(approved);
+      presentationPort.present(parsePicoCompanionPresentation({
+        kind: 'starting',
+        severity: approved ? 'active' : 'blocked',
+        symbol: approved ? '●' : '×',
+        decision: 'none',
+        title: approved ? 'Approval recorded' : 'Request denied',
+        body: approved
+          ? 'Pico is completing the exact approved operation.'
+          : 'Pico will not perform the authority-creating operation.',
+        observedAt: new Date().toISOString(),
+      }));
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.getPresentation,
     (event: IpcMainInvokeEvent) => {
       assertRendererSender(event);
@@ -216,10 +304,37 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.vetoRecovery,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null || presentation.decision !== 'veto_recovery') {
+        return;
+      }
+      try {
+        await runtime.vetoPendingRecovery();
+      } catch {
+        const failed = parsePicoCompanionPresentation({
+          kind: 'service_error',
+          severity: 'blocked',
+          symbol: '×',
+          decision: 'none',
+          title: 'Recovery veto did not complete',
+          body: 'Pico did not record a veto. The recovery alarm remains armed and will rise again on the next authenticated check.',
+          observedAt: new Date().toISOString(),
+        });
+        await presentationPort.present(failed);
+        await presentationPort.notify(failed);
+      }
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.requestCheck,
     async (event: IpcMainInvokeEvent) => {
       assertRendererSender(event);
-      if (runtime === null) {
+      if (runtime === null || productOperationActive) {
+        if (runtime !== null) {
+          return;
+        }
         throw new Error('companion_service_unavailable');
       }
       await runtime.checkNow();
@@ -232,6 +347,175 @@ function registerIpc(): void {
       window?.close();
     },
   );
+}
+
+async function runRecoveryCardIssuance(
+  details: ReturnType<typeof parsePicoCompanionRecoveryCardSetupInput>,
+): Promise<void> {
+  if (window === null || window.isDestroyed()) {
+    throw new Error('companion_window_unavailable');
+  }
+  const profile = readPicoCompanionProfile(defaultPicoCompanionProfilePath());
+  const passphrasePrompt = {
+    title: 'Enter the Vault passphrase',
+    instruction: 'Type this device\'s Vault passphrase, then press Enter. It is not the Recovery Phrase or Card PIN.',
+    maximumLength: 1_024,
+    validate: (value: string) => value.length > 0,
+  };
+  const passphrase = await collectPicoCompanionSecureInput({
+    window,
+    prompt: passphrasePrompt,
+    presentCount: async (count, invalid) => {
+      await presentSecureInput(passphrasePrompt, count, invalid);
+    },
+  });
+  const pinPrompt = {
+    title: 'Choose the Card PIN',
+    instruction: 'Type 6–64 digits or lowercase letters, then press Enter. Keep this PIN somewhere the card is not.',
+    maximumLength: 64,
+    validate: (value: string) => /^[0-9a-z]{6,64}$/u.test(value),
+  };
+  const pin = await collectPicoCompanionSecureInput({
+    window,
+    prompt: pinPrompt,
+    presentCount: async (count, invalid) => {
+      await presentSecureInput(pinPrompt, count, invalid);
+    },
+  });
+  const confirmationPrompt = {
+    ...pinPrompt,
+    title: 'Repeat the Card PIN',
+    instruction: 'Type the same Card PIN again, then press Enter.',
+  };
+  const confirmation = await collectPicoCompanionSecureInput({
+    window,
+    prompt: confirmationPrompt,
+    presentCount: async (count, invalid) => {
+      await presentSecureInput(confirmationPrompt, count, invalid);
+    },
+  });
+  if (pin !== confirmation) {
+    throw new Error('recovery_pin_mismatch');
+  }
+
+  const session = await openPicoCompanionVaultProductSession({
+    socketPath: defaultPicoVaultDaemonSocketPath(),
+    unlock: [{
+      keyRole: 'pico_identity',
+      keyFingerprintHex: profile.identity.keyFingerprintHex,
+      passphrase,
+    }],
+    decisions: approvalDecisionPort,
+  });
+  try {
+    const issued = await issuePicoCompanionRecoveryCard({
+      daemonClient: session.consumerClient,
+      profile,
+      picoName: details.picoName,
+      homeNameOrId: details.homeNameOrId,
+      homeId: details.homeId,
+      pin,
+      form: details.form,
+      printer: createLinuxLpRecoveryCardPrinter(),
+    });
+    await presentationPort.present(parsePicoCompanionPresentation({
+      kind: 'recovery_card_printed',
+      severity: 'active',
+      symbol: '●',
+      decision: 'none',
+      title: 'Recovery Card sent to the printer',
+      body: `Pico sent the ${details.form === 'paper' ? 'folded A4' : 'ID-1'} card for ${issued.metadata.picoName} to the ${issued.destination}. Print and laminate it now, keep the Card PIN elsewhere, and never photograph the secret side.`,
+      observedAt: new Date().toISOString(),
+    }));
+  } finally {
+    await session.close();
+  }
+}
+
+const approvalDecisionPort: PicoCompanionApprovalDecisionPort = {
+  decideApproval: async (
+    approval: PicoVaultDaemonApprovalRequestDescriptor,
+  ): Promise<boolean> => {
+    if (pendingApprovalDecision !== null) {
+      throw new Error('companion_approval_already_pending');
+    }
+    await presentationPort.present(parsePicoCompanionPresentation({
+      kind: 'approval',
+      severity: 'warning',
+      symbol: '!',
+      decision: 'approve_or_deny',
+      title: 'Pico needs your approval',
+      body: `${approval.statement} Signing key ${shortFingerprint(approval.keyFingerprintHex)}; exact request digest ${shortFingerprint(approval.signatureInputDigestHex)}.`,
+      observedAt: new Date().toISOString(),
+    }));
+    showWindow();
+    return await new Promise<boolean>((resolvePromise) => {
+      const timer = setTimeout(() => {
+        if (pendingApprovalDecision !== null) {
+          pendingApprovalDecision = null;
+          resolvePromise(false);
+        }
+      }, Math.max(1, approval.expiresInMs - 250));
+      timer.unref();
+      pendingApprovalDecision = (approved) => {
+        clearTimeout(timer);
+        resolvePromise(approved);
+      };
+    });
+  },
+  notifyApprovalChannelFailure: async () => {
+    await presentProductError(
+      'Pico approval channel stopped',
+      'No authority was approved. Unlock the Vault and start the operation again.',
+    );
+  },
+};
+
+async function presentSecureInput(
+  prompt: { title: string; instruction: string },
+  count: number,
+  invalid: boolean,
+): Promise<void> {
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'secure_input',
+    severity: invalid ? 'blocked' : 'warning',
+    symbol: invalid ? '×' : '!',
+    decision: 'none',
+    title: prompt.title,
+    body: `${prompt.instruction} ${count} character${count === 1 ? '' : 's'} entered${invalid ? '; the value is not valid yet' : ''}. The page receives neither keystrokes nor value.`,
+    observedAt: new Date().toISOString(),
+  }));
+}
+
+async function presentProductError(title: string, body: string): Promise<void> {
+  const state = parsePicoCompanionPresentation({
+    kind: 'service_error',
+    severity: 'blocked',
+    symbol: '×',
+    decision: 'none',
+    title,
+    body,
+    observedAt: new Date().toISOString(),
+  });
+  await presentationPort.present(state);
+  await presentationPort.notify(state);
+}
+
+async function presentRecoveryCardRetry(): Promise<void> {
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'recovery_card_setup',
+    severity: 'blocked',
+    symbol: '×',
+    decision: 'recovery_card_details',
+    title: 'Recovery Card was not printed',
+    body: 'Pico retained no PDF, Recovery Phrase or Card PIN. Check the Vault passphrase, approval and default printer, then try again.',
+    observedAt: new Date().toISOString(),
+  }));
+  showWindow();
+}
+
+function shortFingerprint(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-8)}`;
 }
 
 function assertRendererSender(event: IpcMainEvent | IpcMainInvokeEvent): void {
@@ -291,6 +575,9 @@ function showWindow(): void {
     window.webContents.on('will-attach-webview', (event) => event.preventDefault());
     window.once('closed', () => {
       window = null;
+      const deny = pendingApprovalDecision;
+      pendingApprovalDecision = null;
+      deny?.(false);
     });
     void window.loadFile(rendererPath).then(() => {
       window?.show();
@@ -308,6 +595,7 @@ function presentServiceError(error: unknown): void {
     kind: 'service_error',
     severity: 'blocked',
     symbol: '×',
+    decision: 'none',
     title: 'Pico companion needs attention',
     body: `The local companion service could not start (${reason}). `
       + 'Check this device\'s companion profile and Pico Vault service.',

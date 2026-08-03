@@ -7,6 +7,10 @@ export const picoCompanionIpcChannels = Object.freeze({
   getPresentation: 'pico:presentation:get',
   presentationChanged: 'pico:presentation:changed',
   requestCheck: 'pico:lifecycle:check',
+  vetoRecovery: 'pico:recovery:veto',
+  openRecoveryCard: 'pico:recovery-card:open',
+  submitRecoveryCard: 'pico:recovery-card:submit',
+  decideApproval: 'pico:approval:decide',
   closeWindow: 'pico:window:close',
 });
 
@@ -14,16 +18,36 @@ export type PicoCompanionPresentationKind =
   | 'starting'
   | 'idle'
   | 'pending_recovery'
+  | 'recovery_waiting'
+  | 'recovery_completed'
+  | 'recovery_completion_blocked'
+  | 'recovery_card_setup'
+  | 'secure_input'
+  | 'approval'
+  | 'recovery_card_printed'
   | 'host_keys_rotated'
   | 'host_continuity_unverified'
   | 'service_error';
 
 export type PicoCompanionPresentationSeverity = 'active' | 'warning' | 'blocked';
+export type PicoCompanionPresentationDecision =
+  | 'none'
+  | 'veto_recovery'
+  | 'recovery_card_details'
+  | 'approve_or_deny';
+
+export interface PicoCompanionRecoveryCardSetupInput {
+  picoName: string;
+  homeNameOrId: string;
+  homeId: string;
+  form: 'paper' | 'card_printer';
+}
 
 export interface PicoCompanionPresentation {
   kind: PicoCompanionPresentationKind;
   severity: PicoCompanionPresentationSeverity;
   symbol: '●' | '!' | '×';
+  decision: PicoCompanionPresentationDecision;
   title: string;
   body: string;
   observedAt: string;
@@ -33,6 +57,13 @@ const kinds = new Set<PicoCompanionPresentationKind>([
   'starting',
   'idle',
   'pending_recovery',
+  'recovery_waiting',
+  'recovery_completed',
+  'recovery_completion_blocked',
+  'recovery_card_setup',
+  'secure_input',
+  'approval',
+  'recovery_card_printed',
   'host_keys_rotated',
   'host_continuity_unverified',
   'service_error',
@@ -43,22 +74,41 @@ const severities = new Set<PicoCompanionPresentationSeverity>([
   'blocked',
 ]);
 const symbols = new Set<PicoCompanionPresentation['symbol']>(['●', '!', '×']);
+const decisions = new Set<PicoCompanionPresentationDecision>([
+  'none',
+  'veto_recovery',
+  'recovery_card_details',
+  'approve_or_deny',
+]);
 
 export function parsePicoCompanionPresentation(value: unknown): PicoCompanionPresentation {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('invalid_companion_presentation');
   }
   const record = value as Record<string, unknown>;
-  const expected = new Set(['kind', 'severity', 'symbol', 'title', 'body', 'observedAt']);
+  const expected = new Set([
+    'kind',
+    'severity',
+    'symbol',
+    'decision',
+    'title',
+    'body',
+    'observedAt',
+  ]);
   if (Object.keys(record).some((key) => !expected.has(key))
     || [...expected].some((key) => !(key in record))) {
     throw new Error('invalid_companion_presentation_shape');
   }
   if (!kinds.has(record.kind as PicoCompanionPresentationKind)
     || !severities.has(record.severity as PicoCompanionPresentationSeverity)
-    || !symbols.has(record.symbol as PicoCompanionPresentation['symbol'])) {
+    || !symbols.has(record.symbol as PicoCompanionPresentation['symbol'])
+    || !decisions.has(record.decision as PicoCompanionPresentationDecision)) {
     throw new Error('invalid_companion_presentation_state');
   }
+  assertDecisionKind(
+    record.kind as PicoCompanionPresentationKind,
+    record.decision as PicoCompanionPresentationDecision,
+  );
   assertDisplayText(record.title, 160);
   assertDisplayText(record.body, 4_000);
   if (typeof record.observedAt !== 'string'
@@ -68,15 +118,60 @@ export function parsePicoCompanionPresentation(value: unknown): PicoCompanionPre
   return Object.freeze({ ...record }) as unknown as PicoCompanionPresentation;
 }
 
+function assertDecisionKind(
+  kind: PicoCompanionPresentationKind,
+  decision: PicoCompanionPresentationDecision,
+): void {
+  const expectedKind = decision === 'veto_recovery'
+    ? 'pending_recovery'
+    : decision === 'recovery_card_details'
+      ? 'recovery_card_setup'
+      : decision === 'approve_or_deny'
+        ? 'approval'
+        : undefined;
+  if (expectedKind !== undefined && kind !== expectedKind) {
+    throw new Error('invalid_companion_presentation_decision_binding');
+  }
+}
+
 export function picoCompanionIdlePresentation(now = new Date()): PicoCompanionPresentation {
   return parsePicoCompanionPresentation({
     kind: 'idle',
     severity: 'active',
     symbol: '●',
+    decision: 'none',
     title: 'Pico is watching your Home',
     body: 'No pending device recovery was found on the last authenticated check.',
     observedAt: now.toISOString(),
   });
+}
+
+export function parsePicoCompanionRecoveryCardSetupInput(
+  value: unknown,
+): PicoCompanionRecoveryCardSetupInput {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_recovery_card_setup');
+  }
+  const record = value as Record<string, unknown>;
+  const expected = new Set(['picoName', 'homeNameOrId', 'homeId', 'form']);
+  if (
+    Object.keys(record).some((key) => !expected.has(key))
+    || [...expected].some((key) => !(key in record))
+  ) {
+    throw new Error('invalid_recovery_card_setup_shape');
+  }
+  assertDisplayText(record.picoName, 256);
+  assertDisplayText(record.homeNameOrId, 256);
+  if (
+    typeof record.homeId !== 'string'
+    || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(record.homeId)
+  ) {
+    throw new Error('invalid_recovery_card_home_id');
+  }
+  if (record.form !== 'paper' && record.form !== 'card_printer') {
+    throw new Error('invalid_recovery_card_print_form');
+  }
+  return Object.freeze({ ...record }) as unknown as PicoCompanionRecoveryCardSetupInput;
 }
 
 function assertDisplayText(value: unknown, maximum: number): void {

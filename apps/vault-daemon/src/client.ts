@@ -8,6 +8,7 @@ import {
   PicoVaultDaemonFrameDecoder,
   type PicoVaultDaemonApprovalDecideResult,
   type PicoVaultDaemonApprovalWaitResult,
+  type PicoVaultDaemonApprovalWatchResult,
   type PicoVaultDaemonCeremonyCreateDomainRequest,
   type PicoVaultDaemonCeremonyCreateDomainResult,
   type PicoVaultDaemonCeremonyCreateReaderGrantRequest,
@@ -38,6 +39,7 @@ export interface PicoVaultDaemonClient {
     fields: Record<string, unknown>;
   }): Promise<PicoVaultDaemonSignResult>;
   approvalWait(): Promise<PicoVaultDaemonApprovalWaitResult>;
+  approvalWatch(): Promise<PicoVaultDaemonApprovalWatchResult>;
   approvalDecide(input: {
     approvalId: string;
     signatureInputDigestHex: string;
@@ -169,6 +171,9 @@ export async function connectPicoVaultDaemonClient(
     approvalWait: async () => await request({
       family: picoVaultDaemonRequestFamilies.approvalWait,
     }) as unknown as PicoVaultDaemonApprovalWaitResult,
+    approvalWatch: async () => await request({
+      family: picoVaultDaemonRequestFamilies.approvalWatch,
+    }) as unknown as PicoVaultDaemonApprovalWatchResult,
     approvalDecide: async (decideInput) => await request({
       family: picoVaultDaemonRequestFamilies.approvalDecide,
       approvalId: decideInput.approvalId,

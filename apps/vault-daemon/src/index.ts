@@ -25,6 +25,8 @@ export type {
   PicoVaultDaemonApprovalRequestDescriptor,
   PicoVaultDaemonApprovalWaitRequest,
   PicoVaultDaemonApprovalWaitResult,
+  PicoVaultDaemonApprovalWatchRequest,
+  PicoVaultDaemonApprovalWatchResult,
   PicoVaultDaemonCeremonyCreateDomainRequest,
   PicoVaultDaemonCeremonyCreateDomainResult,
   PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
