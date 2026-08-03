@@ -4,12 +4,15 @@ import { isAbsolute } from 'node:path';
 export const rootOwnedPackageProbeEnvironment =
   'PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE';
 
-export function rootOwnedPackageProbeRequested(
-  value = process.env[rootOwnedPackageProbeEnvironment],
-) {
-  assert(value === undefined || value === '1',
+export function rootOwnedPackageProbeRequested(value) {
+  // Only an omitted argument reads ambient process state. An explicit
+  // undefined represents an unset value and keeps callers/tests deterministic.
+  const requestedValue = arguments.length === 0
+    ? process.env[rootOwnedPackageProbeEnvironment]
+    : value;
+  assert(requestedValue === undefined || requestedValue === '1',
     `${rootOwnedPackageProbeEnvironment} must be unset or exactly 1.`);
-  return value === '1';
+  return requestedValue === '1';
 }
 
 export function selectChromiumSandboxProbe({

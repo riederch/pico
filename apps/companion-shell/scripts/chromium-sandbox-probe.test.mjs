@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  rootOwnedPackageProbeEnvironment,
   rootOwnedPackageProbeRequested,
   selectChromiumSandboxProbe,
 } from './chromium-sandbox-probe.mjs';
@@ -80,6 +81,24 @@ describe('rootOwnedPackageProbeRequested', () => {
   it('accepts only the explicit CI opt-in', () => {
     expect(rootOwnedPackageProbeRequested('1')).toBe(true);
     expect(rootOwnedPackageProbeRequested(undefined)).toBe(false);
+  });
+
+  it('reads the process environment only when the value is omitted', () => {
+    const previousValue = process.env[rootOwnedPackageProbeEnvironment];
+    try {
+      process.env[rootOwnedPackageProbeEnvironment] = '1';
+      expect(rootOwnedPackageProbeRequested()).toBe(true);
+      expect(rootOwnedPackageProbeRequested(undefined)).toBe(false);
+
+      delete process.env[rootOwnedPackageProbeEnvironment];
+      expect(rootOwnedPackageProbeRequested()).toBe(false);
+    } finally {
+      if (previousValue === undefined) {
+        delete process.env[rootOwnedPackageProbeEnvironment];
+      } else {
+        process.env[rootOwnedPackageProbeEnvironment] = previousValue;
+      }
+    }
   });
 
   it('rejects ambiguous opt-in values', () => {

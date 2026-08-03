@@ -238,13 +238,14 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   Electron-associated PIDs remain included even if sandboxing reparents them.
   Failed budget runs emit this evidence before refusing the release.
   The local user-namespace probe has a seven-process topology; the 2026-08-03
-  v2 full-gate run reported 198,276,096 bytes PSS and 94,138,368 private
+  v2 full-gate run reported 200,540,160 bytes PSS and 95,756,288 private
   dirty-plus-hugetlb bytes below the unchanged 225,000,000/110,000,000 numeric
-  gates. Total private memory was 97,947,648 bytes including 3,809,280 clean
-  bytes, and summed RSS was 514,224,128 bytes. The preceding root-owned SUID
-  runner reported comparably stable 204,954,624-byte PSS but 82,874,368 private
-  clean versus 55,267,328 dirty bytes; this evidence is why clean pages remain
-  visible but do not decide the v2 private gate. Static
+  gates. Total private memory was 99,762,176 bytes including 4,005,888 clean
+  bytes, and summed RSS was 516,456,448 bytes. The root-owned SUID v2 package
+  gate then passed with 203,502,592-byte PSS and 55,300,096 budgeted private
+  bytes. Its 136,916,992 total private bytes included 81,616,896 clean bytes;
+  this evidence is why clean pages remain visible but do not decide the v2
+  private gate. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.
