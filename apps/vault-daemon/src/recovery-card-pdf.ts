@@ -26,6 +26,9 @@ export const PICO_RECOVERY_CARD_PDF_LAYOUT = {
   qrQuietZoneModules: 4,
 } as const;
 
+export const PICO_RECOVERY_CARD_V2_QR_PREFIX =
+  'pico-recovery-card-v2:' as const;
+
 export interface PicoRecoveryCardPdfOptions {
   /**
    * Adds a conspicuous watermark to non-secret test/example output. Production
@@ -46,15 +49,22 @@ export interface PicoRecoveryCardQrMatrix {
 }
 
 /**
- * The QR is the binary canonical `pico.recovery.card.v1` payload, not a second
- * JSON serialization. Phrase and QR therefore carry the same protected seed
- * material while the QR additionally binds all Home pins and endpoint hints.
+ * V1 preserves its binary canonical QR bytes. V2 wraps the same canonical
+ * bytes in a fixed ASCII/base64url transport so commodity Linux camera and
+ * USB scanners can return it to Electron Main without a browser renderer ever
+ * receiving the secret QR result. Neither form is a second JSON serialization.
  */
 export function picoRecoveryCardQrPayload(
   card: PicoVaultRecoveryCard,
 ): Uint8Array {
   assertRecoveryCard(card);
-  return hexToBytes(card.canonicalPayloadHex);
+  const canonical = hexToBytes(card.canonicalPayloadHex);
+  if (card.payload.schema === 'pico.recovery.card.v2') {
+    return new TextEncoder().encode(
+      `${PICO_RECOVERY_CARD_V2_QR_PREFIX}${Buffer.from(canonical).toString('base64url')}`,
+    );
+  }
+  return canonical;
 }
 
 export function createPicoRecoveryCardQrMatrix(

@@ -101,6 +101,33 @@ describe('ADR 0110 Recovery Card identity-root material', () => {
     });
   });
 
+  it('issues additive Card v2 with the non-rotating Home acceptor pin', () => {
+    const vector = fixtureVector();
+    const restored = restorePicoVaultIdentityFromRecovery(sodium, {
+      recoveryPhrase: vector.protectedRecoveryPhrase,
+      pinProtected: true,
+      pin: vector.pin,
+      identityKeyFingerprintHex: vector.identityKeyFingerprintHex,
+      passphrase: 'fixture identity passphrase',
+    });
+    const session = openPicoVaultKeyfile(sodium, {
+      keyfile: restored.keyfile,
+      passphrase: 'fixture identity passphrase',
+    });
+    const card = session.issueRecoveryCardV2({
+      ...vector.issuance,
+      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
+      pin: vector.pin,
+    });
+    expect(card.payload).toMatchObject({
+      schema: 'pico.recovery.card.v2',
+      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
+    });
+    expect(card.canonicalPayloadHex).not.toBe(
+      vector.issuedCanonicalPayloadHex,
+    );
+  });
+
   it('restores only the matching root and fails closed on a wrong PIN', () => {
     const vector = fixtureVector();
     const restored = restorePicoVaultIdentityFromRecovery(sodium, {

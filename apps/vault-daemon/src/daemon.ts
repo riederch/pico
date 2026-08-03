@@ -4,13 +4,16 @@ import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
   assertPicoVaultKeyfileMode,
   assertVaultCustodyPathSeparation,
+  createPicoVaultKeyfile,
   createPicoReaderCustodyDomain,
   createPicoReaderCustodyReaderGrant,
   createPicoVaultReaderCustodySyncAccessSession,
   openPicoVaultKeyfile,
   picoVaultCanSignLabel,
   readPicoVaultKeyfile,
+  restorePicoVaultIdentityFromRecovery,
   rotatePicoReaderCustodyDomain,
+  writePicoVaultKeyfile,
   type PicoVaultEncryptedKeyfileV1,
   type PicoVaultReaderCustodySyncAccessSession,
   type PicoVaultReaderCustodySyncItemEvidence,
@@ -20,6 +23,10 @@ import {
 import type {
   PicoReaderCustodySyncBatchRecord,
   PicoVaultPersonKeyRole,
+} from '@pico/protocol';
+import {
+  parsePicoRecoveryCardPayload,
+  picoRecoveryCardV2Schema,
 } from '@pico/protocol';
 import {
   buildPicoVaultSignatureInputFromFields,
@@ -498,6 +505,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleUnlock(socket, request);
         return;
       }
+      case picoVaultDaemonRequestFamilies.recoveryBootstrap: {
+        this.#handleRecoveryBootstrap(socket, request);
+        return;
+      }
       case picoVaultDaemonRequestFamilies.lock: {
         // Locking is never privileged and stays coarse on purpose: any
         // connection may end every session at once as a safety valve.
@@ -542,7 +553,8 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         });
         return;
       }
-      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard: {
+      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard:
+      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2: {
         this.#handleCeremony(socket, frame, request, {
           summary: {
             picoName: request.picoName,
@@ -552,20 +564,41 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
             pinProtected: 'yes',
           },
           statement: `Issue a Recovery Card for Pico ${request.picoName} in ${request.homeNameOrId}. This exports the identity-root recovery material once for printing; PIN protection is mandatory and enabled.`,
-          execute: (session) => session.issueRecoveryCard({
-            picoName: request.picoName,
-            homeNameOrId: request.homeNameOrId,
-            homeId: request.homeId,
-            hostSigningKeyFingerprintHex:
-              request.hostSigningKeyFingerprintHex,
-            hostKeyAgreementKeyFingerprintHex:
-              request.hostKeyAgreementKeyFingerprintHex,
-            hostKeyAgreementPublicKeyHex:
-              request.hostKeyAgreementPublicKeyHex,
-            endpointHint: request.endpointHint,
-            issuedAt: request.issuedAt,
-            pin: request.pin,
-          }) as unknown as Record<string, unknown>,
+          execute: (session) => {
+            if (request.family
+              === picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2) {
+              return session.issueRecoveryCardV2({
+                picoName: request.picoName,
+                homeNameOrId: request.homeNameOrId,
+                homeId: request.homeId,
+                homeHostPicoIdentityFingerprintHex:
+                  request.homeHostPicoIdentityFingerprintHex,
+                hostSigningKeyFingerprintHex:
+                  request.hostSigningKeyFingerprintHex,
+                hostKeyAgreementKeyFingerprintHex:
+                  request.hostKeyAgreementKeyFingerprintHex,
+                hostKeyAgreementPublicKeyHex:
+                  request.hostKeyAgreementPublicKeyHex,
+                endpointHint: request.endpointHint,
+                issuedAt: request.issuedAt,
+                pin: request.pin,
+              }) as unknown as Record<string, unknown>;
+            }
+            return session.issueRecoveryCard({
+              picoName: request.picoName,
+              homeNameOrId: request.homeNameOrId,
+              homeId: request.homeId,
+              hostSigningKeyFingerprintHex:
+                request.hostSigningKeyFingerprintHex,
+              hostKeyAgreementKeyFingerprintHex:
+                request.hostKeyAgreementKeyFingerprintHex,
+              hostKeyAgreementPublicKeyHex:
+                request.hostKeyAgreementPublicKeyHex,
+              endpointHint: request.endpointHint,
+              issuedAt: request.issuedAt,
+              pin: request.pin,
+            }) as unknown as Record<string, unknown>;
+          },
         });
         return;
       }
@@ -1415,6 +1448,102 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
       idleLockMs: this.#idleLockMs,
       maxUnlockDurationMs: this.#maxUnlockDurationMs,
     });
+  }
+
+  #handleRecoveryBootstrap(
+    socket: Socket,
+    request: Extract<PicoVaultDaemonRequest, {
+      family: typeof picoVaultDaemonRequestFamilies.recoveryBootstrap;
+    }>,
+  ): void {
+    if (this.#unlockedSessions.size !== 0
+      || readdirSync(this.keyfilesPath).length !== 0) {
+      this.#respondError(socket, request.requestId, 'recovery_bootstrap_requires_fresh_vault');
+      return;
+    }
+    const card = parsePicoRecoveryCardPayload(
+      Buffer.from(request.canonicalCardPayloadHex, 'hex'),
+    );
+    if (card.schema !== picoRecoveryCardV2Schema) {
+      this.#respondError(
+        socket,
+        request.requestId,
+        'recovery_card_v1_requires_trusted_acceptor_pin',
+      );
+      return;
+    }
+
+    const paths: string[] = [];
+    try {
+      const identity = restorePicoVaultIdentityFromRecovery(this.#sodium, {
+        seedMaterialHex: card.seedMaterialHex,
+        pinProtected: true,
+        pin: request.pin,
+        identityKeyFingerprintHex: card.identityKeyFingerprintHex,
+        passphrase: request.passphrase,
+      });
+      const signing = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'device_signing',
+        passphrase: request.passphrase,
+      });
+      const agreement = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'device_key_agreement',
+        passphrase: request.passphrase,
+      });
+      for (const [role, created] of [
+        ['pico_identity', identity],
+        ['device_signing', signing],
+        ['device_key_agreement', agreement],
+      ] as const) {
+        const path = join(
+          this.keyfilesPath,
+          `${role}-${created.keyFingerprintHex}.json`,
+        );
+        writePicoVaultKeyfile(path, created.keyfile);
+        paths.push(path);
+      }
+      this.#audit('recovery_bootstrap', {
+        outcome: 'ok',
+        identityKeyFingerprintHex: identity.keyFingerprintHex,
+        targetDeviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
+        targetDeviceKeyAgreementKeyFingerprintHex:
+          agreement.keyFingerprintHex,
+      });
+      this.#respondOk(socket, request.requestId, {
+        card: {
+          homeId: card.homeId,
+          homeHostPicoIdentityFingerprintHex:
+            card.homeHostPicoIdentityFingerprintHex,
+          hostSigningKeyFingerprintHex:
+            card.hostSigningKeyFingerprintHex,
+          hostKeyAgreementKeyFingerprintHex:
+            card.hostKeyAgreementKeyFingerprintHex,
+          hostKeyAgreementPublicKeyHex:
+            card.hostKeyAgreementPublicKeyHex,
+          endpointHint: card.endpointHint,
+        },
+        identity: {
+          keyFingerprintHex: identity.keyFingerprintHex,
+          publicKeyHex: identity.publicKeyHex,
+        },
+        device: {
+          signingKeyFingerprintHex: signing.keyFingerprintHex,
+          signingPublicKeyHex: signing.publicKeyHex,
+          keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+          keyAgreementPublicKeyHex: agreement.publicKeyHex,
+          delegationId: request.targetDelegationId,
+        },
+      });
+    } catch (error) {
+      for (const path of paths) {
+        rmSync(path, { force: true });
+      }
+      const reason = snakeCaseReasonPattern.test(messageOf(error))
+        ? messageOf(error)
+        : 'recovery_bootstrap_failed';
+      this.#audit('recovery_bootstrap', { outcome: 'error', reason });
+      this.#respondError(socket, request.requestId, reason);
+    }
   }
 
   #listKeyfiles(): { descriptor: PicoVaultDaemonKeyfileDescriptor; keyfile: PicoVaultEncryptedKeyfileV1 }[] {

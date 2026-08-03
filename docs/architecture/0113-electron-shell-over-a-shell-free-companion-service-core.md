@@ -96,6 +96,15 @@ Each main-process handler is bound to the exact current presentation decision;
 there is no generic command or raw-payload bridge. Secret keystrokes are
 prevented in Main before renderer delivery, and only their count is rendered.
 
+The ADR 0081 P3 Linux unlock adapter also stays entirely in Main and the
+shell-free core. Electron reports the selected `safeStorage` backend; the core
+accepts only GNOME libsecret/KWallet and refuses `basic_text`. The renderer
+receives neither the encrypted binding nor its decrypted passphrase. Before an
+authenticated carrier operation the core may renew the two exact delegated
+device sessions, but it never auto-unlocks the identity root and never widens
+the daemon's idle or absolute limits. Suspend and screen lock close the hold;
+resume/unlock re-enters through the ordinary authenticated check.
+
 ### Tray discipline and the memory budget
 
 The companion's default state is tray-only with the window destroyed,
@@ -280,9 +289,10 @@ Negative and residual:
 - the service core depends on `@pico/vault-daemon` for the daemon and
   Link clients; extracting those clients into a dedicated package is
   legitimate later hygiene, not a product gate;
-- nobody writes the profile in production yet - enrollment, onboarding
-  and restore gain that duty with their product surfaces (S3); the current
-  Card surface is re-issue from an already bound profile.
+- nobody writes the profile or Platform Keystore binding in production yet -
+  enrollment, onboarding and restore gain that duty with their product
+  surfaces (S3); the current Card surface is re-issue from an already bound
+  profile.
 
 ## Relationship to other ADRs
 

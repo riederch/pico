@@ -5,7 +5,10 @@
 Accepted; partially implemented. R1-R4 and R6 are implemented, and R2 now
 holds across a restore rather than within one snapshot. R5's documentation
 half is done and its product half is decided by ADR 0112, whose companion
-surfaces remain open. This ADR decides the path ADR 0109 deliberately left
+surfaces remain open. The additive `pico.recovery.card.v2` canonical form and
+fresh-Vault daemon bootstrap are implemented as prerequisites for that
+surface; v1 remains valid but lacks ADR 0115's Home acceptor pin. This ADR
+decides the path ADR 0109 deliberately left
 missing: how an identity whose Home projects no active delegated device
 regains exactly one. The person's instrument is the
 Recovery Card - a printed, card-sized artifact carrying the PIN-encrypted
@@ -132,16 +135,30 @@ Character Design v3.2.1; product code may not draw or recolor one.
   deliberately unlabeled - a found card must not advertise what belongs
   on it - and what a person writes there is their custody decision, with
   the consequence named below.
-- **The QR payload** is a versioned canonical encoding,
-  `pico.recovery.card.v1` (labeled, length-prefixed elements in the ADR
+- **The QR payload** is a versioned canonical encoding. The original
+  `pico.recovery.card.v1` remains frozen (labeled, length-prefixed elements in the ADR
   0073/0079 style, with authoritative vectors at Gate R1): suite, the
   PIN-protected seed material and its protection flag, identity
   fingerprint, Home id, both host key fingerprints, the host key-agreement
   public key and an endpoint hint, plus the issuance instant. The pins and
-  endpoint make the card self-sufficient: a sealed
+  endpoint made it sufficient for the original host-pin model: a sealed
   recovery claim needs the Home's agreement key and audience pin, and
   trust-on-first-use remains forbidden, so the card carries what the claim
-  bundle once displayed.
+  bundle once displayed. ADR 0115 later made the non-rotating Home Host Pico
+  identity fingerprint mandatory for verifying the host continuity chain.
+  The additive `pico.recovery.card.v2` inserts exactly that fingerprint after
+  Home id and otherwise preserves the v1 fields and semantics. Its
+  authoritative vector is `docs/protocol/fixtures/home-device-recovery/card-v2.json`.
+  New companion issuance uses v2. A v1 card may still restore the root, but a
+  product may create a trusted profile from it only when the person supplies
+  the acceptor pin through a separately verified path; the fresh-Vault daemon
+  bootstrap refuses v1 rather than falling back to TOFU.
+
+  V1 QR transport remains the raw canonical bytes. V2 uses the fixed ASCII
+  wrapper `pico-recovery-card-v2:` plus unpadded base64url of those same
+  canonical bytes, so a commodity scanner can deliver it directly to the
+  companion Main process without the secret result entering the browser
+  renderer. The wrapper is transport only, not a second canonical form.
 
 Issuance renders that content in exactly two print forms, because the two
 ways people actually own a card differ in what the paper has to survive:
@@ -182,8 +199,8 @@ Restore decrypts, derives the root keypair and compares its fingerprint
 against the card's full identity fingerprint: a wrong PIN is detected
 reliably without an authentication tag. The PIN is never printed by the
 tooling, never stored anywhere, and never the Vault passphrase. The flag
-stays in the `pico.recovery.card.v1` layout for format stability; v1
-issuance always sets it, and restore refuses a card that claims no
+stays in both versioned layouts for format stability; issuance always sets
+it, and restore refuses a card that claims no
 protection.
 
 The honesty that makes this acceptable: the card is offline, so no

@@ -22,10 +22,12 @@ import {
 import type { VaultSodium } from '@pico/vault';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { PicoCompanionShellNotifications } from './presentation-adapter.js';
+import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 
 export interface PicoCompanionShellRuntime {
   checkNow(): Promise<PicoCompanionAlarmCheck>;
   vetoPendingRecovery(): Promise<void>;
+  lockVault(): Promise<void>;
   status(): PicoCompanionAlarmCarrierStatus;
   stop(): Promise<void>;
 }
@@ -48,6 +50,7 @@ export async function startPicoCompanionShellRuntime(input: {
   recoveryStatePath?: string;
   fetch?: typeof fetch;
   checkIntervalMs?: number;
+  automaticVaultUnlock?: PicoCompanionAutomaticVaultUnlock;
 }): Promise<PicoCompanionShellRuntime> {
   const profilePath = input.profilePath ?? defaultPicoCompanionProfilePath();
   const profile = readPicoCompanionProfile(profilePath);
@@ -81,6 +84,7 @@ export async function startPicoCompanionShellRuntime(input: {
       return await result;
     };
     const readLifecycle = async () => await serialized(async () => {
+      await input.automaticVaultUnlock?.ensureUnlocked();
       const currentProfile = readPicoCompanionProfile(profilePath);
       const targetLinkClient = await createPicoCompanionLinkClient({
         profile: currentProfile,
@@ -112,6 +116,7 @@ export async function startPicoCompanionShellRuntime(input: {
           throw new Error('no_pending_recovery_alarm');
         }
         await serialized(async () => {
+          await input.automaticVaultUnlock?.ensureUnlocked();
           const currentProfile = readPicoCompanionProfile(profilePath);
           const livingDeviceLinkClient = await createPicoCompanionLinkClient({
             profile: currentProfile,
@@ -126,6 +131,9 @@ export async function startPicoCompanionShellRuntime(input: {
         });
         await carrier.checkNow();
       },
+      lockVault: async () => {
+        await input.automaticVaultUnlock?.lock();
+      },
       status: () => carrier.status(),
       stop: async () => {
         if (stopped) {
@@ -133,11 +141,17 @@ export async function startPicoCompanionShellRuntime(input: {
         }
         stopped = true;
         carrier.stop();
-        await daemonClient.close();
+        await Promise.allSettled([
+          daemonClient.close(),
+          input.automaticVaultUnlock?.close(),
+        ]);
       },
     };
   } catch (error) {
-    await daemonClient.close();
+    await Promise.allSettled([
+      daemonClient.close(),
+      input.automaticVaultUnlock?.close(),
+    ]);
     throw error;
   }
 }

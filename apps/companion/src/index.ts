@@ -76,3 +76,16 @@ export type {
   PicoCompanionVaultProductSession,
   PicoCompanionVaultUnlockInput,
 } from './vault-product-session.js';
+export {
+  createPicoCompanionAutomaticVaultUnlock,
+  defaultPicoCompanionPlatformUnlockPath,
+  hasPicoCompanionPlatformUnlock,
+  picoCompanionLinuxKeystoreBackends,
+  picoCompanionPlatformUnlockSchema,
+  writePicoCompanionPlatformUnlock,
+} from './platform-unlock.js';
+export type {
+  PicoCompanionAutomaticVaultUnlock,
+  PicoCompanionLinuxKeystoreBackend,
+  PicoCompanionPlatformSecretPort,
+} from './platform-unlock.js';

@@ -11,6 +11,7 @@ import {
 } from './index.js';
 
 export const picoRecoveryCardSchema = 'pico.recovery.card.v1' as const;
+export const picoRecoveryCardV2Schema = 'pico.recovery.card.v2' as const;
 export const picoHomeDeviceRecoverySubmissionSchema =
   'pico.home.device-recovery-submission.v1' as const;
 export const picoHomeDeviceRecoveryRecordSchema =
@@ -18,6 +19,7 @@ export const picoHomeDeviceRecoveryRecordSchema =
 
 export const picoHomeDeviceRecoveryCanonicalLabels = {
   card: picoRecoveryCardSchema,
+  cardV2: picoRecoveryCardV2Schema,
   prepare: 'pico.home.device-recovery-prepare.v1',
   evidenceDigest: 'pico.home.device-recovery-evidence-digest.v1',
   claim: 'pico.home.device-recovery-claim.v1',
@@ -46,7 +48,7 @@ export const picoHomeDeviceRecoveryTiming = {
   completionWindowMs: 7 * 24 * 60 * 60 * 1_000,
 } as const;
 
-export interface PicoRecoveryCardPayload {
+export interface PicoRecoveryCardPayloadV1 {
   schema: typeof picoRecoveryCardSchema;
   suite: string;
   picoName: string;
@@ -61,6 +63,32 @@ export interface PicoRecoveryCardPayload {
   endpointHint: string;
   issuedAt: string;
 }
+
+/**
+ * Additive Recovery Card revision for ADR 0115. V1 remains parseable, but it
+ * cannot carry the non-rotating Home acceptor pin and therefore cannot by
+ * itself establish a trustworthy first-run profile.
+ */
+export interface PicoRecoveryCardPayloadV2 {
+  schema: typeof picoRecoveryCardV2Schema;
+  suite: string;
+  picoName: string;
+  homeNameOrId: string;
+  seedMaterialHex: string;
+  pinProtected: boolean;
+  identityKeyFingerprintHex: string;
+  homeId: string;
+  homeHostPicoIdentityFingerprintHex: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  hostKeyAgreementPublicKeyHex: string;
+  endpointHint: string;
+  issuedAt: string;
+}
+
+export type PicoRecoveryCardPayload =
+  | PicoRecoveryCardPayloadV1
+  | PicoRecoveryCardPayloadV2;
 
 export interface PicoHomeDeviceRecoveryEvidence {
   identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
@@ -212,6 +240,7 @@ export function buildPicoHomeDeviceRecoveryPrepareSignatureInput(
 export function buildPicoRecoveryCardPayload(
   input: PicoRecoveryCardPayload,
 ): Uint8Array {
+  const isV2 = input.schema === picoRecoveryCardV2Schema;
   assertExactKeys(input as unknown as Record<string, unknown>, [
     'schema',
     'suite',
@@ -221,13 +250,14 @@ export function buildPicoRecoveryCardPayload(
     'pinProtected',
     'identityKeyFingerprintHex',
     'homeId',
+    ...(isV2 ? ['homeHostPicoIdentityFingerprintHex'] : []),
     'hostSigningKeyFingerprintHex',
     'hostKeyAgreementKeyFingerprintHex',
     'hostKeyAgreementPublicKeyHex',
     'endpointHint',
     'issuedAt',
   ]);
-  if (input.schema !== picoRecoveryCardSchema) {
+  if (input.schema !== picoRecoveryCardSchema && !isV2) {
     throw new Error('invalid_recovery_card_schema');
   }
   if (input.suite !== picoIdentitySuite) {
@@ -246,7 +276,9 @@ export function buildPicoRecoveryCardPayload(
   }
 
   return concatCanonicalElements([
-    asciiBytes(picoHomeDeviceRecoveryCanonicalLabels.card),
+    asciiBytes(isV2
+      ? picoHomeDeviceRecoveryCanonicalLabels.cardV2
+      : picoHomeDeviceRecoveryCanonicalLabels.card),
     asciiBytes(input.suite),
     utf8Bytes(input.picoName),
     utf8Bytes(input.homeNameOrId),
@@ -254,12 +286,75 @@ export function buildPicoRecoveryCardPayload(
     asciiBytes('pin_protected'),
     fixedHexBytes(input.identityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     asciiBytes(input.homeId),
+    ...(isV2
+      ? [fixedHexBytes(
+        input.homeHostPicoIdentityFingerprintHex,
+        32,
+        'invalid_fingerprint_length',
+      )]
+      : []),
     fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.hostKeyAgreementPublicKeyHex, 32, 'invalid_public_key_length'),
     utf8Bytes(input.endpointHint),
     asciiBytes(input.issuedAt),
   ]);
+}
+
+/**
+ * Strict inverse of the binary QR canonical form. It accepts only the exact
+ * v1/v2 element counts, bounded canonical lengths and valid UTF-8, then runs
+ * the same semantic builder and byte-compares the result. No JSON or
+ * field-order-tolerant alternate representation exists on the scan path.
+ */
+export function parsePicoRecoveryCardPayload(
+  canonicalPayload: Uint8Array,
+): PicoRecoveryCardPayload {
+  const elements = parseCanonicalElements(canonicalPayload, 14, 4_096);
+  const label = decodeAsciiElement(elements[0], 'invalid_recovery_card_schema');
+  const v2 = label === picoRecoveryCardV2Schema;
+  if (label !== picoRecoveryCardSchema && !v2) {
+    throw new Error('invalid_recovery_card_schema');
+  }
+  if (elements.length !== (v2 ? 14 : 13)) {
+    throw new Error('invalid_recovery_card_element_count');
+  }
+  let index = 1;
+  const common = {
+    suite: decodeAsciiElement(elements[index++], 'invalid_recovery_suite'),
+    picoName: decodeUtf8Element(elements[index++]),
+    homeNameOrId: decodeUtf8Element(elements[index++]),
+    seedMaterialHex: bytesToHex(elements[index++]),
+    pinProtected:
+      decodeAsciiElement(elements[index++], 'invalid_pin_protection_flag')
+      === 'pin_protected',
+    identityKeyFingerprintHex: bytesToHex(elements[index++]),
+    homeId: decodeAsciiElement(elements[index++], 'invalid_field_charset'),
+  };
+  const homeHostPicoIdentityFingerprintHex = v2
+    ? bytesToHex(elements[index++])
+    : undefined;
+  const tail = {
+    hostSigningKeyFingerprintHex: bytesToHex(elements[index++]),
+    hostKeyAgreementKeyFingerprintHex: bytesToHex(elements[index++]),
+    hostKeyAgreementPublicKeyHex: bytesToHex(elements[index++]),
+    endpointHint: decodeUtf8Element(elements[index++]),
+    issuedAt: decodeAsciiElement(elements[index++], 'invalid_instant'),
+  };
+  const payload: PicoRecoveryCardPayload = v2
+    ? {
+      schema: picoRecoveryCardV2Schema,
+      ...common,
+      homeHostPicoIdentityFingerprintHex:
+        homeHostPicoIdentityFingerprintHex!,
+      ...tail,
+    }
+    : { schema: picoRecoveryCardSchema, ...common, ...tail };
+  const rebuilt = buildPicoRecoveryCardPayload(payload);
+  if (!equalBytes(rebuilt, canonicalPayload)) {
+    throw new Error('noncanonical_recovery_card_payload');
+  }
+  return Object.freeze(payload);
 }
 
 export function buildPicoHomeDeviceRecoveryEvidenceDigestInput(
@@ -638,6 +733,56 @@ function canonicalJson(value: unknown): string {
       `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
   }
   throw new Error('invalid_json_value');
+}
+
+function parseCanonicalElements(
+  input: Uint8Array,
+  maximumElements: number,
+  maximumBytes: number,
+): Uint8Array[] {
+  if (!(input instanceof Uint8Array) || input.byteLength === 0
+    || input.byteLength > maximumBytes) {
+    throw new Error('invalid_recovery_card_payload_length');
+  }
+  const elements: Uint8Array[] = [];
+  let offset = 0;
+  while (offset < input.byteLength) {
+    if (elements.length >= maximumElements || offset + 4 > input.byteLength) {
+      throw new Error('invalid_recovery_card_canonical_length');
+    }
+    const length = new DataView(
+      input.buffer,
+      input.byteOffset + offset,
+      4,
+    ).getUint32(0, false);
+    offset += 4;
+    if (length === 0 || offset + length > input.byteLength) {
+      throw new Error('invalid_recovery_card_canonical_length');
+    }
+    elements.push(input.slice(offset, offset + length));
+    offset += length;
+  }
+  return elements;
+}
+
+function decodeUtf8Element(value: Uint8Array): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(value);
+  } catch {
+    throw new Error('invalid_recovery_card_utf8');
+  }
+}
+
+function decodeAsciiElement(value: Uint8Array, reason: string): string {
+  if ([...value].some((byte) => byte > 0x7f)) {
+    throw new Error(reason);
+  }
+  return decodeUtf8Element(value);
+}
+
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength
+    && left.every((value, index) => value === right[index]);
 }
 
 function bytesToHex(bytes: Uint8Array): string {

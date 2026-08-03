@@ -53,6 +53,10 @@
     "./vault-product-session": {
       "types": "./dist/vault-product-session.d.ts",
       "import": "./dist/vault-product-session.js"
+    },
+    "./platform-unlock": {
+      "types": "./dist/platform-unlock.d.ts",
+      "import": "./dist/platform-unlock.js"
     }
   },
   "scripts": {

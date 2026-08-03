@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1`: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. **Gate P1 is implemented**: `@pico/protocol` exports the Vault keyfile vocabulary plus a pure `buildPicoVaultKeyfileHeaderAad` builder, and `docs/protocol/fixtures/vault-keyfile/` publishes the authoritative header-AAD vector suite. **Gate P2 is implemented as a minimal package-level runtime in `@pico/vault`**: create/open encrypted person-role keyfiles, Argon2id execution, XChaCha20-Poly1305 seal/open with the P1 header AAD, explicit lock, idle auto-lock, role-scoped label-checked signing, key-agreement sealed-box unwrap, encrypted export only, private file mode writes and Foundation data/backup path separation tests. This discharges ADR 0079 Gate G2 for the person-role custody floor. Subsequent ADRs 0097-0102 implement the daemon and approval boundary, and ADR 0110 implements the one named PIN-protected Recovery Card export and time-locked recovery path through R4. Platform-keystore integration, a Vault product shell, recovery/avatar product UX and compatibility certification remain open; Gate P3 remains platform-keystore work.
+Accepted as the threat model and custody direction for **person-role private keys** — the Pico Identity Key and the owner's device keys under `pico.suite.id.v1` (ADR 0079): the exclusive Vault boundary (the Foundation host and every browser context are structurally excluded custody locations), one canonical encrypted at-rest format (`pico.vault.keyfile.v1`: Argon2id-derived key, XChaCha20-Poly1305 with an AAD-bound labeled header), the agent-pattern process boundary with label-checked signing, root minimization (one primary Vault, delegated device keys everywhere else), encrypted-or-absent export, and the honest loss rule — behind three gates. **Gate P1 is implemented**: `@pico/protocol` exports the Vault keyfile vocabulary plus a pure `buildPicoVaultKeyfileHeaderAad` builder, and `docs/protocol/fixtures/vault-keyfile/` publishes the authoritative header-AAD vector suite. **Gate P2 is implemented as a minimal package-level runtime in `@pico/vault`**: create/open encrypted person-role keyfiles, Argon2id execution, XChaCha20-Poly1305 seal/open with the P1 header AAD, explicit lock, idle auto-lock, role-scoped label-checked signing, key-agreement sealed-box unwrap, encrypted export only, private file mode writes and Foundation data/backup path separation tests. This discharges ADR 0079 Gate G2 for the person-role custody floor. Subsequent ADRs 0097-0102 implement the daemon and approval boundary, and ADR 0110 implements the one named PIN-protected Recovery Card export and time-locked recovery path through R4. **Gate P3 now has its first implemented platform tranche:** the packaged Linux Electron companion uses only reviewed `safeStorage` backends backed by GNOME libsecret or KWallet, refuses `basic_text`, and can re-establish only profile-bound device sessions without changing the canonical keyfile. Product onboarding still has to create that binding; other platforms, broader Vault product UX and compatibility certification remain open.
 
 ## Context
 
@@ -159,7 +159,40 @@ Memory hygiene is bounded, not oversold. The runtime zeroizes the derived file k
 
 ### Platform keystores hold the unlock secret, never the format
 
-Where a platform keystore exists, it may store the file key (or a wrapping of it) so that unlock needs no typed passphrase. The keyfile stays canonical: one format to specify, test, vector-cover and carry across platforms; the keystore is an unlock path, not a storage backend. Each platform integration is its own Gate P3 decision with an honest analysis of what that keystore actually defends against on that platform — a Linux Secret Service unlocked with login is a different promise than an iOS Keychain entry behind biometrics, and the difference is written down, not averaged. The passphrase floor always remains available (V3), so no platform integration ever becomes load-bearing for the format.
+Where a platform keystore exists, it may store an unlock secret - for example
+an encrypted passphrase, the file key or a wrapping of it - so that unlock
+needs no typed passphrase. The keyfile stays canonical: one format to specify,
+test, vector-cover and carry across platforms; the keystore is an unlock path,
+not a storage backend. Each platform integration is its own Gate P3 decision
+with an honest analysis of what that keystore actually defends against on that
+platform — a Linux Secret Service unlocked with login is a different promise
+than an iOS Keychain entry behind biometrics, and the difference is written
+down, not averaged. The passphrase floor always remains available (V3), so no
+platform integration ever becomes load-bearing for the format.
+
+The first such decision is the packaged Linux desktop companion. Electron
+`safeStorage` is accepted only when it reports `gnome_libsecret`, `kwallet`,
+`kwallet5` or `kwallet6` and encryption is available. `basic_text`, `unknown`
+and an unavailable or changed backend fail closed; Pico never calls
+`setUsePlainTextEncryption`. The package declares `libsecret-1-0` for the
+GNOME path. A mode-0600 companion record contains the OS-encrypted passphrase
+plus an exact binding to the Home Host Pico, identity, device keys and
+delegation. It contains no key and no plaintext passphrase, and copying it to
+another profile is refused.
+
+The promise is deliberately narrow. This defeats offline theft of the binding
+file and of backups while the person's desktop keyring remains unavailable to
+the thief. It does not defend against malware in the same unlocked login
+session, a coerced/unlocked desktop, or compromise of libsecret/KWallet or
+Electron. Linux login commonly unlocks the keyring, so this is the named V10
+platform authentication decision, not a biometric claim. Only the delegated
+`device_signing` and `device_key_agreement` sessions are automatic; the
+identity root is never on that list. The daemon's five-minute idle and
+fifteen-minute absolute ceilings remain unchanged: the companion obtains a
+fresh bounded session before an authenticated carrier run, closes its hold on
+suspend/screen lock, and retries after resume/unlock. V8/V3 remain intact
+because the same passphrase and canonical keyfiles still work without the
+platform record.
 
 ### The agent boundary and label-checked signing
 
@@ -180,7 +213,7 @@ There is no recovery path in this ADR, and none may be improvised around it: no 
 
 1. **Gate P1 — Keyfile layout and authoritative vectors. Done.** The `pico.vault.keyfile.v1` labeled header-AAD layout is fixed with one keyfile per person-role keypair, ADR 0073-style accept/reject vectors and synthetic open-negative metadata. It covers wrong-label, tampered-header, role-swap, suite-swap, KDF-parameter-downgrade, wrong-passphrase and truncation negatives before any real key exists.
 2. **Gate P2 — Minimal Vault runtime under custody tests. Done.** `@pico/vault` implements create, unlock/open, lock, label-checked sign, key-agreement unwrap, encrypted export only, private keyfile writes and path separation from Foundation scopes. Tests bind V1 (host/browser exclusion by path separation), V2 (encrypted keyfile envelope, no raw private-key export), V4 (no blind signing; unknown labels refused), V7 (explicit lock, idle auto-lock and documented JS memory-hygiene limits) and the ADR 0072 permission pattern for custody files. **This gate discharges ADR 0079 G2 for the person role**; ADR 0086 consumes it for Vault-only reader-custody KEK creation, owner self-envelope unwrap, per-item DEK wrapping/encryption and exact writer signing. ADR 0088 adds historical/additional-reader sealing, additional-reader unwrap and revocation-coupled fresh KEK generation. ADR 0096 adds a bounded structural Reader access adapter over exactly one lockable session. The deployable Vault shell and reader transport remain future.
-3. **Gate P3 — Platform keystore integrations.** Per platform, additive to the keyfile, each with its own written analysis of what the keystore protects against there, and with the passphrase floor kept intact.
+3. **Gate P3 — Platform keystore integrations. Linux desktop tranche implemented.** The companion's Electron adapter, private profile-bound encrypted record, strict backend allow-list, device-only automatic session ownership, screen/suspend locking and tests implement the analysis above. Onboarding/profile creation has not yet written the record in production, so ADR 0112 S3 remains open even though this platform integration substrate is executable. Every further platform is a separate tranche with its own analysis and the passphrase floor kept intact.
 
 ## Non-goals
 
@@ -198,7 +231,7 @@ This ADR does not define or implement:
 ## Open questions
 
 - **Passphrase policy and UX**: minimum-strength guidance, zxcvbn-style feedback, and how the creation flow teaches the loss rule without terrifying people — Vault runtime work above the custody floor.
-- **Auto-lock defaults** (V7): idle thresholds, lock-on-suspend, lock-on-screen-lock — per platform/product runtime, and alongside Gate P3 where platform keystores are involved.
+- **Auto-lock defaults beyond Linux desktop** (V7): Linux keeps the daemon's five-minute idle/fifteen-minute absolute ceilings and closes the companion hold on suspend/screen lock. Every other platform/product runtime still needs its own decision alongside its P3 tranche.
 - **Local consumer transport** for the agent boundary (unix socket permissions, peer credentials, per-app authorization) — ADR 0097 fixes the first process contract (private pathname Unix socket, named request families, hold-bound unlock); `SO_PEERCRED` per-client authority remains its Gate D7.
 - **Paper/offline backup of the *encrypted* export** (printed QR of ciphertext with the passphrase held separately) — allowed in principle by V8; encoding and UX undecided.
 - **Whether the first Vault ships as CLI, daemon or app**, and on which platform first — decided in ADR 0097: CLI plus local daemon, Linux first, macOS as the second POSIX target; native shells and mobile delegated devices are sequenced behind the same daemon contract.

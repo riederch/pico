@@ -6,9 +6,13 @@ Accepted; partially implemented. The transitional CLI wrappers (gate S1)
 landed with this ADR; ADR 0113 C1/C2 have since implemented S2's alarm
 carrier, Electron adapters and real-process proof. S3 now has a first bounded
 product vertical: one-decision veto, on-demand Recovery Card re-issue,
-approval rendering and durable pull-completion/receipt state. First-run
-profile creation, phrase/QR restore and recovery initiation remain open, as
-does S4 on ADR 0105 B3. This ADR takes over the product half of ADR 0110's R5:
+approval rendering and durable pull-completion/receipt state. Card v2 now
+carries ADR 0115's acceptor pin, the Vault daemon can bootstrap a fresh Vault
+from its strictly parsed canonical payload, and the Linux companion has a
+fail-closed Platform Keystore unlock owner for the target device keys.
+First-run profile creation, scanner/phrase capture and recovery initiation
+remain open, as does S4 on ADR 0105 B3. This ADR takes over the product half
+of ADR 0110's R5:
 where a person actually issues a card, restores from it, sees a pending
 alarm, vetoes, and completes a recovery. It deliberately does not choose
 the client shell technology - that choice belongs to the ADR that starts
@@ -187,10 +191,13 @@ transitional for the same reason the other twelve are.
   continuation file carries only the signed public pending view or public
   receipt summary; before `effectiveAt` it renders the honest wait, and on a
   later authenticated check it attempts exact-target completion and records
-  the exactly-one-device receipt. Still open: issuance at the end of
-  onboarding, productive profile creation, the first-run new-identity/card
-  choice, phrase/QR restore into a fresh Vault, recovery initiation, and
-  durable product unlock ownership across the 48-hour wait.
+  the exactly-one-device receipt. The additive Card v2/parser/fresh-Vault
+  daemon bootstrap and Linux
+  libsecret/KWallet-backed device-session owner now provide the custody
+  prerequisites without changing the daemon's bounded unlock ceilings.
+  Still open: the first-run scanner/phrase surface, trusted v1 acceptor-pin
+  fallback, recovery initiation, journaled profile/pending commit, and the
+  onboarding call that creates the Platform Keystore binding.
 - **S4 - Character visuals (open, needs registered production assets):**
   avatar renderings for alarm/veto/completion states, each gated on a
   purpose-registered Character 3.2.1 production asset.
@@ -217,9 +224,9 @@ Negative and residual:
   per-identity Pico setting is legitimate ADR 0104 work later, never
   host configuration;
 - S3 still lacks onboarding/profile creation and first-run restore/initiation;
-  automatic completion can run only while the exact target device key is
-  unlocked, so durable product unlock ownership remains explicit rather than
-  being hidden behind the implemented continuation state. Window close never
+  the implemented Linux unlock owner can renew only a binding that onboarding
+  has created, so that missing call remains explicit rather than being hidden
+  behind the continuation state. Window close never
   means veto, and closing an approval surface denies rather than consents.
 
 ## Relationship to other ADRs

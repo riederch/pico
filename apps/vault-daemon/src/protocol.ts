@@ -3,6 +3,8 @@ import {
   picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeV2SignatureInputLabels,
   picoVaultPersonKeyRoles,
+  parsePicoRecoveryCardPayload,
+  picoRecoveryCardV2Schema,
   type PicoVaultPersonKeyRole,
 } from '@pico/protocol';
 import {
@@ -36,6 +38,8 @@ export const picoVaultDaemonRequestFamilies = {
   ceremonyRotateDomain: 'pico.vault.daemon.ceremony.rotate-domain.v1',
   ceremonyCreateReaderGrant: 'pico.vault.daemon.ceremony.create-reader-grant.v1',
   ceremonyIssueRecoveryCard: 'pico.vault.daemon.ceremony.issue-recovery-card.v1',
+  ceremonyIssueRecoveryCardV2: 'pico.vault.daemon.ceremony.issue-recovery-card.v2',
+  recoveryBootstrap: 'pico.vault.daemon.recovery.bootstrap.v1',
 } as const;
 
 /**
@@ -290,6 +294,58 @@ export interface PicoVaultDaemonCeremonyIssueRecoveryCardResult {
   canonicalPayloadHex: string;
 }
 
+/** Additive ADR 0115 card issuance; the v1 request remains byte-for-byte valid. */
+export interface PicoVaultDaemonCeremonyIssueRecoveryCardV2Request {
+  family:
+    typeof picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2;
+  requestId: string;
+  signerKeyFingerprintHex: string;
+  picoName: string;
+  homeNameOrId: string;
+  homeId: string;
+  homeHostPicoIdentityFingerprintHex: string;
+  hostSigningKeyFingerprintHex: string;
+  hostKeyAgreementKeyFingerprintHex: string;
+  hostKeyAgreementPublicKeyHex: string;
+  endpointHint: string;
+  issuedAt: string;
+  pin: string;
+}
+
+export type PicoVaultDaemonCeremonyIssueRecoveryCardV2Result =
+  PicoVaultDaemonCeremonyIssueRecoveryCardResult;
+
+export interface PicoVaultDaemonRecoveryBootstrapRequest {
+  family: typeof picoVaultDaemonRequestFamilies.recoveryBootstrap;
+  requestId: string;
+  canonicalCardPayloadHex: string;
+  pin: string;
+  passphrase: string;
+  targetDelegationId: string;
+}
+
+export interface PicoVaultDaemonRecoveryBootstrapResult {
+  card: {
+    homeId: string;
+    homeHostPicoIdentityFingerprintHex: string;
+    hostSigningKeyFingerprintHex: string;
+    hostKeyAgreementKeyFingerprintHex: string;
+    hostKeyAgreementPublicKeyHex: string;
+    endpointHint: string;
+  };
+  identity: {
+    keyFingerprintHex: string;
+    publicKeyHex: string;
+  };
+  device: {
+    signingKeyFingerprintHex: string;
+    signingPublicKeyHex: string;
+    keyAgreementKeyFingerprintHex: string;
+    keyAgreementPublicKeyHex: string;
+    delegationId: string;
+  };
+}
+
 export interface PicoVaultDaemonApprovalWaitRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalWait;
   requestId: string;
@@ -330,7 +386,9 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyCreateDomainRequest
   | PicoVaultDaemonCeremonyRotateDomainRequest
   | PicoVaultDaemonCeremonyCreateReaderGrantRequest
-  | PicoVaultDaemonCeremonyIssueRecoveryCardRequest;
+  | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
+  | PicoVaultDaemonCeremonyIssueRecoveryCardV2Request
+  | PicoVaultDaemonRecoveryBootstrapRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -579,6 +637,55 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         passphrase,
       };
     }
+    case picoVaultDaemonRequestFamilies.recoveryBootstrap: {
+      assertExactKeys(parsed, [
+        'family',
+        'requestId',
+        'canonicalCardPayloadHex',
+        'pin',
+        'passphrase',
+        'targetDelegationId',
+      ]);
+      const canonicalCardPayloadHex = parsed.canonicalCardPayloadHex;
+      if (typeof canonicalCardPayloadHex !== 'string'
+        || canonicalCardPayloadHex.length === 0
+        || canonicalCardPayloadHex.length > 8_192
+        || !lowercaseHexPattern.test(canonicalCardPayloadHex)) {
+        throw new Error('invalid_request');
+      }
+      const card = parsePicoRecoveryCardPayload(
+        Buffer.from(canonicalCardPayloadHex, 'hex'),
+      );
+      if (card.schema !== picoRecoveryCardV2Schema) {
+        throw new Error('recovery_card_v1_requires_trusted_acceptor_pin');
+      }
+      const pin = parsed.pin;
+      if (typeof pin !== 'string'
+        || pin.length < picoRecoveryPinProtection.minLength
+        || pin.length > picoRecoveryPinProtection.maxLength
+        || !/^[0-9a-z]+$/u.test(pin)) {
+        throw new Error('invalid_request');
+      }
+      const passphrase = parsed.passphrase;
+      if (typeof passphrase !== 'string'
+        || passphrase.length === 0
+        || passphrase.length > MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS) {
+        throw new Error('invalid_request');
+      }
+      const targetDelegationId = parsed.targetDelegationId;
+      if (typeof targetDelegationId !== 'string'
+        || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(targetDelegationId)) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.recoveryBootstrap,
+        requestId,
+        canonicalCardPayloadHex,
+        pin,
+        passphrase,
+        targetDelegationId,
+      };
+    }
     case picoVaultDaemonRequestFamilies.sign: {
       assertExactKeys(parsed, ['family', 'requestId', 'keyFingerprintHex', 'label', 'fields']);
       const label = parsed.label;
@@ -774,12 +881,16 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
           : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
       };
     }
-    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard: {
+    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard:
+    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2: {
+      const v2 = family
+        === picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2;
       assertExactKeys(
         parsed,
         [
           'family', 'requestId', 'signerKeyFingerprintHex',
           'picoName', 'homeNameOrId', 'homeId',
+          ...(v2 ? ['homeHostPicoIdentityFingerprintHex'] : []),
           'hostSigningKeyFingerprintHex',
           'hostKeyAgreementKeyFingerprintHex',
           'hostKeyAgreementPublicKeyHex', 'endpointHint', 'issuedAt', 'pin',
@@ -794,9 +905,7 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       ) {
         throw new Error('invalid_request');
       }
-      return {
-        family:
-          picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
+      const common = {
         requestId,
         signerKeyFingerprintHex:
           requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
@@ -821,6 +930,22 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         endpointHint: requireBoundedString(parsed, 'endpointHint'),
         issuedAt: requireBoundedString(parsed, 'issuedAt'),
         pin,
+      };
+      if (v2) {
+        return {
+          family:
+            picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2,
+          ...common,
+          homeHostPicoIdentityFingerprintHex:
+            requireFingerprintHex(
+              parsed,
+              'homeHostPicoIdentityFingerprintHex',
+            ),
+        };
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
+        ...common,
       };
     }
     case picoVaultDaemonRequestFamilies.approvalWait: {

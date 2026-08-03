@@ -22,6 +22,9 @@ import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
+import type {
+  PicoCompanionAutomaticVaultUnlock,
+} from '@pico/companion/platform-unlock';
 import {
   openPicoCompanionVaultProductSession,
 } from '@pico/companion/vault-product-session';
@@ -140,6 +143,15 @@ async function start(): Promise<void> {
   powerMonitor.on('resume', () => {
     void runtime?.checkNow();
   });
+  powerMonitor.on('unlock-screen', () => {
+    void runtime?.checkNow();
+  });
+  powerMonitor.on('suspend', () => {
+    void runtime?.lockVault();
+  });
+  powerMonitor.on('lock-screen', () => {
+    void runtime?.lockVault();
+  });
   const networkMonitor = startPicoCompanionNetworkRegainMonitor({
     isOnline: () => net.isOnline(),
     onRegain: async () => {
@@ -154,7 +166,38 @@ async function start(): Promise<void> {
   try {
     await sodium.ready;
     const notifications = createPicoCompanionPresentationAdapter(presentationPort);
-    runtime = await startPicoCompanionShellRuntime({ notifications, sodium });
+    const profilePath = defaultPicoCompanionProfilePath();
+    const profile = readPicoCompanionProfile(profilePath);
+    const {
+      createPicoCompanionAutomaticVaultUnlock,
+      defaultPicoCompanionPlatformUnlockPath,
+      hasPicoCompanionPlatformUnlock,
+    } = await import('@pico/companion/platform-unlock');
+    const platformUnlockPath =
+      defaultPicoCompanionPlatformUnlockPath(profilePath);
+    let automaticVaultUnlock: PicoCompanionAutomaticVaultUnlock | undefined;
+    if (hasPicoCompanionPlatformUnlock(platformUnlockPath)) {
+      const [electronModule, platformKeystoreModule] = await Promise.all([
+        import('electron'),
+        import('./platform-keystore.js'),
+      ]);
+      automaticVaultUnlock = createPicoCompanionAutomaticVaultUnlock({
+        path: platformUnlockPath,
+        profile,
+        socketPath: defaultPicoVaultDaemonSocketPath(),
+        secrets: platformKeystoreModule.createLinuxElectronPlatformSecretPort(
+          electronModule.safeStorage,
+        ),
+      });
+    }
+    runtime = await startPicoCompanionShellRuntime({
+      notifications,
+      sodium,
+      profilePath,
+      ...(automaticVaultUnlock === undefined
+        ? {}
+        : { automaticVaultUnlock }),
+    });
   } catch (error) {
     presentServiceError(error);
   }

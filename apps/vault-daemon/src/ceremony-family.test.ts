@@ -139,6 +139,22 @@ async function startDaemon(
   return { daemon, audit };
 }
 
+async function startFreshDaemon(): Promise<{
+  daemon: PicoVaultDaemon;
+  audit: string[];
+}> {
+  const audit: string[] = [];
+  const daemon = await startPicoVaultDaemon({
+    sodium,
+    vaultHomePath: tempDir('pico-cf-fresh-'),
+    foundationDataPath: tempDir('pico-cf-fresh-data-'),
+    foundationBackupPath: tempDir('pico-cf-fresh-backup-'),
+    auditSink: (line) => { audit.push(line); },
+  });
+  daemons.push(daemon);
+  return { daemon, audit };
+}
+
 async function openClient(daemon: PicoVaultDaemon): Promise<PicoVaultDaemonClient> {
   const client = await connectPicoVaultDaemonClient({ socketPath: daemon.socketPath });
   clients.push(client);
@@ -403,6 +419,111 @@ describe('Daemon-side KEK ceremony families (ADR 0101 K2/K3/K4)', () => {
     expect(auditText).not.toContain(
       String(card.payload.seedMaterialHex),
     );
+  }, 60_000);
+
+  it('issues Card v2 under its own additive family with the Home acceptor pin', async () => {
+    const { daemon, audit } = await startDaemon();
+    const hold = await holdUnlock(daemon);
+    const consumer = await openClient(daemon);
+
+    const { waiting } = await startApprovalWait(hold, audit);
+    const issuing = consumer.ceremonyIssueRecoveryCardV2({
+      signerKeyFingerprintHex: ownerIdentity.keyFingerprintHex,
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      homeId: 'home_recovery_card_daemon_0002',
+      homeHostPicoIdentityFingerprintHex: '44'.repeat(32),
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '33'.repeat(32),
+      endpointHint: 'pico-link://recovery-card-daemon',
+      issuedAt: '2026-08-03T10:00:00.000Z',
+      pin: 'card42',
+    });
+    const pending = await waiting;
+    expect(pending!.label).toBe(
+      picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2,
+    );
+    await hold.approvalDecide({
+      approvalId: pending!.approvalId,
+      signatureInputDigestHex: pending!.signatureInputDigestHex,
+      approved: true,
+    });
+    const card = await issuing;
+    expect(card.payload).toMatchObject({
+      schema: 'pico.recovery.card.v2',
+      homeHostPicoIdentityFingerprintHex: '44'.repeat(32),
+    });
+  }, 60_000);
+
+  it('bootstraps exactly one fresh Vault from Card v2 without logging secrets', async () => {
+    const root = openLocal(ownerIdentity, IDENTITY_PASSPHRASE);
+    const legacyCard = root.issueRecoveryCard({
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      homeId: 'home_recovery_bootstrap_0001',
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '33'.repeat(32),
+      endpointHint: 'http://127.0.0.1:8321',
+      issuedAt: '2026-08-03T10:00:00.000Z',
+      pin: 'card42',
+    });
+    const card = root.issueRecoveryCardV2({
+      picoName: 'Mira',
+      homeNameOrId: 'Alpengasse 7',
+      homeId: 'home_recovery_bootstrap_0001',
+      homeHostPicoIdentityFingerprintHex: '44'.repeat(32),
+      hostSigningKeyFingerprintHex: '11'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '22'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '33'.repeat(32),
+      endpointHint: 'http://127.0.0.1:8321',
+      issuedAt: '2026-08-03T10:00:00.000Z',
+      pin: 'card42',
+    });
+    const { daemon, audit } = await startFreshDaemon();
+    let client = await openClient(daemon);
+    await expect(client.recoveryBootstrap({
+      canonicalCardPayloadHex: legacyCard.canonicalPayloadHex,
+      pin: 'card42',
+      passphrase: 'fresh vault passphrase',
+      targetDelegationId: 'recovery_target_bootstrap_legacy',
+    })).rejects.toThrow('recovery_card_v1_requires_trusted_acceptor_pin');
+    client = await openClient(daemon);
+    await expect(client.recoveryBootstrap({
+      canonicalCardPayloadHex: card.canonicalPayloadHex,
+      pin: 'wrong7',
+      passphrase: 'fresh vault passphrase',
+      targetDelegationId: 'recovery_target_bootstrap_wrong_pin',
+    })).rejects.toThrow('recovery_pin_or_seed_mismatch');
+    expect((await client.status()).keyfiles).toHaveLength(0);
+    const bootstrapped = await client.recoveryBootstrap({
+      canonicalCardPayloadHex: card.canonicalPayloadHex,
+      pin: 'card42',
+      passphrase: 'fresh vault passphrase',
+      targetDelegationId: 'recovery_target_bootstrap_0001',
+    });
+    expect(bootstrapped).toMatchObject({
+      card: {
+        homeId: 'home_recovery_bootstrap_0001',
+        homeHostPicoIdentityFingerprintHex: '44'.repeat(32),
+      },
+      identity: {
+        keyFingerprintHex: ownerIdentity.keyFingerprintHex,
+        publicKeyHex: ownerIdentity.publicKeyHex,
+      },
+      device: { delegationId: 'recovery_target_bootstrap_0001' },
+    });
+    expect((await client.status()).keyfiles).toHaveLength(3);
+    await expect(client.recoveryBootstrap({
+      canonicalCardPayloadHex: card.canonicalPayloadHex,
+      pin: 'card42',
+      passphrase: 'fresh vault passphrase',
+      targetDelegationId: 'recovery_target_bootstrap_0002',
+    })).rejects.toThrow('recovery_bootstrap_requires_fresh_vault');
+    expect(audit.join('')).not.toContain('card42');
+    expect(audit.join('')).not.toContain('fresh vault passphrase');
+    expect(audit.join('')).not.toContain(card.payload.seedMaterialHex);
   }, 60_000);
 
   it('creates a domain under exactly one approval, with the KEK born inside the daemon', async () => {

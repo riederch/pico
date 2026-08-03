@@ -8,9 +8,9 @@ describe('Companion Recovery Card product issuance', () => {
     const cardPrinterPdf = Uint8Array.from([1, 2, 3]);
     const paperPrintablePdf = Uint8Array.from([4, 5, 6]);
     const printedBytes: number[][] = [];
-    const ceremonyIssueRecoveryCard = vi.fn(async () => card());
+    const ceremonyIssueRecoveryCardV2 = vi.fn(async () => card());
     const result = await issuePicoCompanionRecoveryCard({
-      daemonClient: { ceremonyIssueRecoveryCard } as unknown as PicoVaultDaemonClient,
+      daemonClient: { ceremonyIssueRecoveryCardV2 } as unknown as PicoVaultDaemonClient,
       profile: profile(),
       picoName: 'Mira',
       homeNameOrId: 'home_product_1',
@@ -27,11 +27,12 @@ describe('Companion Recovery Card product issuance', () => {
       generatePdfs: async () => ({ cardPrinterPdf, paperPrintablePdf }),
     });
 
-    expect(ceremonyIssueRecoveryCard).toHaveBeenCalledWith({
+    expect(ceremonyIssueRecoveryCardV2).toHaveBeenCalledWith({
       signerKeyFingerprintHex: '55'.repeat(32),
       picoName: 'Mira',
       homeNameOrId: 'home_product_1',
       homeId: 'home_product_1',
+      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
       hostSigningKeyFingerprintHex: '22'.repeat(32),
       hostKeyAgreementKeyFingerprintHex: '44'.repeat(32),
       hostKeyAgreementPublicKeyHex: '33'.repeat(32),
@@ -42,6 +43,7 @@ describe('Companion Recovery Card product issuance', () => {
     expect(printedBytes).toEqual([[4, 5, 6]]);
     expect(result).toEqual({
       metadata: {
+        schema: 'pico.recovery.card.v2',
         identityKeyFingerprintHex: '55'.repeat(32),
         picoName: 'Mira',
         homeNameOrId: 'home_product_1',
@@ -60,7 +62,7 @@ describe('Companion Recovery Card product issuance', () => {
     const paperPrintablePdf = Uint8Array.from([2]);
     await expect(issuePicoCompanionRecoveryCard({
       daemonClient: {
-        ceremonyIssueRecoveryCard: async () => card(),
+        ceremonyIssueRecoveryCardV2: async () => card(),
       } as unknown as PicoVaultDaemonClient,
       profile: profile(),
       picoName: 'Mira',
@@ -82,7 +84,7 @@ describe('Companion Recovery Card product issuance', () => {
 function card(): Record<string, unknown> {
   return {
     payload: {
-      schema: 'pico.recovery.card.v1',
+      schema: 'pico.recovery.card.v2',
       suite: 'pico.suite.id.v1',
       picoName: 'Mira',
       homeNameOrId: 'home_product_1',
@@ -90,6 +92,7 @@ function card(): Record<string, unknown> {
       pinProtected: true,
       identityKeyFingerprintHex: '55'.repeat(32),
       homeId: 'home_product_1',
+      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
       hostSigningKeyFingerprintHex: '22'.repeat(32),
       hostKeyAgreementKeyFingerprintHex: '44'.repeat(32),
       hostKeyAgreementPublicKeyHex: '33'.repeat(32),

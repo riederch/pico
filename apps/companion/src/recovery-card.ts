@@ -6,6 +6,7 @@ import type { PicoCompanionProfile } from './profile.js';
 export type PicoCompanionRecoveryCardPrintForm = 'paper' | 'card_printer';
 
 export interface PicoCompanionRecoveryCardPublicMetadata {
+  schema: 'pico.recovery.card.v2';
   identityKeyFingerprintHex: string;
   picoName: string;
   homeNameOrId: string;
@@ -47,7 +48,7 @@ export async function issuePicoCompanionRecoveryCard(input: {
   if (!Number.isFinite(now.getTime())) {
     throw new Error('invalid_recovery_card_issuance_time');
   }
-  const card = await input.daemonClient.ceremonyIssueRecoveryCard({
+  const card = await input.daemonClient.ceremonyIssueRecoveryCardV2({
     signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
     picoName: input.picoName,
     homeNameOrId: input.homeNameOrId,
@@ -55,6 +56,8 @@ export async function issuePicoCompanionRecoveryCard(input: {
     // The public settings/onboarding form therefore supplies the exact id;
     // it must never be guessed from a display name.
     homeId: input.homeId,
+    homeHostPicoIdentityFingerprintHex:
+      input.profile.home.homeHostPicoIdentityFingerprintHex,
     hostSigningKeyFingerprintHex:
       input.profile.host.signingKeyFingerprintHex,
     hostKeyAgreementKeyFingerprintHex:
@@ -72,6 +75,7 @@ export async function issuePicoCompanionRecoveryCard(input: {
     ? pdfs.paperPrintablePdf
     : pdfs.cardPrinterPdf;
   const metadata: PicoCompanionRecoveryCardPublicMetadata = {
+    schema: 'pico.recovery.card.v2',
     identityKeyFingerprintHex: card.payload.identityKeyFingerprintHex,
     picoName: card.payload.picoName,
     homeNameOrId: card.payload.homeNameOrId,

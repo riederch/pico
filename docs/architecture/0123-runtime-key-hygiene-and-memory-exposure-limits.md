@@ -62,8 +62,9 @@ Does not cover:
 
 - live-memory attackers with the person's uid - conceded in ADR 0097
   and unchanged here;
-- the platform keystore, which remains ADR 0081 P3 and is the real
-  answer to most of this;
+- platform-keystore design beyond the implemented ADR 0081 P3 Linux
+  desktop tranche; this ADR still governs the transient JavaScript strings
+  that integration cannot erase;
 - at-rest key protection, custody floors and backup separation,
   already decided in ADR 0072/0081;
 - TTY and clipboard exposure of secrets the person types or prints,
@@ -195,9 +196,10 @@ Negative and residual:
 
 - generic hosts keep unencrypted swap unless the operator acts, and
   Pico can only say so;
-- the passphrase and the IPC hex strings remain unzeroizable, named
-  debts carried until a platform keystore or a binary protocol pays
-  them - neither is bought by this ADR;
+- the Linux platform keystore now removes the passphrase from companion
+  persistence, but `safeStorage.decryptString` and the daemon's JSON unlock
+  frame still create transient unzeroizable strings; the binary-protocol
+  half of that named debt remains;
 - GC copies remain untouchable from inside the runtime, permanently,
   and Z4 makes sure no document forgets it;
 - disabling core dumps costs post-mortem debuggability for the
@@ -208,9 +210,10 @@ Negative and residual:
 
 ## Relationship to other ADRs
 
-- Restates ADR `0081` V7's honesty limits as binding rules and leaves
-  P3 - the platform keystore - as the structural successor this ADR
-  explicitly defers to.
+- Restates ADR `0081` V7's honesty limits as binding rules. Its first P3
+  Linux tranche changes at-rest topology without making a memory-erasure
+  claim; other platforms and the transient-string remainder stay structural
+  successor work.
 - Makes ADR `0097`'s per-threat concessions and passphrase honesty
   normative for every process, not just the daemon, and leaves its
   boundary mechanics unchanged.
