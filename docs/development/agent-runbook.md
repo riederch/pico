@@ -114,6 +114,15 @@ durch und startet das extrahierte Electron real im Tray-only-Modus:
 npx pnpm@9.0.0 --filter @pico/companion-shell verify:linux
 ```
 
+Der Ressourcen-Probe laeuft aus einem unprivilegiert extrahierten, noch nicht
+installierten Paket. Deshalb kann sein im Archiv korrekt root-eigener
+Setuid-Helper dort nicht wirken; auf Ubuntu 23.10+ blockiert AppArmor zugleich
+den User-Namespace-Fallback. Ausschliesslich dieser Testprozess erhaelt daher
+Electrons test-only `--no-sandbox`. Der Gate verweigert den Schalter in
+Launcher, Desktop- und Autostart-Eintrag und prueft den root-eigenen
+`4755`-Helper weiterhin direkt im Debian-Archiv. Die Renderer-Sandbox wird
+separat durch die C2-Window-, Boundary- und Electron-Smoke-Pruefungen gebunden.
+
 Dafuer werden Linux amd64, `dpkg-deb`, `fakeroot` und entweder eine laufende
 Display-Session oder `xvfb-run` benoetigt. Der Probe schreibt seinen letzten
 Messbericht nach `apps/companion-shell/out/tray-memory-linux-amd64.json`; PSS

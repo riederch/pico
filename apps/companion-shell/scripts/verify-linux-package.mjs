@@ -58,6 +58,10 @@ assert(launcher.includes('ulimit -S -c 0')
   && launcher.includes('ulimit -H -c 0')
   && launcher.includes('exec "$pico_install_dir/pico-companion-bin" "$@"'),
 'Every packaged launch must disable core dumps before Electron starts.');
+assert(!launcher.includes('--no-sandbox')
+  && !desktopEntry.includes('--no-sandbox')
+  && !autostartEntry.includes('--no-sandbox'),
+'Production launch surfaces must never disable Chromium sandboxing.');
 assert(desktopEntry.includes('Exec=/opt/pico-companion/pico-companion'),
   'Desktop entry does not launch the packaged executable.');
 assert(autostartEntry.includes('X-GNOME-Autostart-enabled=true'),
@@ -79,7 +83,12 @@ const lifecycle = verifyDebianLifecycle(artifact);
 
 const probeRoot = temporaryRoot('pico-companion-probe-');
 const probeArgs = [
-  '--disable-setuid-sandbox',
+  // This probe runs an extracted, not root-installed, Debian package. Its
+  // archived root-owned SUID helper cannot carry those privileges here, and
+  // Ubuntu 23.10+ AppArmor blocks the unprivileged-user-namespace fallback
+  // for unconfined binaries. Electron documents --no-sandbox for testing
+  // only; the assertions above keep it out of every production launch path.
+  '--no-sandbox',
   `--user-data-dir=${join(probeRoot, 'user-data')}`,
 ];
 let command = executable;
@@ -126,6 +135,7 @@ const retainedReport = {
   measuredAt: new Date().toISOString(),
   platform: 'linux',
   architecture: 'amd64',
+  chromiumSandboxProbe: 'disabled_for_uninstalled_test_only',
   artifact: artifact.split('/').at(-1),
   sha256: checksum,
   lifecycle,

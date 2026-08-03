@@ -198,15 +198,23 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   pnpm-v9 deploy path whose resolution is not lockfile-authoritative. The
   package installs the Electron shell under `/opt`, registers its desktop
   entry and system-wide XDG autostart, retains Chromium's root-owned setuid
-  sandbox helper, and owns neither a person's profile nor Vault data. A
-  temporary-root lifecycle proof performs install, synthetic upgrade, remove and purge while
-  byte-and-mode sentinels prove profile and keyfile preservation. The
+  sandbox helper, and owns neither a person's profile nor Vault data. The
+  gate rejects production launcher or desktop entries that embed
+  `--no-sandbox`. Its resource probe runs the package extracted rather than
+  root-installed, so the archived SUID helper has no usable privilege there;
+  that probe alone uses Electron's documented test-only `--no-sandbox` mode
+  to remain runnable under Ubuntu's restricted user namespaces. It proves
+  packaged runtime closure and resource/core-dump behavior, not the production
+  Chromium sandbox; C2's window options, boundary tests and Electron smoke
+  carry that separate proof. A temporary-root lifecycle proof performs
+  install, synthetic upgrade, remove and purge while byte-and-mode sentinels
+  prove profile and keyfile preservation. The
   packaged launcher sets both soft and hard core-dump limits to zero before
   `exec`, and the real packaged tray probe proves those inherited limits.
-  The same probe measures all seven Electron processes without a window;
-  the 2026-08-02 reference run reported 203,916,288 bytes PSS and
-  101,384,192 private bytes below the 225,000,000/110,000,000 gates, with
-  summed RSS 516,308,992 bytes retained as informational evidence. Static
+  The test-only extracted probe has a five-process topology; the 2026-08-03
+  full-gate run reported 192,744,448 bytes PSS and 108,425,216 private bytes
+  below the unchanged 225,000,000/110,000,000 gates, with summed RSS
+  474,001,408 bytes retained as informational evidence. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.
