@@ -142,8 +142,14 @@ ausserdem passwortloses `sudo` fuer die begrenzte Extraktion und Rueckgabe des
 exakten temporaeren Verzeichnisses. Der Probe schreibt seinen letzten
 Messbericht nach `apps/companion-shell/out/tray-memory-linux-amd64.json`; PSS
 und private residente Bytes sind die Gates, summiertes RSS ist wegen mehrfach
-gezaehlter Shared Pages nur informativ. Alle temporaeren Paket-, Lifecycle- und
-Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
+gezaehlter Shared Pages nur informativ. Private residente Bytes werden zusaetzlich
+in Clean, Dirty und Hugetlb getrennt und nach den geschlossenen Electron-Rollen
+aggregiert. Die von `app.getAppMetrics()` gemeldeten PIDs ergaenzen den
+Parent-/Child-Walk, damit ein vom Sandbox-Start umgehaengter App-Prozess nicht
+aus der Messung faellt. Der JSON-Bericht wird vor den unveraenderten
+Budgetassertions geschrieben und ausgegeben, sodass auch ein fehlgeschlagener
+CI-Lauf die entscheidungsfaehige Evidenz enthaelt. Alle temporaeren Paket-,
+Lifecycle- und Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
 
 ## Container- und Runtime-Smokes
 

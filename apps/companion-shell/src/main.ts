@@ -32,6 +32,7 @@ import {
 import { picoCompanionPublicServiceErrorReason } from './public-error.js';
 import {
   picoLinuxProcessTreeMemory,
+  picoLinuxProcessRoleFromElectronType,
   readPicoLinuxCoreDumpLimits,
   readPicoLinuxProcessTable,
 } from './linux-process-tree.js';
@@ -145,9 +146,14 @@ async function runTrayMemoryProbe(): Promise<void> {
   process.stderr.write('Pico tray memory probe: sodium ready.\n');
   await new Promise((resolve) => setTimeout(resolve, 5_000));
   process.stderr.write('Pico tray memory probe: measuring process tree.\n');
+  const rolesByPid = new Map(app.getAppMetrics().map((metric) => [
+    metric.pid,
+    picoLinuxProcessRoleFromElectronType(metric.type),
+  ]));
   const memory = picoLinuxProcessTreeMemory(
-    readPicoLinuxProcessTable('/proc', process.pid),
+    readPicoLinuxProcessTable('/proc', process.pid, rolesByPid),
     process.pid,
+    new Set(rolesByPid.keys()),
   );
   const coreDumpLimits = readPicoLinuxCoreDumpLimits();
   const underBudget = memory.proportionalBytes < trayPssBudgetBytes
@@ -159,7 +165,11 @@ async function runTrayMemoryProbe(): Promise<void> {
     processCount: memory.processCount,
     rssBytes: memory.rssBytes,
     proportionalBytes: memory.proportionalBytes,
+    privateCleanBytes: memory.privateCleanBytes,
+    privateDirtyBytes: memory.privateDirtyBytes,
+    privateHugetlbBytes: memory.privateHugetlbBytes,
     privateBytes: memory.privateBytes,
+    processMemoryByRole: memory.processMemoryByRole,
     proportionalBudgetBytes: trayPssBudgetBytes,
     privateBudgetBytes: trayPrivateBudgetBytes,
     underBudget,

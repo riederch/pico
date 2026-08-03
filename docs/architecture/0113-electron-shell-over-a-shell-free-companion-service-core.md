@@ -108,6 +108,13 @@ metric refinement and the two limits were chosen explicitly by the user on
 2026-08-02 after the packaged process measurement made the original literal
 sub-100-MB summed-RSS target physically false.
 
+The retained report separates private clean, dirty and huge pages and groups
+the same measurements by Electron's closed process roles. Electron's own
+`app.getAppMetrics()` PID set supplements the live parent/child walk so a
+sandbox-reparented app process cannot silently disappear from the total. The
+report is written and emitted before either unchanged budget assertion, making
+a failed reference-build measurement actionable without weakening the gate.
+
 ### Chromium currency is a release obligation
 
 Shipping Chromium means owning its security cadence. From C3 on, a
@@ -221,10 +228,14 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   prove profile and keyfile preservation. The
   packaged launcher sets both soft and hard core-dump limits to zero before
   `exec`, and the real packaged tray probe proves those inherited limits.
+  Its retained evidence separates private clean/dirty/huge pages and aggregates
+  browser, zygote, GPU, utility, renderer, sandbox and unknown-role processes;
+  Electron-associated PIDs remain included even if sandboxing reparents them.
+  Failed budget runs emit this evidence before refusing the release.
   The sandboxed extracted probe has a seven-process topology; the 2026-08-03
-  full-gate run reported 198,708,224 bytes PSS and 99,303,424 private bytes
+  full-gate run reported 199,299,072 bytes PSS and 98,140,160 private bytes
   below the unchanged 225,000,000/110,000,000 gates, with summed RSS
-  512,925,696 bytes retained as informational evidence. Static
+  515,047,424 bytes retained as informational evidence. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.

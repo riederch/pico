@@ -4,49 +4,123 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   picoLinuxProcessTreeMemory,
+  picoLinuxProcessRoleFromElectronType,
   readPicoLinuxCoreDumpLimits,
   readPicoLinuxProcessTable,
+  type PicoLinuxProcessMemory,
+  type PicoLinuxProcessRole,
 } from './linux-process-tree.js';
 
-describe('Linux process-tree RSS measurement', () => {
+function processMemory({
+  pid,
+  parentPid,
+  role,
+  rssBytes,
+  proportionalBytes,
+  privateCleanBytes,
+  privateDirtyBytes,
+  privateHugetlbBytes = 0,
+}: Omit<PicoLinuxProcessMemory, 'privateBytes' | 'privateHugetlbBytes'> & {
+  role: PicoLinuxProcessRole;
+  privateHugetlbBytes?: number;
+}): PicoLinuxProcessMemory {
+  return {
+    pid,
+    parentPid,
+    role,
+    rssBytes,
+    proportionalBytes,
+    privateCleanBytes,
+    privateDirtyBytes,
+    privateHugetlbBytes,
+    privateBytes: privateCleanBytes + privateDirtyBytes + privateHugetlbBytes,
+  };
+}
+
+describe('Linux process-tree memory measurement', () => {
   it('sums only the root process and transitive descendants', () => {
     expect(picoLinuxProcessTreeMemory([
-      {
-        pid: 10, parentPid: 1, rssBytes: 10_000, proportionalBytes: 5_000,
-        privateBytes: 4_000,
-      },
-      {
-        pid: 11, parentPid: 10, rssBytes: 20_000, proportionalBytes: 8_000,
-        privateBytes: 6_000,
-      },
-      {
-        pid: 12, parentPid: 11, rssBytes: 30_000, proportionalBytes: 10_000,
-        privateBytes: 7_000,
-      },
-      {
-        pid: 20, parentPid: 1, rssBytes: 40_000, proportionalBytes: 20_000,
-        privateBytes: 15_000,
-      },
+      processMemory({
+        pid: 10, parentPid: 1, role: 'browser', rssBytes: 10_000,
+        proportionalBytes: 5_000, privateCleanBytes: 1_000, privateDirtyBytes: 3_000,
+      }),
+      processMemory({
+        pid: 11, parentPid: 10, role: 'zygote', rssBytes: 20_000,
+        proportionalBytes: 8_000, privateCleanBytes: 2_000, privateDirtyBytes: 4_000,
+      }),
+      processMemory({
+        pid: 12, parentPid: 11, role: 'utility', rssBytes: 30_000,
+        proportionalBytes: 10_000, privateCleanBytes: 3_000, privateDirtyBytes: 4_000,
+      }),
+      processMemory({
+        pid: 20, parentPid: 1, role: 'other', rssBytes: 40_000,
+        proportionalBytes: 20_000, privateCleanBytes: 5_000, privateDirtyBytes: 10_000,
+      }),
     ], 10)).toEqual({
       processCount: 3,
       rssBytes: 60_000,
       proportionalBytes: 23_000,
+      privateCleanBytes: 6_000,
+      privateDirtyBytes: 11_000,
+      privateHugetlbBytes: 0,
       privateBytes: 17_000,
+      processMemoryByRole: [
+        {
+          role: 'browser', processCount: 1, rssBytes: 10_000,
+          proportionalBytes: 5_000, privateCleanBytes: 1_000,
+          privateDirtyBytes: 3_000, privateHugetlbBytes: 0, privateBytes: 4_000,
+        },
+        {
+          role: 'zygote', processCount: 1, rssBytes: 20_000,
+          proportionalBytes: 8_000, privateCleanBytes: 2_000,
+          privateDirtyBytes: 4_000, privateHugetlbBytes: 0, privateBytes: 6_000,
+        },
+        {
+          role: 'utility', processCount: 1, rssBytes: 30_000,
+          proportionalBytes: 10_000, privateCleanBytes: 3_000,
+          privateDirtyBytes: 4_000, privateHugetlbBytes: 0, privateBytes: 7_000,
+        },
+      ],
     });
   });
 
-  it('reads stable process records and tolerates missing RSS', () => {
+  it('includes Electron-associated processes even when the sandbox re-parents them', () => {
+    expect(picoLinuxProcessTreeMemory([
+      processMemory({
+        pid: 10, parentPid: 1, role: 'browser', rssBytes: 10_000,
+        proportionalBytes: 5_000, privateCleanBytes: 1_000, privateDirtyBytes: 3_000,
+      }),
+      processMemory({
+        pid: 20, parentPid: 1, role: 'sandbox', rssBytes: 2_000,
+        proportionalBytes: 1_000, privateCleanBytes: 0, privateDirtyBytes: 500,
+      }),
+    ], 10, new Set([10, 20]))).toMatchObject({
+      processCount: 2,
+      rssBytes: 12_000,
+      proportionalBytes: 6_000,
+      privateBytes: 4_500,
+      processMemoryByRole: [
+        expect.objectContaining({ role: 'browser', processCount: 1 }),
+        expect.objectContaining({ role: 'sandbox', processCount: 1 }),
+      ],
+    });
+  });
+
+  it('separates private memory classes and reports closed process roles', () => {
     const procRoot = mkdtempSync(join(tmpdir(), 'pico-proc-'));
     mkdirSync(join(procRoot, '101'), { recursive: true });
     mkdirSync(join(procRoot, '102'), { recursive: true });
     mkdirSync(join(procRoot, 'not-a-pid'), { recursive: true });
     writeFileSync(join(procRoot, '101', 'status'), 'Name:\tpico\nPPid:\t1\nVmRSS:\t42 kB\n');
     writeFileSync(join(procRoot, '102', 'status'), 'Name:\tpico-child\nPPid:\t101\n');
+    writeFileSync(join(procRoot, '101', 'cmdline'), '/opt/pico\0--user-data-dir=/tmp\0');
+    writeFileSync(join(procRoot, '102', 'cmdline'), '/opt/pico\0--type=utility\0');
     writeFileSync(join(procRoot, '101', 'smaps_rollup'), [
       'Rss: 42 kB',
       'Pss: 21 kB',
       'Private_Clean: 3 kB',
       'Private_Dirty: 4 kB',
+      'Private_Hugetlb: 2 kB',
     ].join('\n'));
     writeFileSync(join(procRoot, '102', 'smaps_rollup'), [
       'Rss: 0 kB',
@@ -55,23 +129,37 @@ describe('Linux process-tree RSS measurement', () => {
       'Private_Dirty: 0 kB',
     ].join('\n'));
 
+    const expectedProcesses: PicoLinuxProcessMemory[] = [
+      {
+        pid: 101,
+        parentPid: 1,
+        role: 'browser',
+        rssBytes: 42 * 1_024,
+        proportionalBytes: 21 * 1_024,
+        privateCleanBytes: 3 * 1_024,
+        privateDirtyBytes: 4 * 1_024,
+        privateHugetlbBytes: 2 * 1_024,
+        privateBytes: 9 * 1_024,
+      },
+      {
+        pid: 102,
+        parentPid: 101,
+        role: 'utility',
+        rssBytes: 0,
+        proportionalBytes: 0,
+        privateCleanBytes: 0,
+        privateDirtyBytes: 0,
+        privateHugetlbBytes: 0,
+        privateBytes: 0,
+      },
+    ];
+    const rolesByPid = new Map<number, PicoLinuxProcessRole>([
+      [101, 'browser'],
+      [102, 'utility'],
+    ]);
+
     try {
-      expect(readPicoLinuxProcessTable(procRoot)).toEqual([
-        {
-          pid: 101,
-          parentPid: 1,
-          rssBytes: 42 * 1_024,
-          proportionalBytes: 21 * 1_024,
-          privateBytes: 7 * 1_024,
-        },
-        {
-          pid: 102,
-          parentPid: 101,
-          rssBytes: 0,
-          proportionalBytes: 0,
-          privateBytes: 0,
-        },
-      ]);
+      expect(readPicoLinuxProcessTable(procRoot, 101, rolesByPid)).toEqual(expectedProcesses);
       mkdirSync(join(procRoot, '103'), { recursive: true });
       writeFileSync(
         join(procRoot, '103', 'status'),
@@ -82,25 +170,32 @@ describe('Linux process-tree RSS measurement', () => {
         'Pss: 50 kB',
         'Private_Clean: 10 kB',
       ].join('\n'));
-      expect(readPicoLinuxProcessTable(procRoot, 101)).toEqual([
-        {
-          pid: 101,
-          parentPid: 1,
-          rssBytes: 42 * 1_024,
-          proportionalBytes: 21 * 1_024,
-          privateBytes: 7 * 1_024,
-        },
-        {
-          pid: 102,
-          parentPid: 101,
-          rssBytes: 0,
-          proportionalBytes: 0,
-          privateBytes: 0,
-        },
-      ]);
+      expect(readPicoLinuxProcessTable(procRoot, 101, rolesByPid)).toEqual(expectedProcesses);
     } finally {
       rmSync(procRoot, { recursive: true });
     }
+  });
+
+  it('maps Electron process metrics into a closed role vocabulary', () => {
+    expect([
+      'Browser',
+      'Tab',
+      'Utility',
+      'Zygote',
+      'Sandbox helper',
+      'GPU',
+      'Pepper Plugin',
+      'Unknown',
+    ].map(picoLinuxProcessRoleFromElectronType)).toEqual([
+      'browser',
+      'renderer',
+      'utility',
+      'zygote',
+      'sandbox',
+      'gpu-process',
+      'other',
+      'other',
+    ]);
   });
 
   it('reads finite and unlimited core-dump limits from procfs', () => {
