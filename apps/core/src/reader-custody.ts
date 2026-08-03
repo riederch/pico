@@ -21,6 +21,7 @@ import {
   picoShareSuite,
 } from '@pico/protocol';
 import type {
+  PicoEventOriginClass,
   PicoHomeFoundingRecord,
   PicoReaderCustodyDomainRecord,
   PicoReaderCustodyItemRecord,
@@ -126,6 +127,8 @@ export interface PicoReaderCustodyItemView {
   writerDeviceSigningKeyFingerprintHex: string;
   contentCiphertextHex: string;
   wrappedDekHex: string;
+  /** ADR 0116 W2: provenance for a context assembler, beside the identity. */
+  originClass: PicoEventOriginClass;
   createdAt: string;
   receivedAt: string;
 }
@@ -2160,6 +2163,14 @@ function itemView(record: PicoReaderCustodyItemRecord): PicoReaderCustodyItemVie
       record.item.writerDeviceSigningKeyFingerprintHex,
     contentCiphertextHex: record.contentCiphertextHex,
     wrappedDekHex: record.wrappedDekHex,
+    // ADR 0116 W2. Reader-custody content is authored by a granted writer and
+    // arrives already sealed, so the Home holds authenticity - who signed it -
+    // and no evidence at all about whether it may instruct. `remote_pico` is
+    // the class the ADR names for it, and it is applied uniformly rather than
+    // raised when the writer happens to be the domain owner: this is a signed
+    // write, never a person typing in a live session, and a wrong guess in the
+    // trusting direction is the only one that costs anything.
+    originClass: 'remote_pico',
     createdAt: record.item.createdAt,
     receivedAt: record.receivedAt,
   };

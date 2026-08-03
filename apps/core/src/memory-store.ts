@@ -1,9 +1,14 @@
 import type Database from 'better-sqlite3';
-import { memoryDomainCustodyClasses } from '@pico/protocol';
+import {
+  lowestPicoOriginClass,
+  memoryDomainCustodyClasses,
+  picoEventOriginClasses,
+} from '@pico/protocol';
 import type {
   MemoryContentPosture,
   MemoryDomainCustodyClass,
   MemoryItemDeletionState,
+  PicoEventOriginClass,
   ReferenceTargetResolutionState,
 } from '@pico/protocol';
 import type { KeyEnvelopeRecord, MemoryContentCrypto } from './memory-content-crypto.js';
@@ -40,6 +45,13 @@ export interface MemoryItemInput {
   domainCustodyClass?: MemoryDomainCustodyClass;
   retentionPolicyRef?: string;
   sourceRef?: string;
+  /**
+   * ADR 0116 W2 origin class, assigned by the caller that authenticated the
+   * writer and never taken from a request payload. Omitted leaves the row
+   * unlabeled, which means "not yet classified" and never "trusted": a context
+   * assembler refuses unlabeled content rather than defaulting it.
+   */
+  origin?: PicoEventOriginClass;
 }
 
 /** Why an encrypted item's content could not be returned in plaintext. */
@@ -63,6 +75,7 @@ export interface MemoryItem {
   contentPosture: MemoryContentPosture;
   keyEnvelopeRef?: string;
   sourceRef?: string;
+  origin?: PicoEventOriginClass;
   createdAt: string;
   updatedAt: string;
 }
@@ -157,9 +170,10 @@ export class MemoryStore {
             content_posture,
             key_envelope_ref,
             source_ref,
+            origin,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
         `)
         .run(
           input.memoryItemId,
@@ -172,6 +186,7 @@ export class MemoryStore {
           posture,
           keyEnvelopeRef,
           input.sourceRef ?? null,
+          input.origin ?? null,
           now,
           now,
         );
@@ -189,6 +204,41 @@ export class MemoryStore {
     }
 
     return created;
+  }
+
+  /**
+   * ADR 0116 W2 derivation. A summary, extraction or model restatement takes
+   * the lowest class among the items it was built from, so nothing becomes
+   * trusted by being stored and read back - the memory-laundering step the
+   * gate exists to break.
+   *
+   * The sources are resolved from the store rather than supplied, because a
+   * caller that could state its own sources' classes could state a higher one.
+   * An unlabeled source is fatal: it is unknown provenance, and deriving from
+   * unknown provenance with a definite answer would be the same upgrade by
+   * another route.
+   */
+  public createDerived(
+    input: Omit<MemoryItemInput, 'origin'> & {
+      derivedFromMemoryItemIds: readonly string[];
+    },
+  ): MemoryItem {
+    if (input.derivedFromMemoryItemIds.length === 0) {
+      throw new Error('A derived memory item requires at least one source.');
+    }
+    const sources: PicoEventOriginClass[] = [];
+    for (const sourceId of input.derivedFromMemoryItemIds) {
+      const source = this.getInDomain(sourceId, input.privacyDomain);
+      if (source === undefined) {
+        throw new Error(`Derivation source is not in this domain: ${sourceId}`);
+      }
+      if (source.origin === undefined) {
+        throw new Error(`Derivation source carries no origin class: ${sourceId}`);
+      }
+      sources.push(source.origin);
+    }
+    const { derivedFromMemoryItemIds: _sources, ...rest } = input;
+    return this.create({ ...rest, origin: lowestPicoOriginClass(sources) });
   }
 
   public getInDomain(memoryItemId: string, privacyDomain: string): MemoryItem | undefined {
@@ -598,6 +648,7 @@ interface MemoryItemRow {
   content_posture: string;
   key_envelope_ref: string | null;
   source_ref: string | null;
+  origin: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -622,6 +673,9 @@ function mapRow(row: MemoryItemRow): MemoryItem {
     contentPosture: row.content_posture as MemoryContentPosture,
     ...(row.key_envelope_ref === null ? {} : { keyEnvelopeRef: row.key_envelope_ref }),
     ...(row.source_ref === null ? {} : { sourceRef: row.source_ref }),
+    ...(row.origin === null || row.origin === undefined
+      ? {}
+      : { origin: row.origin as PicoEventOriginClass }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -637,6 +691,11 @@ function assertMemoryItemInput(input: MemoryItemInput): void {
 
   if (input.retentionPolicyRef !== undefined) {
     assertNonEmptyString(input.retentionPolicyRef, 'retentionPolicyRef');
+  }
+
+  if (input.origin !== undefined
+    && !picoEventOriginClasses.includes(input.origin)) {
+    throw new Error('origin must be a known ADR 0116 class.');
   }
 
   if (input.sourceRef !== undefined) {

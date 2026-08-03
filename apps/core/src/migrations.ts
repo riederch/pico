@@ -71,6 +71,8 @@ export const picoHomeHostContinuityMigrationId =
   '0008_pico_home_host_continuity' as const;
 export const picoEventOriginMigrationId =
   '0009_pico_event_origin' as const;
+export const picoMemoryItemOriginMigrationId =
+  '0010_memory_item_origin' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -825,6 +827,24 @@ const migrations: readonly MigrationDefinition[] = [
         -- write authority and never client-assertable. NULL means the row
         -- predates origin labeling or awaits its W2 class - never "trusted".
         ALTER TABLE pico_event ADD COLUMN origin TEXT NULL
+          CHECK (origin IS NULL OR origin IN (
+            'person_present', 'own_pico', 'home_member',
+            'remote_pico', 'external_content', 'unattributed'
+          ));
+      `);
+    },
+  },
+  {
+    id: picoMemoryItemOriginMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0116 W2. The same server-assigned class as the event log, on the
+        -- store that actually feeds retrieval. Authenticity says who wrote an
+        -- item; origin says whether it may instruct, and a context assembler
+        -- needs the second one. NULL means the row predates labeling - never
+        -- "trusted", and never assertable by the writer.
+        ALTER TABLE memory_item ADD COLUMN origin TEXT NULL
           CHECK (origin IS NULL OR origin IN (
             'person_present', 'own_pico', 'home_member',
             'remote_pico', 'external_content', 'unattributed'

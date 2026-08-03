@@ -212,4 +212,74 @@ describe('MemoryStore', () => {
     expect(() => memory.create(createInput({ memoryItemId: 'mem-2', content: '   ' }))).toThrow('Memory item content must be a non-empty string.');
     expect(() => memory.create(createInput({ memoryItemId: 'mem-3', privacyDomain: '' }))).toThrow('Memory item privacyDomain must be a non-empty string.');
   });
+
+  it('carries the ADR 0116 W2 origin class on every read path', () => {
+    const memory = openMemory();
+    memory.create(createInput({
+      memoryItemId: 'mem-labelled',
+      origin: 'external_content',
+    }));
+    memory.create(createInput({ memoryItemId: 'mem-unlabelled' }));
+
+    expect(memory.getInDomain('mem-labelled', 'domain-private')?.origin)
+      .toBe('external_content');
+    // Absent is "not yet classified", never "trusted": the field is simply
+    // missing, so a consumer cannot mistake a default for a decision.
+    expect(memory.getInDomain('mem-unlabelled', 'domain-private'))
+      .not.toHaveProperty('origin');
+
+    const listed = memory.listInDomain('domain-private');
+    expect(listed.map((item) => item.origin))
+      .toEqual(['external_content', undefined]);
+    const paged = memory.listInDomainPage('domain-private', { limit: 10 });
+    expect(paged.items.map((item) => item.origin))
+      .toEqual(['external_content', undefined]);
+
+    expect(() => memory.create(createInput({
+      memoryItemId: 'mem-invented',
+      origin: 'trusted' as never,
+    }))).toThrow('origin must be a known ADR 0116 class.');
+  });
+
+  it('derives the lowest class among its sources and never upgrades', () => {
+    const memory = openMemory();
+    memory.create(createInput({
+      memoryItemId: 'mem-person',
+      origin: 'person_present',
+    }));
+    memory.create(createInput({
+      memoryItemId: 'mem-mail',
+      origin: 'external_content',
+    }));
+    memory.create(createInput({ memoryItemId: 'mem-unlabelled' }));
+
+    // A summary of the person's note and a fetched mail is not the person
+    // speaking - this is the laundering step the gate breaks.
+    const summary = memory.createDerived({
+      ...createInput({ memoryItemId: 'mem-summary', content: 'A summary.' }),
+      derivedFromMemoryItemIds: ['mem-person', 'mem-mail'],
+    });
+    expect(summary.origin).toBe('external_content');
+
+    const ownOnly = memory.createDerived({
+      ...createInput({ memoryItemId: 'mem-own', content: 'Restatement.' }),
+      derivedFromMemoryItemIds: ['mem-person'],
+    });
+    expect(ownOnly.origin).toBe('person_present');
+
+    expect(() => memory.createDerived({
+      ...createInput({ memoryItemId: 'mem-none', content: 'x' }),
+      derivedFromMemoryItemIds: [],
+    })).toThrow('A derived memory item requires at least one source.');
+    expect(() => memory.createDerived({
+      ...createInput({ memoryItemId: 'mem-missing', content: 'x' }),
+      derivedFromMemoryItemIds: ['mem-person', 'mem-absent'],
+    })).toThrow('Derivation source is not in this domain: mem-absent');
+    // Deriving a definite class from unknown provenance would be an upgrade by
+    // another route.
+    expect(() => memory.createDerived({
+      ...createInput({ memoryItemId: 'mem-from-unlabelled', content: 'x' }),
+      derivedFromMemoryItemIds: ['mem-unlabelled'],
+    })).toThrow('Derivation source carries no origin class: mem-unlabelled');
+  });
 });

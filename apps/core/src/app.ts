@@ -3255,11 +3255,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     // W1's durable label: a row written under the static token - or on the
     // pre-claim trusted-local path with no credential at all - is
-    // `unattributed`. Operator and identity writes stay unlabeled until ADR
-    // 0116 W2 assigns their classes; absent never means "trusted".
+    // `unattributed`.
+    //
+    // W2 assigns the two W1 left open, and both take the lower of the readings
+    // available:
+    //
+    // - an authenticated Pico identity is `home_member`, not `person_present`.
+    //   The higher class would require proving the writer is the subject person
+    //   of what they are writing, and the write path carries `owner` only as a
+    //   free string. `home_member` is what is actually proven, and a later
+    //   milestone that can prove more may raise it deliberately.
+    // - a Foundation operator is `unattributed`, the vocabulary's own "every-
+    //   thing else". There is no host-administration class, and inventing one
+    //   is an ADR change rather than an implementation detail; ADR 0087 keeps
+    //   host infrastructure separate from Home governance, so administration is
+    //   emphatically not a voice that may instruct.
     const authority = resolveAuthority(request.headers.authorization);
-    const origin: PicoEventOriginClass | undefined =
-      authority.kind === 'operator' || authority.kind === 'pico-identity' ? undefined : 'unattributed';
+    const origin: PicoEventOriginClass =
+      authority.kind === 'pico-identity' ? 'home_member' : 'unattributed';
 
     // memory.recorded is content-splitting and server-derived (ADR 0069): the
     // request carries content, the server stores it and records a reference-only
@@ -3299,6 +3312,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         content: request_.content,
         ...(request_.retentionPolicyRef === undefined ? {} : { retentionPolicyRef: request_.retentionPolicyRef }),
         ...(memoryCrypto === undefined ? {} : { contentPosture: 'domain_encrypted' as const }),
+        // ADR 0116 W2: the item carries the same server-assigned class as the
+        // reference event it produces. The store is what retrieval reads, so
+        // labeling only the event would leave the retrieved copy unlabeled.
+        origin,
       });
 
       const recordedPayload: MemoryRecordedPayload = {
@@ -3318,7 +3335,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           remoteLamport: request_.lamport,
           payloadPosture: 'reference_only',
         }),
-        ...(origin === undefined ? {} : { origin }),
+        origin,
       };
 
       const recordedAppend = store.append(recordedEvent);
@@ -3346,7 +3363,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         remoteLamport: validation.body.lamport,
         payloadPosture: validation.body.payloadPosture,
       }),
-      ...(origin === undefined ? {} : { origin }),
+      origin,
     };
 
     const appendResult = store.append(event);
@@ -4272,6 +4289,9 @@ function toMemoryContentItem(item: MemoryItem): PicoMemoryContentItem {
     ...(item.retentionPolicyRef === undefined ? {} : { retentionPolicyRef: item.retentionPolicyRef }),
     ...(item.content === undefined ? {} : { content: item.content }),
     ...(item.contentUnavailable === undefined ? {} : { contentUnavailable: item.contentUnavailable }),
+    // ADR 0116 W2: content and its class leave together, or the receiver has
+    // no way to tell whether what it just read may instruct.
+    ...(item.origin === undefined ? {} : { origin: item.origin }),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };

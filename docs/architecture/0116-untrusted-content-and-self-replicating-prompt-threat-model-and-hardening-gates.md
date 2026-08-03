@@ -4,14 +4,15 @@
 
 Accepted as a security constraint, partially implemented. Opened by the
 user on 2026-08-01 as the security initiative against prompt-injection
-worms of the Morris II class. W1 is implemented at the Foundation write
-path. W3's assembly contract is implemented and counter-proven, but
-nothing calls it yet: there is still no model runtime, so W3 is the
-precondition of the milestone that builds the first consumer rather than
-a defense already standing. W2 and W4-W6 are open and bind the
-milestones that would otherwise close the replication cycle. This ADR
-claims containment, never model immunity: it decides where injected
-content is stopped, not that injection will not happen.
+worms of the Morris II class. W1 and W2 are implemented: content that can
+reach a model context now carries a server-assigned class from intake
+through storage, derivation and every read. W3's assembly contract is
+implemented and counter-proven, but nothing calls it yet - there is still
+no model runtime, so W3 is the precondition of the milestone that builds
+the first consumer rather than a defense already standing. W4-W6 are open
+and bind the milestones that would otherwise close the replication cycle.
+This ADR claims containment, never model immunity: it decides where
+injected content is stopped, not that injection will not happen.
 
 ## Context
 
@@ -196,11 +197,42 @@ patched afterwards.
   under the static token is durably `unattributed`. W1 blocks any
   companion from reading the event log as conversation history before it
   lands.
-- **W2 - Origin labels in the memory store (open):** a server-assigned
-  origin class on every memory item, lowest-class inheritance for
-  derived items, the label surfaced on every read; reader-custody
-  projection labels remote-authored items `remote_pico` with the writer
-  identity. Aligns with ADR 0060's `inputClass` direction.
+- **W2 - Origin labels in the memory store (implemented):** migration
+  `0010_memory_item_origin` puts the same closed vocabulary and CHECK
+  constraint on `memory_item` that W1 put on the event log, because
+  retrieval reads the store and a label that stopped at the reference
+  event would leave the retrieved copy unlabeled. The class is assigned
+  by the code that authenticated the writer; the payload allow-list and
+  the top-level refusal already make it unassertable from either level.
+
+  W2 also settles the two authorities W1 left open, both at the lower of
+  the available readings. An authenticated Pico identity is
+  `home_member`, not `person_present`: the higher class would require
+  proving the writer is the subject person of what they are writing, and
+  the write path carries `owner` only as a free string, so a later
+  milestone that can prove more may raise it deliberately. A Foundation
+  operator is `unattributed`, the vocabulary's own "everything else" -
+  there is no host-administration class, inventing one is an ADR change
+  rather than an implementation detail, and ADR 0087 keeps host
+  infrastructure separate from Home governance, so administration is
+  emphatically not a voice that may instruct.
+
+  Derivation is a real path rather than a stated rule: `createDerived`
+  resolves its sources from the store and takes the lowest class among
+  them, so a summary of the person's note and a fetched mail is not the
+  person speaking. Sources are resolved rather than supplied, because a
+  caller that could state its sources' classes could state a higher one,
+  and an unlabeled source is fatal - deriving a definite class from
+  unknown provenance would be the same upgrade by another route.
+
+  The label leaves with the content on every read, including
+  `PicoMemoryContentItem` over HTTP: a reader that receives text without
+  its class cannot apply W3. Reader-custody item views carry
+  `remote_pico` beside the writer identity, applied uniformly rather
+  than raised when the writer happens to be the domain owner - these are
+  signed writes, never a person typing in a live session, and a wrong
+  guess in the trusting direction is the only one that costs anything.
+  Aligns with ADR 0060's `inputClass` direction.
 - **W3 - Structural context assembly (contract implemented; enforcement
   binds the first consumer):** `packages/protocol/src/model-context.ts`
   assembles the two layers. The descending trust order is declared

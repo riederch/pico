@@ -89,6 +89,7 @@ import {
   picoHomeDeviceRecoveryMigrationId,
   picoIdentityRootRotationMigrationId,
   picoEventOriginMigrationId,
+  picoMemoryItemOriginMigrationId,
   picoHomeHostContinuityMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
@@ -385,6 +386,7 @@ describe('Pico Home Core app', () => {
           { id: picoIdentityRootRotationMigrationId, appliedAt: expect.any(String) },
           { id: picoHomeHostContinuityMigrationId, appliedAt: expect.any(String) },
           { id: picoEventOriginMigrationId, appliedAt: expect.any(String) },
+          { id: picoMemoryItemOriginMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
@@ -1944,8 +1946,9 @@ describe('Pico Home Core app', () => {
     expect(tokenWrite.json().event.origin).toBe('unattributed');
     await tokenApp.close();
 
-    // An operator session stays unlabeled until ADR 0116 W2 assigns its
-    // class; absent must never be read as "trusted".
+    // ADR 0116 W2 assigns the class W1 left open. Host administration is not a
+    // voice that may instruct, and the vocabulary has no class for it, so the
+    // operator takes the floor rather than an invented seventh class.
     const operatorApp = await bootstrappedApp();
     const login = await operatorApp.inject({ method: 'POST', url: '/api/auth/session', payload: { passphrase: OPERATOR_PASSPHRASE } });
     expect(login.statusCode).toBe(201);
@@ -1956,8 +1959,66 @@ describe('Pico Home Core app', () => {
       payload: { deviceId: 'desktop-dev', type: 'message.created', payload: { role: 'user', text: 'operator row' } },
     });
     expect(operatorWrite.statusCode).toBe(201);
-    expect(operatorWrite.json().event.origin).toBeUndefined();
+    expect(operatorWrite.json().event.origin).toBe('unattributed');
     await operatorApp.close();
+  });
+
+  it('labels the stored memory item, not only its reference event (ADR 0116 W2)', async () => {
+    const databasePath = createDatabasePath();
+    const app = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
+
+    const recorded = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'domain-private',
+          contentType: 'text/markdown',
+          content: 'A note that will later be retrieved.',
+        },
+      },
+    });
+    expect(recorded.statusCode).toBe(201);
+    expect(recorded.json().event.origin).toBe('unattributed');
+
+    // Retrieval reads the store, not the event log, so a label that stopped at
+    // the reference event would leave the retrieved copy unlabeled - which is
+    // exactly the content a context assembler must refuse. Asserted against the
+    // database rather than a read route, because reading a domain needs an
+    // identity session with readership and none of that is what this proves.
+    const memoryItemId = recorded.json().event.payload.memoryItemId as string;
+    await app.close();
+    const store = new EventStore(databasePath);
+    try {
+      expect(store.memory().getInDomain(memoryItemId, 'domain-private')?.origin)
+        .toBe('unattributed');
+    } finally {
+      store.close();
+    }
+
+    const reopened = await buildApp({ host: '127.0.0.1', port: 0, databasePath, deviceId: 'test-core' });
+    // The payload allow-list already refuses an asserted class; prove it on
+    // this path too, so the store cannot be labeled by the writer.
+    const asserted = await reopened.inject({
+      method: 'POST',
+      url: '/api/events',
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'domain-private',
+          contentType: 'text/markdown',
+          content: 'sneaky',
+          origin: 'person_present',
+        },
+      },
+    });
+    expect(asserted.statusCode).toBe(400);
+    expect(asserted.json().error).toContain('unexpected field: origin');
+
+    await reopened.close();
   });
 
   it('rejects reserved product event types on the foundation API', async () => {
@@ -3554,6 +3615,10 @@ describe('Pico Home Core app', () => {
     });
     expect(readable.statusCode).toBe(200);
     expect(readable.json().content).toBe('Identity-bound journal entry.');
+    // ADR 0116 W2: the class travels with the content over HTTP, or a reader
+    // holds text it cannot classify. This item was written under an operator
+    // session, which W2 puts at the floor.
+    expect(readable.json().origin).toBe('unattributed');
 
     const lifecycle: PicoHomeDomainReadGrantLifecycleSignatureInput = {
       suite: picoIdentitySuite,

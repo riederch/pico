@@ -2257,6 +2257,12 @@ export interface PicoMemoryContentItem {
   retentionPolicyRef?: string;
   content?: string;
   contentUnavailable?: 'key_shredded' | 'crypto_unavailable';
+  /**
+   * ADR 0116 W2. Content never travels without its provenance: a reader that
+   * receives the text and not the class cannot apply the W3 assembly rule.
+   * Absent means the item predates labeling, and absent is never "trusted".
+   */
+  origin?: PicoEventOriginClass;
   createdAt: string;
   updatedAt: string;
 }

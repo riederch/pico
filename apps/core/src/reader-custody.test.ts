@@ -316,6 +316,10 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
       expect.objectContaining({
         memoryItemId: 'memory_reader_0001',
         contentCiphertextHex: records.item.contentCiphertextHex,
+        // ADR 0116 W2: the Home holds authenticity for this item and no
+        // evidence about whether it may instruct, so the projection says so
+        // beside the writer identity rather than leaving it to be guessed.
+        originClass: 'remote_pico',
       }),
     ]);
 
