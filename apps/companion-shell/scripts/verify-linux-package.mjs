@@ -17,6 +17,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { buildPicoCompanionLinuxPackage } from './package-linux.mjs';
+import { selectChromiumSandboxProbe } from './chromium-sandbox-probe.mjs';
 
 const temporaryRoots = new Set();
 process.once('exit', cleanupTemporaryRoots);
@@ -82,13 +83,9 @@ assertNoBuildMachinePath(appResources);
 const lifecycle = verifyDebianLifecycle(artifact);
 
 const probeRoot = temporaryRoot('pico-companion-probe-');
+const sandboxProbe = selectChromiumSandboxProbe();
 const probeArgs = [
-  // This probe runs an extracted, not root-installed, Debian package. Its
-  // archived root-owned SUID helper cannot carry those privileges here, and
-  // Ubuntu 23.10+ AppArmor blocks the unprivileged-user-namespace fallback
-  // for unconfined binaries. Electron documents --no-sandbox for testing
-  // only; the assertions above keep it out of every production launch path.
-  '--no-sandbox',
+  ...sandboxProbe.arguments,
   `--user-data-dir=${join(probeRoot, 'user-data')}`,
 ];
 let command = executable;
@@ -102,6 +99,7 @@ if (process.env.DISPLAY === undefined && process.env.WAYLAND_DISPLAY === undefin
 // Status 1 is the probe's intentional "measurement exceeded" result; parse
 // its signed-off JSON before the release assertion reports the exact metrics.
 const probe = run(command, args, {
+  ...sandboxProbe.environment,
   PICO_COMPANION_RELEASE_PROBE: 'tray-memory-v1',
   XDG_CACHE_HOME: join(probeRoot, 'cache'),
   XDG_CONFIG_HOME: join(probeRoot, 'config'),
@@ -135,7 +133,7 @@ const retainedReport = {
   measuredAt: new Date().toISOString(),
   platform: 'linux',
   architecture: 'amd64',
-  chromiumSandboxProbe: 'disabled_for_uninstalled_test_only',
+  chromiumSandboxProbe: sandboxProbe.mode,
   artifact: artifact.split('/').at(-1),
   sha256: checksum,
   lifecycle,
