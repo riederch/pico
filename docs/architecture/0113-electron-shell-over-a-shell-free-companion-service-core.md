@@ -200,30 +200,31 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   entry and system-wide XDG autostart, retains Chromium's root-owned setuid
   sandbox helper, and owns neither a person's profile nor Vault data. The
   gate rejects production launcher or desktop entries that embed
-  `--no-sandbox`. Its resource probe runs the package extracted rather than
-  root-installed, so the archived SUID helper has no usable privilege there.
-  On an AppArmor-restricted host such as the GitHub Ubuntu runner, the verifier
-  first materializes Electron's lazy binary download through the pinned package
-  import, then receives a dedicated helper copied from that exact distribution
-  and installed as `root:root` mode `4755`. The verifier accepts
-  its explicitly configured absolute path only when it is a regular file and
-  its SHA-256 equals the helper inside the generated package, then passes that
-  path through `CHROME_DEVEL_SANDBOX`. On hosts without an explicitly
-  configured helper it disables only the setuid path, leaving Chromium's
-  user-namespace sandbox active; an inherited, unvalidated helper path is
-  rejected. The resource probe therefore proves packaged runtime closure and
-  resource/core-dump behavior with a real Chromium sandbox in either
-  environment. C2's window options, boundary tests and Electron smoke carry
-  the separate renderer-boundary proof. A
+  `--no-sandbox`. Chromium prefers the SUID helper adjacent to its executable,
+  so CI probes that exact packaged helper instead of configuring an external
+  substitute. The verifier atomically creates a temporary root, makes that
+  directory `root:root` mode `0755` before privileged package extraction, and
+  therefore preserves the archive's root-owned `4755` helper. It validates both
+  the secured extraction root and the adjacent helper before launching without
+  `CHROME_DEVEL_SANDBOX` or a sandbox command-line override. This exercises the
+  same helper selection as a real package installation while keeping the
+  privileged write confined to a registered `mkdtemp` root; ownership is
+  returned to the invoking user before ordinary cleanup. A normal local probe
+  remains unprivileged and disables only the unusable setuid path, leaving
+  Chromium's user-namespace sandbox active. Inherited helper paths and fully
+  unsandboxed probes are rejected. The resource probe therefore proves packaged
+  runtime closure and resource/core-dump behavior with a real Chromium sandbox
+  in either environment. C2's window options, boundary tests and Electron smoke
+  carry the separate renderer-boundary proof. A
   temporary-root lifecycle proof performs
   install, synthetic upgrade, remove and purge while byte-and-mode sentinels
   prove profile and keyfile preservation. The
   packaged launcher sets both soft and hard core-dump limits to zero before
   `exec`, and the real packaged tray probe proves those inherited limits.
   The sandboxed extracted probe has a seven-process topology; the 2026-08-03
-  full-gate run reported 198,958,080 bytes PSS and 97,705,984 private bytes
+  full-gate run reported 198,708,224 bytes PSS and 99,303,424 private bytes
   below the unchanged 225,000,000/110,000,000 gates, with summed RSS
-  514,416,640 bytes retained as informational evidence. Static
+  512,925,696 bytes retained as informational evidence. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.

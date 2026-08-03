@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { selectChromiumSandboxProbe } from './chromium-sandbox-probe.mjs';
-
-const expectedHelperSha256 = 'a'.repeat(64);
+import {
+  rootOwnedPackageProbeRequested,
+  selectChromiumSandboxProbe,
+} from './chromium-sandbox-probe.mjs';
 
 function helper(overrides = {}) {
   return {
@@ -14,33 +15,30 @@ function helper(overrides = {}) {
   };
 }
 
-function configuredHelper(overrides = {}) {
+function rootOwnedProbe(overrides = {}) {
   return {
-    expectedHelperSha256,
-    hashHelper: () => expectedHelperSha256,
     helperExists: () => true,
-    helperPath: '/validated/chrome-sandbox',
     inheritedSandboxPath: undefined,
     inspectHelper: () => helper(),
+    packagedHelperPath: '/root-owned-extraction/opt/pico-companion/chrome-sandbox',
+    rootOwnedPackageProbe: true,
     ...overrides,
   };
 }
 
 describe('selectChromiumSandboxProbe', () => {
-  it('uses only a byte-identical validated setuid helper', () => {
-    expect(selectChromiumSandboxProbe(configuredHelper())).toEqual({
+  it('uses the adjacent helper only from a validated root-owned extraction', () => {
+    expect(selectChromiumSandboxProbe(rootOwnedProbe())).toEqual({
       arguments: [],
-      environment: {
-        CHROME_DEVEL_SANDBOX: '/validated/chrome-sandbox',
-      },
-      mode: 'installed_exact_setuid_helper',
+      environment: {},
+      mode: 'root_owned_packaged_setuid_helper',
     });
   });
 
-  it('forces the user-namespace sandbox when no helper is configured', () => {
+  it('forces the user-namespace sandbox for an ordinary local extraction', () => {
     expect(selectChromiumSandboxProbe({
-      helperPath: null,
       inheritedSandboxPath: undefined,
+      rootOwnedPackageProbe: false,
     })).toEqual({
       arguments: ['--disable-setuid-sandbox'],
       environment: {},
@@ -53,33 +51,38 @@ describe('selectChromiumSandboxProbe', () => {
     ['a non-root owner', helper({ uid: 1000 })],
     ['a non-setuid mode', helper({ mode: 0o100755 })],
   ])('rejects %s', (_description, metadata) => {
-    expect(() => selectChromiumSandboxProbe(configuredHelper({
+    expect(() => selectChromiumSandboxProbe(rootOwnedProbe({
       inspectHelper: () => metadata,
     }))).toThrow();
   });
 
-  it('rejects a relative configured helper path', () => {
-    expect(() => selectChromiumSandboxProbe(configuredHelper({
-      helperPath: 'relative/chrome-sandbox',
+  it('rejects a relative packaged helper path', () => {
+    expect(() => selectChromiumSandboxProbe(rootOwnedProbe({
+      packagedHelperPath: 'relative/chrome-sandbox',
     }))).toThrow('must be absolute');
   });
 
-  it('rejects a configured helper that is absent', () => {
-    expect(() => selectChromiumSandboxProbe(configuredHelper({
+  it('rejects a packaged helper that is absent', () => {
+    expect(() => selectChromiumSandboxProbe(rootOwnedProbe({
       helperExists: () => false,
     }))).toThrow('does not exist');
   });
 
-  it('rejects a helper from a different Electron distribution', () => {
-    expect(() => selectChromiumSandboxProbe(configuredHelper({
-      hashHelper: () => 'b'.repeat(64),
-    }))).toThrow('differs from the packaged Electron helper');
-  });
-
   it('rejects an inherited helper path instead of trusting host configuration', () => {
     expect(() => selectChromiumSandboxProbe({
-      helperPath: null,
       inheritedSandboxPath: '/untrusted/chrome-sandbox',
+      rootOwnedPackageProbe: false,
     })).toThrow('unvalidated CHROME_DEVEL_SANDBOX');
+  });
+});
+
+describe('rootOwnedPackageProbeRequested', () => {
+  it('accepts only the explicit CI opt-in', () => {
+    expect(rootOwnedPackageProbeRequested('1')).toBe(true);
+    expect(rootOwnedPackageProbeRequested(undefined)).toBe(false);
+  });
+
+  it('rejects ambiguous opt-in values', () => {
+    expect(() => rootOwnedPackageProbeRequested('true')).toThrow('must be unset or exactly 1');
   });
 });

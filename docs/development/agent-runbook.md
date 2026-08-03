@@ -114,25 +114,32 @@ durch und startet das extrahierte Electron real im Tray-only-Modus:
 npx pnpm@9.0.0 --filter @pico/companion-shell verify:linux
 ```
 
-Der Ressourcen-Probe laeuft aus einem unprivilegiert extrahierten, noch nicht
-installierten Paket. Deshalb kann sein im Archiv korrekt root-eigener
-Setuid-Helper dort nicht wirken; auf Ubuntu 23.10+ blockiert AppArmor zugleich
-den User-Namespace-Fallback. Da Electron 43 die binaere Distribution erst beim
-ersten Package-Import laedt, materialisiert der CI-Workflow sie explizit nach
-dem `pnpm install`. Erst danach kopiert er deren Helper nach
-`/usr/local/sbin/pico-companion-chrome-sandbox` und installiert ihn als
-`root:root` mit Modus `4755`. Der Gate akzeptiert den explizit ueber
-`PICO_COMPANION_CHROMIUM_SANDBOX_HELPER` konfigurierten absoluten Pfad nur als
-regulaere Datei und wenn sein SHA-256 dem Helper im erzeugten Paket entspricht;
-erst dann setzt er `CHROME_DEVEL_SANDBOX`. Ohne expliziten Helper erzwingt
-`--disable-setuid-sandbox` ausschliesslich den User-Namespace-Pfad. Geerbte,
-nicht validierte Helper-Variablen und `--no-sandbox` werden nicht akzeptiert.
-Der Gate prueft ausserdem den root-eigenen `4755`-Helper direkt im
-Debian-Archiv. Die Renderer-Sandbox wird separat durch die C2-Window-,
-Boundary- und Electron-Smoke-Pruefungen gebunden.
+Der Ressourcen-Probe laeuft aus dem erzeugten Paket. Chromium bevorzugt seinen
+direkt neben der Anwendung liegenden `chrome-sandbox`; ein externer Helper kann
+diesen Paketbestand nicht ueberschreiben. Der CI-Workflow fordert deshalb mit
+`PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE=1` einen installationsnahen Probe an:
+Der Verifier erzeugt atomar ein exaktes temporaeres Verzeichnis, uebergibt es
+vor dem privilegierten Entpacken an `root:root` mit Modus `0755` und laesst
+`dpkg-deb` dadurch Archiv-Eigentuemer und Setuid-Bit erhalten. Vor dem Start
+muessen Extraktionswurzel und angrenzender Helper regulaer, root-eigen und der
+Helper exakt `4755` sein. Electron startet ohne `CHROME_DEVEL_SANDBOX`,
+`--disable-setuid-sandbox` oder `--no-sandbox` und waehlt damit denselben
+Paket-Helper wie nach einer echten Installation. Das privilegierte
+Extraktionsverzeichnis wird vor dem normalen Entfernen ueber seinen registrierten
+`mkdtemp`-Pfad rekursiv an den aufrufenden Nutzer zurueckgegeben.
+
+Ein normaler lokaler Lauf entpackt weiterhin unprivilegiert. Weil sein im Archiv
+korrekter Setuid-Helper dann absichtlich keine Root-Eigentuemerschaft besitzt,
+erzwingt der Verifier mit `--disable-setuid-sandbox` ausschliesslich den
+User-Namespace-Pfad. Geerbte `CHROME_DEVEL_SANDBOX`-Pfade und vollstaendig
+unsandboxed Probes werden in beiden Modi verweigert. Der Gate prueft ausserdem
+den root-eigenen `4755`-Helper direkt im Debian-Archiv. Die Renderer-Sandbox wird
+separat durch die C2-Window-, Boundary- und Electron-Smoke-Pruefungen gebunden.
 
 Dafuer werden Linux amd64, `dpkg-deb`, `fakeroot` und entweder eine laufende
-Display-Session oder `xvfb-run` benoetigt. Der Probe schreibt seinen letzten
+Display-Session oder `xvfb-run` benoetigt. Der root-eigene CI-Modus benoetigt
+ausserdem passwortloses `sudo` fuer die begrenzte Extraktion und Rueckgabe des
+exakten temporaeren Verzeichnisses. Der Probe schreibt seinen letzten
 Messbericht nach `apps/companion-shell/out/tray-memory-linux-amd64.json`; PSS
 und private residente Bytes sind die Gates, summiertes RSS ist wegen mehrfach
 gezaehlter Shared Pages nur informativ. Alle temporaeren Paket-, Lifecycle- und

@@ -17,9 +17,13 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { buildPicoCompanionLinuxPackage } from './package-linux.mjs';
-import { selectChromiumSandboxProbe } from './chromium-sandbox-probe.mjs';
+import {
+  rootOwnedPackageProbeRequested,
+  selectChromiumSandboxProbe,
+} from './chromium-sandbox-probe.mjs';
 
 const temporaryRoots = new Set();
+const rootOwnedTemporaryRoots = new Set();
 process.once('exit', cleanupTemporaryRoots);
 
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -28,10 +32,16 @@ const packageJson = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8
 const support = JSON.parse(
   readFileSync(join(appRoot, 'electron-support.json'), 'utf8'),
 );
+const rootOwnedPackageProbe = rootOwnedPackageProbeRequested();
 const { artifact, checksum } = buildPicoCompanionLinuxPackage();
 const extractionRoot = temporaryRoot('pico-companion-extract-');
 const packageContents = run('dpkg-deb', ['--contents', artifact]).stdout;
-run('dpkg-deb', ['--extract', artifact, extractionRoot]);
+if (rootOwnedPackageProbe) {
+  makeTemporaryRootOwned(extractionRoot);
+  run('sudo', ['dpkg-deb', '--extract', artifact, extractionRoot]);
+} else {
+  run('dpkg-deb', ['--extract', artifact, extractionRoot]);
+}
 
 const installRoot = join(extractionRoot, 'opt', 'pico-companion');
 const appResources = join(installRoot, 'resources', 'app');
@@ -85,9 +95,8 @@ const lifecycle = verifyDebianLifecycle(artifact);
 const probeRoot = temporaryRoot('pico-companion-probe-');
 const packagedSandboxHelper = join(installRoot, 'chrome-sandbox');
 const sandboxProbe = selectChromiumSandboxProbe({
-  expectedHelperSha256: createHash('sha256')
-    .update(readFileSync(packagedSandboxHelper))
-    .digest('hex'),
+  packagedHelperPath: packagedSandboxHelper,
+  rootOwnedPackageProbe,
 });
 const probeArgs = [
   ...sandboxProbe.arguments,
@@ -349,15 +358,70 @@ function temporaryRoot(prefix) {
   return root;
 }
 
+function makeTemporaryRootOwned(root) {
+  assertManagedTemporaryRoot(root);
+  rootOwnedTemporaryRoots.add(root);
+  run('sudo', ['chown', 'root:root', '--', root]);
+  run('sudo', ['chmod', '0755', '--', root]);
+  const metadata = lstatSync(root);
+  assert(metadata.isDirectory() && !metadata.isSymbolicLink()
+    && metadata.uid === 0 && metadata.gid === 0
+    && (metadata.mode & 0o7777) === 0o755,
+  `Root-owned package extraction directory is not secured: ${root}`);
+}
+
 function removeTemporaryRoot(root) {
+  reclaimTemporaryRoot(root);
   rmSync(root, { recursive: true, force: true });
   temporaryRoots.delete(root);
 }
 
 function cleanupTemporaryRoots() {
   for (const root of temporaryRoots) {
-    rmSync(root, { recursive: true, force: true });
+    try {
+      reclaimTemporaryRoot(root, false);
+      rmSync(root, { recursive: true, force: true });
+    } catch {
+      // A failed best-effort exit cleanup is confined to an exact mkdtemp root.
+    }
   }
+}
+
+function reclaimTemporaryRoot(root, strict = true) {
+  if (!rootOwnedTemporaryRoots.has(root)) {
+    return;
+  }
+  const cleanup = spawnSync('sudo', [
+    'chown',
+    '--recursive',
+    '--no-dereference',
+    `${process.getuid()}:${process.getgid()}`,
+    '--',
+    root,
+  ], {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    env: process.env,
+    stdio: 'pipe',
+  });
+  if (strict) {
+    assert(cleanup.error === undefined && cleanup.status === 0,
+      `Could not reclaim root-owned temporary package extraction: ${root}`);
+  }
+  if (cleanup.error === undefined && cleanup.status === 0) {
+    rootOwnedTemporaryRoots.delete(root);
+  }
+}
+
+function assertManagedTemporaryRoot(root) {
+  const temporaryDirectory = `${realpathSync(tmpdir())}${sep}`;
+  assert(temporaryRoots.has(root)
+    && resolve(root).startsWith(temporaryDirectory),
+  `Refusing privileged operation outside a managed temporary root: ${root}`);
+  const metadata = lstatSync(root);
+  assert(metadata.isDirectory() && !metadata.isSymbolicLink()
+    && metadata.uid === process.getuid() && metadata.gid === process.getgid(),
+  `Managed temporary root has unexpected ownership or type: ${root}`);
 }
 
 function assertInternalLinks(root) {
