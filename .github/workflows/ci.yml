@@ -35,7 +35,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Electron sandbox helper for packaged probe
+        run: sudo install --owner=root --group=root --mode=4755 apps/companion-shell/node_modules/electron/dist/chrome-sandbox /usr/local/sbin/pico-companion-chrome-sandbox
+
       - name: Type check, test and build
+        env:
+          PICO_COMPANION_CHROMIUM_SANDBOX_HELPER: /usr/local/sbin/pico-companion-chrome-sandbox
         run: pnpm release:verify
 
   container:

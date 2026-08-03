@@ -203,23 +203,26 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   `--no-sandbox`. Its resource probe runs the package extracted rather than
   root-installed, so the archived SUID helper has no usable privilege there.
   On an AppArmor-restricted host such as the GitHub Ubuntu runner, the verifier
-  instead accepts the installed Chrome SUID helper only when it is a regular
-  root-owned `4755` file and passes its fixed path through
-  `CHROME_DEVEL_SANDBOX`. On hosts without that helper it explicitly disables
-  only the setuid path, leaving Chromium's user-namespace sandbox active; an
-  inherited, unvalidated helper path is rejected. The resource probe therefore
-  proves packaged runtime closure and resource/core-dump behavior with a real
-  Chromium sandbox in either environment. C2's window options, boundary tests
-  and Electron smoke carry the separate renderer-boundary proof. A
+  instead receives a dedicated helper copied from the exact pinned Electron
+  distribution and installed as `root:root` mode `4755`. The verifier accepts
+  its explicitly configured absolute path only when it is a regular file and
+  its SHA-256 equals the helper inside the generated package, then passes that
+  path through `CHROME_DEVEL_SANDBOX`. On hosts without an explicitly
+  configured helper it disables only the setuid path, leaving Chromium's
+  user-namespace sandbox active; an inherited, unvalidated helper path is
+  rejected. The resource probe therefore proves packaged runtime closure and
+  resource/core-dump behavior with a real Chromium sandbox in either
+  environment. C2's window options, boundary tests and Electron smoke carry
+  the separate renderer-boundary proof. A
   temporary-root lifecycle proof performs
   install, synthetic upgrade, remove and purge while byte-and-mode sentinels
   prove profile and keyfile preservation. The
   packaged launcher sets both soft and hard core-dump limits to zero before
   `exec`, and the real packaged tray probe proves those inherited limits.
   The sandboxed extracted probe has a seven-process topology; the 2026-08-03
-  full-gate run reported 197,067,776 bytes PSS and 97,148,928 private bytes
+  full-gate run reported 197,868,544 bytes PSS and 97,169,408 private bytes
   below the unchanged 225,000,000/110,000,000 gates, with summed RSS
-  515,506,176 bytes retained as informational evidence. Static
+  514,539,520 bytes retained as informational evidence. Static
   upstream evidence pins Electron 43.2.0 as the reviewed latest stable
   version and expires at the next scheduled stable-major date, so stale
   currency evidence blocks `release:verify`.

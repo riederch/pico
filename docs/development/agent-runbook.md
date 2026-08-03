@@ -117,13 +117,16 @@ npx pnpm@9.0.0 --filter @pico/companion-shell verify:linux
 Der Ressourcen-Probe laeuft aus einem unprivilegiert extrahierten, noch nicht
 installierten Paket. Deshalb kann sein im Archiv korrekt root-eigener
 Setuid-Helper dort nicht wirken; auf Ubuntu 23.10+ blockiert AppArmor zugleich
-den User-Namespace-Fallback. Dort verwendet der Probe deshalb den unter
-`/opt/google/chrome/chrome-sandbox` installierten System-Helper ueber
-`CHROME_DEVEL_SANDBOX`, aber erst nach einer fail-closed-Pruefung auf regulaere
-Datei, `root:root` und Modus `4755`. Ohne diesen Helper erzwingt
-`--disable-setuid-sandbox` ausschliesslich den User-Namespace-Pfad. Eine
-geerbte, nicht validierte Helper-Variable und `--no-sandbox` werden nicht
-akzeptiert. Der Gate prueft ausserdem den root-eigenen `4755`-Helper direkt im
+den User-Namespace-Fallback. Der CI-Workflow kopiert dort den Helper der
+tatsaechlich gepinnten Electron-Distribution nach
+`/usr/local/sbin/pico-companion-chrome-sandbox` und installiert ihn als
+`root:root` mit Modus `4755`. Der Gate akzeptiert den explizit ueber
+`PICO_COMPANION_CHROMIUM_SANDBOX_HELPER` konfigurierten absoluten Pfad nur als
+regulaere Datei und wenn sein SHA-256 dem Helper im erzeugten Paket entspricht;
+erst dann setzt er `CHROME_DEVEL_SANDBOX`. Ohne expliziten Helper erzwingt
+`--disable-setuid-sandbox` ausschliesslich den User-Namespace-Pfad. Geerbte,
+nicht validierte Helper-Variablen und `--no-sandbox` werden nicht akzeptiert.
+Der Gate prueft ausserdem den root-eigenen `4755`-Helper direkt im
 Debian-Archiv. Die Renderer-Sandbox wird separat durch die C2-Window-,
 Boundary- und Electron-Smoke-Pruefungen gebunden.
 

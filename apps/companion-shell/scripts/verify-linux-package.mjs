@@ -83,7 +83,12 @@ assertNoBuildMachinePath(appResources);
 const lifecycle = verifyDebianLifecycle(artifact);
 
 const probeRoot = temporaryRoot('pico-companion-probe-');
-const sandboxProbe = selectChromiumSandboxProbe();
+const packagedSandboxHelper = join(installRoot, 'chrome-sandbox');
+const sandboxProbe = selectChromiumSandboxProbe({
+  expectedHelperSha256: createHash('sha256')
+    .update(readFileSync(packagedSandboxHelper))
+    .digest('hex'),
+});
 const probeArgs = [
   ...sandboxProbe.arguments,
   `--user-data-dir=${join(probeRoot, 'user-data')}`,
