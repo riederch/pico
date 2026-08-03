@@ -2,14 +2,16 @@
 
 ## Status
 
-Accepted as a pre-implementation security constraint; nothing is
-implemented. Opened by the user on 2026-08-01 as the security initiative
-against prompt-injection worms of the Morris II class. Gates W1-W6 are
-open; W1 is implementable now and must land before any companion reads
-the event log as conversation history, and W2-W6 bind the milestones
-that would otherwise close the replication cycle. This ADR claims
-containment, never model immunity: it decides where injected content is
-stopped, not that injection will not happen.
+Accepted as a security constraint, partially implemented. Opened by the
+user on 2026-08-01 as the security initiative against prompt-injection
+worms of the Morris II class. W1 is implemented at the Foundation write
+path. W3's assembly contract is implemented and counter-proven, but
+nothing calls it yet: there is still no model runtime, so W3 is the
+precondition of the milestone that builds the first consumer rather than
+a defense already standing. W2 and W4-W6 are open and bind the
+milestones that would otherwise close the replication cycle. This ADR
+claims containment, never model immunity: it decides where injected
+content is stopped, not that injection will not happen.
 
 ## Context
 
@@ -199,10 +201,39 @@ patched afterwards.
   derived items, the label surfaced on every read; reader-custody
   projection labels remote-authored items `remote_pico` with the writer
   identity. Aligns with ADR 0060's `inputClass` direction.
-- **W3 - Structural context assembly (open; binds the companion
-  milestone):** instruction/data layering with origin labels;
-  below-threshold content enters delimited as data; nothing unlabeled is
-  concatenated into instructions.
+- **W3 - Structural context assembly (contract implemented; enforcement
+  binds the first consumer):** `packages/protocol/src/model-context.ts`
+  assembles the two layers. The descending trust order is declared
+  separately from the origin vocabulary, because the vocabulary is a set
+  and this is a lattice; a test asserts the two stay the same set, so a
+  later edit cannot silently re-rank trust. Derivation takes the lowest
+  class among its sources and refuses an empty source list rather than
+  answering the floor. Only `person_present` and Pico's own policy reach
+  the instruction layer - `own_pico` deliberately does not, because
+  output from a context that held untrusted content is untrusted, which
+  is the laundering step this gate breaks. Nothing unlabeled can be
+  assembled: an absent or unknown class is a refusal, not a default, and
+  the source label is a canonical ASCII token because it is rendered into
+  the block header it would otherwise be able to forge.
+
+  Escape resistance comes from prefixing, not from a marker content is
+  assumed not to contain: every line of quoted data carries `> `, so no
+  content can emit an unprefixed line and a forged header renders as
+  quoted text. The split covers LF, CRLF, a lone CR and U+2028/U+2029 -
+  JavaScript does not treat the last two as line terminators inside
+  strings but several renderers do, so a break the renderer did not see
+  is exactly the one that would escape downstream. Content is otherwise
+  unchanged: nothing is filtered, refused or rewritten, which is what
+  keeps this structural. Both guards are counter-proven - removing the
+  quote prefix or the two separators fails the escape test, whose own
+  splitting is deliberately more permissive than JavaScript's.
+
+  What is not claimed: there is no model runtime, so nothing yet calls
+  this. The rule that a consumer may not assemble a context any other way
+  is enforced in the milestone that builds the first consumer, and W3
+  stays that milestone's precondition rather than a finished defense.
+  ADR 0002's relationship tiers are deliberately absent; that vocabulary
+  is W6's.
 - **W4 - Action approvals over the hold channel (open; binds the first
   tool executor):** ADR 0010 decisions realized with ADR 0099/0106
   semantics for tool families; unknown families gated by default.
