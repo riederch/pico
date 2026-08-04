@@ -4,6 +4,8 @@
 
 Accepted as a model-capability delegation concept before runtime, transport, policy or provider implementation.
 
+Three questions this ADR left open were decided by the user on 2026-08-04 and are recorded under "What may leave the device": local inference first with remote only by consent, only the live turn leaving the device, and one standing revocable provider consent rather than a per-job approval. Registry, job-envelope schema, transport, provider authentication and runtime remain unbuilt.
+
 ## Context
 
 Pico may run on devices with very different compute capacity. A phone, browser surface or small appliance may not be able to run a strong local model, while a Pico Home, desktop Pico Vault or another trusted node may have access to a larger local model or a model connector.
@@ -59,6 +61,65 @@ The requesting Pico remains responsible for:
 - asking for confirmation where required
 - executing any approved tool action through its Action Runner
 - recording audit and Action History entries
+
+## What may leave the device
+
+Decided by the user on 2026-08-04. These three answers close the part of
+this ADR that blocked every consumer of ADR 0116 W1/W2/W3, and they are
+recorded here rather than in a new ADR because they refine this ADR's own
+boundary rather than replacing it.
+
+### Local first; remote only with consent
+
+Inference runs on hardware the person owns by default. A remote provider
+is possible, never automatic, and never selected by availability pressure
+- ADR 0118 already forbids failover across provider classes for exactly
+that reason, and the same rule holds here: a job that cannot run locally
+waits or fails, it does not quietly go elsewhere.
+
+### Only the live turn leaves
+
+A remote job carries what the person is saying now, plus Pico's own
+policy. **Retrieved memory does not leave.** If an answer needs
+remembered material, the job runs locally or it does not run.
+
+The reasoning is the blast radius, not the sensitivity ranking. Person
+content is what the person chose to send this second and knows they sent;
+retrieved memory is everything they ever told Pico, selected by a
+retrieval step they did not watch. A provider breach that sees one turn
+sees a turn. A provider breach that sees assembled context sees the
+memory. ADR 0088's reader-custody content sharpens it further: some of it
+was written by other people who were never asked.
+
+A consequence worth naming: this decouples the remote-provider question
+from ADR 0116's worm question. W5 gates egress whose content derives from
+below-threshold context; a job carrying only the person's own words is
+not that path. The two boundaries stop being one problem.
+
+### One standing provider consent, revocable, not one per job
+
+The person decides once that a given provider may be used, sees that it
+is active, and can withdraw it at any time. There is no per-job prompt.
+
+Two alternatives were considered and refused. Per-job approval over the
+ADR 0099 hold channel would misuse a mechanism ADR 0099 binds to
+authority-creating signatures - a model job creates no authority - and
+would undo ADR 0101's work to reduce approval counts; in a conversational
+surface it would also be unusable. Routing every job through Pico Rules
+is architecturally the cleanest and stays the destination, but Pico Rules
+does not exist, and making the model path wait for it would block this
+one behind another large block.
+
+What standing consent must therefore carry: which provider, granted when,
+visible while active, and withdrawable without a ceremony. It is a
+setting in the ADR 0104 sense - it belongs to Pico, not to host
+configuration.
+
+### What is still open
+
+The registry, the job-envelope schema, the transport, provider
+authentication and the runtime remain unbuilt. These three decisions
+bound them; they do not replace them.
 
 ## Model job types
 
