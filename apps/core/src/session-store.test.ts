@@ -107,4 +107,39 @@ describe('SessionStore', () => {
       },
     });
   });
+
+  it('does not let a wall clock wound backward extend a session (ADR 0120 N1)', () => {
+    let nowMs = 1_000_000;
+    let monotonicMs = 0;
+    const sessions = new SessionStore({
+      idleTimeoutMs: 1_000,
+      absoluteTimeoutMs: 10_000,
+      now: () => nowMs,
+      monotonicNow: () => monotonicMs,
+    });
+    const session = sessions.issue();
+    expect(sessions.touch(session.value)).toBeDefined();
+
+    // The attack: the wall clock is wound a day backward, so by its reading
+    // the idle window has not even started. The monotonic clock kept counting.
+    nowMs -= 24 * 60 * 60 * 1_000;
+    monotonicMs += 1_001;
+    expect(sessions.touch(session.value)).toBeUndefined();
+  });
+
+  it('still expires on the wall clock when the monotonic one lags', () => {
+    let nowMs = 1_000_000;
+    const sessions = new SessionStore({
+      idleTimeoutMs: 1_000,
+      absoluteTimeoutMs: 10_000,
+      now: () => nowMs,
+      // A clock that does not advance at all - the suspended-host case, where
+      // CLOCK_MONOTONIC stands still while real time passes.
+      monotonicNow: () => 0,
+    });
+    const session = sessions.issue();
+    nowMs += 1_001;
+    // The earliest clock wins, so the window still ends.
+    expect(sessions.touch(session.value)).toBeUndefined();
+  });
 });

@@ -100,12 +100,32 @@ describe('ADR 0120 N1 exposure windows never last longer', () => {
     })).toBe(false);
   });
 
-  it('falls back to the wall clock alone for a window that outlived its process', () => {
+  it('uses the durable floor when the window outlived its process', () => {
     const endsAtMs = start + hour;
-    // Stated rather than hidden: without a start reading there is nothing to
-    // measure against, so a backward wall clock does extend this one.
+    // No start reading and no floor: nothing to measure against, so a
+    // backward wall clock does extend this one. Stated, not hidden.
     expect(hasPicoExposureWindowElapsed({ endsAtMs, nowMs: start - hour }))
       .toBe(false);
+
+    // With a floor there is: it never moved backward, so it stands ahead of
+    // the rewound wall clock and the window is over.
+    expect(hasPicoExposureWindowElapsed({
+      endsAtMs,
+      nowMs: start - 24 * hour,
+      anchorFloorMs: endsAtMs,
+    })).toBe(true);
+    // A floor that has genuinely not reached the end does not expire it - the
+    // floor lags real time and must not cut a window short on its own.
+    expect(hasPicoExposureWindowElapsed({
+      endsAtMs,
+      nowMs: start,
+      anchorFloorMs: start,
+    })).toBe(false);
+    expect(hasPicoExposureWindowElapsed({
+      endsAtMs,
+      nowMs: start,
+      anchorFloorMs: null,
+    })).toBe(false);
   });
 });
 

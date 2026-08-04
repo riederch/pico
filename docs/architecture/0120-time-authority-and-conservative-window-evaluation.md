@@ -3,10 +3,10 @@
 ## Status
 
 Accepted as a correctness constraint; the initiative and its scope were
-chosen by the user on 2026-08-01. Gates N1-N5 are implemented for the
-objection windows and the irreversible housekeeping path; applying the
-exposure rule to each of the remaining short windows is what N1 still
-binds at the first production deployment. It changes no window's length
+chosen by the user on 2026-08-01. Gates N1-N4 are implemented, and N5's
+irreversible-housekeeping half with them; N5's remaining half - raising
+detected clock movement through the ADR 0112 carrier - is open. It
+changes no window's length
 and no ceremony's shape - only how a window is judged to have passed,
 and what Pico refuses to conclude from a clock it cannot trust.
 
@@ -195,15 +195,25 @@ is not permission to act on nonsense.
 
 ## Gates
 
-- **N1 - Declared window classes and two-clock evaluation (mechanism
-  implemented; the remaining short windows bind the first production
-  deployment):** `packages/protocol/src/time-authority.ts` carries the
+- **N1 - Declared window classes and two-clock evaluation
+  (implemented):** `packages/protocol/src/time-authority.ts` carries the
   closed class vocabulary and both evaluators, with the two attack
   directions tested against each other. The objection rule is applied to
-  the recovery veto delay and the rotation veto, the exposure rule to the
-  recovery completion edge; sessions, tickets, challenges, pending
-  ceremonies and the freshness ceiling still resolve as they did. Original
-  gate text: every window declares objection,
+  the recovery veto delay and the rotation veto; the exposure rule to the
+  recovery completion edge, operator sessions (both the idle and the
+  absolute half), identity-session challenges, realtime tickets, the
+  pending Home claim and pending share-envelope issuance. Each carries the
+  monotonic reading its wall-clock expiry was derived from, and each is
+  counter-proven: a wall clock wound backward does not extend it, while a
+  monotonic clock that stands still - the suspended host - still lets the
+  wall clock end it, because the earliest reading wins.
+
+  The reader-key freshness ceiling is deliberately untouched. It is
+  ADR 0085 checkpoint validity, which this ADR's scope excludes. A window
+  that outlives its process has no monotonic start reading, so it falls
+  back to the wall clock and, where one is available, to the durable
+  floor - which never moves backward and therefore stands ahead of a
+  rewound wall clock. Original gate text: every window declares objection,
   exposure or housekeeping at its definition; exposure takes the
   earliest of both clocks, objection the latest, proven by tests that
   wind each clock in each direction.

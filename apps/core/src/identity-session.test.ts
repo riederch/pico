@@ -62,6 +62,23 @@ describe('identity-bound Foundation sessions (ADR 0082)', () => {
     expect(challenges.consume(expired.challengeId)).toBeUndefined();
   });
 
+  it('does not let a wall clock wound backward revive a challenge (ADR 0120 N1)', () => {
+    let nowMs = 1_000_000;
+    let monotonicMs = 0;
+    const challenges = new IdentitySessionChallengeStore({
+      ttlMs: 100,
+      now: () => nowMs,
+      monotonicNow: () => monotonicMs,
+    });
+    const challenge = challenges.issue('4'.repeat(64));
+
+    // The attack: rewind the wall clock so the replay window looks fresh. The
+    // monotonic clock counted the window out regardless.
+    nowMs -= 60 * 60 * 1_000;
+    monotonicMs += 101;
+    expect(challenges.consume(challenge.challengeId)).toBeUndefined();
+  });
+
   it('accepts device possession only through an active surface-session delegation', () => {
     const challenge = fixedChallenge();
     const proof = signedProof(challenge);

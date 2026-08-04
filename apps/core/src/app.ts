@@ -92,6 +92,7 @@ import {
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  hasPicoExposureWindowElapsed,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoProtocolVersion,
   type PicoIdentityReaderKeyFreshnessCheckpoint,
@@ -263,6 +264,12 @@ type RealtimeAuthorization =
 
 interface RealtimeTicketRecord {
   expiresAtMs: number;
+  /**
+   * ADR 0120 N1. A ticket is an exposure window - it exists to bound a
+   * handoff - so it expires at the earliest instant either clock allows, and
+   * a wall clock wound backward cannot give a spent handoff a second life.
+   */
+  startedAtMonotonicMs: number;
   // Set when the ticket was minted under an operator session: revoking that
   // session invalidates its outstanding tickets (ADR 0076).
   sessionDigest?: string;
@@ -316,6 +323,12 @@ interface PendingPicoHomeClaim {
   founding: PicoHomeFoundingSignatureInput;
   createdAt: string;
   expiresAtMs: number;
+  /**
+   * ADR 0120 N1. A pending claim is an exposure window - it bounds a ceremony
+   * holding a consumed Move-In Code and a setup nonce - so it ends at the
+   * earliest instant either clock allows.
+   */
+  startedAtMonotonicMs: number;
   attempts: number;
 }
 
@@ -642,7 +655,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return undefined;
     }
 
-    if (Date.now() < pendingHomeClaim.expiresAtMs) {
+    if (!hasPicoExposureWindowElapsed({
+      endsAtMs: pendingHomeClaim.expiresAtMs,
+      nowMs: Date.now(),
+      monotonic: {
+        startedAtMs: pendingHomeClaim.startedAtMonotonicMs,
+        nowMs: performance.now(),
+        durationMs: PENDING_HOME_CLAIM_TTL_MS,
+      },
+    })) {
       return pendingHomeClaim;
     }
 
@@ -3977,6 +3998,7 @@ function createPendingPicoHomeClaim(params: {
     founding,
     createdAt,
     expiresAtMs: Date.now() + PENDING_HOME_CLAIM_TTL_MS,
+    startedAtMonotonicMs: performance.now(),
     attempts: 0,
   };
 }
@@ -4429,6 +4451,7 @@ function createRealtimeTicket(
   const expiresAtMs = Date.now() + REALTIME_TICKET_TTL_MS;
   tickets.set(secureDigest(value), {
     expiresAtMs,
+    startedAtMonotonicMs: performance.now(),
     ...(sessionDigest === undefined ? {} : { sessionDigest }),
   });
   return { value, expiresAtMs };
@@ -4504,7 +4527,7 @@ function consumeRealtimeTicket(tickets: Map<string, RealtimeTicketRecord>, ticke
   }
 
   tickets.delete(digest);
-  if (record.expiresAtMs <= Date.now()) {
+  if (hasRealtimeTicketElapsed(record, Date.now())) {
     return { authorized: false };
   }
 
@@ -4518,10 +4541,26 @@ function purgeExpiredRealtimeTickets(tickets: Map<string, RealtimeTicketRecord>)
   const now = Date.now();
 
   for (const [digest, record] of tickets) {
-    if (record.expiresAtMs <= now) {
+    if (hasRealtimeTicketElapsed(record, now)) {
       tickets.delete(digest);
     }
   }
+}
+
+/** ADR 0120 N1 exposure evaluation for one ticket. */
+function hasRealtimeTicketElapsed(
+  record: RealtimeTicketRecord,
+  nowMs: number,
+): boolean {
+  return hasPicoExposureWindowElapsed({
+    endsAtMs: record.expiresAtMs,
+    nowMs,
+    monotonic: {
+      startedAtMs: record.startedAtMonotonicMs,
+      nowMs: performance.now(),
+      durationMs: REALTIME_TICKET_TTL_MS,
+    },
+  });
 }
 
 function isBearerTokenAuthorized(authorizationHeader: string | string[] | undefined, expectedToken: string): boolean {

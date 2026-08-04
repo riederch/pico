@@ -67,20 +67,31 @@ export interface PicoExposureWindowEvaluation {
   nowMs: number;
   /**
    * Present when the window began in this process, which is the common case
-   * for sessions, tickets and challenges. Absent leaves only the wall clock,
-   * and a wall clock wound backward then extends the window - an honest
-   * residual of a window that outlived the process that opened it.
+   * for sessions, tickets and challenges.
    */
   monotonic?: {
     startedAtMs: number;
     nowMs: number;
     durationMs: number;
   };
+  /**
+   * The same durable floor the objection rule uses, read in the opposite
+   * direction. It never moves backward, so a wall clock wound backward leaves
+   * it standing ahead - which is exactly the evidence a window that outlived
+   * its process has nothing else to offer.
+   *
+   * It lags real time, since it counts only observed uptime, so it almost
+   * never fires before the wall clock does. That is the point: it is here for
+   * the one case where the wall clock went the wrong way.
+   */
+  anchorFloorMs?: number | null;
 }
 
 /**
- * Expired at the earliest instant either clock allows. A wall clock wound
- * backward cannot extend a session, because the monotonic clock kept counting.
+ * Expired at the earliest instant any available clock allows. A wall clock
+ * wound backward cannot extend a session, because the monotonic clock kept
+ * counting - and for a window that outlived its process, because the durable
+ * floor did not move backward either.
  */
 export function hasPicoExposureWindowElapsed(
   input: PicoExposureWindowEvaluation,
@@ -89,6 +100,12 @@ export function hasPicoExposureWindowElapsed(
   assertFiniteMs(input.nowMs, 'invalid_pico_window_now');
   if (input.nowMs >= input.endsAtMs) {
     return true;
+  }
+  if (input.anchorFloorMs !== undefined && input.anchorFloorMs !== null) {
+    assertFiniteMs(input.anchorFloorMs, 'invalid_pico_window_floor');
+    if (input.anchorFloorMs >= input.endsAtMs) {
+      return true;
+    }
   }
   if (input.monotonic === undefined) {
     return false;

@@ -1,4 +1,5 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { hasPicoExposureWindowElapsed } from '@pico/protocol';
 
 /**
  * Operator sessions (ADR 0075 A5, ADR 0076).
@@ -27,6 +28,8 @@ export interface SessionStoreOptions {
   /** Cap on concurrent sessions; the oldest is evicted first. */
   maxSessions?: number;
   now?: () => number;
+  /** ADR 0120 N1. The second clock; defaults to the process monotonic one. */
+  monotonicNow?: () => number;
 }
 
 export interface IssuedSession {
@@ -56,6 +59,14 @@ interface SessionRecord {
   idleExpiresAtMs: number;
   absoluteExpiresAtMs: number;
   createdAtMs: number;
+  /**
+   * ADR 0120 N1. Sessions are exposure windows: the person is protected by
+   * the end, so the earliest clock wins. These are the monotonic readings the
+   * wall-clock expiries above were derived from, kept so a wall clock wound
+   * backward cannot hand a session more life than it had.
+   */
+  idleStartedAtMonotonicMs: number;
+  absoluteStartedAtMonotonicMs: number;
   principal: SessionPrincipal;
 }
 
@@ -74,11 +85,14 @@ export class SessionStore {
 
   private readonly now: () => number;
 
+  private readonly monotonicNow: () => number;
+
   public constructor(options: SessionStoreOptions = {}) {
     this.idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS;
     this.absoluteTimeoutMs = options.absoluteTimeoutMs ?? DEFAULT_SESSION_ABSOLUTE_TIMEOUT_MS;
     this.maxSessions = options.maxSessions ?? DEFAULT_MAX_SESSIONS;
     this.now = options.now ?? Date.now;
+    this.monotonicNow = options.monotonicNow ?? (() => performance.now());
   }
 
   public issue(principal: SessionPrincipal = { kind: 'operator' }): IssuedSession {
@@ -93,10 +107,13 @@ export class SessionStore {
     const absoluteExpiresAtMs = nowMs + this.absoluteTimeoutMs;
     const idleExpiresAtMs = Math.min(nowMs + this.idleTimeoutMs, absoluteExpiresAtMs);
 
+    const monotonicMs = this.monotonicNow();
     this.sessions.set(digest(value), {
       idleExpiresAtMs,
       absoluteExpiresAtMs,
       createdAtMs: nowMs,
+      idleStartedAtMonotonicMs: monotonicMs,
+      absoluteStartedAtMonotonicMs: monotonicMs,
       principal: clonePrincipal(principal),
     });
 
@@ -122,12 +139,13 @@ export class SessionStore {
 
     const nowMs = this.now();
 
-    if (nowMs >= record.idleExpiresAtMs || nowMs >= record.absoluteExpiresAtMs) {
+    if (this.hasExpired(record, nowMs)) {
       this.sessions.delete(key);
       return undefined;
     }
 
     record.idleExpiresAtMs = Math.min(nowMs + this.idleTimeoutMs, record.absoluteExpiresAtMs);
+    record.idleStartedAtMonotonicMs = this.monotonicNow();
 
     return { expiresAtMs: record.idleExpiresAtMs, principal: clonePrincipal(record.principal) };
   }
@@ -185,10 +203,35 @@ export class SessionStore {
     const nowMs = this.now();
 
     for (const [key, record] of this.sessions) {
-      if (nowMs >= record.idleExpiresAtMs || nowMs >= record.absoluteExpiresAtMs) {
+      if (this.hasExpired(record, nowMs)) {
         this.sessions.delete(key);
       }
     }
+  }
+
+  /**
+   * ADR 0120 N1. Both halves are exposure windows, so each expires at the
+   * earliest instant either clock allows.
+   */
+  private hasExpired(record: SessionRecord, nowMs: number): boolean {
+    const monotonicNowMs = this.monotonicNow();
+    return hasPicoExposureWindowElapsed({
+      endsAtMs: record.idleExpiresAtMs,
+      nowMs,
+      monotonic: {
+        startedAtMs: record.idleStartedAtMonotonicMs,
+        nowMs: monotonicNowMs,
+        durationMs: this.idleTimeoutMs,
+      },
+    }) || hasPicoExposureWindowElapsed({
+      endsAtMs: record.absoluteExpiresAtMs,
+      nowMs,
+      monotonic: {
+        startedAtMs: record.absoluteStartedAtMonotonicMs,
+        nowMs: monotonicNowMs,
+        durationMs: this.absoluteTimeoutMs,
+      },
+    });
   }
 
   private evictOldest(): void {

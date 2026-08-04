@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   buildPicoIdentityPossessionSignatureInput,
+  hasPicoExposureWindowElapsed,
   picoIdentitySuite,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
@@ -58,6 +59,8 @@ interface IdentitySessionChallengeStoreOptions {
   ttlMs?: number;
   maxChallenges?: number;
   now?: () => number;
+  /** ADR 0120 N1. The second clock; defaults to the process monotonic one. */
+  monotonicNow?: () => number;
 }
 
 /**
@@ -65,16 +68,29 @@ interface IdentitySessionChallengeStoreOptions {
  * an invalid proof, so a captured response cannot be retried against the same
  * verifier nonce.
  */
+/**
+ * ADR 0120 N1. A challenge is an exposure window - it bounds replay - so it
+ * expires at the earliest instant either clock allows. The monotonic reading
+ * is kept beside the challenge rather than inside it: the challenge itself is
+ * handed to callers, and this is bookkeeping, not part of the proof.
+ */
+interface IdentitySessionChallengeRecord {
+  challenge: IdentitySessionChallenge;
+  startedAtMonotonicMs: number;
+}
+
 export class IdentitySessionChallengeStore {
-  private readonly challenges = new Map<string, IdentitySessionChallenge>();
+  private readonly challenges = new Map<string, IdentitySessionChallengeRecord>();
   private readonly ttlMs: number;
   private readonly maxChallenges: number;
   private readonly now: () => number;
+  private readonly monotonicNow: () => number;
 
   public constructor(options: IdentitySessionChallengeStoreOptions = {}) {
     this.ttlMs = options.ttlMs ?? IDENTITY_SESSION_CHALLENGE_TTL_MS;
     this.maxChallenges = options.maxChallenges ?? MAX_IDENTITY_SESSION_CHALLENGES;
     this.now = options.now ?? Date.now;
+    this.monotonicNow = options.monotonicNow ?? (() => performance.now());
   }
 
   public issue(hostSigningKeyFingerprintHex: string): IdentitySessionChallenge {
@@ -95,20 +111,23 @@ export class IdentitySessionChallengeStore {
       verifierContext: `pico.home.surface-session.v1:${hostSigningKeyFingerprintHex}`,
       expiresAtMs: this.now() + this.ttlMs,
     };
-    this.challenges.set(challenge.challengeId, challenge);
+    this.challenges.set(challenge.challengeId, {
+      challenge,
+      startedAtMonotonicMs: this.monotonicNow(),
+    });
 
     return { ...challenge };
   }
 
   public consume(challengeId: string): IdentitySessionChallenge | undefined {
     this.purgeExpired();
-    const challenge = this.challenges.get(challengeId);
-    if (challenge === undefined) {
+    const record = this.challenges.get(challengeId);
+    if (record === undefined) {
       return undefined;
     }
 
     this.challenges.delete(challengeId);
-    return { ...challenge };
+    return { ...record.challenge };
   }
 
   public clear(): void {
@@ -117,8 +136,17 @@ export class IdentitySessionChallengeStore {
 
   private purgeExpired(): void {
     const nowMs = this.now();
-    for (const [challengeId, challenge] of this.challenges) {
-      if (nowMs >= challenge.expiresAtMs) {
+    const monotonicNowMs = this.monotonicNow();
+    for (const [challengeId, record] of this.challenges) {
+      if (hasPicoExposureWindowElapsed({
+        endsAtMs: record.challenge.expiresAtMs,
+        nowMs,
+        monotonic: {
+          startedAtMs: record.startedAtMonotonicMs,
+          nowMs: monotonicNowMs,
+          durationMs: this.ttlMs,
+        },
+      })) {
         this.challenges.delete(challengeId);
       }
     }

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   buildPicoShareEnvelopeSignatureInput,
   buildPicoShareWrapPayload,
+  hasPicoExposureWindowElapsed,
   picoShareEnvelopeRecordSchema,
   picoShareSuite,
   type PicoShareEnvelopeRecord,
@@ -68,6 +69,13 @@ interface PendingRecord {
   envelope: PicoShareEnvelopeSignatureInput;
   sealedWrapHex: string;
   expiresAtMs: number;
+  /**
+   * ADR 0120 N1. A pending issuance is an exposure window - it bounds a
+   * ceremony that holds a sealed wrap - so it ends at the earliest instant
+   * either clock allows, and a wall clock wound backward cannot keep the wrap
+   * alive longer than it was meant to live.
+   */
+  startedAtMonotonicMs: number;
 }
 
 /**
@@ -85,6 +93,8 @@ export class PicoShareEnvelopeIssuer {
     private readonly keyStore: KeyStore | undefined,
     private readonly pendingTtlMs: number = DEFAULT_PENDING_TTL_MS,
     private readonly maxPending: number = DEFAULT_MAX_PENDING,
+    /** ADR 0120 N1. The second clock; defaults to the process monotonic one. */
+    private readonly monotonicNow: () => number = () => performance.now(),
   ) {
     if (!Number.isSafeInteger(pendingTtlMs) || pendingTtlMs < 1
       || !Number.isSafeInteger(maxPending) || maxPending < 1) {
@@ -199,6 +209,7 @@ export class PicoShareEnvelopeIssuer {
       envelope,
       sealedWrapHex: Buffer.from(sealedWrap).toString('hex'),
       expiresAtMs,
+      startedAtMonotonicMs: this.monotonicNow(),
     });
     this.sodium.memzero(sealedWrap);
 
@@ -270,7 +281,7 @@ export class PicoShareEnvelopeIssuer {
 
     const pending = this.pending.get(issuanceId);
     this.pending.delete(issuanceId);
-    if (pending === undefined || pending.expiresAtMs <= now.getTime()) {
+    if (pending === undefined || this.hasPendingElapsed(pending, now.getTime())) {
       return { ok: false, reason: 'unknown_or_expired_issuance' };
     }
     if (this.keyStore === undefined) {
@@ -362,9 +373,22 @@ export class PicoShareEnvelopeIssuer {
     return recorded;
   }
 
+  /** ADR 0120 N1 exposure evaluation for one pending issuance. */
+  private hasPendingElapsed(record: PendingRecord, nowMs: number): boolean {
+    return hasPicoExposureWindowElapsed({
+      endsAtMs: record.expiresAtMs,
+      nowMs,
+      monotonic: {
+        startedAtMs: record.startedAtMonotonicMs,
+        nowMs: this.monotonicNow(),
+        durationMs: this.pendingTtlMs,
+      },
+    });
+  }
+
   private pruneAndMakeRoom(nowMs: number): void {
     for (const [issuanceId, record] of this.pending) {
-      if (record.expiresAtMs <= nowMs) {
+      if (this.hasPendingElapsed(record, nowMs)) {
         this.pending.delete(issuanceId);
       }
     }
