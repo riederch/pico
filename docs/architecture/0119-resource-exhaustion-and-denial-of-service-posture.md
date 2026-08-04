@@ -4,8 +4,8 @@
 
 Accepted as a pre-implementation availability and safety posture; the
 initiative and its scope were chosen by the user on 2026-08-01.
-Gates Q1-Q5 are open. Nothing decided here is implemented, and the
-existing bounds it builds on are named rather than claimed as
+Q1 and Q2 are implemented in the store; Q3, Q4 and Q5 are open. The
+existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
 
@@ -199,12 +199,40 @@ mechanism.
 
 ## Gates
 
-- **Q1 - Reserve floor and three-valued write posture (binds the first
-  non-development deployment):** a configured free-space floor,
+- **Q1 - Reserve floor and three-valued write posture (implemented in
+  the store):** `evaluatePicoStoragePressure` turns free space and a
+  configured floor into `normal`/`reserved`/`exhausted`, and
+  `EventStore.append` refuses a creating write in `reserved` with
+  `refused_storage_pressure` - a refusal, never a partial write. Free
+  space is read per call from the filesystem the database lives on,
+  because pressure is a condition rather than a startup fact: a cached
+  reading would keep refusing long after the person freed space, or keep
+  admitting long after they stopped having room. An unreadable reading
+  evaluates to `exhausted`, so the one case that cannot be measured is
+  not the one case left unprotected. A store with no free-space source
+  stays `normal`, which is the development posture this ADR scopes
+  itself against. Counter-proven exactly as the gate asks: filled to the
+  floor, an event append is refused while a tombstone commits. Original
+  gate text: a configured free-space floor,
   `normal`/`reserved`/`exhausted` states, creating writes refused in
   `reserved`, proven by a test that fills to the floor and shows an
   event append refused while a tombstone still commits.
-- **Q2 - Protective paths survive pressure (binds Q1):** revocation,
+- **Q2 - Protective paths survive pressure (implemented for the event
+  path):** the protective set is listed rather than derived, because
+  this is a security classification and a prefix rule would quietly
+  enrol whatever a future type happens to be called.
+  `home.membership_changed` is deliberately absent: it carries both
+  grants and revocations, so it cannot be classified by type, and the
+  safe reading of an ambiguous type is "creating".
+
+  `exhausted` refuses protective writes too. That reads like a
+  contradiction of this gate and is not: it is the state the reserve
+  exists to prevent, and letting a write through with no room produces a
+  torn write rather than a rescue. The reserve is what keeps the
+  protective paths alive, so the answer to losing it is to have refused
+  earlier, not to try harder afterwards.
+
+  Original gate text: revocation,
   eviction, tombstone, shred, retention sweep and veto complete in
   `reserved`, each counter-proven so that removing its reservation
   fails exactly one test.

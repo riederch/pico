@@ -2306,7 +2306,16 @@ export interface PicoMemoryContentListResponse {
   hasMore: boolean;
 }
 
-export type PicoEventAppendResult = 'inserted' | 'duplicate_same_payload' | 'duplicate_conflict';
+/**
+ * ADR 0119 Q1. `refused_storage_pressure` is a creating write declined while
+ * free space is still above the floor, so the protective paths keep the room
+ * they need to commit and checkpoint. It is a refusal, never a partial write.
+ */
+export type PicoEventAppendResult =
+  | 'inserted'
+  | 'duplicate_same_payload'
+  | 'duplicate_conflict'
+  | 'refused_storage_pressure';
 
 export interface PicoEventCreateResponse<TPayload = unknown> {
   event: PicoEvent<TPayload>;
@@ -4400,6 +4409,7 @@ function assertStringMember<const TValues extends readonly string[]>(
 export * from './recovery.js';
 export * from './model-context.js';
 export * from './time-authority.js';
+export * from './storage-pressure.js';
 export * from './appearance.js';
 
 function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationScope[] {

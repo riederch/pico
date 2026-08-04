@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { statfsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
@@ -438,6 +439,20 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const store = await EventStore.open(config.databasePath, {
     backupDirectory: config.backupDirectory,
     memoryCrypto,
+    // ADR 0119 Q1. Free space on the filesystem the database actually lives
+    // on. Read per call rather than cached: pressure is a condition, not a
+    // startup fact, and a cached reading would refuse writes long after the
+    // person freed space - or admit them long after they stopped having room.
+    availableBytes: () => {
+      try {
+        const stats = statfsSync(dirname(config.databasePath));
+        return stats.bavail * stats.bsize;
+      } catch {
+        // Unreadable is not evidence of room; the evaluator fails closed on
+        // a reading it cannot use.
+        return Number.NaN;
+      }
+    },
     // ADR 0121 J1. Without this the chain is simply not written, and the
     // coverage report says so - which is the honest outcome, not a silent one.
     auditSodium: sodium,

@@ -30,10 +30,13 @@ import type {
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
+  evaluatePicoStoragePressure,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
   isPicoHomeAuditEventType,
+  mayAppendUnderPicoStoragePressure,
   picoHomeAuditRecordDigestHex,
+  type PicoStoragePressureState,
 } from '@pico/protocol';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
@@ -574,6 +577,14 @@ export interface EventStoreOpenOptions {
    * than a silent claim of integrity.
    */
   auditSodium?: PicoAuditSodium;
+  /**
+   * ADR 0119 Q1. How much room is left. Absent means the store does not
+   * evaluate pressure at all, which is the development-host posture the ADR
+   * explicitly scopes itself against.
+   */
+  availableBytes?: () => number;
+  /** ADR 0119 Q1. Deployment property; defaults to the conservative floor. */
+  storageReserveBytes?: number;
 }
 
 interface EventStoreConstructorOptions {
@@ -590,6 +601,10 @@ interface EventStoreConstructorOptions {
   recoveryAnchor?: PicoHomeRecoveryAnchor;
   /** ADR 0121 J1. See {@link EventStoreOpenOptions.auditSodium}. */
   auditSodium?: PicoAuditSodium;
+  /** ADR 0119 Q1. See {@link EventStoreOpenOptions.availableBytes}. */
+  availableBytes?: () => number;
+  /** ADR 0119 Q1. See {@link EventStoreOpenOptions.storageReserveBytes}. */
+  storageReserveBytes?: number;
 }
 
 /** ADR 0121 J2/J4. What one writer's chain actually covers. */
@@ -619,6 +634,8 @@ export class EventStore {
   private readonly memoryCrypto?: MemoryContentCrypto;
   private readonly recoveryAnchor?: PicoHomeRecoveryAnchor;
   private readonly auditSodium?: PicoAuditSodium;
+  private readonly availableBytes?: () => number;
+  private readonly storageReserveBytes?: number;
   private closed = false;
 
   public static async open(databasePath: string, options: EventStoreOpenOptions = {}): Promise<EventStore> {
@@ -628,6 +645,12 @@ export class EventStore {
       ...(options.auditSodium === undefined
         ? {}
         : { auditSodium: options.auditSodium }),
+      ...(options.availableBytes === undefined
+        ? {}
+        : { availableBytes: options.availableBytes }),
+      ...(options.storageReserveBytes === undefined
+        ? {}
+        : { storageReserveBytes: options.storageReserveBytes }),
       recoveryAnchor: options.recoveryAnchor
         ?? openPicoHomeRecoveryAnchor(
           defaultPicoHomeRecoveryAnchorPath(databasePath),
@@ -667,6 +690,8 @@ export class EventStore {
     this.memoryCrypto = options.memoryCrypto;
     this.recoveryAnchor = options.recoveryAnchor;
     this.auditSodium = options.auditSodium;
+    this.availableBytes = options.availableBytes;
+    this.storageReserveBytes = options.storageReserveBytes;
 
     if (options.runMigrations !== false) {
       runMigrations(this.db, {
@@ -678,6 +703,17 @@ export class EventStore {
   public append(event: PicoEvent): AppendResult {
     this.ensureOpen();
     assertStoredEvent(event);
+
+    // ADR 0119 Q1/Q2. Creating writes fail closed under pressure so the
+    // protective paths keep the room they need to commit and checkpoint. A
+    // full disk that blocks a revocation has turned a resource problem into a
+    // security problem.
+    if (!mayAppendUnderPicoStoragePressure({
+      state: this.storagePressure(),
+      eventType: event.type,
+    })) {
+      return 'refused_storage_pressure';
+    }
 
     const payloadJson = serializePayload(event.payload);
     const existing = this.db
@@ -5968,6 +6004,23 @@ export class EventStore {
       // empty chain would be the green mark this gate forbids.
       chained: this.auditSodium !== undefined,
     };
+  }
+
+  /**
+   * ADR 0119 Q1. `normal` when no reading is configured: a store with no
+   * free-space source is a development host, and this ADR scopes itself
+   * against deployments rather than against those.
+   */
+  public storagePressure(): PicoStoragePressureState {
+    if (this.availableBytes === undefined) {
+      return 'normal';
+    }
+    return evaluatePicoStoragePressure({
+      availableBytes: this.availableBytes(),
+      ...(this.storageReserveBytes === undefined
+        ? {}
+        : { reserveBytes: this.storageReserveBytes }),
+    });
   }
 
   /** ADR 0120 N2. The durable floor, or `null` when no anchor is available. */
