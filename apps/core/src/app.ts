@@ -96,6 +96,7 @@ import {
   hasPicoExposureWindowElapsed,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoProtocolVersion,
+  type PicoAuditCoverage,
   type PicoClockDivergence,
   type PicoIdentityReaderKeyFreshnessCheckpoint,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
@@ -964,6 +965,54 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     },
     { anchorFloorMs: () => store.recoveryAnchorFloorMs() },
   );
+
+  /**
+   * ADR 0121 J4. `signed` is stated as false rather than omitted: J3's
+   * checkpoint signer does not exist, so every interval is unsigned, and a
+   * missing field is exactly what a reader would mistake for coverage.
+   */
+  function auditCoverage(): PicoAuditCoverage {
+    const verification = store.verifyPicoAuditChain();
+    return {
+      chained: verification.chained,
+      signed: false,
+      writers: verification.writers,
+    };
+  }
+
+  // ADR 0121 J4. Boot re-proves the links in the ADR 0115 U2 posture: report
+  // loudly, never drop, repair or hide the affected range. A break here is not
+  // a reason to refuse service - the log is evidence, not authority - but it
+  // must never pass in silence.
+  {
+    const coverage = auditCoverage();
+    for (const writer of coverage.writers) {
+      if (writer.status === 'verified') {
+        continue;
+      }
+      app.log.error(
+        {
+          writerId: writer.writerId,
+          status: writer.status,
+          recordCount: writer.recordCount,
+          ...(writer.brokenAtPosition === undefined
+            ? {}
+            : { brokenAtPosition: writer.brokenAtPosition }),
+          ...(writer.checkpointedPosition === undefined
+            ? {}
+            : { checkpointedPosition: writer.checkpointedPosition }),
+        },
+        writer.status === 'rolled_back'
+          ? 'audit chain rolled back: the anchor holds a head this database does not'
+          : writer.status === 'broken'
+            ? 'audit chain broken: a link does not verify and the range beyond it is not covered'
+            : 'audit chain unanchored: no checkpoint exists for this writer',
+      );
+    }
+    if (!coverage.chained) {
+      app.log.warn('audit chain absent: no records are chained on this instance');
+    }
+  }
 
   // ADR 0120 N5. The two readings this process started from, so movement can
   // be measured against them rather than guessed at.
@@ -3297,6 +3346,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       events: resolveReferenceEvents(page.events, store.memory()),
       nextCursor: page.nextCursor === null ? null : encodeEventCursor(page.nextCursor),
       hasMore: page.hasMore,
+      // ADR 0121 J4. This is the surface that reads audit records today, so it
+      // is the one that has to say what its integrity covers. Reading the rows
+      // without the coverage beside them is how a green mark that means
+      // "nobody checked" gets invented downstream.
+      auditCoverage: auditCoverage(),
     };
 
     return sendNoStore(reply, response);

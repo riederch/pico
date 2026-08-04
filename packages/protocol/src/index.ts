@@ -2217,10 +2217,37 @@ export interface PicoHomeContinuityChainResponse {
   };
 }
 
+/**
+ * ADR 0121 J4. What a reader's integrity actually covers, stated rather than
+ * assumed. A person or an auditor is told "this is covered, this is not" -
+ * never shown a green mark that means "no one checked".
+ *
+ * `signed` is present and false today: ADR 0121 J3's checkpoint signer does
+ * not exist yet, so every interval is an unsigned one. That is a reported gap,
+ * not a failure, and it is reported rather than omitted so nobody reads its
+ * absence as coverage.
+ */
+export interface PicoAuditCoverage {
+  /** False when no chain was written at all, so nothing here is covered. */
+  chained: boolean;
+  signed: false;
+  writers: PicoAuditWriterCoverage[];
+}
+
+export interface PicoAuditWriterCoverage {
+  writerId: string;
+  recordCount: number;
+  brokenAtPosition?: number;
+  checkpointedPosition?: number;
+  status: 'verified' | 'broken' | 'rolled_back' | 'unanchored';
+}
+
 export interface PicoEventListResponse<TPayload = unknown> {
   events: PicoEvent<TPayload>[];
   nextCursor: string | null;
   hasMore: boolean;
+  /** ADR 0121 J4. Absent only on a build with no audit chain at all. */
+  auditCoverage?: PicoAuditCoverage;
 }
 
 export interface PicoRealtimeTicketResponse {

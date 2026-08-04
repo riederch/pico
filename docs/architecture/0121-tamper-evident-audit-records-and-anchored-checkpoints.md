@@ -3,10 +3,10 @@
 ## Status
 
 Accepted as a constraint on ADR 0011's product audit; the initiative and
-its scope were chosen by the user on 2026-08-01. J1 and J2 are
-implemented, so the seventeen event types that already act as audit
-records are chained and their heads anchored. J3 (signed checkpoints),
-J4's read surface and J5 remain open.
+its scope were chosen by the user on 2026-08-01. J1, J2 and J4 are implemented, so the seventeen event types that already
+act as audit records are chained, their heads anchored, and what that
+covers is reported at boot and on the read surface. J3 needs a decision
+before it is buildable - see its gate - and J5 remains open.
 
 Timing was the point and it held: this landed before Action History
 exists, so the chain vouches for the trail from its own beginning rather
@@ -232,15 +232,31 @@ than a redesign.
   the anchor keeps the head it saw.
 
   Original gate text:
-- **J3 - Signed checkpoints without new approvals (binds J2):**
+- **J3 - Signed checkpoints without new approvals (open; needs a
+  decision before it is buildable):** the machinery ADR 0100 describes
+  lives entirely in the Vault daemon, Core's key store cannot sign, and
+  this ADR rules out the Foundation host key. So J3 is not implementation
+  waiting to happen - it first needs a decision about which key attests a
+  checkpoint and how Core reaches it, which is a seam between Core and a
+  custody process that does not exist today. Until then every interval is
+  an unsigned one, which this gate already calls acceptable and J4
+  already reports. Original gate text:
   checkpoints signed under an exclusive ADR 0100 label with no
   per-checkpoint approval, justified by attestation creating no
   authority; the Foundation host key is ineligible; unsigned intervals
   are recorded as gaps.
-- **J4 - Coverage is reported (binds the first audit read surface):**
-  every read states which ranges are chained, checkpointed and signed;
-  boot verification re-proves links and reports breaks loudly in the
-  ADR 0115 U2 posture.
+- **J4 - Coverage is reported (implemented):** boot re-proves every
+  link and compares each writer's head with its checkpoint, reporting a
+  break loudly and neither dropping, repairing nor hiding the affected
+  range. A break does not refuse service: the log is evidence, not
+  authority - but it never passes in silence.
+
+  `GET /api/events` is the surface that reads audit records today, so it
+  carries the coverage beside them. `signed` is stated as `false` rather
+  than omitted, because J3's signer does not exist and a missing field is
+  exactly what a reader mistakes for coverage. A writer with no
+  checkpoint reads `unanchored`, and an instance with no chain at all
+  reads `chained: false`. Original gate text:
 - **J5 - Content-free and attacker-quiet (binds Action History, with
   ADR 0011 and ADR 0119 Q3):** audit records carry no content, and no
   unauthorized request produces one.

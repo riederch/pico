@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { openPicoHomeRecoveryAnchor } from './recovery-anchor.js';
 
@@ -190,6 +191,42 @@ describe('ADR 0121 J1/J2 tamper-evident audit records', () => {
       headDigestHex: 'aa'.repeat(32),
     });
     expect(anchor.auditCheckpoint('pico-core')).toMatchObject({ chainPosition: 5 });
+  });
+
+  it('states coverage on the read surface, gaps included (ADR 0121 J4)', async () => {
+    const { databasePath } = fixture();
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath,
+      deviceId: 'pico-core',
+    });
+    try {
+      // An audit record written through the real write path.
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'message.created',
+          payload: { role: 'user', text: 'ordinary' },
+        },
+      })).statusCode).toBe(201);
+
+      const listed = await app.inject({ method: 'GET', url: '/api/events?limit=50' });
+      expect(listed.statusCode).toBe(200);
+      const coverage = listed.json().auditCoverage as {
+        chained: boolean;
+        signed: boolean;
+        writers: unknown[];
+      };
+      // Stated, not omitted: J3's signer does not exist, so every interval is
+      // unsigned - and a missing field is what a reader mistakes for coverage.
+      expect(coverage).toMatchObject({ chained: true, signed: false });
+      expect(Array.isArray(coverage.writers)).toBe(true);
+    } finally {
+      await app.close();
+    }
   });
 
   it('reports absent coverage rather than showing a green mark', () => {
