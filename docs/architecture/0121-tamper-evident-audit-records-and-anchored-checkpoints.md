@@ -5,8 +5,8 @@
 Accepted as a constraint on ADR 0011's product audit; the initiative and
 its scope were chosen by the user on 2026-08-01. J1, J2 and J4 are implemented, so the seventeen event types that already
 act as audit records are chained, their heads anchored, and what that
-covers is reported at boot and on the read surface. J3 needs a decision
-before it is buildable - see its gate - and J5 remains open.
+covers is reported at boot and on the read surface. J3 is closed as not achievable on this platform - see its gate for the
+reasoning and for the condition that reopens it - and J5 remains open.
 
 Timing was the point and it held: this landed before Action History
 exists, so the chain vouches for the trail from its own beginning rather
@@ -232,15 +232,28 @@ than a redesign.
   the anchor keeps the head it saw.
 
   Original gate text:
-- **J3 - Signed checkpoints without new approvals (open; needs a
-  decision before it is buildable):** the machinery ADR 0100 describes
-  lives entirely in the Vault daemon, Core's key store cannot sign, and
-  this ADR rules out the Foundation host key. So J3 is not implementation
-  waiting to happen - it first needs a decision about which key attests a
-  checkpoint and how Core reaches it, which is a seam between Core and a
-  custody process that does not exist today. Until then every interval is
-  an unsigned one, which this gate already calls acceptable and J4
-  already reports. Original gate text:
+- **J3 - Signed checkpoints without new approvals (closed as not
+  achievable on this platform; decided by the user on 2026-08-04):**
+  this gate rules out the Foundation host key because it lives on the
+  disk the attacker owns - and that argument holds for *every* key Core
+  can reach unattended, including a dedicated audit key sitting beside
+  the database. A signature from such a key attests to nothing, which is
+  worse than none: it renders as coverage.
+
+  The Vault daemon holds keys that are not on that disk, but it is
+  unlocked only while the person is present - five minutes idle, fifteen
+  absolute (ADR 0096/0097/0102). A Core-driven checkpoint signer would
+  therefore sign sporadically and leave most intervals unsigned anyway,
+  in exchange for a new seam between Core and a custody process. That is
+  a poor trade for a gap it does not close.
+
+  So every interval is an unsigned interval, which this gate already
+  calls acceptable, and J4 reports it as `signed: false` rather than
+  omitting the field. The condition that would reopen this is a key that
+  is neither on the restorable disk nor gated on human presence - the
+  TPM anchor still open in `TODO.md`, which ADR 0027 IM's appliance work
+  would carry. Until such a substrate exists, signing here would be
+  ceremony. Original gate text:
   checkpoints signed under an exclusive ADR 0100 label with no
   per-checkpoint approval, justified by attestation creating no
   authority; the Foundation host key is ineligible; unsigned intervals
