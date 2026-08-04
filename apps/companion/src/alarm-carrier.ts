@@ -1,4 +1,7 @@
-import type { PicoHomeDeviceRecoveryPendingView } from '@pico/protocol';
+import type {
+  PicoClockDivergence,
+  PicoHomeDeviceRecoveryPendingView,
+} from '@pico/protocol';
 
 /**
  * ADR 0113 C1: the ADR 0112 S2 alarm carrier as shell-free service core.
@@ -20,6 +23,15 @@ export interface PicoCompanionLifecycleSnapshot {
    */
   picoIdentityFingerprintHex: string;
   pendingRecovery: PicoHomeDeviceRecoveryPendingView | null;
+  /** ADR 0120 N5. Clock movement the Home detected, when it reports any. */
+  clockDivergence?: PicoClockDivergence | null;
+}
+
+export interface PicoCompanionClockDivergenceAlarm {
+  picoIdentityFingerprintHex: string;
+  divergence: PicoClockDivergence;
+  /** The objection window the movement touches. */
+  pending: PicoHomeDeviceRecoveryPendingView;
 }
 
 export interface PicoCompanionPendingRecoveryAlarm {
@@ -40,6 +52,16 @@ export interface PicoCompanionNotificationAdapter {
    * pending-recovery presentation it previously raised.
    */
   clearPendingRecovery?(): void | Promise<void>;
+  /**
+   * ADR 0120 N5. Raised only where movement touches an objection window: a
+   * clock that moved while nothing was waiting on it is a log line, not an
+   * interruption. Pico never re-bases the window onto the new time, so what
+   * the person hears is that it happened - the attempt is more interesting
+   * than the correction.
+   */
+  notifyClockDivergence?(
+    alarm: PicoCompanionClockDivergenceAlarm,
+  ): void | Promise<void>;
 }
 
 export interface StartPicoCompanionAlarmCarrierInput {
@@ -144,6 +166,16 @@ export async function startPicoCompanionAlarmCarrier(
         picoIdentityFingerprintHex: snapshot.picoIdentityFingerprintHex,
         pending,
       });
+      // ADR 0120 N5. Only here, inside the pending branch: this is the point
+      // where movement touches an objection window.
+      if (snapshot.clockDivergence !== undefined
+        && snapshot.clockDivergence !== null) {
+        await input.notifications.notifyClockDivergence?.({
+          picoIdentityFingerprintHex: snapshot.picoIdentityFingerprintHex,
+          divergence: snapshot.clockDivergence,
+          pending,
+        });
+      }
     } catch {
       // A broken notifier must not stop the carrier; the failure stays
       // visible and the next check tries again.

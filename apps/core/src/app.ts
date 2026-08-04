@@ -92,9 +92,11 @@ import {
   type PicoSystemStatusResponse,
   type PicoSystemVersionResponse,
   buildPicoIdentityReaderKeyFreshnessSignatureInput,
+  detectPicoClockDivergence,
   hasPicoExposureWindowElapsed,
   picoIdentityReaderKeyFreshnessCheckpointSchema,
   picoProtocolVersion,
+  type PicoClockDivergence,
   type PicoIdentityReaderKeyFreshnessCheckpoint,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
 } from '@pico/protocol';
@@ -960,12 +962,43 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     { anchorFloorMs: () => store.recoveryAnchorFloorMs() },
   );
 
+  // ADR 0120 N5. The two readings this process started from, so movement can
+  // be measured against them rather than guessed at.
+  const startedAtWallMs = Date.now();
+  const startedAtMonotonicMs = performance.now();
+  let reportedClockDivergence: PicoClockDivergence | null = null;
+
+  /**
+   * ADR 0120 N5. Recorded as a fact, never a silent correction: Pico does not
+   * re-base its windows onto the new time. Appended once per distinct kind, so
+   * a clock that stays moved does not fill the log with the same sentence.
+   */
+  function checkClockDivergence(): PicoClockDivergence | null {
+    const divergence = detectPicoClockDivergence({
+      wallMs: Date.now(),
+      monotonicMs: performance.now(),
+      startedAtWallMs,
+      startedAtMonotonicMs,
+      anchorFloorMs: store.recoveryAnchorFloorMs(),
+    });
+    if (divergence !== null && divergence.kind !== reportedClockDivergence?.kind) {
+      appendServerEvent('home.clock_divergence_detected', {});
+      app.log.warn(
+        { kind: divergence.kind, differenceMs: divergence.differenceMs },
+        'clock divergence detected',
+      );
+    }
+    reportedClockDivergence = divergence;
+    return divergence;
+  }
+
   function runRetentionSweep(): void {
     try {
       // ADR 0120 N2. The retention tick doubles as the anchor heartbeat: the
       // floor rises with observed time, and observed time only becomes durable
       // once it is written down.
       store.observeRecoveryAnchor();
+      checkClockDivergence();
       const result = retentionSweeper.sweep();
       if (result.refusedImplausibleClock === true) {
         // N5: recorded as a fact, never a silent skip and never a quiet
@@ -1715,6 +1748,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 pendingRootRotation: store.picoIdentityRootRotationView(
                   principal.picoIdentityFingerprintHex,
                 ),
+                // ADR 0120 N5. Where movement touches an objection window the
+                // person hears about it, and it rides the read the ADR 0112
+                // carrier already performs rather than getting a second
+                // surface nobody would poll. Reported, never used to re-base
+                // a window: the attempt is more interesting than the
+                // correction.
+                clockDivergence: checkClockDivergence(),
                 // ADR 0114 T3/T4. What this identity's own rotation still owes
                 // it, readable from the first authorized moment - which is the
                 // instant the Home Host Pico re-admits the successor, not one

@@ -24,6 +24,7 @@ export const foundationEventTypes = [
   'home.recovery_anchor_reseeded',
   'home.identity_root_rotation_vetoed',
   'home.host_key_rotated',
+  'home.clock_divergence_detected',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -54,6 +55,7 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.recovery_anchor_reseeded',
   'home.identity_root_rotation_vetoed',
   'home.host_key_rotated',
+  'home.clock_divergence_detected',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -1678,6 +1680,10 @@ export function validateFoundationEventPayload(
     || type === 'home.recovery_anchor_reseeded'
     || type === 'home.identity_root_rotation_vetoed'
     || type === 'home.host_key_rotated'
+    // ADR 0120 N5. Content-free like its neighbours: that the clock moved is
+    // the fact worth keeping, and how far it moved is a measurement the reader
+    // takes for itself rather than a claim this row carries.
+    || type === 'home.clock_divergence_detected'
   ) {
     const extraKey = firstUnexpectedKey(payload, []);
     if (extraKey !== undefined) {

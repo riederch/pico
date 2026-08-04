@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import type {
+  PicoCompanionClockDivergenceAlarm,
   PicoCompanionNotificationAdapter,
   PicoCompanionPendingRecoveryAlarm,
 } from './alarm-carrier.js';
@@ -79,6 +80,31 @@ export function renderPicoCompanionHostContinuityAlarm(
   };
 }
 
+/**
+ * ADR 0120 N5. What the person is told is that it happened, not what Pico did
+ * about it - because Pico did not re-base the window, and the attempt is the
+ * interesting part. The wait may therefore be longer than the calendar
+ * suggests, which is the honest consequence of measuring observed time.
+ */
+export function renderPicoCompanionClockDivergenceAlarm(
+  alarm: PicoCompanionClockDivergenceAlarm,
+): { title: string; body: string } {
+  const hours = Math.round(alarm.divergence.differenceMs / (60 * 60 * 1_000));
+  const movement = alarm.divergence.kind === 'wall_behind_monotonic'
+    || alarm.divergence.kind === 'wall_behind_anchor_floor'
+    ? 'backwards'
+    : 'forwards';
+  return {
+    title: 'Pico: this device\'s clock moved',
+    body: `While you have a recovery waiting, this device's clock jumped `
+      + `${movement} by about ${hours} hour${hours === 1 ? '' : 's'}. `
+      + 'Pico did not shorten or extend your objection window because of it - '
+      + `you can still stop recovery ${alarm.pending.recoveryId} until it has `
+      + 'genuinely run its course. If you did not change the time yourself, '
+      + 'treat this as someone trying to rush that window past you.',
+  };
+}
+
 export function createLinuxNotifySendAdapter(
   options: LinuxNotifySendAdapterOptions = {},
 ): PicoCompanionNotificationAdapter & PicoCompanionHostContinuityNotifications {
@@ -111,6 +137,10 @@ export function createLinuxNotifySendAdapter(
     },
     notifyHostContinuityUnverified: async (alarm) => {
       const { title, body } = renderPicoCompanionHostContinuityAlarm(alarm);
+      await send(title, body);
+    },
+    notifyClockDivergence: async (alarm) => {
+      const { title, body } = renderPicoCompanionClockDivergenceAlarm(alarm);
       await send(title, body);
     },
   };

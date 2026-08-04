@@ -29,6 +29,7 @@ export type PicoCompanionPresentationKind =
   | 'recovery_card_printed'
   | 'host_keys_rotated'
   | 'host_continuity_unverified'
+  | 'clock_divergence'
   | 'service_error';
 
 export type PicoCompanionPresentationSeverity = 'active' | 'warning' | 'blocked';
@@ -81,6 +82,7 @@ const kinds = new Set<PicoCompanionPresentationKind>([
   'recovery_card_printed',
   'host_keys_rotated',
   'host_continuity_unverified',
+  'clock_divergence',
   'service_error',
 ]);
 const severities = new Set<PicoCompanionPresentationSeverity>([

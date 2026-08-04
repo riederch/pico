@@ -149,6 +149,79 @@ export function isPicoWallClockPlausible(input: {
   return input.nowMs - input.anchorFloorMs <= tolerance;
 }
 
+/**
+ * How far the wall clock may drift from the monotonic clock inside one process
+ * before it counts as movement rather than scheduling jitter. The Vault daemon
+ * has used the same 45 seconds since ADR 0097, where it reads as a suspend;
+ * here it reads as movement, which is the more general fact.
+ */
+export const picoWallClockDivergenceToleranceMs = 45_000;
+
+export const picoClockDivergenceKinds = [
+  /** The wall clock ran ahead of the monotonic clock inside one process. */
+  'wall_ahead_of_monotonic',
+  /** The wall clock ran behind it, which no honest clock does. */
+  'wall_behind_monotonic',
+  /** The wall clock sits behind a floor this Home already justified. */
+  'wall_behind_anchor_floor',
+] as const;
+
+export type PicoClockDivergenceKind = typeof picoClockDivergenceKinds[number];
+
+export interface PicoClockDivergence {
+  kind: PicoClockDivergenceKind;
+  /** Always positive: how far apart the two readings are. */
+  differenceMs: number;
+}
+
+/**
+ * ADR 0120 N5. A clock that moved is an event, never a silent correction.
+ *
+ * This reports; it never re-bases a window onto the new time. A person whose
+ * objection period was interfered with should learn that, and the attempt is
+ * more interesting than the correction.
+ *
+ * A wall clock *behind* the anchor floor is reported even though the floor
+ * already protects the windows: the protection is silent, and silence is
+ * exactly what an attacker would settle for.
+ */
+export function detectPicoClockDivergence(input: {
+  wallMs: number;
+  monotonicMs: number;
+  /** The same two readings taken when this process started. */
+  startedAtWallMs: number;
+  startedAtMonotonicMs: number;
+  anchorFloorMs?: number | null;
+  toleranceMs?: number;
+}): PicoClockDivergence | null {
+  assertFiniteMs(input.wallMs, 'invalid_pico_window_now');
+  assertFiniteMs(input.monotonicMs, 'invalid_pico_window_now');
+  assertFiniteMs(input.startedAtWallMs, 'invalid_pico_window_start');
+  assertFiniteMs(input.startedAtMonotonicMs, 'invalid_pico_window_start');
+  const tolerance = input.toleranceMs ?? picoWallClockDivergenceToleranceMs;
+  assertFiniteMs(tolerance, 'invalid_pico_window_duration');
+
+  const wallElapsed = input.wallMs - input.startedAtWallMs;
+  const monotonicElapsed = input.monotonicMs - input.startedAtMonotonicMs;
+  const drift = wallElapsed - monotonicElapsed;
+  if (drift > tolerance) {
+    return { kind: 'wall_ahead_of_monotonic', differenceMs: drift };
+  }
+  if (-drift > tolerance) {
+    return { kind: 'wall_behind_monotonic', differenceMs: -drift };
+  }
+
+  if (input.anchorFloorMs !== undefined && input.anchorFloorMs !== null) {
+    assertFiniteMs(input.anchorFloorMs, 'invalid_pico_window_floor');
+    const behind = input.anchorFloorMs - input.wallMs;
+    if (behind > tolerance) {
+      return { kind: 'wall_behind_anchor_floor', differenceMs: behind };
+    }
+  }
+
+  return null;
+}
+
 function assertFiniteMs(value: number, reason: string): void {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(reason);

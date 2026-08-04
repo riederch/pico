@@ -80,6 +80,9 @@ export async function createPicoCompanionLifecycleReader(input: {
     return {
       picoIdentityFingerprintHex: profile.identity.keyFingerprintHex,
       pendingRecovery: view.pendingRecovery,
+      ...(view.clockDivergence === undefined
+        ? {}
+        : { clockDivergence: view.clockDivergence }),
     };
   };
 

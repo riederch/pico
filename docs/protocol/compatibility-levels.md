@@ -78,6 +78,7 @@ home.device_recovery_vetoed
 home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
 home.host_key_rotated
+home.clock_divergence_detected
 ```
 
 L1 does not imply sync compatibility, Pico Link compatibility, Pico Home hosting compatibility or commercial permission.

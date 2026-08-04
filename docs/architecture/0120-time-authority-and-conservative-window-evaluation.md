@@ -3,9 +3,7 @@
 ## Status
 
 Accepted as a correctness constraint; the initiative and its scope were
-chosen by the user on 2026-08-01. Gates N1-N4 are implemented, and N5's
-irreversible-housekeeping half with them; N5's remaining half - raising
-detected clock movement through the ADR 0112 carrier - is open. It
+chosen by the user on 2026-08-01. Gates N1-N5 are implemented. It
 changes no window's length
 and no ceremony's shape - only how a window is judged to have passed,
 and what Pico refuses to conclude from a clock it cannot trust.
@@ -251,13 +249,27 @@ is not permission to act on nonsense.
   correctness path consults a time service; a mechanical check keeps
   network-time imports off those paths, in the same shape as
   `scripts/check-companion-boundary.mjs`.
-- **N5 - Irreversible work refuses implausible time (implemented); the
-  companion alarm half remains open:** the retention sweeper compares the
-  wall clock against the floor and, when the gap is implausible, deletes
-  nothing and says so rather than skipping silently - deletion under
-  ADR 0070 is crypto-shredding and cannot be undone. Raising detected
-  movement through the ADR 0112 carrier is not implemented. Original gate
-  text: divergence beyond a
+- **N5 - Detected movement is raised, and irreversible work refuses
+  (implemented):** the retention sweeper compares the wall clock against
+  the floor and, when the gap is implausible, deletes nothing and says so
+  rather than skipping silently - deletion under ADR 0070 is
+  crypto-shredding and cannot be undone.
+
+  Movement itself is detected in three directions - the wall clock ahead
+  of the monotonic clock, behind it, or behind a floor this Home already
+  justified - and recorded as the content-free `home.clock_divergence_
+  detected`, once per distinct kind so a clock that stays moved does not
+  fill the log with the same sentence. Where it touches an objection
+  window it rides the lifecycle read the ADR 0112 carrier already
+  performs, and the carrier raises it only inside the pending branch: a
+  clock that moved while nothing was waiting on it is a log line, not an
+  interruption.
+
+  What the person is told is that it happened, not what Pico did about
+  it, because Pico did nothing about it - the window is not re-based, and
+  the alarm says the veto is still available. It is loud but not
+  blocking: the window is intact and the veto decision beneath it still
+  stands. Original gate text: divergence beyond a
   threshold is recorded and alarmed through the ADR 0112 carrier;
   the retention sweep refuses to delete against an implausible clock.
 

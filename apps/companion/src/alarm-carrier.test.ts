@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   picoCompanionAlarmCheckIntervalMs,
   startPicoCompanionAlarmCarrier,
+  type PicoCompanionClockDivergenceAlarm,
   type PicoCompanionLifecycleSnapshot,
   type PicoCompanionPendingRecoveryAlarm,
 } from './alarm-carrier.js';
@@ -186,6 +187,49 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
     expect(reads).toBe(2);
     expect(firstCheck).toBe(secondCheck);
     expect(adapter.alarms).toHaveLength(1);
+    carrier.stop();
+  });
+
+  it('raises detected clock movement only where it touches an objection window (ADR 0120 N5)', async () => {
+    const divergences: PicoCompanionClockDivergenceAlarm[] = [];
+    const adapter = {
+      ...recordingAdapter(),
+      notifyClockDivergence(alarm: PicoCompanionClockDivergenceAlarm) {
+        divergences.push(alarm);
+      },
+    };
+    const divergence = {
+      kind: 'wall_ahead_of_monotonic' as const,
+      differenceMs: 48 * 60 * 60 * 1_000,
+    };
+    let snapshotToReturn: PicoCompanionLifecycleSnapshot = {
+      ...snapshot(null),
+      clockDivergence: divergence,
+    };
+    const carrier = await startPicoCompanionAlarmCarrier({
+      readLifecycle: async () => snapshotToReturn,
+      notifications: adapter,
+    });
+
+    // A clock that moved while nothing was waiting on it is a log line, not
+    // an interruption.
+    expect(divergences).toHaveLength(0);
+
+    snapshotToReturn = {
+      ...snapshot(pendingView('recovery_clock')),
+      clockDivergence: divergence,
+    };
+    await carrier.checkNow();
+    expect(divergences).toEqual([{
+      picoIdentityFingerprintHex: identityFingerprintHex,
+      divergence,
+      pending: pendingView('recovery_clock'),
+    }]);
+
+    // A pending window with an honest clock says nothing extra.
+    snapshotToReturn = snapshot(pendingView('recovery_clock'));
+    await carrier.checkNow();
+    expect(divergences).toHaveLength(1);
     carrier.stop();
   });
 });

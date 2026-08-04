@@ -29,6 +29,7 @@ export type {
 } from './alarm-carrier.js';
 export {
   createLinuxNotifySendAdapter,
+  renderPicoCompanionClockDivergenceAlarm,
   renderPicoCompanionHostContinuityAlarm,
   renderPicoCompanionHostRotationNotice,
   renderPicoCompanionPendingRecoveryAlarm,

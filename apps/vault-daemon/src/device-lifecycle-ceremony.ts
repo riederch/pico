@@ -1,10 +1,13 @@
 import {
+  picoClockDivergenceKinds,
   picoHomeDeviceLifecycleCanonicalLabels,
   picoHomeDeviceLifecycleEvidenceDigestHex,
   picoHomeDeviceLifecycleSubmissionSchema,
   picoHomeDeviceRecoveryTiming,
   picoIdentitySignatureInputLabels,
   picoIdentitySuite,
+  type PicoClockDivergence,
+  type PicoClockDivergenceKind,
   type PicoHomeDeviceActivationSignatureInput,
   type PicoHomeDeviceLifecycleEvidence,
   type PicoHomeDeviceLifecycleSubmission,
@@ -43,6 +46,12 @@ export interface PicoHomeDeviceLifecycleView {
   observedLifecycleOrder: string;
   devices: PicoHomeDeviceLifecycleDeviceView[];
   pendingRecovery: PicoHomeDeviceRecoveryPendingView | null;
+  /**
+   * ADR 0120 N5. Detected clock movement, when the Home reports any. Absent
+   * on an older Home, which is not the same as "no movement" - it is simply a
+   * Home that does not look.
+   */
+  clockDivergence?: PicoClockDivergence | null;
 }
 
 export interface PicoHomeDeviceLifecycleCeremonyResult {
@@ -476,6 +485,31 @@ function parseLifecycleView(value: Record<string, unknown>): PicoHomeDeviceLifec
     observedLifecycleOrder: value.observedLifecycleOrder,
     devices,
     pendingRecovery: parsePendingRecovery(value.pendingRecovery),
+    ...(value.clockDivergence === undefined
+      ? {}
+      : { clockDivergence: parseClockDivergence(value.clockDivergence) }),
+  };
+}
+
+/**
+ * ADR 0120 N5. Strict: an unparseable report is refused rather than dropped,
+ * because a silently discarded alarm is the outcome an attacker wants.
+ */
+function parseClockDivergence(value: unknown): PicoClockDivergence | null {
+  if (value === null) {
+    return null;
+  }
+  if (!isRecord(value)
+    || typeof value.kind !== 'string'
+    || !picoClockDivergenceKinds.includes(value.kind as PicoClockDivergenceKind)
+    || typeof value.differenceMs !== 'number'
+    || !Number.isFinite(value.differenceMs)
+    || value.differenceMs < 0) {
+    throw new Error('invalid_lifecycle_view');
+  }
+  return {
+    kind: value.kind as PicoClockDivergenceKind,
+    differenceMs: value.differenceMs,
   };
 }
 

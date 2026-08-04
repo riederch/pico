@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  detectPicoClockDivergence,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
   isPicoWallClockPlausible,
@@ -126,6 +127,74 @@ describe('ADR 0120 N1 exposure windows never last longer', () => {
       nowMs: start,
       anchorFloorMs: null,
     })).toBe(false);
+  });
+});
+
+describe('ADR 0120 N5 detected clock movement', () => {
+  const base = {
+    startedAtWallMs: start,
+    startedAtMonotonicMs: 0,
+  };
+
+  it('reports movement in either direction and stays quiet on jitter', () => {
+    // Ordinary running: both clocks advanced together.
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start + hour,
+      monotonicMs: hour,
+    })).toBeNull();
+    // Scheduling jitter is not movement.
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start + hour + 10_000,
+      monotonicMs: hour,
+    })).toBeNull();
+
+    // A suspend, or a clock jumped forward - the same fact either way.
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start + 48 * hour,
+      monotonicMs: hour,
+    })).toEqual({
+      kind: 'wall_ahead_of_monotonic',
+      differenceMs: 47 * hour,
+    });
+
+    // Backward, which no honest clock does.
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start - hour,
+      monotonicMs: hour,
+    })).toEqual({
+      kind: 'wall_behind_monotonic',
+      differenceMs: 2 * hour,
+    });
+  });
+
+  it('reports a wall clock behind a floor this Home already justified', () => {
+    // The floor already refuses the windows silently; silence is what an
+    // attacker would settle for, so the fact is surfaced too.
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start,
+      monotonicMs: 0,
+      anchorFloorMs: start + 10 * hour,
+    })).toEqual({
+      kind: 'wall_behind_anchor_floor',
+      differenceMs: 10 * hour,
+    });
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start,
+      monotonicMs: 0,
+      anchorFloorMs: start,
+    })).toBeNull();
+    expect(detectPicoClockDivergence({
+      ...base,
+      wallMs: start,
+      monotonicMs: 0,
+      anchorFloorMs: null,
+    })).toBeNull();
   });
 });
 

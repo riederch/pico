@@ -148,6 +148,7 @@ describe('Pico protocol types', () => {
       'home.recovery_anchor_reseeded',
       'home.identity_root_rotation_vetoed',
       'home.host_key_rotated',
+      'home.clock_divergence_detected',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -168,6 +169,7 @@ describe('Pico protocol types', () => {
       'home.recovery_anchor_reseeded',
       'home.identity_root_rotation_vetoed',
       'home.host_key_rotated',
+      'home.clock_divergence_detected',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');

@@ -1,4 +1,5 @@
 import {
+  type PicoCompanionClockDivergenceAlarm,
   type PicoCompanionNotificationAdapter,
   type PicoCompanionPendingRecoveryAlarm,
 } from '@pico/companion/alarm-carrier';
@@ -8,6 +9,7 @@ import {
   type PicoCompanionHostRotationNotice,
 } from '@pico/companion/host-repin';
 import {
+  renderPicoCompanionClockDivergenceAlarm,
   renderPicoCompanionHostContinuityAlarm,
   renderPicoCompanionHostRotationNotice,
   renderPicoCompanionPendingRecoveryAlarm,
@@ -84,6 +86,20 @@ export function createPicoCompanionPresentationAdapter(
         kind: 'host_continuity_unverified',
         severity: 'blocked',
         symbol: '×',
+        decision: 'none',
+        ...rendered,
+        observedAt: now().toISOString(),
+      }, true);
+    },
+    // ADR 0120 N5. Loud, because it means someone may be trying to rush an
+    // objection window past the person - but not blocking, because the
+    // window itself is intact and the veto decision beneath it still stands.
+    notifyClockDivergence: async (alarm: PicoCompanionClockDivergenceAlarm) => {
+      const rendered = renderPicoCompanionClockDivergenceAlarm(alarm);
+      await publish({
+        kind: 'clock_divergence',
+        severity: 'warning',
+        symbol: '!',
         decision: 'none',
         ...rendered,
         observedAt: now().toISOString(),
