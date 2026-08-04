@@ -1,9 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import sodium from 'libsodium-wrappers-sumo';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { openPicoHomeRecoveryAnchor } from './recovery-anchor.js';
 import {
   buildPicoHomeDomainReadGrantSignatureInput,
   buildPicoHomeMembershipSignatureInput,
@@ -289,7 +290,9 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       .run('cc'.repeat(32), JSON.stringify(stored));
     tampering.close();
 
-    const reopened = new EventStore(fixture.databasePath);
+    const reopened = new EventStore(fixture.databasePath, {
+      recoveryAnchor: observedAnchor(fixture.databasePath),
+    });
     expect(reopened.reconcilePicoIdentityRootRotations(sodium, beforeWindow))
       .toEqual({
         verifiedRotations: 0,
@@ -330,7 +333,9 @@ describe('ADR 0114 T2 identity root rotation projection', () => {
       .run('cc'.repeat(32));
     tampering.close();
 
-    const reopened = new EventStore(fixture.databasePath);
+    const reopened = new EventStore(fixture.databasePath, {
+      recoveryAnchor: observedAnchor(fixture.databasePath),
+    });
     expect(reopened.reconcilePicoIdentityRootRotations(sodium, beforeWindow))
       .toEqual({
         verifiedRotations: 0,
@@ -560,7 +565,9 @@ describe('ADR 0114 T3 re-issue after a root rotation', () => {
       .run(fixture.devices[1]!.signing.fingerprintHex);
     tampering.close();
 
-    const reopened = new EventStore(fixture.databasePath);
+    const reopened = new EventStore(fixture.databasePath, {
+      recoveryAnchor: observedAnchor(fixture.databasePath),
+    });
     expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
       .toEqual({
         verifiedRotations: 0,
@@ -598,7 +605,9 @@ describe('ADR 0114 T3 re-issue after a root rotation', () => {
       .run(JSON.stringify(stored));
     tampering.close();
 
-    const reopened = new EventStore(fixture.databasePath);
+    const reopened = new EventStore(fixture.databasePath, {
+      recoveryAnchor: observedAnchor(fixture.databasePath),
+    });
     expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
       .toEqual({
         verifiedRotations: 0,
@@ -635,7 +644,9 @@ describe('ADR 0114 T3 re-issue after a root rotation', () => {
       .run(JSON.stringify(stored));
     tampering.close();
 
-    const reopened = new EventStore(fixture.databasePath);
+    const reopened = new EventStore(fixture.databasePath, {
+      recoveryAnchor: observedAnchor(fixture.databasePath),
+    });
     expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
       .toEqual({
         verifiedRotations: 0,
@@ -767,7 +778,9 @@ describe('ADR 0114 T5 a rotation is decided per Home', () => {
       .run(...columns.map((column) => row[column]));
     target.close();
 
-    const reopened = new EventStore(homeB.databasePath);
+    const reopened = new EventStore(homeB.databasePath, {
+      recoveryAnchor: observedAnchor(homeB.databasePath),
+    });
     // Ignored, but not silently: a merged database must not read as an empty
     // one, so the row is counted and named at boot.
     expect(reopened.reconcilePicoIdentityRootRotations(sodium, afterWindow))
@@ -815,6 +828,23 @@ function createIdentity() {
   };
 }
 
+/**
+ * ADR 0120 N2. A rotation veto is an objection window, so promotion needs a
+ * durable floor as well as a wall clock. These tests model a Home that was
+ * actually running through the window: the floor is bootstrapped at the
+ * instant the test reconciles against.
+ */
+function observedAnchor(databasePath: string, floorAt: string = afterWindow) {
+  const anchor = openPicoHomeRecoveryAnchor(
+    join(dirname(databasePath), "recovery-anchor", "anchor.json"),
+    { now: () => new Date(floorAt) },
+  );
+  if (anchor.isEmpty()) {
+    anchor.seed({ homeId: null, entries: [] });
+  }
+  return anchor;
+}
+
 function createFixture(options: {
   homeId?: string;
   identity?: ReturnType<typeof createIdentity>;
@@ -823,7 +853,9 @@ function createFixture(options: {
   const dir = mkdtempSync(join(tmpdir(), 'pico-root-rotation-test-'));
   tempDirs.push(dir);
   const databasePath = join(dir, 'pico.sqlite');
-  const store = new EventStore(databasePath);
+  const store = new EventStore(databasePath, {
+    recoveryAnchor: observedAnchor(databasePath),
+  });
 
   const founder = createSigningKey('pico_identity');
   const host = createSigningKey('home_host_signing');

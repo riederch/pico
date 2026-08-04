@@ -567,14 +567,31 @@ describe('ADR 0110 durable device recovery', () => {
   });
 });
 
-function createFixture() {
+function createFixture(options: {
+  databasePath?: string;
+  anchorPath?: string;
+  anchorNow?: () => Date;
+} = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'pico-device-recovery-test-'));
   tempDirs.push(dir);
-  const databasePath = join(dir, 'pico.sqlite');
-  const anchorPath = join(dir, 'recovery-anchor', 'anchor.json');
+  const databasePath = options.databasePath ?? join(dir, 'pico.sqlite');
+  const anchorPath = options.anchorPath ?? join(dir, 'recovery-anchor', 'anchor.json');
+  // ADR 0120 N2. The veto delay is an objection window, so completion needs a
+  // durable floor as well as a wall clock, and the floor rises only with time
+  // the Home actually observed. These tests model a Home that was running
+  // through the window; one that needs to observe more calls
+  // `advanceObservedTime`. A test that wants the opposite - a wound-forward
+  // wall clock over an unmoved floor - builds its own anchor.
+  let observedMonotonicMs = 0;
   const store = new EventStore(databasePath, {
-    recoveryAnchor: openPicoHomeRecoveryAnchor(anchorPath),
+    recoveryAnchor: openPicoHomeRecoveryAnchor(anchorPath, {
+      now: options.anchorNow ?? (() => new Date(completedAt)),
+      monotonicNowMs: () => observedMonotonicMs,
+    }),
   });
+  const advanceObservedTime = (milliseconds: number): void => {
+    observedMonotonicMs += milliseconds;
+  };
   const identity = createSigningKey('pico_identity');
   const host = createSigningKey('home_host_signing');
   const sponsorSigning = createSigningKey('device_signing');
@@ -631,6 +648,7 @@ function createFixture() {
     databasePath,
     anchorPath,
     store,
+    advanceObservedTime,
     identity,
     host,
     sponsorSigning,
@@ -1190,6 +1208,9 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
         expiresAt: '2026-08-02T11:04:00.000Z',
       },
     });
+    // Two more days pass with the Home running, so its floor reaches the
+    // second recovery's window end.
+    fixture.advanceObservedTime(49 * 60 * 60 * 1_000);
     expect(fixture.store.completePicoHomeDeviceRecovery({
       recoveryId: 'recovery_r6_second',
       claimDigestHex: second.claimDigestHex,
@@ -1334,6 +1355,127 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
       '2026-08-09T10:00:00.001Z',
     ).anchorStatus).toBe('live');
     quiet.close();
+  });
+
+  it('refuses a veto delay retired by winding the wall clock forward (ADR 0120 N2)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-device-recovery-wound-'));
+    tempDirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+    const anchorPath = join(dir, 'recovery-anchor', 'anchor.json');
+    // The Home observes no time at all after accepting: its floor stays at
+    // acceptance, which is the state an attacker creates by rebooting with a
+    // clock set two days ahead.
+    const woundFixture = createFixture({
+      databasePath,
+      anchorPath,
+      anchorNow: () => new Date(acceptedAt),
+    });
+    const accepted = acceptRecovery(woundFixture, 'recovery_wound_clock');
+
+    const refused = woundFixture.store.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_wound_clock',
+      claimDigestHex: accepted.claimDigestHex,
+      sender: accepted.sender,
+      hostSigningKeyRecord: woundFixture.host.keyRecord,
+      signHostReceipt: woundFixture.host.sign,
+      sodium,
+      // The wall clock says the 48 hours are long gone.
+      completedAt: '2027-01-01T00:00:00.000Z',
+    });
+    expect(refused).toEqual({ ok: false, reason: 'recovery_not_effective' });
+
+    // The same completion succeeds once the Home has actually observed the
+    // window - the rule delays the recovery, it does not break it.
+    woundFixture.advanceObservedTime(49 * 60 * 60 * 1_000);
+    expect(woundFixture.store.completePicoHomeDeviceRecovery({
+      recoveryId: 'recovery_wound_clock',
+      claimDigestHex: accepted.claimDigestHex,
+      sender: accepted.sender,
+      hostSigningKeyRecord: woundFixture.host.keyRecord,
+      signHostReceipt: woundFixture.host.sign,
+      sodium,
+      completedAt: completedAt,
+    }).ok).toBe(true);
+    woundFixture.store.close();
+  });
+
+  it('advances the high-water floor only by observed time (ADR 0120 N2/N3)', () => {
+    const fixture = createFixture();
+    let monotonicMs = 1_000;
+    const anchor = openPicoHomeRecoveryAnchor(fixture.anchorPath, {
+      now: () => new Date(acceptedAt),
+      monotonicNowMs: () => monotonicMs,
+    });
+
+    // An anchor that never took ownership has no floor, and absence refuses.
+    expect(anchor.highWaterInstant()).toBeNull();
+
+    anchor.record({
+      recoveryId: 'recovery_floor_0001',
+      claimDigestHex: 'ab'.repeat(32),
+      picoIdentityFingerprintHex: 'cd'.repeat(32),
+      state: 'accepted',
+      expiresAt: '2026-08-09T10:00:00.000Z',
+    });
+    // Taking ownership bootstraps the floor from the wall clock exactly once.
+    expect(anchor.highWaterInstant()).toBe(acceptedAt);
+
+    // Observed time raises it, and nothing else does.
+    monotonicMs += 6 * 60 * 60 * 1_000;
+    expect(Date.parse(anchor.highWaterInstant()!))
+      .toBe(Date.parse(acceptedAt) + 6 * 60 * 60 * 1_000);
+    anchor.observe();
+
+    // The attack: a wall clock wound a year forward. The floor is unmoved,
+    // because a claim is not observed time.
+    const wound = openPicoHomeRecoveryAnchor(fixture.anchorPath, {
+      now: () => new Date('2027-08-01T10:00:00.000Z'),
+      monotonicNowMs: () => 0,
+    });
+    expect(Date.parse(wound.highWaterInstant()!))
+      .toBe(Date.parse(acceptedAt) + 6 * 60 * 60 * 1_000);
+
+    // And it never rewinds: a reopen with an earlier wall clock keeps it.
+    wound.record({
+      recoveryId: 'recovery_floor_0001',
+      claimDigestHex: 'ab'.repeat(32),
+      picoIdentityFingerprintHex: 'cd'.repeat(32),
+      state: 'consumed',
+      expiresAt: '2026-08-09T10:00:00.000Z',
+    });
+    const reopened = openPicoHomeRecoveryAnchor(fixture.anchorPath, {
+      now: () => new Date('2020-01-01T00:00:00.000Z'),
+      monotonicNowMs: () => 0,
+    });
+    expect(Date.parse(reopened.highWaterInstant()!))
+      .toBeGreaterThanOrEqual(Date.parse(acceptedAt) + 6 * 60 * 60 * 1_000);
+
+    fixture.store.close();
+  });
+
+  it('refuses an unreadable floor rather than reading it as no floor', () => {
+    const fixture = createFixture();
+    const anchor = openPicoHomeRecoveryAnchor(fixture.anchorPath, {
+      now: () => new Date(acceptedAt),
+    });
+    anchor.record({
+      recoveryId: 'recovery_floor_0002',
+      claimDigestHex: 'ab'.repeat(32),
+      picoIdentityFingerprintHex: 'cd'.repeat(32),
+      state: 'accepted',
+      expiresAt: '2026-08-09T10:00:00.000Z',
+    });
+
+    const document = JSON.parse(readFileSync(fixture.anchorPath, 'utf8')) as Record<string, unknown>;
+    writeFileSync(
+      fixture.anchorPath,
+      JSON.stringify({ ...document, highWaterAt: 'not-an-instant' }),
+    );
+    // Collapsing this into "no floor" would open every objection window the
+    // anchor exists to hold shut.
+    expect(() => openPicoHomeRecoveryAnchor(fixture.anchorPath))
+      .toThrow('unreadable_recovery_anchor');
+    fixture.store.close();
   });
 
   it('keeps the anchor monotonic: terminal states never walk back and a torn anchor fails closed', () => {

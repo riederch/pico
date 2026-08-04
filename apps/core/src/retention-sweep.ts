@@ -1,3 +1,4 @@
+import { isPicoWallClockPlausible } from '@pico/protocol';
 import type { MemoryStore } from './memory-store.js';
 import type { RetentionPolicyStore } from './retention-policy-store.js';
 
@@ -27,6 +28,13 @@ export type AppendRetentionTombstone = (input: {
 export interface RetentionSweepOptions {
   now?: () => Date;
   maxDeletionsPerSweep?: number;
+  /**
+   * ADR 0120 N5. The durable floor, so the sweeper can tell a plausible clock
+   * from a nonsensical one. Absent leaves the sweeper as it was: no floor is
+   * no evidence of nonsense, and refusing every deletion because a file is
+   * missing would turn that into a retention outage.
+   */
+  anchorFloorMs?: () => number | null;
 }
 
 export interface RetentionSweepResult {
@@ -35,6 +43,14 @@ export interface RetentionSweepResult {
   kept: number;
   /** Candidates kept because their policy was missing, unresolvable or malformed (fail-safe). */
   unresolved: number;
+  /**
+   * ADR 0120 N5. True when the wall clock sat implausibly far ahead of the
+   * durable floor and nothing was deleted. Deletion under ADR 0070 is
+   * crypto-shredding and cannot be undone, so a clock jumped by years would
+   * expire items with years left. Being able to run is not permission to act
+   * on nonsense - and the sweeper says so rather than skipping silently.
+   */
+  refusedImplausibleClock?: true;
 }
 
 export class RetentionSweeper {
@@ -49,6 +65,19 @@ export class RetentionSweeper {
     const now = (this.options.now ?? (() => new Date()))().getTime();
     const cap = this.options.maxDeletionsPerSweep ?? DEFAULT_MAX_DELETIONS_PER_SWEEP;
     const candidates = this.memory.listRetentionCandidates();
+
+    if (!isPicoWallClockPlausible({
+      nowMs: now,
+      anchorFloorMs: this.options.anchorFloorMs?.() ?? null,
+    })) {
+      return {
+        scanned: candidates.length,
+        expired: 0,
+        kept: candidates.length,
+        unresolved: 0,
+        refusedImplausibleClock: true,
+      };
+    }
 
     let expired = 0;
     let kept = 0;

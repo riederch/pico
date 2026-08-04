@@ -936,11 +936,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         broadcast(tombstone);
       }
     },
+    { anchorFloorMs: () => store.recoveryAnchorFloorMs() },
   );
 
   function runRetentionSweep(): void {
     try {
-      retentionSweeper.sweep();
+      // ADR 0120 N2. The retention tick doubles as the anchor heartbeat: the
+      // floor rises with observed time, and observed time only becomes durable
+      // once it is written down.
+      store.observeRecoveryAnchor();
+      const result = retentionSweeper.sweep();
+      if (result.refusedImplausibleClock === true) {
+        // N5: recorded as a fact, never a silent skip and never a quiet
+        // re-basing of the windows onto the new time.
+        app.log.error(
+          { scanned: result.scanned },
+          'retention sweep refused: wall clock implausible against the recovery anchor floor',
+        );
+      }
     } catch (error) {
       app.log.error({ err: error }, 'retention sweep failed');
     }

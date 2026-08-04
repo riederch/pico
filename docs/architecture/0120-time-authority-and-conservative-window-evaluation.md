@@ -2,11 +2,21 @@
 
 ## Status
 
-Accepted as a pre-implementation correctness constraint; the
-initiative and its scope were chosen by the user on 2026-08-01.
-Gates N1-N5 are open. It changes no window's length and no ceremony's
-shape - only how a window is judged to have passed, and what Pico
-refuses to conclude from a clock it cannot trust.
+Accepted as a correctness constraint; the initiative and its scope were
+chosen by the user on 2026-08-01. Gates N1-N5 are implemented for the
+objection windows and the irreversible housekeeping path; applying the
+exposure rule to each of the remaining short windows is what N1 still
+binds at the first production deployment. It changes no window's length
+and no ceremony's shape - only how a window is judged to have passed,
+and what Pico refuses to conclude from a clock it cannot trust.
+
+One consequence is visible to a person and is therefore stated here
+rather than buried in a gate: **objection windows now measure observed
+time, not calendar time.** The floor rises only while the Home is
+running, so a Home that is switched off half the time takes longer than
+48 hours of wall clock to retire a 48-hour veto delay. That is
+deliberate. The window exists so the person can object, and a person
+whose Home was off could not have objected either.
 
 ## Context
 
@@ -185,26 +195,59 @@ is not permission to act on nonsense.
 
 ## Gates
 
-- **N1 - Declared window classes and two-clock evaluation (binds the
-  first production deployment):** every window declares objection,
+- **N1 - Declared window classes and two-clock evaluation (mechanism
+  implemented; the remaining short windows bind the first production
+  deployment):** `packages/protocol/src/time-authority.ts` carries the
+  closed class vocabulary and both evaluators, with the two attack
+  directions tested against each other. The objection rule is applied to
+  the recovery veto delay and the rotation veto, the exposure rule to the
+  recovery completion edge; sessions, tickets, challenges, pending
+  ceremonies and the freshness ceiling still resolve as they did. Original
+  gate text: every window declares objection,
   exposure or housekeeping at its definition; exposure takes the
   earliest of both clocks, objection the latest, proven by tests that
   wind each clock in each direction.
-- **N2 - Anchored objection windows (binds ADR 0110 and ADR 0114
-  ceremonies):** veto delays and the recovery time lock elapse only
+- **N2 - Anchored objection windows (implemented):** the anchor gained a
+  forward-only `highWaterAt`. It rises only with time the Home observed -
+  monotonic progress within a running process, persisted on write - and
+  never with the wall clock, which is what makes the ADR's own promise
+  true across a restart: a Home rebooted with a clock set two days ahead
+  presents a claim, and a claim may not retire a veto period. The single
+  unavoidable claim is the bootstrap, when an anchor first takes
+  ownership and there is nothing else to start from; it reads the
+  anchor's own clock rather than a caller-supplied `updatedAt`. The
+  retention tick doubles as the heartbeat that makes observed time
+  durable. Counter-proven: a completion at a wall clock a year ahead over
+  an unmoved floor is refused, and the same completion succeeds once the
+  Home has observed the window. Original gate text: veto delays and the recovery time lock elapse only
   when the anchor's high-water instant has passed their end; proven by
   a restored-snapshot test in which the wall clock claims the window is
   over and the ceremony still refuses.
-- **N3 - Anchor invariants preserved (binds N2):** the high-water
+- **N3 - Anchor invariants preserved (implemented):** the floor is
+  forward-only across writes and reopens, still lives outside restorable
+  snapshots, and enters only one comparison - whether a window's end has
+  been passed - so it can withhold elapse and never cause it. An
+  unreadable floor throws rather than reading as "no floor", since that
+  would open every window the anchor exists to hold shut. Original gate
+  text: the high-water
   instant is forward-only, lives outside restorable snapshots, and can
   only refuse - counter-proven by a test that shows no anchor state
   can cause a window to elapse.
-- **N4 - No network time authority (binds every window):** no
+- **N4 - No network time authority (implemented):**
+  `scripts/check-time-authority.mjs` refuses a network-time import or a
+  well-known time-service endpoint anywhere on a correctness path, in the
+  shape the ADR asked for, and runs in `release:verify`. Original gate
+  text: no
   correctness path consults a time service; a mechanical check keeps
   network-time imports off those paths, in the same shape as
   `scripts/check-companion-boundary.mjs`.
-- **N5 - Detected movement is raised, and irreversible work refuses
-  (binds ADR 0074's sweeper and companion UX):** divergence beyond a
+- **N5 - Irreversible work refuses implausible time (implemented); the
+  companion alarm half remains open:** the retention sweeper compares the
+  wall clock against the floor and, when the gap is implausible, deletes
+  nothing and says so rather than skipping silently - deletion under
+  ADR 0070 is crypto-shredding and cannot be undone. Raising detected
+  movement through the ADR 0112 carrier is not implemented. Original gate
+  text: divergence beyond a
   threshold is recorded and alarmed through the ADR 0112 carrier;
   the retention sweep refuses to delete against an implausible clock.
 

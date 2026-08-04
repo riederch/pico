@@ -149,4 +149,30 @@ describe('RetentionSweeper', () => {
     expect(memory.getInDomain('mem-1', 'domain-private')?.deletionState).toBe('tombstoned');
     expect(memory.getInDomain('mem-1', 'domain-private')?.content).toBeUndefined();
   });
+
+  it('refuses to delete against an implausible wall clock (ADR 0120 N5)', () => {
+    const { memory, policies } = openHarness();
+    policies.create({ retentionPolicyId: 'ret-1', displayName: '1d', mode: 'delete_after_max_age', maxAgeDays: 1 });
+    createItem(memory, 'mem-1', 'ret-1');
+    const append: AppendRetentionTombstone = () => undefined;
+    const floorMs = Date.now();
+
+    // A clock jumped by a decade would expire items with years left, and
+    // crypto-shredding cannot be undone.
+    const refused = new RetentionSweeper(memory, policies, append, {
+      now: () => new Date(floorMs + 10 * 365 * DAY_MS),
+      anchorFloorMs: () => floorMs,
+    }).sweep();
+    expect(refused).toMatchObject({ expired: 0, refusedImplausibleClock: true });
+    expect(memory.getInDomain('mem-1', 'domain-private')?.deletionState)
+      .toBe('active');
+
+    // Ordinary downtime is not nonsense: a week behind the floor still sweeps.
+    const swept = new RetentionSweeper(memory, policies, append, {
+      now: () => new Date(floorMs + 7 * DAY_MS),
+      anchorFloorMs: () => floorMs,
+    }).sweep();
+    expect(swept.expired).toBe(1);
+    expect(swept.refusedImplausibleClock).toBeUndefined();
+  });
 });

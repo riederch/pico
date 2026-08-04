@@ -83,6 +83,24 @@ export interface PicoHomeRecoveryAnchorDocument {
   schema: typeof picoHomeRecoveryAnchorSchema;
   homeId: string | null;
   /**
+   * ADR 0120 N2. The greatest instant this anchor has ever justified: the
+   * durable lower bound an objection window needs once it outlives the process
+   * that opened it.
+   *
+   * It advances only by time this Home actually observed - monotonic progress
+   * within a running process, persisted on write - and never by the wall
+   * clock. That is the whole point: a wall clock wound forward is a claim, and
+   * a claim must not retire a veto period.
+   *
+   * The consequence is deliberate and worth stating: a Home that is switched
+   * off does not burn its objection windows. That reads as conservative, and
+   * it is also simply correct - a person could not have objected while their
+   * Home was off either.
+   *
+   * `null` on an anchor that has never taken ownership. Absence refuses.
+   */
+  highWaterAt?: string | null;
+  /**
    * When this anchor took ownership of the Home. An anchor with no entries is
    * not the same thing as an anchor that never existed - a fresh Home has the
    * former for as long as nobody recovers - so seeding is recorded explicitly
@@ -127,6 +145,24 @@ export interface PicoHomeRecoveryAnchor {
    * empty in this sense, or a quiet Home would fail closed after nine days.
    */
   isEmpty(): boolean;
+  /**
+   * ADR 0120 N2/N3. The durable floor, including monotonic progress made since
+   * this process opened the anchor. `null` while the anchor has never taken
+   * ownership, which refuses every objection window rather than defaulting one
+   * open.
+   *
+   * N3 holds by construction: this value can only be compared against a
+   * window's end, and the comparison can only withhold elapse. No anchor state
+   * makes a window elapse that the record itself did not already end.
+   */
+  highWaterInstant(): string | null;
+  /**
+   * Persists the progress observed so far. Called at boot and before
+   * irreversible housekeeping, so a long-running Home does not keep its whole
+   * floor advance in memory. Losing unpersisted progress rewinds the floor,
+   * which only ever refuses more.
+   */
+  observe(): void;
 }
 
 export function defaultPicoHomeRecoveryAnchorPath(databasePath: string): string {
@@ -156,21 +192,65 @@ export function assertPicoHomeRecoveryAnchorSeparation(input: {
 
 export function openPicoHomeRecoveryAnchor(
   anchorPath: string,
-  options: { now?: () => Date } = {},
+  options: { now?: () => Date; monotonicNowMs?: () => number } = {},
 ): PicoHomeRecoveryAnchor {
   const now = options.now ?? (() => new Date());
+  const monotonicNowMs = options.monotonicNowMs ?? (() => performance.now());
   mkdirSync(dirname(anchorPath), { recursive: true, mode: 0o700 });
   let document = readAnchorDocument(anchorPath);
 
+  // ADR 0120 N2. The floor this process last justified, and the monotonic
+  // reading it was justified at. Everything above the baseline is observed
+  // time; the baseline itself is only ever raised.
+  let floorBaselineMs = parseFloorMs(document);
+  let floorBaselineMonotonicMs = monotonicNowMs();
+
+  const currentFloorMs = (): number | null => {
+    if (floorBaselineMs === null) {
+      return null;
+    }
+    const observed = monotonicNowMs() - floorBaselineMonotonicMs;
+    return floorBaselineMs + Math.max(0, observed);
+  };
+
   const persist = (next: PicoHomeRecoveryAnchorDocument): void => {
+    // Three candidates, and the greatest wins so nothing can rewind a floor
+    // another writer already justified: what this process observed, what the
+    // document already carried, and - only when an anchor first takes
+    // ownership - the wall clock at that moment.
+    //
+    // That bootstrap is the single unavoidable claim, and it reads the
+    // anchor's own clock rather than the entry's `updatedAt`: `updatedAt` is
+    // the caller's statement about when something happened and may be
+    // historical, while the reading here is what this anchor itself observed.
+    // Every advance after the bootstrap is observed time, never a claim - a
+    // later write may not raise the floor to its own `now()`.
+    const takingOwnership = currentFloorMs() === null
+      && parseFloorMs(next) === null
+      && next.seededAt !== null;
+    const advancedMs = greatestDefined([
+      currentFloorMs(),
+      parseFloorMs(next),
+      takingOwnership ? now().getTime() : null,
+    ]);
+    const withFloor: PicoHomeRecoveryAnchorDocument = {
+      ...next,
+      highWaterAt: advancedMs === null
+        ? null
+        : new Date(advancedMs).toISOString(),
+    };
+    if (advancedMs !== null) {
+      floorBaselineMs = advancedMs;
+      floorBaselineMonotonicMs = monotonicNowMs();
+    }
     // Atomic replace plus fsync of file and directory: a torn anchor is
     // indistinguishable from a rolled-back one, and both must fail closed.
     const temporaryPath = `${anchorPath}.tmp`;
-    writeFileSync(temporaryPath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(temporaryPath, `${JSON.stringify(withFloor, null, 2)}\n`, { mode: 0o600 });
     fsyncPath(temporaryPath);
     renameSync(temporaryPath, anchorPath);
     fsyncPath(dirname(anchorPath), true);
-    document = next;
+    document = withFloor;
   };
 
   pruneExpiredEntries();
@@ -278,6 +358,15 @@ export function openPicoHomeRecoveryAnchor(
       });
     },
     isEmpty: () => document.seededAt === null && document.entries.length === 0,
+    highWaterInstant: () => {
+      const floorMs = currentFloorMs();
+      return floorMs === null ? null : new Date(floorMs).toISOString();
+    },
+    observe: () => {
+      if (currentFloorMs() !== null) {
+        persist(document);
+      }
+    },
   };
 
   /**
@@ -303,6 +392,27 @@ export function openPicoHomeRecoveryAnchor(
 
 const asciiTokenPattern = /^[A-Za-z0-9._:/+-]+$/;
 const hexPattern = /^[0-9a-f]{64}$/;
+
+function parseFloorMs(
+  document: PicoHomeRecoveryAnchorDocument,
+): number | null {
+  if (document.highWaterAt === undefined || document.highWaterAt === null) {
+    return null;
+  }
+  const parsed = Date.parse(document.highWaterAt);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function greatestDefined(values: readonly (number | null)[]): number | null {
+  let greatest: number | null = null;
+  for (const value of values) {
+    if (value === null || !Number.isFinite(value)) {
+      continue;
+    }
+    greatest = greatest === null ? value : Math.max(greatest, value);
+  }
+  return greatest;
+}
 
 function assertRecordInput(input: PicoHomeRecoveryAnchorRecordInput): void {
   if (typeof input.recoveryId !== 'string' || !asciiTokenPattern.test(input.recoveryId)) {
@@ -386,7 +496,21 @@ function readAnchorDocument(anchorPath: string): PicoHomeRecoveryAnchorDocument 
   ) {
     throw new Error('unreadable_recovery_anchor');
   }
-  return { ...document, seededAt: document.seededAt ?? null };
+  if (
+    document.highWaterAt !== undefined
+    && document.highWaterAt !== null
+    && (typeof document.highWaterAt !== 'string'
+      || !Number.isFinite(Date.parse(document.highWaterAt)))
+  ) {
+    // An unreadable floor must not collapse into "no floor", which would open
+    // every objection window this anchor exists to hold shut.
+    throw new Error('unreadable_recovery_anchor');
+  }
+  return {
+    ...document,
+    seededAt: document.seededAt ?? null,
+    highWaterAt: document.highWaterAt ?? null,
+  };
 }
 
 /**

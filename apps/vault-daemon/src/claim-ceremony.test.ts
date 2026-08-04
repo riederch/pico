@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -154,15 +154,53 @@ async function freePort(): Promise<number> {
   });
 }
 
+/**
+ * ADR 0120 N2. An objection window elapses only when the anchor's floor has
+ * passed its end, and that floor rises with time the Home actually observed -
+ * never with a wall-clock claim. Restarting a core two days ahead is therefore
+ * exactly the move the gate refuses, and no longer a way to simulate waiting.
+ *
+ * These ceremony tests are about the recovery flow across real processes, not
+ * about the floor's mechanics, which are counter-proven in
+ * `apps/core/src/device-recovery.test.ts` - including the wound-clock case.
+ * So the Home is put into the state a ceremony test assumes: one that was
+ * running through its window.
+ */
+function observeAnchorThrough(dataDir: string, instantMs: number): void {
+  const anchorPath = join(dataDir, 'recovery-anchor', 'anchor.json');
+  if (!existsSync(anchorPath)) {
+    return;
+  }
+  const document = JSON.parse(readFileSync(anchorPath, 'utf8')) as Record<string, unknown>;
+  const existing = typeof document.highWaterAt === 'string'
+    ? Date.parse(document.highWaterAt)
+    : Number.NEGATIVE_INFINITY;
+  if (existing >= instantMs) {
+    return;
+  }
+  writeFileSync(
+    anchorPath,
+    `${JSON.stringify({
+      ...document,
+      highWaterAt: new Date(instantMs).toISOString(),
+    }, null, 2)}\n`,
+  );
+}
+
 async function startCore(
   options: {
     restrictedLinkIntake?: boolean;
     dataDir?: string;
     restoredFrom?: RunningCore;
     nowMs?: number;
+    /** The instant this Home is treated as having observed time up to. */
+    observedThroughMs?: number;
   } = {},
 ): Promise<RunningCore> {
   const dataDir = options.dataDir ?? tempDir('pico-claim-core-');
+  if (options.observedThroughMs !== undefined) {
+    observeAnchorThrough(dataDir, options.observedThroughMs);
+  }
   const port = await freePort();
   let linkPort: number | undefined;
   if (options.restrictedLinkIntake === true) {
@@ -1517,6 +1555,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       dataDir: core.dataDir,
       restoredFrom: core,
       nowMs: effectiveNowMs,
+      observedThroughMs: effectiveNowMs,
     });
     targetLink = await createRecoveryLinkClient({
       core: restartedCore,
@@ -2016,6 +2055,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       dataDir: core.dataDir,
       restoredFrom: core,
       nowMs: effectiveNowMs,
+      observedThroughMs: effectiveNowMs,
     });
     const completed = await runCli(completionFlags(laterCore), { nowMs: effectiveNowMs });
     expect(completed.code, completed.stderr).toBe(0);
@@ -2130,6 +2170,7 @@ describe('Home claim ceremony over the Vault daemon (ADR 0103 C1)', () => {
       dataDir: core.dataDir,
       restoredFrom: core,
       nowMs: lapsedNowMs,
+      observedThroughMs: lapsedNowMs,
     });
     targetLink = await createRecoveryLinkClient({
       core: restartedCore,

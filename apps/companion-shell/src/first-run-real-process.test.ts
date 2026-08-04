@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -371,6 +371,28 @@ async function waitFor(condition: () => boolean, label: string): Promise<void> {
 }
 
 /**
+ * ADR 0120 N2. The veto delay elapses only once the anchor's floor has passed
+ * it, and that floor rises with observed time rather than with a wall-clock
+ * claim - so restarting a Home two days ahead no longer simulates waiting.
+ * The floor's mechanics are counter-proven in `apps/core`; here the Home is
+ * put into the state this test is about, one that ran through its window.
+ */
+function observeAnchorThrough(dataDir: string, instantMs: number): void {
+  const anchorPath = join(dataDir, 'recovery-anchor', 'anchor.json');
+  if (!existsSync(anchorPath)) {
+    return;
+  }
+  const document = JSON.parse(readFileSync(anchorPath, 'utf8')) as Record<string, unknown>;
+  writeFileSync(
+    anchorPath,
+    `${JSON.stringify({
+      ...document,
+      highWaterAt: new Date(instantMs).toISOString(),
+    }, null, 2)}\n`,
+  );
+}
+
+/**
  * `reuse` restarts an already founded Home against its own database, ports and
  * host keys. A second boot does not repeat the setup log line - there is
  * nothing left to set up - so the host bundle is carried over rather than
@@ -380,6 +402,9 @@ async function startCore(options: {
   nowMs: number;
   reuse?: RunningCore;
 }): Promise<RunningCore> {
+  if (options.reuse !== undefined) {
+    observeAnchorThrough(options.reuse.dataDir, options.nowMs);
+  }
   const port = options.reuse?.port ?? await freePort();
   let linkPort = options.reuse?.linkPort ?? await freePort();
   while (linkPort === port) {

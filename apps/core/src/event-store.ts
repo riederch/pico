@@ -29,6 +29,10 @@ import type {
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
+  hasPicoExposureWindowElapsed,
+  hasPicoObjectionWindowElapsed,
+} from '@pico/protocol';
+import {
   buildPicoHomeDeviceActivationSignatureInput,
   buildPicoHomeDeviceLifecycleReceiptSignatureInput,
   buildPicoHomeDeviceRecoveryClaimSignatureInput,
@@ -90,6 +94,19 @@ import {
   openPicoHomeRecoveryAnchor,
   type PicoHomeRecoveryAnchor,
 } from './recovery-anchor.js';
+
+/**
+ * ADR 0120 N2. The durable floor, or `null` when no anchor is available -
+ * which refuses every objection window rather than defaulting one open.
+ */
+function anchorFloorMs(anchor: PicoHomeRecoveryAnchor | undefined): number | null {
+  const instant = anchor?.highWaterInstant();
+  if (instant === undefined || instant === null) {
+    return null;
+  }
+  const parsed = Date.parse(instant);
+  return Number.isFinite(parsed) ? parsed : null;
+}
 import type { SqliteBackupResult } from './sqlite-backup.js';
 import {
   verifyPicoHomeDomainReadGrant,
@@ -3210,10 +3227,25 @@ export class EventStore {
     ) {
       return { ok: false, reason: 'recovery_anchor_unavailable' };
     }
-    if (Date.parse(completedAt) < Date.parse(row.effectiveAt)) {
+    // ADR 0120 N2. The veto delay is an objection window: the person is
+    // protected by its duration, so it elapses only when the wall clock and
+    // the anchor's observed floor both say it did. A wall clock wound forward
+    // cannot retire the window the person would have objected in.
+    if (!hasPicoObjectionWindowElapsed({
+      endsAtMs: Date.parse(row.effectiveAt),
+      nowMs: Date.parse(completedAt),
+      anchorFloorMs: anchorFloorMs(anchor),
+    })) {
       return { ok: false, reason: 'recovery_not_effective' };
     }
-    if (Date.parse(completedAt) >= Date.parse(row.completionExpiresAt)) {
+    // The far edge is exposure, not objection: past it a spent authorization
+    // must stop being usable, so the earliest clock wins. There is no
+    // monotonic start reading for a window that outlived its process, which
+    // leaves the wall clock alone here - stated rather than hidden.
+    if (hasPicoExposureWindowElapsed({
+      endsAtMs: Date.parse(row.completionExpiresAt),
+      nowMs: Date.parse(completedAt),
+    })) {
       this.db
         .prepare(`
           UPDATE pico_home_device_recovery
@@ -4742,7 +4774,14 @@ export class EventStore {
       }
       verified += 1;
 
-      if (Date.parse(row.effectiveAt) <= Date.parse(reconciledAt)) {
+      // ADR 0120 N2. The rotation veto is an objection window too, and a
+      // rotation promoted early is a predecessor root retired before the
+      // person could stop it.
+      if (hasPicoObjectionWindowElapsed({
+        endsAtMs: Date.parse(row.effectiveAt),
+        nowMs: Date.parse(reconciledAt),
+        anchorFloorMs: anchorFloorMs(this.recoveryAnchor),
+      })) {
         effective += 1;
         if (row.status !== 'effective') {
           promotions.push(row);
@@ -5714,6 +5753,23 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db, this.memoryCrypto);
+  }
+
+  /** ADR 0120 N2. The durable floor, or `null` when no anchor is available. */
+  public recoveryAnchorFloorMs(): number | null {
+    return anchorFloorMs(this.recoveryAnchor);
+  }
+
+  /**
+   * ADR 0120 N2. Persists the observed time this process has accumulated.
+   * Called at boot and on the retention tick: without it a Home that restarts
+   * often would keep almost all of its floor advance in memory and lose it,
+   * so its objection windows would take far longer than the time it actually
+   * ran. Losing unpersisted progress only ever refuses more, so this is a
+   * liveness measure rather than a safety one.
+   */
+  public observeRecoveryAnchor(): void {
+    this.recoveryAnchor?.observe();
   }
 
   public readerCustody(

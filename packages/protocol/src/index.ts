@@ -4256,6 +4256,7 @@ function assertStringMember<const TValues extends readonly string[]>(
 
 export * from './recovery.js';
 export * from './model-context.js';
+export * from './time-authority.js';
 export * from './appearance.js';
 
 function canonicalScopeSet(scopes: readonly string[]): PicoIdentityDelegationScope[] {
