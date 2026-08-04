@@ -15,6 +15,7 @@ import type {
   PicoRulesDecisionCreatedPayload,
 } from './index.js';
 import {
+  buildPicoHomeAuditRecordDigestInput,
   actionEventTypes,
   avatarIntensities,
   avatarModes,
@@ -2245,6 +2246,59 @@ describe('Pico protocol types', () => {
     };
 
     expect(membership.role).toBe('home_member');
+  });
+
+  it('pins the ADR 0121 J1 audit-record digest input', () => {
+    const record = {
+      writerId: 'pico-core',
+      chainPosition: 2,
+      eventId: 'event_audit_0002',
+      eventType: 'home.host_key_rotated' as const,
+      occurredAt: '2026-09-01T09:00:00.000Z',
+      previousDigestHex: 'ab'.repeat(32),
+    };
+    expect(Buffer.from(buildPicoHomeAuditRecordDigestInput(record)).toString('hex'))
+      .toBe('000000197069636f2e686f6d652e61756469742d7265636f72642e76310000'
+        + '00097069636f2d636f7265000000147365713a303030303030303030303030'
+        + '30303032000000106576656e745f61756469745f3030303200000015686f6d'
+        + '652e686f73745f6b65795f726f746174656400000018323032362d30392d30'
+        + '315430393a30303a30302e3030305a00000020abababababababababababab'
+        + 'abababababababababababababababababababab');
+
+    // Genesis commits to *being* genesis rather than to an absent element, so
+    // a later record cannot be replayed as the first one.
+    const genesis = {
+      ...record,
+      chainPosition: 1,
+      eventId: 'event_audit_0001',
+      previousDigestHex: null,
+    };
+    const genesisHex = Buffer
+      .from(buildPicoHomeAuditRecordDigestInput(genesis)).toString('hex');
+    expect(genesisHex.endsWith('0000000767656e65736973')).toBe(true);
+    expect(genesisHex).not.toContain('00000000');
+
+    // Fixed-width positions: 2 and 20 cannot collide under any later padding.
+    expect(Buffer.from(buildPicoHomeAuditRecordDigestInput({
+      ...record,
+      chainPosition: 20,
+    })).toString('hex')).not.toBe(
+      Buffer.from(buildPicoHomeAuditRecordDigestInput(record)).toString('hex'),
+    );
+
+    for (const invalid of [
+      { ...record, chainPosition: 0 },
+      { ...record, chainPosition: 1.5 },
+      { ...record, writerId: '' },
+      // An invented type is refused; which of the real types count as audit
+      // records is the writer's decision, not the encoder's.
+      { ...record, eventType: 'home.invented' as never },
+      { ...record, previousDigestHex: 'ab' },
+      { ...record, occurredAt: '2026-09-01T09:00:00Z' },
+      { ...record, payload: {} } as never,
+    ]) {
+      expect(() => buildPicoHomeAuditRecordDigestInput(invalid)).toThrow();
+    }
   });
 });
 

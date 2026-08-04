@@ -11,6 +11,7 @@ import {
   picoIdentityRootRotationMigrationId,
   picoEventOriginMigrationId,
   picoMemoryItemOriginMigrationId,
+  picoAuditRecordMigrationId,
   picoHomeHostContinuityMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
@@ -265,6 +266,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoMemoryItemOriginMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoAuditRecordMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

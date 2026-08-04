@@ -437,6 +437,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const store = await EventStore.open(config.databasePath, {
     backupDirectory: config.backupDirectory,
     memoryCrypto,
+    // ADR 0121 J1. Without this the chain is simply not written, and the
+    // coverage report says so - which is the honest outcome, not a silent one.
+    auditSodium: sodium,
     recoveryAnchor: openPicoHomeRecoveryAnchor(recoveryAnchorPath),
   });
   const clock = new LamportClock(store.maxLamport());

@@ -73,6 +73,8 @@ export const picoEventOriginMigrationId =
   '0009_pico_event_origin' as const;
 export const picoMemoryItemOriginMigrationId =
   '0010_memory_item_origin' as const;
+export const picoAuditRecordMigrationId =
+  '0011_pico_audit_record' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -849,6 +851,46 @@ const migrations: readonly MigrationDefinition[] = [
             'person_present', 'own_pico', 'home_member',
             'remote_pico', 'external_content', 'unattributed'
           ));
+      `);
+    },
+  },
+  {
+    id: picoAuditRecordMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0121 J1. Seventeen event types already act as audit records, but
+        -- they were append-only only in the sense that no code updated them:
+        -- nothing linked a row to its predecessor, so any process that could
+        -- open this file could delete one undetectably.
+        --
+        -- The chain lives beside the log rather than inside it. pico_event is
+        -- a general log and audit is a subset of it; a separate table keeps
+        -- the chain's own per-writer sequence explicit instead of overloading
+        -- Lamport, which orders across replicas and says nothing about what
+        -- this instance wrote.
+        CREATE TABLE pico_audit_record (
+          event_id TEXT PRIMARY KEY REFERENCES pico_event (event_id),
+          writer_id TEXT NOT NULL,
+          chain_position INTEGER NOT NULL CHECK (chain_position >= 1),
+          previous_digest_hex TEXT NULL,
+          digest_hex TEXT NOT NULL,
+          recorded_at TEXT NOT NULL,
+          -- Per writer, because ADR 0014's log is designed to become
+          -- replicated and a global chain would assert the single writer the
+          -- architecture never promised.
+          UNIQUE (writer_id, chain_position),
+          -- A digest may appear once as a link, so no writer can fork its own
+          -- sequence and keep both branches.
+          UNIQUE (writer_id, digest_hex),
+          CHECK (
+            (chain_position = 1 AND previous_digest_hex IS NULL)
+            OR (chain_position > 1 AND previous_digest_hex IS NOT NULL)
+          )
+        );
+
+        CREATE INDEX idx_pico_audit_record_writer
+        ON pico_audit_record (writer_id, chain_position);
       `);
     },
   },

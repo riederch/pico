@@ -2,11 +2,21 @@
 
 ## Status
 
-Accepted as a pre-implementation constraint on ADR 0011's product
-audit; the initiative and its scope were chosen by the user on
-2026-08-01. Gates J1-J5 are open. It is due before Action History is
-built, because retrofitting integrity onto an audit trail that already
-exists means the retrofit cannot vouch for anything written before it.
+Accepted as a constraint on ADR 0011's product audit; the initiative and
+its scope were chosen by the user on 2026-08-01. J1 and J2 are
+implemented, so the seventeen event types that already act as audit
+records are chained and their heads anchored. J3 (signed checkpoints),
+J4's read surface and J5 remain open.
+
+Timing was the point and it held: this landed before Action History
+exists, so the chain vouches for the trail from its own beginning rather
+than from the day someone retrofitted it. What it protects today is not
+hypothetical - those rows are written now, and before this any process
+that could open the database could delete one undetectably.
+
+Detection, not prevention, and this ADR forbids claiming otherwise. A
+sustained host root still forges chain, anchor and signature together;
+the external witness that would not is deliberately unbuilt.
 
 ## Context
 
@@ -186,15 +196,42 @@ than a redesign.
 
 ## Gates
 
-- **J1 - Chained audit records (binds Action History):** every audit
-  record carries its predecessor's digest over ADR 0034-style canonical
-  bytes with authoritative vectors; the chain is per writer and says
-  so.
-- **J2 - Anchored checkpoints (binds J1):** chain heads are
-  checkpointed into the ADR 0110 R6 anchor, forward-only and outside
-  restorable snapshots; a mismatch is reported and never repaired,
-  proven by a restored-snapshot test in which a rolled-back log is
-  detected.
+- **J1 - Chained audit records (implemented):** `pico_audit_record`
+  links every `auth.*` and `home.*` event to its predecessor in that
+  writer's sequence, over ADR 0034-style canonical bytes with a pinned
+  vector. The audit set is derived from the vocabulary by prefix, so a
+  new `home.*` type joins the chain by existing rather than by someone
+  remembering a second list. Genesis commits to *being* genesis instead
+  of to an absent element, and positions are fixed-width, so neither a
+  replayed first record nor a padding change can collide. The row and
+  its link commit in one transaction: a chain written a moment later
+  would leave a window in which the record exists unlinked, and an
+  attacker who picks that moment gets a free deletion.
+
+  Per writer, and the record says so by carrying `writerId`. The chain
+  lives beside the log rather than inside it, because `pico_event` is a
+  general log and audit is a subset of it, and because the chain needs
+  its own sequence - Lamport orders across replicas and says nothing
+  about what this instance wrote.
+
+  Original gate text:
+- **J2 - Anchored checkpoints (implemented):** each writer's head is
+  checkpointed into the anchor ADR 0110 R6 built and ADR 0120 extended.
+  Forward-only: a lower position is refused, and the same position with
+  a different head is refused as two histories claiming one place rather
+  than resolved in favour of either. The checkpoint is written after the
+  row, so the anchor never claims a head the database lacks - the
+  reverse would make an honest log look rolled back.
+
+  Counter-proven exactly as the gate asks: a database rolled back past a
+  record the anchor saw is reported `rolled_back`, and the chain itself
+  is internally consistent in that case - an attacker who rolls back
+  wholesale leaves no broken link, so only the anchor disagrees. Deleting
+  a middle row instead is caught by the position and predecessor check,
+  because the survivors still link to each other. Nothing is repaired:
+  the anchor keeps the head it saw.
+
+  Original gate text:
 - **J3 - Signed checkpoints without new approvals (binds J2):**
   checkpoints signed under an exclusive ADR 0100 label with no
   per-checkpoint approval, justified by attestation creating no

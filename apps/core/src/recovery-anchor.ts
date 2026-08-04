@@ -109,6 +109,20 @@ export interface PicoHomeRecoveryAnchorDocument {
   seededAt: string | null;
   sequence: number;
   entries: PicoHomeRecoveryAnchorEntry[];
+  /**
+   * ADR 0121 J2. One checkpoint per writer: the head of that writer's audit
+   * chain, forward-only. Rewriting history in the database is cheap;
+   * rewriting it so this excluded file still agrees means writing to the one
+   * location the supported restore path does not carry.
+   */
+  auditCheckpoints?: PicoHomeAuditCheckpoint[];
+}
+
+export interface PicoHomeAuditCheckpoint {
+  writerId: string;
+  chainPosition: number;
+  headDigestHex: string;
+  updatedAt: string;
 }
 
 export type PicoHomeRecoveryAnchorRecordInput =
@@ -145,6 +159,18 @@ export interface PicoHomeRecoveryAnchor {
    * empty in this sense, or a quiet Home would fail closed after nine days.
    */
   isEmpty(): boolean;
+  /**
+   * ADR 0121 J2. Records a chain head. Forward-only: a lower position for a
+   * writer is refused, so a rolled-back log cannot walk its checkpoint back.
+   * The anchor keeps its invariant - it can refuse to confirm a head, and it
+   * can never make one valid.
+   */
+  recordAuditCheckpoint(input: {
+    writerId: string;
+    chainPosition: number;
+    headDigestHex: string;
+  }): void;
+  auditCheckpoint(writerId: string): PicoHomeAuditCheckpoint | undefined;
   /**
    * ADR 0120 N2/N3. The durable floor, including monotonic progress made since
    * this process opened the anchor. `null` while the anchor has never taken
@@ -358,6 +384,56 @@ export function openPicoHomeRecoveryAnchor(
       });
     },
     isEmpty: () => document.seededAt === null && document.entries.length === 0,
+    recordAuditCheckpoint: (input) => {
+      if (!asciiTokenPattern.test(input.writerId)) {
+        throw new Error('invalid_audit_checkpoint_writer');
+      }
+      if (!Number.isSafeInteger(input.chainPosition) || input.chainPosition < 1) {
+        throw new Error('invalid_audit_checkpoint_position');
+      }
+      if (!hexPattern.test(input.headDigestHex)) {
+        throw new Error('invalid_audit_checkpoint_digest');
+      }
+      const existing = (document.auditCheckpoints ?? []).find(
+        (candidate) => candidate.writerId === input.writerId,
+      );
+      if (existing !== undefined) {
+        if (input.chainPosition < existing.chainPosition) {
+          // Forward-only. A rolled-back log asking to walk its own checkpoint
+          // back is precisely the case this refuses.
+          throw new Error('audit_checkpoint_not_forward');
+        }
+        if (input.chainPosition === existing.chainPosition) {
+          if (input.headDigestHex !== existing.headDigestHex) {
+            // Same position, different head: two histories claiming one place
+            // in the sequence. Reported by refusing, never repaired.
+            throw new Error('audit_checkpoint_head_conflict');
+          }
+          return;
+        }
+      }
+      persist({
+        ...document,
+        seededAt: document.seededAt ?? now().toISOString(),
+        auditCheckpoints: [
+          ...(document.auditCheckpoints ?? []).filter(
+            (candidate) => candidate.writerId !== input.writerId,
+          ),
+          {
+            writerId: input.writerId,
+            chainPosition: input.chainPosition,
+            headDigestHex: input.headDigestHex,
+            updatedAt: now().toISOString(),
+          },
+        ],
+      });
+    },
+    auditCheckpoint: (writerId) => {
+      const found = (document.auditCheckpoints ?? []).find(
+        (candidate) => candidate.writerId === writerId,
+      );
+      return found === undefined ? undefined : { ...found };
+    },
     highWaterInstant: () => {
       const floorMs = currentFloorMs();
       return floorMs === null ? null : new Date(floorMs).toISOString();
@@ -506,10 +582,32 @@ function readAnchorDocument(anchorPath: string): PicoHomeRecoveryAnchorDocument 
     // every objection window this anchor exists to hold shut.
     throw new Error('unreadable_recovery_anchor');
   }
+  const auditCheckpoints = document.auditCheckpoints ?? [];
+  if (!Array.isArray(auditCheckpoints)) {
+    throw new Error('unreadable_recovery_anchor');
+  }
+  const seenWriters = new Set<string>();
+  for (const checkpoint of auditCheckpoints) {
+    if (typeof checkpoint !== 'object' || checkpoint === null
+      || !asciiTokenPattern.test(String(checkpoint.writerId))
+      || !Number.isSafeInteger(checkpoint.chainPosition)
+      || checkpoint.chainPosition < 1
+      || !hexPattern.test(String(checkpoint.headDigestHex))
+      || typeof checkpoint.updatedAt !== 'string') {
+      throw new Error('unreadable_recovery_anchor');
+    }
+    if (seenWriters.has(checkpoint.writerId)) {
+      // Two checkpoints for one writer is two histories; there is no rule for
+      // picking between them, so this fails closed rather than choosing.
+      throw new Error('duplicate_audit_checkpoint');
+    }
+    seenWriters.add(checkpoint.writerId);
+  }
   return {
     ...document,
     seededAt: document.seededAt ?? null,
     highWaterAt: document.highWaterAt ?? null,
+    auditCheckpoints,
   };
 }
 

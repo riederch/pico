@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import type {
+  FoundationEventType,
   PayloadPosture,
   PicoEvent,
   PicoEventAppendResult,
@@ -31,6 +32,8 @@ import type {
 import {
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
+  isPicoHomeAuditEventType,
+  picoHomeAuditRecordDigestHex,
 } from '@pico/protocol';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
@@ -565,6 +568,12 @@ export interface EventStoreOpenOptions {
   memoryCrypto?: MemoryContentCrypto;
   /** ADR 0110 R6; defaults to the filesystem anchor beside the database. */
   recoveryAnchor?: PicoHomeRecoveryAnchor;
+  /**
+   * ADR 0121 J1. The hash the audit chain is built with. Absent leaves the
+   * chain unwritten, which is a coverage gap the read surface reports rather
+   * than a silent claim of integrity.
+   */
+  auditSodium?: PicoAuditSodium;
 }
 
 interface EventStoreConstructorOptions {
@@ -579,18 +588,46 @@ interface EventStoreConstructorOptions {
    * what the anchor exists to refuse.
    */
   recoveryAnchor?: PicoHomeRecoveryAnchor;
+  /** ADR 0121 J1. See {@link EventStoreOpenOptions.auditSodium}. */
+  auditSodium?: PicoAuditSodium;
+}
+
+/** ADR 0121 J2/J4. What one writer's chain actually covers. */
+export interface PicoAuditWriterVerification {
+  writerId: string;
+  recordCount: number;
+  /** Present when a link failed; the range from here on is not covered. */
+  brokenAtPosition?: number;
+  /** Present when the anchor holds a checkpoint for this writer. */
+  checkpointedPosition?: number;
+  status: 'verified' | 'broken' | 'rolled_back' | 'unanchored';
+}
+
+export interface PicoAuditChainVerification {
+  writers: PicoAuditWriterVerification[];
+  /** False when no hash was supplied, so nothing was chained at all. */
+  chained: boolean;
+}
+
+/** ADR 0121 J1. Just the hash the canonical digest needs, nothing else. */
+export interface PicoAuditSodium {
+  crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array;
 }
 
 export class EventStore {
   private readonly db: Database.Database;
   private readonly memoryCrypto?: MemoryContentCrypto;
   private readonly recoveryAnchor?: PicoHomeRecoveryAnchor;
+  private readonly auditSodium?: PicoAuditSodium;
   private closed = false;
 
   public static async open(databasePath: string, options: EventStoreOpenOptions = {}): Promise<EventStore> {
     const store = new EventStore(databasePath, {
       runMigrations: false,
       memoryCrypto: options.memoryCrypto,
+      ...(options.auditSodium === undefined
+        ? {}
+        : { auditSodium: options.auditSodium }),
       recoveryAnchor: options.recoveryAnchor
         ?? openPicoHomeRecoveryAnchor(
           defaultPicoHomeRecoveryAnchorPath(databasePath),
@@ -629,6 +666,7 @@ export class EventStore {
     this.db.pragma('journal_mode = WAL');
     this.memoryCrypto = options.memoryCrypto;
     this.recoveryAnchor = options.recoveryAnchor;
+    this.auditSodium = options.auditSodium;
 
     if (options.runMigrations !== false) {
       runMigrations(this.db, {
@@ -667,22 +705,86 @@ export class EventStore {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    statement.run(
-      event.eventId,
-      event.deviceId,
-      event.sessionId ?? null,
-      event.lamport,
-      event.wallTime,
-      event.type,
-      event.stream,
-      payloadJson,
-      event.signature ?? null,
-      event.payloadPosture ?? null,
-      event.origin ?? null,
-      new Date().toISOString(),
-    );
+    // ADR 0121 J1. The row and its link commit together. A chain that could
+    // be written a moment later would have a window in which the record exists
+    // unlinked, and an attacker who can pick that moment gets a free deletion.
+    const insert = this.db.transaction((): void => {
+      statement.run(
+        event.eventId,
+        event.deviceId,
+        event.sessionId ?? null,
+        event.lamport,
+        event.wallTime,
+        event.type,
+        event.stream,
+        payloadJson,
+        event.signature ?? null,
+        event.payloadPosture ?? null,
+        event.origin ?? null,
+        new Date().toISOString(),
+      );
+      this.chainAuditRecord(event);
+    });
+    insert();
 
     return 'inserted';
+  }
+
+  /**
+   * ADR 0121 J1. Links one audit record to its predecessor in this writer's
+   * sequence. The writer is the event's own device: each instance attests only
+   * "this is the sequence I wrote", because ADR 0014's log is designed to
+   * become replicated and a global chain would assert a single writer.
+   */
+  private chainAuditRecord(event: PicoEvent): void {
+    if (this.auditSodium === undefined || !isPicoHomeAuditEventType(event.type)) {
+      return;
+    }
+    const head = this.db
+      .prepare(`
+        SELECT chain_position AS chainPosition, digest_hex AS digestHex
+        FROM pico_audit_record
+        WHERE writer_id = ?
+        ORDER BY chain_position DESC
+        LIMIT 1
+      `)
+      .get(event.deviceId) as
+      { chainPosition: number; digestHex: string } | undefined;
+
+    const chainPosition = (head?.chainPosition ?? 0) + 1;
+    const previousDigestHex = head?.digestHex ?? null;
+    const digestHex = picoHomeAuditRecordDigestHex(this.auditSodium, {
+      writerId: event.deviceId,
+      chainPosition,
+      eventId: event.eventId,
+      eventType: event.type as FoundationEventType,
+      occurredAt: event.wallTime,
+      previousDigestHex,
+    });
+    this.db
+      .prepare(`
+        INSERT INTO pico_audit_record (
+          event_id, writer_id, chain_position,
+          previous_digest_hex, digest_hex, recorded_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        event.eventId,
+        event.deviceId,
+        chainPosition,
+        previousDigestHex,
+        digestHex,
+        new Date().toISOString(),
+      );
+
+    // ADR 0121 J2. The head goes where a restore cannot reach. Recorded after
+    // the row so the anchor never claims a head the database does not have;
+    // the reverse would make an honest log look rolled back.
+    this.recoveryAnchor?.recordAuditCheckpoint({
+      writerId: event.deviceId,
+      chainPosition,
+      headDigestHex: digestHex,
+    });
   }
 
   public list(limit = 100): PicoEvent[] {
@@ -5753,6 +5855,119 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db, this.memoryCrypto);
+  }
+
+  /**
+   * ADR 0121 J2/J4. Re-proves every link and compares each writer's head with
+   * the anchor's checkpoint, in the ADR 0115 U2 posture: report loudly, never
+   * drop, repair or hide the affected range.
+   *
+   * A checkpoint the anchor has never seen is the detection this gate exists
+   * for. Rewriting history in the database is cheap; rewriting it so the
+   * excluded anchor still agrees means writing to the one location the
+   * supported restore path does not carry.
+   *
+   * Coverage is reported rather than assumed: a writer with no checkpoint is
+   * `unanchored`, not `verified`, because "nobody checked" must never render
+   * as a green mark.
+   */
+  public verifyPicoAuditChain(): PicoAuditChainVerification {
+    this.ensureOpen();
+    const writers = (this.db
+      .prepare('SELECT DISTINCT writer_id AS writerId FROM pico_audit_record ORDER BY writer_id')
+      .all() as { writerId: string }[]).map((row) => row.writerId);
+
+    const results: PicoAuditWriterVerification[] = [];
+    for (const writerId of writers) {
+      const rows = this.db
+        .prepare(`
+          SELECT r.chain_position AS chainPosition,
+                 r.previous_digest_hex AS previousDigestHex,
+                 r.digest_hex AS digestHex,
+                 r.event_id AS eventId,
+                 e.type AS eventType,
+                 e.wall_time AS occurredAt
+          FROM pico_audit_record r
+          JOIN pico_event e ON e.event_id = r.event_id
+          WHERE r.writer_id = ?
+          ORDER BY r.chain_position
+        `)
+        .all(writerId) as {
+          chainPosition: number;
+          previousDigestHex: string | null;
+          digestHex: string;
+          eventId: string;
+          eventType: string;
+          occurredAt: string;
+        }[];
+
+      let status: PicoAuditWriterVerification['status'] = 'verified';
+      let brokenAtPosition: number | undefined;
+      let expectedPosition = 1;
+      let previousDigestHex: string | null = null;
+
+      for (const row of rows) {
+        if (row.chainPosition !== expectedPosition
+          || row.previousDigestHex !== previousDigestHex) {
+          // A gap is a deletion: the surviving rows still link to each other,
+          // which is exactly why position and predecessor are both checked.
+          status = 'broken';
+          brokenAtPosition = row.chainPosition;
+          break;
+        }
+        if (this.auditSodium !== undefined) {
+          const recomputed = picoHomeAuditRecordDigestHex(this.auditSodium, {
+            writerId,
+            chainPosition: row.chainPosition,
+            eventId: row.eventId,
+            eventType: row.eventType as FoundationEventType,
+            occurredAt: row.occurredAt,
+            previousDigestHex: row.previousDigestHex,
+          });
+          if (recomputed !== row.digestHex) {
+            status = 'broken';
+            brokenAtPosition = row.chainPosition;
+            break;
+          }
+        }
+        previousDigestHex = row.digestHex;
+        expectedPosition += 1;
+      }
+
+      const head = rows.at(-1);
+      const checkpoint = this.recoveryAnchor?.auditCheckpoint(writerId);
+      if (status === 'verified') {
+        if (checkpoint === undefined) {
+          status = 'unanchored';
+        } else if (head === undefined
+          || checkpoint.chainPosition > head.chainPosition
+          || (checkpoint.chainPosition === head.chainPosition
+            && checkpoint.headDigestHex !== head.digestHex)) {
+          // The anchor holds a head this log does not: the database was rolled
+          // back past a record the anchor already saw. Reported, never
+          // repaired - the anchor can refuse to confirm a head and can never
+          // make one valid.
+          status = 'rolled_back';
+        }
+      }
+
+      results.push({
+        writerId,
+        recordCount: rows.length,
+        ...(brokenAtPosition === undefined ? {} : { brokenAtPosition }),
+        ...(checkpoint === undefined
+          ? {}
+          : { checkpointedPosition: checkpoint.chainPosition }),
+        status,
+      });
+    }
+
+    return {
+      writers: results,
+      // Absent hashing means nothing was chained; saying "verified" about an
+      // empty chain would be the green mark this gate forbids.
+      chained: this.auditSodium !== undefined,
+    };
   }
 
   /** ADR 0120 N2. The durable floor, or `null` when no anchor is available. */

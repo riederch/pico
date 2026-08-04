@@ -2522,6 +2522,116 @@ export function picoHomeDeviceLifecycleEvidenceDigestHex(
   ));
 }
 
+/**
+ * ADR 0121 J1. The canonical bytes an audit record's digest is taken over.
+ *
+ * The chain is **per writer**, and the record says so by carrying `writerId`:
+ * ADR 0014's log is designed to become replicated, and a global chain would
+ * quietly assert the single writer the architecture never promised. Each
+ * instance attests only "this is the sequence I wrote"; ordering across
+ * replicas stays Lamport's job.
+ *
+ * Content-free by construction - there is no payload element here, only the
+ * facts that identify the record and its place in the sequence. ADR 0011's
+ * abuse-resistance section is the reason: a detailed trail of a person's life
+ * is a surveillance asset, and an audit that needs protecting as strongly as
+ * the data it describes has multiplied the problem it was meant to bound.
+ *
+ * What this buys is stated exactly in ADR 0121: on its own a chain catches
+ * corruption, partial restores and naive edits. It does not stop an attacker
+ * who recomputes every digest, which is why J2 anchors the head.
+ */
+export const picoHomeAuditRecordCanonicalLabel = 'pico.home.audit-record.v1' as const;
+
+export interface PicoHomeAuditRecordDigestInput {
+  /** The instance that wrote this record, and whose sequence it belongs to. */
+  writerId: string;
+  /** 1-based position in that writer's sequence. */
+  chainPosition: number;
+  eventId: string;
+  eventType: FoundationEventType;
+  occurredAt: string;
+  /** The predecessor's digest, or null at the first record of a sequence. */
+  previousDigestHex: string | null;
+}
+
+export function buildPicoHomeAuditRecordDigestInput(
+  input: PicoHomeAuditRecordDigestInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'writerId',
+    'chainPosition',
+    'eventId',
+    'eventType',
+    'occurredAt',
+    'previousDigestHex',
+  ]);
+  if (!Number.isSafeInteger(input.chainPosition) || input.chainPosition < 1) {
+    throw new Error('invalid_audit_chain_position');
+  }
+  if (!auditWriterPattern.test(input.writerId)) {
+    throw new Error('invalid_audit_writer');
+  }
+  if (!auditWriterPattern.test(input.eventId)) {
+    throw new Error('invalid_audit_event_id');
+  }
+  if (!(foundationEventTypes as readonly string[]).includes(input.eventType)) {
+    throw new Error('invalid_audit_event_type');
+  }
+  assertInstant(input.occurredAt);
+  if (input.previousDigestHex !== null
+    && !/^[0-9a-f]{64}$/.test(input.previousDigestHex)) {
+    throw new Error('invalid_audit_previous_digest');
+  }
+  return concatCanonicalElements([
+    asciiBytes(picoHomeAuditRecordCanonicalLabel),
+    asciiBytes(input.writerId),
+    // Fixed width so position 2 and position 20 cannot produce the same bytes
+    // under any padding a future writer might choose.
+    asciiBytes(`seq:${String(input.chainPosition).padStart(16, '0')}`),
+    asciiBytes(input.eventId),
+    asciiBytes(input.eventType),
+    asciiBytes(input.occurredAt),
+    // The genesis record commits to *being* genesis rather than to an absent
+    // element, so a later record cannot be replayed as the first one.
+    input.previousDigestHex === null
+      ? asciiBytes('genesis')
+      : fixedHexBytes(input.previousDigestHex, 32, 'invalid_audit_previous_digest'),
+  ]);
+}
+
+export function picoHomeAuditRecordDigestHex(
+  sodium: { crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array },
+  input: PicoHomeAuditRecordDigestInput,
+): string {
+  return bytesToHex(sodium.crypto_generichash(
+    32,
+    buildPicoHomeAuditRecordDigestInput(input),
+    null,
+  ));
+}
+
+const auditWriterPattern = /^[A-Za-z0-9._:/+-]{1,256}$/;
+
+/**
+ * ADR 0121. Which Foundation events are audit records: every `auth.*` and
+ * `home.*` type, which are content-free by design and are the ones that record
+ * an authority decision.
+ *
+ * Derived from the vocabulary by prefix rather than listed separately, so a
+ * new `home.*` type joins the chain by existing instead of by someone
+ * remembering a second list. A test pins the derivation.
+ */
+export const picoHomeAuditEventTypes = foundationEventTypes.filter(
+  (type) => type.startsWith('auth.') || type.startsWith('home.'),
+);
+
+export function isPicoHomeAuditEventType(
+  type: string,
+): type is FoundationEventType {
+  return (picoHomeAuditEventTypes as readonly string[]).includes(type);
+}
+
 export function buildPicoHomeDeviceLifecycleSubmissionDigestInput(
   submission: PicoHomeDeviceLifecycleSubmission,
 ): Uint8Array {

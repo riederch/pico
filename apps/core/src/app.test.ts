@@ -90,6 +90,7 @@ import {
   picoIdentityRootRotationMigrationId,
   picoEventOriginMigrationId,
   picoMemoryItemOriginMigrationId,
+  picoAuditRecordMigrationId,
   picoHomeHostContinuityMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
@@ -387,6 +388,7 @@ describe('Pico Home Core app', () => {
           { id: picoHomeHostContinuityMigrationId, appliedAt: expect.any(String) },
           { id: picoEventOriginMigrationId, appliedAt: expect.any(String) },
           { id: picoMemoryItemOriginMigrationId, appliedAt: expect.any(String) },
+          { id: picoAuditRecordMigrationId, appliedAt: expect.any(String) },
         ],
       },
     });
