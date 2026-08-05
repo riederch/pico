@@ -4,7 +4,7 @@
 
 Accepted as a pre-implementation availability and safety posture; the
 initiative and its scope were chosen by the user on 2026-08-01.
-Q1 and Q2 are implemented in the store; Q3, Q4 and Q5 are open. The
+Q1, Q2 and Q3 are implemented; Q4 and Q5 are open. The
 existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
@@ -236,10 +236,35 @@ mechanism.
   eviction, tombstone, shred, retention sweep and veto complete in
   `reserved`, each counter-proven so that removing its reservation
   fails exactly one test.
-- **Q3 - No durable write without authorization (binds the Link intake
-  port publication):** an unauthorized request produces no row, event,
-  audit record or on-disk counter; proven by asserting store and log
-  are byte-identical across a refused-request burst.
+- **Q3 - No durable write without authorization (proven on both
+  listeners):** proven where the gate points. The Foundation surface is
+  bursted with a wrong bearer token across events, memory, home, auth
+  and realtime writes; the published Link intake port is bursted on its
+  own listener, which carries no credential at all because
+  authorization there is the sealed envelope and nothing else. Both
+  assert the store and log are byte-identical afterwards, over
+  `pico.sqlite` and `-wal` - `-shm` is excluded as shared-memory
+  coordination a reader touches, and this gate is about what survives a
+  restart.
+
+  Two things keep the proof honest. First, each burst ends by making
+  one *authorized* write and asserting the digest moves: byte-identity
+  otherwise proves only that the database is never written at all.
+  Second, the Link burst pins its own depth. Refusals there happen at
+  four ranges - the listener edge before Fastify routing, the body
+  limit, the envelope shape check, and the seal-open - and only the
+  last spends a private key. So the deep payload is asserted to come
+  back `sealed_request_unreadable` rather than `invalid_envelope`,
+  because a payload that quietly regressed to a shape refusal would
+  leave the expensive path unproven while the test still passed.
+
+  Refusal counters live in memory, where `LoginThrottle` already keeps
+  them. The accepted cost is that failed attempts are not forensically
+  reconstructable, which ADR 0076 already chose; the gain is that log
+  flooding is closed by construction rather than by tuning. Original
+  gate text: an unauthorized request produces no row, event, audit
+  record or on-disk counter; proven by asserting store and log are
+  byte-identical across a refused-request burst.
 - **Q4 - Relationship-keyed quotas and concurrency caps (binds the Link
   intake port publication, with ADR 0031):** per-relationship send
   budgets with the tightest tier unauthenticated, content-free
