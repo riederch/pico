@@ -433,7 +433,40 @@ function renderCoreSummary(container: HTMLElement, status: SystemStatus | null):
     { key: 'Device ID', value: status.deviceId, monospace: true },
     { key: 'Capabilities', value: enabledCapabilityNames(status), monospace: true },
     { key: 'Pico Home Claim', value: status.picoHome.claimState.state, monospace: true },
+    { key: 'Storage', value: storageSummary(status.storage), monospace: true },
   ]);
+}
+
+/**
+ * ADR 0119 Q5. The named state, and for anything other than `normal` the
+ * reasons and the action that clears each one. A refusal the person meets with
+ * no warning is the outcome this gate exists to prevent, so the condition is
+ * shown while there is still room to act rather than only at the moment a write
+ * is declined.
+ *
+ * The core names the remedy as a class; the words are chosen here, because
+ * phrasing belongs to whichever surface is speaking to the person.
+ */
+export function storageSummary(storage: SystemStatus['storage']): string {
+  if (storage.reasons.length === 0) {
+    return storage.state;
+  }
+
+  const remedyText: Record<string, string> = {
+    free_disk_space: 'free disk space',
+    reduce_stored_data: 'export, migrate or shred to reduce stored data',
+  };
+
+  const reasons = storage.reasons.map((reason) => {
+    const remedy = remedyText[reason.remedy] ?? reason.remedy;
+    if (reason.cause === 'store_ceiling') {
+      return `${reason.store ?? 'store'} at ceiling `
+        + `(${String(reason.rows ?? 0)}/${String(reason.ceilingRows ?? 0)} rows) - ${remedy}`;
+    }
+    return `low disk - ${remedy}`;
+  });
+
+  return `${storage.state}: ${reasons.join('; ')}`;
 }
 
 function renderDatabaseSummary(container: HTMLElement, status: SystemStatus | null): void {

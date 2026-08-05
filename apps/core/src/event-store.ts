@@ -30,12 +30,14 @@ import type {
   PicoShareEnvelopeRecord,
 } from '@pico/protocol';
 import {
-  evaluatePicoStoragePressure,
+  evaluatePicoStorageCondition,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
   isPicoHomeAuditEventType,
   mayAppendUnderPicoStoragePressure,
   picoHomeAuditRecordDigestHex,
+  type PicoDurableStore,
+  type PicoStorageCondition,
   type PicoStoragePressureState,
 } from '@pico/protocol';
 import {
@@ -74,6 +76,7 @@ import {
   type AppliedMigration,
   type MigrationDefinition,
 } from './migrations.js';
+import { PicoStoreRowCounter } from './store-row-counter.js';
 import { MemoryStore } from './memory-store.js';
 import { RetentionPolicyStore } from './retention-policy-store.js';
 import { OperatorStore, type PasswordHashingSodium } from './operator-store.js';
@@ -585,6 +588,8 @@ export interface EventStoreOpenOptions {
   availableBytes?: () => number;
   /** ADR 0119 Q1. Deployment property; defaults to the conservative floor. */
   storageReserveBytes?: number;
+  /** ADR 0119 Q5. Per-store row ceilings; defaults are the conservative ones. */
+  storeCeilingRows?: Partial<Record<PicoDurableStore, number>>;
 }
 
 interface EventStoreConstructorOptions {
@@ -605,6 +610,8 @@ interface EventStoreConstructorOptions {
   availableBytes?: () => number;
   /** ADR 0119 Q1. See {@link EventStoreOpenOptions.storageReserveBytes}. */
   storageReserveBytes?: number;
+  /** ADR 0119 Q5. See {@link EventStoreOpenOptions.storeCeilingRows}. */
+  storeCeilingRows?: Partial<Record<PicoDurableStore, number>>;
 }
 
 /** ADR 0121 J2/J4. What one writer's chain actually covers. */
@@ -636,6 +643,7 @@ export class EventStore {
   private readonly auditSodium?: PicoAuditSodium;
   private readonly availableBytes?: () => number;
   private readonly storageReserveBytes?: number;
+  private readonly rowCounter: PicoStoreRowCounter;
   private closed = false;
 
   public static async open(databasePath: string, options: EventStoreOpenOptions = {}): Promise<EventStore> {
@@ -651,6 +659,9 @@ export class EventStore {
       ...(options.storageReserveBytes === undefined
         ? {}
         : { storageReserveBytes: options.storageReserveBytes }),
+      ...(options.storeCeilingRows === undefined
+        ? {}
+        : { storeCeilingRows: options.storeCeilingRows }),
       recoveryAnchor: options.recoveryAnchor
         ?? openPicoHomeRecoveryAnchor(
           defaultPicoHomeRecoveryAnchorPath(databasePath),
@@ -692,6 +703,7 @@ export class EventStore {
     this.auditSodium = options.auditSodium;
     this.availableBytes = options.availableBytes;
     this.storageReserveBytes = options.storageReserveBytes;
+    this.rowCounter = new PicoStoreRowCounter(this.db, options.storeCeilingRows ?? {});
 
     if (options.runMigrations !== false) {
       runMigrations(this.db, {
@@ -763,6 +775,10 @@ export class EventStore {
     });
     insert();
 
+    // ADR 0119 Q5. Counted after the transaction commits, so a rolled-back
+    // insert never inflates the ceiling.
+    this.rowCounter.recordInsert('event_log');
+
     return 'inserted';
   }
 
@@ -802,7 +818,7 @@ export class EventStore {
         INSERT INTO pico_audit_record (
           event_id, writer_id, chain_position,
           previous_digest_hex, digest_hex, recorded_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+             ) VALUES (?, ?, ?, ?, ?, ?)
       `)
       .run(
         event.eventId,
@@ -812,6 +828,8 @@ export class EventStore {
         digestHex,
         new Date().toISOString(),
       );
+    // ADR 0119 Q5.
+    this.rowCounter.recordInsert('audit_record');
 
     // ADR 0121 J2. The head goes where a restore cannot reach. Recorded after
     // the row so the anchor never claims a head the database does not have;
@@ -5475,6 +5493,11 @@ export class EventStore {
         params.record.createdAt,
       ).changes === 1;
 
+    // ADR 0119 Q5. Only a row that actually landed is counted.
+    if (inserted) {
+      this.rowCounter.recordInsert('share_envelope');
+    }
+
     return { ok: true, inserted, envelope: candidate };
   }
 
@@ -5890,7 +5913,7 @@ export class EventStore {
   // read domain_encrypted items.
   public memory(): MemoryStore {
     this.ensureOpen();
-    return new MemoryStore(this.db, this.memoryCrypto);
+    return new MemoryStore(this.db, this.memoryCrypto, this.rowCounter);
   }
 
   /**
@@ -6012,15 +6035,36 @@ export class EventStore {
    * against deployments rather than against those.
    */
   public storagePressure(): PicoStoragePressureState {
-    if (this.availableBytes === undefined) {
-      return 'normal';
-    }
-    return evaluatePicoStoragePressure({
-      availableBytes: this.availableBytes(),
+    return this.storageCondition().state;
+  }
+
+  /**
+   * ADR 0119 Q1/Q5. Disk and per-store ceilings together, with every applicable
+   * reason and the class of action that clears it.
+   *
+   * A reached ceiling is re-counted before it is believed. Insert counts drift
+   * upward between resyncs by design (see {@link PicoStoreRowCounter}), so
+   * without this a person who shredded a domain to make room would stay refused
+   * on a number that is no longer true. Doing it here means the recount happens
+   * only where it can change the answer.
+   */
+  public storageCondition(): PicoStorageCondition {
+    const evaluate = (): PicoStorageCondition => evaluatePicoStorageCondition({
+      ...(this.availableBytes === undefined
+        ? {}
+        : { availableBytes: this.availableBytes() }),
       ...(this.storageReserveBytes === undefined
         ? {}
         : { reserveBytes: this.storageReserveBytes }),
+      ceilings: this.rowCounter.ceilings(),
     });
+
+    const condition = evaluate();
+    if (!condition.reasons.some((reason) => reason.cause === 'store_ceiling')) {
+      return condition;
+    }
+    this.rowCounter.resync();
+    return evaluate();
   }
 
   /** ADR 0120 N2. The durable floor, or `null` when no anchor is available. */
@@ -6097,7 +6141,7 @@ export class EventStore {
       .prepare("SELECT payload_json FROM pico_event WHERE type = 'memory.tombstone'")
       .all() as { payload_json: string }[];
 
-    const memory = new MemoryStore(this.db);
+    const memory = new MemoryStore(this.db, undefined, this.rowCounter);
     let enforced = 0;
 
     for (const row of rows) {

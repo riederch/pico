@@ -4,7 +4,9 @@
 
 Accepted as a pre-implementation availability and safety posture; the
 initiative and its scope were chosen by the user on 2026-08-01.
-Q1 through Q4 are implemented; Q5 is open. The
+Q1 through Q4 are implemented. Q5 is implemented in the store and the
+Foundation UI; the companion rendering it also binds waits on ADR 0118
+O4, which is open. The
 existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
@@ -330,10 +332,62 @@ mechanism.
   Original gate text: per-relationship send budgets with the tightest
   tier unauthenticated, content-free refusals, plus global in-flight
   and connection caps on both listeners.
-- **Q5 - Durable ceilings and visible pressure (binds companion UX,
-  with ADR 0118 O4):** per-store ceilings, the `reserved` condition
-  surfaced to the person as a named state with the action that clears
-  it, and no silent trimming of the append-only log.
+- **Q5 - Durable ceilings and visible pressure (store and Foundation
+  UI implemented; the companion surface stays with ADR 0118 O4):**
+  `evaluatePicoStorageCondition` folds disk and per-store ceilings into
+  one condition, and `/api/system/status` carries it.
+
+  Four stores carry a ceiling: the event log, memory items, audit
+  records and the share-envelope inbox. That is the ADR's own list
+  minus one - "projection archives" names something this tree does not
+  yet have a store for, so it is left uncovered rather than mapped onto
+  the nearest table to make the list look complete. The pending inbox
+  is held far tighter than the rest, because it is the only one of the
+  four an outside sender can grow.
+
+  Reaching a ceiling is `reserved`, never `exhausted`. The two share a
+  refusal but not a situation: a ceiling means the person has stored a
+  lot, while the filesystem still has room, so the protective paths can
+  certainly commit - which is exactly what `reserved` asserts and
+  `exhausted` denies.
+
+  **No silent trimming**, counter-proven: at the ceiling an append is
+  refused and the log is unchanged, with the refused event absent. ADR
+  0014 made the log append-only for reasons resource pressure does not
+  overturn, and an expiry that quietly forgets signed evidence is a
+  worse failure than a refusal.
+
+  Counting is maintained rather than measured per call, because
+  measuring is not affordable: on this tree's SQLite build a bare
+  `COUNT(*)` costs about 8 ms at a million rows and 50 ms at five
+  million, so checking a ceiling on every append would cost more than
+  the append. Inserts are counted - each of the four tables has exactly
+  one insert site - and deletions are not, because they have many. The
+  drift is therefore one-directional: the cached count can only run
+  high, and a high count refuses a write that could have been allowed,
+  never the reverse. A resync runs whenever a ceiling looks reached, so
+  the correction lands exactly where it changes an answer and a person
+  who shredded a domain to make room is unblocked by their next
+  attempt. Counts seed from the tables at open, so a restart does not
+  forgive a full store.
+
+  The condition is a named state with every reason that applies and the
+  class of action that clears each one - not just the most severe,
+  because a person who frees disk space while a store is also at its
+  ceiling would otherwise fix one condition and meet the next with no
+  warning. The remedy is a named class rather than a sentence: the core
+  says which action applies, and the words belong to whichever surface
+  is speaking to the person. The Foundation UI renders it today.
+
+  **What is not done.** The gate also binds companion UX, and the
+  companion does not render this. That surface is where ADR 0118 O4
+  puts `no_network` and `no_model`, storage pressure was meant to join
+  them there as a third stated condition, and O4 is still open - so
+  claiming the whole gate on the strength of the Foundation UI would be
+  claiming a surface that has not been built. Original gate text:
+  per-store ceilings, the `reserved` condition surfaced to the person
+  as a named state with the action that clears it, and no silent
+  trimming of the append-only log.
 
 ## Threat ledger
 

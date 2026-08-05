@@ -1559,6 +1559,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         maxLamport: store.maxLamport(),
         migrations: store.appliedMigrations(),
       },
+      // ADR 0119 Q5. Read per call, like the pressure it reports: a condition
+      // cached at boot would tell the person about a disk that was full an hour
+      // ago, or stay silent about one that filled since.
+      storage: store.storageCondition(),
     };
   }
 

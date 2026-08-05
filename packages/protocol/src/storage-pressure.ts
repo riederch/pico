@@ -101,6 +101,145 @@ export function mayAppendUnderPicoStoragePressure(input: {
   return isPicoProtectiveEventType(input.eventType);
 }
 
+/**
+ * ADR 0119 Q5 - durable growth is a decided quantity rather than an emergent
+ * one.
+ *
+ * Reaching a ceiling is the same `reserved` condition as low disk: creating
+ * writes refused, protective paths alive, person informed. It is deliberately
+ * never `exhausted` - the disk still has room, so a tombstone can certainly
+ * commit, and the two conditions should not be conflated just because they
+ * share a refusal.
+ *
+ * The append-only log gets no expiry here. ADR 0014 made it append-only for
+ * reasons resource pressure does not overturn, and an expiry that quietly
+ * forgets signed evidence is a worse failure than a refusal. A ceiling
+ * *refuses*; it never trims. What it forces is the conversation the person
+ * should be having - export, migrate, shred a domain, or provision more space.
+ */
+export const picoDurableStores = [
+  'event_log',
+  'memory_item',
+  'audit_record',
+  'share_envelope',
+] as const;
+
+export type PicoDurableStore = typeof picoDurableStores[number];
+
+/**
+ * Conservative for a personal appliance, and stated rather than guessed: at a
+ * thousand events a day the event ceiling is roughly thirteen years, the audit
+ * ceiling tracks it because authority-bearing events chain one record each, and
+ * a million memory items is past any one person's lifetime of notes.
+ *
+ * The pending inbox is held far tighter than the rest. It is the only one of
+ * these an outside sender can grow, so it is the only one where the ceiling is
+ * sized against a peer rather than against the person.
+ */
+export const defaultPicoStoreCeilingRows: Record<PicoDurableStore, number> = {
+  event_log: 5_000_000,
+  memory_item: 1_000_000,
+  audit_record: 5_000_000,
+  share_envelope: 100_000,
+};
+
+export interface PicoStoreCeiling {
+  store: PicoDurableStore;
+  rows: number;
+  ceilingRows: number;
+}
+
+export const picoStoragePressureCauses = ['low_disk', 'store_ceiling'] as const;
+export type PicoStoragePressureCause = typeof picoStoragePressureCauses[number];
+
+/**
+ * The action that clears the condition, as a named class rather than a
+ * sentence. The core states which remedy applies; the words belong to whichever
+ * surface is speaking to the person, so this does not hard-code one product's
+ * phrasing into the protocol.
+ */
+export const picoStoragePressureRemedies = [
+  'free_disk_space',
+  'reduce_stored_data',
+] as const;
+export type PicoStoragePressureRemedy = typeof picoStoragePressureRemedies[number];
+
+export interface PicoStoragePressureReason {
+  cause: PicoStoragePressureCause;
+  remedy: PicoStoragePressureRemedy;
+  /** Present only for `store_ceiling`. */
+  store?: PicoDurableStore;
+  rows?: number;
+  ceilingRows?: number;
+}
+
+export interface PicoStorageCondition {
+  state: PicoStoragePressureState;
+  /**
+   * Every reason that currently applies, not just the most severe. A person
+   * who frees disk space while a store is also at its ceiling would otherwise
+   * fix one condition and meet the next one with no warning.
+   */
+  reasons: PicoStoragePressureReason[];
+}
+
+export function hasPicoStoreReachedCeiling(ceiling: PicoStoreCeiling): boolean {
+  if (!Number.isFinite(ceiling.ceilingRows) || ceiling.ceilingRows <= 0) {
+    throw new Error(`invalid_pico_store_ceiling:${ceiling.store}`);
+  }
+  return ceiling.rows >= ceiling.ceilingRows;
+}
+
+/**
+ * The whole condition: disk and ceilings together, with the most severe state
+ * winning and every applicable reason listed.
+ */
+export function evaluatePicoStorageCondition(input: {
+  availableBytes?: number;
+  reserveBytes?: number;
+  ceilings?: readonly PicoStoreCeiling[];
+}): PicoStorageCondition {
+  const reasons: PicoStoragePressureReason[] = [];
+
+  // A store with no free-space source stays `normal` on that axis, which is the
+  // development posture ADR 0119 scopes itself against - not a claim of room.
+  const diskState: PicoStoragePressureState = input.availableBytes === undefined
+    ? 'normal'
+    : evaluatePicoStoragePressure({
+      availableBytes: input.availableBytes,
+      ...(input.reserveBytes === undefined ? {} : { reserveBytes: input.reserveBytes }),
+    });
+  if (diskState !== 'normal') {
+    reasons.push({ cause: 'low_disk', remedy: 'free_disk_space' });
+  }
+
+  let ceilingReached = false;
+  for (const ceiling of input.ceilings ?? []) {
+    if (!hasPicoStoreReachedCeiling(ceiling)) {
+      continue;
+    }
+    ceilingReached = true;
+    reasons.push({
+      cause: 'store_ceiling',
+      remedy: 'reduce_stored_data',
+      store: ceiling.store,
+      rows: ceiling.rows,
+      ceilingRows: ceiling.ceilingRows,
+    });
+  }
+
+  // `exhausted` can only come from the disk. A ceiling means the person has
+  // stored a lot, not that the filesystem has run out, so the protective paths
+  // still have room to commit - which is exactly what `reserved` means.
+  if (diskState === 'exhausted') {
+    return { state: 'exhausted', reasons };
+  }
+  return {
+    state: diskState === 'reserved' || ceilingReached ? 'reserved' : 'normal',
+    reasons,
+  };
+}
+
 export function assertKnownPicoProtectiveEventTypes(): void {
   for (const type of picoProtectiveEventTypes) {
     if (!(foundationEventTypes as readonly string[]).includes(type)) {

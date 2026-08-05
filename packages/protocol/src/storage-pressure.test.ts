@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   assertKnownPicoProtectiveEventTypes,
   defaultPicoStorageReserveBytes,
+  defaultPicoStoreCeilingRows,
+  evaluatePicoStorageCondition,
   evaluatePicoStoragePressure,
   isPicoProtectiveEventType,
   mayAppendUnderPicoStoragePressure,
+  picoDurableStores,
   picoProtectiveEventTypes,
   picoStoragePressureStates,
 } from './index.js';
@@ -72,6 +75,45 @@ describe('ADR 0119 Q2 protective paths', () => {
     for (const eventType of [...picoProtectiveEventTypes, 'memory.recorded']) {
       expect(mayAppendUnderPicoStoragePressure({ state: 'exhausted', eventType }))
         .toBe(false);
+    }
+  });
+});
+
+describe('ADR 0119 Q5 storage condition', () => {
+  it('lists every reason that applies, not only the most severe', () => {
+    // A person who frees disk space while a store is also at its ceiling would
+    // otherwise fix one condition and meet the next one with no warning.
+    const condition = evaluatePicoStorageCondition({
+      // Nothing left at all, which is what `exhausted` means; a byte still
+      // free is `reserved`.
+      availableBytes: 0,
+      reserveBytes: 1_024,
+      ceilings: [
+        { store: 'event_log', rows: 10, ceilingRows: 10 },
+        { store: 'memory_item', rows: 1, ceilingRows: 1_000 },
+      ],
+    });
+
+    // Disk exhaustion wins the state, but the ceiling is still reported.
+    expect(condition.state).toBe('exhausted');
+    expect(condition.reasons.map((reason) => reason.cause))
+      .toEqual(['low_disk', 'store_ceiling']);
+  });
+  it('never escalates a ceiling to exhausted', () => {
+    // A ceiling means the person has stored a lot, not that the filesystem has
+    // run out - so the protective paths still have room to commit, which is
+    // exactly what `reserved` means and `exhausted` does not.
+    const condition = evaluatePicoStorageCondition({
+      availableBytes: 1_000_000_000,
+      reserveBytes: 1_024,
+      ceilings: [{ store: 'audit_record', rows: 99, ceilingRows: 10 }],
+    });
+
+    expect(condition.state).toBe('reserved');
+  });
+  it('carries a default for every declared store', () => {
+    for (const store of picoDurableStores) {
+      expect(defaultPicoStoreCeilingRows[store]).toBeGreaterThan(0);
     }
   });
 });

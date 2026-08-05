@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { eventHistoryNoticeLabel, eventTableColumnLabels } from './render.js';
+import { eventHistoryNoticeLabel, eventTableColumnLabels, storageSummary } from './render.js';
 
 describe('dashboard event table', () => {
   it('shows the foundation security warning in the static dashboard shell', () => {
@@ -99,5 +99,49 @@ describe('dashboard event history notice', () => {
   it('shows when the latest event tail omits older stored events', () => {
     expect(eventHistoryNoticeLabel({ loadedCount: 10_000, hasMore: true }, 500))
       .toBe('Showing latest 500 events. Older stored events may be omitted.');
+  });
+});
+
+describe('ADR 0119 Q5 storage condition in the Foundation summary', () => {
+  it('shows the bare state when nothing applies', () => {
+    expect(storageSummary({ state: 'normal', reasons: [] })).toBe('normal');
+  });
+
+  it('names the store, the numbers and the action that clears it', () => {
+    // The gate asks for the condition *and* what to do about it. A state on its
+    // own would tell the person something is wrong and leave them guessing,
+    // which is barely better than meeting the refusal cold.
+    expect(storageSummary({
+      state: 'reserved',
+      reasons: [{
+        cause: 'store_ceiling',
+        remedy: 'reduce_stored_data',
+        store: 'event_log',
+        rows: 5_000_000,
+        ceilingRows: 5_000_000,
+      }],
+    })).toBe(
+      'reserved: event_log at ceiling (5000000/5000000 rows) '
+      + '- export, migrate or shred to reduce stored data',
+    );
+  });
+
+  it('shows every reason, so fixing one does not reveal the next by surprise', () => {
+    expect(storageSummary({
+      state: 'exhausted',
+      reasons: [
+        { cause: 'low_disk', remedy: 'free_disk_space' },
+        {
+          cause: 'store_ceiling',
+          remedy: 'reduce_stored_data',
+          store: 'memory_item',
+          rows: 12,
+          ceilingRows: 10,
+        },
+      ],
+    })).toBe(
+      'exhausted: low disk - free disk space; '
+      + 'memory_item at ceiling (12/10 rows) - export, migrate or shred to reduce stored data',
+    );
   });
 });

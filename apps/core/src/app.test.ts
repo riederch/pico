@@ -391,6 +391,10 @@ describe('Pico Home Core app', () => {
           { id: picoAuditRecordMigrationId, appliedAt: expect.any(String) },
         ],
       },
+      // ADR 0119 Q5. A development host has no free-space source and
+      // an empty store, so nothing applies and the reasons list is empty -
+      // not absent. An absent condition would read as "unknown".
+      storage: { state: 'normal', reasons: [] },
     });
 
     await app.close();

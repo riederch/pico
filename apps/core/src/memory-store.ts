@@ -12,6 +12,7 @@ import type {
   ReferenceTargetResolutionState,
 } from '@pico/protocol';
 import type { KeyEnvelopeRecord, MemoryContentCrypto } from './memory-content-crypto.js';
+import type { PicoStoreRowCounter } from './store-row-counter.js';
 
 /**
  * Deleteable memory store skeleton (ADR 0068).
@@ -119,6 +120,8 @@ export class MemoryStore {
   public constructor(
     private readonly db: Database.Database,
     private readonly crypto?: MemoryContentCrypto,
+    /** ADR 0119 Q5. The single insert site for `memory_item` reports here. */
+    private readonly rowCounter?: PicoStoreRowCounter,
   ) {}
 
   public create(input: MemoryItemInput): MemoryItem {
@@ -197,6 +200,9 @@ export class MemoryStore {
     });
 
     insert();
+    // ADR 0119 Q5. After the transaction, so a rollback never inflates the
+    // ceiling; the throw above means only a real row reaches this line.
+    this.rowCounter?.recordInsert('memory_item');
 
     const created = this.getInDomain(input.memoryItemId, input.privacyDomain);
     if (created === undefined) {

@@ -1,3 +1,4 @@
+import type { PicoStorageCondition } from './storage-pressure.js';
 export const foundationEventTypes = [
   'device.registered',
   'device.seen',
@@ -2152,6 +2153,13 @@ export interface PicoSystemStatusResponse {
     maxLamport: number;
     migrations: PicoAppliedMigration[];
   };
+  /**
+   * ADR 0119 Q5. The storage condition as a named state with every reason that
+   * applies and the class of action that clears each one, so a surface can tell
+   * the person what is wrong and what to do while there is still room to act -
+   * rather than letting a refusal arrive as a mystery.
+   */
+  storage: PicoStorageCondition;
 }
 
 export interface PicoHomeClaimStateResponse {
