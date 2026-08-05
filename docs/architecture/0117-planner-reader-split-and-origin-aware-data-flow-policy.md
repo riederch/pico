@@ -4,9 +4,11 @@
 
 Accepted as a pre-implementation security constraint refining ADR 0116
 W3; the split and its scope were chosen explicitly by the user on
-2026-08-01 within the ADR 0116 security initiative. Nothing is
-implemented. Gates X1-X5 are open and bind the same future milestones
-W3-W5 already bind; where they overlap, this ADR is the stronger rule.
+2026-08-01 within the ADR 0116 security initiative. X1 and X2 are
+implemented in the protocol. X3, X4 and X5 stay open and bind the same
+future milestones W3-W5 already bind - a tool executor, a model
+delegation runtime and a companion surface, none of which exist yet.
+Where they overlap, this ADR is the stronger rule.
 The claim strengthens from ADR 0116's "injected content is contained"
 to "injected content never reaches the acting model" - and stays as
 honest: data poisoning survives every split, and this ADR says so.
@@ -158,15 +160,70 @@ what the approval cryptographically binds.
 
 ## Gates
 
-- **X1 - Role admission rules (binds the companion milestone, with
-  W3):** the planner context admits only `person_present` material,
-  Pico's own policy material, typed values and opaque references; the
-  reader runs with zero tool and key access; single-context assembly
-  stays lawful only where no executor exists.
-- **X2 - Controller value boundary (binds the companion milestone):**
-  declared schemas for every reader output shape, refusal on parse
-  failure, no free-text crossing; references resolve under ADR 0060's
-  rules - materialized, expiring, never expandable.
+- **X1 - Role admission rules (implemented in the protocol):**
+  `assemblePicoPlannerContext` takes policy, the present person, typed
+  values and opaque references - and nothing else.
+
+  **The gate is the absence of a parameter**, not a filter that could be
+  misconfigured and not a delimiter that has to hold. A caller holding a
+  stranger's mail has nowhere to put it, and the refusal happens at the
+  call site rather than at review time. That is what moves the claim
+  from W3's "injected content is contained" to "injected content never
+  reaches the acting model": W3's delimiter bet stops being load-bearing
+  for a Pico that can act, because the bytes are not there to be obeyed.
+
+  `picoReaderCapabilities` gives the reader `toolAccess: false` and
+  `keyAccess: false` as a type whose fields can only be `false`. A
+  boolean that *could* be true invites a call site to set it; a type
+  that cannot express the permission cannot leak it by configuration.
+
+  `mayPicoUseSingleContextAssembly` returns false as soon as an executor
+  exists, which is the rule stated as code rather than as prose.
+
+  Values are re-parsed at the planner boundary rather than trusted from
+  the call site - a value that only type-checked somewhere earlier has
+  not crossed a boundary. Removing either that re-parse or the strict
+  key check fails exactly the test that names it.
+
+  Original gate text: the planner context admits only `person_present`
+  material, Pico's own policy material, typed values and opaque
+  references; the reader runs with zero tool and key access;
+  single-context assembly stays lawful only where no executor exists.
+- **X2 - Controller value boundary (implemented in the protocol):**
+  `parsePicoReaderOutput` declares six value shapes and refuses
+  anything else - a wrong type, an undeclared extra field, a name that
+  is not a canonical token, a duplicate name. It refuses rather than
+  dropping the field it could not parse, because continuing with the
+  parts that happened to fit is how an undeclared shape becomes an
+  accepted one; "last one wins" on a duplicate is a decision no declared
+  schema made.
+
+  A reader value can never carry `person_present`, and that refusal has
+  its own error so it is never confused with a shape failure. It is the
+  laundering step the whole split exists to break: a read of a
+  stranger's mail must not re-enter as the person's own instruction.
+
+  References carry a handle and an expiry and nothing else. A reference
+  that never expires is a standing grant, and this one is handed to a
+  model; expansion stays a separate authorized act under ADR 0060 and
+  never happens during assembly.
+
+  **On "no free-text crossing", the reading matters and is written down
+  here rather than left to inference.** A `text` shape exists, because a
+  summary has to be able to come back. Read literally the gate would
+  forbid it; this ADR's own threat ledger answers the question by
+  listing "prose smuggled through a string-typed value" as a *residual*
+  with stated width, not as a violation. So the rule is implemented as
+  "no *undeclared* free text crosses": every string arrives named,
+  typed and origin-carrying, and lands in the planner as data under W3's
+  quoting discipline, never as instruction. What X2 buys is not that
+  strings became safe - it is that there is no path on which raw content
+  arrives undeclared. The residual is that the planner still reads the
+  sentence; it is simply never told to obey it.
+
+  Original gate text: declared schemas for every reader output shape,
+  refusal on parse failure, no free-text crossing; references resolve
+  under ADR 0060's rules - materialized, expiring, never expandable.
 - **X3 - Data-flow origin on action arguments (binds the first tool
   executor, with W4):** controller-computed derivation labels on every
   argument in the canonical action request; Pico Rules consumes them;
