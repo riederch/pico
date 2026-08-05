@@ -33,7 +33,15 @@ export interface PicoCompanionPresentationPort {
 
 export type PicoCompanionShellNotifications = PicoCompanionNotificationAdapter
   & PicoCompanionHostContinuityNotifications
-  & PicoCompanionRecoveryNotifications;
+  & PicoCompanionRecoveryNotifications
+  & {
+    /**
+     * ADR 0118 O4. Network reachability is a local device fact the shell
+     * observes, not something the carrier reads from the Home - so it enters
+     * here rather than through the carrier's notification contract.
+     */
+    reportNetworkState(online: boolean): Promise<void>;
+  };
 
 export function createPicoCompanionPresentationAdapter(
   port: PicoCompanionPresentationPort,
@@ -49,6 +57,29 @@ export function createPicoCompanionPresentationAdapter(
    */
   let conditions: readonly PicoCompanionCondition[] = [];
   let lastPublished: PicoCompanionPresentationInput | null = null;
+
+  /**
+   * The facts observed so far, kept rather than the conditions derived from
+   * them. Each reporter knows one fact, and conditions have to *compose*: a
+   * storage report that replaced the whole list would silently drop a standing
+   * `no_network`, and the person would watch one absence erase another.
+   *
+   * An unset field states nothing, which is not the same as stating that all
+   * is well - nobody looked yet.
+   */
+  const observed: Parameters<typeof picoCompanionConditionsFor>[0] = {};
+
+  const observe = async (
+    fact: Parameters<typeof picoCompanionConditionsFor>[0],
+  ): Promise<void> => {
+    Object.assign(observed, fact);
+    const next = picoCompanionConditionsFor(observed);
+    if (sameConditions(conditions, next)) {
+      return;
+    }
+    conditions = next;
+    await publish(lastPublished ?? picoCompanionIdlePresentation(now()), false);
+  };
 
   const publish = async (
     // The input shape, because this parses before it publishes: requiring the
@@ -73,12 +104,11 @@ export function createPicoCompanionPresentationAdapter(
      * notification would be told to them late - or, on a quiet Home, never.
      */
     reportStorageCondition: async (view) => {
-      const next = picoCompanionConditionsFor({ storage: view.state });
-      if (sameConditions(conditions, next)) {
-        return;
-      }
-      conditions = next;
-      await publish(lastPublished ?? picoCompanionIdlePresentation(now()), false);
+      await observe({ storage: view.state });
+    },
+    /** ADR 0118 O4. The shell's own observation, composed with the rest. */
+    reportNetworkState: async (online) => {
+      await observe({ online });
     },
     notifyPendingRecovery: async (alarm: PicoCompanionPendingRecoveryAlarm) => {
       const rendered = renderPicoCompanionPendingRecoveryAlarm(alarm);

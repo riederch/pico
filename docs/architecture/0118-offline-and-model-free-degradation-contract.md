@@ -274,7 +274,8 @@ into a changed world, is not the thing that was approved.
   additive records in the ADR 0069 idiom, idempotent, origin-labeled
   under ADR 0116 W2 and typed under ADR 0117 X2, over the existing ADR
   0112 hook; never an edit of the captured record.
-- **O4 - Two states (implemented, except the producer):** `picoAbsenceStates` splits ADR 0009's
+- **O4 - Two states (implemented for `no_network`; `no_model` waits on a
+  model):** `picoAbsenceStates` splits ADR 0009's
   single "offline or degraded" into `no_network` and `no_model`, and
   `PicoDegradationState` carries them as a list so both, either or
   neither can hold - a shape that cannot collapse them back into one.
@@ -307,14 +308,40 @@ into a changed world, is not the thing that was approved.
   and a test binds the two, which is what stops the copy from becoming a
   second source of truth.
 
-  **What is not done: no producer is wired.** The surface exists and is
-  proven; nothing fills it yet. The sources differ in how far away they
-  are, and saying so matters more than a single "open": network has one
-  (`net.isOnline()`, already polled by the regain monitor), storage has
-  one that the companion cannot yet reach (the core states it on
-  `/api/system/status`, and the companion has no read path to it), and
-  `no_model` has none at all because there is no model provider. So O4's
-  display is done and O4's *observation* is not.
+Both producers now run. Storage rides the ADR 0112 carrier; network
+  comes from the shell's own `net.isOnline()` reading.
+
+  The regain monitor had only ever answered a different question. It
+  fires on false -> true because that is the ADR 0112 network-regain
+  hook, and an edge is the right shape for *re-checking*. A displayed
+  state is not an edge: a companion that started offline would have said
+  nothing until the network returned, which is exactly the moment the
+  person no longer needs telling. So it now also reports the reading it
+  starts with, and every transition in both directions, while the regain
+  hook stays precisely as it was.
+
+  Network is reported by the shell rather than read from the Home,
+  because reachability is a local device fact. It therefore enters
+  through the adapter and not through the carrier's notification
+  contract, which is about what the Home said.
+
+  **Absences compose rather than replace.** The adapter keeps the facts
+  it has observed and derives the condition list from all of them, so a
+  storage report cannot silently drop a standing `no_network` - the
+  person would otherwise watch one absence erase another. An unobserved
+  fact still states nothing, which is not the same as stating that all
+  is well.
+
+  One ordering trap is handled explicitly: the network monitor starts
+  before the service core, so its first reading has nowhere to go. It is
+  kept and replayed once the adapter exists, or "offline since boot"
+  would be the single state that never gets stated - the case this
+  display is most needed for.
+
+  What is not done: `no_model` has no source at all, because there is no
+  model provider. The state, its display and its remedy wording are in
+  place and unused, and will stay that way until something can observe a
+  model's absence.
 
   Original gate text: `no_network` and `no_model` distinct and
   independently displayed; floor operations never rendered as blocked.

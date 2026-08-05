@@ -46,6 +46,7 @@ import { startPicoCompanionNetworkRegainMonitor } from './network-monitor.js';
 import {
   createPicoCompanionPresentationAdapter,
   type PicoCompanionPresentationPort,
+  type PicoCompanionShellNotifications,
 } from './presentation-adapter.js';
 import {
   defaultPicoVaultDaemonSocketPath,
@@ -83,6 +84,15 @@ let presentation: PicoCompanionPresentation = parsePicoCompanionPresentation({
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let runtime: PicoCompanionShellRuntime | null = null;
+/**
+ * ADR 0118 O4. The network monitor starts before the service core does, so its
+ * first reading arrives with nowhere to go. Keeping it here lets the core
+ * replay it once the adapter exists - otherwise "offline since boot" would be
+ * the one state that never gets stated, which is the case the display is most
+ * needed for.
+ */
+let shellNotifications: PicoCompanionShellNotifications | null = null;
+let lastNetworkState: boolean | null = null;
 let quitting = false;
 let productOperationActive = false;
 let pendingApprovalDecision: ((approved: boolean) => void) | null = null;
@@ -161,6 +171,13 @@ async function start(): Promise<void> {
     onRegain: async () => {
       await runtime?.checkNow();
     },
+    // ADR 0118 O4. The state, not just the edge: a companion that started
+    // offline has to say so, and the regain hook only ever fires on the way
+    // back - by which point the person no longer needs telling.
+    onState: async (online) => {
+      lastNetworkState = online;
+      await shellNotifications?.reportNetworkState(online);
+    },
   });
   app.once('will-quit', () => {
     networkMonitor.stop();
@@ -179,6 +196,10 @@ async function startServiceCore(): Promise<void> {
   try {
     await sodium.ready;
     const notifications = createPicoCompanionPresentationAdapter(presentationPort);
+    shellNotifications = notifications;
+    if (lastNetworkState !== null) {
+      await notifications.reportNetworkState(lastNetworkState);
+    }
     const profilePath = defaultPicoCompanionProfilePath();
     // Dynamic, like the Platform Keystore adapter beside it: the ADR 0113 C3
     // tray budget is measured on a probe that never reaches this line, and a

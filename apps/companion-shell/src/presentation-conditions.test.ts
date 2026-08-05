@@ -67,3 +67,36 @@ describe('ADR 0118 O4 conditions ride every presentation', () => {
     expect(presented.at(-1)?.conditions).toEqual([]);
   });
 });
+
+describe('ADR 0118 O4 absences compose instead of replacing', () => {
+  it('keeps a standing network condition when storage reports', async () => {
+    // A reporter that replaced the whole list would let one absence erase
+    // another, and the person would watch a real problem disappear.
+    const { notifications, presented } = adapter();
+
+    await notifications.reportNetworkState(false);
+    await notifications.reportStorageCondition?.({ state: 'reserved', causes: ['low_disk'] });
+
+    expect(presented.at(-1)?.conditions.map((condition) => condition.kind))
+      .toEqual(['no_network', 'storage_reserved']);
+  });
+
+  it('clears one without clearing the other', async () => {
+    const { notifications, presented } = adapter();
+
+    await notifications.reportNetworkState(false);
+    await notifications.reportStorageCondition?.({ state: 'exhausted', causes: ['low_disk'] });
+    await notifications.reportNetworkState(true);
+
+    expect(presented.at(-1)?.conditions.map((condition) => condition.kind))
+      .toEqual(['storage_exhausted']);
+  });
+
+  it('says nothing about a fact nobody has reported', async () => {
+    // Unset is not "all is well": nobody looked yet.
+    const { notifications, presented } = adapter();
+
+    await notifications.reportNetworkState(true);
+    expect(presented).toHaveLength(0);
+  });
+});
