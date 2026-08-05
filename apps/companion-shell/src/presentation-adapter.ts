@@ -21,6 +21,7 @@ import {
   parsePicoCompanionPresentation,
   picoCompanionIdlePresentation,
   type PicoCompanionPresentation,
+  type PicoCompanionPresentationInput,
 } from './contract.js';
 
 export interface PicoCompanionPresentationPort {
@@ -39,7 +40,10 @@ export function createPicoCompanionPresentationAdapter(
   let currentKind: PicoCompanionPresentation['kind'] = 'starting';
 
   const publish = async (
-    state: PicoCompanionPresentation,
+    // The input shape, because this parses before it publishes: requiring the
+    // parsed shape here would make every builder restate an empty condition
+    // list it has nothing to say about.
+    state: PicoCompanionPresentationInput,
     notify: boolean,
   ): Promise<void> => {
     const parsed = parsePicoCompanionPresentation(state);

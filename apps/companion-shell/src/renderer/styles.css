@@ -102,3 +102,43 @@ button:disabled { opacity: .55; cursor: wait; }
 @media (prefers-reduced-motion: no-preference) {
   button { transition: background-color var(--pico-motion-fast) var(--pico-ease); }
 }
+
+/*
+ * ADR 0118 O4, ADR 0119 Q5. Conditions sit below the body as their own rows,
+ * because they are independent of the state above them and of each other.
+ * The assurance line is deliberately not styled as a warning: it is the part
+ * that says the floor still works.
+ */
+.conditions {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.conditions li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.35rem 0.5rem;
+  border-left: 2px solid var(--pico-border-strong);
+  background: var(--pico-surface-2);
+  border-radius: 0 4px 4px 0;
+}
+
+.condition-label {
+  font-weight: 600;
+  color: var(--pico-text-primary);
+}
+
+.condition-remedy {
+  color: var(--pico-text-secondary);
+}
+
+.floor-assurance {
+  margin: 0.5rem 0 0;
+  color: var(--pico-text-secondary);
+}

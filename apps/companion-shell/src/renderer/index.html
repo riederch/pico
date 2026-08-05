@@ -18,6 +18,14 @@
       <div>
         <h2 id="title">Pico is starting</h2>
         <p id="body">Connecting to this device's Pico service core.</p>
+        <!--
+          ADR 0118 O4, ADR 0119 Q5. Conditions live beside the state, not
+          inside it: several may hold at once, and none of them stops the
+          floor. The assurance line is rendered from the floor family list
+          rather than written here, so it cannot drift from what is enforced.
+        -->
+        <ul id="conditions" class="conditions" hidden></ul>
+        <p id="floor-assurance" class="floor-assurance" hidden></p>
       </div>
     </section>
     <p id="scope" class="scope" hidden>

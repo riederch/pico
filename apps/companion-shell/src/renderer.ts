@@ -1,5 +1,7 @@
 import {
   parsePicoCompanionPresentation,
+  picoCompanionFloorAssurance,
+  type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
 
@@ -29,6 +31,8 @@ const symbol = requireElement('symbol');
 const title = requireElement('title');
 const body = requireElement('body');
 const scope = requireElement('scope');
+const conditions = requireElement('conditions');
+const floorAssurance = requireElement('floor-assurance');
 const check = requireButton('check');
 const veto = requireButton('veto');
 const recoveryCard = requireButton('recovery-card');
@@ -47,6 +51,7 @@ function render(value: unknown): void {
   symbol.textContent = state.symbol;
   title.textContent = state.title;
   body.textContent = state.body;
+  renderConditions(state);
   scope.hidden = state.kind !== 'pending_recovery';
   veto.hidden = state.decision !== 'veto_recovery';
   recoveryCard.hidden = state.kind !== 'idle'
@@ -61,6 +66,51 @@ function render(value: unknown): void {
     || state.kind === 'first_run'
     || state.kind === 'starting';
 }
+
+/**
+ * ADR 0118 O4 and ADR 0119 Q5. Each condition gets its own row, because they
+ * are independently true and different decisions follow from each: "I cannot
+ * send this" is not "I cannot have this summarised" and neither is "I am
+ * running out of room".
+ *
+ * The assurance line is not optional decoration. O4's load-bearing half is
+ * that no absence renders a floor operation as blocked - an avatar reporting
+ * itself broken while capture still works teaches the person that Pico is
+ * unreliable offline, which is the opposite of what the contract buys. So
+ * whenever a condition is shown, what still works is shown with it.
+ *
+ * `textContent` throughout: a remedy is text, and this is the surface where
+ * untrusted content would otherwise become markup.
+ */
+function renderConditions(state: PicoCompanionPresentation): void {
+  conditions.replaceChildren();
+  const present = state.conditions.length > 0;
+  conditions.hidden = !present;
+  floorAssurance.hidden = !present;
+  if (!present) {
+    return;
+  }
+  for (const condition of state.conditions) {
+    const row = document.createElement('li');
+    row.dataset.condition = condition.kind;
+    const label = document.createElement('span');
+    label.className = 'condition-label';
+    label.textContent = conditionLabels[condition.kind];
+    const remedy = document.createElement('span');
+    remedy.className = 'condition-remedy';
+    remedy.textContent = condition.remedy;
+    row.append(label, remedy);
+    conditions.append(row);
+  }
+  floorAssurance.textContent = picoCompanionFloorAssurance();
+}
+
+const conditionLabels: Record<PicoCompanionCondition['kind'], string> = {
+  no_network: 'No network',
+  no_model: 'No model',
+  storage_reserved: 'Storage is running low',
+  storage_exhausted: 'Storage is full',
+};
 
 async function beginFirstRun(source: 'camera' | 'typed'): Promise<void> {
   scanCamera.disabled = true;

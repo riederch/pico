@@ -274,8 +274,7 @@ into a changed world, is not the thing that was approved.
   additive records in the ADR 0069 idiom, idempotent, origin-labeled
   under ADR 0116 W2 and typed under ADR 0117 X2, over the existing ADR
   0112 hook; never an edit of the captured record.
-- **O4 - Two states (vocabulary and invariant implemented; the display
-  still binds companion UX):** `picoAbsenceStates` splits ADR 0009's
+- **O4 - Two states (implemented, except the producer):** `picoAbsenceStates` splits ADR 0009's
   single "offline or degraded" into `no_network` and `no_model`, and
   `PicoDegradationState` carries them as a list so both, either or
   neither can hold - a shape that cannot collapse them back into one.
@@ -286,12 +285,36 @@ into a changed world, is not the thing that was approved.
   family list rather than a lookup with a default, so a family added
   later gets the safe answer without anyone remembering to return here.
 
-  What is not done, and it is the larger half: **nothing computes these
-  states.** No model provider exists, and network reachability is not
-  tracked anywhere, so there is no source to display from and no
-  companion surface to display on. ADR 0119 Q5's storage condition was
-  meant to join these two as a third stated condition on that surface,
-  and that debt stays open with it.
+  The companion now displays them. `PicoCompanionPresentation` carries
+  `conditions` beside `kind` rather than folded into it, because the two
+  answer different questions: `kind` is what Pico is doing, a condition
+  is what is currently absent, and several conditions can hold while
+  `kind` is perfectly ordinary. ADR 0119 Q5's storage condition joins
+  `no_network` and `no_model` there as the third and fourth kinds, which
+  is where that debt is paid.
+
+  The list refuses two rows of the same kind, and refuses `reserved`
+  together with `exhausted` - Q5's storage states are a ladder, not a
+  set, and showing both would leave the person to work out which is
+  true. It is always present on a parsed presentation, never absent, so
+  a consumer never has to tell "no conditions" from "conditions not
+  stated".
+
+  The floor assurance is rendered from the floor family list rather than
+  written by hand, so it cannot drift from what `offline-floor.json`
+  enforces. Because the renderer loads plain ES modules with no bundler,
+  the contract cannot import the protocol and declares the list itself -
+  and a test binds the two, which is what stops the copy from becoming a
+  second source of truth.
+
+  **What is not done: no producer is wired.** The surface exists and is
+  proven; nothing fills it yet. The sources differ in how far away they
+  are, and saying so matters more than a single "open": network has one
+  (`net.isOnline()`, already polled by the regain monitor), storage has
+  one that the companion cannot yet reach (the core states it on
+  `/api/system/status`, and the companion has no read path to it), and
+  `no_model` has none at all because there is no model provider. So O4's
+  display is done and O4's *observation* is not.
 
   Original gate text: `no_network` and `no_model` distinct and
   independently displayed; floor operations never rendered as blocked.

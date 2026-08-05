@@ -17,6 +17,9 @@ describe('companion renderer presentation contract', () => {
       title: 'Pico is watching your Home',
       body: 'No pending device recovery was found on the last authenticated check.',
       observedAt: '2026-08-02T12:00:00.000Z',
+      // ADR 0118 O4. Always present, never absent: a consumer must not have to
+      // tell "no conditions" from "conditions not stated".
+      conditions: [],
     });
     expect(Object.isFrozen(state)).toBe(true);
   });
