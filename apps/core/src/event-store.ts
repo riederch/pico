@@ -31,6 +31,7 @@ import type {
 } from '@pico/protocol';
 import {
   evaluatePicoStorageCondition,
+  parsePicoTimeBoundEntry,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
   isPicoHomeAuditEventType,
@@ -39,6 +40,7 @@ import {
   type PicoDurableStore,
   type PicoStorageCondition,
   type PicoStoragePressureState,
+  type PicoTimeBoundEntry,
 } from '@pico/protocol';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
@@ -5914,6 +5916,91 @@ export class EventStore {
   public memory(): MemoryStore {
     this.ensureOpen();
     return new MemoryStore(this.db, this.memoryCrypto, this.rowCounter);
+  }
+
+  /**
+   * ADR 0118 O1. Attaches the instant the person meant to an existing memory
+   * item, which is what turns it into a time-bound entry.
+   *
+   * Separate from creation on purpose: the item is the person's content and
+   * already went through the memory path with its domain, retention and
+   * shredding. This adds the one field the floor family is about, so a reminder
+   * cannot end up outside the protections every other item has.
+   */
+  public setPicoTimeBoundEntryDue(input: {
+    memoryItemId: string;
+    dueAt: string;
+  }): boolean {
+    this.ensureOpen();
+    return this.db
+      .prepare(`
+        UPDATE memory_item
+        SET due_at = ?, updated_at = ?
+        WHERE memory_item_id = ? AND deletion_state = 'active'
+      `)
+      .run(input.dueAt, new Date().toISOString(), input.memoryItemId).changes === 1;
+  }
+
+  /**
+   * ADR 0118 O1. Entries still waiting, oldest instant first.
+   *
+   * Deliberately unfiltered by lateness: an instant that passed while the Home
+   * was off is still due. Skipping it would be the silent failure this family
+   * exists to prevent - the person stopped carrying the appointment themselves
+   * the moment they wrote it down.
+   */
+  public picoTimeBoundEntries(limit = 100): PicoTimeBoundEntry[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT memory_item_id AS memoryItemId,
+               content_type AS contentType,
+               due_at AS dueAt,
+               raised_at AS raisedAt
+        FROM memory_item
+        WHERE due_at IS NOT NULL
+          AND raised_at IS NULL
+          AND deletion_state = 'active'
+        ORDER BY due_at ASC
+        LIMIT ?
+      `)
+      .all(limit) as Array<{
+        memoryItemId: string;
+        contentType: string;
+        dueAt: string;
+        raisedAt: string | null;
+      }>;
+    return rows.map((row) => parsePicoTimeBoundEntry({
+      memoryItemId: row.memoryItemId,
+      kind: row.contentType === 'application/vnd.pico.appointment'
+        ? 'appointment'
+        : 'reminder',
+      // The title is the person's content and lives behind the domain's
+      // custody rules; this projection carries the identifier and the instant,
+      // and whoever raises it reads the item through the memory path.
+      title: row.memoryItemId,
+      dueAt: row.dueAt,
+      ...(row.raisedAt === null ? {} : { raisedAt: row.raisedAt }),
+    }));
+  }
+
+  /**
+   * ADR 0118 O1. Marks an entry as having reached the person. Idempotent by
+   * construction: the `raised_at IS NULL` clause means a restart, a double
+   * tick or two schedulers racing raise it exactly once.
+   */
+  public markPicoTimeBoundEntryRaised(input: {
+    memoryItemId: string;
+    raisedAt: string;
+  }): boolean {
+    this.ensureOpen();
+    return this.db
+      .prepare(`
+        UPDATE memory_item
+        SET raised_at = ?, updated_at = ?
+        WHERE memory_item_id = ? AND raised_at IS NULL AND due_at IS NOT NULL
+      `)
+      .run(input.raisedAt, new Date().toISOString(), input.memoryItemId).changes === 1;
   }
 
   /**

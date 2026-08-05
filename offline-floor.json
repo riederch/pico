@@ -9,7 +9,11 @@
       ]
     },
     "time_bound_entry": {
-      "unimplemented": "No appointment or reminder exists in the tree: there is no due-instant field, no scheduling path and no event type for one. ADR 0118 names this a floor family, so the gap is recorded here rather than left to be noticed later, and O1 cannot be claimed complete while it stands."
+      "modules": [
+        "apps/core/src/time-bound-scheduler.ts",
+        "apps/core/src/memory-store.ts",
+        "apps/core/src/event-store.ts"
+      ]
     },
     "local_recall": {
       "modules": [

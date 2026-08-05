@@ -130,6 +130,8 @@ describe('Pico protocol types', () => {
       'message.created',
       'avatar.state_changed',
       'memory.recorded',
+      // ADR 0118 O1: the fifth floor family.
+      'memory.time_bound_entry_recorded',
       'memory.tombstone',
       'memory.domain_shredded',
       'auth.operator_bootstrapped',

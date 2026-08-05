@@ -245,6 +245,8 @@ interface MemoryRecordedRequest {
   owner?: string;
   controller?: string;
   retentionPolicyRef?: string;
+  /** ADR 0118 O1. Present turns this into a time-bound entry. */
+  dueAt?: string;
 }
 
 interface RealtimeSocket {
@@ -3515,6 +3517,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         return sendNoStore(reply.code(400), { error: 'retentionPolicyRef does not match a known retention policy.' });
       }
 
+      // ADR 0118 O1. An optional instant turns this into a time-bound entry.
+      const dueAt = request_.dueAt;
+
       const memoryItemId = `mem_${randomUUID()}`;
       const owner = request_.owner ?? request_.deviceId;
       store.memory().create({
@@ -3531,19 +3536,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         // labeling only the event would leave the retrieved copy unlabeled.
         origin,
       });
+      if (typeof dueAt === 'string') {
+        store.setPicoTimeBoundEntryDue({ memoryItemId, dueAt });
+      }
 
       const recordedPayload: MemoryRecordedPayload = {
         memoryItemId,
         privacyDomain: request_.privacyDomain,
         contentType: request_.contentType,
         ...(request_.summary === undefined ? {} : { summary: request_.summary }),
-      };
+        ...(typeof dueAt === 'string' ? { dueAt } : {}),
+      } as MemoryRecordedPayload;
 
       const recordedEvent = {
         ...factory.create({
           deviceId: request_.deviceId,
           sessionId: request_.sessionId,
-          type: 'memory.recorded',
+          // The event names what was recorded. A commitment with an instant is
+          // a different thing from a note, and a reader should not have to
+          // inspect the payload to find that out.
+          type: typeof dueAt === 'string'
+            ? 'memory.time_bound_entry_recorded'
+            : 'memory.recorded',
           stream: request_.stream,
           payload: recordedPayload,
           remoteLamport: request_.lamport,
@@ -4909,7 +4923,11 @@ function validateIncomingEvent(body: IncomingEventBody | undefined): { ok: true;
 // target. This is a read projection; the stored event is unchanged.
 function resolveReferenceEvents(events: PicoEvent[], memory: MemoryStore): PicoEvent[] {
   return events.map((event) => {
-    if (event.type !== 'memory.recorded') {
+    // ADR 0118 O1. A time-bound entry is a memory item like any other, so it
+    // gets the same read-time resolution; leaving it out would make a reminder
+    // the one reference whose target could vanish unnoticed.
+    if (event.type !== 'memory.recorded'
+      && event.type !== 'memory.time_bound_entry_recorded') {
       return event;
     }
 
@@ -5002,7 +5020,7 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
   }
 
   for (const key of Object.keys(payload)) {
-    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller', 'retentionPolicyRef'].includes(key)) {
+    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller', 'retentionPolicyRef', 'dueAt'].includes(key)) {
       return { ok: false, error: `memory.recorded payload has unexpected field: ${key}.` };
     }
   }
@@ -5031,6 +5049,16 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
     return { ok: false, error: 'memory.recorded retentionPolicyRef must be a non-empty string when provided.' };
   }
 
+  // ADR 0118 O1. Canonical, not merely parseable: two spellings of the same
+  // instant sort apart, and this value decides when something reaches the
+  // person.
+  if (payload.dueAt !== undefined
+    && (typeof payload.dueAt !== 'string'
+      || Number.isNaN(Date.parse(payload.dueAt))
+      || new Date(payload.dueAt).toISOString() !== payload.dueAt)) {
+    return { ok: false, error: 'dueAt must be a canonical ISO-8601 instant when provided.' };
+  }
+
   return {
     ok: true,
     request: {
@@ -5045,6 +5073,7 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
       owner: payload.owner as string | undefined,
       controller: payload.controller as string | undefined,
       retentionPolicyRef: payload.retentionPolicyRef as string | undefined,
+      dueAt: payload.dueAt as string | undefined,
     },
   };
 }

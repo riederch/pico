@@ -6,6 +6,11 @@ export const foundationEventTypes = [
   'message.created',
   'avatar.state_changed',
   'memory.recorded',
+  /**
+   * ADR 0118 O1, the fifth floor family. Recorded with a due instant the
+   * person meant on the wall clock; raising it needs no model and no network.
+   */
+  'memory.time_bound_entry_recorded',
   'memory.tombstone',
   'memory.domain_shredded',
   'auth.operator_bootstrapped',
@@ -4431,6 +4436,7 @@ export * from './model-context.js';
 export * from './time-authority.js';
 export * from './offline-floor.js';
 export * from './planner-reader.js';
+export * from './time-bound-entry.js';
 export * from './storage-pressure.js';
 export * from './appearance.js';
 

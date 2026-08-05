@@ -75,6 +75,8 @@ export const picoMemoryItemOriginMigrationId =
   '0010_memory_item_origin' as const;
 export const picoAuditRecordMigrationId =
   '0011_pico_audit_record' as const;
+export const picoMemoryItemDueAtMigrationId =
+  '0012_memory_item_due_at' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -891,6 +893,31 @@ const migrations: readonly MigrationDefinition[] = [
 
         CREATE INDEX idx_pico_audit_record_writer
         ON pico_audit_record (writer_id, chain_position);
+      `);
+    },
+  },
+  {
+    id: picoMemoryItemDueAtMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0118 O1, the fifth floor family. A time-bound entry is a memory
+        -- item that carries an instant, rather than a store of its own: that
+        -- way it inherits privacy domains, retention and crypto-shredding
+        -- instead of growing a second set that would have to be kept in step.
+        --
+        -- \`due_at\` is the instant the person meant on the wall clock, and
+        -- \`raised_at\` records that it reached them. Both nullable, because
+        -- every existing memory item has neither and is not a time-bound
+        -- entry.
+        ALTER TABLE memory_item ADD COLUMN due_at TEXT NULL;
+        ALTER TABLE memory_item ADD COLUMN raised_at TEXT NULL;
+
+        -- Partial: the scheduler only ever asks for entries that still wait,
+        -- and the overwhelming majority of memory items have no instant at all.
+        CREATE INDEX idx_memory_item_due
+        ON memory_item (due_at)
+        WHERE due_at IS NOT NULL AND raised_at IS NULL AND deletion_state = 'active';
       `);
     },
   },

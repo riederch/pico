@@ -3,10 +3,9 @@
 ## Status
 
 Accepted as a pre-implementation availability contract; the initiative
-and its scope were chosen by the user on 2026-08-01. O1 is enforced for
-four of the five floor families - `time_bound_entry` does not exist in
-the tree at all, so the floor is not yet complete and the gate says so
-in its own output. O2 and O4 have their vocabulary and their invariants
+and its scope were chosen by the user on 2026-08-01. **O1 is complete**:
+all five floor families exist and are mechanically enforced, and the
+gate reports five of five. O2 and O4 have their vocabulary and their invariants
 implemented and tested; both still bind a surface that does not exist -
 the first model integration for O2, and anything that computes network
 or model health for O4. O3 and O5 are untouched, because neither an
@@ -207,8 +206,7 @@ into a changed world, is not the thing that was approved.
 
 ## Gates
 
-- **O1 - The floor is named and mechanically enforced (four of five
-  families):** `offline-floor.json` declares each family's modules and
+- **O1 - The floor is named and mechanically enforced (complete):** `offline-floor.json` declares each family's modules and
   `scripts/check-offline-floor.mjs` resolves their transitive import
   closure, failing on a forbidden reachable import or a forbidden global
   call. It runs in `release:verify` beside the companion boundary check.
@@ -216,14 +214,45 @@ into a changed world, is not the thing that was approved.
   and flagging one would be a false positive whose natural fix is an
   exemption.
 
-  **The floor is not complete, and the check refuses to imply that it
-  is.** `time_bound_entry` - an appointment or reminder with a due
-  instant - does not exist anywhere in the tree: no field, no scheduling
-  path, no event type. Every family named in the protocol must appear in
-  the manifest, one that is unimplemented must carry a written reason,
-  and that reason is printed on success rather than swallowed. So the
-  gate reports "4 of 5 families enforced" and names the gap, instead of
-  passing quietly over an empty set.
+  `time_bound_entry` was the last one missing and now exists. A
+  time-bound entry is a **memory item that carries an instant**, not a
+  store of its own: that way it inherits privacy domains, retention and
+  crypto-shredding instead of growing a second set that would have to be
+  kept in step. `POST /api/events` takes an optional `dueAt` in the
+  payload, and the event is named `memory.time_bound_entry_recorded` -
+  a commitment with an instant is a different thing from a note, and a
+  reader should not have to inspect the payload to find that out.
+
+  **Which clock, and why it is not the one ADR 0120 insists on
+  elsewhere.** N2 refuses to let a wall clock retire an objection
+  window, because a wall clock is a claim and a claim must not consume a
+  veto period. A reminder is the opposite kind of thing: the person said
+  "nine in the morning", and the wall clock is exactly what they meant.
+  Applying the monotonic floor here would delay every reminder on a Home
+  that had been switched off, inverting the intent rather than
+  protecting it. So this is a wall-clock commitment, deliberately, and
+  the residual is stated: a clock wound forward raises reminders early,
+  one wound back delays them. N5 already makes divergence visible, and
+  no reminder decides authority, so the harm stops at a badly timed
+  prompt.
+
+  The scheduler sleeps to the next instant rather than polling, because
+  a poll has to choose between waking constantly and raising late. It
+  caps each sleep and re-checks, so a distant instant becomes several
+  short waits and the comparison that decides anything is always against
+  the clock rather than against the timer. An instant that passed while
+  the Home was off is still due: raising it late is a bad outcome and
+  raising it never is a broken promise, because the person stopped
+  carrying the appointment themselves the moment they wrote it down.
+  Raising is once-only by construction - the `raised_at IS NULL` clause
+  means a restart, a double tick or two schedulers racing raise it
+  exactly once.
+
+  The manifest discipline that reported the gap is unchanged: every
+  family named in the protocol must appear, an unimplemented one must
+  carry a written reason, and that reason prints on success rather than
+  being swallowed. It is what kept "4 of 5" honest, and it is what would
+  report the next gap.
 
   The scanner is probed on every run, because a checker that cannot
   catch a violation is worse than no checker: it converts an unexamined
