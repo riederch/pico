@@ -4,7 +4,7 @@
 
 Accepted as a pre-implementation availability and safety posture; the
 initiative and its scope were chosen by the user on 2026-08-01.
-Q1, Q2 and Q3 are implemented; Q4 and Q5 are open. The
+Q1 through Q4 are implemented; Q5 is open. The
 existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
@@ -165,7 +165,28 @@ which would otherwise turn the quota into a membership oracle.
 
 Both listeners additionally carry a global in-flight and connection
 cap, so aggregate concurrency is bounded even when every individual
-request is well-formed and every quota is respected.
+request is well-formed and every quota is respected. The counters are
+separate per listener rather than shared, so an intake flood cannot
+consume the budget the person's own device is using.
+
+**The residual, named rather than designed away.** A relationship can
+only be known after the seal is opened, and the open is the expensive
+step the stranger budget exists to bound. So the stranger budget is
+charged before Pico can tell a member from anyone else, and a sustained
+flood therefore degrades intake for members too. This is the same shape
+as the login-throttle residual below and is accepted for the same
+reason: the alternatives are worse. Keying the pre-open bound on a
+network property is what this section has just refused; skipping it
+would leave the private-key work unbounded, which is the attack.
+
+What the design does buy is stated exactly. The flood is bounded rather
+than unbounded; a member who does get through is metered separately, so
+one runaway peer cannot spend anyone else's budget; the Foundation
+surface is untouched, so the person's own device keeps working
+throughout; and nothing durable is written by any of it (Q3). What it
+does not buy is guaranteed intake availability for members while a
+flood is in progress, and no wording here should be read as promising
+that.
 
 ### Durable growth has a ceiling and a stated policy
 
@@ -265,11 +286,50 @@ mechanism.
   gate text: an unauthorized request produces no row, event, audit
   record or on-disk counter; proven by asserting store and log are
   byte-identical across a refused-request burst.
-- **Q4 - Relationship-keyed quotas and concurrency caps (binds the Link
-  intake port publication, with ADR 0031):** per-relationship send
-  budgets with the tightest tier unauthenticated, content-free
-  refusals, plus global in-flight and connection caps on both
-  listeners.
+- **Q4 - Relationship-keyed quotas and concurrency caps
+  (implemented):** `PicoRequestQuota` holds two token buckets and
+  `PicoConcurrencyCap` holds one counter per listener.
+
+  The budgets are charged at two different depths, because they answer
+  two different questions. The **stranger** budget is charged at intake
+  before the seal is opened - the seal-open is the first place the Home
+  spends a private key, so a bound behind it would not bound the
+  expensive step at all. It is one shared bucket rather than one per
+  caller: the envelope hides the sender by design, so before the open
+  there is genuinely nothing to key on, and the only other candidate is
+  the network property this ADR has just refused to trust. The
+  **relationship** budget is charged once a signature has proven the
+  sender, and bounds authorized volume so one runaway peer is contained
+  without touching anyone else's. A self-minted identity reaching a
+  pre-authority operation gets no bucket of its own: generating a
+  keypair must not buy a larger budget than raw garbage.
+
+  Refill runs on the monotonic clock (ADR 0120 N1). A budget that
+  refilled on the wall clock would be refilled by moving the wall
+  clock, which would make the whole bound a formality for anyone able
+  to nudge the system time.
+
+  Refusals are content-free and share one `quota_exceeded` reason across
+  both buckets, returned as 429 rather than folded into the generic 400
+  - a well-behaved peer is early, not malformed. There is deliberately
+  no `Retry-After`: it would have to be computed from whichever bucket
+  refused, and the two refill at different rates, so a truthful hint
+  would name the sender's tier and reintroduce the membership oracle
+  the shared reason exists to prevent.
+
+  The in-flight counters are **per listener, not shared**. Both
+  listeners serve the same Fastify application, so one counter would
+  let a stranger on the published intake exhaust the budget the
+  person's own device depends on - publishing the intake would silently
+  degrade the local UI. Intake-forwarded requests are marked with a
+  symbol, not a header, because a header would be forgeable and the
+  caller must not get to choose which budget they spend. Connection
+  caps sit beside them via `maxConnections` on both servers, because a
+  socket that never sends a request is bounded by nothing above.
+
+  Original gate text: per-relationship send budgets with the tightest
+  tier unauthenticated, content-free refusals, plus global in-flight
+  and connection caps on both listeners.
 - **Q5 - Durable ceilings and visible pressure (binds companion UX,
   with ADR 0118 O4):** per-store ceilings, the `reserved` condition
   surfaced to the person as a named state with the action that clears

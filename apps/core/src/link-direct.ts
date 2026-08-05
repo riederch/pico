@@ -13,6 +13,7 @@ import {
 } from '@pico/protocol';
 import { verifyPicoIdentityDetachedSignature, verifyPicoIdentityKeyRecordFingerprint } from '@pico/identity';
 import type { IdentityVerificationSodium } from '@pico/identity';
+import { PicoRequestQuota } from './request-quota.js';
 
 /**
  * ADR 0107 D2: the Foundation's Pico Link Direct intake.
@@ -51,7 +52,13 @@ export type PicoLinkDirectFailure =
   | 'invalid_sender_signature'
   | 'invalid_arguments_digest'
   | 'sender_is_not_authorized'
-  | 'unknown_operation';
+  | 'unknown_operation'
+  /**
+   * ADR 0119 Q4. Deliberately one reason for both budgets: a refusal that
+   * distinguished a known sender from an unknown one would turn the quota into
+   * a membership oracle.
+   */
+  | 'quota_exceeded';
 
 export interface PicoLinkDirectPrincipal {
   picoIdentityFingerprintHex: string;
@@ -109,6 +116,8 @@ export class PicoLinkDirectIntake {
     },
     private readonly authority: PicoLinkDirectAuthority,
     private readonly maxSeenRequests = MAX_PICO_LINK_DIRECT_SEEN_REQUESTS,
+    /** ADR 0119 Q4. Aggregate send budgets, keyed on relationship. */
+    private readonly quota: PicoRequestQuota = new PicoRequestQuota(),
   ) {}
 
   /**
@@ -132,6 +141,17 @@ export class PicoLinkDirectIntake {
     const hostSigningKeyFingerprintHex = this.authority.hostSigningKeyFingerprintHex();
     if (hostSigningKeyFingerprintHex === undefined) {
       return { ok: false, reason: 'wrong_home' };
+    }
+
+    // 0. ADR 0119 Q4, the stranger budget. Charged for every request alike and
+    //    before anything else, because step 2 below is where the Home first
+    //    spends a private key and a bound behind it would not bound that at
+    //    all. One shared bucket, not one per caller: the envelope hides the
+    //    sender by design, so before the seal is opened there is genuinely
+    //    nothing to key on, and the only other candidate is the network
+    //    property ADR 0119 refuses to trust. The residual is named there.
+    if (!this.quota.admitStranger()) {
+      return { ok: false, reason: 'quota_exceeded' };
     }
 
     // 1. Shape and size, before any cryptography: a caller must not be able to
@@ -267,8 +287,26 @@ export class PicoLinkDirectIntake {
       delegationId: request.senderDelegationId,
     };
     const preAuthority = preAuthorityOperations.has(request.operation);
-    if (!preAuthority && !this.authority.isAuthorizedSender(principal, at)) {
+    const related = this.authority.isAuthorizedSender(principal, at);
+    if (!preAuthority && !related) {
       return { ok: false, reason: 'sender_is_not_authorized' };
+    }
+
+    // ADR 0119 Q4, the relationship budget, charged on top of the stranger
+    // charge already spent at step 0. The two answer different questions: that
+    // one bounds the cryptographic work an unknown caller can demand, this one
+    // bounds authorized volume so a single runaway peer is contained without
+    // touching anyone else's budget.
+    //
+    // Only a proven relationship gets its own bucket. A self-minted identity
+    // reaches this line for a pre-authority operation, and it must not be
+    // rewarded with a larger budget than raw garbage for having generated a
+    // keypair - so it stays on the stranger bucket alone.
+    //
+    // The refusal is the same `quota_exceeded` an unauthenticated caller gets,
+    // which is what keeps a quota from becoming a membership oracle.
+    if (related && !this.quota.admitRelationship(principal.picoIdentityFingerprintHex)) {
+      return { ok: false, reason: 'quota_exceeded' };
     }
 
     this.#remember(request.requestId, expiresAtMs);

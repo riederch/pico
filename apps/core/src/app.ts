@@ -111,7 +111,14 @@ import {
 } from '@pico/identity';
 import sodium from 'libsodium-wrappers-sumo';
 import { LamportClock } from '@pico/sync';
+import {
+  defaultPicoFoundationMaxConnections,
+  defaultPicoFoundationMaxInFlight,
+  PicoConcurrencyCap,
+  picoLinkIntakeRequestMark,
+} from './concurrency-cap.js';
 import { EventFactory } from './event-factory.js';
+import { PicoRequestQuota } from './request-quota.js';
 import {
   EventStore,
   type EventCursor,
@@ -501,7 +508,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         sodium,
         at,
       }),
-  });
+  }, undefined, new PicoRequestQuota(config.linkRequestQuota));
   const readerKeySelector = new PicoIdentityReaderKeySelector(
     store,
     sodium,
@@ -1273,6 +1280,31 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     return { kind: 'pico-identity', sessionDigest, principal };
   }
+
+  // ADR 0119 Q4. Registered before the access-class hook so it runs first:
+  // a request refused for concurrency should cost no session lookup and no
+  // credential comparison.
+  const foundationInFlight = new PicoConcurrencyCap(
+    config.foundationMaxInFlight ?? defaultPicoFoundationMaxInFlight,
+  );
+  app.addHook('onRequest', async (request, reply) => {
+    // A request forwarded by the Link intake listener already spent that
+    // listener's budget. Charging it here too would let an intake flood
+    // exhaust the surface the person's own device uses, which is the coupling
+    // the separate counters exist to break.
+    if ((request.raw as { [picoLinkIntakeRequestMark]?: true })[picoLinkIntakeRequestMark]) {
+      return;
+    }
+    if (!foundationInFlight.acquire()) {
+      return reply.code(503).send({ error: 'Busy.' });
+    }
+    // `close` on the raw response rather than `onResponse`: an aborted
+    // connection never reaches `onResponse`, and a counter that only
+    // decrements on success leaks upward to a permanent 503.
+    reply.raw.once('close', () => {
+      foundationInFlight.release();
+    });
+  });
 
   app.addHook('onRequest', async (request, reply) => {
     const routeUrl = request.routeOptions?.url;
@@ -2288,6 +2320,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     });
 
     if (!handled.ok) {
+      // ADR 0119 Q4. A quota refusal is its own status, because folding it into
+      // the generic 400 would tell a well-behaved peer that its envelope was
+      // malformed when in fact it was fine and merely early.
+      //
+      // No `Retry-After`. The header would have to be computed from whichever
+      // bucket refused, and the two buckets refill at different rates - so a
+      // truthful hint would say which tier the sender is in, which is the
+      // membership oracle the single shared reason exists to prevent.
+      if (handled.reason === 'quota_exceeded') {
+        return sendNoStore(reply.code(429), { error: handled.reason });
+      }
       // A pre-authentication refusal carries no signature, because there is no
       // verified reply key to seal one to. It says only that the envelope was
       // not accepted, never why in terms of the Home's state.
@@ -3589,6 +3632,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       sockets.delete(socket);
     });
   });
+
+  // ADR 0119 Q4. Sockets that never send a request are bounded by nothing
+  // above: the in-flight cap only counts requests. Set before `listen`, so it
+  // is in force from the first accepted connection.
+  app.server.maxConnections = config.foundationMaxConnections
+    ?? defaultPicoFoundationMaxConnections;
 
   return app;
 }

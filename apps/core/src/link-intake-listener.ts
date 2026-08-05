@@ -2,6 +2,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import type { FastifyInstance } from 'fastify';
 import type { PicoLinkIntakeBinding } from './config.js';
+import {
+  defaultPicoLinkIntakeMaxConnections,
+  defaultPicoLinkIntakeMaxInFlight,
+  PicoConcurrencyCap,
+  picoLinkIntakeRequestMark,
+} from './concurrency-cap.js';
 
 export const PICO_LINK_INTAKE_PATH = '/api/home/link';
 // ADR 0115 U4, decided by the user on 2026-08-01: the unsealed continuity
@@ -40,6 +46,10 @@ export async function startPicoLinkIntakeListener(
 ): Promise<PicoLinkIntakeListener> {
   await app.ready();
 
+  const inFlight = new PicoConcurrencyCap(
+    binding.maxInFlight ?? defaultPicoLinkIntakeMaxInFlight,
+  );
+
   // The exact-match comparison is load-bearing: a query string makes the URL
   // a different target, so `?anything` is refused as 404 at this edge.
   const allowedMethodByTarget = new Map<string, 'POST' | 'GET'>([
@@ -61,10 +71,35 @@ export async function startPicoLinkIntakeListener(
       return;
     }
 
+    // ADR 0119 Q4. The in-flight cap sits here, above `app.routing`, so a
+    // refused request costs no parsing and no route work. It is this
+    // listener's own counter: sharing the Foundation one would let a stranger
+    // on the published port exhaust the budget the person's own device needs.
+    if (!inFlight.acquire()) {
+      refuse(request, response, 503, 'Busy.');
+      return;
+    }
+    // `close` rather than `finish`: an aborted connection never finishes, and a
+    // counter that only decrements on success leaks to a permanent 503.
+    response.once('close', () => {
+      inFlight.release();
+    });
+
+    // Marked so the Foundation counter does not charge this request a second
+    // time against a budget it is not spending.
+    (request as IncomingMessage & { [picoLinkIntakeRequestMark]?: true })[
+      picoLinkIntakeRequestMark
+    ] = true;
+
     // Even parser/size failures must not be cached by an intermediary.
     response.setHeader('cache-control', 'no-store');
     app.routing(request, response);
   });
+
+  // A connection cap rather than only an in-flight one: sockets that never send
+  // a request are bounded by nothing above, and the header timeout only ends
+  // them after five seconds each.
+  server.maxConnections = binding.maxConnections ?? defaultPicoLinkIntakeMaxConnections;
 
   // The first private-key work happens only after bounded body parsing and
   // envelope-shape checks. Header, slow-request and connection limits keep the
@@ -95,7 +130,7 @@ export async function startPicoLinkIntakeListener(
 function refuse(
   request: IncomingMessage,
   response: ServerResponse,
-  statusCode: 404 | 405,
+  statusCode: 404 | 405 | 503,
   error: string,
 ): void {
   // Do not buffer or route a body for a target this listener does not expose.

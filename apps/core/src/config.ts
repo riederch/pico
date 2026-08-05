@@ -1,6 +1,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DomainReadership } from './domain-readership.js';
+import type { PicoRequestQuotaOptions } from './request-quota.js';
 import type {
   PicoIdentityReaderKeyFreshnessCheckpointSource,
 } from './reader-key-freshness.js';
@@ -35,6 +36,14 @@ export interface CoreConfig {
   foundationToken?: string;
   foundationAccessMode?: FoundationAccessMode;
   /**
+   * ADR 0119 Q4. Aggregate bounds on the Foundation listener, kept separate
+   * from the Link intake's own so neither surface can starve the other.
+   */
+  foundationMaxConnections?: number;
+  foundationMaxInFlight?: number;
+  /** ADR 0119 Q4. Relationship-keyed send budgets for the Link intake. */
+  linkRequestQuota?: PicoRequestQuotaOptions;
+  /**
    * Where the process log goes. Defaults to the standard destination. The
    * operator bootstrap code is surfaced only on this log (ADR 0076), so tests
    * read it the same way an operator does instead of through a back door.
@@ -60,6 +69,9 @@ export interface CoreConfig {
 export interface PicoLinkIntakeBinding {
   host: string;
   port: number;
+  /** ADR 0119 Q4. Deployment properties; conservative defaults apply. */
+  maxConnections?: number;
+  maxInFlight?: number;
 }
 
 type Environment = Record<string, string | undefined>;
