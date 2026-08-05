@@ -1,6 +1,8 @@
 import type { PicoVaultRecoveryCard } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon';
-import { generatePicoRecoveryCardPdfs } from '@pico/vault-daemon';
+// ADR 0118 O1. Narrow subpath rather than the barrel, which re-exports the
+// networked vault CLI; see the note in recovery-controller.ts.
+import { generatePicoRecoveryCardPdfs } from '@pico/vault-daemon/recovery-card-pdf';
 import type { PicoCompanionProfile } from './profile.js';
 
 export type PicoCompanionRecoveryCardPrintForm = 'paper' | 'card_printer';

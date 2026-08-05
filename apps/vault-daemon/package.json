@@ -26,6 +26,14 @@
       "types": "./dist/host-pin-refresh.d.ts",
       "import": "./dist/host-pin-refresh.js"
     },
+    "./recovery-card-pdf": {
+      "types": "./dist/recovery-card-pdf.d.ts",
+      "import": "./dist/recovery-card-pdf.js"
+    },
+    "./device-recovery-ceremony": {
+      "types": "./dist/device-recovery-ceremony.d.ts",
+      "import": "./dist/device-recovery-ceremony.js"
+    },
     "./link-direct-client": {
       "types": "./dist/link-direct-client.d.ts",
       "import": "./dist/link-direct-client.js"

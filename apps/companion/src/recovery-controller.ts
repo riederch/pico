@@ -3,11 +3,16 @@ import type {
   PicoHomeDeviceRecoveryRecord,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
+// ADR 0118 O1. The narrow subpath, not the package barrel. The barrel
+// re-exports the vault CLI, which talks HTTP to the Foundation - so importing
+// it here would put a networked module inside the reachable closure of a floor
+// family that must work with no network at all. Nothing in recovery uses the
+// CLI; the wide import was incidental, and the floor check is what surfaced it.
 import {
   completePicoHomeDeviceRecovery,
   vetoPicoHomeDeviceRecovery,
-  type PicoVaultDaemonClient,
-} from '@pico/vault-daemon';
+} from '@pico/vault-daemon/device-recovery-ceremony';
+import type { PicoVaultDaemonClient } from '@pico/vault-daemon';
 import {
   createPicoLinkDirectClient,
   type PicoLinkDirectClient,

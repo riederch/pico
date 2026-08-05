@@ -1,0 +1,61 @@
+{
+  "$comment": "ADR 0118 O1. The offline floor, declared so it can be checked rather than asserted. Every family in picoOfflineFloorFamilies must appear here; scripts/check-offline-floor.mjs resolves each module's transitive import closure and fails on a forbidden reachable import. A family that is not built yet says so, with a reason, so a partial floor can never read as a complete one.",
+  "families": {
+    "capture": {
+      "modules": [
+        "apps/core/src/memory-store.ts",
+        "apps/core/src/event-store.ts",
+        "apps/core/src/event-factory.ts"
+      ]
+    },
+    "time_bound_entry": {
+      "unimplemented": "No appointment or reminder exists in the tree: there is no due-instant field, no scheduling path and no event type for one. ADR 0118 names this a floor family, so the gap is recorded here rather than left to be noticed later, and O1 cannot be claimed complete while it stands."
+    },
+    "local_recall": {
+      "modules": [
+        "apps/core/src/memory-store.ts",
+        "apps/core/src/event-store.ts"
+      ]
+    },
+    "decide": {
+      "modules": [
+        "apps/companion/src/approval-carrier.ts"
+      ]
+    },
+    "recovery_access": {
+      "modules": [
+        "apps/companion/src/recovery-controller.ts",
+        "apps/companion/src/recovery-state.ts",
+        "apps/companion/src/recovery-card.ts",
+        "apps/core/src/recovery-anchor.ts"
+      ]
+    }
+  },
+  "forbidden": {
+    "$comment": "Outbound reach and model providers. Servers are deliberately absent: a loopback listener is how the person's own device talks to itself, and forbidding it would make the floor unimplementable rather than network-free. What is forbidden is code that reaches out.",
+    "specifiers": [
+      "undici",
+      "axios",
+      "node-fetch",
+      "got",
+      "superagent",
+      "ws",
+      "socket.io-client",
+      "eventsource",
+      "node:dgram",
+      "node:tls",
+      "@pico/model-provider"
+    ],
+    "specifierPrefixes": [
+      "@pico/model-",
+      "@aws-sdk/",
+      "openai",
+      "@anthropic-ai/"
+    ],
+    "globalCalls": [
+      "fetch",
+      "XMLHttpRequest",
+      "EventSource"
+    ]
+  }
+}

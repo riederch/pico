@@ -3,9 +3,14 @@
 ## Status
 
 Accepted as a pre-implementation availability contract; the initiative
-and its scope were chosen by the user on 2026-08-01. Nothing is
-implemented. Gates O1-O5 are open and bind the companion milestone, the
-first model integration and the first Action Runner. The contract is a
+and its scope were chosen by the user on 2026-08-01. O1 is enforced for
+four of the five floor families - `time_bound_entry` does not exist in
+the tree at all, so the floor is not yet complete and the gate says so
+in its own output. O2 and O4 have their vocabulary and their invariants
+implemented and tested; both still bind a surface that does not exist -
+the first model integration for O2, and anything that computes network
+or model health for O4. O3 and O5 are untouched, because neither an
+enrichment path nor an Action Runner exists to hold them. The contract is a
 floor, not a feature set: it states what may never depend on a model or
 a network, and what everything else must do when one of them is
 missing.
@@ -202,23 +207,94 @@ into a changed world, is not the thing that was approved.
 
 ## Gates
 
-- **O1 - The floor is named and mechanically enforced (binds the
-  companion milestone):** the five operation families are implemented
-  with no model and no network dependency on their code paths, checked
-  the way `scripts/check-companion-boundary.mjs` already checks the
-  shell boundary - a sibling check in `release:verify` that fails on a
+- **O1 - The floor is named and mechanically enforced (four of five
+  families):** `offline-floor.json` declares each family's modules and
+  `scripts/check-offline-floor.mjs` resolves their transitive import
+  closure, failing on a forbidden reachable import or a forbidden global
+  call. It runs in `release:verify` beside the companion boundary check.
+  Type-only imports are not walked: they are erased before anything runs,
+  and flagging one would be a false positive whose natural fix is an
+  exemption.
+
+  **The floor is not complete, and the check refuses to imply that it
+  is.** `time_bound_entry` - an appointment or reminder with a due
+  instant - does not exist anywhere in the tree: no field, no scheduling
+  path, no event type. Every family named in the protocol must appear in
+  the manifest, one that is unimplemented must carry a written reason,
+  and that reason is printed on success rather than swallowed. So the
+  gate reports "4 of 5 families enforced" and names the gap, instead of
+  passing quietly over an empty set.
+
+  The scanner is probed on every run, because a checker that cannot
+  catch a violation is worse than no checker: it converts an unexamined
+  risk into a false assurance. Four negative probes (a direct forbidden
+  import, one three modules deep, a global `fetch(`, and one reached
+  through a workspace specifier) must each be caught, and a clean probe
+  - including prose that merely mentions `fetch(` and a forbidden
+  package inside a comment - must not be flagged.
+
+  It found something on its first run. `recovery-controller.ts` and
+  `recovery-card.ts` imported the `@pico/vault-daemon` barrel, which
+  re-exports the vault CLI, which talks HTTP to the Foundation. Nothing
+  in recovery used the CLI - the wide import was incidental - but it put
+  a networked module inside the reachable closure of a floor family that
+  must work with no network at all. Both now import narrow subpaths.
+  That is the gate doing its job before the floor was ever exercised
+  offline.
+
+  Original gate text: the five operation families are implemented with
+  no model and no network dependency on their code paths, checked the
+  way `scripts/check-companion-boundary.mjs` already checks the shell
+  boundary - a sibling check in `release:verify` that fails on a
   forbidden reachable import, proven by negative probes.
-- **O2 - Absence is typed and never routed around (binds the first
-  model integration):** unavailability is a typed outcome, not an empty
+- **O2 - Absence is typed and never routed around (vocabulary and
+  rules implemented; enforcement still binds the first model
+  integration):** `PicoCapabilityOutcome` makes unavailability a typed
+  outcome rather than an empty result, which is the distinction that
+  matters - an empty result is indistinguishable from "nothing matched",
+  which is how a missing dependency becomes a silent wrong answer.
+  `timeout` is one of the named reasons, so a provider that answers too
+  slowly is unavailable rather than slow.
+
+  `mayPicoFailOverBetweenProviders` is false across classes and true
+  only within one, proven over every ordered pair. `mayPicoQueueUntilReachable`
+  queues an already-approved delivery and refuses an approval whatever
+  its flag says, because a path that could not be approved offline must
+  not be treated as approved once the network returns.
+
+  What is not done: nothing consumes these yet. There is no model
+  provider in the tree, so no code path can be shown to honour the
+  no-failover rule under real pressure. The rules are stated and tested
+  where they will be read; the enforcement lands with the provider.
+
+  Original gate text: unavailability is a typed outcome, not an empty
   result; no failover across provider classes; timeout equals absence;
   delivery may queue, approval may not.
 - **O3 - Enrichment on reconnection (binds the companion milestone):**
   additive records in the ADR 0069 idiom, idempotent, origin-labeled
   under ADR 0116 W2 and typed under ADR 0117 X2, over the existing ADR
   0112 hook; never an edit of the captured record.
-- **O4 - Two states (binds companion UX, with ADR 0117 X5):**
-  `no_network` and `no_model` distinct and independently displayed;
-  floor operations never rendered as blocked.
+- **O4 - Two states (vocabulary and invariant implemented; the display
+  still binds companion UX):** `picoAbsenceStates` splits ADR 0009's
+  single "offline or degraded" into `no_network` and `no_model`, and
+  `PicoDegradationState` carries them as a list so both, either or
+  neither can hold - a shape that cannot collapse them back into one.
+
+  `isPicoFloorFamilyAvailableUnderAbsence` holds the load-bearing half:
+  no absence renders a floor operation blocked, proven over every family
+  against every combination of absences. It is a total function over the
+  family list rather than a lookup with a default, so a family added
+  later gets the safe answer without anyone remembering to return here.
+
+  What is not done, and it is the larger half: **nothing computes these
+  states.** No model provider exists, and network reachability is not
+  tracked anywhere, so there is no source to display from and no
+  companion surface to display on. ADR 0119 Q5's storage condition was
+  meant to join these two as a third stated condition on that surface,
+  and that debt stays open with it.
+
+  Original gate text: `no_network` and `no_model` distinct and
+  independently displayed; floor operations never rendered as blocked.
 - **O5 - Delegation under absence (binds the first Action Runner, with
   ADR 0037):** deterministic rules continue within their existing
   limits; judgment-dependent delegations become pending items and never

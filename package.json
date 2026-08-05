@@ -19,10 +19,11 @@
     "version:check": "node scripts/check-version.mjs",
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:coverage": "pnpm -r test:coverage",
-    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm companion:check && pnpm time:check && pnpm build && pnpm companion:release-check && pnpm check && pnpm test",
+    "release:verify": "pnpm license:check && pnpm version:check && pnpm addon:check && pnpm design-system:check && pnpm companion:check && pnpm time:check && pnpm offline:check && pnpm build && pnpm companion:release-check && pnpm check && pnpm test",
     "companion:check": "node scripts/check-companion-boundary.mjs && node scripts/check-electron-support.mjs",
     "companion:release-check": "pnpm --filter @pico/companion-shell verify:linux",
-    "time:check": "node scripts/check-time-authority.mjs"
+    "time:check": "node scripts/check-time-authority.mjs",
+    "offline:check": "node scripts/check-offline-floor.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
