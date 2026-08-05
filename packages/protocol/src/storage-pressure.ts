@@ -240,6 +240,65 @@ export function evaluatePicoStorageCondition(input: {
   };
 }
 
+/**
+ * ADR 0119 Q5. What a device is told over the Link: the state and which classes
+ * of cause apply, and nothing more.
+ *
+ * Deliberately narrower than {@link PicoStorageCondition}, which the Foundation
+ * surface reads locally. Row counts and free bytes would let a peer infer how
+ * much the Home holds and how fast it grows, and no decision the person makes
+ * changes with them.
+ */
+export interface PicoHomeStorageConditionView {
+  state: PicoStoragePressureState;
+  causes: readonly PicoStoragePressureCause[];
+}
+
+export function toPicoHomeStorageConditionView(
+  condition: PicoStorageCondition,
+): PicoHomeStorageConditionView {
+  const causes: PicoStoragePressureCause[] = [];
+  for (const reason of condition.reasons) {
+    if (!causes.includes(reason.cause)) {
+      causes.push(reason.cause);
+    }
+  }
+  return { state: condition.state, causes };
+}
+
+export function parsePicoHomeStorageConditionView(
+  value: unknown,
+): PicoHomeStorageConditionView {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_pico_home_storage_condition');
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 2 || keys[0] !== 'causes' || keys[1] !== 'state') {
+    throw new Error('invalid_pico_home_storage_condition');
+  }
+  if (!(picoStoragePressureStates as readonly string[]).includes(record.state as string)) {
+    throw new Error('invalid_pico_home_storage_condition');
+  }
+  if (!Array.isArray(record.causes)) {
+    throw new Error('invalid_pico_home_storage_condition');
+  }
+  const causes: PicoStoragePressureCause[] = [];
+  for (const cause of record.causes as unknown[]) {
+    if (!(picoStoragePressureCauses as readonly string[]).includes(cause as string)) {
+      throw new Error('invalid_pico_home_storage_condition');
+    }
+    if (causes.includes(cause as PicoStoragePressureCause)) {
+      throw new Error('invalid_pico_home_storage_condition');
+    }
+    causes.push(cause as PicoStoragePressureCause);
+  }
+  return Object.freeze({
+    state: record.state as PicoStoragePressureState,
+    causes: Object.freeze(causes),
+  });
+}
+
 export function assertKnownPicoProtectiveEventTypes(): void {
   for (const type of picoProtectiveEventTypes) {
     if (!(foundationEventTypes as readonly string[]).includes(type)) {

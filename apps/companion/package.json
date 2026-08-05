@@ -30,6 +30,10 @@
       "types": "./dist/lifecycle-reader.d.ts",
       "import": "./dist/lifecycle-reader.js"
     },
+    "./storage-reader": {
+      "types": "./dist/storage-reader.d.ts",
+      "import": "./dist/storage-reader.js"
+    },
     "./notify": {
       "types": "./dist/notify.d.ts",
       "import": "./dist/notify.js"

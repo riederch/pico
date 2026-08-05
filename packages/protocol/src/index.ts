@@ -267,6 +267,18 @@ export const picoLinkDirectOperations = [
   'home.authority.submit',
   'home.authority.list',
   'home.device.lifecycle.read',
+  /**
+   * ADR 0119 Q5 with ADR 0107. Remote capability is opt-in per operation, and
+   * this one is opted in because the person's own device is where the storage
+   * condition has to be visible - a refusal they meet with no warning is the
+   * outcome Q5 exists to prevent, and the Foundation UI is not where they are.
+   *
+   * It returns the state and the reason classes, never the row counts or the
+   * free bytes. The person needs to know what is wrong and what clears it; the
+   * numbers would add an inference surface about the Home's contents without
+   * changing a single decision.
+   */
+  'home.storage.condition.read',
   'home.device.lifecycle.submit',
   'home.device.recovery.submit',
   'home.device.recovery.veto',

@@ -2721,6 +2721,25 @@ describe('Pico Home Core app', () => {
         pendingRootRotation: { rotationId: 'rotation_link_0001', status: 'pending' },
       });
 
+    // ADR 0119 Q5 with ADR 0118 O4. The person's own device can ask the Home
+    // for its storage condition, because the Foundation UI is not where the
+    // person is and a refusal met with no warning is what Q5 exists to
+    // prevent. Authorized senders only, and the reply carries the state and
+    // the reason classes and nothing else - row counts and free bytes would
+    // let a peer infer how much this Home holds without changing a decision.
+    const storage = await linkRequest('home.storage.condition.read', {}, devices[1]);
+    expect(storage.response.outcome).toBe('ok');
+    expect(storage.result).toEqual({ state: 'normal', causes: [] });
+    expect(Object.keys(storage.result as Record<string, unknown>).sort())
+      .toEqual(['causes', 'state']);
+
+    // Arguments are a shape this operation does not have.
+    expect((await linkRequest(
+      'home.storage.condition.read',
+      { store: 'event_log' },
+      devices[1],
+    )).response.outcome).toBe('invalid_arguments');
+
     // The device that authorized the rotation is not an independent objection
     // to it, and the Link surface adds no exception to that.
     expect((await linkRequest(

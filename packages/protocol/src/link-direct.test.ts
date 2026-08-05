@@ -135,6 +135,9 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.authority.submit',
       'home.authority.list',
       'home.device.lifecycle.read',
+      // ADR 0119 Q5 with ADR 0107: opted in so the person's own device can see
+      // the storage condition, not just the operator surface on the host.
+      'home.storage.condition.read',
       'home.device.lifecycle.submit',
       'home.device.recovery.submit',
       'home.device.recovery.veto',

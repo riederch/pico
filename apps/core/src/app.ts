@@ -101,6 +101,7 @@ import {
   type PicoClockDivergence,
   type PicoIdentityReaderKeyFreshnessCheckpoint,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
+  toPicoHomeStorageConditionView,
 } from '@pico/protocol';
 import {
   createVerifiedPicoIdentityLifecycleIndex,
@@ -1825,6 +1826,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             return { outcome: 'sender_is_not_home_authority', result: {} };
           }
           return toLinkExecution(executeHomeAuthorityList(args));
+        }
+        // ADR 0119 Q5 with ADR 0107. Opted in deliberately: the person's own
+        // device is where the storage condition has to be visible, because a
+        // refusal met with no warning is exactly what Q5 exists to prevent and
+        // the Foundation UI is not where the person is.
+        //
+        // Authorized senders only - it is Home state, not public. The reply
+        // carries the state and the reason classes and stops there: row counts
+        // and free bytes would let a peer infer how much the Home holds and
+        // how fast it grows, and no decision the person makes changes with
+        // them.
+        case 'home.storage.condition.read': {
+          if (Object.keys(args).length !== 0) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: toPicoHomeStorageConditionView(store.storageCondition()) as unknown as
+              Record<string, unknown>,
+          };
         }
         case 'home.device.lifecycle.read': {
           if (Object.keys(args).length !== 0) {

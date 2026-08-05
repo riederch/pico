@@ -4,9 +4,9 @@
 
 Accepted as a pre-implementation availability and safety posture; the
 initiative and its scope were chosen by the user on 2026-08-01.
-Q1 through Q4 are implemented. Q5 is implemented in the store and the
-Foundation UI; the companion rendering it also binds waits on ADR 0118
-O4, which is open. The
+Q1 through Q4 are implemented. Q5 is implemented in the store, the
+Foundation UI and the companion, which can now read the condition over
+the Link; what remains is a scheduled producer to call that read. The
 existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
@@ -379,12 +379,31 @@ mechanism.
   says which action applies, and the words belong to whichever surface
   is speaking to the person. The Foundation UI renders it today.
 
-  **What is not done.** The gate also binds companion UX, and the
-  companion does not render this. That surface is where ADR 0118 O4
-  puts `no_network` and `no_model`, storage pressure was meant to join
-  them there as a third stated condition, and O4 is still open - so
-  claiming the whole gate on the strength of the Foundation UI would be
-  claiming a surface that has not been built. Original gate text:
+  The companion renders it too, and can now learn it.
+  `home.storage.condition.read` is a Link operation, opted in per ADR
+  0107 because the person's own device is where the condition has to be
+  visible - the Foundation UI is an operator surface on the host, and a
+  person who only ever sees their companion would meet the refusal with
+  no warning, which is the outcome this gate exists to prevent.
+
+  It travels over the authenticated Link rather than the diagnostic
+  endpoint: the companion holds no Foundation credential and should not
+  grow one for this. Authorized senders only, so it is Home state and
+  not public.
+
+  **The reply is narrower than the local view on purpose.** It carries
+  the state and the reason classes and stops there - no row counts, no
+  free bytes. Those would let a peer infer how much the Home holds and
+  how fast it grows, and no decision the person makes changes with them.
+  A refused read is named rather than swallowed: returning `normal`
+  because the channel broke would turn a failure into a reassurance,
+  which is the silent comfort this whole gate is against.
+
+  **What is not done.** Nothing calls the reader yet. The condition can
+  be asked for and displayed, but no scheduled producer feeds the
+  companion's condition list, so the surface stays empty in practice
+  until that wiring lands - most naturally on the cadence the ADR 0112
+  carrier already runs. Original gate text:
   per-store ceilings, the `reserved` condition surfaced to the person
   as a named state with the action that clears it, and no silent
   trimming of the append-only log.
