@@ -5,8 +5,15 @@
 Accepted as a product and installation-path concept. On 2026-08-01 the
 appliance platform gates IM1-IM3 were added, lifting requirements that
 later ADRs (0110, 0120, 0121, 0122, 0123) had placed on the future
-image as scattered footnotes into one explicit, checkable list. All
-three are open.
+image as scattered footnotes into one explicit, checkable list.
+
+IM1's **substrate** is implemented and tested: the counter port, a
+tpm2 adapter verified against a software TPM, and rollback detection
+wired into the ADR 0110 anchor through the interface built for exactly
+this swap, without touching a caller. IM1 itself stays open, because
+the gate says *the image* provides it and there is no image. IM2 and
+IM3 are untouched for the same reason - both are properties of an
+image build, not of this tree.
 
 ## Context
 
@@ -161,7 +168,47 @@ add-on and generic-host paths cannot choose it. What only the image
 can provide is therefore gated here, once, instead of living as
 footnotes in the ADRs that need it.
 
-- **IM1 - Platform anchor.** The image provides a platform-backed,
+- **IM1 - Platform anchor (substrate implemented; the gate waits on
+  the image).** `PicoPlatformAnchorCounter` is the port - read and
+  increment, nothing else - because a TPM is one implementation and a
+  secure element or a platform monotonic service is another, and the
+  anchor must not learn the difference.
+  `openPicoHomeRecoveryAnchor` takes it as an option; absent, the
+  filesystem substrate behaves exactly as before, which is what keeps
+  hardware without a secure element from becoming a lesser appliance
+  by silent downgrade.
+
+  The counter does not store the anchor, it witnesses the anchor's
+  generation. Each write bumps it and the document records the value it
+  was written at, so a document restored from an earlier generation
+  carries a value the platform has already passed - and says so without
+  needing to know it was restored. That closes the
+  whole-filesystem-rollback residual on this path.
+
+  Ordering is the part worth stating. The document is written first and
+  the counter bumped after, so a crash between the two leaves the
+  document one generation *ahead*. That direction is safe and matches
+  the anchor's existing rule, where being ahead costs one re-initiation
+  and being behind resurrects a spent authorization; bumping first would
+  invert it and brick the anchor on any crash. The residual is exact and
+  small: within that crash window, a rollback of exactly one generation
+  reads as the crash rather than as an attack.
+
+  Four verdicts, not two: `consistent`, `pending_write` (the crash
+  window), `rolled_back`, and `foreign_counter` for a document further
+  ahead than one write can explain - a cloned image or a replaced secure
+  element, which is not a rollback and not something to guess about.
+
+  The tpm2 adapter is exercised against a **software TPM**, not the
+  developer's own: same `tpm2-tools` binaries and the same NV counter
+  semantics, but defining an NV index consumes limited persistent
+  storage on real hardware, so the tests must never point at it. Those
+  tests skip visibly where the tools are absent rather than passing
+  vacuously. What has therefore *not* been shown is behaviour against
+  physical TPM hardware; that belongs to the image, where it can be run
+  on the platform it ships on.
+
+  Original gate text: the image provides a platform-backed,
   rollback-resistant substrate - a TPM NV counter or equivalent secure
   element - for the ADR 0110 R6 anchor, replacing the filesystem
   substrate through the interface that was built for exactly this

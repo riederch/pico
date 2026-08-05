@@ -8,6 +8,10 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
+import {
+  verifyPicoPlatformAnchorGeneration,
+  type PicoPlatformAnchorCounter,
+} from './platform-anchor.js';
 
 /**
  * ADR 0110 R6. The consumption anchor.
@@ -100,6 +104,12 @@ export interface PicoHomeRecoveryAnchorDocument {
    * `null` on an anchor that has never taken ownership. Absence refuses.
    */
   highWaterAt?: string | null;
+  /**
+   * ADR 0027 IM1. The platform counter generation this document was written
+   * at, when a platform anchor is in use. Absent on the filesystem substrate,
+   * which is the honest fallback rather than a downgrade.
+   */
+  platformCounter?: number | null;
   /**
    * When this anchor took ownership of the Home. An anchor with no entries is
    * not the same thing as an anchor that never existed - a fresh Home has the
@@ -218,12 +228,35 @@ export function assertPicoHomeRecoveryAnchorSeparation(input: {
 
 export function openPicoHomeRecoveryAnchor(
   anchorPath: string,
-  options: { now?: () => Date; monotonicNowMs?: () => number } = {},
+  options: {
+    now?: () => Date;
+    monotonicNowMs?: () => number;
+    /** ADR 0027 IM1. Absent keeps the filesystem substrate. */
+    platformCounter?: PicoPlatformAnchorCounter;
+  } = {},
 ): PicoHomeRecoveryAnchor {
   const now = options.now ?? (() => new Date());
   const monotonicNowMs = options.monotonicNowMs ?? (() => performance.now());
   mkdirSync(dirname(anchorPath), { recursive: true, mode: 0o700 });
   let document = readAnchorDocument(anchorPath);
+
+  // ADR 0027 IM1. Checked before anything is read out of the document, because
+  // a rolled-back anchor must not answer one question correctly before it is
+  // caught. The anchor can only ever refuse, so refusing to open is in
+  // character: every caller of a missing anchor already fails closed.
+  const platformCounter = options.platformCounter;
+  let platformGeneration: number | null = null;
+  if (platformCounter !== undefined) {
+    const counterValue = platformCounter.read();
+    const verdict = verifyPicoPlatformAnchorGeneration({
+      documentValue: document.platformCounter ?? null,
+      counterValue,
+    });
+    if (verdict === 'rolled_back' || verdict === 'foreign_counter') {
+      throw new Error(`pico_platform_anchor_${verdict}`);
+    }
+    platformGeneration = document.platformCounter ?? counterValue;
+  }
 
   // ADR 0120 N2. The floor this process last justified, and the monotonic
   // reading it was justified at. Everything above the baseline is observed
@@ -271,12 +304,33 @@ export function openPicoHomeRecoveryAnchor(
     }
     // Atomic replace plus fsync of file and directory: a torn anchor is
     // indistinguishable from a rolled-back one, and both must fail closed.
+    // ADR 0027 IM1. The document is written at the *next* generation and the
+    // counter is bumped afterwards. A crash between the two leaves the document
+    // one ahead, which the open-time check reads as `pending_write` and
+    // accepts - the same direction the anchor already prefers, where being
+    // ahead costs one re-initiation and being behind resurrects a spent
+    // authorization. Bumping first would invert that and brick the anchor on
+    // any crash.
+    const withGeneration: PicoHomeRecoveryAnchorDocument = platformGeneration === null
+      ? withFloor
+      : { ...withFloor, platformCounter: platformGeneration + 1 };
+
     const temporaryPath = `${anchorPath}.tmp`;
-    writeFileSync(temporaryPath, `${JSON.stringify(withFloor, null, 2)}\n`, { mode: 0o600 });
+    writeFileSync(temporaryPath, `${JSON.stringify(withGeneration, null, 2)}\n`, { mode: 0o600 });
     fsyncPath(temporaryPath);
     renameSync(temporaryPath, anchorPath);
     fsyncPath(dirname(anchorPath), true);
-    document = withFloor;
+
+    if (platformCounter !== undefined && platformGeneration !== null) {
+      const advanced = platformCounter.increment();
+      if (advanced !== platformGeneration + 1) {
+        // Something else is spending this counter. Continuing would compare
+        // generations that no longer mean what they say.
+        throw new Error('pico_platform_anchor_counter_contended');
+      }
+      platformGeneration = advanced;
+    }
+    document = withGeneration;
   };
 
   pruneExpiredEntries();
