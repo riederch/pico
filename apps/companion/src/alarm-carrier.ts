@@ -1,7 +1,9 @@
 import type {
   PicoClockDivergence,
   PicoHomeDeviceRecoveryPendingView,
+  PicoHomeStorageConditionView,
 } from '@pico/protocol';
+import type { PicoCompanionStorageReader } from './storage-reader.js';
 
 /**
  * ADR 0113 C1: the ADR 0112 S2 alarm carrier as shell-free service core.
@@ -62,10 +64,28 @@ export interface PicoCompanionNotificationAdapter {
   notifyClockDivergence?(
     alarm: PicoCompanionClockDivergenceAlarm,
   ): void | Promise<void>;
+  /**
+   * ADR 0119 Q5 with ADR 0118 O4. The Home's storage condition, reported on
+   * the same cadence rather than on a second schedule - ADR 0118 reuses this
+   * hook precisely so absence does not grow its own scheduler.
+   *
+   * Called only after a *successful* read. A failed read never arrives here,
+   * because it is not evidence the problem went away: silence would clear a
+   * standing condition on nothing more than a broken channel.
+   */
+  reportStorageCondition?(
+    view: PicoHomeStorageConditionView,
+  ): void | Promise<void>;
 }
 
 export interface StartPicoCompanionAlarmCarrierInput {
   readLifecycle: PicoCompanionLifecycleReader;
+  /**
+   * ADR 0119 Q5. Optional: a Home that does not answer the storage operation,
+   * or a companion built before it existed, keeps working and simply says
+   * nothing about storage.
+   */
+  readStorageCondition?: PicoCompanionStorageReader;
   notifications: PicoCompanionNotificationAdapter;
   /** Defaults to the pinned six hours; anything longer violates ADR 0112. */
   checkIntervalMs?: number;
@@ -85,6 +105,8 @@ export interface PicoCompanionAlarmCarrierStatus {
   readFailures: number;
   consecutiveReadFailures: number;
   notifyFailures: number;
+  /** ADR 0119 Q5. Counted separately: storage is secondary to the alarm. */
+  storageReadFailures: number;
 }
 
 export interface PicoCompanionAlarmCarrier {
@@ -119,10 +141,38 @@ export async function startPicoCompanionAlarmCarrier(
     readFailures: 0,
     consecutiveReadFailures: 0,
     notifyFailures: 0,
+    storageReadFailures: 0,
+  };
+
+  /**
+   * ADR 0119 Q5. Runs beside the lifecycle read and can never fail it: the
+   * alarm is the reason this carrier exists, and a storage read that cannot
+   * complete must not suppress a pending-recovery notification.
+   */
+  const readStorage = async (): Promise<void> => {
+    if (input.readStorageCondition === undefined) {
+      return;
+    }
+    let view: PicoHomeStorageConditionView;
+    try {
+      view = await input.readStorageCondition();
+    } catch {
+      // Counted, and deliberately not reported. A failed read is not evidence
+      // that a standing condition cleared, so nothing is said and whatever the
+      // person was last told still stands.
+      status.storageReadFailures += 1;
+      return;
+    }
+    try {
+      await input.notifications.reportStorageCondition?.(view);
+    } catch {
+      status.notifyFailures += 1;
+    }
   };
 
   const performCheck = async (): Promise<PicoCompanionAlarmCheck> => {
     const checkedAt = now().toISOString();
+    await readStorage();
     let snapshot: PicoCompanionLifecycleSnapshot;
     try {
       snapshot = await input.readLifecycle();

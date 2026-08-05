@@ -19,7 +19,9 @@ import {
 } from '@pico/companion/recovery-controller';
 import {
   parsePicoCompanionPresentation,
+  picoCompanionConditionsFor,
   picoCompanionIdlePresentation,
+  type PicoCompanionCondition,
   type PicoCompanionPresentation,
   type PicoCompanionPresentationInput,
 } from './contract.js';
@@ -39,6 +41,15 @@ export function createPicoCompanionPresentationAdapter(
 ): PicoCompanionShellNotifications {
   let currentKind: PicoCompanionPresentation['kind'] = 'starting';
 
+  /**
+   * ADR 0118 O4. Conditions are ambient, not events: they are true between
+   * notifications rather than at one. So they are held here and stamped onto
+   * every presentation that goes out, instead of each builder having to
+   * remember them.
+   */
+  let conditions: readonly PicoCompanionCondition[] = [];
+  let lastPublished: PicoCompanionPresentationInput | null = null;
+
   const publish = async (
     // The input shape, because this parses before it publishes: requiring the
     // parsed shape here would make every builder restate an empty condition
@@ -46,7 +57,8 @@ export function createPicoCompanionPresentationAdapter(
     state: PicoCompanionPresentationInput,
     notify: boolean,
   ): Promise<void> => {
-    const parsed = parsePicoCompanionPresentation(state);
+    lastPublished = state;
+    const parsed = parsePicoCompanionPresentation({ ...state, conditions });
     currentKind = parsed.kind;
     await port.present(parsed);
     if (notify) {
@@ -55,6 +67,19 @@ export function createPicoCompanionPresentationAdapter(
   };
 
   return {
+    /**
+     * ADR 0119 Q5. A change re-publishes what the person is already looking
+     * at, because a condition that only appeared at the next unrelated
+     * notification would be told to them late - or, on a quiet Home, never.
+     */
+    reportStorageCondition: async (view) => {
+      const next = picoCompanionConditionsFor({ storage: view.state });
+      if (sameConditions(conditions, next)) {
+        return;
+      }
+      conditions = next;
+      await publish(lastPublished ?? picoCompanionIdlePresentation(now()), false);
+    },
     notifyPendingRecovery: async (alarm: PicoCompanionPendingRecoveryAlarm) => {
       const rendered = renderPicoCompanionPendingRecoveryAlarm(alarm);
       await publish({
@@ -148,6 +173,15 @@ export function createPicoCompanionPresentationAdapter(
       }, true);
     },
   };
+}
+
+function sameConditions(
+  a: readonly PicoCompanionCondition[],
+  b: readonly PicoCompanionCondition[],
+): boolean {
+  return a.length === b.length
+    && a.every((condition, index) => condition.kind === b[index]?.kind
+      && condition.remedy === b[index]?.remedy);
 }
 
 function shortFingerprint(value: string): string {

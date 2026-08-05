@@ -6,6 +6,7 @@ import {
   type PicoCompanionAlarmCarrierStatus,
 } from '@pico/companion/alarm-carrier';
 import { createPicoCompanionLifecycleReader } from '@pico/companion/lifecycle-reader';
+import { createPicoCompanionStorageReader } from '@pico/companion/storage-reader';
 import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
@@ -100,8 +101,31 @@ export async function startPicoCompanionShellRuntime(input: {
       });
       return await baseReadLifecycle();
     });
+    /**
+     * ADR 0119 Q5. Serialized like the lifecycle read, for the same reason -
+     * one daemon, one caller at a time - and reading the profile fresh, so a
+     * re-pin that happened since the last check is already in force.
+     *
+     * It builds its own Link client rather than sharing one. At a six-hour
+     * cadence that cost is nothing, and the alternative would tie the storage
+     * read's lifetime to the lifecycle read's error handling, where a strand
+     * recovery is already doing delicate work.
+     */
+    const readStorageCondition = async () => await serialized(async () => {
+      await input.automaticVaultUnlock?.ensureUnlocked();
+      const currentProfile = readPicoCompanionProfile(profilePath);
+      const linkClient = await createPicoCompanionLinkClient({
+        profile: currentProfile,
+        daemonClient,
+        sodium: input.sodium,
+        ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      });
+      return await createPicoCompanionStorageReader({ linkClient })();
+    });
+
     const carrier = await startPicoCompanionAlarmCarrier({
       readLifecycle,
+      readStorageCondition,
       notifications: input.notifications,
       ...(input.checkIntervalMs === undefined
         ? {}

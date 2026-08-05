@@ -4,9 +4,10 @@
 
 Accepted as a pre-implementation availability and safety posture; the
 initiative and its scope were chosen by the user on 2026-08-01.
-Q1 through Q4 are implemented. Q5 is implemented in the store, the
-Foundation UI and the companion, which can now read the condition over
-the Link; what remains is a scheduled producer to call that read. The
+Q1 through Q5 are implemented, end to end: the store decides the
+condition, the Foundation UI renders it, a Link operation carries it to
+a device, the ADR 0112 carrier reads it on its cadence and the companion
+states it. The
 existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
@@ -399,11 +400,25 @@ mechanism.
   because the channel broke would turn a failure into a reassurance,
   which is the silent comfort this whole gate is against.
 
-  **What is not done.** Nothing calls the reader yet. The condition can
-  be asked for and displayed, but no scheduled producer feeds the
-  companion's condition list, so the surface stays empty in practice
-  until that wiring lands - most naturally on the cadence the ADR 0112
-  carrier already runs. Original gate text:
+  The ADR 0112 carrier calls it. ADR 0118 reuses that hook precisely so
+  absence does not grow a second scheduler, and storage joins it rather
+  than starting one.
+
+  Two rules there are load-bearing, and both are counter-proven. **A
+  failed read never clears a standing condition:** a broken channel is
+  not evidence the problem went away, so nothing is reported and
+  whatever the person was last told still stands. Only a successful read
+  saying `normal` clears it. And **the storage read can never fail the
+  alarm** - the carrier exists for pending recovery, so a storage read
+  that throws is counted and stepped over, and a shell that cannot
+  accept the report does not suppress the notification either.
+
+  Conditions are ambient rather than events: true between notifications,
+  not at one. The presentation adapter therefore holds them and stamps
+  them onto every presentation it publishes, and a change re-publishes
+  what the person is already looking at - a condition that waited for
+  the next unrelated notification would reach them late, or on a quiet
+  Home never. Original gate text:
   per-store ceilings, the `reserved` condition surfaced to the person
   as a named state with the action that clears it, and no silent
   trimming of the append-only log.
