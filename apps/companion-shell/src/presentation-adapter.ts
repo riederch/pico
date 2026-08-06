@@ -136,15 +136,25 @@ export function createPicoCompanionPresentationAdapter(
       const oldest = view.entries.reduce((left, right) =>
         (Date.parse(left.dueAt) <= Date.parse(right.dueAt) ? left : right));
       const count = view.entries.length;
+      // The title is present only where this device may read that domain, so
+      // the two shapes are not a formatting choice - they are what the custody
+      // rules allowed. Saying "open your Home to see what" when the words were
+      // withheld is the honest fallback; inventing a placeholder that read like
+      // a title would not be.
+      const named = oldest.title;
       await publish({
         kind: 'time_bound_entry_due',
         severity: 'warning',
         symbol: '!',
         decision: 'none',
-        title: count === 1 ? 'Something you asked for is due' : `${count} entries are due`,
-        body: `The oldest was due at ${oldest.dueAt}. `
-          + 'Open your Pico Home to see what it is - this device is told that '
-          + 'an entry is waiting, not what it says.',
+        title: count === 1
+          ? (named ?? 'Something you asked for is due')
+          : `${count} entries are due`,
+        body: named === undefined
+          ? `The oldest was due at ${oldest.dueAt}. Open your Pico Home to see `
+            + 'what it is - this device was not given the words, only that an '
+            + 'entry is waiting.'
+          : `Due at ${oldest.dueAt}.${count === 1 ? '' : ` ${count - 1} more waiting.`}`,
         observedAt: now().toISOString(),
       }, true);
     },

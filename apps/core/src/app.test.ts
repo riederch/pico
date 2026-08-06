@@ -2754,6 +2754,39 @@ describe('Pico Home Core app', () => {
       devices[1],
     )).response.outcome).toBe('invalid_arguments');
 
+    // ADR 0118 O1 with ADR 0077. Record one that is already due, then ask as a
+    // member. The entry comes back; the words do not.
+    //
+    // This is the property worth proving: membership is what the Link
+    // authorized, and readership is a separate question this Home answers no
+    // to. A device that got the title here would have been given content on
+    // the strength of "may use this Home", which is exactly the conflation
+    // ADR 0077 exists to prevent.
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: operatorAuth,
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'domain-private',
+          contentType: 'application/vnd.pico.reminder',
+          content: 'Call the dentist',
+          dueAt: new Date(Date.now() - 60_000).toISOString(),
+        },
+      },
+    })).statusCode).toBe(201);
+
+    const withEntry = await linkRequest('home.time_bound_entries.read', {}, devices[1]);
+    const listed = (withEntry.result as { entries: Array<Record<string, unknown>> }).entries;
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.kind).toBe('reminder');
+    expect(listed[0]?.title).toBeUndefined();
+    // And the domain is not named either, so the silence cannot be turned into
+    // a map of what this Home holds.
+    expect(Object.keys(listed[0] ?? {}).sort()).toEqual(['dueAt', 'kind', 'memoryItemId']);
+
     // The device that authorized the rotation is not an independent objection
     // to it, and the Link surface adds no exception to that.
     expect((await linkRequest(

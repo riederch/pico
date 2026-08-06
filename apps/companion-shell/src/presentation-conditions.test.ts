@@ -116,7 +116,7 @@ describe('ADR 0118 O1 due entries reach the person', () => {
     expect(state?.kind).toBe('time_bound_entry_due');
     expect(state?.severity).toBe('warning');
     expect(state?.body).toContain('2026-08-06T09:00:00.000Z');
-    expect(state?.body).toContain('not what it says');
+    expect(state?.body).toContain('not given the words');
   });
 
   it('names the oldest instant when several are waiting', async () => {
@@ -160,5 +160,36 @@ describe('ADR 0118 O1 due entries reach the person', () => {
     await notifications.reportDueEntries({ entries: [] });
 
     expect(presented.at(-1)?.kind).toBe('idle');
+  });
+});
+
+describe('ADR 0118 O1 the title only where custody allowed it', () => {
+  it('names the entry when the Home was allowed to send the words', async () => {
+    const { notifications, presented } = adapter();
+
+    await notifications.reportDueEntries({
+      entries: [{
+        memoryItemId: 'mem_1',
+        kind: 'reminder',
+        dueAt: '2026-08-06T09:00:00.000Z',
+        title: 'Call the dentist',
+      }],
+    });
+
+    expect(presented.at(-1)?.title).toBe('Call the dentist');
+    expect(presented.at(-1)?.body).toContain('2026-08-06T09:00:00.000Z');
+  });
+
+  it('does not invent a placeholder when the words were withheld', async () => {
+    // A stand-in that read like a title would misrepresent what this device
+    // was actually told.
+    const { notifications, presented } = adapter();
+
+    await notifications.reportDueEntries({
+      entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z' }],
+    });
+
+    expect(presented.at(-1)?.title).toBe('Something you asked for is due');
+    expect(presented.at(-1)?.body).toContain('not given the words');
   });
 });

@@ -87,17 +87,29 @@ export function parsePicoTimeBoundEntry(value: unknown): PicoTimeBoundEntry {
 /**
  * ADR 0118 O1. What a device is told over the Link about entries that are due.
  *
- * The title is deliberately absent. It is the person's own content and lives
- * behind the privacy domain's custody rules; a Link read that carried it would
- * be routing around those rather than satisfying them. So the companion can
- * say that something is due and since when, and the person opens their Home to
- * see what - which is a weaker surface than knowing, and the honest one until
- * a custody-respecting read exists.
+ * The title is present only where the asking device may actually read that
+ * privacy domain - membership is not enough, because ADR 0077 keeps "may use
+ * this Home" separate from "may read this domain" and the Link's own
+ * authorization only answers the first. So readership is asked per entry, and
+ * the title rides the same grant that would let the person read the item any
+ * other way.
+ *
+ * **Its absence carries no reason, deliberately.** "You may not read that
+ * domain" and "the Home cannot decrypt it right now" are one indistinguishable
+ * silence. Telling them apart would make this reply a grant oracle: a device
+ * could learn which domains it is excluded from, which is exactly what a
+ * non-enumerating denial exists to prevent (ADR 0077 C4).
+ *
+ * The entry itself is never dropped for an unreadable title. That something is
+ * due is the fact this family exists to deliver; hiding it because the words
+ * are private would trade a privacy rule for a broken promise.
  */
 export interface PicoHomeDueEntry {
   memoryItemId: string;
   kind: PicoTimeBoundEntryKind;
   dueAt: string;
+  /** Present only where the asking device may read the entry's domain. */
+  title?: string;
 }
 
 export interface PicoHomeDueEntriesView {
@@ -124,10 +136,20 @@ export function parsePicoHomeDueEntriesView(value: unknown): PicoHomeDueEntriesV
     }
     const row = entry as Record<string, unknown>;
     const rowKeys = Object.keys(row).sort();
-    if (rowKeys.length !== 3
-      || rowKeys[0] !== 'dueAt'
-      || rowKeys[1] !== 'kind'
-      || rowKeys[2] !== 'memoryItemId') {
+    const withoutTitle = ['dueAt', 'kind', 'memoryItemId'];
+    const withTitle = [...withoutTitle, 'title'].sort();
+    const matchesRow = (expected: readonly string[]): boolean =>
+      rowKeys.length === expected.length
+      && rowKeys.every((key, index) => key === expected[index]);
+    if (!matchesRow(withoutTitle) && !matchesRow(withTitle)) {
+      throw new Error('invalid_pico_home_due_entries');
+    }
+    if (row.title !== undefined
+      && (typeof row.title !== 'string'
+        || row.title.trim() === ''
+        || row.title.length > maxPicoTimeBoundEntryTitleChars)) {
+      // An empty title is not a title; it would render as a blank line the
+      // person has to interpret, which is worse than saying nothing.
       throw new Error('invalid_pico_home_due_entries');
     }
     if (typeof row.memoryItemId !== 'string' || row.memoryItemId === '') {
@@ -144,6 +166,7 @@ export function parsePicoHomeDueEntriesView(value: unknown): PicoHomeDueEntriesV
       memoryItemId: row.memoryItemId,
       kind: row.kind as PicoTimeBoundEntryKind,
       dueAt: row.dueAt,
+      ...(row.title === undefined ? {} : { title: row.title as string }),
     });
   });
   return Object.freeze({ entries: Object.freeze(entries) });

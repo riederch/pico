@@ -122,6 +122,7 @@ import { EventFactory } from './event-factory.js';
 import {
   duePicoTimeBoundEntries,
   maxPicoHomeDueEntries,
+  maxPicoTimeBoundEntryTitleChars,
 } from '@pico/protocol/time-bound-entry';
 import { PicoRequestQuota } from './request-quota.js';
 import {
@@ -1863,18 +1864,58 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             return { outcome: 'invalid_arguments', result: {} };
           }
           const nowIso = new Date().toISOString();
-          const due = duePicoTimeBoundEntries({
-            entries: store.picoTimeBoundEntries(maxPicoHomeDueEntries),
-            nowIso,
-          });
+          const candidates = store.picoTimeBoundEntries(maxPicoHomeDueEntries);
+          const byDomain = new Map(candidates.map(
+            (entry) => [entry.memoryItemId, entry.privacyDomain],
+          ));
+          const due = duePicoTimeBoundEntries({ entries: candidates, nowIso });
+          const memory = store.memory();
+
+          // Readership is asked per entry, not per request. ADR 0077 keeps
+          // "may use this Home" separate from "may read this domain", and the
+          // Link's own authorization only answers the first - so a sender with
+          // a grant on one domain and none on another gets exactly one title.
+          //
+          // The channel is named rather than dressed as a session: this
+          // principal came from a sealed envelope, and the membership-backed
+          // policy keys on the identity alone.
+          const readTitle = (memoryItemId: string): string | undefined => {
+            const privacyDomain = byDomain.get(memoryItemId);
+            if (privacyDomain === undefined) {
+              return undefined;
+            }
+            if (!readership.mayRead({
+              sessionDigest: 'pico-link-direct',
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            }, privacyDomain)) {
+              return undefined;
+            }
+            const item = memory.getInDomain(memoryItemId, privacyDomain);
+            const content = item?.content;
+            if (typeof content !== 'string' || content.trim() === '') {
+              // Shredded, undecryptable, or simply gone. One silence for all of
+              // them: telling them apart would make this reply a grant oracle.
+              return undefined;
+            }
+            return content.slice(0, maxPicoTimeBoundEntryTitleChars);
+          };
+
           return {
             outcome: 'ok',
             result: {
-              entries: due.slice(0, maxPicoHomeDueEntries).map((entry) => ({
-                memoryItemId: entry.memoryItemId,
-                kind: entry.kind,
-                dueAt: entry.dueAt,
-              })),
+              entries: due.slice(0, maxPicoHomeDueEntries).map((entry) => {
+                const title = readTitle(entry.memoryItemId);
+                return {
+                  memoryItemId: entry.memoryItemId,
+                  kind: entry.kind,
+                  dueAt: entry.dueAt,
+                  // The entry is never dropped for an unreadable title: that
+                  // something is due is the fact this family delivers, and
+                  // hiding it because the words are private would trade a
+                  // privacy rule for a broken promise.
+                  ...(title === undefined ? {} : { title }),
+                };
+              }),
             },
           };
         }

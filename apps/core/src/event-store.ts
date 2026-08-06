@@ -5951,11 +5951,14 @@ export class EventStore {
    * exists to prevent - the person stopped carrying the appointment themselves
    * the moment they wrote it down.
    */
-  public picoTimeBoundEntries(limit = 100): PicoTimeBoundEntry[] {
+  public picoTimeBoundEntries(
+    limit = 100,
+  ): Array<PicoTimeBoundEntry & { privacyDomain: string }> {
     this.ensureOpen();
     const rows = this.db
       .prepare(`
         SELECT memory_item_id AS memoryItemId,
+               privacy_domain AS privacyDomain,
                content_type AS contentType,
                due_at AS dueAt,
                raised_at AS raisedAt
@@ -5968,21 +5971,26 @@ export class EventStore {
       `)
       .all(limit) as Array<{
         memoryItemId: string;
+        privacyDomain: string;
         contentType: string;
         dueAt: string;
         raisedAt: string | null;
       }>;
-    return rows.map((row) => parsePicoTimeBoundEntry({
-      memoryItemId: row.memoryItemId,
-      kind: row.contentType === 'application/vnd.pico.appointment'
-        ? 'appointment'
-        : 'reminder',
-      // The title is the person's content and lives behind the domain's
-      // custody rules; this projection carries the identifier and the instant,
-      // and whoever raises it reads the item through the memory path.
-      title: row.memoryItemId,
-      dueAt: row.dueAt,
-      ...(row.raisedAt === null ? {} : { raisedAt: row.raisedAt }),
+    return rows.map((row) => ({
+      ...parsePicoTimeBoundEntry({
+        memoryItemId: row.memoryItemId,
+        kind: row.contentType === 'application/vnd.pico.appointment'
+          ? 'appointment'
+          : 'reminder',
+        // The identifier stands in for the title here. The title is the
+        // person's content behind the domain's custody rules, so it is read
+        // through the memory path by a caller that has established readership -
+        // never carried out of this projection, which asks nobody's permission.
+        title: row.memoryItemId,
+        dueAt: row.dueAt,
+        ...(row.raisedAt === null ? {} : { raisedAt: row.raisedAt }),
+      }),
+      privacyDomain: row.privacyDomain,
     }));
   }
 

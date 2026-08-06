@@ -69,16 +69,39 @@ describe('ADR 0118 O1 companion due-entries read', () => {
     await expect(read()).rejects.toThrow(/due_entries_read_rejected/u);
   });
 
-  it('refuses a reply carrying a title it should not have', async () => {
-    // The title is domain content behind custody rules. A Home that sent one
-    // would be routing around them, and accepting it would make this surface
-    // complicit.
+  it('accepts a title the Home was allowed to send', async () => {
+    // Present only where domain readership allowed it; the Home decides that,
+    // and this side simply carries what it was given.
     const read = createPicoCompanionDueEntriesReader({
       linkClient: linkClient({
         outcome: 'ok',
-        result: { entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z', title: 'Dentist' }] },
+        result: {
+          entries: [{
+            memoryItemId: 'mem_1',
+            kind: 'reminder',
+            dueAt: '2026-08-06T09:00:00.000Z',
+            title: 'Call the dentist',
+          }],
+        },
       }),
     });
-    await expect(read()).rejects.toThrow(/invalid_pico_home_due_entries/u);
+
+    expect((await read()).entries[0]?.title).toBe('Call the dentist');
+  });
+
+  it('refuses a title that is empty, oversized or a stray field', async () => {
+    // An empty title would render as a blank line the person has to interpret,
+    // which is worse than the honest silence of no title at all.
+    for (const entry of [
+      { memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z', title: '   ' },
+      { memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z', title: 'x'.repeat(201) },
+      { memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z', privacyDomain: 'd' },
+    ]) {
+      const read = createPicoCompanionDueEntriesReader({
+        linkClient: linkClient({ outcome: 'ok', result: { entries: [entry] } }),
+      });
+      await expect(read(), JSON.stringify(entry))
+        .rejects.toThrow(/invalid_pico_home_due_entries/u);
+    }
   });
 });
