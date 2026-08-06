@@ -76,6 +76,22 @@ rules that make its values well-formed), a **composition** of capabilities
 the core already provides, and a **surface** (routes, forms, presentation
 states).
 
+Ownership and location are separate, and conflating them would leave the
+M2 check with nothing precise to enforce. A module **defines** its
+vocabulary - the shapes and rules are its decision - but that vocabulary
+**ships from `@pico/protocol` as a subpath**, never from the module
+package. The reason is in the deactivation rules below: an append-only
+log written while a module was active must stay parseable while it is
+off, and a parser that shipped with the module would not be there.
+`@pico/protocol/time-bound-entry` is already exactly this shape.
+
+What ships *in* a module package is therefore its composition and its
+surface. A module publishes the part of that another module is allowed to
+build on, as a subpath export; everything else is internal. The split is
+the module's own decision, but it has to be made explicitly, because
+"published" and "internal" are exactly what M2 can check and a package
+with no such split offers the check nothing to hold on to.
+
 It owns neither of two things, and both exclusions are the point.
 
 **Never its own storage.** A module's data is memory items and events,
@@ -90,6 +106,15 @@ asked to be special.
 **Never its own authority.** If a module needs a guard - readership, a
 quota, custody, an anchor - that guard belongs to the core. A module may
 *ask*; it may not *decide*.
+
+Both exclusions have the same practical consequence, and it is worth
+stating rather than leaving to inference: **migrations are core-only.** A
+module never adds a column, a table or an index. Where a module needs a
+mechanic the schema does not yet have, that mechanic is lifted as a core
+capability under M5 and migrated by the core - which is how `due_at` and
+`raised_at` arrived, and why they carry no calendar-specific name. A
+module shipping its own migration would be owning storage under a
+different word.
 
 ### Capabilities live at the store; modules compose them
 
@@ -190,10 +215,11 @@ with it.
 ## Gates
 
 - **M1 - The module contract (binds the first module):** a module
-  manifest declares identifier, kind, dependencies and surfaces; the core
-  holds the closed enumerated list; a module owns no table and no guard.
-  Proven by a module whose data is shredded, retained and restored by the
-  core's existing paths with no module-specific handling.
+  manifest declares identifier, kind, dependencies, published subpaths
+  and surfaces; the core holds the closed enumerated list; a module ships
+  no migration, owns no table and holds no guard. Proven by a module
+  whose data is shredded, retained and restored by the core's existing
+  paths with no module-specific handling.
 - **M2 - Mechanical boundaries (binds M1):** a `module:check` gate in
   `release:verify` resolves each module's transitive import closure and
   fails on an undeclared dependency, a cycle, or a reach into another
