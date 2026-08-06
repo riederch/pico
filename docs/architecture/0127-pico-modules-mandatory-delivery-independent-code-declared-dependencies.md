@@ -116,6 +116,54 @@ capability under M5 and migrated by the core - which is how `due_at` and
 module shipping its own migration would be owning storage under a
 different word.
 
+### The runtime imports the module; the module never imports the runtime
+
+A module owns a surface but registers nothing by itself, and the edge has
+to point one way or the two packages form a cycle.
+
+**A runtime imports a module. A module never imports a runtime.** What a
+module needs from the core arrives as a **declared port**, supplied at
+registration: a narrow interface naming the operations it uses, not the
+`EventStore` and not the app. 
+
+A module package therefore depends on `@pico/protocol`, on the published
+subpath of any module it declares a dependency on, and on no runtime.
+
+This is not a new pattern here. `PicoTimeBoundEntryStore` in the ADR 0118
+O1 scheduler is already exactly that shape - two methods, no store, no
+app - which is why that scheduler could move behind a module boundary
+without being rewritten. The camera-scan spawn port is the same idea in
+the companion.
+
+Two consequences worth stating, because both are load-bearing:
+
+- **Module independence is what ports buy.** A module that only sees the
+  protocol and its own ports cannot observe another module even by
+  accident, which is what keeps the configurations worth testing finite.
+  Where a module genuinely depends on another it imports that module's
+  published subpath - a contract, at compile time - while the runtime
+  wiring stays with the runtime that hosts them.
+- **Only a runtime that can resolve packages imports a module.** The
+  core is a Node process and imports modules directly. The Foundation
+  dashboard and the companion renderer are not: both load plain ES
+  modules with no bundler, where a bare specifier does not resolve at
+  all. Their module-facing surfaces therefore receive data through the
+  contracts those runtimes already have - the Foundation API and the ADR
+  0113 C2 presentation contract - and a module never becomes a package
+  dependency of a browser-loaded surface. Where such a surface needs a
+  module's vocabulary as a value, it declares it locally and a test binds
+  it to the protocol, which is the arrangement `contract.ts` already uses
+  for the ADR 0118 floor families.
+
+  This also keeps the ADR 0113 C3 tray budget out of the module layer:
+  the companion shell gains no package edges from modules existing, so
+  the measured budget and its import check are unaffected.
+
+Modules live in their own workspace directory, `modules/*`, beside
+`apps/*` and `packages/*`. They are neither runtimes nor capabilities,
+and giving them a third place is also what lets the M2 check enumerate
+them without guessing.
+
 ### Capabilities live at the store; modules compose them
 
 When two modules need the same mechanic, that mechanic is a core
@@ -143,6 +191,21 @@ Shipping everything is what lets this ADR skip a plugin contract
 entirely. Nothing here negotiates capabilities, spans version
 boundaries, or decides whether to trust foreign code, because there is no
 foreign code.
+
+**Where the switch lives is decided, not left to the first
+implementation.** Activation is a decision a person makes about their own
+Pico, so ADR 0104 rules out a host configuration option: it must not
+become a third entry on that ADR's debt list. It is a durable decision
+recorded the way this codebase records durable decisions - an event and a
+projection - so it survives a restart, is visible in the system status,
+and carries the statement M4 requires when something is switched off with
+promises standing.
+
+That makes activation the first real Pico-side setting. It does not
+resolve ADR 0104's two named violations; `memory_encryption` and
+`pico_foundation_token` stay debt, and this ADR does not claim otherwise.
+Being a core capability under M5, the mechanism belongs to the core - a
+module never stores its own activation state.
 
 ### Modules may depend on each other, declared and acyclic
 
@@ -221,16 +284,18 @@ with it.
   whose data is shredded, retained and restored by the core's existing
   paths with no module-specific handling.
 - **M2 - Mechanical boundaries (binds M1):** a `module:check` gate in
-  `release:verify` resolves each module's transitive import closure and
-  fails on an undeclared dependency, a cycle, or a reach into another
-  module's internals rather than its published subpath. Proven by
+  `release:verify` enumerates `modules/*`, resolves each module's
+  transitive import closure and fails on an undeclared dependency, a
+  cycle, a reach into another module's internals rather than its
+  published subpath, or an import of a runtime from a module. Proven by
   negative probes, in the idiom the offline-floor and tray checks already
   use.
-- **M3 - Activation (binds the first two modules):** enabling a module
-  enables its dependency closure; disabling one another depends on is
-  refused and names the dependents; activation state is readable in the
-  system status. Deactivation stops surfaces, producers and schedulers
-  and touches no stored data.
+- **M3 - Activation (binds the first two modules):** activation is a
+  durable Pico-side decision, never a host configuration option; enabling
+  a module enables its dependency closure; disabling one another depends
+  on is refused and names the dependents; activation state is readable in
+  the system status. Deactivation stops surfaces, producers and
+  schedulers and touches no stored data.
 - **M4 - Deactivation is loud where promises stand (binds M3, with ADR
   0118 O1):** disabling a module holding unfinished commitments states
   what will not happen, and the statement names the commitments rather
