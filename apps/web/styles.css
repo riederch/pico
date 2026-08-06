@@ -156,3 +156,10 @@ thead th { border-top: 0; color: var(--pico-text-secondary); font-size: 12px; fo
   .metric-row { grid-template-columns: 1fr; gap: 4px; }
   .metric-value { text-align: left; }
 }
+
+/*
+ * ADR 0118 O1. An overdue entry is marked rather than sorted away: it is still
+ * the person's commitment, and hiding it would be the silent failure the floor
+ * family exists to prevent.
+ */
+tbody tr[data-overdue="true"] td:first-child { color: var(--pico-status-warning); font-weight: 600; }

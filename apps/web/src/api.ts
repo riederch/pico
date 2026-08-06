@@ -208,6 +208,61 @@ export async function shredPrivacyDomain(
 }
 
 /**
+ * ADR 0118 O1. Records an appointment or reminder: a memory item that carries
+ * the instant the person meant.
+ *
+ * It goes through the ordinary memory write rather than a route of its own,
+ * which is what gives it the same privacy domain, retention and shredding as
+ * everything else the person stores. The core names the resulting event
+ * `memory.time_bound_entry_recorded` because it carries an instant.
+ */
+export async function createTimeBoundEntry(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: {
+    deviceId: string;
+    privacyDomain: string;
+    kind: 'appointment' | 'reminder';
+    title: string;
+    dueAt: string;
+  },
+): Promise<{ memoryItemId: string }> {
+  const url = buildEndpointUrl(baseUrl, '/api/events');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      deviceId: input.deviceId,
+      type: 'memory.recorded',
+      payload: {
+        privacyDomain: input.privacyDomain,
+        contentType: input.kind === 'appointment'
+          ? 'application/vnd.pico.appointment'
+          : 'application/vnd.pico.reminder',
+        content: input.title,
+        dueAt: input.dueAt,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Recording the entry'));
+  }
+
+  const data = (await response.json()) as unknown;
+  if (!isRecord(data)
+    || !isRecord(data.event)
+    || !isRecord((data.event as Record<string, unknown>).payload)) {
+    throw new Error('The entry response did not carry the recorded event.');
+  }
+  const payload = (data.event as Record<string, unknown>).payload as Record<string, unknown>;
+  if (typeof payload.memoryItemId !== 'string') {
+    throw new Error('The entry response did not carry a memory item reference.');
+  }
+  return { memoryItemId: payload.memoryItemId };
+}
+
+/**
  * Reads a privacy domain's content (ADR 0077 Gate C). Authorized by domain
  * readership, not the operator role: in this single-operator instance the
  * operator reads every domain, but that is readership, not administration.

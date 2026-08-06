@@ -9,6 +9,7 @@ import {
   loginOperator,
   mintRealtimeTicket,
   normalizePicoHomeUrl,
+  createTimeBoundEntry,
   shredPrivacyDomain,
   updateRetentionPolicy,
 } from './api.js';
@@ -104,6 +105,10 @@ export function startDashboard(document: Document): void {
 
   view.onShredRequested(() => {
     void shredDomain();
+  });
+
+  view.onTimeBoundEntryRequested(() => {
+    void recordTimeBoundEntry();
   });
 
   view.onContentReadRequested(() => {
@@ -339,6 +344,55 @@ export function startDashboard(document: Document): void {
     // Revoking deletes no memory: items referencing it fall back to keep.
     view.setRetentionPolicyStatus(`Revoked ${retentionPolicyId}. Items that referenced it are kept, not deleted.`, 'active');
     await refreshRetentionPolicies();
+  }
+
+  /**
+   * ADR 0118 O1. Records an appointment or reminder.
+   *
+   * Refuses an instant that has already passed. The core would accept it and
+   * the scheduler would raise it immediately, which is defensible for an entry
+   * that went stale while the Home was off - but a person typing a past time
+   * into a form has almost certainly made a mistake, and silently firing it is
+   * a worse answer than saying so.
+   */
+  async function recordTimeBoundEntry(): Promise<void> {
+    const form = view.readTimeBoundEntryForm();
+
+    if (form.title === '') {
+      view.setTimeBoundEntryStatus('Say what the entry is.', 'error');
+      return;
+    }
+    if (form.privacyDomain === '') {
+      view.setTimeBoundEntryStatus('Name the privacy domain to record it in.', 'error');
+      return;
+    }
+    if (form.dueAt === '' || Number.isNaN(Date.parse(form.dueAt))) {
+      view.setTimeBoundEntryStatus('Give the date and time it is due.', 'error');
+      return;
+    }
+    if (Date.parse(form.dueAt) <= Date.now()) {
+      view.setTimeBoundEntryStatus('That instant has already passed.', 'error');
+      return;
+    }
+
+    view.setTimeBoundEntryStatus('Recording...');
+
+    try {
+      await createTimeBoundEntry(state.baseUrl, foundationAccess(), {
+        deviceId: 'pico-web',
+        privacyDomain: form.privacyDomain,
+        kind: form.kind,
+        title: form.title,
+        dueAt: form.dueAt,
+      });
+    } catch (error) {
+      view.setTimeBoundEntryStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    view.clearTimeBoundEntryForm();
+    view.setTimeBoundEntryStatus('Recorded. It works with no model and no network.');
+    await refreshCurrentSnapshot();
   }
 
   async function shredDomain(): Promise<void> {

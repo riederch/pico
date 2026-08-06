@@ -137,6 +137,31 @@
           </div>
         </article>
 
+        <!--
+          ADR 0118 O1. The fifth floor family, given a surface. Entering an
+          appointment needs no model and no network beyond this Home, and the
+          list is read from events the dashboard already loaded rather than a
+          second endpoint.
+        -->
+        <article class="card full">
+          <div class="card-header"><h2>Appointments and reminders</h2></div>
+          <form id="entry-form" class="admin-form">
+            <div class="filter-field"><label for="entry-title">What</label><input id="entry-title" type="text" autocomplete="off" placeholder="Call the dentist" /></div>
+            <div class="filter-field"><label for="entry-kind">Kind</label><select id="entry-kind"><option value="reminder">Reminder</option><option value="appointment">Appointment</option></select></div>
+            <div class="filter-field"><label for="entry-due">Due</label><input id="entry-due" type="datetime-local" /></div>
+            <div class="filter-field"><label for="entry-domain">Privacy domain</label><input id="entry-domain" type="text" spellcheck="false" autocomplete="off" placeholder="domain-private" /></div>
+            <div class="filter-field admin-form-actions"><button id="entry-button" type="submit">Record entry</button></div>
+          </form>
+          <p id="entry-status" class="form-hint" role="status" aria-live="polite"></p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Due</th><th>Kind</th><th>Domain</th><th>Item</th></tr></thead>
+              <tbody id="entries-body"></tbody>
+            </table>
+          </div>
+          <p id="entries-empty" class="empty-state">No appointments or reminders recorded.</p>
+        </article>
+
         <article class="card full danger-card">
           <div class="card-header"><h2>Crypto-shred a privacy domain</h2></div>
           <p class="danger-note">Destroying a domain's keys is irreversible. Every memory item in that domain becomes unreadable, including copies in existing backups. There is no undo and no recovery. Requires memory encryption to be enabled; without it the content is plaintext at rest and shredding would protect nothing.</p>

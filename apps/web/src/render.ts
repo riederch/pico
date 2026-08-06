@@ -32,6 +32,11 @@ export interface DashboardView {
   onRetentionPolicyEditRequested(handler: (retentionPolicyId: string) => void): void;
   onRetentionPolicyRevokeRequested(handler: (retentionPolicyId: string) => void): void;
   onRetentionPolicyEditCancelled(handler: () => void): void;
+  /** ADR 0118 O1. Reads the entry form; the instant is normalised to UTC. */
+  readTimeBoundEntryForm(): TimeBoundEntryFormValue;
+  clearTimeBoundEntryForm(): void;
+  setTimeBoundEntryStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onTimeBoundEntryRequested(handler: () => void): void;
   readShredForm(): ShredFormValue;
   clearShredForm(): void;
   setShredStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
@@ -88,6 +93,14 @@ interface DashboardElements {
   retentionPolicyCount: HTMLElement;
   retentionPoliciesBody: HTMLTableSectionElement;
   retentionPoliciesEmpty: HTMLElement;
+  entryForm: HTMLFormElement;
+  entryTitleInput: HTMLInputElement;
+  entryKindSelect: HTMLSelectElement;
+  entryDueInput: HTMLInputElement;
+  entryDomainInput: HTMLInputElement;
+  entryStatus: HTMLElement;
+  entriesBody: HTMLTableSectionElement;
+  entriesEmpty: HTMLElement;
   shredForm: HTMLFormElement;
   shredDomainInput: HTMLInputElement;
   shredConfirmInput: HTMLInputElement;
@@ -100,6 +113,13 @@ export interface RetentionPolicyFormValue {
   displayName: string;
   mode: RetentionMode;
   maxAgeDays: number | null;
+}
+
+export interface TimeBoundEntryFormValue {
+  title: string;
+  kind: 'appointment' | 'reminder';
+  privacyDomain: string;
+  dueAt: string;
 }
 
 export interface ShredFormValue {
@@ -188,6 +208,14 @@ export function createDashboardView(document: Document): DashboardView {
     retentionPolicyCount: requireElement(document, 'retention-policy-count', HTMLElement),
     retentionPoliciesBody: requireElement(document, 'retention-policies-body', HTMLTableSectionElement),
     retentionPoliciesEmpty: requireElement(document, 'retention-policies-empty', HTMLElement),
+    entryForm: requireElement(document, 'entry-form', HTMLFormElement),
+    entryTitleInput: requireElement(document, 'entry-title', HTMLInputElement),
+    entryKindSelect: requireElement(document, 'entry-kind', HTMLSelectElement),
+    entryDueInput: requireElement(document, 'entry-due', HTMLInputElement),
+    entryDomainInput: requireElement(document, 'entry-domain', HTMLInputElement),
+    entryStatus: requireElement(document, 'entry-status', HTMLElement),
+    entriesBody: requireElement(document, 'entries-body', HTMLTableSectionElement),
+    entriesEmpty: requireElement(document, 'entries-empty', HTMLElement),
     shredForm: requireElement(document, 'shred-form', HTMLFormElement),
     shredDomainInput: requireElement(document, 'shred-domain', HTMLInputElement),
     shredConfirmInput: requireElement(document, 'shred-confirm', HTMLInputElement),
@@ -358,6 +386,33 @@ export function createDashboardView(document: Document): DashboardView {
         handler();
       });
     },
+    readTimeBoundEntryForm(): TimeBoundEntryFormValue {
+      const local = elements.entryDueInput.value;
+      return {
+        title: elements.entryTitleInput.value.trim(),
+        kind: elements.entryKindSelect.value === 'appointment' ? 'appointment' : 'reminder',
+        privacyDomain: elements.entryDomainInput.value.trim(),
+        // `datetime-local` has no zone, so the browser's own is the only
+        // reading of what the person meant. Normalised to a canonical UTC
+        // instant here, because the core refuses anything else - two spellings
+        // of one instant would sort apart.
+        dueAt: local === '' ? '' : new Date(local).toISOString(),
+      };
+    },
+    clearTimeBoundEntryForm(): void {
+      elements.entryTitleInput.value = '';
+      elements.entryDueInput.value = '';
+    },
+    setTimeBoundEntryStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.entryStatus.textContent = message;
+      elements.entryStatus.dataset.state = state;
+    },
+    onTimeBoundEntryRequested(handler: () => void): void {
+      elements.entryForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
     readShredForm(): ShredFormValue {
       return {
         privacyDomain: elements.shredDomainInput.value.trim(),
@@ -410,6 +465,7 @@ export function createDashboardView(document: Document): DashboardView {
       elements.errorBanner.hidden = state.errorMessage === null;
       elements.errorBanner.textContent = state.errorMessage ?? '';
 
+      renderTimeBoundEntries(elements, state.events);
       renderCoreSummary(elements.coreSummary, state.systemStatus);
       renderDatabaseSummary(elements.databaseSummary, state.systemStatus);
       renderEventControls(elements, state);
@@ -418,6 +474,45 @@ export function createDashboardView(document: Document): DashboardView {
       elements.rawStatus.textContent = state.systemStatus === null ? '{}' : JSON.stringify(state.systemStatus, null, 2);
     },
   };
+}
+
+/**
+ * ADR 0118 O1. Soonest first, and overdue rows marked - the person reads this
+ * to find the next thing they have to deal with, so the ordering is the point
+ * rather than a preference.
+ *
+ * `textContent` throughout: the title is the person's own content, but it
+ * still arrives through the event stream, and a surface that builds markup
+ * from stored strings is one injection away from being someone else's.
+ */
+function renderTimeBoundEntries(
+  elements: DashboardElements,
+  events: readonly PicoEvent[],
+): void {
+  const rows = timeBoundEntriesFromEvents(events, new Date().toISOString());
+  elements.entriesBody.replaceChildren();
+  elements.entriesEmpty.hidden = rows.length > 0;
+
+  for (const row of rows) {
+    const tr = document.createElement('tr');
+    if (row.overdue) {
+      tr.dataset.overdue = 'true';
+    }
+    for (const [value, monospace] of [
+      [formatDateTime(row.dueAt), false],
+      [row.kind, false],
+      [row.privacyDomain, true],
+      [row.memoryItemId, true],
+    ] as Array<[string, boolean]>) {
+      const cell = document.createElement('td');
+      cell.textContent = value;
+      if (monospace) {
+        cell.classList.add('monospace');
+      }
+      tr.append(cell);
+    }
+    elements.entriesBody.append(tr);
+  }
 }
 
 function renderCoreSummary(container: HTMLElement, status: SystemStatus | null): void {
@@ -447,6 +542,59 @@ function renderCoreSummary(container: HTMLElement, status: SystemStatus | null):
  * The core names the remedy as a class; the words are chosen here, because
  * phrasing belongs to whichever surface is speaking to the person.
  */
+export interface TimeBoundEntryRow {
+  memoryItemId: string;
+  kind: 'appointment' | 'reminder';
+  privacyDomain: string;
+  dueAt: string;
+  /** True once the instant has passed and it is still listed. */
+  overdue: boolean;
+}
+
+/**
+ * ADR 0118 O1. The entries, taken from the events the dashboard already loaded
+ * rather than from a second endpoint.
+ *
+ * Sorted by the instant, soonest first, so the next thing the person has to
+ * deal with is at the top - the order the list is *for*. Overdue is computed
+ * against the clock rather than stored, because whether something is late
+ * changes without anything being written.
+ *
+ * Note what this cannot tell the person yet: whether an entry was already
+ * raised. That lives on the memory item, and the event stream does not carry
+ * it - so an entry stays listed as overdue after it has been raised, and the
+ * list is honest about being a record of what was entered rather than a
+ * record of what has happened since.
+ */
+export function timeBoundEntriesFromEvents(
+  events: readonly PicoEvent[],
+  nowIso: string,
+): TimeBoundEntryRow[] {
+  const nowMs = Date.parse(nowIso);
+  const rows: TimeBoundEntryRow[] = [];
+  for (const event of events) {
+    if (event.type !== 'memory.time_bound_entry_recorded') {
+      continue;
+    }
+    const payload = event.payload as Record<string, unknown>;
+    const dueAt = payload.dueAt;
+    const memoryItemId = payload.memoryItemId;
+    if (typeof dueAt !== 'string' || typeof memoryItemId !== 'string') {
+      continue;
+    }
+    rows.push({
+      memoryItemId,
+      kind: payload.contentType === 'application/vnd.pico.appointment'
+        ? 'appointment'
+        : 'reminder',
+      privacyDomain: typeof payload.privacyDomain === 'string' ? payload.privacyDomain : '',
+      dueAt,
+      overdue: Date.parse(dueAt) <= nowMs,
+    });
+  }
+  return rows.sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
+}
+
 export function storageSummary(storage: SystemStatus['storage']): string {
   if (storage.reasons.length === 0) {
     return storage.state;
