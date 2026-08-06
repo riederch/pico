@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPicoCompanionStorageReader } from './storage-reader.js';
+import {
+  createPicoCompanionDueEntriesReader,
+  createPicoCompanionStorageReader,
+} from './storage-reader.js';
 
 function linkClient(response: unknown): never {
   return { request: vi.fn(async () => response) } as never;
@@ -42,5 +45,40 @@ describe('ADR 0119 Q5 companion storage read', () => {
       await expect(read(), JSON.stringify(result))
         .rejects.toThrow(/invalid_pico_home_storage_condition/u);
     }
+  });
+});
+
+describe('ADR 0118 O1 companion due-entries read', () => {
+  it('asks the Home over the authenticated Link with no arguments', async () => {
+    const client = { request: vi.fn(async () => ({
+      outcome: 'ok',
+      result: { entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z' }] },
+    })) };
+    const read = createPicoCompanionDueEntriesReader({ linkClient: client as never });
+
+    expect((await read()).entries).toHaveLength(1);
+    expect(client.request).toHaveBeenCalledWith('home.time_bound_entries.read', {});
+  });
+
+  it('names a refused read instead of reporting an empty list', async () => {
+    // An empty list on a broken channel would tell the person nothing is
+    // waiting when nobody actually looked.
+    const read = createPicoCompanionDueEntriesReader({
+      linkClient: linkClient({ outcome: 'sender_is_not_authorized', result: {} }),
+    });
+    await expect(read()).rejects.toThrow(/due_entries_read_rejected/u);
+  });
+
+  it('refuses a reply carrying a title it should not have', async () => {
+    // The title is domain content behind custody rules. A Home that sent one
+    // would be routing around them, and accepting it would make this surface
+    // complicit.
+    const read = createPicoCompanionDueEntriesReader({
+      linkClient: linkClient({
+        outcome: 'ok',
+        result: { entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z', title: 'Dentist' }] },
+      }),
+    });
+    await expect(read()).rejects.toThrow(/invalid_pico_home_due_entries/u);
   });
 });

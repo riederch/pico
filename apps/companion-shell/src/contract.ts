@@ -30,6 +30,13 @@ export type PicoCompanionPresentationKind =
   | 'host_keys_rotated'
   | 'host_continuity_unverified'
   | 'clock_divergence'
+  /**
+   * ADR 0118 O1. Something the person asked to be reminded of is due. A
+   * `kind` rather than a condition: the conditions list says what is *absent*,
+   * and a waiting appointment is the opposite - something present that needs
+   * them.
+   */
+  | 'time_bound_entry_due'
   | 'service_error';
 
 export type PicoCompanionPresentationSeverity = 'active' | 'warning' | 'blocked';
@@ -140,6 +147,7 @@ const kinds = new Set<PicoCompanionPresentationKind>([
   'host_keys_rotated',
   'host_continuity_unverified',
   'clock_divergence',
+  'time_bound_entry_due',
   'service_error',
 ]);
 const severities = new Set<PicoCompanionPresentationSeverity>([

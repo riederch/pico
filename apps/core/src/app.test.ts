@@ -2742,6 +2742,18 @@ describe('Pico Home Core app', () => {
       devices[1],
     )).response.outcome).toBe('invalid_arguments');
 
+    // ADR 0118 O1. The device can ask which entries are due, and the reply
+    // carries no title: that is domain content behind custody rules, so the
+    // person is told something is waiting and opens their Home to see what.
+    const dueEntries = await linkRequest('home.time_bound_entries.read', {}, devices[1]);
+    expect(dueEntries.response.outcome).toBe('ok');
+    expect(dueEntries.result).toEqual({ entries: [] });
+    expect((await linkRequest(
+      'home.time_bound_entries.read',
+      { limit: 5 },
+      devices[1],
+    )).response.outcome).toBe('invalid_arguments');
+
     // The device that authorized the rotation is not an independent objection
     // to it, and the Link surface adds no exception to that.
     expect((await linkRequest(

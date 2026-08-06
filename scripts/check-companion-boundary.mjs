@@ -100,13 +100,18 @@ if (/https?:\/\//.test(rendererHtml) || /<script(?![^>]+\bsrc=)[^>]*>/i.test(ren
  * It caught nothing when it was written, because the narrowing that prompted
  * it had already landed. It exists so the next one is a named error in a
  * second rather than a number in CI.
+ *
+ * `time-bound-entry` was on this list and came off it deliberately: the tray
+ * now reads which entries are due and needs that vocabulary. The list is for
+ * modules with no business starting with the tray, not a freeze on the graph -
+ * so coming off it is a decision someone has to make and write down, which is
+ * the whole value of having it.
  */
 const trayEntry = join(shellRoot, 'src', 'main.ts');
 const trayForbidden = [
   { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'cli.ts'), why: 'the vault CLI' },
   { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'daemon.ts'), why: 'the daemon server' },
   { file: join(repoRoot, 'packages', 'protocol', 'src', 'planner-reader.ts'), why: 'a subpath-published protocol surface' },
-  { file: join(repoRoot, 'packages', 'protocol', 'src', 'time-bound-entry.ts'), why: 'a subpath-published protocol surface' },
   { file: join(repoRoot, 'packages', 'protocol', 'src', 'offline-floor.ts'), why: 'a subpath-published protocol surface' },
 ];
 

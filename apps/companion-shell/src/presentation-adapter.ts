@@ -17,6 +17,7 @@ import {
 import {
   type PicoCompanionRecoveryNotifications,
 } from '@pico/companion/recovery-controller';
+import type { PicoHomeDueEntriesView } from '@pico/protocol/time-bound-entry';
 import {
   parsePicoCompanionPresentation,
   picoCompanionConditionsFor,
@@ -35,6 +36,8 @@ export type PicoCompanionShellNotifications = PicoCompanionNotificationAdapter
   & PicoCompanionHostContinuityNotifications
   & PicoCompanionRecoveryNotifications
   & {
+    /** ADR 0118 O1. Something is due; see the adapter for what it can say. */
+    reportDueEntries(view: PicoHomeDueEntriesView): Promise<void>;
     /**
      * ADR 0118 O4. Network reachability is a local device fact the shell
      * observes, not something the carrier reads from the Home - so it enters
@@ -109,6 +112,41 @@ export function createPicoCompanionPresentationAdapter(
     /** ADR 0118 O4. The shell's own observation, composed with the rest. */
     reportNetworkState: async (online) => {
       await observe({ online });
+    },
+    /**
+     * ADR 0118 O1. States that something is due, and since when.
+     *
+     * It cannot say *what*: the title is domain content behind custody rules
+     * and the Link read does not carry it. So this points the person at their
+     * Home rather than pretending to be the reminder itself - a weaker surface
+     * than knowing, and the honest one.
+     *
+     * An empty list clears the presentation only if this is what is currently
+     * shown. Overwriting an approval or a pending recovery because nothing is
+     * due would replace something that needs a decision with something that
+     * does not.
+     */
+    reportDueEntries: async (view) => {
+      if (view.entries.length === 0) {
+        if (currentKind === 'time_bound_entry_due') {
+          await publish(picoCompanionIdlePresentation(now()), false);
+        }
+        return;
+      }
+      const oldest = view.entries.reduce((left, right) =>
+        (Date.parse(left.dueAt) <= Date.parse(right.dueAt) ? left : right));
+      const count = view.entries.length;
+      await publish({
+        kind: 'time_bound_entry_due',
+        severity: 'warning',
+        symbol: '!',
+        decision: 'none',
+        title: count === 1 ? 'Something you asked for is due' : `${count} entries are due`,
+        body: `The oldest was due at ${oldest.dueAt}. `
+          + 'Open your Pico Home to see what it is - this device is told that '
+          + 'an entry is waiting, not what it says.',
+        observedAt: now().toISOString(),
+      }, true);
     },
     notifyPendingRecovery: async (alarm: PicoCompanionPendingRecoveryAlarm) => {
       const rendered = renderPicoCompanionPendingRecoveryAlarm(alarm);

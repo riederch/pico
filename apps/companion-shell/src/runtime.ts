@@ -6,7 +6,10 @@ import {
   type PicoCompanionAlarmCarrierStatus,
 } from '@pico/companion/alarm-carrier';
 import { createPicoCompanionLifecycleReader } from '@pico/companion/lifecycle-reader';
-import { createPicoCompanionStorageReader } from '@pico/companion/storage-reader';
+import {
+  createPicoCompanionDueEntriesReader,
+  createPicoCompanionStorageReader,
+} from '@pico/companion/storage-reader';
 import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
@@ -123,9 +126,23 @@ export async function startPicoCompanionShellRuntime(input: {
       return await createPicoCompanionStorageReader({ linkClient })();
     });
 
+    /** ADR 0118 O1. Same shape and the same reasons as the storage read. */
+    const readDueEntries = async () => await serialized(async () => {
+      await input.automaticVaultUnlock?.ensureUnlocked();
+      const currentProfile = readPicoCompanionProfile(profilePath);
+      const linkClient = await createPicoCompanionLinkClient({
+        profile: currentProfile,
+        daemonClient,
+        sodium: input.sodium,
+        ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      });
+      return await createPicoCompanionDueEntriesReader({ linkClient })();
+    });
+
     const carrier = await startPicoCompanionAlarmCarrier({
       readLifecycle,
       readStorageCondition,
+      readDueEntries,
       notifications: input.notifications,
       ...(input.checkIntervalMs === undefined
         ? {}

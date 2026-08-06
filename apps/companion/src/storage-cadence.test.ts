@@ -103,3 +103,44 @@ describe('ADR 0119 Q5 storage rides the ADR 0112 cadence', () => {
     }
   });
 });
+
+describe('ADR 0118 O1 due entries ride the same cadence', () => {
+  it('reports them on the check, and never fails the alarm', async () => {
+    const reportDueEntries = vi.fn();
+    const started = await carrier({
+      readDueEntries: async () => ({ entries: [] }),
+      notifications: { notifyPendingRecovery: () => {}, reportDueEntries },
+    });
+
+    try {
+      await started.checkNow();
+      expect(reportDueEntries).toHaveBeenCalledWith({ entries: [] });
+      expect(started.status().dueEntriesReadFailures).toBe(0);
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('says nothing when the read broke', async () => {
+    // An empty list from a failed read would tell the person nothing is
+    // waiting when nobody looked.
+    const reportDueEntries = vi.fn();
+    const started = await carrier({
+      readDueEntries: async () => {
+        throw new Error('link_unreachable');
+      },
+      notifications: { notifyPendingRecovery: () => {}, reportDueEntries },
+    });
+
+    try {
+      const check = await started.checkNow();
+      expect(reportDueEntries).not.toHaveBeenCalled();
+      expect(started.status().dueEntriesReadFailures).toBe(started.status().checks);
+      // The alarm is untouched: due entries are secondary to it.
+      expect(check.status).toBe('clear');
+      expect(started.status().readFailures).toBe(0);
+    } finally {
+      started.stop();
+    }
+  });
+});

@@ -3,7 +3,11 @@ import type {
   PicoHomeDeviceRecoveryPendingView,
   PicoHomeStorageConditionView,
 } from '@pico/protocol';
-import type { PicoCompanionStorageReader } from './storage-reader.js';
+import type { PicoHomeDueEntriesView } from '@pico/protocol/time-bound-entry';
+import type {
+  PicoCompanionDueEntriesReader,
+  PicoCompanionStorageReader,
+} from './storage-reader.js';
 
 /**
  * ADR 0113 C1: the ADR 0112 S2 alarm carrier as shell-free service core.
@@ -76,6 +80,14 @@ export interface PicoCompanionNotificationAdapter {
   reportStorageCondition?(
     view: PicoHomeStorageConditionView,
   ): void | Promise<void>;
+  /**
+   * ADR 0118 O1. Which entries are due, on the same cadence for the same
+   * reason: absence and waiting work both ride the hook that already exists.
+   *
+   * Reported only after a successful read - an empty list from a broken
+   * channel would say nothing is waiting when nobody looked.
+   */
+  reportDueEntries?(view: PicoHomeDueEntriesView): void | Promise<void>;
 }
 
 export interface StartPicoCompanionAlarmCarrierInput {
@@ -86,6 +98,8 @@ export interface StartPicoCompanionAlarmCarrierInput {
    * nothing about storage.
    */
   readStorageCondition?: PicoCompanionStorageReader;
+  /** ADR 0118 O1. Optional, like the storage read. */
+  readDueEntries?: PicoCompanionDueEntriesReader;
   notifications: PicoCompanionNotificationAdapter;
   /** Defaults to the pinned six hours; anything longer violates ADR 0112. */
   checkIntervalMs?: number;
@@ -107,6 +121,8 @@ export interface PicoCompanionAlarmCarrierStatus {
   notifyFailures: number;
   /** ADR 0119 Q5. Counted separately: storage is secondary to the alarm. */
   storageReadFailures: number;
+  /** ADR 0118 O1. Counted separately for the same reason. */
+  dueEntriesReadFailures: number;
 }
 
 export interface PicoCompanionAlarmCarrier {
@@ -142,6 +158,7 @@ export async function startPicoCompanionAlarmCarrier(
     consecutiveReadFailures: 0,
     notifyFailures: 0,
     storageReadFailures: 0,
+    dueEntriesReadFailures: 0,
   };
 
   /**
@@ -170,9 +187,29 @@ export async function startPicoCompanionAlarmCarrier(
     }
   };
 
+  /** ADR 0118 O1. Same posture as the storage read: never fails the alarm. */
+  const readDue = async (): Promise<void> => {
+    if (input.readDueEntries === undefined) {
+      return;
+    }
+    let view: PicoHomeDueEntriesView;
+    try {
+      view = await input.readDueEntries();
+    } catch {
+      status.dueEntriesReadFailures += 1;
+      return;
+    }
+    try {
+      await input.notifications.reportDueEntries?.(view);
+    } catch {
+      status.notifyFailures += 1;
+    }
+  };
+
   const performCheck = async (): Promise<PicoCompanionAlarmCheck> => {
     const checkedAt = now().toISOString();
     await readStorage();
+    await readDue();
     let snapshot: PicoCompanionLifecycleSnapshot;
     try {
       snapshot = await input.readLifecycle();

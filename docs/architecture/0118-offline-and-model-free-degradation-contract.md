@@ -254,6 +254,32 @@ into a changed world, is not the thing that was approved.
   being swallowed. It is what kept "4 of 5" honest, and it is what would
   report the next gap.
 
+  **The companion says when something is due**, over
+  `home.time_bound_entries.read` on the cadence the ADR 0112 carrier
+  already keeps, as its own presentation kind rather than a condition -
+  the conditions list says what is *absent*, and a waiting appointment
+  is the opposite. A failed read reports nothing rather than an empty
+  list, because "nothing is waiting" and "nobody looked" are different
+  claims. An empty list clears only that presentation: overwriting an
+  approval because nothing is due would replace something needing a
+  decision with something that does not.
+
+  **What that surface cannot say, and why.** It carries no title. The
+  title is the person's own content behind the privacy domain's custody
+  rules, and a Link read that carried it would be routing around them
+  rather than satisfying them - so the device says something is due and
+  since when, and the person opens their Home to see what. That is
+  weaker than knowing, and it is the honest shape until a
+  custody-respecting read exists. The reader refuses a reply that
+  carries a title anyway, so a Home that over-shared could not make this
+  surface complicit.
+
+  The other limit is the cadence. The companion learns of a due entry at
+  its next check or on the wake and network-regain hook, not at the
+  instant itself - punctual raising on the device would need either a
+  push channel or a local copy, and neither exists. The Home-side
+  scheduler is punctual; the device is a catch-up surface.
+
   The scanner is probed on every run, because a checker that cannot
   catch a violation is worse than no checker: it converts an unexamined
   risk into a false assurance. Four negative probes (a direct forbidden

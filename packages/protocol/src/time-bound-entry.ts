@@ -85,6 +85,71 @@ export function parsePicoTimeBoundEntry(value: unknown): PicoTimeBoundEntry {
 }
 
 /**
+ * ADR 0118 O1. What a device is told over the Link about entries that are due.
+ *
+ * The title is deliberately absent. It is the person's own content and lives
+ * behind the privacy domain's custody rules; a Link read that carried it would
+ * be routing around those rather than satisfying them. So the companion can
+ * say that something is due and since when, and the person opens their Home to
+ * see what - which is a weaker surface than knowing, and the honest one until
+ * a custody-respecting read exists.
+ */
+export interface PicoHomeDueEntry {
+  memoryItemId: string;
+  kind: PicoTimeBoundEntryKind;
+  dueAt: string;
+}
+
+export interface PicoHomeDueEntriesView {
+  entries: readonly PicoHomeDueEntry[];
+}
+
+export const maxPicoHomeDueEntries = 50;
+
+export function parsePicoHomeDueEntriesView(value: unknown): PicoHomeDueEntriesView {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_pico_home_due_entries');
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record);
+  if (keys.length !== 1 || keys[0] !== 'entries' || !Array.isArray(record.entries)) {
+    throw new Error('invalid_pico_home_due_entries');
+  }
+  if (record.entries.length > maxPicoHomeDueEntries) {
+    throw new Error('pico_home_due_entries_too_many');
+  }
+  const entries = (record.entries as unknown[]).map((entry) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new Error('invalid_pico_home_due_entries');
+    }
+    const row = entry as Record<string, unknown>;
+    const rowKeys = Object.keys(row).sort();
+    if (rowKeys.length !== 3
+      || rowKeys[0] !== 'dueAt'
+      || rowKeys[1] !== 'kind'
+      || rowKeys[2] !== 'memoryItemId') {
+      throw new Error('invalid_pico_home_due_entries');
+    }
+    if (typeof row.memoryItemId !== 'string' || row.memoryItemId === '') {
+      throw new Error('invalid_pico_home_due_entries');
+    }
+    if (typeof row.kind !== 'string'
+      || !(picoTimeBoundEntryKinds as readonly string[]).includes(row.kind)) {
+      throw new Error('invalid_pico_home_due_entries');
+    }
+    if (!isCanonicalInstant(row.dueAt)) {
+      throw new Error('invalid_pico_home_due_entries');
+    }
+    return Object.freeze({
+      memoryItemId: row.memoryItemId,
+      kind: row.kind as PicoTimeBoundEntryKind,
+      dueAt: row.dueAt,
+    });
+  });
+  return Object.freeze({ entries: Object.freeze(entries) });
+}
+
+/**
  * ADR 0118 O1. Which entries are due, oldest first.
  *
  * An entry whose instant passed while the Home was off is still due. Skipping

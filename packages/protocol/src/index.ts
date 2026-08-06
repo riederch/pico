@@ -284,6 +284,12 @@ export const picoLinkDirectOperations = [
    * changing a single decision.
    */
   'home.storage.condition.read',
+  /**
+   * ADR 0118 O1. Which time-bound entries are due, so the person's own device
+   * can say so. Carries no title: that is domain content behind custody rules,
+   * and a Link read must not route around them.
+   */
+  'home.time_bound_entries.read',
   'home.device.lifecycle.submit',
   'home.device.recovery.submit',
   'home.device.recovery.veto',

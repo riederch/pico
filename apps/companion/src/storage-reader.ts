@@ -2,6 +2,10 @@ import {
   parsePicoHomeStorageConditionView,
   type PicoHomeStorageConditionView,
 } from '@pico/protocol';
+import {
+  parsePicoHomeDueEntriesView,
+  type PicoHomeDueEntriesView,
+} from '@pico/protocol/time-bound-entry';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 
 /**
@@ -19,6 +23,31 @@ import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client
  * authorized sender.
  */
 export type PicoCompanionStorageReader = () => Promise<PicoHomeStorageConditionView>;
+
+/**
+ * ADR 0118 O1. Reads which time-bound entries are due, so the companion can
+ * say something is waiting.
+ *
+ * The reply carries no title - that is domain content behind custody rules -
+ * so this surface can say *that* something is due and since when, and the
+ * person opens their Home to see what. Weaker than knowing, and the honest
+ * shape until a custody-respecting read exists.
+ */
+export type PicoCompanionDueEntriesReader = () => Promise<PicoHomeDueEntriesView>;
+
+export function createPicoCompanionDueEntriesReader(input: {
+  linkClient: PicoLinkDirectClient;
+}): PicoCompanionDueEntriesReader {
+  return async () => {
+    const response = await input.linkClient.request('home.time_bound_entries.read', {});
+    if (response.outcome !== 'ok') {
+      // Named, not swallowed: an empty list on a broken channel would tell the
+      // person nothing is waiting when nobody actually looked.
+      throw new Error(`due_entries_read_rejected:${response.outcome}`);
+    }
+    return parsePicoHomeDueEntriesView(response.result);
+  };
+}
 
 export function createPicoCompanionStorageReader(input: {
   linkClient: PicoLinkDirectClient;

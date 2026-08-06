@@ -119,6 +119,10 @@ import {
   picoLinkIntakeRequestMark,
 } from './concurrency-cap.js';
 import { EventFactory } from './event-factory.js';
+import {
+  duePicoTimeBoundEntries,
+  maxPicoHomeDueEntries,
+} from '@pico/protocol/time-bound-entry';
 import { PicoRequestQuota } from './request-quota.js';
 import {
   EventStore,
@@ -1847,6 +1851,31 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             outcome: 'ok',
             result: toPicoHomeStorageConditionView(store.storageCondition()) as unknown as
               Record<string, unknown>,
+          };
+        }
+        // ADR 0118 O1. Which entries are due, so the person's own device can
+        // say something is waiting. No title: that is domain content behind
+        // custody rules, and a Link read must satisfy them rather than route
+        // around them - so the device says that something is due and since
+        // when, and the person opens their Home to see what.
+        case 'home.time_bound_entries.read': {
+          if (Object.keys(args).length !== 0) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const nowIso = new Date().toISOString();
+          const due = duePicoTimeBoundEntries({
+            entries: store.picoTimeBoundEntries(maxPicoHomeDueEntries),
+            nowIso,
+          });
+          return {
+            outcome: 'ok',
+            result: {
+              entries: due.slice(0, maxPicoHomeDueEntries).map((entry) => ({
+                memoryItemId: entry.memoryItemId,
+                kind: entry.kind,
+                dueAt: entry.dueAt,
+              })),
+            },
           };
         }
         case 'home.device.lifecycle.read': {
