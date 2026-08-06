@@ -3,9 +3,9 @@
 ## Status
 
 Accepted as a structural constraint on where product features live; the
-initiative and its scope were chosen by the user on 2026-08-06. Nothing
-is implemented. Gates M1-M5 are open and bind the first module and every
-product feature after it.
+initiative and its scope were chosen by the user on 2026-08-06. M1 and
+M2 are implemented at the calendar, the first module; M3-M5 are open and
+bind the second module and every product feature after it.
 
 The claim is deliberately narrow: this decides **organisation**, not
 protection. A module boundary makes features easier to find and harder
@@ -277,19 +277,54 @@ with it.
 
 ## Gates
 
-- **M1 - The module contract (binds the first module):** a module
-  manifest declares identifier, kind, dependencies, published subpaths
-  and surfaces; the core holds the closed enumerated list; a module ships
-  no migration, owns no table and holds no guard. Proven by a module
-  whose data is shredded, retained and restored by the core's existing
-  paths with no module-specific handling.
-- **M2 - Mechanical boundaries (binds M1):** a `module:check` gate in
-  `release:verify` enumerates `modules/*`, resolves each module's
-  transitive import closure and fails on an undeclared dependency, a
-  cycle, a reach into another module's internals rather than its
-  published subpath, or an import of a runtime from a module. Proven by
-  negative probes, in the idiom the offline-floor and tray checks already
-  use.
+- **M1 - The module contract (implemented at the calendar):**
+  `@pico/module-calendar` declares itself through
+  `@pico/protocol/module` - identifier, kind, package name,
+  dependencies, published subpaths and surfaces - and the closed
+  enumerated list lives in the protocol beside
+  `picoProtectiveEventTypes`, listed rather than discovered by directory
+  scan. The package publishes `./manifest` and `./calendar` and exports
+  no barrel; the manifest parser refuses a bare `.` outright, because a
+  barrel is how this tree twice dragged unrelated code into the measured
+  tray budget.
+
+  What moved is the reading, not the mechanics. The store, `due_at`,
+  `raised_at`, the scheduler and readership all stay in the core; the
+  module receives three ports - entries, one title, a clock - and asks
+  rather than decides. The Link's `home.time_bound_entries.read` now
+  delegates to `picoCalendarDueEntriesView`, and every existing test
+  passed unchanged, which is the evidence that the boundary was cut where
+  the code already divided.
+
+  **The proof is a negative one and is written as a comparison.** "No
+  module-specific handling" cannot be asserted in a comment, so
+  `module-custody.test.ts` runs a calendar entry and an ordinary memory
+  item through the same core path - crypto-shred, retention sweep, backup
+  and restore - and requires the two outcomes to be *identical*. Two
+  separate assertions could both pass while the core quietly treated the
+  kinds differently; an equality cannot. Each test also carries a case
+  that must survive, so the comparison can fail.
+- **M2 - Mechanical boundaries (implemented):**
+  `scripts/check-modules.mjs` runs in `release:verify` after `build`,
+  because it reads each module's declaration by importing the file the
+  product loads rather than by re-parsing its source - and it parses that
+  declaration with the protocol's own parser. A check with a second
+  parser would enforce a different contract than the one that ships.
+
+  It fails on an undeclared dependency, a cycle, a reach into a subpath
+  another module does not publish, an import of a runtime from a module,
+  a relative import that leaves the module, an export the manifest does
+  not publish or a published subpath the package does not export, a
+  listed module that ships no package, and - reporting M5 early - a
+  module containing storage mechanics: a database driver, a table, a
+  migration or an index.
+
+  Ten probes, and the seventh is the one that matters most: **a declared,
+  published, acyclic edge between two modules passes.** Without it the
+  check could be "fails on any module-to-module import", which would
+  forbid exactly what ADR 0127 permits. An escaping relative import is
+  reported and *not followed*, or the one real finding would arrive
+  buried under every consequence of it.
 - **M3 - Activation (binds the first two modules):** activation is a
   durable Pico-side decision, never a host configuration option; enabling
   a module enables its dependency closure; disabling one another depends

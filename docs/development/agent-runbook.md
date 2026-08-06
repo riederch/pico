@@ -58,7 +58,8 @@ Enthalten sind:
 ```text
 license:check -> version:check -> addon:check -> design-system:check ->
 companion:check -> browser:check -> time:check -> offline:check ->
-supply:check -> build -> companion:release-check -> check -> test
+supply:check -> build -> module:check -> companion:release-check ->
+check -> test
 ```
 
 Fokussierte Beispiele:

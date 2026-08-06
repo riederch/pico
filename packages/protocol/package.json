@@ -11,6 +11,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./module": {
+      "types": "./dist/module.d.ts",
+      "import": "./dist/module.js"
+    },
     "./offline-floor": {
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"
