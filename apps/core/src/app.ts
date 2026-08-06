@@ -101,6 +101,7 @@ import {
   type PicoClockDivergence,
   type PicoIdentityReaderKeyFreshnessCheckpoint,
   type PicoIdentityReaderKeyFreshnessSignatureInput,
+  describePicoVersionChange,
   toPicoHomeStorageConditionView,
 } from '@pico/protocol';
 import {
@@ -1055,6 +1056,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * re-base its windows onto the new time. Appended once per distinct kind, so
    * a clock that stays moved does not fill the log with the same sentence.
    */
+  // ADR 0122 Y6. Once per boot, before anything else can append: the record
+  // that the running code changed is evidence about this boot, and evidence
+  // that arrives after the work it describes is worth less.
+  //
+  // A downgrade is named as one. Arriving on older code is the direction that
+  // can reintroduce a fixed flaw, and an installation unable to say which way
+  // it moved cannot tell an update from an attack.
+  const versionChange = describePicoVersionChange({
+    previousVersion: store.observeServiceVersion(SERVICE_VERSION),
+    version: SERVICE_VERSION,
+  });
+  //
+  // A first boot records the version but appends nothing. Nothing *changed* -
+  // this is the beginning, and the gate asks for a record where the running
+  // version differs from the recorded one. An anchor that was re-seeded would
+  // also read as a first boot, and that case already has its own, more precise
+  // record in `home.recovery_anchor_reseeded`.
+  if (versionChange !== null && versionChange.direction !== 'first_boot') {
+    appendServerEvent('home.version_changed', versionChange as unknown as FoundationEventPayload);
+    if (versionChange.direction === 'downgrade') {
+      app.log.warn(versionChange, 'running an older version than last recorded');
+    }
+  }
+
   function checkClockDivergence(): PicoClockDivergence | null {
     const divergence = detectPicoClockDivergence({
       wallMs: Date.now(),

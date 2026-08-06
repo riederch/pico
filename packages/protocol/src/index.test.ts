@@ -152,6 +152,8 @@ describe('Pico protocol types', () => {
       'home.identity_root_rotation_vetoed',
       'home.host_key_rotated',
       'home.clock_divergence_detected',
+      // ADR 0122 Y6: the running code changed.
+      'home.version_changed',
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
@@ -173,6 +175,7 @@ describe('Pico protocol types', () => {
       'home.identity_root_rotation_vetoed',
       'home.host_key_rotated',
       'home.clock_divergence_detected',
+      'home.version_changed',
     ]);
 
     expect(actionEventTypes).toContain('action.requested');

@@ -10,30 +10,45 @@ on:
     branches:
       - main
 
+# ADR 0122 Y1. A tag is movable, so every one of these is pinned to the commit
+# it resolved to, with the human-readable version kept as a comment. The commit
+# is what determines the build; the tag only says what someone called it.
 permissions:
   contents: read
-  packages: write
 
 jobs:
   verify:
     name: Verify release gates
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
 
+      # ADR 0122 Y1. Install scripts stay enabled, and the exception is
+      # recorded here rather than remembered: better-sqlite3 is a native module
+      # whose build runs during install, so turning script execution off would
+      # not harden this build - it would stop it. What carries the weight
+      # instead is the frozen lockfile with per-package integrity hashes.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # ADR 0122 Y1. Beside `release:verify`, not inside it: a known advisory
+      # is a fact about the world on the day of the build, and folding it into
+      # the gate would make an unrelated disclosure look like a broken tree.
+      - name: Audit dependencies
+        run: pnpm audit --prod --audit-level high
 
       - name: Type check, test and build
         env:
@@ -44,20 +59,26 @@ jobs:
     name: Build and smoke-test Pico Core container
     runs-on: ubuntu-latest
     needs: verify
+    # ADR 0122 Y1. `packages: write` lives on the one job that publishes,
+    # rather than on the workflow where the verify job would inherit a
+    # permission it has no use for.
+    permissions:
+      contents: read
+      packages: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Login to GitHub Container Registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -67,9 +88,19 @@ jobs:
         if: github.ref_type == 'tag'
         run: node scripts/check-release-tag.mjs
 
+      # ADR 0122 Y4. Before the build, not after: a refusal is only useful
+      # while nothing has been pushed. Nothing here makes a GHCR tag immutable
+      # - it removes the legitimate path to a moved one, so a version whose
+      # bytes change is always evidence rather than possibly a re-run.
+      - name: Verify the release neither republishes nor downgrades
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/check-release-monotonic.mjs
+
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ghcr.io/riederch/pico/core
           tags: |
@@ -79,7 +110,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: Build local amd64 smoke-test image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/core.Dockerfile
@@ -121,7 +152,7 @@ jobs:
           exit 1
 
       - name: Build local arm64 smoke-test image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/core.Dockerfile
@@ -163,7 +194,8 @@ jobs:
           exit 1
 
       - name: Build and optionally push multi-arch release image
-        uses: docker/build-push-action@v6
+        id: release_image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/core.Dockerfile
@@ -171,3 +203,26 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      # ADR 0122 Y2. Provenance from the platform's own Sigstore-backed
+      # tooling. No Pico-held signing key is created, deliberately: for every
+      # consumption path that exists today the update authority is already
+      # repository plus registry write access, and a key Pico held would add a
+      # ceremony without moving that root of trust.
+      - name: Attest build provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ghcr.io/riederch/pico/core
+          subject-digest: ${{ steps.release_image.outputs.digest }}
+          push-to-registry: true
+
+      # ADR 0122 Y3. The digest the release notes have to record, produced by
+      # the build rather than copied by hand from a terminal.
+      - name: Report the published digest
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "ghcr.io/riederch/pico/core@${{ steps.release_image.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

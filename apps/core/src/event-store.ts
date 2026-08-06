@@ -6164,6 +6164,16 @@ export class EventStore {
     return evaluate();
   }
 
+  /**
+   * ADR 0122 Y6. Records the running version outside restorable snapshots and
+   * returns what was there before. `null` when no anchor is available, which
+   * reads as a first boot rather than as a silent match.
+   */
+  public observeServiceVersion(version: string): string | null {
+    this.ensureOpen();
+    return this.recoveryAnchor?.observeServiceVersion(version) ?? null;
+  }
+
   /** ADR 0120 N2. The durable floor, or `null` when no anchor is available. */
   public recoveryAnchorFloorMs(): number | null {
     return anchorFloorMs(this.recoveryAnchor);

@@ -255,7 +255,11 @@ describe('ADR 0119 Q3 no durable write without authorization', () => {
 
       const events = await app.inject({ method: 'GET', url: '/api/events?limit=100' });
       expect(events.statusCode).toBe(200);
-      expect(events.json().events).toHaveLength(0);
+      // Not "the log is empty": a first boot records its own version (ADR 0122
+      // Y6), and that is the Home writing about itself. What must be absent is
+      // anything the burst authored.
+      expect((events.json().events as Array<{ deviceId: string; type: string }>)
+        .every((stored) => stored.type === 'home.version_changed')).toBe(true);
 
       // Same sensitivity check as above: the digest has to be able to move,
       // or byte-identity proves only that this database is never written.

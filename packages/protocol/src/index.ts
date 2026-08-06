@@ -31,6 +31,16 @@ export const foundationEventTypes = [
   'home.identity_root_rotation_vetoed',
   'home.host_key_rotated',
   'home.clock_divergence_detected',
+  /**
+   * ADR 0122 Y6. The running code changed. Content-free by construction: two
+   * version strings and a direction, because an installation that cannot tell
+   * it was downgraded cannot notice the one update that matters most.
+   *
+   * The `home.` prefix is not cosmetic here - `picoHomeAuditEventTypes` derives
+   * the audit family from it, so this is chained and anchored like every other
+   * authority-relevant record without a second decision.
+   */
+  'home.version_changed',
 ] as const;
 
 export type FoundationEventType = typeof foundationEventTypes[number];
@@ -62,6 +72,10 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.identity_root_rotation_vetoed',
   'home.host_key_rotated',
   'home.clock_divergence_detected',
+  // ADR 0122 Y6. The server appends it at boot from its own observation; a
+  // client claiming its code changed would be claiming something only the
+  // process itself can know.
+  'home.version_changed',
 ] as const satisfies readonly FoundationEventType[];
 
 export type ServerSynthesizedFoundationEventType = typeof serverSynthesizedFoundationEventTypes[number];
@@ -2161,6 +2175,58 @@ export interface PicoSystemVersionResponse {
 export interface PicoAppliedMigration {
   id: string;
   appliedAt: string;
+}
+
+/** ADR 0122 Y6. What a boot recorded about the code it is running. */
+export const picoVersionChangeDirections = ['first_boot', 'upgrade', 'downgrade'] as const;
+export type PicoVersionChangeDirection = typeof picoVersionChangeDirections[number];
+
+export interface PicoVersionChangedPayload {
+  previousVersion: string | null;
+  version: string;
+  direction: PicoVersionChangeDirection;
+}
+
+/**
+ * ADR 0122 Y6. Compares what is running against what was last recorded.
+ *
+ * A downgrade is named rather than folded into "changed": arriving on older
+ * code is the one direction that can reintroduce a fixed flaw, and an
+ * installation that cannot say which way it moved cannot tell an update from
+ * an attack.
+ */
+export function describePicoVersionChange(input: {
+  previousVersion: string | null;
+  version: string;
+}): PicoVersionChangedPayload | null {
+  const { previousVersion, version } = input;
+  if (previousVersion === null) {
+    return { previousVersion: null, version, direction: 'first_boot' };
+  }
+  if (previousVersion === version) {
+    return null;
+  }
+  const parse = (value: string): [number, number, number] | null => {
+    const match = /^(\d+)\.(\d+)\.(\d+)$/u.exec(value);
+    return match === null ? null : [Number(match[1]), Number(match[2]), Number(match[3])];
+  };
+  const left = parse(previousVersion);
+  const right = parse(version);
+  if (left === null || right === null) {
+    // An unparseable pair still changed, and saying "changed" is honest where
+    // saying "upgrade" would be a guess.
+    return { previousVersion, version, direction: 'upgrade' };
+  }
+  for (let index = 0; index < 3; index += 1) {
+    if (left[index] !== right[index]) {
+      return {
+        previousVersion,
+        version,
+        direction: right[index] < left[index] ? 'downgrade' : 'upgrade',
+      };
+    }
+  }
+  return null;
 }
 
 export interface PicoSystemStatusResponse {

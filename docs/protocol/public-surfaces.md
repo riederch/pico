@@ -230,6 +230,7 @@ home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
 home.host_key_rotated
 home.clock_divergence_detected
+home.version_changed
 ```
 
 Server-synthesized foundation event types (exported as `serverSynthesizedFoundationEventTypes`), appended by the server and never accepted on `POST /api/events`:
@@ -254,6 +255,7 @@ home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
 home.host_key_rotated
 home.clock_divergence_detected
+home.version_changed
 ```
 
 `memory.recorded` records a reference to a deleteable memory item (ADR 0068 / ADR 0069). Its `POST /api/events` request carries the content (`{ privacyDomain, contentType, content, summary?, owner?, controller?, retentionPolicyRef? }`); an unknown `retentionPolicyRef` is rejected at write time, because the sweep's fail-safe rule would otherwise keep the item forever while the writer believed expiry was configured. The reference is stored with the item and does not appear in the event payload; the server stores the content in the deleteable memory store and records a server-derived event whose payload is only the reference `{ memoryItemId, privacyDomain, contentType, summary? }` with posture `reference_only`. The append-only event never holds the content. The stored event and its `memoryItemId` are returned in the response. On read, `GET /api/events` and `/api/events/tail` enrich each `memory.recorded` event with a `resolutionState` (`resolvable`, `deleted` or `unknown`) computed from the store; this is a read-time projection and does not change the stored event.

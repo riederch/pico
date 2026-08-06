@@ -111,6 +111,15 @@ export interface PicoHomeRecoveryAnchorDocument {
    */
   platformCounter?: number | null;
   /**
+   * ADR 0122 Y6. The service version this anchor last saw running.
+   *
+   * Here rather than in the database because that is the point: a restore that
+   * brought back an older Foundation snapshot would also bring back its record
+   * of which version was running, and the downgrade would look like continuity.
+   * The anchor is outside every restorable snapshot, so it still remembers.
+   */
+  serviceVersion?: string | null;
+  /**
    * When this anchor took ownership of the Home. An anchor with no entries is
    * not the same thing as an anchor that never existed - a fresh Home has the
    * former for as long as nobody recovers - so seeding is recorded explicitly
@@ -181,6 +190,15 @@ export interface PicoHomeRecoveryAnchor {
     headDigestHex: string;
   }): void;
   auditCheckpoint(writerId: string): PicoHomeAuditCheckpoint | undefined;
+  /**
+   * ADR 0122 Y6. Reads the version last seen and records the running one.
+   *
+   * Returns what was there before, so the caller can name the direction. The
+   * write happens whatever the direction: this is a record of what ran, not a
+   * high-water mark, and refusing to record a downgrade would leave the next
+   * boot comparing against a version that never ran.
+   */
+  observeServiceVersion(version: string): string | null;
   /**
    * ADR 0120 N2/N3. The durable floor, including monotonic progress made since
    * this process opened the anchor. `null` while the anchor has never taken
@@ -487,6 +505,28 @@ export function openPicoHomeRecoveryAnchor(
         (candidate) => candidate.writerId === writerId,
       );
       return found === undefined ? undefined : { ...found };
+    },
+    observeServiceVersion: (version) => {
+      if (typeof version !== 'string' || version.trim() === '') {
+        throw new Error('invalid_pico_service_version');
+      }
+      // An anchor that never took ownership must not be brought into existence
+      // by this. ADR 0110 R6 keeps a Home closed when its anchor is missing,
+      // until a person re-seeds it deliberately - and a file written here would
+      // turn that loss into a fresh empty anchor that answers every question
+      // with "nothing was ever consumed". Recording which version ran is not
+      // worth defeating the block that exists to notice a restore.
+      if (document.seededAt === null && document.entries.length === 0) {
+        return null;
+      }
+      const previous = document.serviceVersion ?? null;
+      if (previous === version) {
+        // Nothing changed, so nothing is written: the common boot must not
+        // rewrite the anchor and spend a platform-counter generation on it.
+        return previous;
+      }
+      persist({ ...document, serviceVersion: version });
+      return previous;
     },
     highWaterInstant: () => {
       const floorMs = currentFloorMs();

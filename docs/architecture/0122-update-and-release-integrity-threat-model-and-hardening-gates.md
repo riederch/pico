@@ -4,7 +4,8 @@
 
 Accepted as the update-channel threat model and hardening direction;
 the initiative and its scope were chosen by the user on 2026-08-01.
-Gates Y1-Y6 are open. This is the highest-priority item of the
+Y1, Y4 and Y6 are implemented; Y2 and Y3 are written but unverified until
+a release runs; Y5 is open. This is the highest-priority item of the
 security initiative for a stated reason: the update channel is the one
 path that defeats every other boundary at once. ADR 0116 contains
 hostile content, ADR 0117 keeps it from the acting model, ADR 0121
@@ -183,31 +184,108 @@ so loudly.
 
 ## Gates
 
-- **Y1 - The commit determines the build (binds the next release):**
-  actions pinned to commit SHAs, base image pinned by digest,
-  `packageManager` pinned with integrity hash, lockfile frozen,
-  dependency-audit step beside `release:verify`, `packages: write`
-  narrowed to the publish job. Install scripts stay enabled and the
-  exception is recorded in the workflow.
-- **Y2 - Attested provenance per release (binds the next release after
-  Y1):** every published digest carries a build-provenance attestation
-  from the platform's existing Sigstore-backed tooling; no Pico-held
-  signing key is created.
-- **Y3 - Digest-verified deployment path (binds docs and scripts):**
-  the container deployment path verifies the attestation and deploys
-  by digest; `upgrade-contract.md` replaces the tag-immutability claim
-  with the recorded-digest mechanism.
-- **Y4 - No re-tag, no silent downgrade (binds the release pipeline):**
-  publishing refuses an already-published version and a version below
-  the newest published; a version tag is never re-pushed.
+- **Y1 - The commit determines the build (implemented):** all twelve
+  action uses carry a full commit SHA with the version as a trailing
+  comment, the base image carries its digest, `packageManager` carries a
+  sha512 hash verified against the published tarball rather than copied
+  from the registry's own claim, `packages: write` sits on the one job
+  that publishes, and a dependency audit runs beside `release:verify`
+  rather than inside it - a known advisory is a fact about the day of
+  the build, and folding it into the gate would make an unrelated
+  disclosure look like a broken tree.
+
+  `scripts/check-workflow-pinning.mjs` keeps all of that from being
+  undone by the next person adding a step: it fails on an action that is
+  not SHA-pinned, a base image without a digest, a package manager
+  without an integrity hash, and on the install-script exception going
+  unrecorded. That last one was unmet when the check was written, which
+  is how it was noticed.
+
+  The audit found three high-severity advisories on the first run -
+  `find-my-way` HTTP/2 denial of service and two `fast-uri` host
+  confusions, all transitive under Fastify. They are fixed by
+  re-resolving to `find-my-way@9.7.0` and `fast-uri@3.1.5`, not by
+  lowering the threshold.
+
+  Install scripts stay enabled and the exception is recorded in the
+  workflow: `better-sqlite3` is a native module whose build runs during
+  install, so disabling script execution would not harden this build, it
+  would stop it. The frozen lockfile with per-package integrity hashes
+  is what carries the weight instead.
+- **Y2 - Attested provenance per release (written; unverified until a
+  release runs):** the workflow attests the published digest with the
+  platform's own Sigstore-backed action and pushes the attestation to the
+  registry. No Pico-held signing key is created, deliberately: for every
+  consumption path that exists today the update authority is already
+  repository plus registry write access, and a key Pico held would add a
+  ceremony without moving that root of trust.
+
+  It cannot be exercised here. A pull request does not publish, so the
+  step is written and its first real proof is the next tagged release.
+- **Y3 - Digest-verified deployment path (partly implemented):**
+  `upgrade-contract.md` already states that GHCR tags are mutable and
+  documents recording the digest, so the false immutability claim is
+  gone. The build now emits the published digest into the job summary,
+  so the digest a release records is produced by the build rather than
+  copied by hand from a terminal.
+
+  What is missing is the verifying half: no deployment path checks the
+  attestation before running the image, and it cannot until Y2 has
+  produced one.
+- **Y4 - No re-tag, no silent downgrade (implemented):**
+  `scripts/check-release-monotonic.mjs` runs before the build, because a
+  refusal is only useful while nothing has been pushed. It refuses a
+  version that already exists and one below the newest published, reads
+  the published set from the registry rather than from anything in this
+  repository - what is out there is the fact, and a local list is what an
+  attacker would rewrite - and fails closed when the registry cannot be
+  read, since a registry that did not answer did not say yes.
+
+  The two refusals are different failures and are named separately. An
+  accidental re-run and an attempt to change what a version means are
+  indistinguishable from the pipeline, so both get the answer for the
+  hostile reading. Versions are ordered numerically: `0.1.10` sorts below
+  `0.1.9` as text, which would pass a real downgrade and block a real
+  upgrade.
+
+  Nothing here makes a GHCR tag immutable, and the gate does not claim
+  it. What it removes is the legitimate path to a moved tag, so a version
+  whose bytes change is always evidence rather than possibly a re-run.
 - **Y5 - Non-root container with a shipped AppArmor profile (binds the
   next add-on release):** entrypoint prepares `/data` then drops
   privileges before Pico code runs; a custom profile ships with the
   add-on; the smoke tests run against the hardened form.
-- **Y6 - Boot-time update evidence (binds ADR 0121 J1):** a
-  content-free version-change audit record on every boot where the
-  running version differs from the recorded one, downgrades stated as
-  downgrades, raised through the ADR 0112 carrier.
+- **Y6 - Boot-time update evidence (the record implemented; the
+  carrier surfacing open):** the running version is recorded in the ADR
+  0110 anchor, which is where it has to live: a restore brings back the
+  Foundation snapshot *and* its record of what was running, so a
+  downgrade would look like continuity. `home.version_changed` carries
+  two versions and a direction, and because it starts with `home.` the
+  audit family picks it up by prefix - chained and anchored like every
+  other authority-relevant record without a second decision.
+
+  A downgrade is named as one. Arriving on older code is the direction
+  that can reintroduce a fixed flaw, and an installation unable to say
+  which way it moved cannot tell an update from an attack. Versions are
+  compared numerically for the same reason as Y4.
+
+  **A first boot records the version and appends nothing.** Nothing
+  changed - that is the beginning, and this gate asks for a record where
+  the running version *differs* from the recorded one. An anchor that was
+  re-seeded also reads as a first boot, and that case already has its own
+  more precise record in `home.recovery_anchor_reseeded`.
+
+  **Recording never creates an anchor**, and a test caught the first
+  version of this doing exactly that. ADR 0110 R6 keeps a Home closed
+  when its anchor is missing until a person re-seeds it deliberately; a
+  file written at boot would have turned that loss into a fresh empty
+  anchor answering every question with "nothing was ever consumed".
+  Knowing which version ran is not worth defeating the block that exists
+  to notice a restore.
+
+  What is not done: the record is not raised through the ADR 0112
+  carrier, so a person learns of a downgrade by reading the log rather
+  than by being told.
 
 ## Threat ledger
 
