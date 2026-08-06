@@ -1,4 +1,4 @@
-import { realtimeMessageType } from '@pico/protocol';
+import { realtimeMessageType } from './protocol-values.js';
 import {
   createRetentionPolicy,
   defaultPicoHomeUrl,

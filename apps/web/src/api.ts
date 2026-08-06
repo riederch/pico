@@ -1,4 +1,4 @@
-import { memoryRetentionModes, picoHomeClaimStates } from '@pico/protocol';
+import { memoryRetentionModes, picoHomeClaimStates } from './protocol-values.js';
 import type {
   DashboardSnapshot,
   EventHistoryStatus,

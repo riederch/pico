@@ -1,4 +1,4 @@
-import { memoryRetentionModes } from '@pico/protocol';
+import { memoryRetentionModes } from './protocol-values.js';
 import type { ConnectionStatus, DashboardState, EventFilters, MemoryContentItem, PicoEvent, RetentionMode, RetentionPolicy, SystemStatus } from './types.js';
 
 export interface DashboardView {

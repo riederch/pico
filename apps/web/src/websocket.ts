@@ -1,4 +1,4 @@
-import { realtimeMessageType } from '@pico/protocol';
+import { realtimeMessageType } from './protocol-values.js';
 import { buildEndpointUrl } from './api.js';
 import type { RealtimeMessage } from './types.js';
 import { isPicoEvent, isRecord } from './types.js';
