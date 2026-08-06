@@ -620,6 +620,26 @@ export class MemoryStore {
    * ADR 0069): `resolvable` while the item is active, `deleted` after it is
    * deleted or tombstoned, `unknown` if it is not in this domain.
    */
+  /**
+   * ADR 0118 O1. When a time-bound entry reached the person, or `undefined`
+   * while it still waits or is not one at all.
+   *
+   * A read projection like {@link resolutionState} beside it: whether an entry
+   * has been raised changes after the event was written, so the event cannot
+   * carry it and a surface that only read events would show a reminder as
+   * forever pending.
+   *
+   * Deliberately not scoped by domain and deliberately carrying no content:
+   * this is a delivery timestamp, not the person's words, and the caller has
+   * the item's own reference already.
+   */
+  public raisedAt(memoryItemId: string): string | undefined {
+    const row = this.db
+      .prepare('SELECT raised_at AS raisedAt FROM memory_item WHERE memory_item_id = ?')
+      .get(memoryItemId) as { raisedAt: string | null } | undefined;
+    return row?.raisedAt ?? undefined;
+  }
+
   public resolutionState(memoryItemId: string, privacyDomain: string): ReferenceTargetResolutionState {
     const item = this.getInDomain(memoryItemId, privacyDomain);
 

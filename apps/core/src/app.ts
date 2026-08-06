@@ -5003,7 +5003,22 @@ function resolveReferenceEvents(events: PicoEvent[], memory: MemoryStore): PicoE
 
     const payload = event.payload as MemoryRecordedPayload;
     const resolutionState = memory.resolutionState(payload.memoryItemId, payload.privacyDomain);
-    return { ...event, payload: { ...payload, resolutionState } };
+    if (event.type !== 'memory.time_bound_entry_recorded') {
+      return { ...event, payload: { ...payload, resolutionState } };
+    }
+    // ADR 0118 O1. Whether an entry has been raised changes after the event
+    // was written, so the event cannot carry it - a surface reading only
+    // events would show every reminder as forever pending. Projected here for
+    // the same reason `resolutionState` is, and the stored event is unchanged.
+    const raisedAt = memory.raisedAt(payload.memoryItemId);
+    return {
+      ...event,
+      payload: {
+        ...payload,
+        resolutionState,
+        ...(raisedAt === undefined ? {} : { raisedAt }),
+      },
+    };
   });
 }
 

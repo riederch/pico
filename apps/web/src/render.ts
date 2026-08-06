@@ -498,9 +498,18 @@ function renderTimeBoundEntries(
     if (row.overdue) {
       tr.dataset.overdue = 'true';
     }
+    if (row.raisedAt !== undefined) {
+      tr.dataset.raised = 'true';
+    }
     for (const [value, monospace] of [
       [formatDateTime(row.dueAt), false],
       [row.kind, false],
+      // Three states, not two: waiting, late, and done. Collapsing "done" into
+      // "not late" would leave the person unable to tell an entry that
+      // reached them from one that simply is not due yet.
+      [row.raisedAt === undefined
+        ? (row.overdue ? 'overdue' : 'waiting')
+        : `raised ${formatDateTime(row.raisedAt)}`, false],
       [row.privacyDomain, true],
       [row.memoryItemId, true],
     ] as Array<[string, boolean]>) {
@@ -547,7 +556,9 @@ export interface TimeBoundEntryRow {
   kind: 'appointment' | 'reminder';
   privacyDomain: string;
   dueAt: string;
-  /** True once the instant has passed and it is still listed. */
+  /** Set once the entry reached the person. */
+  raisedAt?: string;
+  /** True only while it is late *and* still waiting. */
   overdue: boolean;
 }
 
@@ -560,11 +571,10 @@ export interface TimeBoundEntryRow {
  * against the clock rather than stored, because whether something is late
  * changes without anything being written.
  *
- * Note what this cannot tell the person yet: whether an entry was already
- * raised. That lives on the memory item, and the event stream does not carry
- * it - so an entry stays listed as overdue after it has been raised, and the
- * list is honest about being a record of what was entered rather than a
- * record of what has happened since.
+ * `raisedAt` is a read projection the core adds, not a stored field: whether
+ * an entry reached the person changes after the event was written. An entry
+ * that has been raised is never overdue - it is done, and calling it late
+ * would keep nagging about something already delivered.
  */
 export function timeBoundEntriesFromEvents(
   events: readonly PicoEvent[],
@@ -582,6 +592,7 @@ export function timeBoundEntriesFromEvents(
     if (typeof dueAt !== 'string' || typeof memoryItemId !== 'string') {
       continue;
     }
+    const raisedAt = typeof payload.raisedAt === 'string' ? payload.raisedAt : undefined;
     rows.push({
       memoryItemId,
       kind: payload.contentType === 'application/vnd.pico.appointment'
@@ -589,7 +600,8 @@ export function timeBoundEntriesFromEvents(
         : 'reminder',
       privacyDomain: typeof payload.privacyDomain === 'string' ? payload.privacyDomain : '',
       dueAt,
-      overdue: Date.parse(dueAt) <= nowMs,
+      ...(raisedAt === undefined ? {} : { raisedAt }),
+      overdue: raisedAt === undefined && Date.parse(dueAt) <= nowMs,
     });
   }
   return rows.sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));

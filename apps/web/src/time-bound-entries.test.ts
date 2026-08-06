@@ -85,6 +85,8 @@ describe('ADR 0118 O1 the appointment surface exists in the shell', () => {
     expect(html).toContain('id="entry-kind"');
     expect(html).toContain('id="entry-domain"');
     expect(html).toContain('id="entries-body"');
+    // Three states need their own column.
+    expect(html).toContain('<th>State</th>');
 
     // A picker rather than a free-text instant: the core refuses anything but
     // a canonical one, and a person should not have to spell ISO-8601.
@@ -94,5 +96,60 @@ describe('ADR 0118 O1 the appointment surface exists in the shell', () => {
     // Both kinds are offerable, because the protocol names both.
     expect(html).toContain('value="reminder"');
     expect(html).toContain('value="appointment"');
+  });
+});
+
+describe('ADR 0118 O1 the raised state', () => {
+  const raised = (raisedAt: string) => event({
+    payload: {
+      memoryItemId: 'mem_1',
+      privacyDomain: 'domain-private',
+      contentType: 'application/vnd.pico.reminder',
+      dueAt: '2026-08-01T09:00:00.000Z',
+      raisedAt,
+    },
+  });
+
+  it('carries the instant the entry reached the person', () => {
+    const [row] = timeBoundEntriesFromEvents(
+      [raised('2026-08-01T09:00:04.000Z')],
+      '2026-08-06T00:00:00.000Z',
+    );
+
+    expect(row?.raisedAt).toBe('2026-08-01T09:00:04.000Z');
+  });
+
+  it('never calls a raised entry overdue', () => {
+    // It is done. Calling it late would keep nagging about something already
+    // delivered, which is how a list stops being worth reading.
+    const [row] = timeBoundEntriesFromEvents(
+      [raised('2026-08-01T09:00:04.000Z')],
+      '2026-08-06T00:00:00.000Z',
+    );
+
+    expect(row?.overdue).toBe(false);
+  });
+
+  it('still calls an unraised past entry overdue', () => {
+    const [row] = timeBoundEntriesFromEvents([event({
+      payload: {
+        memoryItemId: 'mem_1',
+        privacyDomain: 'domain-private',
+        contentType: 'application/vnd.pico.reminder',
+        dueAt: '2026-08-01T09:00:00.000Z',
+      },
+    })], '2026-08-06T00:00:00.000Z');
+
+    expect(row?.overdue).toBe(true);
+    expect(row?.raisedAt).toBeUndefined();
+  });
+
+  it('keeps a raised entry in the list', () => {
+    // A person looking for what they asked for should find it whether or not
+    // it has already arrived.
+    expect(timeBoundEntriesFromEvents(
+      [raised('2026-08-01T09:00:04.000Z')],
+      '2026-08-06T00:00:00.000Z',
+    )).toHaveLength(1);
   });
 });

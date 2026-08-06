@@ -79,6 +79,65 @@ describe('ADR 0118 O1 recording a time-bound entry through the API', () => {
     }
   });
 
+  it('projects the raised instant onto the event once it is raised', async () => {
+    // Whether an entry reached the person changes after the event was written,
+    // so the event cannot carry it - a surface reading only events would show
+    // every reminder as forever pending.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-time-bound-raised-'));
+    tempDirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath,
+      deviceId: 'pico-core',
+    });
+
+    try {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/api/events',
+        payload: {
+          deviceId: 'desktop-dev',
+          type: 'memory.recorded',
+          payload: {
+            privacyDomain: 'domain-private',
+            contentType: 'application/vnd.pico.reminder',
+            content: 'Call the dentist',
+            dueAt: new Date(Date.now() - 60_000).toISOString(),
+          },
+        },
+      });
+      expect(created.statusCode).toBe(201);
+      const memoryItemId = (created.json().event.payload as { memoryItemId: string }).memoryItemId;
+
+      const before = await app.inject({ method: 'GET', url: '/api/events?limit=10' });
+      const beforeRow = (before.json().events as Array<{ type: string; payload: Record<string, unknown> }>)
+        .find((stored) => stored.type === 'memory.time_bound_entry_recorded');
+      expect(beforeRow?.payload.raisedAt).toBeUndefined();
+
+      // Raise it the way the scheduler would.
+      const store = await EventStore.open(databasePath);
+      try {
+        expect(store.markPicoTimeBoundEntryRaised({
+          memoryItemId,
+          raisedAt: '2026-08-06T09:00:04.000Z',
+        })).toBe(true);
+      } finally {
+        store.close();
+      }
+
+      const after = await app.inject({ method: 'GET', url: '/api/events?limit=10' });
+      const afterRow = (after.json().events as Array<{ type: string; payload: Record<string, unknown> }>)
+        .find((stored) => stored.type === 'memory.time_bound_entry_recorded');
+      expect(afterRow?.payload.raisedAt).toBe('2026-08-06T09:00:04.000Z');
+      // A projection, not a rewrite: everything else is what was stored.
+      expect(afterRow?.payload.memoryItemId).toBe(memoryItemId);
+    } finally {
+      await app.close();
+    }
+  });
+
   it('stays an ordinary memory record without an instant', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'pico-time-bound-plain-'));
     tempDirs.push(dir);

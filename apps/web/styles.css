@@ -163,3 +163,10 @@ thead th { border-top: 0; color: var(--pico-text-secondary); font-size: 12px; fo
  * family exists to prevent.
  */
 tbody tr[data-overdue="true"] td:first-child { color: var(--pico-status-warning); font-weight: 600; }
+
+/*
+ * ADR 0118 O1. A raised entry is done, so it recedes rather than shouting -
+ * and it is still listed, because a person looking for what they asked for
+ * should find it whether or not it has already arrived.
+ */
+tbody tr[data-raised="true"] td { color: var(--pico-text-muted); }
