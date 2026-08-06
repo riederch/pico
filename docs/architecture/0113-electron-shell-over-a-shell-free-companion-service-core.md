@@ -218,7 +218,33 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   bridge methods. A spawned Foundation, a founded Home and two real Vault
   daemons prove that a real pending recovery reaches the hosted carrier and
   raises its blocked presentation on the first authenticated read.
-- **C3 - Packaging and budget (implemented):** the Linux-amd64 build emits
+- **C3 - Packaging and budget (implemented; the budget now has a cheap
+  companion check):** the measured PSS budget stays the authority - but it is
+  a twenty-minute round trip that packages the app, installs it and reads
+  memory, then reports a number and nothing about why. On 2026-08-06 it
+  reported 225,261,568 against 225,000,000 and left the cause to be found by
+  hand.
+
+  The cause was structural rather than a leak: the Electron tray's *static*
+  import graph had grown. `vault-product-session.ts` imported the
+  `@pico/vault-daemon` barrel for one client function, and that barrel also
+  carries the vault CLI and the daemon server - 156 KiB of source starting
+  with a tray that uses neither. Three protocol modules added the same week
+  rode in through `@pico/protocol`'s barrel for the same reason. Narrowing
+  the one import and publishing those three as subpaths took the tray graph
+  from 44 modules and 836 KiB to 38 and 647 KiB, which is far more than the
+  additions had cost: the budget had roughly 819 KB of headroom, so anything
+  at all would have tripped it.
+
+  `check-companion-boundary.mjs` now walks that graph and fails, by name, on
+  a module that has no business starting with the tray. Type-only imports are
+  not walked, because they are erased before anything runs. The check found
+  nothing when it was written - the narrowing had already landed - and exists
+  so the next one is a named error in a second rather than a number in CI.
+  Counter-proven against both shapes the regression took: restoring the
+  barrel import, and re-adding a subpath module to the barrel.
+
+  The rest of the gate is unchanged: the Linux-amd64 build emits
   a deterministic Debian package plus SHA-256 sidecar. It carries only
   built runtime files and internal dependency links. The production closure
   is installed offline from the committed frozen lockfile and existing pnpm

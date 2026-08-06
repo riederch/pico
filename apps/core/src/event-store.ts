@@ -31,7 +31,6 @@ import type {
 } from '@pico/protocol';
 import {
   evaluatePicoStorageCondition,
-  parsePicoTimeBoundEntry,
   hasPicoExposureWindowElapsed,
   hasPicoObjectionWindowElapsed,
   isPicoHomeAuditEventType,
@@ -40,7 +39,6 @@ import {
   type PicoDurableStore,
   type PicoStorageCondition,
   type PicoStoragePressureState,
-  type PicoTimeBoundEntry,
 } from '@pico/protocol';
 import {
   buildPicoHomeDeviceActivationSignatureInput,
@@ -78,6 +76,10 @@ import {
   type AppliedMigration,
   type MigrationDefinition,
 } from './migrations.js';
+import {
+  parsePicoTimeBoundEntry,
+  type PicoTimeBoundEntry,
+} from '@pico/protocol/time-bound-entry';
 import { PicoStoreRowCounter } from './store-row-counter.js';
 import { MemoryStore } from './memory-store.js';
 import { RetentionPolicyStore } from './retention-policy-store.js';

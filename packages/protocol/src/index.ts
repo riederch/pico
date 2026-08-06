@@ -4434,9 +4434,14 @@ function assertStringMember<const TValues extends readonly string[]>(
 export * from './recovery.js';
 export * from './model-context.js';
 export * from './time-authority.js';
-export * from './offline-floor.js';
-export * from './planner-reader.js';
-export * from './time-bound-entry.js';
+// ADR 0113 C3. Deliberately *not* re-exported here: `offline-floor`,
+// `planner-reader` and `time-bound-entry` are published as subpaths instead.
+//
+// This barrel is imported wholesale by the Electron tray path, so anything
+// added to it costs tray memory whether the tray uses it or not - and the tray
+// uses none of these three. The measured budget is what caught it, one commit
+// after they landed. New surfaces get their own subpath from the start rather
+// than growing a barrel no consumer can opt out of.
 export * from './storage-pressure.js';
 export * from './appearance.js';
 

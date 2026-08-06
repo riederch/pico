@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -85,6 +85,108 @@ if (/https?:\/\//.test(rendererHtml) || /<script(?![^>]+\bsrc=)[^>]*>/i.test(ren
   errors.push('apps/companion-shell renderer must contain no remote or inline script content.');
 }
 
+/**
+ * ADR 0113 C3. The Electron tray runs against a measured memory budget, and
+ * that budget is checked by packaging the app, installing it and reading PSS -
+ * a twenty-minute round trip that reports "225,261,568 exceeds 225,000,000"
+ * and nothing about why.
+ *
+ * This is the cheap half of that check. It walks the tray's *static* import
+ * graph and fails on a module that has no business being started with the
+ * tray: the vault CLI, the daemon server, or a protocol surface published as a
+ * subpath precisely so the barrel would not carry it. None of them is wrong to
+ * exist - they are wrong to be loaded before the tray has done anything.
+ *
+ * It caught nothing when it was written, because the narrowing that prompted
+ * it had already landed. It exists so the next one is a named error in a
+ * second rather than a number in CI.
+ */
+const trayEntry = join(shellRoot, 'src', 'main.ts');
+const trayForbidden = [
+  { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'cli.ts'), why: 'the vault CLI' },
+  { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'daemon.ts'), why: 'the daemon server' },
+  { file: join(repoRoot, 'packages', 'protocol', 'src', 'planner-reader.ts'), why: 'a subpath-published protocol surface' },
+  { file: join(repoRoot, 'packages', 'protocol', 'src', 'time-bound-entry.ts'), why: 'a subpath-published protocol surface' },
+  { file: join(repoRoot, 'packages', 'protocol', 'src', 'offline-floor.ts'), why: 'a subpath-published protocol surface' },
+];
+
+const workspaceRoots = new Map();
+for (const group of ['packages', 'apps']) {
+  for (const entry of readdirSync(join(repoRoot, group))) {
+    const manifest = join(repoRoot, group, entry, 'package.json');
+    if (!existsSync(manifest)) {
+      continue;
+    }
+    workspaceRoots.set(
+      JSON.parse(readFileSync(manifest, 'utf8')).name,
+      join(repoRoot, group, entry, 'src'),
+    );
+  }
+}
+
+// `import type` is erased before anything runs, so it costs the tray nothing
+// and must not be walked - flagging one would be a false positive whose
+// natural fix is an exemption.
+const typeOnly = /(?:^|[^\w$])(?:import|export)\s+type\s[^'"]*$/u;
+
+function resolveTrayImport(specifier, fromFile) {
+  if (specifier.startsWith('.')) {
+    const base = resolve(dirname(fromFile), specifier).replace(/\.js$/u, '');
+    for (const candidate of [`${base}.ts`, join(base, 'index.ts'), `${base}.cts`]) {
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+  for (const [name, root] of workspaceRoots) {
+    if (specifier === name) {
+      const candidate = join(root, 'index.ts');
+      return existsSync(candidate) ? candidate : null;
+    }
+    if (specifier.startsWith(`${name}/`)) {
+      const rest = specifier.slice(name.length + 1).replace(/\.js$/u, '');
+      for (const candidate of [join(root, `${rest}.ts`), join(root, rest, 'index.ts')]) {
+        if (existsSync(candidate)) {
+          return candidate;
+        }
+      }
+      return null;
+    }
+  }
+  return null;
+}
+
+const trayReached = new Set();
+const trayQueue = [trayEntry];
+while (trayQueue.length > 0) {
+  const file = trayQueue.pop();
+  if (trayReached.has(file)) {
+    continue;
+  }
+  trayReached.add(file);
+  const source = readFileSync(file, 'utf8');
+  for (const match of source.matchAll(/(?:^|[^\w$])(?:from\s+|require\s*\(\s*)['"]([^'"]+)['"]/g)) {
+    const preceding = source.slice(0, match.index + match[0].length - match[1].length - 2);
+    if (typeOnly.test(preceding)) {
+      continue;
+    }
+    const resolved = resolveTrayImport(match[1], file);
+    if (resolved !== null) {
+      trayQueue.push(resolved);
+    }
+  }
+}
+
+for (const { file, why } of trayForbidden) {
+  if (trayReached.has(file)) {
+    errors.push(
+      `apps/companion-shell tray start must not statically reach ${relative(repoRoot, file)} (${why}); `
+      + 'import a narrow subpath, or load it dynamically where it is used.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Companion shell-boundary check failed:');
   for (const error of errors) {
@@ -93,7 +195,10 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('Companion shell-boundary check passed.');
+console.log(
+  'Companion shell-boundary check passed'
+  + ` (tray start reaches ${trayReached.size} modules).`,
+);
 
 function listSourceFiles(directory) {
   const files = [];

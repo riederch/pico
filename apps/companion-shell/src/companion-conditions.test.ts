@@ -1,4 +1,4 @@
-import { picoOfflineFloorFamilies } from '@pico/protocol';
+import { picoOfflineFloorFamilies } from '@pico/protocol/offline-floor';
 import { describe, expect, it } from 'vitest';
 import {
   parsePicoCompanionPresentation,

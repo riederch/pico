@@ -2,7 +2,7 @@ import {
   duePicoTimeBoundEntries,
   nextPicoTimeBoundEntryDueAt,
   type PicoTimeBoundEntry,
-} from '@pico/protocol';
+} from '@pico/protocol/time-bound-entry';
 
 /**
  * ADR 0118 O1. The local scheduling that raises a time-bound entry.

@@ -6,6 +6,24 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./offline-floor": {
+      "types": "./dist/offline-floor.d.ts",
+      "import": "./dist/offline-floor.js"
+    },
+    "./planner-reader": {
+      "types": "./dist/planner-reader.d.ts",
+      "import": "./dist/planner-reader.js"
+    },
+    "./time-bound-entry": {
+      "types": "./dist/time-bound-entry.d.ts",
+      "import": "./dist/time-bound-entry.js"
+    }
+  },
   "files": [
     "dist"
   ],

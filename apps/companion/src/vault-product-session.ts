@@ -1,8 +1,11 @@
 import type { PicoVaultPersonKeyRole } from '@pico/protocol';
-import {
-  connectPicoVaultDaemonClient,
-  type PicoVaultDaemonClient,
-} from '@pico/vault-daemon';
+// ADR 0113 C3. The narrow subpath, not the package barrel: the barrel also
+// carries the vault CLI and the daemon *server*, neither of which a companion
+// needs, and this module sits on the Electron tray's static graph where every
+// byte is measured against a budget. The same narrowing ADR 0118 O1's floor
+// check forced on the recovery modules, here forced by the memory gate.
+import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
+import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import {
   startPicoCompanionApprovalCarrier,
   type PicoCompanionApprovalCarrier,
