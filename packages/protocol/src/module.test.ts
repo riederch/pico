@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  bindPicoModuleEffects,
   orderPicoModuleManifests,
   parsePicoModuleManifest,
   picoModuleIdentifiers,
+  picoModuleIsEffectBearing,
   picoModuleKinds,
   type PicoModuleManifest,
 } from './module.js';
@@ -14,7 +16,14 @@ const wellFormed = {
   dependencies: [],
   publishedSubpaths: ['./manifest', './calendar'],
   surfaces: ['Foundation API: time-bound entries'],
+  effects: [],
 };
+
+function omit(source: Record<string, unknown>, key: string): Record<string, unknown> {
+  const copy = { ...source };
+  delete copy[key];
+  return copy;
+}
 
 /** Manifests for graph tests, without pretending unshipped identifiers exist. */
 function manifest(
@@ -28,6 +37,7 @@ function manifest(
     dependencies,
     publishedSubpaths: ['./manifest'],
     surfaces: ['none'],
+    effects: [],
   } as unknown as PicoModuleManifest;
 }
 
@@ -61,6 +71,14 @@ describe('ADR 0127 M1 module manifest vocabulary', () => {
     ['no surface', { ...wellFormed, surfaces: [] }, 'invalid_pico_module_surfaces'],
     ['an unrecognised field', { ...wellFormed, activatedByDefault: true }, 'invalid_pico_module_manifest'],
     ['a missing field', { identifier: 'calendar', kind: 'product' }, 'invalid_pico_module_manifest'],
+    ['effects missing entirely', omit(wellFormed, 'effects'), 'invalid_pico_module_manifest'],
+    ['effects that is not a list', { ...wellFormed, effects: {} }, 'invalid_pico_module_effects'],
+    ['an effect with extra keys', { ...wellFormed, effects: [{ name: 'calendar.x', description: 'd', reversible: true }] }, 'invalid_pico_module_effect'],
+    ['an effect namespaced to another module', { ...wellFormed, effects: [{ name: 'shopping.buy', description: 'd' }] }, 'invalid_pico_module_effect_name'],
+    ['an effect with no namespace at all', { ...wellFormed, effects: [{ name: 'raise', description: 'd' }] }, 'invalid_pico_module_effect_name'],
+    ['an effect name in the wrong case', { ...wellFormed, effects: [{ name: 'calendar.RaiseEntry', description: 'd' }] }, 'invalid_pico_module_effect_name'],
+    ['an effect nobody described', { ...wellFormed, effects: [{ name: 'calendar.x', description: '  ' }] }, 'invalid_pico_module_effect_description'],
+    ['the same effect twice', { ...wellFormed, effects: [{ name: 'calendar.x', description: 'a' }, { name: 'calendar.x', description: 'b' }] }, 'duplicate_pico_module_effect'],
   ])('refuses %s', (_name, value, reason) => {
     expect(() => parsePicoModuleManifest(value)).toThrow(reason);
   });
@@ -124,5 +142,88 @@ describe('ADR 0127 M2 dependency ordering', () => {
   it('refuses two manifests claiming the same identifier', () => {
     expect(() => orderPicoModuleManifests([manifest('calendar'), manifest('calendar')]))
       .toThrow('duplicate_pico_module_identifier');
+  });
+});
+
+describe('ADR 0128 H3 effects are declared, and effect-bearing is derived', () => {
+  const withEffects = (...effects: Array<{ name: string; description: string }>) =>
+    parsePicoModuleManifest({ ...wellFormed, effects });
+
+  it('treats an empty list as a declaration that nothing changes', () => {
+    const parsed = parsePicoModuleManifest(wellFormed);
+    expect(parsed.effects).toEqual([]);
+    expect(picoModuleIsEffectBearing(parsed)).toBe(false);
+    expect(Object.isFrozen(parsed.effects)).toBe(true);
+  });
+
+  it('accepts effects namespaced to the declaring module', () => {
+    const parsed = withEffects(
+      { name: 'calendar.raise-entry', description: 'Tells you an appointment is due.' },
+    );
+    expect(parsed.effects).toEqual([
+      { name: 'calendar.raise-entry', description: 'Tells you an appointment is due.' },
+    ]);
+    expect(picoModuleIsEffectBearing(parsed)).toBe(true);
+  });
+
+  it('separates absent from empty', () => {
+    // A missing field says nobody considered the question; an empty list says
+    // this module changes nothing. Reading the same would be the whole point
+    // of the declaration lost.
+    expect(() => parsePicoModuleManifest(omit(wellFormed, 'effects')))
+      .toThrow('invalid_pico_module_manifest');
+    expect(() => parsePicoModuleManifest({ ...wellFormed, effects: [] })).not.toThrow();
+  });
+});
+
+describe('ADR 0128 H3 the runtime supplies exactly what was declared', () => {
+  const manifestWith = (...names: string[]) => parsePicoModuleManifest({
+    ...wellFormed,
+    effects: names.map((name) => ({ name, description: `does ${name}` })),
+  });
+
+  it('accepts an exact match, including the empty case', () => {
+    expect(() => bindPicoModuleEffects({
+      manifest: manifestWith(),
+      supplied: {},
+    })).not.toThrow();
+    expect(() => bindPicoModuleEffects({
+      manifest: manifestWith('calendar.raise-entry'),
+      supplied: { 'calendar.raise-entry': () => undefined },
+    })).not.toThrow();
+  });
+
+  it('refuses power the manifest never asked for', () => {
+    // The manifest is what a person reads to know what a module can do. Power
+    // arriving outside it makes that reading false.
+    expect(() => bindPicoModuleEffects({
+      manifest: manifestWith(),
+      supplied: { 'calendar.raise-entry': () => undefined },
+    })).toThrow('undeclared_pico_module_effect: calendar.raise-entry');
+  });
+
+  it('refuses a declared effect the runtime forgot, at wiring rather than at use', () => {
+    // Otherwise it fails the first time it is needed, which is the moment
+    // someone is relying on it.
+    expect(() => bindPicoModuleEffects({
+      manifest: manifestWith('calendar.raise-entry', 'calendar.cancel-entry'),
+      supplied: { 'calendar.raise-entry': () => undefined },
+    })).toThrow('unsupplied_pico_module_effect: calendar.cancel-entry');
+  });
+
+  it('names every mismatch rather than only the first', () => {
+    expect(() => bindPicoModuleEffects({
+      manifest: manifestWith(),
+      supplied: { 'calendar.b': 1, 'calendar.a': 1 },
+    })).toThrow('undeclared_pico_module_effect: calendar.a, calendar.b');
+  });
+
+  it('reports extra power before missing power', () => {
+    // Both are wrong, but a module holding an effect nobody declared is the
+    // one that can act right now.
+    expect(() => bindPicoModuleEffects({
+      manifest: manifestWith('calendar.declared'),
+      supplied: { 'calendar.surprise': 1 },
+    })).toThrow('undeclared_pico_module_effect: calendar.surprise');
   });
 });

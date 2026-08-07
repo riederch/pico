@@ -5,6 +5,7 @@ import {
   orderPicoModuleManifests,
   parsePicoModuleManifest,
   picoModuleIdentifiers,
+  picoModuleIsEffectBearing,
 } from '../packages/protocol/dist/module.js';
 
 /**
@@ -25,7 +26,15 @@ import {
  *   handle. ADR 0127 M5 asks for this to be reported as a boundary error
  *   rather than a style preference, because a module that owns storage has to
  *   be added to the shred cascade, the backup exclusions, the boot
- *   reconciliation, the Q5 ceilings and the Q3 byte-identity proof.
+ *   reconciliation, the Q5 ceilings and the Q3 byte-identity proof;
+ * - **a module reaching the world directly** - a process, a socket, a
+ *   filesystem, `fetch`. ADR 0128 H3: a module declares what it can cause and
+ *   the core decides whether to cause it, so reaching out itself takes that
+ *   decision and makes the manifest false.
+ *
+ * The manifest's `effects` list is validated by the protocol's parser rather
+ * than here, so "declared no effects" and "declared them badly" are one rule
+ * with one implementation.
  *
  * The manifests are read through the protocol's own parser, not a second one
  * written here. A check that accepted manifests the product refuses - or the
@@ -48,6 +57,43 @@ const storageMechanics = [
   { pattern: /\bCREATE\s+TABLE\b/iu, what: 'a table definition' },
   { pattern: /\bALTER\s+TABLE\b/iu, what: 'a migration' },
   { pattern: /\bCREATE\s+(?:UNIQUE\s+)?INDEX\b/iu, what: 'an index definition' },
+];
+
+/**
+ * ADR 0128 H3. Direct routes out of the process, which a module never takes.
+ *
+ * A module declares what it can cause and the **core** decides whether to
+ * cause it. A module that reaches the world itself has taken that decision,
+ * and its manifest - the thing a person reads to know what it can do - has
+ * become false. So these are refused whether or not the module declared an
+ * effect: a declaration is a request for a port, not permission to bypass one.
+ *
+ * This is also the only static answer to "causing an effect it did not
+ * declare". A port is just a function and no scanner can see through one, so
+ * the wiring check (`bindPicoModuleEffects`) covers the port route and this
+ * covers everything that goes around it.
+ */
+const worldReachingImports = new Set([
+  'node:child_process',
+  'node:cluster',
+  'node:dgram',
+  'node:fs',
+  'node:fs/promises',
+  'node:http',
+  'node:http2',
+  'node:https',
+  'node:net',
+  'node:os',
+  'node:process',
+  'node:tls',
+  'node:v8',
+  'node:vm',
+  'node:worker_threads',
+]);
+
+const worldReachingGlobals = [
+  { pattern: /(?:^|[^\w$.])fetch\s*\(/u, what: 'a network call through fetch()' },
+  { pattern: /(?:^|[^\w$.])process\.(?:env|exit|kill)\b/u, what: 'direct process access' },
 ];
 
 function sourceFiles(directory) {
@@ -219,6 +265,16 @@ for (const module_ of modules) {
           );
         }
       }
+      for (const reach of worldReachingGlobals) {
+        if (reach.pattern.test(source)) {
+          errors.push(
+            `${fileLabel}: contains ${reach.what}. ADR 0128 H3: a module declares `
+            + 'what it can cause and the core decides whether to cause it, so a '
+            + 'module never reaches the world itself - not even one that declared '
+            + 'an effect. What it needs arrives as a port.',
+          );
+        }
+      }
     }
 
     for (const { specifier, typeOnly: isTypeOnly } of valueImportsOf(source)) {
@@ -244,6 +300,16 @@ for (const module_ of modules) {
         continue;
       }
       if (specifier.startsWith('node:')) {
+        if (worldReachingImports.has(specifier) && !file.endsWith('.test.ts')) {
+          errors.push(
+            `${fileLabel}: imports ${specifier}, a direct route out of the `
+            + 'process. ADR 0128 H3: a module declares what it can cause and the '
+            + 'core decides whether to cause it. Reaching the world itself takes '
+            + 'that decision and makes the manifest false, so this is refused '
+            + 'whether or not an effect was declared - a declaration asks for a '
+            + 'port, it does not permit going around one.',
+          );
+        }
         continue;
       }
 
@@ -317,4 +383,9 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log(`Module check passed: ${modules.length} of ${picoModuleIdentifiers.length} listed modules present.`);
+const effectBearing = modules.filter((module_) => picoModuleIsEffectBearing(module_.manifest));
+console.log(
+  `Module check passed: ${modules.length} of ${picoModuleIdentifiers.length} listed modules present, `
+  + `${effectBearing.length} effect-bearing`
+  + `${effectBearing.length === 0 ? '' : ` (${effectBearing.map((m) => m.manifest.identifier).join(', ')})`}.`,
+);

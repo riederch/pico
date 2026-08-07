@@ -4,7 +4,8 @@
 
 Accepted as a placement and framing constraint; the observation that Home
 Assistant reads as more central to Pico than it is came from the user on
-2026-08-07. H1, H2 and H5 are implemented. H3 and H4 are open.
+2026-08-07. H1, H2, H3 and H5 are implemented. H4 is open and binds
+the first Home Assistant integration.
 
 ## Context
 
@@ -171,12 +172,49 @@ name belongs.
   Home Assistant's own interface labels are quoted as they read rather
   than translated - a user following a wrong menu path is worse served
   than one reading a slightly older word.
-- **H3 - Effect-bearing is declared (binds ADR 0127 M1/M2 and the first
-  effect-bearing module):** the module manifest carries the effects a
-  module can cause; `module:check` fails on an effect-bearing module that
-  declares none, and on a module causing an effect it did not declare.
-  Open, and deliberately unbuilt: a property no module needs yet would be
-  a shape guessed from one hypothetical caller.
+- **H3 - Effect-bearing is declared (implemented):** the module manifest
+  carries `effects`, each one `<module-identifier>.<verb>` with a
+  description a person could be asked to consent to. The namespace is the
+  declaring module's own identifier, which is checkable and stops a module
+  claiming another's effects; what the second half says is the module's
+  decision, because a closed list of effects would have to be guessed
+  before any module needed one.
+
+  **Absent is not empty.** A missing `effects` field means nobody
+  considered the question; an empty list says this module changes nothing.
+  The parser refuses the first and accepts the second, and the calendar
+  ships the second.
+
+  **Effect-bearing is derived from the list, never stored beside it.** A
+  boolean and a list are two things that can contradict each other, and
+  the contradiction would be found by whoever trusted the wrong one.
+
+  "Causing an effect it did not declare" is checked in the two places
+  where causing is observable, because no scanner sees through a port:
+
+  - **statically**, `module:check` refuses every *direct* route out of the
+    process - a process spawner, a socket, the filesystem, `fetch`,
+    `process.env`. This is refused whether or not an effect was declared:
+    a declaration asks the core for a port, it does not permit going
+    around one.
+  - **at wiring**, `bindPicoModuleEffects` refuses a supplied effect the
+    manifest never declared, and a declared effect the runtime did not
+    supply. The first is a runtime handing a module more power than it
+    asked for, which makes the manifest a false thing to read; the second
+    would fail at first use, which is the moment someone is relying on it.
+    Extra power is reported before missing power, because only one of them
+    can act right now.
+
+  Seventeen probes cover the module boundary, and the seventeenth is the
+  one that keeps this honest: **a well-formed declared effect passes.**
+  Without it the check would be indistinguishable from "effects are
+  forbidden".
+
+  What was accepted in building this early: the shape is drawn from one
+  module that declares nothing, so the first module that actually causes
+  something may disagree with it. The parts most likely to be wrong are
+  the effect-name grammar and the absence of any severity or
+  reversibility, both of which are additions rather than rewrites.
 - **H4 - The integration is a module (binds the first Home Assistant
   integration):** no Supervisor client, entity read or service call lands
   in `apps/core`. Proven the way ADR 0127 M1 was proven - the
@@ -218,6 +256,8 @@ name belongs.
 | An ADR explains Foundation access as a Home Assistant fact | H1. The subject is what stands in front of the surface; Home Assistant is an instance of one of three. |
 | A Home Assistant integration is proposed inside `apps/core` | Refused (H4). It is a module, and a connector. |
 | An effect-bearing module wants to decide whether to act | The decision goes to the action path. A module declares what it can cause; the core chooses. |
+| A module reaches the world directly instead of asking | Refused at `module:check` (H3), declared effects or not. A declaration asks for a port; it does not permit going around one. |
+| A runtime supplies an effect the manifest never declared | Refused at wiring (H3). The manifest is what a person reads to know what a module can do. |
 | A connector's foreign content becomes an action argument | Only with its origin label attached (ADR 0117). A module boundary is not a substitute and never was one. |
 | An effect-bearing module is switched off with promises standing | The M4 statement is made, but it does not gate the stop. Stopping the world changing is sometimes the point. |
 | Someone drops the `ha-ingress` alias | A release decision under ADR 0122, never a cleanup: the value sits in installed environments today (H5). |

@@ -40,6 +40,38 @@ export interface PicoModuleManifest {
   publishedSubpaths: readonly string[];
   /** Where this module reaches a person. Prose, for the status surface. */
   surfaces: readonly string[];
+  /**
+   * ADR 0128 H3. What this module can cause outside Pico's custody.
+   *
+   * An empty list is a declaration, not an omission, in the same way an empty
+   * `dependencies` is: it says this module changes nothing in the world.
+   *
+   * **Effect-bearing is derived from this list, never stated beside it.** A
+   * boolean and a list are two things that can contradict each other, and the
+   * contradiction would be discovered by whoever trusted the wrong one.
+   */
+  effects: readonly PicoModuleEffect[];
+}
+
+/**
+ * ADR 0128 H3. One thing a module can cause, named so the core can decide.
+ *
+ * Turning on a light is not input, it is an effect: something outside Pico's
+ * custody changes, and deleting a row afterwards does not undo it. A module
+ * declares what it can cause; **the decision to cause it belongs to the core's
+ * action path** (ADR 0036, ADR 0117). This is a request for a capability, not
+ * a capability.
+ *
+ * The name is namespaced by the declaring module's own identifier, which is
+ * checkable and stops a module from claiming another's effects. What the
+ * second half says is the module's decision - Pico holds no closed list of
+ * effects, because it would have to be guessed before any module needed one.
+ */
+export interface PicoModuleEffect {
+  /** `<module-identifier>.<verb>`, lowercase, e.g. `calendar.raise-entry`. */
+  name: string;
+  /** What a person would say happened. Prose, for the surface that asks. */
+  description: string;
 }
 
 function isDistinctStringArray(value: unknown): value is readonly string[] {
@@ -55,6 +87,7 @@ export function parsePicoModuleManifest(value: unknown): PicoModuleManifest {
   const record = value as Record<string, unknown>;
   const expected = [
     'dependencies',
+    'effects',
     'identifier',
     'kind',
     'packageName',
@@ -97,6 +130,7 @@ export function parsePicoModuleManifest(value: unknown): PicoModuleManifest {
   if (!isDistinctStringArray(record.surfaces) || record.surfaces.length === 0) {
     throw new Error('invalid_pico_module_surfaces');
   }
+  const effects = parsePicoModuleEffects(record.effects, record.identifier);
   return Object.freeze({
     identifier: record.identifier as PicoModuleIdentifier,
     kind: record.kind as PicoModuleKind,
@@ -104,7 +138,92 @@ export function parsePicoModuleManifest(value: unknown): PicoModuleManifest {
     dependencies: Object.freeze([...record.dependencies] as PicoModuleIdentifier[]),
     publishedSubpaths: Object.freeze([...record.publishedSubpaths]),
     surfaces: Object.freeze([...record.surfaces]),
+    effects,
   });
+}
+
+function parsePicoModuleEffects(
+  value: unknown,
+  identifier: string,
+): readonly PicoModuleEffect[] {
+  if (!Array.isArray(value)) {
+    // Absent is not empty. An empty list says "this module changes nothing";
+    // a missing field says nobody considered the question, and the two must
+    // not read the same to whoever wires this module up.
+    throw new Error('invalid_pico_module_effects');
+  }
+  const namePattern = new RegExp(`^${identifier}\\.[a-z0-9]+(?:-[a-z0-9]+)*$`, 'u');
+  const effects = value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      throw new Error('invalid_pico_module_effect');
+    }
+    const record = entry as Record<string, unknown>;
+    const keys = Object.keys(record).sort();
+    if (keys.length !== 2 || keys[0] !== 'description' || keys[1] !== 'name') {
+      throw new Error('invalid_pico_module_effect');
+    }
+    if (typeof record.name !== 'string' || !namePattern.test(record.name)) {
+      // Namespaced by the declaring module, so one module cannot claim
+      // another's effects and a reader can tell at a glance who answers for it.
+      throw new Error('invalid_pico_module_effect_name');
+    }
+    if (typeof record.description !== 'string' || record.description.trim() === '') {
+      // A person is going to be asked to allow this. An effect nobody can
+      // describe is one nobody can consent to.
+      throw new Error('invalid_pico_module_effect_description');
+    }
+    return Object.freeze({ name: record.name, description: record.description });
+  });
+  if (new Set(effects.map((effect) => effect.name)).size !== effects.length) {
+    throw new Error('duplicate_pico_module_effect');
+  }
+  return Object.freeze(effects);
+}
+
+/**
+ * ADR 0128 H3. Whether this module can change anything outside Pico's custody.
+ *
+ * Derived, never stored beside the list. A stored flag could disagree with the
+ * effects it claims to summarise, and the disagreement would be found by
+ * whoever trusted the wrong one.
+ */
+export function picoModuleIsEffectBearing(manifest: PicoModuleManifest): boolean {
+  return manifest.effects.length > 0;
+}
+
+/**
+ * ADR 0128 H3. The runtime hands a module exactly the effects it declared.
+ *
+ * A static check can refuse every *direct* route to the world - and
+ * `module:check` does - but it cannot see an effect caused through a port,
+ * because a port is just a function. Wiring is where "causing" becomes
+ * observable, so this is checked there.
+ *
+ * Both directions are failures, and they are different ones:
+ *
+ * - **Supplied but not declared** is a runtime handing a module more power
+ *   than it asked for. The manifest is what a person reads to know what a
+ *   module can do; power arriving outside it makes that reading false.
+ * - **Declared but not supplied** is a module that will fail the first time
+ *   it tries - which is at the moment someone is relying on it. Refusing at
+ *   wiring turns a later surprise into a start-up error.
+ */
+export function bindPicoModuleEffects(input: {
+  manifest: PicoModuleManifest;
+  supplied: Readonly<Record<string, unknown>>;
+}): void {
+  const declared = new Set(input.manifest.effects.map((effect) => effect.name));
+  const supplied = new Set(Object.keys(input.supplied));
+
+  const undeclared = [...supplied].filter((name) => !declared.has(name)).sort();
+  if (undeclared.length > 0) {
+    throw new Error(`undeclared_pico_module_effect: ${undeclared.join(', ')}`);
+  }
+
+  const unsupplied = [...declared].filter((name) => !supplied.has(name)).sort();
+  if (unsupplied.length > 0) {
+    throw new Error(`unsupplied_pico_module_effect: ${unsupplied.join(', ')}`);
+  }
 }
 
 /**

@@ -35,4 +35,15 @@ export const picoCalendarModuleManifest: PicoModuleManifest = Object.freeze({
     'Pico Link: home.time_bound_entries.read',
     'Companion: the time_bound_entry_due presentation state',
   ]),
+  /**
+   * ADR 0128 H3. Nothing outside Pico's custody changes because of this module.
+   *
+   * The empty list is the declaration, not an omission. A calendar reads
+   * entries and orders them; the raising a person eventually sees is a core
+   * capability, and telling someone something is due changes a surface rather
+   * than the world. If this module ever gained a way to act - moving an
+   * appointment in an external calendar, say - the effect would be declared
+   * here first, and the core would decide whether to allow it.
+   */
+  effects: Object.freeze([]),
 });

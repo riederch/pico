@@ -280,7 +280,8 @@ with it.
 - **M1 - The module contract (implemented at the calendar):**
   `@pico/module-calendar` declares itself through
   `@pico/protocol/module` - identifier, kind, package name,
-  dependencies, published subpaths and surfaces - and the closed
+  dependencies, published subpaths, surfaces and, since ADR 0128 H3, the
+  effects it can cause outside Pico's custody - and the closed
   enumerated list lives in the protocol beside
   `picoProtectiveEventTypes`, listed rather than discovered by directory
   scan. The package publishes `./manifest` and `./calendar` and exports
@@ -317,10 +318,14 @@ with it.
   not publish or a published subpath the package does not export, a
   listed module that ships no package, and - reporting M5 early - a
   module containing storage mechanics: a database driver, a table, a
-  migration or an index.
+  migration or an index. ADR 0128 H3 added one more: a module reaching the
+  world directly - a process spawner, a socket, the filesystem, `fetch`,
+  `process.env` - because a module declares what it can cause and the core
+  decides whether to cause it.
 
-  Ten probes, and the seventh is the one that matters most: **a declared,
-  published, acyclic edge between two modules passes.** Without it the
+  Seventeen probes, and two matter most: **a declared, published, acyclic
+  edge between two modules passes**, and **a well-formed declared effect
+  passes.** Without it the
   check could be "fails on any module-to-module import", which would
   forbid exactly what ADR 0127 permits. An escaping relative import is
   reported and *not followed*, or the one real finding would arrive
