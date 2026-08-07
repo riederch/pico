@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as a structural constraint on where product features live; the
-initiative and its scope were chosen by the user on 2026-08-06. M1, M2 and M3 are implemented; the calendar was the first module and
-spatial recall (ADR 0129) is the second. M4 and M5 are open.
+initiative and its scope were chosen by the user on 2026-08-06. M1, M2, M3 and M4 are implemented; the calendar was the first module
+and spatial recall (ADR 0129) is the second. M5 is open.
 
 The claim is deliberately narrow: this decides **organisation**, not
 protection. A module boundary makes features easier to find and harder
@@ -374,10 +374,41 @@ with it.
   one row per shipped module, forever - which puts it in the same class
   as the authority and lifecycle tables beside it and explicitly not in
   the second kind of store ADR 0129 gates behind five places.
-- **M4 - Deactivation is loud where promises stand (binds M3, with ADR
-  0118 O1):** disabling a module holding unfinished commitments states
-  what will not happen, and the statement names the commitments rather
-  than the module.
+- **M4 - Deactivation is loud where promises stand (implemented):**
+  disabling a module returns what will no longer happen, gathered before
+  the change so it describes what was there rather than what is left. The
+  statement names the **commitments** - each with its kind, its instant
+  and an opaque handle, oldest first - rather than saying the module had
+  some. For the calendar those are the entries that still wait, and an
+  overdue one counts: it is not stale, it is the promise already broken
+  by the longest. A raised entry does not, because it happened, and
+  listing it would tell someone they are losing something they have.
+
+  **The statement is content-free, and that is a rule rather than an
+  omission.** ADR 0075 A7 keeps administration separate from readership:
+  whoever may switch a module off is not thereby entitled to read what it
+  holds. So a commitment says that something is outstanding and when,
+  never what it says - the same split the ADR 0118 O1 Link read already
+  makes. A test asserts the field set and that a title cannot be found in
+  the response, rather than trusting a reviewer to notice one being added
+  later.
+
+  **It does not gate the stop.** ADR 0128 is explicit that deactivating
+  an effect-bearing module must stay immediate, because stopping the
+  world changing is sometimes the point. So this is told in the posture
+  ADR 0119 Q5 uses for storage pressure - said while there is still room
+  to act, never as a confirmation standing in the way - and the module is
+  already off on the call that reports what it dropped. Re-enabling
+  restores everything, because M3 dropped no data.
+
+  The full count travels with the shown few. A truncated list that
+  reports its own truncated length is worse than no list: "and 9,987
+  more" is information, a quiet cut is a lie.
+
+  Where a module's promises come from is a map in the runtime wiring, not
+  a method every module must implement - a module with nothing
+  outstanding simply has no entry, so the core grows no per-module
+  branch.
 - **M5 - Capability lift (binds the second module):** a mechanic needed
   by two modules is a core capability, not a module dependency, and the
   check reports a module that holds storage mechanics as a boundary

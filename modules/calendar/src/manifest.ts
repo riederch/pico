@@ -28,12 +28,13 @@ export const picoCalendarModuleManifest: PicoModuleManifest = Object.freeze({
   // No `.` export exists, deliberately. A barrel is how this tree twice
   // dragged unrelated code into the measured tray budget, and ADR 0127 chose
   // subpaths from the first day rather than vigilance.
-  publishedSubpaths: Object.freeze(['./manifest', './calendar']),
+  publishedSubpaths: Object.freeze(['./manifest', './calendar', './commitments']),
   surfaces: Object.freeze([
     'Foundation API: recording a memory item with a due instant',
     'Foundation dashboard: the entry list and its waiting, overdue and raised states',
     'Pico Link: home.time_bound_entries.read',
     'Companion: the time_bound_entry_due presentation state',
+    'Foundation API: what will not happen if this module is switched off',
   ]),
   /**
    * ADR 0128 H3. Nothing outside Pico's custody changes because of this module.

@@ -467,3 +467,82 @@ export function toPicoModuleActivationView(input: {
     }))),
   });
 }
+
+/**
+ * ADR 0127 M4. Something a module promised that has not happened yet.
+ *
+ * **Content-free by construction, and that is not a limitation.** ADR 0075 A7
+ * keeps administration separate from readership: whoever may switch a module
+ * off is not thereby entitled to read what it holds. So a commitment names
+ * itself - its kind, when it was going to happen, and an opaque handle - and
+ * says nothing about the words. That something is outstanding is the fact this
+ * gate delivers; disclosing it because an administrator asked would trade a
+ * privacy rule for a louder message.
+ *
+ * It is the same split the ADR 0118 O1 Link read already makes, and for the
+ * same reason: the entry is always delivered, the title only where readership
+ * allows.
+ *
+ * The wording belongs to the surface. Handing a person a sentence built in the
+ * core would either bake in a language or bake in a phrasing that cannot say
+ * "and two more" - and the surface is the only place that knows how much room
+ * it has.
+ */
+export interface PicoModuleCommitment {
+  module: PicoModuleIdentifier;
+  /** `<module-identifier>.<noun>`, so a surface can word it. */
+  kind: string;
+  /** When it was going to happen, on the wall clock the person meant. */
+  dueAt: string;
+  /** An opaque handle, so a person can go and find it. Never content. */
+  reference: string;
+}
+
+/**
+ * Exactly the fields a commitment may carry.
+ *
+ * Exported so a test can assert the shape rather than trusting a reviewer to
+ * notice a title being added - which is precisely the mistake this type exists
+ * to make impossible.
+ */
+export const picoModuleCommitmentFields = [
+  'dueAt',
+  'kind',
+  'module',
+  'reference',
+] as const;
+
+/**
+ * ADR 0127 M4. Oldest first, and bounded.
+ *
+ * Oldest first because the longest-standing promise is the one a person is
+ * most likely to have forgotten they made. Bounded because a module holding
+ * ten thousand outstanding entries must still produce a message a surface can
+ * show - and "and 9,987 more" is information, while a truncated list that does
+ * not say it was truncated is a lie.
+ */
+export const maxPicoModuleCommitmentsShown = 20;
+
+export interface PicoModuleDeactivationStatement {
+  module: PicoModuleIdentifier;
+  /** How many commitments will not be kept. The full count, never the shown one. */
+  total: number;
+  /** The oldest few, for a surface to name. */
+  shown: readonly PicoModuleCommitment[];
+}
+
+export function toPicoModuleDeactivationStatement(input: {
+  module: PicoModuleIdentifier;
+  commitments: readonly PicoModuleCommitment[];
+}): PicoModuleDeactivationStatement {
+  const ordered = [...input.commitments]
+    .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
+  return Object.freeze({
+    module: input.module,
+    // The full count, so a surface can say how many it is not showing. A
+    // truncated list that reports its own truncated length is worse than no
+    // list at all.
+    total: ordered.length,
+    shown: Object.freeze(ordered.slice(0, maxPicoModuleCommitmentsShown)),
+  });
+}

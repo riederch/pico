@@ -12,6 +12,10 @@
     "./calendar": {
       "types": "./dist/calendar.d.ts",
       "import": "./dist/calendar.js"
+    },
+    "./commitments": {
+      "types": "./dist/commitments.d.ts",
+      "import": "./dist/commitments.js"
     }
   },
   "files": [

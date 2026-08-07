@@ -6,6 +6,7 @@ import { Writable } from 'node:stream';
 import type { PicoSystemStatusResponse } from '@pico/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
+import { EventStore } from './event-store.js';
 
 /**
  * ADR 0127 M3. Activation is a durable Pico-side decision, and switching a
@@ -319,6 +320,151 @@ describe('ADR 0127 M3 deactivation stops behaviour and touches no stored data', 
       // behaviour is the only thing it stopped.
       const events = await readEvents(app, session);
       expect(events.some((event) => event.type === 'memory.time_bound_entry_recorded')).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('ADR 0127 M4 deactivation is loud where promises stand', () => {
+  async function recordEntry(
+    app: Awaited<ReturnType<typeof openApp>>,
+    session: string,
+    content: string,
+    dueAt: string,
+  ): Promise<string> {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${session}` },
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'domain-private',
+          contentType: 'application/vnd.pico.reminder',
+          content,
+          dueAt,
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    return (response.json().event.payload as { memoryItemId: string }).memoryItemId;
+  }
+
+  it('names what will not happen, and names the commitments rather than the module', async () => {
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      const later = await recordEntry(app, session, 'Call the dentist', '2026-09-02T09:00:00.000Z');
+      const oldest = await recordEntry(app, session, 'Collect the parcel', '2026-08-30T09:00:00.000Z');
+
+      const response = await setModuleActive(app, session, 'calendar', false);
+      expect(response.statusCode).toBe(200);
+
+      const dropped = response.json().dropped as Array<{
+        module: string;
+        total: number;
+        shown: Array<{ kind: string; dueAt: string; reference: string }>;
+      }>;
+      expect(dropped).toHaveLength(1);
+      expect(dropped[0]?.module).toBe('calendar');
+      expect(dropped[0]?.total).toBe(2);
+      // The commitments, oldest first - not "the calendar has two things".
+      expect(dropped[0]?.shown.map((item) => item.reference)).toEqual([oldest, later]);
+      expect(dropped[0]?.shown[0]?.kind).toBe('calendar.time_bound_entry');
+      expect(dropped[0]?.shown[0]?.dueAt).toBe('2026-08-30T09:00:00.000Z');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('does not leak the words to an administrator who may not read them', async () => {
+    // ADR 0075 A7: administration is not readership. Switching a module off is
+    // an instance-management act; it does not entitle anyone to its content.
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      await recordEntry(app, session, 'Oncology appointment', '2026-09-02T09:00:00.000Z');
+
+      const response = await setModuleActive(app, session, 'calendar', false);
+      expect(response.body).not.toContain('Oncology');
+      expect(response.body).not.toContain('appointment');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('says nothing when nothing is outstanding', async () => {
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      const response = await setModuleActive(app, session, 'spatial-recall', false);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().dropped).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('does not gate the stop on the statement', async () => {
+    // ADR 0128: deactivation must stay immediate - stopping the world changing
+    // is sometimes the point - so this is told, never asked. One call, no
+    // confirmation field, and the module is off when it returns.
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      await recordEntry(app, session, 'Call the dentist', '2026-09-02T09:00:00.000Z');
+
+      const response = await setModuleActive(app, session, 'calendar', false);
+      expect(response.statusCode).toBe(200);
+      expect((response.json().dropped as unknown[]).length).toBe(1);
+      // Off already, on the same call that reported what it dropped.
+      expect((await readModules(app, session)).modules
+        .find((entry) => entry.identifier === 'calendar')?.active).toBe(false);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('drops nothing when a raised entry is all there is', async () => {
+    const databasePath = createDatabasePath();
+    const app = await openApp(databasePath);
+    try {
+      const session = await hostAdminSession(app);
+      const memoryItemId = await recordEntry(app, session, 'Call the dentist', '2026-09-02T09:00:00.000Z');
+      // Raised means kept. Reporting it would tell someone they are losing
+      // something they already have.
+      //
+      // Marked through a second handle on the same file rather than through an
+      // API, because nothing starts the scheduler in the product yet - a gap
+      // recorded in progress.md, and not one this test should paper over by
+      // pretending a route exists.
+      const marker = new EventStore(databasePath);
+      try {
+        expect(marker.markPicoTimeBoundEntryRaised({
+          memoryItemId,
+          raisedAt: '2026-09-02T09:00:01.000Z',
+        })).toBe(true);
+      } finally {
+        marker.close();
+      }
+
+      const response = await setModuleActive(app, session, 'calendar', false);
+      expect(response.json().dropped).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('reports nothing dropped when a module is switched on', async () => {
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      await recordEntry(app, session, 'Call the dentist', '2026-09-02T09:00:00.000Z');
+      await setModuleActive(app, session, 'calendar', false);
+      const response = await setModuleActive(app, session, 'calendar', true);
+      expect(response.json().dropped).toEqual([]);
     } finally {
       await app.close();
     }

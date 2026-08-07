@@ -123,11 +123,14 @@ import { EventFactory } from './event-factory.js';
 // ADR 0127. A runtime imports a module; a module never imports a runtime. The
 // edge points one way, or the two packages form a cycle.
 import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
+import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitments';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
 import {
   resolvePicoModuleActivation,
   toPicoModuleActivationView,
+  toPicoModuleDeactivationStatement,
+  type PicoModuleCommitment,
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
 import { PicoRequestQuota } from './request-quota.js';
@@ -1604,6 +1607,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     picoSpatialRecallModuleManifest,
   ];
 
+  /**
+   * ADR 0127 M4. Where a module's outstanding promises come from.
+   *
+   * A map rather than a branch in the handler, and rather than a method every
+   * module has to implement: a module with nothing outstanding simply has no
+   * entry, so nothing here grows a per-module `if`. The core supplies the
+   * data - custody is its - and the module says which of it is a promise.
+   *
+   * This is runtime wiring, which is exactly the part ADR 0127 leaves with the
+   * runtime that hosts the modules.
+   */
+  const moduleCommitmentReaders: Partial<Record<
+    PicoModuleIdentifier,
+    () => readonly PicoModuleCommitment[]
+  >> = {
+    calendar: () => picoCalendarStandingCommitments(store.picoTimeBoundEntries(Number.MAX_SAFE_INTEGER)),
+  };
+
+  function readModuleCommitments(
+    identifier: PicoModuleIdentifier,
+  ): readonly PicoModuleCommitment[] {
+    return moduleCommitmentReaders[identifier]?.() ?? [];
+  }
+
   function readModuleActivation(): ReturnType<typeof toPicoModuleActivationView> {
     return toPicoModuleActivationView({
       manifests: shippedModuleManifests,
@@ -1684,9 +1711,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     if (decision.outcome === 'unchanged') {
       // No record and no event: a log that filled with no-ops would bury the
-      // changes that mattered.
-      return sendNoStore(reply, { modules: readModuleActivation() });
+      // changes that mattered. Nothing is being dropped either, so there is
+      // nothing to say.
+      return sendNoStore(reply, { modules: readModuleActivation(), dropped: [] });
     }
+
+    /**
+     * ADR 0127 M4. What will not happen, gathered **before** the change so it
+     * describes what was there rather than what is left.
+     *
+     * It does not gate the stop. ADR 0128 is explicit that deactivating an
+     * effect-bearing module has to stay immediate - stopping the world
+     * changing is sometimes the point - so this is told in the posture ADR
+     * 0119 Q5 uses for storage pressure: said while there is still room to
+     * act, never as a confirmation step standing in the way. Re-enabling
+     * restores everything, because deactivation dropped no data (M3).
+     */
+    const dropped = decision.disabled
+      .map((identifier) => toPicoModuleDeactivationStatement({
+        module: identifier,
+        commitments: readModuleCommitments(identifier),
+      }))
+      .filter((statement) => statement.total > 0);
 
     const decidedAt = new Date().toISOString();
     store.setPicoModuleActivation({
@@ -1710,7 +1756,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     store.append(event);
     broadcast(event);
 
-    return sendNoStore(reply, { modules: readModuleActivation() });
+    return sendNoStore(reply, { modules: readModuleActivation(), dropped });
   });
 
   function recordHomeMembership(body: unknown): FoundationOperationResult {
