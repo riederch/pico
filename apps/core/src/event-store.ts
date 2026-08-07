@@ -5999,6 +5999,70 @@ export class EventStore {
   }
 
   /**
+   * ADR 0118 O1 delivery semantics. Entries the Home has not yet noticed.
+   *
+   * The scheduler's working set, and it is keyed on `announced_at` rather
+   * than `raised_at` because the two are different facts. An entry nobody
+   * acknowledged is still outstanding and still offered to the person's
+   * device; it is simply not announced twice.
+   */
+  public picoUnannouncedTimeBoundEntries(
+    limit = 100,
+  ): Array<PicoTimeBoundEntry & { privacyDomain: string }> {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT memory_item_id AS memoryItemId,
+               privacy_domain AS privacyDomain,
+               content_type AS contentType,
+               due_at AS dueAt,
+               raised_at AS raisedAt,
+               announced_at AS announcedAt
+        FROM memory_item
+        WHERE due_at IS NOT NULL
+          AND announced_at IS NULL
+          AND deletion_state = 'active'
+        ORDER BY due_at ASC
+        LIMIT ?
+      `)
+      .all(limit) as Array<{
+        memoryItemId: string;
+        privacyDomain: string;
+        contentType: string;
+        dueAt: string;
+        raisedAt: string | null;
+        announcedAt: string | null;
+      }>;
+    return rows.map((row) => ({
+      memoryItemId: row.memoryItemId,
+      privacyDomain: row.privacyDomain,
+      kind: row.contentType.includes('reminder') ? 'reminder' : 'appointment',
+      title: '',
+      dueAt: row.dueAt,
+      ...(row.raisedAt === null ? {} : { raisedAt: row.raisedAt }),
+      ...(row.announcedAt === null ? {} : { announcedAt: row.announcedAt }),
+    }));
+  }
+
+  /**
+   * ADR 0118 O1. The Home noticed. Idempotent by the `IS NULL` clause, so a
+   * restart, a double tick or two schedulers racing announce it exactly once.
+   */
+  public markPicoTimeBoundEntryAnnounced(input: {
+    memoryItemId: string;
+    announcedAt: string;
+  }): boolean {
+    this.ensureOpen();
+    return this.db
+      .prepare(`
+        UPDATE memory_item
+        SET announced_at = ?, updated_at = ?
+        WHERE memory_item_id = ? AND announced_at IS NULL AND due_at IS NOT NULL
+      `)
+      .run(input.announcedAt, new Date().toISOString(), input.memoryItemId).changes === 1;
+  }
+
+  /**
    * ADR 0127 M5. How many entries are due right now - all of them, not a page.
    *
    * The list this store hands out is capped, and before this existed the cap
@@ -6026,9 +6090,13 @@ export class EventStore {
   }
 
   /**
-   * ADR 0118 O1. Marks an entry as having reached the person. Idempotent by
-   * construction: the `raised_at IS NULL` clause means a restart, a double
-   * tick or two schedulers racing raise it exactly once.
+   * ADR 0118 O1. A surface confirmed the person was told.
+   *
+   * **Only an acknowledgement calls this.** The scheduler used to, which made
+   * this column a claim the Home could not make: it cannot observe that a
+   * notification was shown, and an entry cleared on the Home's say-so is a
+   * promise nobody kept. Idempotent by the `IS NULL` clause, so a device that
+   * retries an acknowledgement it already sent changes nothing.
    */
   public markPicoTimeBoundEntryRaised(input: {
     memoryItemId: string;

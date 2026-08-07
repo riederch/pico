@@ -217,16 +217,16 @@ describe('ADR 0118 O1 time-bound entries', () => {
     }
   });
 
-  it('raises exactly once however often it is ticked', async () => {
-    // A restart, a double tick or two schedulers racing must not re-raise.
+  it('announces exactly once however often it is ticked', async () => {
+    // A restart, a double tick or two schedulers racing must not announce twice.
     const store = await openStore();
     try {
       recordEntry(store, 'entry-1', '2020-01-01T00:00:00.000Z');
-      const raised: string[] = [];
+      const announced: string[] = [];
       const scheduler = startPicoTimeBoundScheduler({
         store,
-        raise: (entry) => {
-          raised.push(entry.memoryItemId);
+        announce: (entry: { memoryItemId: string }) => {
+          announced.push(entry.memoryItemId);
         },
         setTimer: () => ({ unref: () => {} }) as never,
         clearTimer: () => {},
@@ -234,31 +234,31 @@ describe('ADR 0118 O1 time-bound entries', () => {
 
       expect(await scheduler.tick()).toBe(1);
       expect(await scheduler.tick()).toBe(0);
-      expect(raised).toEqual(['entry-1']);
+      expect(announced).toEqual(['entry-1']);
       scheduler.stop();
     } finally {
       store.close();
     }
   });
 
-  it('still raises an instant that passed while the Home was off', async () => {
+  it('still announces an instant that passed while the Home was off', async () => {
     // Skipping it would be the silent failure this family exists to prevent:
     // the person stopped carrying the appointment when they wrote it down.
     const store = await openStore();
     try {
       recordEntry(store, 'entry-old', '2019-05-05T08:00:00.000Z');
-      const raised: string[] = [];
+      const announced: string[] = [];
       const scheduler = startPicoTimeBoundScheduler({
         store,
-        raise: (entry) => {
-          raised.push(entry.memoryItemId);
+        announce: (entry: { memoryItemId: string }) => {
+          announced.push(entry.memoryItemId);
         },
         setTimer: () => ({ unref: () => {} }) as never,
         clearTimer: () => {},
       });
 
       expect(await scheduler.tick()).toBe(1);
-      expect(raised).toEqual(['entry-old']);
+      expect(announced).toEqual(['entry-old']);
       scheduler.stop();
     } finally {
       store.close();
@@ -269,18 +269,18 @@ describe('ADR 0118 O1 time-bound entries', () => {
     const store = await openStore();
     try {
       recordEntry(store, 'entry-future', '2099-01-01T00:00:00.000Z');
-      const raised: string[] = [];
+      const announced: string[] = [];
       const scheduler = startPicoTimeBoundScheduler({
         store,
-        raise: (entry) => {
-          raised.push(entry.memoryItemId);
+        announce: (entry: { memoryItemId: string }) => {
+          announced.push(entry.memoryItemId);
         },
         setTimer: () => ({ unref: () => {} }) as never,
         clearTimer: () => {},
       });
 
       expect(await scheduler.tick()).toBe(0);
-      expect(raised).toEqual([]);
+      expect(announced).toEqual([]);
       expect(store.picoTimeBoundEntries()).toHaveLength(1);
       scheduler.stop();
     } finally {
@@ -288,29 +288,73 @@ describe('ADR 0118 O1 time-bound entries', () => {
     }
   });
 
-  it('does not let one failing surface stop the others', async () => {
+  it('does not let one failing record stop the others, and tries that one again', async () => {
     const store = await openStore();
     try {
       recordEntry(store, 'entry-a', '2020-01-01T00:00:00.000Z');
       recordEntry(store, 'entry-b', '2020-01-02T00:00:00.000Z');
-      const raised: string[] = [];
+      const announced: string[] = [];
+      let failFirst = true;
       const scheduler = startPicoTimeBoundScheduler({
         store,
-        raise: (entry) => {
-          if (entry.memoryItemId === 'entry-a') {
-            throw new Error('surface_gone');
+        announce: (entry: { memoryItemId: string }) => {
+          if (entry.memoryItemId === 'entry-a' && failFirst) {
+            throw new Error('write_failed');
           }
-          raised.push(entry.memoryItemId);
+          announced.push(entry.memoryItemId);
         },
         setTimer: () => ({ unref: () => {} }) as never,
         clearTimer: () => {},
       });
 
       await scheduler.tick();
-      expect(raised).toEqual(['entry-b']);
-      // And the failed one is not re-raised forever: one prompt the person
-      // never saw beats an endless loop of them.
+      expect(announced).toEqual(['entry-b']);
+
+      // The reversed choice, and the whole decision in one assertion: the
+      // failed one is left unannounced so the next tick tries again. The old
+      // scheduler marked first and moved on, so a surface that could not take
+      // it left the entry marked and nobody told - the silent drop ADR 0118 O1
+      // calls worse than never recording the entry at all.
+      failFirst = false;
+      await scheduler.tick();
+      expect(announced).toEqual(['entry-b', 'entry-a']);
+      scheduler.stop();
+    } finally {
+      store.close();
+    }
+  });
+
+  it('announcing does not clear the entry from what the person is offered', async () => {
+    // Starting the scheduler must not empty the companion's list. Announcing
+    // is the Home noticing; being told is a separate fact, and only an
+    // acknowledgement reports it.
+    const store = await openStore();
+    try {
+      recordEntry(store, 'entry-1', '2020-01-01T00:00:00.000Z');
+      const scheduler = startPicoTimeBoundScheduler({
+        store,
+        announce: () => {},
+        setTimer: () => ({ unref: () => {} }) as never,
+        clearTimer: () => {},
+      });
+
+      expect(await scheduler.tick()).toBe(1);
+      // Still outstanding, still offered.
+      expect(store.picoTimeBoundEntries()).toHaveLength(1);
+      // And not announced again.
+      expect(store.picoUnannouncedTimeBoundEntries()).toHaveLength(0);
+
+      // The acknowledgement is what clears it.
+      expect(store.markPicoTimeBoundEntryRaised({
+        memoryItemId: 'entry-1',
+        raisedAt: '2020-01-01T00:00:05.000Z',
+      })).toBe(true);
       expect(store.picoTimeBoundEntries()).toHaveLength(0);
+      // Idempotent: a device retrying after a dropped response changes nothing.
+      expect(store.markPicoTimeBoundEntryRaised({
+        memoryItemId: 'entry-1',
+        raisedAt: '2020-01-01T00:00:09.000Z',
+      })).toBe(false);
       scheduler.stop();
     } finally {
       store.close();
@@ -324,7 +368,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       recordEntry(store, 'entry-future', '2099-01-01T00:00:00.000Z');
       const scheduler = startPicoTimeBoundScheduler({
         store,
-        raise: () => {},
+        announce: () => {},
         setTimer,
         clearTimer: () => {},
       });
@@ -345,7 +389,7 @@ describe('ADR 0118 O1 time-bound entries', () => {
       const setTimer = vi.fn(() => ({ unref: () => {} }) as never);
       const scheduler = startPicoTimeBoundScheduler({
         store,
-        raise: () => {},
+        announce: () => {},
         setTimer,
         clearTimer: () => {},
       });

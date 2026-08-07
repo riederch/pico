@@ -79,6 +79,8 @@ export const picoMemoryItemDueAtMigrationId =
   '0012_memory_item_due_at' as const;
 export const picoModuleActivationMigrationId =
   '0013_pico_module_activation' as const;
+export const picoMemoryItemAnnouncedAtMigrationId =
+  '0014_memory_item_announced_at' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -945,6 +947,38 @@ const migrations: readonly MigrationDefinition[] = [
           active INTEGER NOT NULL CHECK (active IN (0, 1)),
           decided_at TEXT NOT NULL
         );
+      `);
+    },
+  },
+  {
+    id: picoMemoryItemAnnouncedAtMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0118 O1, delivery semantics. Two facts, not one.
+        --
+        -- \`raised_at\` used to be set by the scheduler, which made it a claim
+        -- the Home could not honestly make: it cannot observe that a
+        -- notification was shown. So it now means "a surface confirmed the
+        -- person was told", set only by an acknowledgement, and this column
+        -- carries what the Home *can* know - that the instant passed and it
+        -- noticed.
+        --
+        -- Without it the scheduler would announce the same entry on every
+        -- tick; with it, an entry nobody acknowledged stays outstanding and
+        -- keeps being offered, which is the loud failure rather than the quiet
+        -- one.
+        ALTER TABLE memory_item ADD COLUMN announced_at TEXT NULL;
+
+        -- The scheduler now asks for entries that are due and not yet
+        -- announced. The old partial index answered the old question.
+        DROP INDEX IF EXISTS idx_memory_item_due;
+        CREATE INDEX idx_memory_item_due
+        ON memory_item (due_at)
+        WHERE due_at IS NOT NULL AND raised_at IS NULL AND deletion_state = 'active';
+        CREATE INDEX idx_memory_item_unannounced
+        ON memory_item (due_at)
+        WHERE due_at IS NOT NULL AND announced_at IS NULL AND deletion_state = 'active';
       `);
     },
   },

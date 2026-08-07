@@ -31,8 +31,25 @@ export interface PicoTimeBoundEntry {
   title: string;
   /** The instant the person meant, on the wall clock. */
   dueAt: string;
-  /** Set once the entry has been raised; absent while it still waits. */
+  /**
+   * When a surface confirmed the person was told.
+   *
+   * **Not "when the Home noticed".** The Home cannot observe that a
+   * notification was shown, so it does not get to say so: only an
+   * acknowledgement from whoever delivered it sets this. Absent means the
+   * promise is still outstanding, and an outstanding promise keeps being
+   * offered - repetition is the loud failure, silence is the quiet one, and
+   * ADR 0118 O1 exists because the quiet one is worse.
+   */
   raisedAt?: string;
+  /**
+   * When the Home noticed the instant had passed.
+   *
+   * Separate from `raisedAt` because they are different facts and only one of
+   * them the Home can honestly claim. This one stops the scheduler announcing
+   * the same entry on every tick; it never means anybody heard.
+   */
+  announcedAt?: string;
 }
 
 function isCanonicalInstant(value: unknown): value is string {

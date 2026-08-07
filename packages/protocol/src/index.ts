@@ -12,6 +12,15 @@ export const foundationEventTypes = [
    * person meant on the wall clock; raising it needs no model and no network.
    */
   'memory.time_bound_entry_recorded',
+  /**
+   * ADR 0118 O1. The Home noticed that a time-bound entry came due.
+   *
+   * This is **not** a claim that anyone was told. It records that the instant
+   * passed and the Home saw it, which is the part the Home can honestly know
+   * about itself; `raised_at` stays for the surface that actually reached the
+   * person. Content-free: an item id and the instant, never the words.
+   */
+  'memory.time_bound_entry_due',
   'memory.tombstone',
   'memory.domain_shredded',
   'auth.operator_bootstrapped',
@@ -65,6 +74,10 @@ export type FoundationEventType = typeof foundationEventTypes[number];
 // append-only log cannot be flooded (ADR 0075 A9).
 export const serverSynthesizedFoundationEventTypes = [
   'memory.domain_shredded',
+  // ADR 0118 O1. Appended by the scheduler from the clock, never by a client:
+  // a caller claiming an entry came due would be claiming something only the
+  // process watching the instant can know.
+  'memory.time_bound_entry_due',
   'auth.operator_bootstrapped',
   'auth.credential_changed',
   'auth.operator_reset',
@@ -319,6 +332,14 @@ export const picoLinkDirectOperations = [
    * and a Link read must not route around them.
    */
   'home.time_bound_entries.read',
+  /**
+   * ADR 0118 O1. The device says it told the person.
+   *
+   * Opted in because the device is the only party that knows. A Home cannot
+   * observe that a notification was shown, and a promise that clears itself on
+   * the Home's say-so is a promise nobody kept.
+   */
+  'home.time_bound_entry.acknowledge',
   'home.device.lifecycle.submit',
   'home.device.recovery.submit',
   'home.device.recovery.veto',

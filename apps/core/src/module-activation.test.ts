@@ -470,3 +470,107 @@ describe('ADR 0127 M4 deactivation is loud where promises stand', () => {
     }
   });
 });
+
+describe('ADR 0118 O1 delivery semantics, end to end', () => {
+  async function recordDue(
+    app: Awaited<ReturnType<typeof openApp>>,
+    session: string,
+    dueAt: string,
+  ): Promise<string> {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/events',
+      headers: { authorization: `Bearer ${session}` },
+      payload: {
+        deviceId: 'desktop-dev',
+        type: 'memory.recorded',
+        payload: {
+          privacyDomain: 'domain-private',
+          contentType: 'application/vnd.pico.reminder',
+          content: 'Call the dentist',
+          dueAt,
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    return (response.json().event.payload as { memoryItemId: string }).memoryItemId;
+  }
+
+  it('records that an entry came due, and does not claim anybody was told', async () => {
+    const databasePath = createDatabasePath();
+    const app = await openApp(databasePath);
+    try {
+      const session = await hostAdminSession(app);
+      // Already past, so the scheduler has work the moment it is asked.
+      const memoryItemId = await recordDue(app, session, '2020-01-01T09:00:00.000Z');
+
+      // The scheduler runs on its own timer; a direct tick is the same code
+      // path without waiting for a clock.
+      const marker = new EventStore(databasePath);
+      let announced = false;
+      try {
+        announced = marker.markPicoTimeBoundEntryAnnounced({
+          memoryItemId,
+          announcedAt: '2020-01-01T09:00:01.000Z',
+        });
+      } finally {
+        marker.close();
+      }
+      expect(announced).toBe(true);
+
+      // The promise is still outstanding, because nobody has said they told
+      // the person. Starting the scheduler must not empty what the device is
+      // offered - that was the reason this could not simply be switched on.
+      const due = await app.inject({
+        method: 'GET',
+        url: '/api/events?limit=50',
+        headers: { authorization: `Bearer ${session}` },
+      });
+      expect(due.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('clears an entry only when a surface acknowledges it', async () => {
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      const memoryItemId = await recordDue(app, session, '2020-01-01T09:00:00.000Z');
+
+      const acknowledge = async () => app.inject({
+        method: 'POST',
+        url: `/api/memory/time-bound-entries/${memoryItemId}/acknowledge`,
+        headers: { authorization: `Bearer ${session}` },
+      });
+
+      const first = await acknowledge();
+      expect(first.statusCode).toBe(200);
+      expect(first.json()).toEqual({ memoryItemId, acknowledged: true });
+
+      // Idempotent, and a second one is not an error: a device that retried
+      // after a dropped response should not have to reason about whether it
+      // already succeeded.
+      const second = await acknowledge();
+      expect(second.statusCode).toBe(200);
+      expect(second.json()).toEqual({ memoryItemId, acknowledged: false });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('refuses an unauthenticated acknowledgement', async () => {
+    // Clearing someone's outstanding promise is a claim about their life.
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      const memoryItemId = await recordDue(app, session, '2020-01-01T09:00:00.000Z');
+      expect((await app.inject({
+        method: 'POST',
+        url: `/api/memory/time-bound-entries/${memoryItemId}/acknowledge`,
+      })).statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+});

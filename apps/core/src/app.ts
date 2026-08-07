@@ -134,6 +134,7 @@ import {
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
 import { PicoRequestQuota } from './request-quota.js';
+import { startPicoTimeBoundScheduler } from './time-bound-scheduler.js';
 import {
   EventStore,
   type EventCursor,
@@ -1135,9 +1136,42 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const retentionSweep = setInterval(runRetentionSweep, RETENTION_SWEEP_INTERVAL_MS);
   retentionSweep.unref();
 
+  /**
+   * ADR 0118 O1. The scheduler runs.
+   *
+   * It was written, tested and never started, so no entry in a running Pico
+   * had ever come due - the third state a surface can show was unreachable in
+   * the product. Starting it needed the delivery question answered first,
+   * because a scheduler that marked entries delivered would have emptied the
+   * companion's list without anybody being told.
+   *
+   * What it does now is record that the instant passed. Durable, because the
+   * person's device may be asleep or in a tunnel, and unreachable is not the
+   * same as forgotten. Whether anyone was *told* is a separate fact that only
+   * the device that told them can report.
+   */
+  const timeBoundScheduler = startPicoTimeBoundScheduler({
+    store: {
+      picoUnannouncedTimeBoundEntries: (limit) => store.picoUnannouncedTimeBoundEntries(limit),
+      markPicoTimeBoundEntryAnnounced: (input) => store.markPicoTimeBoundEntryAnnounced(input),
+    },
+    announce: (entry) => {
+      const event = factory.create({
+        deviceId: config.deviceId,
+        type: 'memory.time_bound_entry_due',
+        // Content-free: which item and when it was due. The words stay in the
+        // privacy domain that governs them.
+        payload: { memoryItemId: entry.memoryItemId, dueAt: entry.dueAt },
+      });
+      store.append(event);
+      broadcast(event);
+    },
+  });
+
   app.addHook('onClose', async () => {
     clearInterval(websocketKeepalive);
     clearInterval(retentionSweep);
+    timeBoundScheduler.stop();
     sockets.clear();
     store.close();
   });
@@ -1573,6 +1607,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // a host configuration option. Host-admin because it changes what the Home
   // does, and `host-admin` is the class that already means exactly that.
   accessClasses.register('POST', '/api/home/modules', 'host-admin');
+  // ADR 0118 O1. A surface says it told the person. Authenticated, because
+  // clearing someone's outstanding promise is a claim about their life.
+  accessClasses.register('POST', '/api/memory/time-bound-entries/:memoryItemId/acknowledge', 'authenticated');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/events', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/events/tail', 'foundation-diagnostic');
@@ -1665,6 +1702,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.get('/api/system/status', async (_request, reply) => {
     return sendNoStore(reply, readSystemStatus());
+  });
+
+  /**
+   * ADR 0118 O1. The delivery half: a surface confirms the person was told.
+   *
+   * Only this sets `raised_at`. The Home cannot observe that a notification
+   * was shown, and an entry it cleared on its own say-so would be a promise
+   * nobody kept - so the one party that knows is the one that reports.
+   *
+   * Idempotent, and a second acknowledgement is not an error. A device that
+   * retried after a dropped response should not have to reason about whether
+   * it already succeeded.
+   */
+  app.post('/api/memory/time-bound-entries/:memoryItemId/acknowledge', async (request, reply) => {
+    const { memoryItemId } = request.params as { memoryItemId: string };
+    const acknowledged = store.markPicoTimeBoundEntryRaised({
+      memoryItemId,
+      raisedAt: new Date().toISOString(),
+    });
+    return sendNoStore(reply, { memoryItemId, acknowledged });
   });
 
   /**
@@ -2084,6 +2141,29 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           // would put the cap back on the wire and leave the asking device
           // counting what fitted rather than what is due.
           return { outcome: 'ok', result: { entries: view.entries, total: view.total } };
+        }
+        /**
+         * ADR 0118 O1. The device says it told the person.
+         *
+         * Opted in per operation (ADR 0107) because the device is the only
+         * party that knows. It names an entry it was given by the read above,
+         * so it discloses nothing it was not already told.
+         */
+        case 'home.time_bound_entry.acknowledge': {
+          const memoryItemId = args.memoryItemId;
+          if (Object.keys(args).length !== 1 || typeof memoryItemId !== 'string' || memoryItemId === '') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              memoryItemId,
+              acknowledged: store.markPicoTimeBoundEntryRaised({
+                memoryItemId,
+                raisedAt: new Date().toISOString(),
+              }),
+            },
+          };
         }
         case 'home.device.lifecycle.read': {
           if (Object.keys(args).length !== 0) {

@@ -60,6 +60,7 @@ message.created
 avatar.state_changed
 memory.recorded
 memory.time_bound_entry_recorded
+memory.time_bound_entry_due
 memory.tombstone
 memory.domain_shredded
 auth.operator_bootstrapped

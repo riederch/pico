@@ -140,6 +140,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.storage.condition.read',
       // ADR 0118 O1: due entries, so the device can say something is waiting.
       'home.time_bound_entries.read',
+      'home.time_bound_entry.acknowledge',
       'home.device.lifecycle.submit',
       'home.device.recovery.submit',
       'home.device.recovery.veto',

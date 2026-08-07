@@ -132,6 +132,7 @@ describe('Pico protocol types', () => {
       'memory.recorded',
       // ADR 0118 O1: the fifth floor family.
       'memory.time_bound_entry_recorded',
+      'memory.time_bound_entry_due',
       'memory.tombstone',
       'memory.domain_shredded',
       'auth.operator_bootstrapped',
@@ -159,6 +160,7 @@ describe('Pico protocol types', () => {
     ]);
     expect(serverSynthesizedFoundationEventTypes).toEqual([
       'memory.domain_shredded',
+      'memory.time_bound_entry_due',
       'auth.operator_bootstrapped',
       'auth.credential_changed',
       'auth.operator_reset',

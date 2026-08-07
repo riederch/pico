@@ -204,6 +204,48 @@ An approval is given for a decision of a certain quality, made in a
 certain world; substituting worse judgment, or executing hours later
 into a changed world, is not the thing that was approved.
 
+
+### Delivery is acknowledged by whoever delivered it
+
+`raised_at` used to be set by the scheduler, which made it a claim the Home
+cannot honestly make. A Home cannot observe that a notification was shown; it
+can only observe that it sent one, or in the polled case not even that. An
+entry the Home cleared on its own say-so is a promise nobody kept, and this is
+the family whose whole argument is that failing to raise is worse than never
+recording it at all.
+
+So the two facts are separated, because only one of them is the Home's to
+state:
+
+- **`announced_at`** - the Home noticed the instant passed. The scheduler
+  writes it, and it exists so the same entry is not announced on every tick. It
+  never means anybody heard.
+- **`raised_at`** - a surface confirmed the person was told. Only an
+  acknowledgement sets it, over the Foundation API or the opt-in Link operation
+  `home.time_bound_entry.acknowledge`. Idempotent, and a second acknowledgement
+  is not an error: a device that retried after a dropped response should not
+  have to reason about whether it already succeeded.
+
+**An unacknowledged entry stays outstanding and keeps being offered.** That is
+the whole reversal. The old scheduler marked first and then called a surface,
+so a surface that could not take it left the entry marked and nobody told; the
+comment even claimed the ordering failed "towards the louder mistake" while the
+code did the opposite. Repetition is the loud failure and silence is the quiet
+one, and ADR 0118 O1 exists because the quiet one is worse.
+
+The announcement is durable rather than a live message, for the same reason:
+the person's device may be asleep, off, or in a tunnel, and being unreachable
+is not the same as being forgotten. `memory.time_bound_entry_due` is
+content-free - an item id and the instant - and server-synthesized, because a
+client claiming an entry came due would be claiming something only the process
+watching the clock can know.
+
+**The scheduler now runs.** It was written, tested and never started, so no
+entry in a running Pico had ever come due and the third state a surface can
+show was unreachable in the product. Switching it on needed this decision
+first: a scheduler that marked entries delivered would have emptied the
+companion's list without anybody being told.
+
 ## Gates
 
 - **O1 - The floor is named and mechanically enforced (complete):** `offline-floor.json` declares each family's modules and
