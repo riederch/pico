@@ -5999,6 +5999,33 @@ export class EventStore {
   }
 
   /**
+   * ADR 0127 M5. How many entries are due right now - all of them, not a page.
+   *
+   * The list this store hands out is capped, and before this existed the cap
+   * was invisible: a Home with 137 due entries answered with 50 and said
+   * nothing, so the companion announced "50 entries are due". A count is what
+   * makes the cap say so.
+   *
+   * It rides the same partial index as the scheduler's own query
+   * (`idx_memory_item_due`), so it costs an index scan over exactly the rows
+   * that still wait rather than a table scan over everything ever recorded.
+   */
+  public picoDueTimeBoundEntryCount(nowIso: string): number {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT COUNT(*) AS due
+        FROM memory_item
+        WHERE due_at IS NOT NULL
+          AND raised_at IS NULL
+          AND deletion_state = 'active'
+          AND due_at <= ?
+      `)
+      .get(nowIso) as { due: number };
+    return row.due;
+  }
+
+  /**
    * ADR 0118 O1. Marks an entry as having reached the person. Idempotent by
    * construction: the `raised_at IS NULL` clause means a restart, a double
    * tick or two schedulers racing raise it exactly once.

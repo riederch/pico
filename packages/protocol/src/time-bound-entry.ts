@@ -114,6 +114,16 @@ export interface PicoHomeDueEntry {
 
 export interface PicoHomeDueEntriesView {
   entries: readonly PicoHomeDueEntry[];
+  /**
+   * ADR 0127 M5. How many are due, which is not how many are listed.
+   *
+   * The list is capped at `maxPicoHomeDueEntries`; before this field existed
+   * a device with sixty entries due was told "50 entries are due", and the
+   * number a person read was a fact about the cap rather than about their day.
+   * On a family that exists to keep promises, that is the wrong direction to
+   * be wrong in.
+   */
+  total: number;
 }
 
 export const maxPicoHomeDueEntries = 50;
@@ -123,12 +133,22 @@ export function parsePicoHomeDueEntriesView(value: unknown): PicoHomeDueEntriesV
     throw new Error('invalid_pico_home_due_entries');
   }
   const record = value as Record<string, unknown>;
-  const keys = Object.keys(record);
-  if (keys.length !== 1 || keys[0] !== 'entries' || !Array.isArray(record.entries)) {
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 2
+    || keys[0] !== 'entries'
+    || keys[1] !== 'total'
+    || !Array.isArray(record.entries)) {
     throw new Error('invalid_pico_home_due_entries');
   }
   if (record.entries.length > maxPicoHomeDueEntries) {
     throw new Error('pico_home_due_entries_too_many');
+  }
+  if (typeof record.total !== 'number'
+    || !Number.isInteger(record.total)
+    || record.total < record.entries.length) {
+    // A total below what is listed is not a smaller claim, it is an
+    // incoherent one - and it would make "and N more" negative.
+    throw new Error('invalid_pico_home_due_entries_total');
   }
   const entries = (record.entries as unknown[]).map((entry) => {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
@@ -169,7 +189,10 @@ export function parsePicoHomeDueEntriesView(value: unknown): PicoHomeDueEntriesV
       ...(row.title === undefined ? {} : { title: row.title as string }),
     });
   });
-  return Object.freeze({ entries: Object.freeze(entries) });
+  return Object.freeze({
+    entries: Object.freeze(entries),
+    total: record.total as number,
+  });
 }
 
 /**

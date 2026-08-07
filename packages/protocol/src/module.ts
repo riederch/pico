@@ -1,3 +1,5 @@
+import { boundPicoProjection } from './bounded-projection.js';
+
 /**
  * ADR 0127. What a Pico module declares about itself.
  *
@@ -537,12 +539,13 @@ export function toPicoModuleDeactivationStatement(input: {
 }): PicoModuleDeactivationStatement {
   const ordered = [...input.commitments]
     .sort((left, right) => Date.parse(left.dueAt) - Date.parse(right.dueAt));
+  // ADR 0127 M5. The bound is a core capability, not a slice written here:
+  // this file had it right and the due-entries view had it wrong, which is
+  // precisely the situation the lift rule exists for.
+  const bounded = boundPicoProjection({ items: ordered, max: maxPicoModuleCommitmentsShown });
   return Object.freeze({
     module: input.module,
-    // The full count, so a surface can say how many it is not showing. A
-    // truncated list that reports its own truncated length is worse than no
-    // list at all.
-    total: ordered.length,
-    shown: Object.freeze(ordered.slice(0, maxPicoModuleCommitmentsShown)),
+    total: bounded.total,
+    shown: bounded.shown,
   });
 }

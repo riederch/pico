@@ -110,7 +110,7 @@ describe('ADR 0118 O1 due entries reach the person', () => {
     // surface must not pretend to be the reminder itself.
     const { notifications, presented } = adapter();
 
-    await notifications.reportDueEntries({ entries: [due('2026-08-06T09:00:00.000Z')] });
+    await notifications.reportDueEntries({ entries: [due('2026-08-06T09:00:00.000Z')], total: 1 });
 
     const state = presented.at(-1);
     expect(state?.kind).toBe('time_bound_entry_due');
@@ -127,6 +127,7 @@ describe('ADR 0118 O1 due entries reach the person', () => {
         due('2026-08-06T12:00:00.000Z', 'later'),
         due('2026-08-06T07:00:00.000Z', 'oldest'),
       ],
+      total: 2,
     });
 
     expect(presented.at(-1)?.title).toBe('2 entries are due');
@@ -148,7 +149,7 @@ describe('ADR 0118 O1 due entries reach the person', () => {
     });
     const before = presented.length;
 
-    await notifications.reportDueEntries({ entries: [] });
+    await notifications.reportDueEntries({ entries: [], total: 0 });
     expect(presented).toHaveLength(before);
     expect(presented.at(-1)?.kind).toBe('pending_recovery');
   });
@@ -156,8 +157,8 @@ describe('ADR 0118 O1 due entries reach the person', () => {
   it('goes back to idle once its own entries are gone', async () => {
     const { notifications, presented } = adapter();
 
-    await notifications.reportDueEntries({ entries: [due('2026-08-06T09:00:00.000Z')] });
-    await notifications.reportDueEntries({ entries: [] });
+    await notifications.reportDueEntries({ entries: [due('2026-08-06T09:00:00.000Z')], total: 1 });
+    await notifications.reportDueEntries({ entries: [], total: 0 });
 
     expect(presented.at(-1)?.kind).toBe('idle');
   });
@@ -174,6 +175,7 @@ describe('ADR 0118 O1 the title only where custody allowed it', () => {
         dueAt: '2026-08-06T09:00:00.000Z',
         title: 'Call the dentist',
       }],
+      total: 1,
     });
 
     expect(presented.at(-1)?.title).toBe('Call the dentist');
@@ -187,6 +189,7 @@ describe('ADR 0118 O1 the title only where custody allowed it', () => {
 
     await notifications.reportDueEntries({
       entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z' }],
+      total: 1,
     });
 
     expect(presented.at(-1)?.title).toBe('Something you asked for is due');

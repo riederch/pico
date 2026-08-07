@@ -357,3 +357,39 @@ describe('ADR 0118 O1 time-bound entries', () => {
     }
   });
 });
+
+describe('ADR 0127 M5 how many are due, not how many fit in a page', () => {
+  it('counts every due entry while the list stops at its limit', async () => {
+    const store = await openStore();
+    const nowIso = '2026-08-06T09:00:00.000Z';
+    for (let index = 0; index < 60; index += 1) {
+      recordEntry(store, `mem_${index}`, new Date(Date.parse('2026-08-06T07:00:00.000Z') + index * 1_000).toISOString());
+    }
+
+    // The window is a page; the count is the fact. Before this the cap was
+    // invisible and a companion announced the page size as the day's total.
+    expect(store.picoTimeBoundEntries(50)).toHaveLength(50);
+    expect(store.picoDueTimeBoundEntryCount(nowIso)).toBe(60);
+    store.close();
+  });
+
+  it('counts only what is actually due, and stops counting what was raised', async () => {
+    const store = await openStore();
+    recordEntry(store, 'mem_past', '2026-08-06T07:00:00.000Z');
+    recordEntry(store, 'mem_future', '2026-08-06T23:00:00.000Z');
+    recordEntry(store, 'mem_raised', '2026-08-06T07:30:00.000Z');
+    expect(store.markPicoTimeBoundEntryRaised({
+      memoryItemId: 'mem_raised',
+      raisedAt: '2026-08-06T07:30:01.000Z',
+    })).toBe(true);
+
+    // One: the past one that still waits. Not the future one, which is not due
+    // yet, and not the raised one, which was kept.
+    expect(store.picoDueTimeBoundEntryCount('2026-08-06T09:00:00.000Z')).toBe(1);
+    // And the boundary itself counts, the same way `picoCalendarEntryState`
+    // treats the due instant as overdue rather than waiting.
+    expect(store.picoDueTimeBoundEntryCount('2026-08-06T07:00:00.000Z')).toBe(1);
+    expect(store.picoDueTimeBoundEntryCount('2026-08-06T06:59:59.000Z')).toBe(0);
+    store.close();
+  });
+});

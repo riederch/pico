@@ -135,7 +135,10 @@ export function createPicoCompanionPresentationAdapter(
       }
       const oldest = view.entries.reduce((left, right) =>
         (Date.parse(left.dueAt) <= Date.parse(right.dueAt) ? left : right));
-      const count = view.entries.length;
+      // ADR 0127 M5. How many are due, not how many were listed. The Home caps
+      // the list; a person told "50 entries are due" when sixty are would be
+      // reading a fact about the cap.
+      const count = view.total;
       // The title is present only where this device may read that domain, so
       // the two shapes are not a formatting choice - they are what the custody
       // rules allowed. Saying "open your Home to see what" when the words were

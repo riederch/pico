@@ -52,7 +52,7 @@ describe('ADR 0118 O1 companion due-entries read', () => {
   it('asks the Home over the authenticated Link with no arguments', async () => {
     const client = { request: vi.fn(async () => ({
       outcome: 'ok',
-      result: { entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z' }] },
+      result: { entries: [{ memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z' }], total: 1 },
     })) };
     const read = createPicoCompanionDueEntriesReader({ linkClient: client as never });
 
@@ -82,6 +82,7 @@ describe('ADR 0118 O1 companion due-entries read', () => {
             dueAt: '2026-08-06T09:00:00.000Z',
             title: 'Call the dentist',
           }],
+          total: 1,
         },
       }),
     });
@@ -98,7 +99,7 @@ describe('ADR 0118 O1 companion due-entries read', () => {
       { memoryItemId: 'mem_1', kind: 'reminder', dueAt: '2026-08-06T09:00:00.000Z', privacyDomain: 'd' },
     ]) {
       const read = createPicoCompanionDueEntriesReader({
-        linkClient: linkClient({ outcome: 'ok', result: { entries: [entry] } }),
+        linkClient: linkClient({ outcome: 'ok', result: { entries: [entry], total: 1 } }),
       });
       await expect(read(), JSON.stringify(entry))
         .rejects.toThrow(/invalid_pico_home_due_entries/u);

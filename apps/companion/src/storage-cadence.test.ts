@@ -108,13 +108,13 @@ describe('ADR 0118 O1 due entries ride the same cadence', () => {
   it('reports them on the check, and never fails the alarm', async () => {
     const reportDueEntries = vi.fn();
     const started = await carrier({
-      readDueEntries: async () => ({ entries: [] }),
+      readDueEntries: async () => ({ entries: [], total: 0 }),
       notifications: { notifyPendingRecovery: () => {}, reportDueEntries },
     });
 
     try {
       await started.checkNow();
-      expect(reportDueEntries).toHaveBeenCalledWith({ entries: [] });
+      expect(reportDueEntries).toHaveBeenCalledWith({ entries: [], total: 0 });
       expect(started.status().dueEntriesReadFailures).toBe(0);
     } finally {
       started.stop();

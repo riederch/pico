@@ -1,3 +1,4 @@
+import { boundPicoProjection } from '@pico/protocol/bounded-projection';
 import {
   duePicoTimeBoundEntries,
   maxPicoHomeDueEntries,
@@ -42,6 +43,17 @@ export interface PicoCalendarPorts {
    */
   timeBoundEntries(limit: number): readonly PicoCalendarEntryCandidate[];
   /**
+   * ADR 0127 M5. How many are due in total, which is not how many the window
+   * above returned.
+   *
+   * A second question rather than a richer answer to the first, because the
+   * cap belongs to whoever is answering a request and the count belongs to the
+   * store. The two are separate reads, so under a concurrent write they can
+   * skew by one - which turns "and 12 more" into "and 13 more" and is a
+   * different order of wrong from the silent undercount it replaces.
+   */
+  countDueEntries(nowIso: string): number;
+  /**
    * The words of one entry, if the asking party may read that domain.
    *
    * Returns `undefined` for every reason - no grant, no key, shredded, gone -
@@ -72,9 +84,17 @@ export function picoCalendarDueEntriesView(
     (entry) => [entry.memoryItemId, entry.privacyDomain],
   ));
   const due = duePicoTimeBoundEntries({ entries: candidates, nowIso });
+  // ADR 0127 M5. Bounded through the core capability, so the count a person
+  // is told is how many are due rather than how many fitted.
+  const bounded = boundPicoProjection({ items: due, max: maxPicoHomeDueEntries });
+  // Never fewer than what is listed. Two reads can skew, and a list longer
+  // than its own count is incoherent to send - the parser would refuse it, and
+  // a benign race must not turn into a failed read.
+  const total = Math.max(ports.countDueEntries(nowIso), bounded.shown.length);
 
   return {
-    entries: due.slice(0, maxPicoHomeDueEntries).map((entry) => {
+    total,
+    entries: bounded.shown.map((entry) => {
       const privacyDomain = byMemoryItemId.get(entry.memoryItemId);
       const title = privacyDomain === undefined
         ? undefined

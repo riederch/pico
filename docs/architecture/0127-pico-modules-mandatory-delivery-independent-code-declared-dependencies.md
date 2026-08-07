@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as a structural constraint on where product features live; the
-initiative and its scope were chosen by the user on 2026-08-06. M1, M2, M3 and M4 are implemented; the calendar was the first module
-and spatial recall (ADR 0129) is the second. M5 is open.
+initiative and its scope were chosen by the user on 2026-08-06. M1-M5 are implemented; the calendar was the first module and spatial
+recall (ADR 0129) is the second.
 
 The claim is deliberately narrow: this decides **organisation**, not
 protection. A module boundary makes features easier to find and harder
@@ -409,10 +409,37 @@ with it.
   a method every module must implement - a module with nothing
   outstanding simply has no entry, so the core grows no per-module
   branch.
-- **M5 - Capability lift (binds the second module):** a mechanic needed
-  by two modules is a core capability, not a module dependency, and the
-  check reports a module that holds storage mechanics as a boundary
-  error rather than a style preference.
+- **M5 - Capability lift (implemented):** the check half has held since
+  M2 - `module:check` reports a database driver, a table, a migration or
+  an index in a module as a boundary error, and ADR 0128 H3 added every
+  direct route out of the process to the same list.
+
+  The lift half was answered by looking rather than by assuming. With two
+  modules shipped, **they share no mechanic**: the calendar reads entries
+  and orders them, spatial recall classifies samples, and the only thing
+  in common is comparing two instants - a comparator, not a capability.
+  Saying so is the honest outcome; inventing a shared need to satisfy a
+  gate would have drawn a boundary to fit a taxonomy.
+
+  What the look *did* find is a mechanic this tree had twice and got
+  right once. The M4 deactivation statement reports a total beside the
+  few it shows; the ADR 0118 O1 due-entries view cut its list at fifty
+  and said nothing. So a Home with 137 due entries answered with fifty,
+  and the companion announced **"50 entries are due"** - a number that
+  was a fact about the cap rather than about the person's day. On the
+  family whose whole argument is that an unkept promise is worse than one
+  never made, that is the wrong direction to be wrong in, and it is the
+  direction nobody checks.
+
+  `@pico/protocol/bounded-projection` is that mechanic as a core
+  capability: a list plus the true count, with the count refused if it
+  would be lower than the list. Both consumers compose it. The cap sat in
+  the *store*, not in the view, so the lift also needed a real count -
+  `picoDueTimeBoundEntryCount` over the partial index the scheduler
+  already uses - reaching the module as a second port operation. Two
+  reads can skew by one under a concurrent write, which turns "and 12
+  more" into "and 13 more": a different order of wrong from the silent
+  undercount, and stated rather than hidden.
 
 ## Failure ledger
 
@@ -422,6 +449,7 @@ with it.
 | A module is disabled with unfinished commitments | Stated, naming the commitments, before the change takes effect (M4). |
 | A module wants a guard of its own | The guard goes to the core. One guard, one place, one failing counter-proof - the property every existing guard has. |
 | Two modules need the same mechanic | The mechanic is lifted to a core capability (M5); it does not become an edge in the module graph. |
+| A module caps a list it hands to a person | It composes `bounded-projection` and reports the true total. A list that reports its own truncated length is not a smaller answer, it is a wrong one (M5). |
 | A module reaches into another's internals | Boundary error at `module:check` (M2), not a review comment. |
 | A dependency cycle is introduced | Refused (M2). Cycles are what make the activation and test story meaningless. |
 | A product module starts accepting foreign input | It is a connector and takes ADR 0116 W2 threshold labeling with it. |

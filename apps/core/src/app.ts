@@ -2053,6 +2053,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           const view = picoCalendarDueEntriesView({
               now: () => new Date(),
               timeBoundEntries: (limit) => store.picoTimeBoundEntries(limit),
+              countDueEntries: (nowIso) => store.picoDueTimeBoundEntryCount(nowIso),
               // Readership is asked per entry, not per request. ADR 0077 keeps
               // "may use this Home" separate from "may read this domain", and
               // the Link's own authorization only answers the first - so a
@@ -2079,7 +2080,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 return content;
               },
             });
-          return { outcome: 'ok', result: { entries: view.entries } };
+          // ADR 0127 M5. The total travels with the list. Dropping it here
+          // would put the cap back on the wire and leave the asking device
+          // counting what fitted rather than what is due.
+          return { outcome: 'ok', result: { entries: view.entries, total: view.total } };
         }
         case 'home.device.lifecycle.read': {
           if (Object.keys(args).length !== 0) {

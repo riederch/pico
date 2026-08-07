@@ -27,6 +27,7 @@ function candidate(
 function ports(overrides: Partial<PicoCalendarPorts> = {}): PicoCalendarPorts {
   return {
     timeBoundEntries: () => [],
+    countDueEntries: () => 0,
     readTitle: () => undefined,
     now: () => now,
     ...overrides,
@@ -200,5 +201,61 @@ describe('ADR 0127 M1 the three states a person sees', () => {
     ];
     picoCalendarAgenda({ entries, nowIso: now.toISOString() });
     expect(entries.map((item) => item.memoryItemId)).toEqual(['later', 'earlier']);
+  });
+});
+
+describe('ADR 0127 M5 the due list says how many are due, not how many fitted', () => {
+  it('reports the true total when the list is capped', () => {
+    // Before the lift this view cut at fifty and said nothing, so a companion
+    // reading it announced "50 entries are due" to a person with sixty. On a
+    // family that exists to keep promises, that is the wrong direction to be
+    // wrong in.
+    const many = Array.from({ length: 60 }, (_value, index) => candidate({
+      memoryItemId: `mem_${index}`,
+      dueAt: new Date(Date.parse('2026-08-06T07:00:00.000Z') + index * 1_000).toISOString(),
+    }));
+    const view = picoCalendarDueEntriesView(ports({
+      timeBoundEntries: (limit) => many.slice(0, limit),
+      countDueEntries: () => many.length,
+      readTitle: () => undefined,
+    }));
+
+    expect(view.entries).toHaveLength(50);
+    expect(view.total).toBe(60);
+    expect(() => parsePicoHomeDueEntriesView(view)).not.toThrow();
+  });
+
+  it('counts everything due even when the store hands back more than it lists', () => {
+    // The port is asked for a bounded window, so the honest total is what came
+    // back and was due - not what survived the display cap.
+    const view = picoCalendarDueEntriesView(ports({
+      timeBoundEntries: () => Array.from({ length: 3 }, (_value, index) => candidate({
+        memoryItemId: `mem_${index}`,
+        dueAt: '2026-08-06T08:00:00.000Z',
+      })),
+      countDueEntries: () => 3,
+      readTitle: () => undefined,
+    }));
+    expect(view.total).toBe(3);
+    expect(view.entries).toHaveLength(3);
+  });
+});
+
+describe('ADR 0127 M5 the total never contradicts the list', () => {
+  it('never reports fewer than it lists, even when two reads skew', () => {
+    // The count and the window are separate reads. A list longer than its own
+    // count is incoherent, the protocol parser refuses it, and a benign race
+    // must not turn into a failed read.
+    const view = picoCalendarDueEntriesView(ports({
+      timeBoundEntries: () => [
+        candidate({ memoryItemId: 'mem_a', dueAt: '2026-08-06T08:00:00.000Z' }),
+        candidate({ memoryItemId: 'mem_b', dueAt: '2026-08-06T08:00:01.000Z' }),
+      ],
+      countDueEntries: () => 0,
+      readTitle: () => undefined,
+    }));
+    expect(view.entries).toHaveLength(2);
+    expect(view.total).toBe(2);
+    expect(() => parsePicoHomeDueEntriesView(view)).not.toThrow();
   });
 });

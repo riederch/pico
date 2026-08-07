@@ -2771,7 +2771,7 @@ describe('Pico Home Core app', () => {
     // person is told something is waiting and opens their Home to see what.
     const dueEntries = await linkRequest('home.time_bound_entries.read', {}, devices[1]);
     expect(dueEntries.response.outcome).toBe('ok');
-    expect(dueEntries.result).toEqual({ entries: [] });
+    expect(dueEntries.result).toEqual({ entries: [], total: 0 });
     expect((await linkRequest(
       'home.time_bound_entries.read',
       { limit: 5 },
