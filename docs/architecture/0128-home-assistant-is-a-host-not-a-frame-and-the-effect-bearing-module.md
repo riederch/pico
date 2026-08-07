@@ -4,8 +4,7 @@
 
 Accepted as a placement and framing constraint; the observation that Home
 Assistant reads as more central to Pico than it is came from the user on
-2026-08-07. H1, H2, H3 and H5 are implemented. H4 is open and binds
-the first Home Assistant integration.
+2026-08-07. H1-H5 are implemented.
 
 ## Context
 
@@ -215,11 +214,51 @@ name belongs.
   something may disagree with it. The parts most likely to be wrong are
   the effect-name grammar and the absence of any severity or
   reversibility, both of which are additions rather than rewrites.
-- **H4 - The integration is a module (binds the first Home Assistant
-  integration):** no Supervisor client, entity read or service call lands
-  in `apps/core`. Proven the way ADR 0127 M1 was proven - the
-  integration's data is shredded, retained and restored by the core's
-  existing paths with no integration-specific handling.
+- **H4 - The integration is a module (implemented):**
+  `@pico/module-home-assistant` is a **connector**, and the kind is the
+  argument rather than a label. An entity's friendly name is whatever
+  somebody typed into their own Home Assistant and a notification body is
+  whatever a third party's integration put there - that is text, and text
+  can carry an instruction. It is exactly what separates this from ADR
+  0129's spatial recall, whose latitudes cannot.
+
+  **The threshold assigns; the module asks.** `PicoConnectorObservation`
+  is deliberately incapable of expressing an origin class, and the core's
+  intake stamps `external_content` without consulting it. Not out of
+  distrust of our own module: the interesting failure is never one that
+  decides to lie, it is one that parsed a field wrong and passed a value
+  along. `external_content` is the floor of the ADR 0116 W2 lattice, so
+  anything Pico later derives from a Home Assistant entity stays below the
+  instruction threshold however often it is summarised and re-read - the
+  Morris II step that lattice exists to break.
+
+  Bounds live at the threshold too: `domain.object_id` refused rather
+  than normalised, state and name length-capped, and **exact keys**, so a
+  field this contract cannot label cannot smuggle unlabelled foreign text
+  past it.
+
+  **Proven as a comparison, and it found a real defect on the first run.**
+  The intake wrote foreign text in plaintext while every ordinary item in
+  the same domain was encrypted, so a crypto-shred destroyed one and left
+  the other readable. Asserting identical outcomes caught it; two separate
+  assertions would both have passed. Encryption posture and retention
+  policy are now supplied by the core, because both are custody decisions
+  and custody is not the module's.
+
+  **The prose is now a check.** `module:check` refuses the Supervisor
+  host, its token and the state and service endpoints anywhere in
+  `apps/core`, with four probes. It does not ban the words "home
+  assistant": H5 leaves one host adapter in the core that must name its
+  host, and banning the name would either break that or teach people to
+  spell it differently.
+
+  **The transport is a declared port with no implementation**, and that
+  is deliberate rather than unfinished. H4 forbids a Supervisor client in
+  `apps/core` and H3 forbids the module any direct route out of the
+  process, so its only honest home is a capability - and one that cannot
+  be run against a real Home Assistant would be code nobody can verify.
+  Deferred for the reason ADR 0129 deferred its sensor adapter, with the
+  rules that matter testable without it.
 - **H5 - The host adapter (implemented):** `apps/core` names no host
   outside one file. `host-adapter.ts` is the seam - detect, then fill in
   what nobody set - and `host-adapter-home-assistant.ts` is the only place
@@ -254,7 +293,8 @@ name belongs.
 | Situation | Posture |
 |---|---|
 | An ADR explains Foundation access as a Home Assistant fact | H1. The subject is what stands in front of the surface; Home Assistant is an instance of one of three. |
-| A Home Assistant integration is proposed inside `apps/core` | Refused (H4). It is a module, and a connector. |
+| A Home Assistant integration is proposed inside `apps/core` | Refused at `module:check` (H4), by the Supervisor host, its token and its endpoints - not by the product name, which H5's host adapter legitimately uses. |
+| A connector asks for an origin class | It cannot: the observation type has no field for one, and the intake would ignore it. The class is assigned at the threshold (H4, ADR 0116 W1). |
 | An effect-bearing module wants to decide whether to act | The decision goes to the action path. A module declares what it can cause; the core chooses. |
 | A module reaches the world directly instead of asking | Refused at `module:check` (H3), declared effects or not. A declaration asks for a port; it does not permit going around one. |
 | A runtime supplies an effect the manifest never declared | Refused at wiring (H3). The manifest is what a person reads to know what a module can do. |

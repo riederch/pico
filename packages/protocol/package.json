@@ -15,6 +15,10 @@
       "types": "./dist/bounded-projection.d.ts",
       "import": "./dist/bounded-projection.js"
     },
+    "./home-assistant": {
+      "types": "./dist/home-assistant.d.ts",
+      "import": "./dist/home-assistant.js"
+    },
     "./module": {
       "types": "./dist/module.d.ts",
       "import": "./dist/module.js"
@@ -23,13 +27,13 @@
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"
     },
-    "./spatial-recall": {
-      "types": "./dist/spatial-recall.d.ts",
-      "import": "./dist/spatial-recall.js"
-    },
     "./planner-reader": {
       "types": "./dist/planner-reader.d.ts",
       "import": "./dist/planner-reader.js"
+    },
+    "./spatial-recall": {
+      "types": "./dist/spatial-recall.d.ts",
+      "import": "./dist/spatial-recall.js"
     },
     "./time-bound-entry": {
       "types": "./dist/time-bound-entry.d.ts",

@@ -76,6 +76,9 @@ importers:
       '@pico/module-calendar':
         specifier: workspace:*
         version: link:../../modules/calendar
+      '@pico/module-home-assistant':
+        specifier: workspace:*
+        version: link:../../modules/home-assistant
       '@pico/module-spatial-recall':
         specifier: workspace:*
         version: link:../../modules/spatial-recall
@@ -137,6 +140,12 @@ importers:
         version: link:../../packages/protocol
 
   modules/calendar:
+    dependencies:
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+
+  modules/home-assistant:
     dependencies:
       '@pico/protocol':
         specifier: workspace:*

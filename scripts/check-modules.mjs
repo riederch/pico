@@ -375,6 +375,42 @@ if (modules.length > 0) {
   }
 }
 
+/**
+ * ADR 0128 H4. A connected-house integration lives in a module, not in a
+ * runtime.
+ *
+ * The gate says no Supervisor client, entity read or service call lands in
+ * `apps/core`, and prose is exactly what nobody re-reads. This looks for the
+ * shapes such a client has: the Supervisor host a Home Assistant App talks
+ * to, its token, and its state and service endpoints.
+ *
+ * It deliberately does not forbid the *words* "home assistant". ADR 0128 H5
+ * leaves exactly one host adapter in the core that must name its host, and
+ * banning the name would either break that or teach people to spell it
+ * differently. What is forbidden is reaching the API.
+ */
+const connectorReach = [
+  { pattern: /http:\/\/supervisor\b/u, what: 'the Home Assistant Supervisor host' },
+  { pattern: /\bSUPERVISOR_TOKEN\b/u, what: 'the Supervisor token' },
+  { pattern: /\/core\/api\/(?:states|services)\b/u, what: 'a Home Assistant entity or service endpoint' },
+];
+
+for (const file of sourceFiles(join(repoRoot, 'apps', 'core', 'src'))) {
+  if (file.endsWith('.test.ts')) {
+    continue;
+  }
+  const source = readFileSync(file, 'utf8');
+  for (const reach of connectorReach) {
+    if (reach.pattern.test(source)) {
+      errors.push(
+        `${relative(repoRoot, file)}: reaches ${reach.what}. ADR 0128 H4: the `
+        + 'connected-house integration is a module and its transport is a '
+        + 'capability - a runtime that talked to Home Assistant would put '
+        + 'product logic back where ADR 0127 took it from.',
+      );
+    }
+  }
+}
 if (errors.length > 0) {
   console.error('Module check failed:');
   for (const error of errors) {
