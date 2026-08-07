@@ -18,7 +18,7 @@ panel_title: Pico Core
 panel_admin: true
 # Only options with a real default belong here. A `null` default is not the
 # same as "unset": the Supervisor reads it back as a missing value and rejects
-# the add-on before it starts, even when the schema marks the option optional.
+# the app before it starts, even when the schema marks the option optional.
 # An optional option with no default is declared in `schema` alone, which is
 # what `applyHomeAssistantAddonOptions` already expects (it treats a missing,
 # null or blank token as "no token" and stays in ingress mode).

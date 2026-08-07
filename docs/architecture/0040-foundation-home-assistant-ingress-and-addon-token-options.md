@@ -4,7 +4,19 @@
 
 Accepted and partially implemented for add-on ingress metadata, dashboard ingress-prefix URL handling, the optional direct-access `pico_foundation_token` bridge and the default direct host-port disablement.
 
+> **Host framing (ADR 0128, 2026-08-07).** This ADR is specifically about the Home Assistant packaging path, which is legitimate - it is the ADR that made that path work. Home Assistant is
+> **one host shape of three** - the others being the ADR 0027 appliance image
+> and local development - and the subject of every access rule below is *what
+> stands in front of the Foundation surface*: a loopback boundary, a token, or
+> a trusted proxy. Home Assistant ingress is an instance of the third. Where
+> the text below reads as though Home Assistant were the setting rather than
+> an example, ADR 0128 is the correction.
+
 ## Context
+
+**The "before" list below describes the state prior to this ADR's own
+implementation**, in the present tense it was written in. All of it has since
+been done; it is kept as the record of what the slices changed.
 
 ADR 0038 chooses a staged Foundation access hardening model:
 

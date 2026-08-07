@@ -4,7 +4,22 @@
 
 Accepted as a foundation hardening direction.
 
+> **Host framing (ADR 0128, 2026-08-07).** This ADR was written when the Home Assistant add-on was the only packaging path. Home Assistant is
+> **one host shape of three** - the others being the ADR 0027 appliance image
+> and local development - and the subject of every access rule below is *what
+> stands in front of the Foundation surface*: a loopback boundary, a token, or
+> a trusted proxy. Home Assistant ingress is an instance of the third. Where
+> the text below reads as though Home Assistant were the setting rather than
+> an example, ADR 0128 is the correction.
+
 ## Context
+
+**The bullet list below is the foundation-phase state and is no longer true.**
+It records what was absent when this direction was chosen: production
+authentication, authorization, CSRF protection and a session model all arrived
+with ADR 0075/0076, and `WS /ws` gained ticket-based authentication with ADR
+0039. Read it as the problem statement it was, not as a description of the
+current surface.
 
 ADR 0030 defines the current Foundation HTTP and WebSocket API as a trusted local diagnostics and foundation interface.
 

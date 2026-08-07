@@ -4,6 +4,20 @@
 
 Accepted and implemented for Foundation access-mode parsing, startup validation, Home Assistant add-on defaulting and default direct host-port disablement. The temporary unsafe compatibility mode was removed before the first deployment.
 
+> **Host framing (ADR 0128, 2026-08-07).** This ADR names one of its three modes after Home Assistant ingress. Home Assistant is
+> **one host shape of three** - the others being the ADR 0027 appliance image
+> and local development - and the subject of every access rule below is *what
+> stands in front of the Foundation surface*: a loopback boundary, a token, or
+> a trusted proxy. Home Assistant ingress is an instance of the third. Where
+> the text below reads as though Home Assistant were the setting rather than
+> an example, ADR 0128 is the correction.
+
+> **A note on that mode specifically:** `ha-ingress` is a label, not a
+> behaviour. Traced through the code it is simply the one mode that requires
+> neither a loopback host nor a token, because something trusted stands in
+> front - which is true of any authenticating reverse proxy. ADR 0128 H5 holds
+> the rename and the transition obligation that makes it safe.
+
 ## Context
 
 ADR 0030 defines the current Foundation HTTP and WebSocket surface as trusted-local diagnostics and foundation plumbing.

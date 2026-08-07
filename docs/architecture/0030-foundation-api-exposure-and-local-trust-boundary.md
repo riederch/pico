@@ -4,7 +4,22 @@
 
 Accepted as a foundation exposure and hardening constraint.
 
+> **Host framing (ADR 0128, 2026-08-07).** This ADR was written when the Home Assistant add-on was the only packaging path. Home Assistant is
+> **one host shape of three** - the others being the ADR 0027 appliance image
+> and local development - and the subject of every access rule below is *what
+> stands in front of the Foundation surface*: a loopback boundary, a token, or
+> a trusted proxy. Home Assistant ingress is an instance of the third. Where
+> the text below reads as though Home Assistant were the setting rather than
+> an example, ADR 0128 is the correction.
+
 ## Context
+
+**The context below is dated 2026 and describes the foundation phase.** Much
+of it has since been answered - production authentication and a session model
+arrived with ADR 0075/0076, membership with ADR 0080, identity with ADR 0029's
+successors. It is kept as the record of what was true when the boundary was
+drawn, not as a statement about today; `docs/architecture/implementation-status.md`
+carries the current position.
 
 Pico Home Core currently exposes a small HTTP and WebSocket surface for the foundation phase:
 

@@ -2,13 +2,13 @@
 
 ![Pico hero](../docs/assets/pico-readme-hero.png)
 
-Pico Core is the Home Assistant add-on foundation for Pico.
+Pico Core is the Home Assistant app foundation for Pico.
 
 Pico is a local-first personal AI companion foundation. The goal is not simply to build another chatbot. Pico is meant to become a personal agent foundation that can run across trusted devices, understand context, interact through text, voice, avatar, and Home Assistant surfaces, and execute approved tools only through clear policy and audit boundaries.
 
-This add-on is the Home Assistant entry point for the current Pico Core service. Home Assistant is the first packaging and runtime path, not the only intended platform and not an ownership layer for resident Pico identities or private data.
+This app is the Home Assistant entry point for the current Pico Core service. Home Assistant is the first packaging and runtime path, not the only intended platform and not an ownership layer for resident Pico identities or private data.
 
-For full technical project documentation, see [`../ReadmeTech.md`](../ReadmeTech.md). For add-on installation and operation details, see [`DOCS.md`](DOCS.md).
+For full technical project documentation, see [`../ReadmeTech.md`](../ReadmeTech.md). For app installation and operation details, see [`DOCS.md`](DOCS.md).
 
 ## Why Pico exists
 
@@ -18,7 +18,7 @@ Pico is designed around a different premise:
 
 > Personal AI should help people without taking away their control over their own data and decisions.
 
-Home Assistant is a useful starting point because it already brings together local devices, sensors, states, events, automations and routines. Pico Core uses that environment as the first add-on packaging and runtime path, while the broader Pico Core host model must also work on other trusted platforms.
+Home Assistant is a useful starting point because it already brings together local devices, sensors, states, events, automations and routines. Pico Core uses that environment as the first app packaging and runtime path, while the broader Pico Core host model must also work on other trusted platforms.
 
 ## What Pico Core should become
 
@@ -71,7 +71,7 @@ Pico's current concept work defines several important boundaries:
 - the Gastgeber Pico / Home Host Pico may invite or evict residents from that host, but must not decrypt, impersonate, rewrite or own resident Picos
 - a future Pico Home Image is an appliance-style installation path for the same host model, not a separate trust model
 - Pico Home should be treated as a local endpoint in the Pico Link / Relay network, not as a public inbound API server
-- external reachability should use Pico Link transports, primarily Pico Relay, rather than port forwarding into the add-on API
+- external reachability should use Pico Link transports, primarily Pico Relay, rather than port forwarding into the app API
 - Pico Relays transport encrypted packets but do not own Pico memory, identity, relationships, actions or authority
 - Pico Link is transport-neutral; Meshtastic and future radio standards belong behind transport adapters
 - Picos can communicate across different Pico Homes; relationships belong to Picos, not Homes
@@ -96,18 +96,18 @@ Current version:
 0.1.9
 ```
 
-The current foundation add-on provides:
+The current foundation app provides:
 
 - local HTTP API
 - realtime WebSocket endpoint
 - SQLite-backed event storage
 - foundation diagnostics dashboard
-- health check endpoint for add-on monitoring
+- health check endpoint for app monitoring
 - first packaging and update path for later Pico functions
 
 Pico Core is **not production-ready** yet. Authentication, authorization, policy execution, encrypted personal data domains, relay transport, Pico Link transport security, migration safety, backup/rollback behaviour and companion clients still need to be built.
 
-The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or add-on boundary. Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs, the optional add-on `pico_foundation_token` bridge and the `PICO_FOUNDATION_ACCESS_MODE` startup gate are implemented as foundation hardening, but real HA install validation remains open. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
+The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication or authorization. Do not expose port `3100` outside a trusted local development or app boundary. Home Assistant ingress metadata, ingress-prefix-aware dashboard URLs, the optional app `pico_foundation_token` bridge and the `PICO_FOUNDATION_ACCESS_MODE` startup gate are implemented as foundation hardening, but real HA install validation remains open. Current `deviceId` values are client-supplied metadata, and `signature` values are stored as unverified metadata rather than cryptographic proof.
 
 ## Visual direction
 
@@ -129,21 +129,21 @@ The avatar communicates state and risk. For example:
 
 | Entry point | Purpose |
 |---|---|
-| Home Assistant ingress panel | Preferred add-on browser path for the foundation diagnostics dashboard, pending real HA install validation |
+| Home Assistant ingress panel | Preferred app browser path for the foundation diagnostics dashboard, pending real HA install validation |
 | Internal port `3100` | Pico Core local foundation HTTP API and WebSocket endpoint used by ingress and watchdog |
 | `/` | foundation diagnostics dashboard |
-| `/health` | add-on health check |
+| `/health` | app health check |
 | `/api/events` | event list and event creation |
 | `/api/events/tail` | latest foundation events for diagnostics dashboard use |
 | `/ws` | realtime event stream |
 
 `/api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.
 
-Port `3100` is no longer published to the Home Assistant host by default. It remains the internal service port used by ingress and the watchdog. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the add-on API to the internet.
+Port `3100` is no longer published to the Home Assistant host by default. It remains the internal service port used by ingress and the watchdog. Future remote reachability should use Pico Link transports and Pico Relay instead of exposing the app API to the internet.
 
-ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the add-on, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments. ADR 0040 defines the concrete ingress metadata, ingress-prefix URL requirement, add-on token option and packaging-default direction. ADR 0041 defines the explicit access-mode gate. The current add-on metadata includes ingress, a working `pico_foundation_token` option bridge, `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` entrypoint defaulting and a closed direct host port by default, but real Home Assistant validation remains follow-up work.
+ADR 0038 defines the staged hardening direction: Home Assistant ingress should become the preferred protected browser path for the app, while a temporary Foundation token can protect direct standalone/container access until real Pico identity, membership and pairing exist. ADR 0039 defines the direct-access WebSocket ticket boundary for token-protected deployments. ADR 0040 defines the concrete ingress metadata, ingress-prefix URL requirement, app token option and packaging-default direction. ADR 0041 defines the explicit access-mode gate. The current app metadata includes ingress, a working `pico_foundation_token` option bridge, `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` entrypoint defaulting and a closed direct host port by default, but real Home Assistant validation remains follow-up work.
 
-Persistent data is stored in the Home Assistant add-on data directory:
+Persistent data is stored in the Home Assistant app data directory:
 
 ```text
 /data/pico.sqlite
@@ -161,8 +161,8 @@ Persistent data is stored in the Home Assistant add-on data directory:
 
 ## Documentation map
 
-- [`DOCS.md`](DOCS.md) - Home Assistant add-on installation and operation details
-- [`CHANGELOG.md`](CHANGELOG.md) - add-on-specific changelog
+- [`DOCS.md`](DOCS.md) - Home Assistant app installation and operation details
+- [`CHANGELOG.md`](CHANGELOG.md) - app-specific changelog
 - [`../README.md`](../README.md) - non-technical project overview
 - [`../ReadmeTech.md`](../ReadmeTech.md) - full technical project documentation
 - [`../docs/architecture`](../docs/architecture) - architecture decisions and concept notes
@@ -179,7 +179,7 @@ Persistent data is stored in the Home Assistant add-on data directory:
 - [`../docs/architecture/0037-proactive-companion-delegation-and-procurement.md`](../docs/architecture/0037-proactive-companion-delegation-and-procurement.md) - proactive delegation and procurement reference case
 - [`../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`](../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md) - staged Foundation access hardening, Home Assistant ingress and temporary direct-access token boundary
 - [`../docs/architecture/0039-foundation-websocket-ticket-boundary.md`](../docs/architecture/0039-foundation-websocket-ticket-boundary.md) - direct-access Foundation WebSocket ticket boundary
-- [`../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`](../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md) - concrete Home Assistant ingress metadata, add-on token option and packaging-default direction
+- [`../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`](../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md) - concrete Home Assistant ingress metadata, app token option and packaging-default direction
 - [`../docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md`](../docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md) - explicit Foundation access modes and direct-port gate
 - [`../docs/architecture/0042-pico-link-draft-schema-and-fixture-gate.md`](../docs/architecture/0042-pico-link-draft-schema-and-fixture-gate.md) - draft-only Pico Link schema and fixture staging gate
 - [`../docs/architecture/0043-pico-link-draft-packet-envelope-preflight.md`](../docs/architecture/0043-pico-link-draft-packet-envelope-preflight.md) - draft-only Pico Link packet-envelope preflight shape
