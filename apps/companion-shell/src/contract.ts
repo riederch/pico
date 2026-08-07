@@ -80,6 +80,9 @@ export const picoCompanionFloorFamilies = [
   'local_recall',
   'decide',
   'recovery_access',
+  // ADR 0129. Remembering a place, and answering from it - the family whose
+  // question is asked in exactly the place the network is not.
+  'spatial_recall',
 ] as const;
 
 /**

@@ -19,7 +19,7 @@ export type PicoModuleKind = typeof picoModuleKinds[number];
  * Every module Pico ships. Activation is a separate question (ADR 0127 M3):
  * being listed here says the code exists, not that it is running.
  */
-export const picoModuleIdentifiers = ['calendar'] as const;
+export const picoModuleIdentifiers = ['calendar', 'spatial-recall'] as const;
 export type PicoModuleIdentifier = typeof picoModuleIdentifiers[number];
 
 export interface PicoModuleManifest {

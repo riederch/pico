@@ -1,7 +1,7 @@
 /**
  * ADR 0118 - the offline and model-free degradation contract.
  *
- * The floor is a guarantee, not a best effort: these five operation families
+ * The floor is a guarantee, not a best effort: these six operation families
  * work with no reachable model and no reachable network. They are not a sample
  * of what happens to survive - they are the operations whose value is destroyed
  * by deferral (a photo not taken now cannot be taken later, an appointment not
@@ -23,6 +23,13 @@ export const picoOfflineFloorFamilies = [
   'decide',
   /** The ADR 0110/0112 recovery surfaces. */
   'recovery_access',
+  /**
+   * ADR 0129. Remembering a place and deriving what happened there from
+   * samples already on the device. It earns the floor in the strongest way any
+   * family here does: "where did I park" is asked in exactly the place the
+   * network is not.
+   */
+  'spatial_recall',
 ] as const;
 
 export type PicoOfflineFloorFamily = typeof picoOfflineFloorFamilies[number];

@@ -19,6 +19,10 @@
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"
     },
+    "./spatial-recall": {
+      "types": "./dist/spatial-recall.d.ts",
+      "import": "./dist/spatial-recall.js"
+    },
     "./planner-reader": {
       "types": "./dist/planner-reader.d.ts",
       "import": "./dist/planner-reader.js"

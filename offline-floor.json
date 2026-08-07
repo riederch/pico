@@ -33,6 +33,12 @@
         "apps/companion/src/recovery-card.ts",
         "apps/core/src/recovery-anchor.ts"
       ]
+    },
+    "spatial_recall": {
+      "modules": [
+        "modules/spatial-recall/src/mobility.ts",
+        "modules/spatial-recall/src/parking.ts"
+      ]
     }
   },
   "forbidden": {

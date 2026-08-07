@@ -139,6 +139,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/protocol
 
+  modules/spatial-recall:
+    dependencies:
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+
   packages/appearance: {}
 
   packages/identity:

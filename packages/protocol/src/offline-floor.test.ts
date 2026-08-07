@@ -12,13 +12,16 @@ import {
 } from './offline-floor.js';
 
 describe('ADR 0118 O1 the floor', () => {
-  it('names the five families ADR 0118 guarantees', () => {
+  it('names the six families ADR 0118 guarantees', () => {
     expect([...picoOfflineFloorFamilies]).toEqual([
       'capture',
       'time_bound_entry',
       'local_recall',
       'decide',
       'recovery_access',
+      // ADR 0129. "Where did I park" is asked in exactly the place the
+      // network is not.
+      'spatial_recall',
     ]);
   });
 

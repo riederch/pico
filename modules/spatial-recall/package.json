@@ -1,0 +1,33 @@
+{
+  "name": "@pico/module-spatial-recall",
+  "version": "0.1.9",
+  "private": true,
+  "license": "SEE LICENSE IN LICENSE",
+  "type": "module",
+  "exports": {
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js"
+    },
+    "./mobility": {
+      "types": "./dist/mobility.d.ts",
+      "import": "./dist/mobility.js"
+    },
+    "./parking": {
+      "types": "./dist/parking.d.ts",
+      "import": "./dist/parking.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@pico/protocol": "workspace:*"
+  }
+}
