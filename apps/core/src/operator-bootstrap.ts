@@ -11,10 +11,11 @@ import { digest } from './session-store.js';
  * process log here, the ADR 0027 protected-display-channel pattern generally.
  *
  * A code is required rather than trusting the first caller, because under
- * `ha-ingress` the first caller is not necessarily the operator: every add-on
- * page on the shared Home Assistant origin can reach the ingress path. Reading
- * the host's log requires the local control that ADR 0027 demands, on every
- * platform, with no platform-specific display path.
+ * `trusted-proxy` the first caller is not necessarily the operator: anything
+ * the proxy serves on its shared origin can reach the path - every App page on
+ * a Home Assistant install, for instance. Reading the host's log requires the
+ * local control that ADR 0027 demands, on every platform, with no
+ * platform-specific display path.
  *
  * The code lives for the process only: a restart mints a new one, which is
  * itself proof of local control and keeps bootstrap state out of the database

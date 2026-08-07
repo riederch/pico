@@ -78,10 +78,11 @@ describe('Core config', () => {
     );
   });
 
-  it('rejects invalid foundation access modes', () => {
+  it('rejects invalid foundation access modes and names both sets', () => {
     for (const mode of ['public', 'unsafe-trusted-local']) {
       expect(() => loadConfig({ PICO_FOUNDATION_ACCESS_MODE: mode })).toThrow(
-        'PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress.',
+        'PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, '
+        + 'trusted-proxy (also accepted: ha-ingress).',
       );
     }
   });
@@ -100,11 +101,43 @@ describe('Core config', () => {
     })).toThrow('PICO_FOUNDATION_ACCESS_MODE=direct-token requires PICO_FOUNDATION_TOKEN.');
   });
 
-  it('accepts explicit ha-ingress mode for non-loopback hosts', () => {
-    expect(loadConfig({
+  it('accepts explicit trusted-proxy mode for non-loopback hosts', () => {
+    const config = loadConfig({
       PICO_HOST: '0.0.0.0',
-      PICO_FOUNDATION_ACCESS_MODE: 'ha-ingress',
-    }).foundationAccessMode).toBe('ha-ingress');
+      PICO_FOUNDATION_ACCESS_MODE: 'trusted-proxy',
+    });
+    expect(config.foundationAccessMode).toBe('trusted-proxy');
+    // Nothing to say: the current name was used.
+    expect(config.foundationAccessModeAlias).toBeUndefined();
+  });
+
+  describe('ADR 0128 H5 the former name keeps working', () => {
+    it('resolves ha-ingress to trusted-proxy and records what was configured', () => {
+      // ADR 0122: this value ships in an installed config and sits in people's
+      // container environments. A rename that refused it would turn an update
+      // into an outage, so it resolves and the boot log says so once.
+      const config = loadConfig({
+        PICO_HOST: '0.0.0.0',
+        PICO_FOUNDATION_ACCESS_MODE: 'ha-ingress',
+      });
+      expect(config.foundationAccessMode).toBe('trusted-proxy');
+      expect(config.foundationAccessModeAlias).toBe('ha-ingress');
+    });
+
+    it('puts the former name through the same rules, not a parallel set', () => {
+      // The old spelling must not become a way around a check. Both of these
+      // are refused for the current name too.
+      expect(() => loadConfig({
+        PICO_HOST: '0.0.0.0',
+        PICO_FOUNDATION_ACCESS_MODE: 'HA-INGRESS',
+      })).toThrow('PICO_FOUNDATION_ACCESS_MODE must be one of');
+      expect(loadConfig({
+        PICO_HOST: '0.0.0.0',
+        PICO_LINK_INTAKE_HOST: '0.0.0.0',
+        PICO_LINK_INTAKE_PORT: '3101',
+        PICO_FOUNDATION_ACCESS_MODE: 'ha-ingress',
+      }).linkIntake).toEqual({ host: '0.0.0.0', port: 3101 });
+    });
   });
 
   it('rejects invalid ports', () => {

@@ -12,11 +12,14 @@ Accepted and implemented for Foundation access-mode parsing, startup validation,
 > the text below reads as though Home Assistant were the setting rather than
 > an example, ADR 0128 is the correction.
 
-> **A note on that mode specifically:** `ha-ingress` is a label, not a
-> behaviour. Traced through the code it is simply the one mode that requires
+> **That mode has since been renamed.** `ha-ingress` was a label, not a
+> behaviour: traced through the code it is simply the one mode requiring
 > neither a loopback host nor a token, because something trusted stands in
-> front - which is true of any authenticating reverse proxy. ADR 0128 H5 holds
-> the rename and the transition obligation that makes it safe.
+> front - true of any authenticating reverse proxy. It is now
+> `trusted-proxy` (ADR 0128 H5). **The old name still resolves**, because it
+> sits in installed environments and a rename that refused it would be an
+> update failure under ADR 0122. Text below keeps the name it was written
+> with.
 
 ## Context
 
@@ -48,7 +51,7 @@ The implementation supports these modes:
 |---|---|---|
 | `loopback-dev` | Local development on the same machine. | Core must bind only to a loopback host. `PICO_FOUNDATION_TOKEN` is optional. |
 | `direct-token` | Standalone/container direct access where the port is reachable beyond loopback. | `PICO_FOUNDATION_TOKEN` is required. Core may bind to non-loopback addresses. |
-| `ha-ingress` | Home Assistant add-on ingress path. | Packaging must not expose the direct host port by default. Core may bind to the internal add-on interface. Token remains optional. |
+| `trusted-proxy` (formerly `ha-ingress`, still accepted) | An authenticating proxy terminates in front of the Foundation surface; Home Assistant ingress is one. | Packaging must not expose the direct host port by default. Core may bind to the internal host interface. Token remains optional. |
 
 The default is fail-closed for unsafe ambiguity:
 
@@ -58,7 +61,7 @@ The default is fail-closed for unsafe ambiguity:
 | no explicit mode, non-loopback bind, token configured | treat as `direct-token` |
 | no explicit mode, non-loopback bind, no token | startup error |
 
-The standalone `PICO_HOST` default is `127.0.0.1` so ordinary local development starts in `loopback-dev`. Docker keeps explicit all-interface binding for container operation, and CI direct-port smokes use `direct-token` with disposable tokens. The Home Assistant add-on entrypoint sets `ha-ingress` when `/data/options.json` exists and no explicit access mode was already configured.
+The standalone `PICO_HOST` default is `127.0.0.1` so ordinary local development starts in `loopback-dev`. Docker keeps explicit all-interface binding for container operation, and CI direct-port smokes use `direct-token` with disposable tokens. The Home Assistant host adapter sets `trusted-proxy` when `/data/options.json` exists and no explicit access mode was already configured (ADR 0128 H5).
 
 ## Core design rule
 

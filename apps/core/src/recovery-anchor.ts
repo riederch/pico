@@ -30,12 +30,13 @@ import {
  * resolved it.
  *
  * What it honestly is not: a platform monotonic counter. A TPM NV counter is
- * unreachable from the add-on container and an external service would break
- * local-first, so the substrate is the filesystem, in a directory the Home
- * Assistant Supervisor excludes from add-on backups (as `keys/**` already
- * is), with a deployment override for installations that can mount something
- * outside the data directory. That raises the bar from "restore an add-on
- * backup through the supported path" to "write to the excluded directory";
+ * unreachable from a container on most hosts and an external service would
+ * break local-first, so the substrate is the filesystem, in a directory the
+ * host excludes from its own backups - on Home Assistant the Supervisor does,
+ * as it already does for `keys/**` - with a deployment override for
+ * installations that can mount something outside the data directory. That
+ * raises the bar from "restore a host backup through the supported path" to
+ * "write to the excluded directory";
  * a whole-filesystem rollback (VM image, disk copy, rsync host migration)
  * still moves anchor and database together. The interface exists so a real
  * platform anchor can replace the substrate without touching a caller.

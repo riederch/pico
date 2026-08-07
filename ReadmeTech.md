@@ -427,7 +427,7 @@ PICO_FOUNDATION_TOKEN=<token> \
 pnpm dev:core
 ```
 
-The accepted access modes are `loopback-dev`, `direct-token` and `ha-ingress`.
+The accepted access modes are `loopback-dev`, `direct-token` and `trusted-proxy`. The last was called `ha-ingress` and that spelling still resolves (ADR 0128 H5).
 Tokenless direct non-loopback startup fails closed; CI direct-port smokes use
 `direct-token` with disposable tokens.
 

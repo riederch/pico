@@ -4,8 +4,7 @@
 
 Accepted as a placement and framing constraint; the observation that Home
 Assistant reads as more central to Pico than it is came from the user on
-2026-08-07. H1 and H2 are implemented. H3-H5 are open. **Nothing in this
-ADR changes runtime behaviour.**
+2026-08-07. H1, H2 and H5 are implemented. H3 and H4 are open.
 
 ## Context
 
@@ -57,12 +56,14 @@ a future Home Assistant integration is; the module property that a
 world-changing module needs and ADR 0127 does not have; and the naming
 currency.
 
+The context above describes the code as it stood when this was written.
+H5 has since changed it, and the gate says how; the description is left
+as the problem statement it was.
+
 Does not cover:
 
 - building the Home Assistant integration, which does not exist and is
   not scheduled here;
-- the host-adapter cleanup in code, which this ADR names as follow-up
-  work with its obligation (H5) rather than performing;
 - ADR 0036's capability and MCP boundary, which stands and is what an
   integration would be built against;
 - ADR 0027's appliance image, which is the second host and is unaffected
@@ -146,11 +147,12 @@ what shipped. Rewriting either to match today's vocabulary would make the
 record less true rather than more current - and this repository has 34
 such entries in `pico_core/CHANGELOG.md` alone.
 
-Identifiers are not prose. `pico_core/`, `addon:check`,
-`applyHomeAssistantAddonOptions` and
-`PICO_FOUNDATION_ACCESS_MODE=ha-ingress` are untouched by this ADR; they
-are H5's business, and H5 carries the obligation that makes changing them
-safe.
+Identifiers are not prose, and H5 changed the ones that named a host from
+inside general code. Two are deliberately kept: `pico_core/` is the
+installed App's slug, which a rename would break for every existing
+install, and `addon:check` validates that package's manifest. Both name
+the Home Assistant packaging artifact, and that is precisely where a host
+name belongs.
 
 ## Gates
 
@@ -180,14 +182,34 @@ safe.
   in `apps/core`. Proven the way ADR 0127 M1 was proven - the
   integration's data is shredded, retained and restored by the core's
   existing paths with no integration-specific handling.
-- **H5 - The host adapter (binds a later code change):** `apps/core`
-  names no host. The add-on entrypoint becomes one implementation of a
-  host adapter, and `ha-ingress` becomes the trusted-proxy mode it
-  already is. **The rename carries a transition obligation:**
-  `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` is set in a shipped
-  `config.yaml` and documented for installed instances, so the old value
-  keeps working until a release may drop it (ADR 0122). A rename that
-  breaks a running install is an update failure, not a cleanup.
+- **H5 - The host adapter (implemented):** `apps/core` names no host
+  outside one file. `host-adapter.ts` is the seam - detect, then fill in
+  what nobody set - and `host-adapter-home-assistant.ts` is the only place
+  in the core that knows what Home Assistant is. Everything downstream
+  reads the environment and nothing else.
+
+  **Defaults, never overrides**, checked at the seam: a host that could
+  overrule an explicit value would make one deployment behave differently
+  depending on where it ran, which is the failure the seam exists to
+  prevent rather than a convenience it may trade away. The first detected
+  adapter wins and the rest are not consulted, because two hosts at once
+  is not a real deployment and merging their answers would produce a
+  configuration neither describes.
+
+  `ha-ingress` became `trusted-proxy`, which is what it always was: the
+  one mode requiring neither a loopback host nor a token, because
+  something in front has already authenticated the person. **The old name
+  still resolves**, and a former spelling reaches the same rules rather
+  than a parallel set that can drift - removing the alias fails the
+  transition test and the error-message test, and nothing else. The boot
+  log names the detected host, the mode, and once, that a former name was
+  configured.
+
+  The separate container entrypoint is gone rather than renamed. It meant
+  the image and a plain `pnpm start` booted from different configuration
+  on the same host - the entrypoint applied the options file, the plain
+  start did not - so host detection moved into `index.ts`, where the
+  logger already exists. One start path, one answer.
 
 ## Failure ledger
 
@@ -198,7 +220,7 @@ safe.
 | An effect-bearing module wants to decide whether to act | The decision goes to the action path. A module declares what it can cause; the core chooses. |
 | A connector's foreign content becomes an action argument | Only with its origin label attached (ADR 0117). A module boundary is not a substitute and never was one. |
 | An effect-bearing module is switched off with promises standing | The M4 statement is made, but it does not gate the stop. Stopping the world changing is sometimes the point. |
-| Someone renames `ha-ingress` without a transition | An update failure under ADR 0122, not a cleanup (H5). |
+| Someone drops the `ha-ingress` alias | A release decision under ADR 0122, never a cleanup: the value sits in installed environments today (H5). |
 | A historical ADR or a changelog entry says "add-on" | Correct, and left alone. It records what was decided and what shipped. |
 
 ## Consequences
@@ -215,6 +237,8 @@ Positive:
 
 Negative and accepted:
 
+- two spellings of one access mode for as long as the alias lives, which
+  is a small carrying cost paid so that no running install breaks;
 - a property no module declares yet is a promise about a future check;
   until H3 is built nothing enforces it, and H3's shape may be wrong
   until a second effect-bearing module exists to disagree with it;

@@ -20,7 +20,7 @@ panel_admin: true
 # same as "unset": the Supervisor reads it back as a missing value and rejects
 # the app before it starts, even when the schema marks the option optional.
 # An optional option with no default is declared in `schema` alone, which is
-# what `applyHomeAssistantAddonOptions` already expects (it treats a missing,
+# what `applyPicoHomeAssistantAppOptions` already expects (it treats a missing,
 # null or blank token as "no token" and stays in ingress mode).
 options:
   memory_encryption: false

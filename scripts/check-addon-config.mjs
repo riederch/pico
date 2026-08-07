@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,6 +57,42 @@ if (options !== undefined && schema !== undefined) {
       errors.push(
         `${configPath}: schema entry \`${key}\` is required (\`${type}\`) but has no default in \`options\`, `
         + 'so a fresh install cannot start until someone fills it in. Give it a default or mark it optional.',
+      );
+    }
+  }
+}
+
+/**
+ * ADR 0128 H5. The container's CMD names a file that exists in the source.
+ *
+ * The entry moved from `addon-entrypoint.js` to `index.js` when host detection
+ * stopped being a separate file. Nothing would have caught a CMD left pointing
+ * at the old name: `tsc` does not remove outputs for deleted sources, so a
+ * stale `dist/` keeps a broken CMD working locally, and the failure surfaces
+ * first in a clean image build - which is to say, on someone's install.
+ *
+ * The check maps back to `src/` rather than looking in `dist/`, so it does
+ * not depend on a build having run and cannot be satisfied by a leftover.
+ */
+const dockerfilePath = 'docker/core.Dockerfile';
+const dockerfile = readFileSync(join(repoRoot, dockerfilePath), 'utf8');
+const cmdMatch = /^CMD\s+\[([^\]]*)\]/mu.exec(dockerfile);
+
+if (cmdMatch === null) {
+  errors.push(`${dockerfilePath}: no exec-form CMD found.`);
+} else {
+  const argv = [...cmdMatch[1].matchAll(/"([^"]*)"/gu)].map((match) => match[1]);
+  const entry = argv.find((argument) => argument.endsWith('.js'));
+
+  if (entry === undefined) {
+    errors.push(`${dockerfilePath}: CMD names no JavaScript entry.`);
+  } else {
+    const source = entry.replace(/\/dist\//u, '/src/').replace(/\.js$/u, '.ts');
+    if (!existsSync(join(repoRoot, source))) {
+      errors.push(
+        `${dockerfilePath}: CMD runs ${entry}, but ${source} does not exist. `
+        + 'A stale dist/ keeps a removed entry working locally; a clean image '
+        + 'build does not.',
       );
     }
   }

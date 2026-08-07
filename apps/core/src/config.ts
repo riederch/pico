@@ -23,9 +23,9 @@ export interface CoreConfig {
   /**
    * ADR 0110 R6 consumption anchor. A deployment binding, not a Pico setting:
    * it must live outside every restorable Foundation snapshot. Defaults to
-   * `recovery-anchor/anchor.json` beside the database, which the add-on
-   * excludes from backups; installations that can mount storage outside the
-   * data directory should point this there instead.
+   * `recovery-anchor/anchor.json` beside the database, which the host
+   * excludes from its backups; installations that can mount storage outside
+   * the data directory should point this there instead.
    */
   recoveryAnchorPath?: string;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
@@ -35,6 +35,12 @@ export interface CoreConfig {
   wsAllowedOrigins?: string[];
   foundationToken?: string;
   foundationAccessMode?: FoundationAccessMode;
+  /**
+   * The former name a person actually configured, when they used one. Carried
+   * so the boot log can say the old spelling still works (ADR 0128 H5); absent
+   * whenever the current name was used.
+   */
+  foundationAccessModeAlias?: string;
   /**
    * ADR 0119 Q4. Aggregate bounds on the Foundation listener, kept separate
    * from the Link intake's own so neither surface can starve the other.
@@ -78,11 +84,33 @@ type Environment = Record<string, string | undefined>;
 
 export type FoundationAccessMode = typeof foundationAccessModes[number];
 
+/**
+ * ADR 0041, renamed under ADR 0128 H5. What stands in front of the Foundation
+ * surface - not which product it is.
+ *
+ * `trusted-proxy` was called `ha-ingress`, and the old name claimed more than
+ * the code ever did: traced through, it is simply the one mode that requires
+ * neither a loopback host nor a token, because something in front has already
+ * authenticated the person. Home Assistant ingress is one such thing; any
+ * authenticating reverse proxy is another.
+ */
 const foundationAccessModes = [
   'loopback-dev',
   'direct-token',
-  'ha-ingress',
+  'trusted-proxy',
 ] as const;
+
+/**
+ * ADR 0128 H5 with ADR 0122. Former names that still resolve.
+ *
+ * `ha-ingress` is documented for installed instances and may sit in someone's
+ * container environment right now. A rename that refused it would turn an
+ * update into an outage, so the old spelling keeps working and the boot log
+ * says so once. Dropping it is a release decision, not a cleanup.
+ */
+const formerFoundationAccessModeNames: Readonly<Record<string, FoundationAccessMode>> = {
+  'ha-ingress': 'trusted-proxy',
+};
 
 export function defaultWebRootPath(): string {
   return fileURLToPath(new URL('../../web', import.meta.url));
@@ -93,12 +121,12 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
   const host = readNonEmptyString(env, 'PICO_HOST', '127.0.0.1');
   const port = readPort(env.PICO_PORT, 'PICO_PORT', '3100');
   const foundationToken = readOptionalNonEmptyString(env.PICO_FOUNDATION_TOKEN, 'PICO_FOUNDATION_TOKEN');
-  const foundationAccessMode = resolveFoundationAccessMode({
+  const accessMode = resolveFoundationAccessMode({
     host,
     foundationToken,
     requestedAccessMode: readOptionalNonEmptyString(env.PICO_FOUNDATION_ACCESS_MODE, 'PICO_FOUNDATION_ACCESS_MODE'),
   });
-  const linkIntake = readPicoLinkIntakeBinding(env, port, foundationAccessMode);
+  const linkIntake = readPicoLinkIntakeBinding(env, port, accessMode.mode);
 
   return {
     host,
@@ -114,7 +142,8 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),
     foundationToken,
-    foundationAccessMode,
+    foundationAccessMode: accessMode.mode,
+    ...(accessMode.alias === undefined ? {} : { foundationAccessModeAlias: accessMode.alias }),
   };
 }
 
@@ -220,16 +249,16 @@ function resolveFoundationAccessMode(options: {
   host: string;
   foundationToken?: string;
   requestedAccessMode?: string;
-}): FoundationAccessMode {
+}): { mode: FoundationAccessMode; alias?: string } {
   const requestedAccessMode = options.requestedAccessMode;
 
   if (requestedAccessMode === undefined) {
     if (isLoopbackHost(options.host)) {
-      return 'loopback-dev';
+      return { mode: 'loopback-dev' };
     }
 
     if (options.foundationToken !== undefined) {
-      return 'direct-token';
+      return { mode: 'direct-token' };
     }
 
     throw new Error(
@@ -237,19 +266,28 @@ function resolveFoundationAccessMode(options: {
     );
   }
 
-  if (!isFoundationAccessMode(requestedAccessMode)) {
-    throw new Error('PICO_FOUNDATION_ACCESS_MODE must be one of: loopback-dev, direct-token, ha-ingress.');
+  const former = formerFoundationAccessModeNames[requestedAccessMode];
+  const mode = former ?? requestedAccessMode;
+
+  if (!isFoundationAccessMode(mode)) {
+    throw new Error(
+      'PICO_FOUNDATION_ACCESS_MODE must be one of: '
+      + `${foundationAccessModes.join(', ')}`
+      + ` (also accepted: ${Object.keys(formerFoundationAccessModeNames).join(', ')}).`,
+    );
   }
 
-  if (requestedAccessMode === 'loopback-dev' && !isLoopbackHost(options.host)) {
+  // The checks below are stated against the current name, so a former spelling
+  // reaches exactly the same rules rather than a parallel set that can drift.
+  if (mode === 'loopback-dev' && !isLoopbackHost(options.host)) {
     throw new Error('PICO_FOUNDATION_ACCESS_MODE=loopback-dev requires PICO_HOST to be a loopback host.');
   }
 
-  if (requestedAccessMode === 'direct-token' && options.foundationToken === undefined) {
+  if (mode === 'direct-token' && options.foundationToken === undefined) {
     throw new Error('PICO_FOUNDATION_ACCESS_MODE=direct-token requires PICO_FOUNDATION_TOKEN.');
   }
 
-  return requestedAccessMode;
+  return former === undefined ? { mode } : { mode, alias: requestedAccessMode };
 }
 
 function isFoundationAccessMode(value: string): value is FoundationAccessMode {

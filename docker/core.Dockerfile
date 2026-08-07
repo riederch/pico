@@ -41,8 +41,12 @@ ENV PICO_DATABASE_PATH=/data/pico.sqlite
 
 VOLUME ["/data"]
 
-# Home Assistant mounts /data at runtime. Running as the image's non-root
-# node user makes that mounted directory read-only for SQLite on some add-on
-# installations. Keep the foundation add-on root-based until startup can safely
-# prepare /data ownership and drop privileges.
-CMD ["node", "apps/core/dist/addon-entrypoint.js"]
+# A host may mount /data at runtime - Home Assistant does. Running as the
+# image's non-root node user makes that mounted directory read-only for SQLite
+# on some installations, so the foundation image stays root-based until startup
+# can safely prepare /data ownership and drop privileges.
+#
+# ADR 0128 H5: index.js applies the host adapters itself, so the image and a
+# plain `pnpm start` boot from the same configuration. There is no separate
+# host entrypoint any more.
+CMD ["node", "apps/core/dist/index.js"]

@@ -437,10 +437,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * be strict because the dashboard is framework-free with no inline script
    * and its styles live in `/styles.css` rather than an inline block, so no
    * 'unsafe-inline' carve-out exists to grow stale. `frame-ancestors 'self'`
-   * instead of 'none' because Home Assistant ingress embeds the dashboard as
-   * a same-origin iframe of the Home Assistant frontend; direct access never
-   * frames it. This is transport-surface hardening only — it grants nothing
-   * and is not part of any authority decision (ADR 0030/0038).
+   * instead of 'none' because a trusted proxy may embed the dashboard as a
+   * same-origin iframe of its own frontend - Home Assistant ingress does -
+   * while direct access never frames it. It is unconditional rather than
+   * mode-dependent: 'self' permits only same-origin framing, so the narrower
+   * value would buy nothing and would tie a security header to a deployment
+   * label. This is transport-surface hardening only — it grants nothing and is
+   * not part of any authority decision (ADR 0030/0038/0128).
    */
   app.addHook('onSend', async (_request, reply, payload) => {
     reply.header('content-security-policy', "default-src 'self'; frame-ancestors 'self'");

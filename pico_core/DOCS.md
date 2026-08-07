@@ -172,7 +172,7 @@ The current foundation app exposes these user-configurable options:
 
 The app entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. If `memory_encryption` is `true`, it sets `PICO_MEMORY_ENCRYPTION` unless that variable was already configured.
 
-The app entrypoint also sets `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` when Home Assistant's options file exists and no explicit access mode was already configured.
+The Home Assistant host adapter also sets `PICO_FOUNDATION_ACCESS_MODE=trusted-proxy` when Home Assistant's options file exists and no explicit access mode was already configured. That mode was called `ha-ingress`; the former name still works, and the boot log says so once (ADR 0128 H5).
 
 Leave `pico_foundation_token` unset for the default ingress-first dashboard path. Set it only when the current token guard should also protect ingress API calls.
 

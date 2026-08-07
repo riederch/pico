@@ -5,10 +5,10 @@
  * Argon2id allocation at a time. It is not an attempt bound, and without one a
  * caller can guess the passphrase at the rate a single verification takes —
  * measured around 11 attempts per second at the interactive limits this
- * appliance uses. Under `ha-ingress` that surface is reachable from every
- * add-on page on the shared Home Assistant origin, which is the same argument
- * ADR 0076 used to require a bootstrap code instead of trusting the first
- * caller.
+ * appliance uses. Under `trusted-proxy` that surface is reachable from every
+ * page the proxy serves on its shared origin - every App page on a Home
+ * Assistant install, for instance - which is the same argument ADR 0076 used
+ * to require a bootstrap code instead of trusting the first caller.
  *
  * The throttle is deliberately a delay, not a lockout. A lockout would hand an
  * attacker the ability to lock the owner out of their own appliance by failing
