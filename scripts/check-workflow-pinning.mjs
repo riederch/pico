@@ -93,6 +93,97 @@ if (!/install scripts?/iu.test(ciWorkflow)) {
   );
 }
 
+/**
+ * ADR 0122 Y2. Actions that need permissions their name does not suggest.
+ *
+ * Build provenance needs an OIDC token and somewhere to record the result, and
+ * a job that merely publishes has neither by default. The failure is quiet in
+ * the worst way: without `id-token` the step dies with "Unable to get
+ * ACTIONS_ID_TOKEN_REQUEST_URL", which reads like an infrastructure fault
+ * rather than a permission the workflow never asked for. Without
+ * `attestations` it fails later, after the image is already published.
+ *
+ * Y2 could not be exercised before it shipped - a pull request does not
+ * publish, so the first real run was its first proof, and that run found
+ * exactly this. The check exists so the second one is not also the proof.
+ */
+const permissionHungryActions = [
+  {
+    action: 'actions/attest-build-provenance',
+    required: ['id-token: write', 'attestations: write'],
+  },
+];
+
+for (const entry of readdirSync(workflowDir)) {
+  if (!entry.endsWith('.yml') && !entry.endsWith('.yaml')) {
+    continue;
+  }
+  const path = join(workflowDir, entry);
+  const content = readFileSync(path, 'utf8');
+
+  for (const { action, required } of permissionHungryActions) {
+    if (!content.includes(`uses: ${action}`)) {
+      continue;
+    }
+    // The job's own block, because a workflow-level grant would hand the
+    // permission to every job, including the one that only verifies.
+    const job = jobContaining(content, `uses: ${action}`);
+    for (const permission of required) {
+      if (job === null || !grantsPermission(job, permission)) {
+        errors.push(
+          `${relative(repoRoot, path)}: the job using ${action} does not grant `
+          + `${permission}. Without it the attestation fails on the run that `
+          + 'publishes, which is the one run nobody can repeat cheaply.',
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Whether a job block grants a permission as a key, rather than mentioning it.
+ *
+ * A key on its own line, not a substring. The workflow explains both
+ * permissions in a comment a few lines above the block that grants them, and a
+ * substring match is satisfied by the explanation - which is how this check
+ * first passed against a workflow that granted neither, the same way prose in
+ * a comment once satisfied the offline-floor import scan.
+ */
+function grantsPermission(job, permission) {
+  const separator = permission.indexOf(':');
+  const name = permission.slice(0, separator).trim();
+  const value = permission.slice(separator + 1).trim();
+  const pattern = new RegExp(`^\\s+${name}:\\s*${value}\\s*$`, 'u');
+  return job
+    .split('\n')
+    .some((line) => !line.trimStart().startsWith('#') && pattern.test(line));
+}
+
+/**
+ * The text of the job a line belongs to.
+ *
+ * A targeted reader rather than a YAML dependency, in the tradeoff the other
+ * check scripts make: jobs are two-space keys under `jobs:`, so the block runs
+ * from that key to the next one at the same indent.
+ */
+function jobContaining(content, needle) {
+  const lines = content.split('\n');
+  const at = lines.findIndex((line) => line.includes(needle));
+  if (at === -1) {
+    return null;
+  }
+  const isJobKey = (line) => /^ {2}[A-Za-z0-9_-]+:\s*$/u.test(line);
+  let start = at;
+  while (start > 0 && !isJobKey(lines[start])) {
+    start -= 1;
+  }
+  let end = start + 1;
+  while (end < lines.length && !isJobKey(lines[end])) {
+    end += 1;
+  }
+  return lines.slice(start, end).join('\n');
+}
+
 if (errors.length > 0) {
   console.error('Workflow pinning check failed:');
   for (const error of errors) {

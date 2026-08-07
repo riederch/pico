@@ -220,8 +220,27 @@ so loudly.
   repository plus registry write access, and a key Pico held would add a
   ceremony without moving that root of trust.
 
-  It cannot be exercised here. A pull request does not publish, so the
-  step is written and its first real proof is the next tagged release.
+  **The first publishing run refused it**, and the reason is the kind a
+  review does not catch: attestation needs `id-token: write` for the OIDC
+  token Sigstore signs against, and `attestations: write` to record the
+  result. A job that publishes has neither by default, and Y1 had
+  deliberately narrowed permissions to that job - so the least-privilege
+  decision and the attestation decision were taken separately and did not
+  meet until a real release. The error compounds it: "Unable to get
+  ACTIONS_ID_TOKEN_REQUEST_URL" reads as an infrastructure fault rather
+  than as a grant the workflow never asked for.
+
+  Both permissions now sit on the publishing job, and
+  `scripts/check-workflow-pinning.mjs` refuses a workflow that uses the
+  attestation action without them - matched as YAML keys rather than as
+  text, because the workflow explains both permissions in a comment and a
+  substring match is satisfied by the explanation. Five probes: each
+  permission missing, both missing, granted workflow-wide instead of on
+  the job, and commented out.
+
+  What stays unproven is the attestation itself. The permissions are a
+  precondition; whether the produced attestation verifies is the next
+  publishing run's answer, not this one's.
 - **Y3 - Digest-verified deployment path (partly implemented):**
   `upgrade-contract.md` already states that GHCR tags are mutable and
   documents recording the digest, so the false immutability claim is

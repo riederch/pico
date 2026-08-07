@@ -59,12 +59,24 @@ jobs:
     name: Build and smoke-test Pico Core container
     runs-on: ubuntu-latest
     needs: verify
-    # ADR 0122 Y1. `packages: write` lives on the one job that publishes,
-    # rather than on the workflow where the verify job would inherit a
-    # permission it has no use for.
+    # ADR 0122 Y1. These live on the one job that publishes, rather than on
+    # the workflow where the verify job would inherit permissions it has no use
+    # for.
+    #
+    # ADR 0122 Y2 needs two more than publishing does, and both are easy to
+    # miss because neither is named after what it does here:
+    #
+    # - `id-token: write` is what makes `ACTIONS_ID_TOKEN_REQUEST_URL` exist.
+    #   Without it the attestation cannot get the OIDC token Sigstore signs
+    #   against, and the step fails before it has looked at the image at all.
+    # - `attestations: write` is what lets the finished attestation be
+    #   recorded. Missing it fails later than the token does, which is worse:
+    #   the build has already published by then.
     permissions:
       contents: read
       packages: write
+      id-token: write
+      attestations: write
 
     steps:
       - name: Checkout
