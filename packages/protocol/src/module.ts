@@ -277,3 +277,193 @@ export function orderPicoModuleManifests(
   }
   return Object.freeze(ordered);
 }
+
+/**
+ * ADR 0127 M3. A module and everything it needs, in activation order.
+ *
+ * Enabling a module enables its closure, because a module whose dependency is
+ * off is not a disabled feature - it is a broken one, and the person who
+ * turned it on did not ask for that.
+ */
+export function picoModuleActivationClosure(input: {
+  manifests: readonly PicoModuleManifest[];
+  identifier: PicoModuleIdentifier;
+}): readonly PicoModuleIdentifier[] {
+  const ordered = orderPicoModuleManifests(input.manifests);
+  const byIdentifier = new Map(ordered.map((manifest) => [manifest.identifier, manifest]));
+  if (!byIdentifier.has(input.identifier)) {
+    throw new Error('unknown_pico_module');
+  }
+
+  const needed = new Set<PicoModuleIdentifier>();
+  const collect = (identifier: PicoModuleIdentifier): void => {
+    if (needed.has(identifier)) {
+      return;
+    }
+    needed.add(identifier);
+    for (const dependency of byIdentifier.get(identifier)?.dependencies ?? []) {
+      collect(dependency);
+    }
+  };
+  collect(input.identifier);
+
+  return Object.freeze(ordered
+    .filter((manifest) => needed.has(manifest.identifier))
+    .map((manifest) => manifest.identifier));
+}
+
+/**
+ * ADR 0127 M3. Which *active* modules declare a dependency on this one.
+ *
+ * Active, not merely shipped: a dependent that is switched off is not going to
+ * break, and refusing on its behalf would make a module impossible to turn off
+ * for the sake of something nobody is running.
+ *
+ * The refusal names them, because "refused" without the names leaves a person
+ * guessing which of several things they would have to turn off first.
+ */
+export function picoModuleDependents(input: {
+  manifests: readonly PicoModuleManifest[];
+  identifier: PicoModuleIdentifier;
+  among?: readonly PicoModuleIdentifier[];
+}): readonly PicoModuleIdentifier[] {
+  const considered = input.among === undefined
+    ? undefined
+    : new Set(input.among);
+  return Object.freeze(input.manifests
+    .filter((manifest) => manifest.dependencies.includes(input.identifier))
+    .filter((manifest) => considered === undefined || considered.has(manifest.identifier))
+    .map((manifest) => manifest.identifier)
+    .sort());
+}
+
+export interface PicoModuleActivationRequest {
+  identifier: PicoModuleIdentifier;
+  active: boolean;
+}
+
+export type PicoModuleActivationDecision =
+  | {
+    outcome: 'changed';
+    active: readonly PicoModuleIdentifier[];
+    /** Everything this turned on, including the module asked for. */
+    enabled: readonly PicoModuleIdentifier[];
+    /** Everything this turned off. Never more than the one asked for. */
+    disabled: readonly PicoModuleIdentifier[];
+  }
+  | { outcome: 'unchanged'; active: readonly PicoModuleIdentifier[] }
+  | { outcome: 'refused_dependents'; dependents: readonly PicoModuleIdentifier[] };
+
+/**
+ * ADR 0127 M3. What a request to switch a module on or off actually does.
+ *
+ * Two asymmetries, and both are deliberate:
+ *
+ * - **Enabling cascades; disabling never does.** Turning something on pulls in
+ *   what it needs, which is what the person asked for by implication. Turning
+ *   something off is refused when another active module depends on it, rather
+ *   than quietly taking that one with it: a person who switched off one thing
+ *   should not discover that a second went too.
+ * - **Unchanged is its own outcome**, not a silent success. Re-enabling what is
+ *   already on should append no record and raise no event; a log that filled
+ *   with no-ops would bury the changes that mattered.
+ *
+ * Pure, so the rule is one expression rather than whatever the first
+ * implementation happened to do - and so a caller can show a person what a
+ * change would do before it is made.
+ */
+export function resolvePicoModuleActivation(input: {
+  manifests: readonly PicoModuleManifest[];
+  active: readonly PicoModuleIdentifier[];
+  request: PicoModuleActivationRequest;
+}): PicoModuleActivationDecision {
+  const ordered = orderPicoModuleManifests(input.manifests);
+  if (!ordered.some((manifest) => manifest.identifier === input.request.identifier)) {
+    throw new Error('unknown_pico_module');
+  }
+  const inOrder = (identifiers: Iterable<PicoModuleIdentifier>): readonly PicoModuleIdentifier[] => {
+    const wanted = new Set(identifiers);
+    return Object.freeze(ordered
+      .map((manifest) => manifest.identifier)
+      .filter((identifier) => wanted.has(identifier)));
+  };
+
+  const active = new Set(input.active);
+
+  if (input.request.active) {
+    const closure = picoModuleActivationClosure({
+      manifests: ordered,
+      identifier: input.request.identifier,
+    });
+    const enabled = closure.filter((identifier) => !active.has(identifier));
+    if (enabled.length === 0) {
+      return { outcome: 'unchanged', active: inOrder(active) };
+    }
+    for (const identifier of enabled) {
+      active.add(identifier);
+    }
+    return {
+      outcome: 'changed',
+      active: inOrder(active),
+      enabled: Object.freeze(enabled),
+      disabled: Object.freeze([]),
+    };
+  }
+
+  if (!active.has(input.request.identifier)) {
+    return { outcome: 'unchanged', active: inOrder(active) };
+  }
+
+  const dependents = picoModuleDependents({
+    manifests: ordered,
+    identifier: input.request.identifier,
+    among: [...active],
+  });
+  if (dependents.length > 0) {
+    return { outcome: 'refused_dependents', dependents };
+  }
+
+  active.delete(input.request.identifier);
+  return {
+    outcome: 'changed',
+    active: inOrder(active),
+    enabled: Object.freeze([]),
+    disabled: Object.freeze([input.request.identifier]),
+  };
+}
+
+/**
+ * ADR 0127 M3. What a surface is told about activation.
+ *
+ * A capability that is missing **on purpose** must not present as one that is
+ * broken, so the state is readable beside everything else in the system status
+ * rather than being inferable from a feature's silence.
+ */
+export interface PicoModuleActivationEntry {
+  identifier: PicoModuleIdentifier;
+  kind: PicoModuleKind;
+  active: boolean;
+  /** ADR 0128 H3, carried here so a person can see what an active module can do. */
+  effectBearing: boolean;
+  dependencies: readonly PicoModuleIdentifier[];
+}
+
+export interface PicoModuleActivationView {
+  modules: readonly PicoModuleActivationEntry[];
+}
+
+export function toPicoModuleActivationView(input: {
+  manifests: readonly PicoModuleManifest[];
+  active: readonly PicoModuleIdentifier[];
+}): PicoModuleActivationView {
+  const active = new Set(input.active);
+  return Object.freeze({
+    modules: Object.freeze(orderPicoModuleManifests(input.manifests).map((manifest) => Object.freeze({
+      identifier: manifest.identifier,
+      kind: manifest.kind,
+      active: active.has(manifest.identifier),
+      effectBearing: picoModuleIsEffectBearing(manifest),
+      dependencies: manifest.dependencies,
+    }))),
+  });
+}

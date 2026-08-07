@@ -123,6 +123,13 @@ import { EventFactory } from './event-factory.js';
 // ADR 0127. A runtime imports a module; a module never imports a runtime. The
 // edge points one way, or the two packages form a cycle.
 import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
+import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
+import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
+import {
+  resolvePicoModuleActivation,
+  toPicoModuleActivationView,
+  type PicoModuleIdentifier,
+} from '@pico/protocol/module';
 import { PicoRequestQuota } from './request-quota.js';
 import {
   EventStore,
@@ -1558,6 +1565,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('GET', '/api/home/reader-custody/items', 'home-authority-relay');
   accessClasses.register('GET', '/api/system/version', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/system/status', 'foundation-diagnostic');
+  // ADR 0127 M3 with ADR 0104: activation is a durable decision a person makes
+  // about their own Pico, so it is an authenticated Pico operation rather than
+  // a host configuration option. Host-admin because it changes what the Home
+  // does, and `host-admin` is the class that already means exactly that.
+  accessClasses.register('POST', '/api/home/modules', 'host-admin');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/events', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/events/tail', 'foundation-diagnostic');
@@ -1579,6 +1591,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sendNoStore(reply, response);
   });
 
+  /**
+   * ADR 0127 M3. The shipped modules, listed rather than discovered.
+   *
+   * A runtime imports a module; a module never imports a runtime. This is that
+   * edge, and it is the only place the two manifests are named - adding a
+   * module is a decision spoken here and in the protocol's closed list, not a
+   * side effect of a directory existing.
+   */
+  const shippedModuleManifests = [
+    picoCalendarModuleManifest,
+    picoSpatialRecallModuleManifest,
+  ];
+
+  function readModuleActivation(): ReturnType<typeof toPicoModuleActivationView> {
+    return toPicoModuleActivationView({
+      manifests: shippedModuleManifests,
+      active: store.picoActiveModules(),
+    });
+  }
+
   function readSystemStatus(): PicoSystemStatusResponse {
     return {
       service: 'pico-home-core',
@@ -1597,11 +1629,88 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // cached at boot would tell the person about a disk that was full an hour
       // ago, or stay silent about one that filled since.
       storage: store.storageCondition(),
+      // ADR 0127 M3. Read per call for the same reason the storage condition
+      // is: a state cached at boot would keep reporting a module the person
+      // switched off ten minutes ago.
+      modules: readModuleActivation(),
     };
   }
 
   app.get('/api/system/status', async (_request, reply) => {
     return sendNoStore(reply, readSystemStatus());
+  });
+
+  /**
+   * ADR 0127 M3. Switching a module on or off.
+   *
+   * The decision itself is a pure function in the protocol, so the rule about
+   * cascading and refusal is one expression rather than whatever this route
+   * happened to do. What lives here is what only a runtime can do: authorize,
+   * persist and record.
+   *
+   * **Deactivation stops behaviour and touches no stored data.** Nothing below
+   * deletes, shreds or rewrites anything: items a disabled module wrote stay
+   * memory items under core custody, and retention, shredding and the ADR 0119
+   * Q5 ceilings keep running over them. A module being off must never mean
+   * nobody is responsible.
+   */
+  app.post('/api/home/modules', async (request, reply) => {
+    const body = request.body as { identifier?: unknown; active?: unknown } | undefined;
+    const identifier = body?.identifier;
+    const active = body?.active;
+
+    if (typeof identifier !== 'string'
+      || !shippedModuleManifests.some((manifest) => manifest.identifier === identifier)) {
+      return sendNoStore(reply.code(400), { error: 'identifier must name a shipped module.' });
+    }
+    if (typeof active !== 'boolean') {
+      return sendNoStore(reply.code(400), { error: 'active must be a boolean.' });
+    }
+
+    const decision = resolvePicoModuleActivation({
+      manifests: shippedModuleManifests,
+      active: store.picoActiveModules(),
+      request: { identifier: identifier as PicoModuleIdentifier, active },
+    });
+
+    if (decision.outcome === 'refused_dependents') {
+      // Named, not merely refused. A person who turned off one thing should not
+      // have to guess which of several others is holding it on.
+      return sendNoStore(reply.code(409), {
+        error: 'pico_module_has_active_dependents',
+        dependents: decision.dependents,
+      });
+    }
+
+    if (decision.outcome === 'unchanged') {
+      // No record and no event: a log that filled with no-ops would bury the
+      // changes that mattered.
+      return sendNoStore(reply, { modules: readModuleActivation() });
+    }
+
+    const decidedAt = new Date().toISOString();
+    store.setPicoModuleActivation({
+      decidedAt,
+      changes: [
+        ...decision.enabled.map((entry) => ({ identifier: entry, active: true })),
+        ...decision.disabled.map((entry) => ({ identifier: entry, active: false })),
+      ],
+    });
+
+    const event = factory.create({
+      deviceId: config.deviceId,
+      type: 'home.module_activation_changed',
+      payload: {
+        // Content-free: identifiers and a direction, nothing about what the
+        // modules hold.
+        enabled: [...decision.enabled],
+        disabled: [...decision.disabled],
+      },
+    });
+    store.append(event);
+    broadcast(event);
+
+    return sendNoStore(reply, { modules: readModuleActivation() });
   });
 
   function recordHomeMembership(body: unknown): FoundationOperationResult {

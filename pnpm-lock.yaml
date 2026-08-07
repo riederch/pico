@@ -76,6 +76,9 @@ importers:
       '@pico/module-calendar':
         specifier: workspace:*
         version: link:../../modules/calendar
+      '@pico/module-spatial-recall':
+        specifier: workspace:*
+        version: link:../../modules/spatial-recall
       '@pico/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

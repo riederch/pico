@@ -77,6 +77,8 @@ export const picoAuditRecordMigrationId =
   '0011_pico_audit_record' as const;
 export const picoMemoryItemDueAtMigrationId =
   '0012_memory_item_due_at' as const;
+export const picoModuleActivationMigrationId =
+  '0013_pico_module_activation' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -918,6 +920,31 @@ const migrations: readonly MigrationDefinition[] = [
         CREATE INDEX idx_memory_item_due
         ON memory_item (due_at)
         WHERE due_at IS NOT NULL AND raised_at IS NULL AND deletion_state = 'active';
+      `);
+    },
+  },
+  {
+    id: picoModuleActivationMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0127 M3. Which modules a person has switched on.
+        --
+        -- A projection of decisions in the append-only log, bounded by the
+        -- closed identifier list in \`@pico/protocol/module\` - at most one row
+        -- per shipped module, forever. That puts it in the same class as the
+        -- authority and lifecycle tables beside it and explicitly *not* in the
+        -- second kind of store ADR 0129 gates behind five places: it does not
+        -- grow with use, so it needs no ceiling of its own.
+        --
+        -- No default row is written here. A Home with no rows has made no
+        -- activation decision, which is different from having switched
+        -- everything off, and the read applies the shipped default instead.
+        CREATE TABLE pico_module_activation (
+          identifier TEXT PRIMARY KEY,
+          active INTEGER NOT NULL CHECK (active IN (0, 1)),
+          decided_at TEXT NOT NULL
+        );
       `);
     },
   },

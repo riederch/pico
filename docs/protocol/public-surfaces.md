@@ -230,6 +230,7 @@ home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
 home.host_key_rotated
 home.clock_divergence_detected
+home.module_activation_changed
 home.version_changed
 ```
 
@@ -255,6 +256,7 @@ home.recovery_anchor_reseeded
 home.identity_root_rotation_vetoed
 home.host_key_rotated
 home.clock_divergence_detected
+home.module_activation_changed
 home.version_changed
 ```
 

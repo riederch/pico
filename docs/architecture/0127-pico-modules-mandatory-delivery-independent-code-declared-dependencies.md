@@ -3,9 +3,8 @@
 ## Status
 
 Accepted as a structural constraint on where product features live; the
-initiative and its scope were chosen by the user on 2026-08-06. M1 and
-M2 are implemented at the calendar, the first module; M3-M5 are open and
-bind the second module and every product feature after it.
+initiative and its scope were chosen by the user on 2026-08-06. M1, M2 and M3 are implemented; the calendar was the first module and
+spatial recall (ADR 0129) is the second. M4 and M5 are open.
 
 The claim is deliberately narrow: this decides **organisation**, not
 protection. A module boundary makes features easier to find and harder
@@ -330,12 +329,51 @@ with it.
   forbid exactly what ADR 0127 permits. An escaping relative import is
   reported and *not followed*, or the one real finding would arrive
   buried under every consequence of it.
-- **M3 - Activation (binds the first two modules):** activation is a
-  durable Pico-side decision, never a host configuration option; enabling
-  a module enables its dependency closure; disabling one another depends
-  on is refused and names the dependents; activation state is readable in
-  the system status. Deactivation stops surfaces, producers and
-  schedulers and touches no stored data.
+- **M3 - Activation (implemented):** the decision itself is a pure
+  function in `@pico/protocol/module`, so the rule is one expression
+  rather than whatever the first route happened to do - and a caller can
+  show a person what a change would do before it is made.
+
+  **Two asymmetries, both deliberate.** Enabling cascades to the
+  dependency closure, because a module whose dependency is off is not a
+  disabled feature but a broken one, and nobody asked for that. Disabling
+  never cascades: it is refused when another *active* module depends on
+  it, and the refusal names the dependents, because a person who switched
+  off one thing should not discover that a second went with it - nor be
+  left guessing which of several is holding it on. Active rather than
+  merely shipped, or a module would be impossible to turn off for the
+  sake of something nobody is running.
+
+  **Durable and Pico-side.** A `home.module_activation_changed` event and
+  a projection, which is how this codebase records durable decisions; the
+  `home.` prefix puts it in the audit family without a second decision.
+  ADR 0104 rules out a host configuration option, so the surface is an
+  authenticated `host-admin` route and an unauthenticated change is
+  refused - asserted rather than assumed. The payload is content-free:
+  identifiers and a direction. A request that changes nothing appends
+  nothing, because a log full of no-ops would bury the changes that
+  mattered.
+
+  **The default is every module on**, and a Home that has decided nothing
+  is deliberately distinguishable from one that switched everything off:
+  only changed modules get a row, so a future default can still reach a
+  Home that never expressed a preference. The default is not a manifest
+  field - both shipped modules are ordinary product features a person
+  expects to work, and the one privacy question nearby, whether spatial
+  recall may begin *capturing*, belongs to ADR 0129 SR5/SR6 where consent
+  can actually be enforced. **Activating a module is not consent to
+  record.**
+
+  **Deactivation touches no stored data**, proven rather than asserted:
+  an entry recorded while the calendar was on is still there, still
+  carrying its instant, after the module is switched off and on again.
+  Retention, shredding and the ADR 0119 Q5 ceilings keep running over it.
+  A module being off must never mean nobody is responsible.
+
+  The projection table is bounded by the closed identifier list - at most
+  one row per shipped module, forever - which puts it in the same class
+  as the authority and lifecycle tables beside it and explicitly not in
+  the second kind of store ADR 0129 gates behind five places.
 - **M4 - Deactivation is loud where promises stand (binds M3, with ADR
   0118 O1):** disabling a module holding unfinished commitments states
   what will not happen, and the statement names the commitments rather

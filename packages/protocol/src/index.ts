@@ -1,3 +1,4 @@
+import type { PicoModuleActivationView } from './module.js';
 import type { PicoStorageCondition } from './storage-pressure.js';
 export const foundationEventTypes = [
   'device.registered',
@@ -31,6 +32,16 @@ export const foundationEventTypes = [
   'home.identity_root_rotation_vetoed',
   'home.host_key_rotated',
   'home.clock_divergence_detected',
+  /**
+   * ADR 0127 M3. A module was switched on or off.
+   *
+   * Content-free by construction: identifiers and a direction. Activation is a
+   * durable decision a person made about their own Pico (ADR 0104 forbids it
+   * being a host configuration option), so it is recorded the way this codebase
+   * records durable decisions - an event and a projection - and it survives a
+   * restart because it is in the log, not because something remembered.
+   */
+  'home.module_activation_changed',
   /**
    * ADR 0122 Y6. The running code changed. Content-free by construction: two
    * version strings and a direction, because an installation that cannot tell
@@ -72,6 +83,10 @@ export const serverSynthesizedFoundationEventTypes = [
   'home.identity_root_rotation_vetoed',
   'home.host_key_rotated',
   'home.clock_divergence_detected',
+  // ADR 0127 M3. The server appends it when a person switches a module on or
+  // off. A client writing its own activation record would be describing a
+  // decision the Home, not the client, is responsible for.
+  'home.module_activation_changed',
   // ADR 0122 Y6. The server appends it at boot from its own observation; a
   // client claiming its code changed would be claiming something only the
   // process itself can know.
@@ -2249,6 +2264,14 @@ export interface PicoSystemStatusResponse {
    * rather than letting a refusal arrive as a mystery.
    */
   storage: PicoStorageCondition;
+  /**
+   * ADR 0127 M3. Which modules are running.
+   *
+   * Readable beside everything else rather than inferable from a feature's
+   * silence: a capability that is missing **on purpose** must not present as
+   * one that is broken.
+   */
+  modules: PicoModuleActivationView;
 }
 
 export interface PicoHomeClaimStateResponse {

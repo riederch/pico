@@ -4,8 +4,12 @@ import {
   orderPicoModuleManifests,
   parsePicoModuleManifest,
   picoModuleIdentifiers,
+  picoModuleActivationClosure,
+  picoModuleDependents,
   picoModuleIsEffectBearing,
   picoModuleKinds,
+  resolvePicoModuleActivation,
+  toPicoModuleActivationView,
   type PicoModuleManifest,
 } from './module.js';
 
@@ -225,5 +229,86 @@ describe('ADR 0128 H3 the runtime supplies exactly what was declared', () => {
       manifest: manifestWith('calendar.declared'),
       supplied: { 'calendar.surprise': 1 },
     })).toThrow('undeclared_pico_module_effect: calendar.surprise');
+  });
+});
+
+describe('ADR 0127 M3 activation', () => {
+  // A graph with a real edge, because the interesting rules only exist once
+  // one module needs another.
+  const shipped = [
+    manifest('calendar'),
+    manifest('list', ['calendar']),
+  ];
+
+  const resolve = (
+    active: readonly string[],
+    identifier: string,
+    wanted: boolean,
+  ) => resolvePicoModuleActivation({
+    manifests: shipped,
+    active: active as never,
+    request: { identifier: identifier as never, active: wanted },
+  });
+
+  it('enables the closure, in dependency order', () => {
+    // A module whose dependency is off is not a disabled feature, it is a
+    // broken one - and the person who turned it on did not ask for that.
+    const decision = resolve([], 'list', true);
+    expect(decision.outcome).toBe('changed');
+    expect(decision.outcome === 'changed' && decision.enabled).toEqual(['calendar', 'list']);
+    expect(decision.outcome === 'changed' && decision.active).toEqual(['calendar', 'list']);
+  });
+
+  it('enables only what was missing when part of the closure is already on', () => {
+    const decision = resolve(['calendar'], 'list', true);
+    expect(decision.outcome === 'changed' && decision.enabled).toEqual(['list']);
+  });
+
+  it('refuses to disable something an active module depends on, and names it', () => {
+    // "Refused" without the names leaves a person guessing which of several
+    // things they would have to turn off first.
+    const decision = resolve(['calendar', 'list'], 'calendar', false);
+    expect(decision.outcome).toBe('refused_dependents');
+    expect(decision.outcome === 'refused_dependents' && decision.dependents).toEqual(['list']);
+  });
+
+  it('allows disabling once the dependent is itself off', () => {
+    // Active, not merely shipped: refusing on behalf of something nobody is
+    // running would make a module impossible to turn off for no one's sake.
+    expect(resolve(['calendar'], 'calendar', false).outcome).toBe('changed');
+  });
+
+  it('never cascades a disable', () => {
+    const decision = resolve(['calendar', 'list'], 'list', false);
+    expect(decision.outcome === 'changed' && decision.disabled).toEqual(['list']);
+    // calendar stays on. A person who switched off one thing should not
+    // discover that a second went with it.
+    expect(decision.outcome === 'changed' && decision.active).toEqual(['calendar']);
+  });
+
+  it('reports no-ops as unchanged rather than as silent success', () => {
+    // A log that filled with no-ops would bury the changes that mattered.
+    expect(resolve(['calendar'], 'calendar', true).outcome).toBe('unchanged');
+    expect(resolve([], 'calendar', false).outcome).toBe('unchanged');
+  });
+
+  it('refuses a module nobody ships', () => {
+    expect(() => resolve([], 'nonsense', true)).toThrow('unknown_pico_module');
+  });
+
+  it('gives a surface the state beside the kind and what a module can cause', () => {
+    // A capability missing on purpose must not present as one that is broken.
+    const view = toPicoModuleActivationView({ manifests: shipped, active: ['calendar'] as never });
+    expect(view.modules.map((entry) => `${entry.identifier}:${entry.active}`))
+      .toEqual(['calendar:true', 'list:false']);
+    expect(view.modules[0]?.effectBearing).toBe(false);
+    expect(view.modules[1]?.dependencies).toEqual(['calendar']);
+  });
+
+  it('lists dependents of a module that is not shipped as none, not as an error', () => {
+    expect(picoModuleDependents({ manifests: shipped, identifier: 'calendar' as never }))
+      .toEqual(['list']);
+    expect(picoModuleActivationClosure({ manifests: shipped, identifier: 'calendar' as never }))
+      .toEqual(['calendar']);
   });
 });

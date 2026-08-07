@@ -90,6 +90,7 @@ import {
   picoIdentityRootRotationMigrationId,
   picoEventOriginMigrationId,
   picoMemoryItemDueAtMigrationId,
+  picoModuleActivationMigrationId,
   picoMemoryItemOriginMigrationId,
   picoAuditRecordMigrationId,
   picoHomeHostContinuityMigrationId,
@@ -391,12 +392,35 @@ describe('Pico Home Core app', () => {
           { id: picoMemoryItemOriginMigrationId, appliedAt: expect.any(String) },
           { id: picoAuditRecordMigrationId, appliedAt: expect.any(String) },
           { id: picoMemoryItemDueAtMigrationId, appliedAt: expect.any(String) },
+          { id: picoModuleActivationMigrationId, appliedAt: expect.any(String) },
         ],
       },
       // ADR 0119 Q5. A development host has no free-space source and
       // an empty store, so nothing applies and the reasons list is empty -
       // not absent. An absent condition would read as "unknown".
       storage: { state: 'normal', reasons: [] },
+      // ADR 0127 M3. A capability missing on purpose must not present as one
+      // that is broken, so every shipped module is named with its state - all
+      // on, because a Home that has decided nothing has not switched anything
+      // off.
+      modules: {
+        modules: [
+          {
+            identifier: 'calendar',
+            kind: 'product',
+            active: true,
+            effectBearing: false,
+            dependencies: [],
+          },
+          {
+            identifier: 'spatial-recall',
+            kind: 'product',
+            active: true,
+            effectBearing: false,
+            dependencies: [],
+          },
+        ],
+      },
     });
 
     await app.close();

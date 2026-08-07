@@ -1,6 +1,10 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
+import {
+  picoModuleIdentifiers,
+  type PicoModuleIdentifier,
+} from '@pico/protocol/module';
 import type {
   FoundationEventType,
   PayloadPosture,
@@ -6011,6 +6015,57 @@ export class EventStore {
         WHERE memory_item_id = ? AND raised_at IS NULL AND due_at IS NOT NULL
       `)
       .run(input.raisedAt, new Date().toISOString(), input.memoryItemId).changes === 1;
+  }
+
+  /**
+   * ADR 0127 M3. Which modules this Home has running.
+   *
+   * **A Home that has decided nothing gets the shipped default**, which is
+   * every module on. That is different from having switched everything off,
+   * and conflating the two would leave a fresh install looking broken while a
+   * person who deliberately emptied it kept getting their features back.
+   *
+   * The default is deliberately *not* a per-module manifest field. Both shipped
+   * modules are ordinary product features a person expects to work, and the one
+   * privacy question in the neighbourhood - whether spatial recall may begin
+   * *capturing* - belongs to ADR 0129 SR5/SR6 where consent can actually be
+   * enforced. **Activating a module is not consent to record.**
+   */
+  public picoActiveModules(): readonly PicoModuleIdentifier[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare('SELECT identifier, active FROM pico_module_activation')
+      .all() as Array<{ identifier: string; active: number }>;
+    const decided = new Map(rows.map((row) => [row.identifier, row.active === 1]));
+
+    return Object.freeze(picoModuleIdentifiers
+      .filter((identifier) => decided.get(identifier) ?? true));
+  }
+
+  /**
+   * ADR 0127 M3. Records what a person decided, for exactly the modules that
+   * changed.
+   *
+   * Writing only the changed ones keeps "never decided" distinguishable from
+   * "decided to leave on", which is what lets a future default change reach a
+   * Home that never expressed a preference and leave alone one that did.
+   */
+  public setPicoModuleActivation(input: {
+    changes: ReadonlyArray<{ identifier: PicoModuleIdentifier; active: boolean }>;
+    decidedAt: string;
+  }): void {
+    this.ensureOpen();
+    const statement = this.db.prepare(`
+      INSERT INTO pico_module_activation (identifier, active, decided_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(identifier) DO UPDATE SET active = excluded.active, decided_at = excluded.decided_at
+    `);
+    const apply = this.db.transaction(() => {
+      for (const change of input.changes) {
+        statement.run(change.identifier, change.active ? 1 : 0, input.decidedAt);
+      }
+    });
+    apply();
   }
 
   /**

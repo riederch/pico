@@ -152,6 +152,8 @@ describe('Pico protocol types', () => {
       'home.identity_root_rotation_vetoed',
       'home.host_key_rotated',
       'home.clock_divergence_detected',
+      // ADR 0127 M3: a module was switched on or off.
+      'home.module_activation_changed',
       // ADR 0122 Y6: the running code changed.
       'home.version_changed',
     ]);
@@ -175,6 +177,7 @@ describe('Pico protocol types', () => {
       'home.identity_root_rotation_vetoed',
       'home.host_key_rotated',
       'home.clock_divergence_detected',
+      'home.module_activation_changed',
       'home.version_changed',
     ]);
 
