@@ -130,6 +130,20 @@ Paket-Helper wie nach einer echten Installation. Das privilegierte
 Extraktionsverzeichnis wird vor dem normalen Entfernen ueber seinen registrierten
 `mkdtemp`-Pfad rekursiv an den aufrufenden Nutzer zurueckgegeben.
 
+**Der Probe-Modus entscheidet ueber das Budget, und die Differenz ist gross.**
+Ein lokaler Standardlauf misst im `user_namespace`-Modus rund 17,5 MB hoeher als
+der root-eigene Paket-Probe und reisst das PSS-Budget deshalb auch an
+unveraendertem HEAD. Das ist **kein** Befund am Code. Wer eine Budgetabweichung
+sieht, prueft zuerst das `probe`-Feld im Messbericht, bevor er den Importgraphen
+verdaechtigt. Der Modus, gegen den das Budget definiert wurde, ist ein
+ausdrueckliches Opt-in - dieselbe Variable, die `.github/workflows/ci.yml`
+setzt - und verlangt passwortloses `sudo`, also ein Terminal mit TTY:
+
+```bash
+PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE=1 \
+  npx pnpm@9.0.0 companion:release-check
+```
+
 Ein normaler lokaler Lauf entpackt weiterhin unprivilegiert. Weil sein im Archiv
 korrekter Setuid-Helper dann absichtlich keine Root-Eigentuemerschaft besitzt,
 erzwingt der Verifier mit `--disable-setuid-sandbox` ausschliesslich den
@@ -206,6 +220,11 @@ naechste Schritte nur nach direkter Repository-Pruefung aktualisieren.
 
 - `pnpm` ist moeglicherweise nicht global auf dem `PATH`; `npx pnpm@9.0.0` ist
   der portable Standardweg.
+- Die Arbeitsmaschine bringt kein passendes globales Node mit. Node 22.20.0 und
+  Hilfsbinaries werden dort unter `/tmp/node-v22.20.0-linux-x64/bin` bzw.
+  `/tmp/pico-bin` bereitgestellt und beiden `PATH` vorangestellt. `/tmp` ist
+  tmpfs: nach einem Neustart ist das erneut bereitzustellen, und grosse
+  Fixtures gehoeren nicht dorthin.
 - Sandbox-DNS kann Registry-Aufloesung blockieren; nicht durch unsichere
   Workarounds umgehen.
 - Crypto-Tests verwenden `libsodium-wrappers-sumo`. Externe Prozesse wie
