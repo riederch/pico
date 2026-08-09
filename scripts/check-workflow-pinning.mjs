@@ -184,6 +184,33 @@ function jobContaining(content, needle) {
   return lines.slice(start, end).join('\n');
 }
 
+/**
+ * ADR 0122 Y2. A build with no provenance may not look like one that has it.
+ *
+ * GitHub refuses to store an attestation for a user-owned private repository,
+ * so the step is conditional. That is a defensible answer to a platform limit
+ * - failing every push would make a wall out of a gate - but a conditional
+ * step is invisible when it does not run, and "no attestation" would then be
+ * indistinguishable from "attestation succeeded" to anyone reading the run.
+ *
+ * So: if the attestation is conditional, the workflow must also say so where a
+ * person meets it. Same rule as the enabled-install-scripts exception above,
+ * and for the same reason - an exception nobody records is an exception nobody
+ * remembers.
+ */
+if (/uses: actions\/attest-build-provenance/u.test(ciWorkflow)) {
+  const attestStep = /- name: Attest build provenance\n\s+if: ([^\n]*)\n/u.exec(ciWorkflow);
+  const conditional = attestStep !== null && /repository\.private/u.test(attestStep[1]);
+  const recorded = /not attested/iu.test(ciWorkflow);
+  if (conditional && !recorded) {
+    errors.push(
+      ".github/workflows/ci.yml: build provenance is skipped for private "
+      + "repositories and the skip is not reported. A build without an "
+      + "attestation must not read like one that has it.",
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Workflow pinning check failed:');
   for (const error of errors) {

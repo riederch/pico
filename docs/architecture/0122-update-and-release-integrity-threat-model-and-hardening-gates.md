@@ -238,9 +238,37 @@ so loudly.
   permission missing, both missing, granted workflow-wide instead of on
   the job, and commented out.
 
-  What stays unproven is the attestation itself. The permissions are a
-  precondition; whether the produced attestation verifies is the next
-  publishing run's answer, not this one's.
+  With the permissions in place the next run got further and stopped
+  somewhere else:
+
+      Failed to persist attestation: Feature not available for
+      user-owned private repositories.
+
+  **So Y2 is unmet, and not for a reason this repository can fix.** The
+  attestation is built and signed; GitHub declines to store it because
+  this repository is private and owned by a person rather than an
+  organisation. Nothing in the workflow, the permissions or the pinning
+  changes that.
+
+  Two things would produce provenance, and both are decisions about the
+  project rather than about a file: a **public repository**, or an
+  **organisation-owned** one. Until one of them happens, the update
+  authority for every consumption path is repository plus registry write
+  access, **unattested** - which is the same authority Y2 was written to
+  keep from being the only one.
+
+  What the workflow does in the meantime is skip the attestation and say
+  so in the job summary. Failing every push would make a wall out of a
+  gate; skipping quietly would let a build with no provenance read like
+  one that has it, which is the worse of the two. `supply:check` refuses
+  a conditional attestation whose skip is not reported, so the notice
+  cannot be dropped later while the condition stays - two probes, one
+  removing the reporting step and one gutting its text.
+
+  This is also the third thing the first real publishing runs taught that
+  no amount of reading would have: the permissions, and then the
+  repository shape. A gate written against a platform is a claim about
+  that platform, and only the platform can settle it.
 - **Y3 - Digest-verified deployment path (partly implemented):**
   `upgrade-contract.md` already states that GHCR tags are mutable and
   documents recording the digest, so the false immutability claim is

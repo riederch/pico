@@ -221,13 +221,47 @@ jobs:
       # consumption path that exists today the update authority is already
       # repository plus registry write access, and a key Pico held would add a
       # ceremony without moving that root of trust.
+      #
+      # Conditional on the repository being public, because GitHub refuses to
+      # store an attestation for a user-owned private repository:
+      #
+      #   Failed to persist attestation: Feature not available for user-owned
+      #   private repositories.
+      #
+      # That is a platform limit, not a build failure, and the two must not
+      # look the same. Failing every push would make a wall out of a gate;
+      # skipping quietly would let a build with no provenance look like one
+      # that has it. So it is skipped and said out loud in the job summary,
+      # in the ADR 0119 Q5 posture: told while there is still room to act.
+      #
+      # The two things that would actually produce provenance are a public
+      # repository or an organisation-owned one. Both are decisions about the
+      # project rather than about this file.
       - name: Attest build provenance
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.event.repository.private == false
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-name: ghcr.io/riederch/pico/core
           subject-digest: ${{ steps.release_image.outputs.digest }}
           push-to-registry: true
+
+      # ADR 0122 Y2. The skip is recorded where a person reading the run will
+      # meet it, rather than being inferable from a step that is not there.
+      - name: Report that build provenance was not attested
+        if: github.event_name != 'pull_request' && github.event.repository.private == true
+        run: |
+          {
+            echo "### Build provenance: not attested"
+            echo
+            echo "This image carries **no build-provenance attestation**."
+            echo "GitHub does not store attestations for user-owned private"
+            echo "repositories, so ADR 0122 Y2 is unmet for this build."
+            echo
+            echo "Provenance would require a public repository or an"
+            echo "organisation-owned one. Until then, the update authority for"
+            echo "every consumption path is repository plus registry write"
+            echo "access, unattested."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # ADR 0122 Y3. The digest the release notes have to record, produced by
       # the build rather than copied by hand from a terminal.
