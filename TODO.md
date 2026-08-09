@@ -199,12 +199,14 @@ Die vier Achsen und ihre Vorrangregel stehen jetzt in ADR 0125.
 
 Offen bleiben daraus zwei kleinere Luecken, beide stromaufwaerts:
 
-- **Die Kontextachse hat keine geschriebene Semantik.** Acht Tokens tragen
-  Farbwerte und sonst nichts - nirgends steht, was ein Kontext ist. Dass er
-  eine Pico-Einstellung nach ADR 0104 ist, ist entschieden (zwei Picos in
-  einem Home koennen verschiedenen Subjekten dienen); ausgenommen bleibt
-  `nightFocus`, das wie ein Modus und nicht wie ein Subjekt liest und dessen
-  Platz in dieser Gruppe unerklaert ist.
+- **Die Kontextachse war nie unbeschrieben - sie war nur nicht verlinkt.**
+  Korrigiert am 2026-08-09: `Color_System.md` definiert die Achse,
+  `Context_Modules.md` sagt, was ein Kontext veraendert, und listet alle
+  acht samt `Nacht / Fokus`, `Context_Icon_System.md` zaehlt sie auf,
+  `PICO_Product_Design_System_v1.0.md` traegt die Werte. Nur die Tokens
+  zeigten auf nichts davon. ADR 0135 D2 hat den Zeiger ergaenzt und
+  festgehalten, dass der Kontext eine Pico-Einstellung nach ADR 0104 ist
+  und dass noch keine Flaeche die Tokens liest.
 - **Die Style-Variante ist keine Achse.** `neutral/technical/soft` steht in
   ADR 0013 unter "Design basis image" - in einer Liste dessen, was das
   Ursprungsbild "shows the intent for", neben context modes, modularen

@@ -66,8 +66,8 @@
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.json",
-      "bytes": 9779,
-      "sha256": "8ae0bfdad8f14f6a58c68adad3934da6a69a52fcf638e4c495fce14a1e22509e"
+      "bytes": 10235,
+      "sha256": "fd4302392af509bea8e94734300654f8004fbe74ba8510fb267193fd6254a935"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.scss",
@@ -241,8 +241,8 @@
     },
     {
       "path": "05_Patterns/Context_Modules.md",
-      "bytes": 664,
-      "sha256": "4438c3483561ccdaa2d0cbf38ca8c46556ae9ae99f7aaa734e388d44f956532c"
+      "bytes": 1462,
+      "sha256": "c2bddbe18c9014f18febebcb9889c4304c5163a9d42932ad9b58de5742a38c64"
     },
     {
       "path": "05_Patterns/Empty_States.md",

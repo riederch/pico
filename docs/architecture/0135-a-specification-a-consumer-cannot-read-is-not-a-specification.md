@@ -2,10 +2,17 @@
 
 ## Status
 
-Accepted; not implemented. The user made the design system the next block
-on 2026-08-09 after three separate questions in one session each ended at
-the same place: the design system says something in prose, the consumer
-cannot read it, and the consumer invents its own answer.
+Accepted. D1 and D2 are implemented; D3 and D4 are open. The user made the
+design system the next block on 2026-08-09 after three separate questions
+in one session each ended at the same place: the design system says
+something in prose, the consumer cannot read it, and the consumer invents
+its own answer.
+
+Doing D1 and D2 corrected this ADR twice. Both gates were written on the
+assumption that the design system was silent where it is in fact
+unreachable, and both turned out smaller and different than planned. The
+context of this ADR now records what was found rather than what was
+assumed.
 
 ## Context
 
@@ -21,14 +28,24 @@ earlier draft of ADR 0132 concluded from that gap that the design system
 had no typography at all, which was wrong in the direction that lets a
 contradiction look like a vacancy.
 
-**The context axis has values and no meaning.** Eight colour tokens exist -
-`technology`, `waterInfrastructure`, `fireDepartment`, `organization`,
-`smartHome`, `communication`, `energy`, `nightFocus` - carrying colour
-values and not one line saying what a context *is* or who selects one.
-That is why a `TODO.md` entry could ask whether Appearance replaces "the
-style presets" using a list assembled from two different axes: with no
-written semantics, an axis can be misremembered without anything
-contradicting the memory.
+**The context axis is documented four times and reachable from none of
+them.** Eight colour tokens exist - `technology`, `waterInfrastructure`,
+`fireDepartment`, `organization`, `smartHome`, `communication`, `energy`,
+`nightFocus`. An earlier draft of this ADR said they carried "not one line
+saying what a context is", which was wrong, and wrong in the way this ADR
+is about: `Color_System.md` defines a context colour as the *fachlicher
+Anwendungsbereich* and gives five binding rules, `Context_Modules.md`
+opens with "Ein Kontext verändert Fachsprache, Symbole und Akzentfarbe,
+nicht die Grundstruktur der App" and tabulates all eight with their
+typical content, `Context_Icon_System.md` enumerates them, and
+`PICO_Product_Design_System_v1.0.md` carries their values.
+
+Four documents, and the token file points at none of them. A consumer -
+human or machine - that arrives at `pico.tokens.json` finds eight colours
+and no way to learn what they mean. That is how a `TODO.md` entry came to
+ask whether Appearance replaces "the style presets" using a list
+assembled from two axes, and how the first draft of this very ADR
+declared a documented axis undocumented.
 
 **A concept-board intent read as an axis.** `neutral/technical/soft`
 appears in ADR 0013 under "Design basis image", in a list of what the
@@ -38,9 +55,17 @@ neighbour on that list *was* realised, as the eight context tokens, which
 is what makes the difference visible: realisation looks like tokens, and
 this item never got any.
 
-The shape is the same each time. What binds is not what is written; it is
-what a consumer can read. Prose that a consumer cannot reach either gets
-contradicted or gets reinvented, and both look like the consumer's fault.
+The shape is the same each time, and it is narrower than "the design
+system is silent". Only the third finding is a true absence. The first two
+are specifications that exist and cannot be reached from the surface that
+carries their values - so they get contradicted, or reinvented, or
+declared missing by someone who searched the tokens and the ADRs and
+stopped there. This ADR's author did exactly that three times in one
+session, which is the strongest evidence available that the problem is
+reachability rather than diligence.
+
+What binds is not what is written; it is what a consumer can read - and a
+consumer includes the next person who goes looking.
 
 ## Scope
 
@@ -68,31 +93,48 @@ enforced.
 
 ### Typography becomes tokens, and the card follows them
 
-`Inter` moves from prose into the token set with its fallback stack and
-the sizes the design system states. The Recovery Card stops drawing
-Helvetica: ADR 0132 G2 embeds an `Inter` subset, which the SIL Open Font
-License permits and which keeps the deterministic output that card's tests
-require.
+`Inter` moves from prose into the token set with its fallback stack. The
+Recovery Card stops drawing Helvetica: ADR 0132 G2 embeds an `Inter`
+subset, which the SIL Open Font License permits and which keeps the
+deterministic output that card's tests require. The package's "no font
+files" line stays true of the *design system package* and stops being true
+of the repository - the file arrives where it is consumed, with its licence
+recorded.
 
-The package's "no font files" line stays true of the *design system
-package* and stops being true of the repository - the file arrives where
-it is consumed, with its licence recorded.
+The sizes do **not** move. They are stated as a minimum and a range - "at
+least 15 px, preferably 16", "1.45-1.6" - and a range written as one token
+value is a decision nobody took. They stay guidance, and `Typography.md`
+now marks which of its statements are tokens and which are for people.
 
-Print sizes are not screen sizes, and the token set says so rather than
-letting each surface discover it: a 4.2 pt fingerprint on a laminated
-85.6 mm card is not a violation of a 15 px minimum written for screens.
+Print has no values at all, and that absence is named rather than filled.
+A 4.2 pt fingerprint on a laminated 85.6 mm card is not a violation of a
+15 px minimum written for screens, but neither is it licence to rescale
+screen numbers into a print scale nobody designed.
 
-### The context axis gets written semantics, and `nightFocus` gets resolved
+### The context axis gets a pointer, not a definition
 
-What a context *is* gets one paragraph: which question it answers, what
-changes when it changes, and who chooses. Who chooses is already decided -
-a per-Pico setting under ADR 0104, because two Picos in one Home can serve
-different subjects.
+The definition exists and is not rewritten. What the token group gains is
+a `$description` naming the documents that hold its meaning, so arriving
+at the values leads to them instead of dead-ending.
 
-`nightFocus` is resolved rather than carried: seven of the eight names are
-subjects, and this one reads as a mode. Either it is a subject and the
-paragraph says which, or it is a mode and it leaves the group for one that
-describes modes. It does not stay in a group whose definition it fails.
+Two things are genuinely missing and are added. **Who chooses a context**
+is written nowhere: it is a per-Pico setting under ADR 0104, because two
+Picos in one Home can serve different subjects, and that belongs beside
+the definition rather than only in an ADR. And **nothing consumes the
+tokens** - the only occurrence outside the generated outputs is the
+generated variable block itself. That is recorded as a present fact, not
+repaired: an axis waiting for its first surface is fine, an axis nobody
+knows is waiting is not.
+
+`nightFocus` stays where it is. An earlier draft planned to move it out
+on the grounds that seven names are subjects and this one is a mode. That
+reasoning took `Color_System.md`'s "fachlicher Anwendungsbereich" in
+isolation and missed `Context_Modules.md`, which says a context changes
+*Fachsprache, Symbole und Akzentfarbe* and lists Nacht/Fokus among the
+eight with "reduzierte Helligkeit, minimale Ablenkung". By the axis's own
+working definition it qualifies. The mild tension between the two
+sentences is noted where both live, and nothing is moved on the strength
+of half of it.
 
 ### The style variant is recorded as not an axis
 
@@ -166,9 +208,17 @@ forever. Nothing consumes it, so nothing would ever prove it wrong.
   outputs and silently dropped by the sixth. The list is now declared
   once and checked where the CSS-name check runs, so an ungrouped token
   fails by name instead of vanishing. Counter-proven.
-- **D2 - Context has semantics (open):** one written paragraph for what a
-  context is and what changes with it, the ADR 0104 setting recorded, and
-  `nightFocus` either defined as a subject or moved out of the group.
+- **D2 - Context is reachable (implemented, and it was the gate that was
+  wrong):** the semantics existed all along, in four documents. The
+  `color.context` group now carries a `$description` naming them, so
+  arriving at the values leads to their meaning. `Context_Modules.md`
+  gains what was genuinely missing: that the context is a per-Pico setting
+  under ADR 0104, and that no surface reads these tokens yet.
+  `nightFocus` stays where it is - the plan to move it read
+  `Color_System.md`'s "fachlicher Anwendungsbereich" in isolation and
+  missed that the same axis defines itself by what it *changes*, which
+  Nacht/Fokus does. The tension between those two sentences is noted where
+  both live.
 - **D3 - The style variant is closed (open):** recorded as a concept-board
   observation and not an axis, with ADR 0013 keeping its text and gaining
   a note.

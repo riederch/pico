@@ -25,13 +25,20 @@ character standard wins over UI composition and context design.
 Two things follow that this ADR does not own but records so they are not
 lost. The context axis is a **per-Pico setting** under ADR 0104 - two Picos
 in one Home can serve different subjects, which is that ADR's own test - so
-it belongs in Pico rather than in host configuration; `nightFocus` is
-excluded from that statement, because it reads as a mode rather than a
-subject and its place in the group is unexplained. And the eight context
-tokens carry colour values and **no written semantics at all**: nothing
-says what a context is or who chooses one. The style variant has the same
-gap in the other direction - it is prose in ADR 0013 and appears in no
-token, type or manifest.
+it belongs in Pico rather than in host configuration.
+
+Two claims made here on 2026-08-09 were corrected the same day. The context
+tokens do **not** lack written semantics: `Color_System.md` defines the
+axis, `Context_Modules.md` states what a context changes and tabulates all
+eight, `Context_Icon_System.md` enumerates them and
+`PICO_Product_Design_System_v1.0.md` carries their values. Nothing linked
+the tokens to any of it, which is what ADR 0135 D2 fixes. And `nightFocus`
+is not unexplained - `Context_Modules.md` lists it with "reduzierte
+Helligkeit, minimale Ablenkung", and by the axis's working definition,
+what a context *changes*, it qualifies.
+
+The style variant remains the one true absence: prose in ADR 0013, in no
+token, type or manifest, and never decided.
 
 ## Context
 

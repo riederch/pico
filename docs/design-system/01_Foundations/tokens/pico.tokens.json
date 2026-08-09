@@ -110,6 +110,7 @@
       }
     },
     "context": {
+      "$description": "Fachlicher Anwendungsbereich. Ein Kontext veraendert Fachsprache, Symbole und Akzentfarbe, nicht die Grundstruktur der App. Bedeutung je Kontext in 05_Patterns/Context_Modules.md, bindende Regeln in 01_Foundations/Color_System.md, Symbole in 02_Brand/Context_Icon_System.md. Welcher Kontext gilt, ist eine Einstellung des einzelnen Pico (ADR 0104), keine Wirtskonfiguration. Stand 2026-08-09 liest noch keine Flaeche diese Tokens.",
       "technology": {
         "$type": "color",
         "$value": { "colorSpace": "srgb", "components": [0.207843, 0.552941, 1], "hex": "#358DFF" }
