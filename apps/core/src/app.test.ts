@@ -84,23 +84,7 @@ import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
 import { MemoryContentCrypto } from './memory-content-crypto.js';
 import {
-  foundationOperatorHomeBindingMigrationId,
-  picoHomeDeviceLifecycleMigrationId,
-  picoHomeDeviceRecoveryMigrationId,
-  picoIdentityRootRotationMigrationId,
-  picoEventOriginMigrationId,
-  picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
-  picoMemoryItemOriginMigrationId,
-  picoAuditRecordMigrationId,
-  picoHomeHostContinuityMigrationId,
-  picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
-  readerCustodyMultiReaderRotationMigrationId,
 } from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
 import {
@@ -385,22 +369,6 @@ describe('Pico Home Core app', () => {
         maxLamport: 0,
         migrations: [
           { id: picoSchemaBaselineMigrationId, appliedAt: expect.any(String) },
-          { id: foundationOperatorHomeBindingMigrationId, appliedAt: expect.any(String) },
-          { id: readerCustodyMultiReaderRotationMigrationId, appliedAt: expect.any(String) },
-          { id: picoHomeFoundingFirstDeviceEvidenceMigrationId, appliedAt: expect.any(String) },
-          { id: picoHomeDeviceLifecycleMigrationId, appliedAt: expect.any(String) },
-          { id: picoHomeDeviceRecoveryMigrationId, appliedAt: expect.any(String) },
-          { id: picoIdentityRootRotationMigrationId, appliedAt: expect.any(String) },
-          { id: picoHomeHostContinuityMigrationId, appliedAt: expect.any(String) },
-          { id: picoEventOriginMigrationId, appliedAt: expect.any(String) },
-          { id: picoMemoryItemOriginMigrationId, appliedAt: expect.any(String) },
-          { id: picoAuditRecordMigrationId, appliedAt: expect.any(String) },
-          { id: picoMemoryItemDueAtMigrationId, appliedAt: expect.any(String) },
-          { id: picoModuleActivationMigrationId, appliedAt: expect.any(String) },
-          { id: picoMemoryItemAnnouncedAtMigrationId, appliedAt: expect.any(String) },
-          { id: picoObservationMigrationId, appliedAt: expect.any(String) },
-          { id: picoMemoryItemPlaceMigrationId, appliedAt: expect.any(String) },
-          { id: picoModuleCaptureMigrationId, appliedAt: expect.any(String) },
         ],
       },
       // ADR 0119 Q5. A development host has no free-space source and

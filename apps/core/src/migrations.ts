@@ -56,42 +56,23 @@ export interface MigrationDefinition {
 }
 
 export const picoSchemaBaselineMigrationId = '0001_initial_schema' as const;
-export const foundationOperatorHomeBindingMigrationId = '0002_foundation_operator_home_binding' as const;
-export const readerCustodyMultiReaderRotationMigrationId =
-  '0003_reader_custody_multi_reader_rotation' as const;
-export const picoHomeFoundingFirstDeviceEvidenceMigrationId =
-  '0004_pico_home_founding_first_device_evidence' as const;
-export const picoHomeDeviceLifecycleMigrationId =
-  '0005_pico_home_device_lifecycle' as const;
-export const picoHomeDeviceRecoveryMigrationId =
-  '0006_pico_home_device_recovery' as const;
-export const picoIdentityRootRotationMigrationId =
-  '0007_pico_identity_root_rotation' as const;
-export const picoHomeHostContinuityMigrationId =
-  '0008_pico_home_host_continuity' as const;
-export const picoEventOriginMigrationId =
-  '0009_pico_event_origin' as const;
-export const picoMemoryItemOriginMigrationId =
-  '0010_memory_item_origin' as const;
-export const picoAuditRecordMigrationId =
-  '0011_pico_audit_record' as const;
-export const picoMemoryItemDueAtMigrationId =
-  '0012_memory_item_due_at' as const;
-export const picoModuleActivationMigrationId =
-  '0013_pico_module_activation' as const;
-export const picoMemoryItemAnnouncedAtMigrationId =
-  '0014_memory_item_announced_at' as const;
-export const picoObservationMigrationId =
-  '0015_pico_observation' as const;
-export const picoMemoryItemPlaceMigrationId =
-  '0016_memory_item_place' as const;
-export const picoModuleCaptureMigrationId =
-  '0017_pico_module_capture' as const;
 
-// Pico has no deployed database yet. The pre-deployment 0001-0020 development
-// chain was therefore consolidated into this one final-schema baseline. Future
-// schema changes must be appended as new migrations; the runner's backup,
-// audit and unknown-version protections deliberately remain unchanged.
+// Pico has no deployed database yet, so the development chain is folded into
+// one final-schema baseline rather than carried as steps out of states nothing
+// is in. This is the second such fold: the first collapsed 0001-0020, and this
+// one collapses the 0002-0017 that accumulated after it (ADR 0134 F3).
+//
+// The baseline is *derived*, not transcribed. It is the schema a database
+// carries after running those seventeen, read back from `sqlite_master`, so
+// columns that arrived by `ALTER TABLE` appear here in their final position
+// and no statement was retyped by hand. Equivalence is proven the same way it
+// was produced: apply this baseline to an empty database and compare
+// `sqlite_master` against the seventeen-step result.
+//
+// Future schema changes are appended as new migrations. The runner's backup,
+// audit and unknown-version protections are unchanged, and an existing
+// development database - which now reports sixteen unknown migrations and
+// refuses to open - is recreated rather than migrated.
 const migrations: readonly MigrationDefinition[] = [
   {
     id: picoSchemaBaselineMigrationId,
@@ -122,7 +103,11 @@ const migrations: readonly MigrationDefinition[] = [
           signature TEXT NULL,
           created_at TEXT NOT NULL,
           payload_posture TEXT NULL
-        );
+        , origin TEXT NULL
+          CHECK (origin IS NULL OR origin IN (
+            'person_present', 'own_pico', 'home_member',
+            'remote_pico', 'external_content', 'unattributed'
+          )));
 
         CREATE INDEX idx_pico_event_lamport
         ON pico_event (lamport, wall_time, event_id);
@@ -176,7 +161,11 @@ const migrations: readonly MigrationDefinition[] = [
           content_posture TEXT NOT NULL DEFAULT 'plaintext_foundation'
             CHECK (content_posture IN ('plaintext_foundation', 'domain_encrypted')),
           key_envelope_ref TEXT NULL
-        );
+        , origin TEXT NULL
+          CHECK (origin IS NULL OR origin IN (
+            'person_present', 'own_pico', 'home_member',
+            'remote_pico', 'external_content', 'unattributed'
+          )), due_at TEXT NULL, raised_at TEXT NULL, announced_at TEXT NULL, latitude_deg REAL NULL, longitude_deg REAL NULL, accuracy_m REAL NULL);
 
         CREATE INDEX idx_memory_item_domain
         ON memory_item (privacy_domain, deletion_state);
@@ -209,7 +198,7 @@ const migrations: readonly MigrationDefinition[] = [
           credential_verifier TEXT NOT NULL,
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
-        );
+        , home_binding_json TEXT NULL);
 
         CREATE TABLE memory_domain_custody (
           privacy_domain TEXT PRIMARY KEY,
@@ -217,26 +206,6 @@ const migrations: readonly MigrationDefinition[] = [
             CHECK (custody_class IN ('host_custody', 'reader_custody')),
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
-        );
-
-        CREATE TABLE pico_home_founding_record (
-          id INTEGER PRIMARY KEY CHECK (id = 1),
-          schema TEXT NOT NULL CHECK (schema = 'pico.home.founding-record.v1'),
-          founding_id TEXT NOT NULL UNIQUE,
-          home_id TEXT NOT NULL UNIQUE,
-          claim_id TEXT NOT NULL UNIQUE,
-          home_host_pico_identity_fingerprint_hex TEXT NOT NULL,
-          host_signing_key_fingerprint_hex TEXT NOT NULL,
-          host_key_agreement_key_fingerprint_hex TEXT NOT NULL,
-          founded_at TEXT NOT NULL,
-          lifecycle_order TEXT NOT NULL,
-          claim_response_json TEXT NOT NULL,
-          founding_json TEXT NOT NULL,
-          claimant_identity_key_record_json TEXT NOT NULL,
-          claimant_founding_signature_hex TEXT NOT NULL,
-          host_claim_response_signature_hex TEXT NOT NULL,
-          host_founding_signature_hex TEXT NOT NULL,
-          created_at TEXT NOT NULL
         );
 
         CREATE TABLE pico_home_membership (
@@ -491,45 +460,7 @@ const migrations: readonly MigrationDefinition[] = [
           created_at,
           package_id
         );
-      `);
 
-      const now = new Date().toISOString();
-      db
-        .prepare(`
-          INSERT INTO pico_home_claim_state (
-            id,
-            state,
-            host_admin_pico_id,
-            claimed_at,
-            created_at,
-            updated_at,
-            home_id,
-            host_signing_key_fingerprint_hex,
-            host_key_agreement_key_fingerprint_hex
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `)
-        .run(1, 'unclaimed', null, null, now, now, null, null, null);
-    },
-  },
-  {
-    id: foundationOperatorHomeBindingMigrationId,
-    requiresBackup: false,
-    up(db) {
-      // NULL is the pre-claim/unclaimed binding. A claimed binding is a
-      // canonical JSON object validated by OperatorStore. Keeping the binding
-      // beside the verifier means a copied or restored credential cannot
-      // silently float to a different Home/founding ceremony (ADR 0087).
-      db.exec(`
-        ALTER TABLE foundation_operator
-        ADD COLUMN home_binding_json TEXT NULL
-      `);
-    },
-  },
-  {
-    id: readerCustodyMultiReaderRotationMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
         CREATE TABLE pico_reader_custody_reader_grant (
           reader_grant_id TEXT PRIMARY KEY,
           domain_authority_id TEXT NOT NULL,
@@ -593,20 +524,6 @@ const migrations: readonly MigrationDefinition[] = [
           domain_authority_id,
           kek_version
         );
-      `);
-    },
-  },
-  {
-    id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
-    requiresBackup: true,
-    up(db) {
-      // ADR 0108 introduces a v2 founding record, while v1 records remain
-      // durable and verifiable. SQLite cannot widen the schema CHECK in
-      // place, so rebuild the singleton table and carry every v1 byte across
-      // unchanged. The nullable evidence column is populated only by v2.
-      db.exec(`
-        ALTER TABLE pico_home_founding_record
-        RENAME TO pico_home_founding_record_v1;
 
         CREATE TABLE pico_home_founding_record (
           id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -634,56 +551,6 @@ const migrations: readonly MigrationDefinition[] = [
           created_at TEXT NOT NULL
         );
 
-        INSERT INTO pico_home_founding_record (
-          id,
-          schema,
-          founding_id,
-          home_id,
-          claim_id,
-          home_host_pico_identity_fingerprint_hex,
-          host_signing_key_fingerprint_hex,
-          host_key_agreement_key_fingerprint_hex,
-          founded_at,
-          lifecycle_order,
-          claim_response_json,
-          founding_json,
-          claimant_identity_key_record_json,
-          claimant_founding_signature_hex,
-          host_claim_response_signature_hex,
-          host_founding_signature_hex,
-          first_device_evidence_json,
-          created_at
-        )
-        SELECT
-          id,
-          schema,
-          founding_id,
-          home_id,
-          claim_id,
-          home_host_pico_identity_fingerprint_hex,
-          host_signing_key_fingerprint_hex,
-          host_key_agreement_key_fingerprint_hex,
-          founded_at,
-          lifecycle_order,
-          claim_response_json,
-          founding_json,
-          claimant_identity_key_record_json,
-          claimant_founding_signature_hex,
-          host_claim_response_signature_hex,
-          host_founding_signature_hex,
-          NULL,
-          created_at
-        FROM pico_home_founding_record_v1;
-
-        DROP TABLE pico_home_founding_record_v1;
-      `);
-    },
-  },
-  {
-    id: picoHomeDeviceLifecycleMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
         CREATE TABLE pico_home_device_lifecycle_transition (
           transition_id TEXT PRIMARY KEY,
           action TEXT NOT NULL CHECK (action IN ('enroll', 'renew', 'revoke')),
@@ -702,14 +569,7 @@ const migrations: readonly MigrationDefinition[] = [
           accepted_at,
           transition_id
         );
-      `);
-    },
-  },
-  {
-    id: picoHomeDeviceRecoveryMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
+
         CREATE TABLE pico_home_device_recovery (
           recovery_id TEXT PRIMARY KEY,
           home_id TEXT NOT NULL,
@@ -742,14 +602,7 @@ const migrations: readonly MigrationDefinition[] = [
         CREATE UNIQUE INDEX idx_pico_home_device_recovery_one_pending
         ON pico_home_device_recovery (pico_identity_fingerprint_hex)
         WHERE status = 'pending';
-      `);
-    },
-  },
-  {
-    id: picoIdentityRootRotationMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
+
         CREATE TABLE pico_identity_root_rotation (
           rotation_id TEXT NOT NULL,
           home_id TEXT NOT NULL,
@@ -788,28 +641,13 @@ const migrations: readonly MigrationDefinition[] = [
           effective_at
         );
 
-        -- One identity may have at most one rotation awaiting its veto window.
-        -- A second submission supersedes nothing silently; it is refused, so a
-        -- root holder cannot flood the window with competing successors.
         CREATE UNIQUE INDEX idx_pico_identity_root_rotation_one_pending
         ON pico_identity_root_rotation (
           home_id,
           predecessor_identity_fingerprint_hex
         )
         WHERE status = 'pending';
-      `);
-    },
-  },
-  {
-    id: picoHomeHostContinuityMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0115 (ADR 0080 H7). One row per accepted link of the host-key
-        -- chain. The chain starts at the founding record's host keys; each
-        -- link's outgoing keys must equal the previous link's incoming keys,
-        -- enforced by the recorder and re-verified at boot, so 'same Home'
-        -- stays proven rather than asserted.
+
         CREATE TABLE pico_home_host_continuity (
           continuity_id TEXT NOT NULL,
           home_id TEXT NOT NULL,
@@ -829,58 +667,7 @@ const migrations: readonly MigrationDefinition[] = [
 
         CREATE UNIQUE INDEX idx_pico_home_host_continuity_position
         ON pico_home_host_continuity (home_id, chain_position);
-      `);
-    },
-  },
-  {
-    id: picoEventOriginMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0116 W1. Server-assigned origin class, set at intake from the
-        -- write authority and never client-assertable. NULL means the row
-        -- predates origin labeling or awaits its W2 class - never "trusted".
-        ALTER TABLE pico_event ADD COLUMN origin TEXT NULL
-          CHECK (origin IS NULL OR origin IN (
-            'person_present', 'own_pico', 'home_member',
-            'remote_pico', 'external_content', 'unattributed'
-          ));
-      `);
-    },
-  },
-  {
-    id: picoMemoryItemOriginMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0116 W2. The same server-assigned class as the event log, on the
-        -- store that actually feeds retrieval. Authenticity says who wrote an
-        -- item; origin says whether it may instruct, and a context assembler
-        -- needs the second one. NULL means the row predates labeling - never
-        -- "trusted", and never assertable by the writer.
-        ALTER TABLE memory_item ADD COLUMN origin TEXT NULL
-          CHECK (origin IS NULL OR origin IN (
-            'person_present', 'own_pico', 'home_member',
-            'remote_pico', 'external_content', 'unattributed'
-          ));
-      `);
-    },
-  },
-  {
-    id: picoAuditRecordMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0121 J1. Seventeen event types already act as audit records, but
-        -- they were append-only only in the sense that no code updated them:
-        -- nothing linked a row to its predecessor, so any process that could
-        -- open this file could delete one undetectably.
-        --
-        -- The chain lives beside the log rather than inside it. pico_event is
-        -- a general log and audit is a subset of it; a separate table keeps
-        -- the chain's own per-writer sequence explicit instead of overloading
-        -- Lamport, which orders across replicas and says nothing about what
-        -- this instance wrote.
+
         CREATE TABLE pico_audit_record (
           event_id TEXT PRIMARY KEY REFERENCES pico_event (event_id),
           writer_id TEXT NOT NULL,
@@ -903,106 +690,22 @@ const migrations: readonly MigrationDefinition[] = [
 
         CREATE INDEX idx_pico_audit_record_writer
         ON pico_audit_record (writer_id, chain_position);
-      `);
-    },
-  },
-  {
-    id: picoMemoryItemDueAtMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0118 O1, the fifth floor family. A time-bound entry is a memory
-        -- item that carries an instant, rather than a store of its own: that
-        -- way it inherits privacy domains, retention and crypto-shredding
-        -- instead of growing a second set that would have to be kept in step.
-        --
-        -- \`due_at\` is the instant the person meant on the wall clock, and
-        -- \`raised_at\` records that it reached them. Both nullable, because
-        -- every existing memory item has neither and is not a time-bound
-        -- entry.
-        ALTER TABLE memory_item ADD COLUMN due_at TEXT NULL;
-        ALTER TABLE memory_item ADD COLUMN raised_at TEXT NULL;
 
-        -- Partial: the scheduler only ever asks for entries that still wait,
-        -- and the overwhelming majority of memory items have no instant at all.
-        CREATE INDEX idx_memory_item_due
-        ON memory_item (due_at)
-        WHERE due_at IS NOT NULL AND raised_at IS NULL AND deletion_state = 'active';
-      `);
-    },
-  },
-  {
-    id: picoModuleActivationMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0127 M3. Which modules a person has switched on.
-        --
-        -- A projection of decisions in the append-only log, bounded by the
-        -- closed identifier list in \`@pico/protocol/module\` - at most one row
-        -- per shipped module, forever. That puts it in the same class as the
-        -- authority and lifecycle tables beside it and explicitly *not* in the
-        -- second kind of store ADR 0129 gates behind five places: it does not
-        -- grow with use, so it needs no ceiling of its own.
-        --
-        -- No default row is written here. A Home with no rows has made no
-        -- activation decision, which is different from having switched
-        -- everything off, and the read applies the shipped default instead.
         CREATE TABLE pico_module_activation (
           identifier TEXT PRIMARY KEY,
           active INTEGER NOT NULL CHECK (active IN (0, 1)),
           decided_at TEXT NOT NULL
-        );
-      `);
-    },
-  },
-  {
-    id: picoMemoryItemAnnouncedAtMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0118 O1, delivery semantics. Two facts, not one.
-        --
-        -- \`raised_at\` used to be set by the scheduler, which made it a claim
-        -- the Home could not honestly make: it cannot observe that a
-        -- notification was shown. So it now means "a surface confirmed the
-        -- person was told", set only by an acknowledgement, and this column
-        -- carries what the Home *can* know - that the instant passed and it
-        -- noticed.
-        --
-        -- Without it the scheduler would announce the same entry on every
-        -- tick; with it, an entry nobody acknowledged stays outstanding and
-        -- keeps being offered, which is the loud failure rather than the quiet
-        -- one.
-        ALTER TABLE memory_item ADD COLUMN announced_at TEXT NULL;
+        , capture_consented INTEGER NULL
+          CHECK (capture_consented IS NULL OR capture_consented IN (0, 1)));
 
-        -- The scheduler now asks for entries that are due and not yet
-        -- announced. The old partial index answered the old question.
-        DROP INDEX IF EXISTS idx_memory_item_due;
         CREATE INDEX idx_memory_item_due
         ON memory_item (due_at)
         WHERE due_at IS NOT NULL AND raised_at IS NULL AND deletion_state = 'active';
+
         CREATE INDEX idx_memory_item_unannounced
         ON memory_item (due_at)
         WHERE due_at IS NOT NULL AND announced_at IS NULL AND deletion_state = 'active';
-      `);
-    },
-  },
-  {
-    id: picoObservationMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0129 SR2. The second kind of store the core owns.
-        --
-        -- High-rate, short-lived and never individually governed: no retention
-        -- policy reference, no origin class, no readership decision, no
-        -- deletion state. A memory item carries all of those because it is a
-        -- memory; a reading is a measurement that may become one.
-        --
-        -- The domain is the only custody it carries, and it is not optional:
-        -- the ADR 0071 shred cascade keys on it, and a sample nobody can reach
-        -- is a sample nobody can destroy.
+
         CREATE TABLE pico_observation (
           observation_id INTEGER PRIMARY KEY AUTOINCREMENT,
           privacy_domain TEXT NOT NULL,
@@ -1012,65 +715,36 @@ const migrations: readonly MigrationDefinition[] = [
           created_at TEXT NOT NULL
         );
 
-        -- The window read and the age prune both order by the instant.
         CREATE INDEX idx_pico_observation_observed
         ON pico_observation (observed_at);
 
-        -- The shred deletes by domain, so it must not scan.
         CREATE INDEX idx_pico_observation_domain
         ON pico_observation (privacy_domain);
-      `);
-    },
-  },
-  {
-    id: picoMemoryItemPlaceMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0129 SR3. Where something was, as a core capability.
-        --
-        -- Generically named, in the shape \`due_at\` already has: no parking
-        -- column and no calendar column, so "where was I yesterday afternoon"
-        -- composes the same capability and a later module inventing its own
-        -- would be inventing a second answer to a question already answered.
-        --
-        -- All three or none, enforced here rather than trusted to writers.
-        -- A coordinate without its accuracy is not a less precise position, it
-        -- is an unusable one: every honest thing a surface can say about a
-        -- remembered place depends on how well it was known.
-        ALTER TABLE memory_item ADD COLUMN latitude_deg REAL NULL;
-        ALTER TABLE memory_item ADD COLUMN longitude_deg REAL NULL;
-        ALTER TABLE memory_item ADD COLUMN accuracy_m REAL NULL;
 
-        -- Partial, for the same reason the due index is: the overwhelming
-        -- majority of memory items have no place at all, and a full index
-        -- would be mostly nulls.
         CREATE INDEX idx_memory_item_place
         ON memory_item (latitude_deg, longitude_deg)
         WHERE latitude_deg IS NOT NULL AND deletion_state = 'active';
       `);
-    },
-  },
-  {
-    id: picoModuleCaptureMigrationId,
-    requiresBackup: false,
-    up(db) {
-      db.exec(`
-        -- ADR 0129 SR6. Whether a module may record, which is not whether it
-        -- is switched on.
-        --
-        -- The table already holds this person's durable decisions about a
-        -- module; activation was the first of them. A second column rather
-        -- than a second table, because they are decisions about the same
-        -- subject and splitting them would invite one to be read without the
-        -- other.
-        --
-        -- Nullable, and null is not "off": it is "nobody has been asked",
-        -- which stays distinguishable the same way an absent activation row
-        -- does. Both read as no capture; only one of them is a decision.
-        ALTER TABLE pico_module_activation ADD COLUMN capture_consented INTEGER NULL
-          CHECK (capture_consented IS NULL OR capture_consented IN (0, 1));
-      `);
+
+      // The claim-state singleton is seeded, not merely declared: a Home with
+      // no row is indistinguishable from one whose row was lost, and Setup
+      // Mode reads this to decide whether it may mint a Move-In Code.
+      const now = new Date().toISOString();
+      db
+        .prepare(`
+          INSERT INTO pico_home_claim_state (
+            id,
+            state,
+            host_admin_pico_id,
+            claimed_at,
+            created_at,
+            updated_at,
+            home_id,
+            host_signing_key_fingerprint_hex,
+            host_key_agreement_key_fingerprint_hex
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `)
+        .run(1, 'unclaimed', null, null, now, now, null, null, null);
     },
   },
 ];

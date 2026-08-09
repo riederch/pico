@@ -4,24 +4,8 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  foundationOperatorHomeBindingMigrationId,
   listAppliedMigrations,
-  picoHomeDeviceLifecycleMigrationId,
-  picoHomeDeviceRecoveryMigrationId,
-  picoIdentityRootRotationMigrationId,
-  picoEventOriginMigrationId,
-  picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
-  picoMemoryItemOriginMigrationId,
-  picoAuditRecordMigrationId,
-  picoHomeHostContinuityMigrationId,
-  picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
-  readerCustodyMultiReaderRotationMigrationId,
   runMigrations,
 } from './migrations.js';
 import { createSqliteBackup, restoreSqliteBackup } from './sqlite-backup.js';
@@ -236,70 +220,6 @@ describe('restoreSqliteBackup', () => {
     expect(listAppliedMigrations(restored)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: foundationOperatorHomeBindingMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: readerCustodyMultiReaderRotationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeDeviceLifecycleMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeDeviceRecoveryMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoIdentityRootRotationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeHostContinuityMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoEventOriginMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemOriginMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoAuditRecordMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemDueAtMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoModuleActivationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemAnnouncedAtMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoObservationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemPlaceMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoModuleCaptureMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

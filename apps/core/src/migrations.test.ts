@@ -5,25 +5,9 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   describeMigrationState,
-  foundationOperatorHomeBindingMigrationId,
   listAppliedMigrations,
   listMigrationAuditRecords,
-  picoHomeDeviceLifecycleMigrationId,
-  picoHomeDeviceRecoveryMigrationId,
-  picoIdentityRootRotationMigrationId,
-  picoEventOriginMigrationId,
-  picoMemoryItemOriginMigrationId,
-  picoAuditRecordMigrationId,
-  picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
-  picoHomeHostContinuityMigrationId,
-  picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
-  readerCustodyMultiReaderRotationMigrationId,
   runMigrations,
 } from './migrations.js';
 
@@ -52,73 +36,9 @@ describe('database migrations', () => {
           id: picoSchemaBaselineMigrationId,
           requiresBackup: false,
         },
-        {
-          id: foundationOperatorHomeBindingMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: readerCustodyMultiReaderRotationMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
-          requiresBackup: true,
-        },
-        {
-          id: picoHomeDeviceLifecycleMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoHomeDeviceRecoveryMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoIdentityRootRotationMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoHomeHostContinuityMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoEventOriginMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoMemoryItemOriginMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoAuditRecordMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoMemoryItemDueAtMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoModuleActivationMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoMemoryItemAnnouncedAtMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoObservationMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoMemoryItemPlaceMigrationId,
-          requiresBackup: false,
-        },
-        {
-          id: picoModuleCaptureMigrationId,
-          requiresBackup: false,
-        },
       ],
       unknownMigrationIds: [],
-      backupRequired: true,
+      backupRequired: false,
     });
 
     const tables = db
@@ -160,70 +80,6 @@ describe('database migrations', () => {
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: foundationOperatorHomeBindingMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: readerCustodyMultiReaderRotationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeFoundingFirstDeviceEvidenceMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeDeviceLifecycleMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeDeviceRecoveryMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoIdentityRootRotationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoHomeHostContinuityMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoEventOriginMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemOriginMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoAuditRecordMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemDueAtMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoModuleActivationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemAnnouncedAtMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoObservationMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoMemoryItemPlaceMigrationId,
-        appliedAt: expect.any(String),
-      },
-      {
-        id: picoModuleCaptureMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -331,43 +187,47 @@ describe('database migrations', () => {
     expect(describeMigrationState(db)).toEqual({
       appliedMigrationIds: [
         picoSchemaBaselineMigrationId,
-        foundationOperatorHomeBindingMigrationId,
-        readerCustodyMultiReaderRotationMigrationId,
-        picoHomeFoundingFirstDeviceEvidenceMigrationId,
-        picoHomeDeviceLifecycleMigrationId,
-        picoHomeDeviceRecoveryMigrationId,
-        picoIdentityRootRotationMigrationId,
-        picoHomeHostContinuityMigrationId,
-        picoEventOriginMigrationId,
-        picoMemoryItemOriginMigrationId,
-        picoAuditRecordMigrationId,
-        picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(17);
+    expect(listAppliedMigrations(db)).toHaveLength(1);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
   });
 
-  it('requires explicit backup confirmation for the v2 founding migration', () => {
+  // The gate used to be proven through whichever product migration happened to
+  // set `requiresBackup`, which made a runner guarantee depend on the schema's
+  // history. After the ADR 0134 F3 consolidation no product step requires a
+  // backup, so the definition is injected: the runner's promise is now tested
+  // as the runner's promise.
+  it('requires explicit backup confirmation for a migration that demands one', () => {
     const db = new Database(createDatabasePath());
+    const backupDemanding = [
+      {
+        id: '0001_initial_schema',
+        requiresBackup: true,
+        up(database: Database.Database) {
+          database.exec('CREATE TABLE backup_gated (id TEXT PRIMARY KEY);');
+        },
+      },
+    ];
 
-    expect(() => runMigrations(db, { requireBackupBeforeMigration: true }))
-      .toThrow('Backup confirmation is required');
+    expect(() => runMigrations(db, {
+      requireBackupBeforeMigration: true,
+      migrationDefinitions: backupDemanding,
+    })).toThrow('Backup confirmation is required');
+    expect(db.prepare("SELECT name FROM sqlite_master WHERE name = 'backup_gated'").get())
+      .toBeUndefined();
+
     expect(() => runMigrations(db, {
       requireBackupBeforeMigration: true,
       backupConfirmed: true,
+      migrationDefinitions: backupDemanding,
     })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(17);
+    expect(listAppliedMigrations(db)).toHaveLength(1);
 
     db.close();
   });
@@ -406,7 +266,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(17);
+    expect(listAppliedMigrations(db)).toHaveLength(1);
 
     db.close();
   });
@@ -418,22 +278,6 @@ describe('database migrations', () => {
 
     expect(result.appliedMigrationIds).toEqual([
       picoSchemaBaselineMigrationId,
-      foundationOperatorHomeBindingMigrationId,
-      readerCustodyMultiReaderRotationMigrationId,
-      picoHomeFoundingFirstDeviceEvidenceMigrationId,
-      picoHomeDeviceLifecycleMigrationId,
-      picoHomeDeviceRecoveryMigrationId,
-      picoIdentityRootRotationMigrationId,
-      picoHomeHostContinuityMigrationId,
-      picoEventOriginMigrationId,
-      picoMemoryItemOriginMigrationId,
-      picoAuditRecordMigrationId,
-      picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -443,22 +287,6 @@ describe('database migrations', () => {
         status: 'applied',
         migrationIds: [
           picoSchemaBaselineMigrationId,
-          foundationOperatorHomeBindingMigrationId,
-          readerCustodyMultiReaderRotationMigrationId,
-          picoHomeFoundingFirstDeviceEvidenceMigrationId,
-          picoHomeDeviceLifecycleMigrationId,
-          picoHomeDeviceRecoveryMigrationId,
-          picoIdentityRootRotationMigrationId,
-          picoHomeHostContinuityMigrationId,
-          picoEventOriginMigrationId,
-          picoMemoryItemOriginMigrationId,
-          picoAuditRecordMigrationId,
-          picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
         ],
       },
     ]);
@@ -520,22 +348,6 @@ describe('database migrations', () => {
         status: 'failed',
         migrationIds: [
           picoSchemaBaselineMigrationId,
-          foundationOperatorHomeBindingMigrationId,
-          readerCustodyMultiReaderRotationMigrationId,
-          picoHomeFoundingFirstDeviceEvidenceMigrationId,
-          picoHomeDeviceLifecycleMigrationId,
-          picoHomeDeviceRecoveryMigrationId,
-          picoIdentityRootRotationMigrationId,
-          picoHomeHostContinuityMigrationId,
-          picoEventOriginMigrationId,
-          picoMemoryItemOriginMigrationId,
-          picoAuditRecordMigrationId,
-          picoMemoryItemDueAtMigrationId,
-  picoModuleActivationMigrationId,
-  picoMemoryItemAnnouncedAtMigrationId,
-  picoObservationMigrationId,
-  picoMemoryItemPlaceMigrationId,
-  picoModuleCaptureMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },
