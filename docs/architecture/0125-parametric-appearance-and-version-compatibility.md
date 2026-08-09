@@ -6,6 +6,33 @@ Proposed. The contract, the `@pico/appearance` package, the protocol
 specification and the fixtures exist; no renderer, no Pico Link sync, no
 persistence and no character approval exist. This ADR approves no graphics.
 
+Clarified on 2026-08-09, after `TODO.md` asked whether Appearance replaces
+the style presets from ADR 0013 or forms a fourth axis beside them. Neither:
+the question assumed a shared axis that does not exist. Four axes do, and
+they do not compete.
+
+**Status** is what a Pico is doing right now and lives in `color.status` at
+runtime. **Context** is the accent palette of `color.context` - seven
+domain-shaped names plus `nightFocus`. **Appearance** is this ADR: the
+individual Pico's identity as a closed integer parameter set, which
+`appearance-profile-v1.ts` already states carries "no status colour, no
+context equipment, no image, texture or mesh data, and no free emission
+values". **Style variant** is ADR 0013's neutral/technical/soft rendering
+register. Appearance cannot express the other three; the type forbids it.
+Where they do conflict, ADR 0013's precedence already decides: the
+character standard wins over UI composition and context design.
+
+Two things follow that this ADR does not own but records so they are not
+lost. The context axis is a **per-Pico setting** under ADR 0104 - two Picos
+in one Home can serve different subjects, which is that ADR's own test - so
+it belongs in Pico rather than in host configuration; `nightFocus` is
+excluded from that statement, because it reads as a mode rather than a
+subject and its place in the group is unexplained. And the eight context
+tokens carry colour values and **no written semantics at all**: nothing
+says what a context is or who chooses one. The style variant has the same
+gap in the other direction - it is prose in ADR 0013 and appears in no
+token, type or manifest.
+
 ## Context
 
 A PICO's appearance must survive time and heterogeneity: newer official

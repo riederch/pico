@@ -167,19 +167,38 @@ Kollisionstests in Abschnitt 13.3 pruefen gegen Visier, Seitenmodule und
 Schulterraum. ADR 0124 liefert diese Volumina jetzt. PAS parametrisiert Haar
 und Materialfarben, nicht PICO, und kommt deshalb **nach** dem Core.
 
-Offen zu entscheiden ist ausserdem, wie sich Appearance zu den Style-Presets
-aus ADR 0013 verhaelt (Standard, Technical, Soft, Focus, Night, Work, Home,
-Firefighter, Water). Das Design-System kennt nur die Kontextachse mit acht
-Kontexten; die Preset-Achse steht nirgends. Ersetzt Appearance sie, oder ist
-es eine vierte Achse?
+**Die Preset-Frage ist am 2026-08-09 geschlossen, weil sie falsch gestellt
+war.** Sie unterstellte eine gemeinsame Achse und berief sich auf eine Liste
+(Standard, Technical, Soft, Focus, Night, Work, Home, Firefighter, Water),
+die aus zwei verschiedenen Achsen zusammengesetzt ist: sechs davon sind
+umbenannte oder aufgespaltene Kontexttokens (`technology`,
+`waterInfrastructure`, `fireDepartment`, `organization`, `smartHome`,
+`nightFocus` - Letzteres in der Liste faelschlich in Night und Focus
+geteilt), `communication` und `energy` fehlen ganz, und Standard/Soft
+stammen aus ADR 0013s Style-Varianten. Appearance ersetzt nichts und ist
+keine vierte Achse: `appearance-profile-v1.ts` haelt ausdruecklich fest,
+dass das Profil weder Statusfarbe noch Kontextausruestung ausdruecken kann.
+Die vier Achsen und ihre Vorrangregel stehen jetzt in ADR 0125.
+
+Offen bleiben daraus zwei kleinere Luecken, beide stromaufwaerts:
+
+- **Die Kontextachse hat keine geschriebene Semantik.** Acht Tokens tragen
+  Farbwerte und sonst nichts - nirgends steht, was ein Kontext ist. Dass er
+  eine Pico-Einstellung nach ADR 0104 ist, ist entschieden (zwei Picos in
+  einem Home koennen verschiedenen Subjekten dienen); ausgenommen bleibt
+  `nightFocus`, das wie ein Modus und nicht wie ein Subjekt liest und dessen
+  Platz in dieser Gruppe unerklaert ist.
+- **Die Style-Variante hat keinen Ort.** `neutral/technical/soft` steht als
+  Prosa in ADR 0013 und in keinem Token, Typ oder Manifest - dieselbe Luecke
+  wie bei der Typografie, die das Design-System ebenfalls nicht kennt.
 
 ADR-Nummern sind vergeben: **0124** ist die Architektur (autorierter
 Character Core und gestufte Darstellung, angelegt 2026-08-02), **0125** ist
 PAS, **0126** ist Multi-Presence. Weiter vergeben: **0130** Desktop-
 Bedienflaeche, **0131** Android als Vollclient, **0132** Recovery-Card-
-Generator, **0133** Ableitungsgrundsatz. Naechste freie Nummer: **0134** -
-vor dem Schreiben hier beanspruchen, sonst kollidieren zwei parallele
-Sitzungen still.
+Generator, **0133** Ableitungsgrundsatz, **0134** Formatrevision vor dem
+Freeze. Naechste freie Nummer: **0135** - vor dem Schreiben hier
+beanspruchen, sonst kollidieren zwei parallele Sitzungen still.
 
 ## Security-Initiative: Backlog abgearbeitet
 
