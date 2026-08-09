@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx pnpm@9.0.0 release:verify *)",
+      "Bash(npx pnpm@9.0.0 --filter @pico/vault-daemon test *)",
+      "Bash(npx pnpm@9.0.0 --filter @pico/vault-daemon check *)",
+      "Bash(npx pnpm@9.0.0 exec vitest run *)",
+      "Bash(npx pnpm@9.0.0 exec tsc *)",
+      "Bash(npx pnpm@9.0.0 test *)",
+      "Bash(npx pnpm@9.0.0 --filter @pico/core test *)",
+      "Bash(npx pnpm@9.0.0 --filter @pico/protocol test *)",
+      "Bash(npx pnpm@9.0.0 license:check *)"
+    ]
+  }
+}

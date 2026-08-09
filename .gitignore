@@ -16,3 +16,8 @@ yarn.lock
 # Locally generated Recovery Card print previews
 /pico-recovery-card-option1-card-printer.pdf
 /pico-recovery-card-option2-paper-printable.pdf
+
+# Claude Code: the shared project settings are versioned, the local allowlist
+# is not. It accumulates per-session one-offs, machine-specific absolute paths
+# and reads scoped to other repositories on this machine.
+/.claude/settings.local.json
