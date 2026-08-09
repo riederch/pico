@@ -140,7 +140,7 @@ describe('ADR 0110 durable device recovery', () => {
     fixture.store.close();
 
     const reopened = new EventStore(fixture.databasePath, {
-      recoveryAnchor: openPicoHomeRecoveryAnchor(fixture.anchorPath),
+      recoveryAnchor: reopenAnchor(fixture.anchorPath),
     });
     expect(reopened.reconcilePicoHomeDeviceRecoveries(
       sodium,
@@ -209,7 +209,7 @@ describe('ADR 0110 durable device recovery', () => {
     staleProjection.close();
 
     const reconciled = new EventStore(fixture.databasePath, {
-      recoveryAnchor: openPicoHomeRecoveryAnchor(fixture.anchorPath),
+      recoveryAnchor: reopenAnchor(fixture.anchorPath),
     });
     expect(reconciled.reconcilePicoHomeDeviceRecoveries(
       sodium,
@@ -545,7 +545,7 @@ describe('ADR 0110 durable device recovery', () => {
     `).run(JSON.stringify(record));
     corrupted.close();
     const quarantining = new EventStore(clean.databasePath, {
-      recoveryAnchor: openPicoHomeRecoveryAnchor(clean.anchorPath),
+      recoveryAnchor: reopenAnchor(clean.anchorPath),
     });
     expect(quarantining.reconcilePicoHomeDeviceRecoveries(
       sodium,
@@ -566,6 +566,25 @@ describe('ADR 0110 durable device recovery', () => {
     quarantining.close();
   });
 });
+
+/**
+ * ADR 0110 A9 drops anchor entries whose completion window has passed, and it
+ * measures that against the anchor's *own* clock. An anchor opened without one
+ * borrows the machine's, and every entry this file creates expires at
+ * `postWindowAt` - so on 2026-08-09T10:00Z these tests began failing with no
+ * line of the tree having changed, because real time had walked past the
+ * fixture horizon and the reopened anchors pruned their own evidence.
+ *
+ * Moving the dates forward would only re-arm that. A reopened anchor states
+ * the moment it models instead, exactly as `createFixture` already does for
+ * the first one. Nothing in this file may take the ambient clock.
+ */
+function reopenAnchor(
+  anchorPath: string,
+  at: string = completedAt,
+): ReturnType<typeof openPicoHomeRecoveryAnchor> {
+  return openPicoHomeRecoveryAnchor(anchorPath, { now: () => new Date(at) });
+}
 
 function createFixture(options: {
   databasePath?: string;
@@ -995,7 +1014,7 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
 
   function reopen(fixture: ReturnType<typeof createFixture>): EventStore {
     return new EventStore(fixture.databasePath, {
-      recoveryAnchor: openPicoHomeRecoveryAnchor(fixture.anchorPath),
+      recoveryAnchor: reopenAnchor(fixture.anchorPath),
     });
   }
 
@@ -1473,7 +1492,7 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     );
     // Collapsing this into "no floor" would open every objection window the
     // anchor exists to hold shut.
-    expect(() => openPicoHomeRecoveryAnchor(fixture.anchorPath))
+    expect(() => reopenAnchor(fixture.anchorPath))
       .toThrow('unreadable_recovery_anchor');
     fixture.store.close();
   });
@@ -1483,7 +1502,7 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     acceptRecovery(fixture, 'recovery_r6_monotonic');
     fixture.store.close();
 
-    const anchor = openPicoHomeRecoveryAnchor(fixture.anchorPath);
+    const anchor = reopenAnchor(fixture.anchorPath);
     const entry = anchor.lookup('recovery_r6_monotonic');
     expect(entry?.state).toBe('accepted');
     anchor.record({
@@ -1513,14 +1532,14 @@ describe('ADR 0110 R6 restore-proof consumption anchor', () => {
     })).toThrow('recovery_anchor_claim_digest_conflict');
 
     writeFileSync(fixture.anchorPath, '{"schema":"pico.home.recovery-anchor.v1"');
-    expect(() => openPicoHomeRecoveryAnchor(fixture.anchorPath))
+    expect(() => reopenAnchor(fixture.anchorPath))
       .toThrow('unreadable_recovery_anchor');
   });
 
   it('reports a failed flush instead of claiming a durability it did not get', () => {
     const fixture = createFixture();
     fixture.store.close();
-    const anchor = openPicoHomeRecoveryAnchor(fixture.anchorPath);
+    const anchor = reopenAnchor(fixture.anchorPath);
     // Durability is the entire point of this file, so a flush that cannot
     // happen must surface as a refusal rather than a silent success - the
     // rule the ADR 0090 reader-sync store already follows.
