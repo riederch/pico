@@ -76,6 +76,18 @@ export const picoTokens = {
       1
     ]
   },
+  "typography": {
+    "fontFamily": {
+      "sans": [
+        "Inter",
+        "ui-sans-serif",
+        "system-ui",
+        "-apple-system",
+        "Segoe UI",
+        "sans-serif"
+      ]
+    }
+  },
   "theme": {
     "light": {
       "color": {

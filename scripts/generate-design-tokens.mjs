@@ -91,7 +91,21 @@ const cssNames = new Map([
   ['motion.normal', 'motion-normal'],
   ['motion.slow', 'motion-slow'],
   ['motion.easeStandard', 'ease'],
+  ['typography.fontFamily.sans', 'font-sans'],
 ]);
+
+// The SCSS output is the only one that groups by hand instead of mapping every
+// token, so a new token group silently vanishes from it while every other
+// output carries it. The list is declared here and checked below, in the same
+// place the CSS-name check runs, so the failure reads like every other one
+// instead of arriving as a stack trace out of the renderer.
+const scssBaseGroups = [
+  ['$pico-colors', (token) => token.type === 'color'],
+  ['$pico-space', (token) => token.path.startsWith('space.')],
+  ['$pico-radius', (token) => token.path.startsWith('radius.')],
+  ['$pico-motion', (token) => token.path.startsWith('motion.')],
+  ['$pico-typography', (token) => token.path.startsWith('typography.')],
+];
 
 const themes = ['dark', 'light'];
 const surfacePaths = [
@@ -140,6 +154,9 @@ const lightTokens = tokens.filter((token) =>
 for (const token of baseTokens) {
   if (!cssNames.has(token.path)) {
     errors.push(`${tokenPath}: token ${token.path} has no generated output name.`);
+  }
+  if (!scssBaseGroups.some(([, matches]) => matches(token))) {
+    errors.push(`${tokenPath}: token ${token.path} matches no SCSS group.`);
   }
 }
 for (const token of lightTokens) {
@@ -256,6 +273,20 @@ function validateToken(token) {
         errors.push(`${tokenPath}: ${token.path} is not a DTCG cubicBezier value.`);
       }
       break;
+    // A fallback stack is ordered and its order is the whole meaning, so the
+    // value is always an array - a bare string would make a one-family stack
+    // and a fallback chain indistinguishable at the type level.
+    case 'fontFamily':
+      if (
+        !Array.isArray(token.value)
+        || token.value.length === 0
+        || token.value.some((family) =>
+          typeof family !== 'string' || family.trim() !== family || family === ''
+        )
+      ) {
+        errors.push(`${tokenPath}: ${token.path} is not a DTCG fontFamily stack.`);
+      }
+      break;
     default:
       errors.push(`${tokenPath}: ${token.path} uses unsupported type ${JSON.stringify(token.type)}.`);
   }
@@ -317,12 +348,13 @@ function renderCss(base, light) {
 }
 
 function renderScss(base, light) {
+  const [colors, ...rest] = scssBaseGroups;
   const groups = [
-    ['$pico-colors', base.filter((token) => token.type === 'color')],
+    // Light colours stay directly under the base colours, where they override
+    // them; the remaining groups keep their declared order.
+    [colors[0], base.filter(colors[1])],
     ['$pico-light-colors', light],
-    ['$pico-space', base.filter((token) => token.path.startsWith('space.'))],
-    ['$pico-radius', base.filter((token) => token.path.startsWith('radius.'))],
-    ['$pico-motion', base.filter((token) => token.path.startsWith('motion.'))],
+    ...rest.map(([name, matches]) => [name, base.filter(matches)]),
   ];
   const lines = ['// Generated from pico.tokens.json; do not edit by hand.'];
   for (const [name, entries] of groups) {
@@ -380,6 +412,11 @@ function platformValue(type, value) {
       return `${value.value}${value.unit}`;
     case 'cubicBezier':
       return value;
+    // The stack stays a list here. A PDF writer needs the first available
+    // family, not a CSS declaration, and flattening it would force every
+    // non-CSS consumer to parse the string back apart (ADR 0133).
+    case 'fontFamily':
+      return value;
     default:
       throw new Error(`Unsupported token type: ${type}`);
   }
@@ -394,9 +431,24 @@ function cssValue(token) {
       return `${token.value.value}${token.value.unit}`;
     case 'cubicBezier':
       return `cubic-bezier(${token.value.join(', ')})`;
+    // CSS is the one consumer that wants the stack flattened, so it is
+    // flattened here and nowhere else (ADR 0133).
+    case 'fontFamily':
+      return token.value.map(cssFontFamilyName).join(', ');
     default:
       throw new Error(`Unsupported token type: ${token.type}`);
   }
+}
+
+/**
+ * Quotes a family name only where CSS requires it. An unquoted custom-ident
+ * cannot contain spaces and cannot start with a digit; generic families such
+ * as `sans-serif` must stay unquoted or they stop being generic.
+ */
+function cssFontFamilyName(family) {
+  return /^-?[A-Za-z_][A-Za-z0-9_-]*$/.test(family)
+    ? family
+    : JSON.stringify(family);
 }
 
 function injectGeneratedCss(stylesheet, css, path) {

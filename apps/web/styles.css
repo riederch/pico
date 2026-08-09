@@ -51,6 +51,7 @@
   --pico-motion-normal: 240ms;
   --pico-motion-slow: 360ms;
   --pico-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --pico-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 [data-theme="light"] {

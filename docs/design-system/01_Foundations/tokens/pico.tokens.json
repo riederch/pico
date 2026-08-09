@@ -169,6 +169,15 @@
     "slow": { "$type": "duration", "$value": { "value": 360, "unit": "ms" } },
     "easeStandard": { "$type": "cubicBezier", "$value": [0.2, 0.8, 0.2, 1] }
   },
+  "typography": {
+    "$description": "Only what Typography.md states as a value. Its sizes and line heights are minima and ranges, so they stay rules for people rather than becoming invented token values.",
+    "fontFamily": {
+      "sans": {
+        "$type": "fontFamily",
+        "$value": ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "sans-serif"]
+      }
+    }
+  },
   "theme": {
     "light": {
       "color": {

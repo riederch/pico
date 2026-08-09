@@ -61,28 +61,28 @@
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.css",
-      "bytes": 2042,
-      "sha256": "9095fb0ccb7c5299b9f67bdb0056c7fed86b845002780d8490d9bdc091c5fa1b"
+      "bytes": 2134,
+      "sha256": "4bfb3e3e5f876c3638de7ced5692b71876d10093c1c083052edd3fe88b50c3d9"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.json",
-      "bytes": 9384,
-      "sha256": "ea1cc53aa3ff57fbae2c2ef16f5710b4558761e2147cc25c6553f65fba9305d4"
+      "bytes": 9779,
+      "sha256": "8ae0bfdad8f14f6a58c68adad3934da6a69a52fcf638e4c495fce14a1e22509e"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.scss",
-      "bytes": 1505,
-      "sha256": "37a5150fb96cfc90a17b3bb7d36500f6335c75ec5bbdeeb49961acec2b4ef6c3"
+      "bytes": 1608,
+      "sha256": "d5971ee2af9f69c0a9312b20736053501914f6e31981c4386bd25a1574417eb4"
     },
     {
       "path": "01_Foundations/tokens/pico.tokens.ts",
-      "bytes": 2299,
-      "sha256": "f0d0231b9b3d93818b2dcafa4677e7f662d2ad4869d85566ff5bbffe6a44ca3b"
+      "bytes": 2501,
+      "sha256": "cbc3bf043be0c5023bf204f6580a452259db88ed2f713528b6c7b986dd8a27d4"
     },
     {
       "path": "01_Foundations/Typography.md",
-      "bytes": 559,
-      "sha256": "ab48c6880523141ab57a16e886f55a3356fda2d8b4be2e779e1283e7b620b247"
+      "bytes": 1817,
+      "sha256": "ffd54c57baec1ed9bff74adb86ad802ecca40dfe969d397d2426012e3e1e38f3"
     },
     {
       "path": "02_Brand/App_Icon_System.md",

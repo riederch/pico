@@ -141,10 +141,31 @@ forever. Nothing consumes it, so nothing would ever prove it wrong.
 
 ## Gates
 
-- **D1 - Typography is readable (open):** family, fallback stack and the
-  stated sizes become tokens; print sizes are named as their own case;
-  the `Inter` subset and its licence land where they are consumed, and
-  ADR 0132 G2 stops the card's contradiction.
+- **D1 - Typography is readable (implemented, narrower than written):**
+  `typography.fontFamily.sans` carries the stack from `Typography.md`
+  exactly, and the generator learned the DTCG `fontFamily` type to hold
+  it. CSS and SCSS receive it flattened, because that is what a
+  declaration needs; the TypeScript output keeps the list, because a
+  surface without CSS has to pick the first available family and cannot
+  use a joined string (ADR 0133).
+
+  The gate as first written also asked for the sizes. It should not have:
+  `Typography.md` states a minimum and a range - "at least 15 px,
+  preferably 16", "1.45-1.6" - and writing a range as one token value
+  would decide something nobody decided. Sizes therefore stay guidance,
+  and `Typography.md` now marks which of its statements are tokens and
+  which are for people. Print has no values at all, and that absence is
+  named there rather than filled by rescaling screen numbers.
+
+  The `Inter` file does not land here either. Nothing consumes it until
+  ADR 0132 G2 embeds it, and shipping a font ahead of its consumer is the
+  thing ADR 0133 exists to refuse. G2 brings it in with its licence.
+
+  One finding came out of the work rather than the plan: `renderScss`
+  groups tokens by a hand-written list, so a new group is emitted by five
+  outputs and silently dropped by the sixth. The list is now declared
+  once and checked where the CSS-name check runs, so an ungrouped token
+  fails by name instead of vanishing. Counter-proven.
 - **D2 - Context has semantics (open):** one written paragraph for what a
   context is and what changes with it, the ADR 0104 setting recorded, and
   `nightFocus` either defined as a subject or moved out of the group.
