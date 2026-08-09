@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted as an architecture boundary; not implemented. The number was
+Accepted as an architecture boundary; P1 and P5 implemented, P2/P3/P6 open
+and P4 blocked. The number was
 reserved on 2026-08-02 with the work order in
 `docs/development/briefs/multi-presence.md`. The two terminology
 collisions that order left open were decided by the user on 2026-08-09:
@@ -246,9 +247,14 @@ version of a concept, and the versions drift where nobody is looking.
 - **P4 - Ownership and idempotency (open, blocked):** selection, handover,
   running-action ownership and controlled takeover. Blocked on the Action
   Runner, which does not exist; without it there is nothing to own.
-- **P5 - Retroactive naming (open):** ADR 0113's companion is described as
-  the first presence through a status note, keeping its text - the ADR
-  0128 record rule. Nothing about its shell, boundary or gates changes.
+- **P5 - Retroactive naming (implemented):** ADR 0113 keeps its text and
+  gains a status note naming its companion the first presence of the
+  identity - the ADR 0128 record rule. Nothing about its shell, boundary,
+  renderer discipline or C-gates changes. The note points at the seams
+  that were already there: the shell-free core is what a second presence
+  reuses, the device-local profile is presence-local rather than identity
+  state, and further platforms are further presences rather than further
+  products.
 - **P6 - Per-presence switch-off (open):** a person can disable an
   individual sensor, actuator or whole presence, generalising ADR 0129 SR6
   beyond spatial recall.

@@ -193,12 +193,21 @@ freeze, which is when it becomes dangerous.
     licensed - it is the size, not the permission, that keeps it out of a
     tail-end block.
   - **Recovery Card v1**, handled by F2.
-  - **`foundationAccessModeAlias`** - the `ha-ingress` name kept under ADR
-    0128 H5 because it "steht in installierten Umgebungen". Whether such
-    an environment exists is a fact only the operator holds, and a
-    different question from whether a Pico exists; it is also the cheapest
-    of the four to keep, so it is the one that most needs a stated
-    population rather than a reflex.
+  - **`foundationAccessModeAlias`** - **closed on 2026-08-09 by naming its
+    population, and it turns out to have been mis-filed here.** The other
+    three items protect artifacts produced by a Pico. This one protects a
+    *container environment variable*: anyone who ran the add-on before the
+    rename has `PICO_FOUNDATION_ACCESS_MODE=ha-ingress` set right now, and
+    a boot that refused it would turn an update into an outage. That
+    population is not "someone who founded an identity", so the freeze line
+    cannot speak to it - a container with the old spelling fails whether or
+    not a Pico was ever founded in it.
+
+    The cost of keeping is one entry in `formerFoundationAccessModeNames`
+    and a boot log line that says so once, which is below the cost of being
+    wrong about who is out there. `config.ts` already records the same
+    conclusion in its own words: dropping it is a release decision, not a
+    cleanup. It stays, and it leaves this sweep.
 
   Two sites marked "Additive, optional" in `packages/protocol/src/index.ts`
   are unjudged: one is the ADR 0116 W1 origin, which is server-assigned at

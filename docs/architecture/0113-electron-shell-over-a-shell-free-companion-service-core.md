@@ -12,6 +12,19 @@ Both decisions in here - Electron, and
 service-core-first for the attached milestone - were made explicitly by
 the user on 2026-07-31.
 
+Named on 2026-08-09 under ADR 0126 P5: what this ADR calls the companion
+is, in that model, **the first presence** of the identity - one execution
+of it on one device, beside others that may run at the same time. The text
+below keeps its wording and nothing about the shell, the boundary, the
+renderer discipline or the C-gates changes. What the naming adds is where
+the seams already were: the shell-free service core is what a second
+presence reuses (ADR 0131 counts on exactly that), the device-local
+profile is presence-local state rather than identity state, and C4's
+further platforms are further presences rather than further products.
+
+The superseding of C4 by ADR 0130 E7/E8 is recorded there and unchanged
+here.
+
 ## Context
 
 ADR 0105 fixed the product form (background service reached through the
