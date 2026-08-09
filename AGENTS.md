@@ -126,6 +126,14 @@ Konsistenzchecks; produkt- oder releasebezogene Doku braucht den vollen Gate.
 - Keine REST-Endpunkte allein fuer Dashboard-Komfort einfuehren.
 - Reservierte oder draft-only Protocol-Surfaces duerfen keine Runtime-,
   Security-, Conformance- oder Compatibility-Claims erhalten.
+- Aus der Quelle ableiten, bis das Medium bekannt ist. Eine abgeflachte
+  Darstellung ist ein Cache, nie eine Autoritaet: sie darf ersetzt werden,
+  sie ist nicht Eingabe einer weiteren Ableitung, und zwei Konsumenten
+  derselben Quelle duerfen sich nicht widersprechen koennen, weil einer
+  eine Kopie bekam. Frueh zu materialisieren ist erlaubt und nennt vier
+  Dinge: gemessene Kosten, Driftrichtung samt Nachweis, dass sie die
+  fail-safe ist, Korrekturpunkt, und was ein Konsument weiterhin annehmen
+  darf (ADR 0133).
 - Keine versteckten Automationen und keine Umgehung von Policy, Consent oder
   Audit.
 

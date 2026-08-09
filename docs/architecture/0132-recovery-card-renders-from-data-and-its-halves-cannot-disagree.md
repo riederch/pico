@@ -253,6 +253,10 @@ Negative and residual:
 
 - Applies ADR `0106`'s principle - one validated source behind both the
   human-readable and the machine-readable form - to the Recovery Card.
+- Is the first case governed by ADR `0133`: G4 hands the card parameters
+  and a composition formula rather than a finished image, because the card
+  is the boundary that knows its medium. That reasoning was generalized
+  out of here rather than being invented here.
 - Leaves ADR `0110` and ADR `0112` unchanged in what the card contains,
   what it is for and how it is printed; only the generator's input shape
   changes.
@@ -272,3 +276,4 @@ Negative and residual:
 - [ADR 0112](0112-recovery-product-surfaces-in-the-background-companion.md)
 - [ADR 0113](0113-electron-shell-over-a-shell-free-companion-service-core.md)
 - [ADR 0124](0124-authored-character-core-and-tiered-presentation.md)
+- [ADR 0133](0133-derive-from-the-source-until-the-medium-is-known.md)

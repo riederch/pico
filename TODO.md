@@ -177,8 +177,9 @@ ADR-Nummern sind vergeben: **0124** ist die Architektur (autorierter
 Character Core und gestufte Darstellung, angelegt 2026-08-02), **0125** ist
 PAS, **0126** ist Multi-Presence. Weiter vergeben: **0130** Desktop-
 Bedienflaeche, **0131** Android als Vollclient, **0132** Recovery-Card-
-Generator. Naechste freie Nummer: **0133** - vor dem Schreiben hier
-beanspruchen, sonst kollidieren zwei parallele Sitzungen still.
+Generator, **0133** Ableitungsgrundsatz. Naechste freie Nummer: **0134** -
+vor dem Schreiben hier beanspruchen, sonst kollidieren zwei parallele
+Sitzungen still.
 
 ## Security-Initiative: Backlog abgearbeitet
 
