@@ -145,7 +145,13 @@ freeze, which is when it becomes dangerous.
   beside it - so it is read where a version decision is made rather than
   in an ADR nobody reopens. When the answer changes, that line changes
   first and everything else follows from it.
-- **F2 - The card collapses to one format (open):** the v2 layout becomes
+- **F2 - The card and the founding record collapse to one format each
+  (open):** two formats, one operation, done together because they are the
+  same branch pattern - `'homeHostPicoIdentityFingerprintHex' in input` on
+  the card, `'firstDeviceDelegationId' in input` on the founding signature
+  input - and separating them would establish the proof method twice.
+
+  For the card: the v2 layout becomes
   the only Recovery Card format and keeps the name `v1`. The second
   schema, the dual QR transport, the Vault's
   `'homeHostPicoIdentityFingerprintHex' in input` branch, the PDF writer's
@@ -154,6 +160,17 @@ freeze, which is when it becomes dangerous.
   prefix follows the surviving name, and the development cards printed on
   2026-07-31 are declared unreadable. ADR 0110 and 0112 gain status notes
   and keep their text.
+
+  For the founding record: `pico.home.founding-record.v2` and
+  `PicoHomeFoundingSignatureInput`'s v1 variant disappear into the
+  surviving `.v1` name, the three first-device fields become required, the
+  dispatching builder and its v1 twin collapse into one, and
+  `legacyFounding` leaves `event-store.ts` with them. Its positive vector
+  gains new canonical bytes; its two canonicalization negatives and
+  `home-first-device-founding/suite.json` are re-read rather than
+  regenerated, because a negative asserts a rejection and only reading it
+  says whether that rejection still means the same thing. ADR 0108 gains a
+  status note and keeps its text.
 - **F3 - Compatibility sweep (open):** every property the tree keeps "for
   compatibility" either goes or gets its population written down. A sweep
   on 2026-08-09 found four, and each ends with a removal or a named
@@ -200,14 +217,32 @@ freeze, which is when it becomes dangerous.
 
     Whether this ADR licensed it was undecidable when the sweep was
     written, because obligation 4 pointed at a document that recorded
-    claims only in prose - explicit exclusion for the card, "experimental
-    setup surface" for the route that stores the founding record, and
-    nothing at all for the record itself. That gap was closed on
-    2026-08-09: `public-surfaces.md` now states that the class is the
-    first word of a status, and gives the canonical byte forms their own
-    table. The founding record is **Experimental**, so the collapse is
-    licensed - it is the size, not the permission, that keeps it out of a
-    tail-end block.
+    claims only in prose. That gap was closed on 2026-08-09:
+    `public-surfaces.md` now states that the class is the first word of a
+    status and gives the canonical byte forms their own table. The founding
+    record is **Experimental**, so the collapse is licensed.
+
+    **Measured again on 2026-08-09, and it belongs to F2 rather than
+    here.** The two are not similar operations; they are the same one. The
+    card is issued as v1 or v2 depending on
+    `'homeHostPicoIdentityFingerprintHex' in input`; the founding
+    signature input is built as v1 or v2 depending on
+    `'firstDeviceDelegationId' in input`. Same branch shape, same
+    additive-field-becomes-required change, same obligation to regenerate
+    vectors under the surviving name.
+
+    The founding record costs a little more on the vector side: the
+    published positive vector
+    `home-signature-input/.../canonicalization-positive/founding-record`
+    pins the ten-field v1 shape and would need new canonical bytes, and two
+    canonicalization negatives plus `home-first-device-founding/suite.json`
+    need re-checking rather than blind regeneration - a negative asserts a
+    rejection, and only reading it says whether the rejection still means
+    what it meant.
+
+    Doing them apart would establish the proof method twice and risk the
+    second drifting from the first. **F2 therefore covers both**, and this
+    entry is closed by moving rather than by doing.
   - **Recovery Card v1**, handled by F2.
   - **`foundationAccessModeAlias`** - **closed on 2026-08-09 by naming its
     population, and it turns out to have been mis-filed here.** The other
