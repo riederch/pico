@@ -163,12 +163,28 @@ freeze, which is when it becomes dangerous.
     `0017_pico_module_capture`, each a step out of a state no database is
     in. Consolidating them also retires the ordering dependency that
     `0017` has on `0013`. The caveat is load-bearing and decides how this
-    is done: the migrations are currently the only test material the
-    migration runner has, so folding them into one baseline without
-    replacing that material would quietly retire the ordering, idempotence
-    and backup-before-migration proofs - the checks most needed *after*
-    the freeze. Fold the product schema, give the runner synthetic
-    migrations.
+    is done - or it was. **Checked on 2026-08-09 and the caveat is wrong.**
+    `runMigrations` already accepts `migrationDefinitions`, and
+    `migrations.test.ts` already exercises the runner through that seam
+    with a synthetic definition. The real list is pinned in only five
+    places: three `toHaveLength(17)` assertions and two `migrationIds`
+    lists, all of which assert that the *product schema* applies rather
+    than that the runner works. Folding therefore does not retire the
+    ordering, idempotence or backup-before-migration proofs, because those
+    do not depend on the seventeen.
+
+    The method is also settled, and it removes the risk that made this
+    look dangerous: **derive the baseline, do not fold it by hand.** Running
+    the seventeen on a fresh database and reading `sqlite_master` yields
+    the exact final shape - 68 objects, 33 tables and 35 indexes, about 20
+    KB of DDL - including the columns that arrived by `ALTER TABLE`, since
+    SQLite stores the rewritten `CREATE`. Equivalence is then a mechanical
+    proof rather than a review: apply the single baseline to a fresh
+    database and compare `sqlite_master` against the seventeen-step result.
+
+    What remains is the diff itself - roughly 1,200 deleted lines in the
+    one file where a mistake is a data-shape mistake - and that is what
+    keeps it a block of its own rather than a tail-end task.
   - **`legacyFounding`** in `apps/core/src/event-store.ts` - a type
     variant and a branch that keep a Home founded under the ADR 0080 v1
     schema verifiable while refusing new v1 claims. No Home is founded, so
