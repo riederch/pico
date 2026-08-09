@@ -162,6 +162,32 @@ freeze, which is when it becomes dangerous.
     variant and a branch that keep a Home founded under the ADR 0080 v1
     schema verifiable while refusing new v1 claims. No Home is founded, so
     the branch describes a state nothing can be in.
+
+    Measured on 2026-08-09 and **larger and less licensed than this entry
+    first assumed**. The branch is not the item: behind it sits the
+    `pico.home.founding-record.v1`/`v2` pair, 56 sites across 15 files,
+    with published fixture suites (`home-first-device-founding`,
+    `home-signature-input/.../founding-record`). Removing the branch
+    honestly means collapsing that pair - the same shape and roughly the
+    same size as F2.
+
+    And unlike the card, it is not clear this ADR licenses it at all.
+    Obligation 4 names `public-surfaces.md` as the list that decides, and
+    that list treats the two surfaces differently: it says of the card and
+    its generator that they "are local implementation surfaces, not Pico
+    Link compatibility", an explicit exclusion, while the founding record
+    is documented at length as part of `POST /api/home/claim` - an
+    "experimental setup surface" that "does not implement Pico Home Link
+    compatibility". Experimental and excluded are not the same statement,
+    and deciding between them requires reading prose that says different
+    things in different paragraphs.
+
+    That is a gap in this ADR rather than in the sweep: obligation 4 needs
+    an input that can actually decide, and `public-surfaces.md` records
+    claims per surface only in prose. Resolve that before touching the
+    founding record - a collapse performed under a misread of which class
+    a surface belongs to is precisely the failure the obligation exists to
+    prevent.
   - **Recovery Card v1**, handled by F2.
   - **`foundationAccessModeAlias`** - the `ha-ingress` name kept under ADR
     0128 H5 because it "steht in installierten Umgebungen". Whether such
