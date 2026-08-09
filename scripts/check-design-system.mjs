@@ -56,6 +56,39 @@ if (!version.includes(`Character dependency: ${characterStandard}`)) {
   errors.push('docs/design-system/VERSION.txt has the wrong character dependency.');
 }
 
+// ADR 0135 D4. VERSION.txt is the authority, and every other place inside the
+// design system that states the *current* version has to agree with it. Before
+// this check, `00_START_HERE/README.md` and the v1.0 document still announced
+// 1.0.1 while VERSION.txt and the manifest said 1.1.0, and nothing noticed.
+//
+// Two kinds of version statement are deliberately out of scope, because
+// forcing them to match would make them false:
+//
+// - `SOURCE.md` records the imported upstream archive (1.0.0) and the patch
+//   state that first corrected it (1.0.1). That is provenance, already pinned
+//   by the archive name and hash above, and bumping it would rewrite history.
+// - The v1.0 document's title is its identity - it *is* the v1.0 document -
+//   and the same holds for its filename.
+//
+// ADRs are also excluded: they are records, and a version named in one states
+// what it was written against (ADR 0128). A stale pointer there is answered
+// with a status note, not an edit.
+const currentVersionStatements = [
+  [
+    'docs/design-system/00_START_HERE/README.md',
+    `Repository-Patchstand: **${expectedVersion}**.`,
+  ],
+  [
+    'docs/design-system/01_Foundations/PICO_Product_Design_System_v1.0.md',
+    `**PICO Product Design System v${expectedVersion}**`,
+  ],
+];
+for (const [path, expected] of currentVersionStatements) {
+  if (!read(path).includes(expected)) {
+    errors.push(`${path} does not state the current version ${expectedVersion}.`);
+  }
+}
+
 const tokenMetadata = tokens.$extensions?.['org.pico.design-system'];
 assertEqual(tokenMetadata?.version, expectedVersion, 'token metadata version');
 assertEqual(

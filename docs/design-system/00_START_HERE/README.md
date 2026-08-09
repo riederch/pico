@@ -1,6 +1,6 @@
 # PICO Product Design System v1.0
 
-Repository-Patchstand: **1.0.1**.
+Repository-Patchstand: **1.1.0**.
 
 Dieses Paket definiert die visuelle und funktionale Produktsprache für Apps, Chats, Weboberflächen und digitale Dienste rund um PICO.
 

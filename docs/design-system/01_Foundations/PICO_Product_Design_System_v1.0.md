@@ -8,7 +8,7 @@ unverändert die oberste Designautorität.
 Das Gesamtsystem besteht aus zwei voneinander getrennten Standards:
 
 1. **PICO Character Design v3.2.1** – unveränderlicher Charakterstandard.
-2. **PICO Product Design System v1.0.1** – abgeleiteter Produkt-, UI- und Interaktionsstandard.
+2. **PICO Product Design System v1.1.0** – abgeleiteter Produkt-, UI- und Interaktionsstandard.
 
 Das Product Design System verweist auf den Character Standard, darf ihn aber nicht überschreiben.
 

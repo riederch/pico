@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. D1 and D2 are implemented; D3 and D4 are open. The user made the
+Accepted and implemented; D1 to D4 are all done. The user made the
 design system the next block on 2026-08-09 after three separate questions
 in one session each ended at the same place: the design system says
 something in prose, the consumer cannot read it, and the consumer invents
@@ -150,13 +150,21 @@ the first place.
 ### The design system's own version is checked like the product's
 
 `check-version.mjs` enforces the product version across sixteen locations.
-The design system version has no equivalent, and it shows: `VERSION.txt`
-and `manifest.json` say 1.1.0 while ADR 0013 still says 1.0.1.
-`SOURCE.md`'s 1.0.0 is not part of that - it records the provenance of the
-original import and is correct as it stands.
+The design system version had no equivalent, and it showed: `VERSION.txt`
+and `manifest.json` said 1.1.0 while `00_START_HERE/README.md` and the
+v1.0 document still announced 1.0.1, and nothing noticed.
 
-Every location that states the design system version joins one check, in
-the idiom already used for the product version.
+Every place inside the design system stating the *current* version joins
+one check, in the idiom already used for the product version. Two
+statements stay out, because forcing them to agree would make them false:
+`SOURCE.md` records the imported archive and the patch state that first
+corrected it, which is provenance already pinned by name and hash; and the
+v1.0 document's title is its identity rather than a claim about today.
+
+ADRs stay out as well. A version named in one says what that ADR was
+written against, and editing it would falsify a record (ADR 0128). A stale
+pointer there is answered with a status note naming `VERSION.txt` as the
+authority.
 
 ## Rejected alternatives
 
@@ -219,12 +227,28 @@ forever. Nothing consumes it, so nothing would ever prove it wrong.
   missed that the same axis defines itself by what it *changes*, which
   Nacht/Fokus does. The tension between those two sentences is noted where
   both live.
-- **D3 - The style variant is closed (open):** recorded as a concept-board
-  observation and not an axis, with ADR 0013 keeping its text and gaining
-  a note.
-- **D4 - The design system version is checked (open):** every location
-  stating it joins one check; ADR 0013's 1.0.1 is corrected to the actual
-  version in the same change.
+- **D3 - The style variant is closed (implemented):** ADR 0013 keeps its
+  text and gains a status note recording that "neutral/technical/soft" is
+  what the concept board shows the intent for, not a decision - no token,
+  no type, no manifest entry, and no consumer.
+- **D4 - The design system version is checked (implemented, with two
+  deliberate exemptions):** `check-design-system.mjs` now enforces that
+  every place inside the design system stating the *current* version
+  agrees with `VERSION.txt`. Two stale statements were found by writing
+  it - `00_START_HERE/README.md` and the v1.0 document both still
+  announced 1.0.1 while VERSION.txt and the manifest said 1.1.0 - and
+  both counter-prove by name.
+
+  Two version statements are out of scope because matching them would
+  make them false. `SOURCE.md` records the imported archive (1.0.0) and
+  the patch state that first corrected it (1.0.1); that is provenance,
+  already pinned by archive name and hash. And the v1.0 document's title
+  is its identity, as is its filename.
+
+  ADR 0013 is not edited either, which is where this gate changed shape:
+  a version named in an ADR states what that ADR was written against, and
+  rewriting it would falsify a record (ADR 0128). It gains a status note
+  pointing at VERSION.txt as the authority instead.
 
 ## Consequences
 

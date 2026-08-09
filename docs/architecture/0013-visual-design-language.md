@@ -4,6 +4,25 @@
 
 Accepted as the visual design basis for the companion phase.
 
+Two notes added on 2026-08-09 under ADR 0135. The text below keeps its
+wording; these correct what it points at, not what it decided.
+
+**The style variants are not an axis.** "neutral/technical/soft" appears
+under *Design basis image* among the things the original concept board
+"shows the intent for" - beside context modes, modular elements and
+multi-surface presentation. That is a description of the source image, not
+a decision. Nothing consumes it, and it has no token, type or manifest
+entry. Its neighbour on that list *was* realised, as the eight context
+tokens; that is what realisation looks like here, and this item never got
+any. If a surface ever needs the distinction it is decided then, with that
+surface as the reason (ADR 0135 D3).
+
+**The product standard is now v1.1.0.** The version named below was current
+when this was written. `docs/design-system/VERSION.txt` is the authority,
+and `check-design-system.mjs` now enforces agreement across the design
+system's own current statements (ADR 0135 D4). The number in the text
+stays as the record of what this ADR was written against.
+
 ## Context
 
 Pico should have a recognizable visual identity. The chosen design basis is a small floating companion robot with a glossy white shell, black face display, expressive glowing eyes, a glowing chest core, and a small antenna/identity light.

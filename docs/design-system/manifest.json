@@ -17,7 +17,7 @@
     {
       "path": "00_START_HERE/README.md",
       "bytes": 1386,
-      "sha256": "ca4798a8388a9b08bd867e2700a1fe4a017f7423b00a7e4dfb8062aa6e28ba4c"
+      "sha256": "6a9d662c1f7c813ada49de70f4ee7ed276d7aa39d3cd58f0d0d895bdc2149ce3"
     },
     {
       "path": "00_START_HERE/SCOPE_AND_DEPENDENCY.md",
@@ -42,7 +42,7 @@
     {
       "path": "01_Foundations/PICO_Product_Design_System_v1.0.md",
       "bytes": 9059,
-      "sha256": "d8354fc3f8680eda29ae19f3a2a7f6f7e35843c1c746f7dd213dc52bb41dbafc"
+      "sha256": "d3abd34ac591be1a240070bc9521f07118d3a2365229adf6cdeb35a8a78055c9"
     },
     {
       "path": "01_Foundations/Responsive_and_Light_Mode.md",
