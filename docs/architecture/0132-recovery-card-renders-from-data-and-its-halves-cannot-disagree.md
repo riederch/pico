@@ -35,13 +35,22 @@ it looks. It consumes exactly one token group - `color`, all seven
 constants - and that link is mechanically held: `design-system:check`
 runs in `release:verify` and fails when the generated token module and
 the token source disagree, so the card cannot drift on colour. It does
-not consume `space`, `radius` or `motion`, and it cannot consume type
-tokens because the design system has none. Its content contract is
-versioned (`pico.recovery.card.v1` and `v2`); its appearance is not, so
-two cards printed either side of a token change differ and neither says
-which design generation it belongs to. For an artifact whose appearance
-carries no authority that is acceptable, but it should be known rather
-than assumed.
+not consume `space` or `radius`, which are screen quantities.
+
+Typography is the exception that matters, and an earlier draft of this
+ADR had it wrong. `docs/design-system/01_Foundations/Typography.md`
+specifies `Inter` with system sans-serif fallbacks and states that the
+package ships no font files. The card draws Helvetica and Courier, so it
+does not fill a gap - it **contradicts a specification it cannot read**,
+because that specification exists as prose and not as a token. The
+contradiction is resolved here (G2) and the readability gap belongs to
+ADR 0135.
+
+The card's content contract is versioned (`pico.recovery.card.v1` and
+`v2`); its appearance is not, so two cards printed either side of a token
+change differ and neither says which design generation it belongs to. For
+an artifact whose appearance carries no authority that is acceptable, but
+it should be known rather than assumed.
 
 The obvious split - loose fields instead of the Vault object - breaks
 something. The QR carries the **exact canonical bytes**, deliberately not
@@ -127,31 +136,31 @@ current mixed-language instruction on the A4 sheet - "At 100% / actual
 size printen. Nicht an Seite anpassen." - stops being a code edit and
 becomes a value.
 
-### The avatar slot is the ADR 0124 composite consumer, not a slot of its own
+### The card carries no depiction, and this ADR does not give it one
 
-ADR 0124 lists three presentation tiers over one authored source, and
-names **PDF** among the composite-tier surfaces: a transparent bake plus
-a zone map, with background, status colour, expression and personal tint
-as the runtime freedom. The card is therefore not a special case that
-needs an avatar mechanism of its own - it is an already-named consumer
-that currently bypasses the pipeline by hand-drawing a cyan circle and
-the `PICO` wordmark.
+An earlier draft of this ADR planned an avatar slot, reasoning that ADR
+0124 names **PDF** among its composite-tier surfaces and that the card
+therefore bypassed the pipeline by hand-drawing a cyan circle and the
+`PICO` wordmark. That reasoning was wrong twice.
 
-So `design` does not get a generic image field. It gets the composite
-consumer shape: bake plus zone map plus the composition inputs ADR 0124
-defines, and nothing that would let a surface invent its own depiction.
-That keeps the rule that ADR 0124 exists for - authored and parametric
-are separated once, not per surface - true for the card as well.
+ADR 0124 says the *medium* PDF can carry the composite tier. It does not
+say this card does. And ADR 0013 says the opposite about this card in
+particular: "The current ADR 0110 Recovery Card **deliberately renders no
+Character at all**; it reads its palette from the generated tokens and
+must not be described as printing an avatar." The circle is not a bypass;
+it is the deliberate absence the design language requires.
 
-It stays empty for now, and that is enforced rather than intended:
-`approved-character-assets.json` lists five assets, all
-`character_reference` with an empty `productionUses`, so a production
-depiction needs a registered production use of an approved asset - ADR
-0112 S4, blocked on ADR 0124's model and bakes. Until then the wordmark
-stays and nothing claims otherwise.
+So `design` gets **no depiction field at all**. Whether a Recovery Card
+should ever show Pico is a product decision nobody has taken, and adding
+a slot would pre-empt it in the direction of yes. Until it is taken, ADR
+0013's prohibition stands and the card keeps the wordmark.
 
-The slot exists now so the bake lands in a place designed for it, rather
-than being pressed into a drawing function later.
+If that decision is later taken as yes, the shape is already determined
+by ADR 0124 and does not need inventing here: the card would receive the
+composite artifact - bake plus zone map plus the written composition
+formula - through the design module, never a finished image and never a
+drawing callback. Recording that saves the next reader the same detour,
+without deciding anything today.
 
 ## Rejected alternatives
 
@@ -190,36 +199,32 @@ count and determinism are pinned; layout is free.
   Where a token group is deliberately not consumed, the reason is written
   next to the default rather than left as a bare number - `space` and
   `radius` are screen quantities, and a laminated 85.6 mm card carrying
-  4.2 pt type does not scale out of them. Typography is not a choice this
-  gate can make: the design system has no type tokens at all, so the
-  card's fonts are an absence upstream, not an omission here.
+  4.2 pt type does not scale out of them. Typography is not such a case:
+  the design system specifies `Inter`, the card draws Helvetica and
+  Courier, and this gate ends that contradiction by embedding a subset -
+  the SIL Open Font License permits it, and embedding keeps the output
+  deterministic. The package ships no font file, so this gate brings one
+  in and says why.
 - **G3 - Labels are data (open):** every string on both faces and the A4
   sheet moves into `design`; the mixed-language instruction is fixed as a
   value, not as code.
-- **G4 - The depiction comes from the design module (open):** the card
-  passes appearance parameters and declares its tier; the design module
-  answers with the ADR 0124 composite artifact - bake plus zone map plus
-  the written composition formula - and the card composes and places it.
-  No free image field, no drawing callback into the PDF context: a
-  callback would make the design module learn pdf-lib, Canvas and SVG one
-  by one and invert the dependency this gate exists to create. The
-  parameter side already exists as ADR 0125's versioned appearance
-  profile with `projectAppearanceProfileV1`; the depiction side does not
-  and is ADR 0124's unbuilt core. The slot therefore stays empty, refused
-  by the same asset governance until a production use is registered
-  against an approved asset.
+- **G4 - No depiction field (open):** `design` carries no image, bake or
+  avatar slot, and the drawing code gains no path to one. ADR 0013
+  forbids this card a Character depiction today, so a slot would
+  pre-empt a product decision nobody has taken. The gate is satisfied by
+  a test proving the type offers no such field, not by leaving one
+  unused.
 
-  Three constraints decide whether this interface is usable, and each is
-  a present fact rather than a worry: the answer must be
-  **deterministic**, since the card's byte-identical output is tested and
-  `Math.sin`/`cos`/`pow` are not bit-identical across engines - so
-  quantized output, hashed after quantization; it must be **lazily
-  loaded**, since `@pico/companion/recovery-card` reaches the writer
-  through a narrow subpath precisely to keep bakes out of the tray import
-  graph and its ADR 0113 C3 budget; and it must carry **print
-  resolution**, which today's assets do not - every depiction in the tree
-  is a crop of one 303x347 rendering, and a laminated 85.6 mm card is not
-  a screen.
+  Should that decision later be taken as yes, three present facts already
+  constrain the answer and are recorded so they are not rediscovered:
+  it must be **deterministic**, since the card's byte-identical output is
+  tested and `Math.sin`/`cos`/`pow` are not bit-identical across engines -
+  quantize, then hash; it must be **lazily loaded**, since
+  `@pico/companion/recovery-card` reaches the writer through a narrow
+  subpath precisely to keep bakes out of the tray import graph and its
+  ADR 0113 C3 budget; and it must carry **print resolution**, which
+  today's assets do not - every depiction in the tree is a crop of one
+  303x347 rendering, and a laminated 85.6 mm card is not a screen.
 - **G5 - Counter-proof (open):** a test that hands the generator a
   `content` whose printed fingerprint disagrees with its QR bytes and
   proves the mapping refuses it. Without this the invariant is a comment.

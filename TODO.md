@@ -205,17 +205,22 @@ Offen bleiben daraus zwei kleinere Luecken, beide stromaufwaerts:
   einem Home koennen verschiedenen Subjekten dienen); ausgenommen bleibt
   `nightFocus`, das wie ein Modus und nicht wie ein Subjekt liest und dessen
   Platz in dieser Gruppe unerklaert ist.
-- **Die Style-Variante hat keinen Ort.** `neutral/technical/soft` steht als
-  Prosa in ADR 0013 und in keinem Token, Typ oder Manifest - dieselbe Luecke
-  wie bei der Typografie, die das Design-System ebenfalls nicht kennt.
+- **Die Style-Variante ist keine Achse.** `neutral/technical/soft` steht in
+  ADR 0013 unter "Design basis image" - in einer Liste dessen, was das
+  Ursprungsbild "shows the intent for", neben context modes, modularen
+  Elementen und Multi-Surface-Darstellung. Nie entschieden. Der Nachbar in
+  derselben Liste *wurde* realisiert, als die acht Kontexttokens; so sieht
+  Realisierung aus, und hier hat sie nie stattgefunden. Als Nicht-Achse
+  festgehalten in ADR 0135 D3.
 
 ADR-Nummern sind vergeben: **0124** ist die Architektur (autorierter
 Character Core und gestufte Darstellung, angelegt 2026-08-02), **0125** ist
 PAS, **0126** ist Multi-Presence. Weiter vergeben: **0130** Desktop-
 Bedienflaeche, **0131** Android als Vollclient, **0132** Recovery-Card-
 Generator, **0133** Ableitungsgrundsatz, **0134** Formatrevision vor dem
-Freeze. Naechste freie Nummer: **0135** - vor dem Schreiben hier
-beanspruchen, sonst kollidieren zwei parallele Sitzungen still.
+Freeze, **0135** Design-System-Lesbarkeit. Naechste freie Nummer: **0136** -
+vor dem Schreiben hier beanspruchen, sonst kollidieren zwei parallele
+Sitzungen still.
 
 ## Security-Initiative: Backlog abgearbeitet
 
