@@ -6,6 +6,15 @@ Accepted as a structural constraint on where product features live; the
 initiative and its scope were chosen by the user on 2026-08-06. M1-M5 are implemented; the calendar was the first module and spatial
 recall (ADR 0129) is the second.
 
+Status note, 2026-08-10: ADR 0136 fills this ADR's stated exclusion
+without changing it. Content Pico did not author now has a place - a Pico
+Bridge or a Pico Library filling a core-owned slot - while third-party
+*modules* stay excluded and every module still ships with the product. A
+module is still vocabulary, composition and surface; a supplier has none
+of the three, which makes it smaller than a module rather than a variant
+of one. "Three module kinds, three trust postures" keeps its text, and
+ADR 0136 consolidates its `provider` against ADR 0036's `provider_id`.
+
 The claim is deliberately narrow: this decides **organisation**, not
 protection. A module boundary makes features easier to find and harder
 to confuse. It does not make them safer, and the safeguards below exist

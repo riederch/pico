@@ -1,0 +1,740 @@
+# 0136 - Pico Bridges and Libraries: The Slot Is the Contract
+
+## Status
+
+Accepted as a structural constraint on where content Pico did not author
+enters it; nothing is implemented. The initiative and its scope were
+chosen by the user on 2026-08-10, prompted by issue #4 and shaped by three
+of the user's own corrections during drafting - the Framework laptop
+expansion bay, which decided more of this ADR than the issue did; the
+observation that a static lexicon and an attached knowledge base reach
+outside at no point at all; and three Home Assistants at three addresses,
+which showed that the axis along which suppliers add up is coverage rather
+than kind. BR1-BR7 are open.
+
+The claim is deliberately narrow. This decides **where outside content
+comes from and what it may say on arrival**. It does not decide what Pico
+does with it: Pico Rules, the Action Runner and the Action Catalog stay
+above everything here, and none of them exists yet.
+
+## Context
+
+Issue #4 asks for a VesselTracking module reaching the VesselFinder AIS
+API, with a provider interface so the provider can be swapped. Issue #2
+asks for a shopping list arriving through a messenger. ADR 0128 H4
+declared a Home Assistant connector whose transport is a port with no
+implementation. ADR 0129 SR5 declared a location sensor port with no
+implementation, for the same stated reason: neither is testable without
+the real system behind it. And the user keeps a personal knowledge base -
+`rchkb`, attached over git - that Pico should be able to read.
+
+Five requests, one shape. Each wants Pico to hold a domain and something
+else to supply the content.
+
+**None of them arrives once.** The knowledge base has siblings belonging
+to an association or a company; Home Assistant runs at home, in a camper
+van and in a holiday house. Multiplicity is the normal case rather than a
+later extension, and taking it as normal from the start changes what the
+supplier record has to carry - which is why it is a decision below and not
+a note.
+
+**ADR 0127 does not have a place for that, and said so on purpose.** Its
+scope excludes "third-party or externally authored modules, which would
+need a plugin contract, capability negotiation and a per-module trust
+decision - all of which this ADR avoids by shipping every module with the
+product", and the decision text is blunter still: "Shipping everything is
+what lets this ADR skip a plugin contract entirely. Nothing here
+negotiates capabilities, spans version boundaries, or decides whether to
+trust foreign code, because there is no foreign code."
+
+That reasoning is intact. What these five introduce is not foreign *code* -
+the maritime module would be Pico's own - but foreign *content*, and in
+one case a foreign *dependency*: networked, credentialed and metered. No
+ADR covers either.
+
+**ADR 0036 sketched the frame years earlier and left out the boundary.**
+It already decides capability first, connector second - "A capability
+describes what Pico may do or ask to do. The connector or protocol
+describes how that capability is implemented" - already states that the
+same capability may have different providers, and already lists a
+connector registry carrying identity, trust level, local-versus-cloud
+execution, secrets location and available capabilities. What it never
+says is where the connector *runs*, and that omission is the whole risk.
+
+**The shape came from hardware.** A Framework laptop has four identical
+USB-C bays; HDMI, Ethernet and MicroSD exist only on the outside of the
+cards. The laptop does not know what HDMI is. That inverts the question
+usefully: the design problem is not "what is a plugin" but **what are the
+slots**, and the answer has to be a small closed set the core already
+owns, or "present the data uniformly" has no target. Issue #4 shows the
+failure mode by proposing four DTO families of its own.
+
+The analogy carries its own warning. A Framework bay has no trust
+boundary: USB-C carries Thunderbolt, Thunderbolt carries DMA, and a
+hostile card reads memory. Framework's answer is ownership - you chose the
+card. Home Assistant's answer for integrations is the same one with review
+standing in for ownership, and HACS explicitly outside the safety story.
+Neither transfers, because ADR 0127 states the property that makes this
+codebase work: "One guard, one place, one failing test."
+
+The analogy also carries the fix. A modern laptop does not trust the card;
+it puts an IOMMU in front of it - a boundary the card cannot argue with,
+independent of who made it.
+
+**And the analogy has an edge the first draft walked over.** A lexicon, a
+port-code table and a knowledge base are suppliers that reach outside at
+no point. `rchkb` is concrete about the scale: 1.4 GB, 2,657 files, 534
+Markdown documents beside 466 PDFs, 449 JSON files, 300 text files and 261
+spreadsheets, organised into personal domains including `Finanz`, `Privat`
+and `Feuerwehr`. It answers without a network. It is not shipped with
+Pico, and it is not frozen - it moves with commits. And it is the person's
+own content rather than a third party's, which makes it the sharpest of
+the five: Pico must be able to read it without ever pretending it owns it.
+
+## Scope
+
+Covers: what a slot is and what fills one; where a supplier's code runs;
+what arrives with foreign content; how freshness, certainty and cache age
+stay separate facts; whether a corpus is read or ingested; where a
+credential lives; what a metered dependency may cost before a person says
+yes; what detaching means; and the product terminology for all of it.
+
+Does not cover:
+
+- any specific bridge or library - VesselFinder, Home Assistant, a
+  messenger, `rchkb` - which are separate work under their own modules;
+- model providers, which ADR 0049 already gives a registry, provider
+  identity and locality, trust states, job envelope, retention modes and
+  tool-use modes; a model transforms rather than supplies, and two
+  registries is the correct number;
+- the action path that decides whether to trigger a declared effect
+  (ADR 0010, ADR 0117 X3), which does not exist;
+- retrieval quality, indexing strategy or embeddings, which are a
+  consumer's problem and, under ADR 0133, a cache either way;
+- distribution, signing, discovery or a marketplace, which are ADR 0036
+  non-goals and stay non-goals here;
+- ADR 0127's module boundary, which is unchanged. A module is still
+  vocabulary, composition and surface.
+
+## Decision
+
+### The core owns the slots, and there are three
+
+A slot is a shape the core already has. The list is **closed and
+enumerated** - listed, not derived, in the idiom ADR 0127 uses for module
+identifiers and ADR 0119 Q2 for protective event types:
+
+- **an observation** - ADR 0129 SR2's second store kind: capped,
+  short-lived, never individually regulated. An AIS position report, a
+  Home Assistant sensor state, a location fix.
+- **a memory item** - ordinary core custody, optionally carrying a place
+  with mandatory accuracy (ADR 0129 SR3) and a due instant
+  (ADR 0118 O1). A ship's master data, a shopping list, a port call, a
+  passage derived from a document.
+- **an effect** - ADR 0128 H3's declared `<module>.<verb>`, outbound.
+
+Events are deliberately not a slot. Origin is server-assigned at intake
+under ADR 0116 W1; the core writes the log, and a supplier that could
+write an event directly could claim its own origin.
+
+A supplier that needs a shape the list does not have does not invent one.
+The shape is lifted as a core capability under ADR 0127 M5 and migrated by
+the core - which is how `due_at` and the place columns arrived - or the
+supplier waits. That is the point of closing the list: without a fixed
+target, "present the data uniformly" means every supplier defines its own
+uniformity, and four DTO families become forty.
+
+### Two kinds fill a slot, and the offline floor tells them apart
+
+Both supply content Pico did not author. They agree on little else, and
+the split is categorical rather than a matter of degree:
+
+|  | Pico Bridge | Pico Library |
+|---|---|---|
+| Answering needs the network | yes, per query | never |
+| Freshness | a measurement instant | a version or a commit |
+| Cost | metered, possibly per call | none |
+| Availability | typed states, may fail | attached or not |
+| ADR 0118 floor | **never eligible** | **eligible** |
+| Custody | produces items Pico holds | Pico holds nothing of it |
+
+The floor is the test, and it decides cleanly. A UN/LOCODE table answers
+without a network. `rchkb` answers from a working copy on disk. An AIS
+query cannot, ever. ADR 0118's guarantee is against dependencies, so a
+supplier that *is* a dependency cannot be inside it - while a corpus on
+local disk is exactly what the floor was written to protect.
+
+**How a library is pinned is a declared property, not a third kind.** A
+shipped lexicon is frozen and verified against a pinned hash, the
+mechanism ADR 0013 already runs for immutable reference assets. An
+attached knowledge base tracks a git ref, and its commit id is a better
+pin than a hash because it carries history. Both answer offline, neither
+is metered, and both sit outside Pico's custody. Making "it updates" into
+a separate kind would repeat the error ADR 0128 corrected when it made
+effect-bearing a declared property rather than a fourth module kind.
+
+**Not every shipped table is a library.** The test is whether it is
+*chosen*. A small vocabulary every Pico carries identically is module
+data and needs no concept; naming it would add a boundary without adding a
+decision. A library is what a person or a deployment may select, omit or
+replace.
+
+### A supplier carries; it never decides
+
+A supplier has **no surface, no vocabulary and no storage**, which makes
+it strictly smaller than an ADR 0127 module rather than a variant of one.
+A module owns vocabulary, composition and surface; a supplier owns a
+mapping.
+
+The expansion card says it: an HDMI card does not give you a video player.
+The map, the AR view, the sentence a person reads and the answer to "where
+is the MSC GÜLSÜN" are the core's and the module's. The bridge supplied a
+place with a timestamp.
+
+It owns no authority either, for ADR 0127's reason unchanged: if a
+supplier needs a guard - readership, a quota, custody, an anchor - that
+guard belongs to the core. A supplier may ask; it may not decide.
+
+**The leak test is a sentence.** The moment any document or comment reads
+"the bridge decides", "the library allows" or "the skill knows", the word
+has moved into the architecture and the boundary has moved with it.
+
+### The boundary follows the processing, not the network
+
+A supplier's code runs **outside the core process**, reached over a
+private local socket with named request families - the shape ADR 0097
+already built for the Vault daemon and ADR 0100 already proved against
+real ceremonies.
+
+The first draft of this ADR tied that boundary to reaching the network,
+and `rchkb` shows why that is wrong. A JSON table Pico ships and reads
+with its own strict parser executes nothing and needs no boundary. A
+corpus of 466 PDFs and 148 office documents is a parser being fed bytes
+nobody reviewed, which is exactly where memory-safety failures live - and
+it never touches a network. **The rule is therefore about processing:
+extraction runs out of process wherever Pico did not author both the
+parser and the bytes.**
+
+The underlying reason is the property ADR 0127 names: every guard here is
+a single place a counter-proof can knock out. That does not survive
+foreign code sharing an address space, and no amount of review restores
+it. This is the IOMMU, not the card vendor's promise.
+
+Three further things follow, and they are the practical argument:
+
+- **The offline floor stays statically checkable.** `offline:check` walks
+  reachable imports. Code that arrives at runtime has no import hull to
+  walk - and a bridge needs none, because it can never be in the floor. A
+  library can be, and a library's *extractor* is code like any other, so
+  the floor sees it where it matters.
+- **`module:check` keeps its meaning** for the core and Pico's own
+  modules, including the seventeen probes and the companion import hull
+  that holds the tray budget.
+- **ADR 0134 survives almost intact.** Only the supplier protocol becomes
+  an identity someone keeps. Internal canonical byte forms stay revisable
+  in place, which is what made the 2026-08-10 collapse possible and what a
+  library-linked plugin contract would have ended for every format at
+  once.
+
+### A library is derived from, never ingested
+
+ADR 0133 already decides this: derive from the source until the medium is
+known, and a flattened representation is a cache, never an authority.
+
+Ingesting 2,657 files as memory items would put a person's whole filing
+cabinet under ceilings sized for memories, and ADR 0129 refused the same
+move at smaller scale for a location fix. A library is **read where it
+lies**. What Pico derives from it - a passage, an answer, a summary - is an
+ordinary memory item under ordinary custody, carrying its origin, and the
+provenance it carries includes the commit it was read at. Any index or
+embedding is a cache under ADR 0133's terms, which means it names its
+measured cost, its drift direction and its correction point; for a git
+library the correction point is a commit id, which is unusually honest for
+a cache.
+
+**A library is attached, not held.** Pico cannot shred what it does not
+own, and must never report that it did. Detaching a library stops
+derivation and deletes nothing - ADR 0129 SR6's distinction unchanged:
+stopping and forgetting are different acts. Derived items are Pico's and
+are shredded normally, which means a domain shred reaches everything Pico
+ever concluded and nothing it merely read.
+
+### A supplier lands in a Private Space, not in a Pico
+
+`rchkb` holds `Finanz`, `Privat` and `Feuerwehr` in one working copy. A
+library that attached to a Pico rather than to a domain would cross every
+ADR 0075 privacy boundary in a single act, silently, at attach time.
+
+Bridges are no different, and the holiday house makes it obvious: that
+Home Assistant may be shared with family while the camper van's is not, so
+the two belong in different spaces even though they are the same kind of
+supplier talking the same protocol. Where a supplier lands is a property
+of the instance, never of the kind.
+
+A supplier therefore attaches **into exactly one Private Space**, and a
+corpus or a site spanning several is attached as several instances over
+stated subtrees or it does not attach. This is the least settled part of
+this ADR
+and the reason BR7 exists: mapping directories to domains is a person's
+judgement about their own life, and no default is safe. The failure to
+avoid is the quiet one - a single attach that makes financial documents
+readable wherever the household calendar is.
+
+### Suppliers are instances, and that list is open
+
+A person has more than one of almost everything here. `rchkb` is personal
+material; the next knowledge base is an association's or a company's. One
+Home Assistant runs at home, a second in a camper van, a third in a
+holiday house. Multiplicity is therefore not an extension of this design,
+it is the normal case, and it is how the previous section becomes
+workable: splitting by domain is something a person has usually already
+done, and attaching separately respects it rather than asking them to
+re-derive it inside one corpus.
+
+Five consequences, and the first runs against this codebase's habit.
+
+**The slot list is closed; the attachment list is not.** Module
+identifiers are enumerated in one place under ADR 0127 because adding a
+module is Pico's decision, spoken once. Adding a library is a person's
+decision about their own material, so no enumeration can exist ahead of
+it. Every guard that would have leaned on a closed list has to lean on the
+attachment record instead, and the two asymmetries have to stay
+distinguishable: what a supplier may produce is fixed, how many suppliers
+exist is not.
+
+**An instance carries a stable identifier the person chooses, and it is
+never an address.** Working copies move, get re-cloned and change host; a
+camper van's Home Assistant changes IP with every campsite. An identifier
+that was a path or a URL would lose its meaning to a `mv` or a DHCP lease.
+The identifier plus the pin - a commit for a library, nothing for a bridge -
+is what a derived item keeps, and it belongs to the item rather than to
+the attachment, so provenance survives detaching.
+
+**Coverage is declared, and it decides whether instances add up.** The
+first draft of this section said libraries add up while bridges are
+alternatives, and three houses disprove it: those are bridges, and nobody
+wants two of them switched off. The axis is not the kind but the subject.
+Two AIS providers cover the same ships and are therefore alternatives,
+where metering makes keeping both a matter of paying twice for one answer.
+Three Home Assistants cover three buildings and are additive, as two
+knowledge bases covering different material are. An instance therefore
+declares what it covers, and Pico unions or chooses according to that
+rather than according to what kind of supplier it is.
+
+**An empty answer must say which kind of empty it is.** Once coverage is
+declared, "not there" splits in two, and conflating them is how a person
+gets misled by a true statement. The vocabulary of ADR 0118 O2 gains **out
+of scope** beside not-found: the ship is not in this provider's waters,
+the light is not in this house. Asking the wrong instance is a different
+fact from an answer that does not exist.
+
+**A partial answer names who was silent.** The camper is off-grid in a
+garage; the holiday house is reachable but nobody is in it. A union over
+three instances where one did not respond must say so, because "no motion
+anywhere" reads as safety and would here be a report about two houses
+presented as a report about three. Absence of evidence and evidence of
+absence are different answers, and a supplier is exactly the place where
+they get quietly merged.
+
+**Disagreement is reported, never resolved.** Where two instances answer
+the same question differently, Pico gives both with their identifiers and
+pins rather than picking. Under ADR 0129 neither answer was `known` to
+begin with, so a conflict lowers certainty instead of being settled by an
+order nobody chose. A silent winner would be the worst available outcome:
+a decision, taken by a supplier, which is the thing this ADR exists to
+prevent.
+
+**An effect names its instance, and the instance is never inferred.** This
+is where multiplicity stops being a modelling question. Under ADR 0128 H3
+a module declares `<module>.<verb>`; with three houses attached, an effect
+that did not carry its target could switch on a light in a building the
+person is not standing in. The instance is part of the effect, and the
+ADR 0106 approval statement renders it from the same validated fields the
+signature covers, so what a person approves says *Ferienhaus* rather than
+*light on*. Pico may **suggest** an instance from a derived location - it
+is usually right - but a derived location never reaches `known` under
+ADR 0129, and an unconfirmed guess is not permitted to select the building
+that gets acted on.
+
+### Foreign content is labeled at the threshold, and the core assigns the label
+
+Everything crossing a slot inward carries `external_content` under
+ADR 0116 W2, at the threshold and never behind it. The supplier **cannot
+express an origin class at all** - the core assigns it without asking,
+exactly as ADR 0128 H4 settled for the Home Assistant connector.
+
+The proof is H4's comparison, and it is the same proof because it is the
+same claim: an item that arrived through a slot and an ordinary memory
+item run through crypto-shred, the retention sweep and backup/restore, and
+must produce identical results.
+
+**This holds for a person's own knowledge base too, and the reason is
+worth stating because it looks harsh.** The core cannot distinguish a
+sentence the person wrote from one they pasted, and `rchkb` has a `raw`
+and a `_manual_import` directory that say so plainly. Labeling is not a
+judgement about the author; it is an admission about what the core can
+verify. The consequence is real: under ADR 0117 the acting model never
+receives that text, so a library is usable only through a quarantined read
+job (X4) - which does not exist yet. A library is therefore placeable
+today and answerable later, and this ADR states that rather than implying
+otherwise.
+
+### Asked, measured and certain are three facts, not one
+
+A bridge answer carries at least three values that must never collapse:
+
+- **when the bridge asked** - cache age, Pico's own bookkeeping;
+- **when the outside system measured** - the AIS report instant, which
+  belongs to the content and survives caching;
+- **how certain the value is** - ADR 0129's second axis.
+
+Issue #4 states the first two in its own words - "Cache-Alter und
+AIS-Datenalter nicht verwechseln" - and it is right that this is where the
+mistake happens. A six-hour-old position presented as a live one is not a
+stale answer, it is a false one.
+
+Certainty is the third because origin does not imply it: a value carries
+Pico's own origin once derived and can still be a guess. Following
+ADR 0129, a slot value is a tagged value that cannot be constructed
+without its certainty, and **no supplier output ever reaches `known`** -
+only a person's confirmation does.
+
+For a library the middle value is a commit or a version, and the same rule
+applies: it is content, not bookkeeping.
+
+### A cache is the observation buffer, and what is worth keeping becomes a memory item
+
+Issue #4 asks for a provider-side cache with per-type TTL. Under ADR 0127
+that is module-private storage, and under ADR 0129 it is unnecessary,
+because the second store kind already is a capped, short-lived,
+shred-cascaded buffer whose five admission questions are answered.
+
+The split falls out of the data rather than being imposed on it. An AIS
+position is a measurement and belongs in the buffer, where the 48-hour
+window and the row ceiling apply. A ship's build year is not a
+measurement; once resolved it becomes an ordinary memory item, exactly as
+ADR 0129 compacts an observation window into one. Cost control is then a
+consequence of storing observations rather than a mechanism of its own -
+the same reasoning by which ADR 0129 refused to encrypt the buffer per
+row.
+
+### The credential belongs to Pico
+
+A bridge credential is a decision a person makes about their own Pico, so
+ADR 0104 rules out a host configuration option. Issue #4's proposed
+`VESSELFINDER_API_KEY` environment variable would be **a third entry on
+that ADR's debt list** beside `memory_encryption` and
+`pico_foundation_token` - the outcome ADR 0127 explicitly refused for
+module activation and refuses again here.
+
+The credential is held under core custody, handed to the supplier process
+for use and never stored by it. ADR 0036 already reserved the field
+("secrets location") and already stated the rule that matters most once a
+model exists: connectors must not hand raw secrets to the language model,
+which may see a tool name, a schema and results.
+
+A git library has the same shape when its remote is private, and one
+addition: a deploy credential that can only read is the correct one, and
+Pico never pushes.
+
+### Cost is a state, and reaching out is off by default
+
+No existing ADR covers a metered dependency. ADR 0118 O2 has the
+vocabulary for typed unavailability and the rule against failover across
+provider classes; it has nothing about money.
+
+A bridge therefore declares its states as content, extending O2's
+vocabulary rather than returning an error string: **not configured**,
+**unreachable**, **rate-limited**, **budget exhausted**, **stale but
+present**, **partial**. Each is a fact a surface can show and a person can
+act on; a string is neither.
+
+**A bridge is off until a person turns it on**, inverted from module
+activation and for ADR 0129 SR6's reason. Activation says whether a
+feature exists; reaching outside says whether Pico may spend a person's
+money and disclose that they asked. Those are different decisions, and the
+second is recorded the way this codebase records durable decisions - a
+content-free event plus a projection over an authenticated surface.
+Background polling is a third decision and not implied by the second.
+
+A library needs none of this. It costs nothing and tells nobody - and a
+git fetch is the one moment it does reach a network, which is why fetching
+is a bridge-shaped decision even though reading is not.
+
+### An absent supplier is configured, not broken
+
+ADR 0127 already has the sentence: "a capability that is missing on
+purpose must not present as a capability that is broken." Pulling a card
+removes a port; it does not break the laptop.
+
+ADR 0118 O2's rule holds in the shape the hardware suggests: two AIS
+bridges are alternatives for one slot, and no supplier substitutes across
+slots. HDMI is not Ethernet.
+
+### The names
+
+Two new rows in ADR 0026's terminology map:
+
+| Product term | Technical / legacy term | Meaning |
+|---|---|---|
+| Pico Bridge | Connector / provider adapter | Runs beside Pico, connects exactly one outside system, and speaks only Pico's shapes inward. |
+| Pico Library | Attached or pinned corpus | A body of documents Pico may read but does not own, answering without a network. |
+
+Wire names follow ADR 0026's rule - lowercase and namespaced:
+`pico_bridge.*`, `pico_library.*`.
+
+`Library` is chosen over `Dataset` because the same word has to cover a
+port-code table and a person's filing cabinet, and because it carries the
+custody rule in ordinary language: you borrow from a library, and it stays
+someone else's.
+
+**Skill was considered and fails ADR 0026's core rule**, which is why it
+is recorded here rather than in a comment. Product names "must not imply
+authority, ownership, trust, rank or control that the component does not
+have", and a skill is an ability - the one thing a supplier does not have.
+The design rule seals it: "Never let a nicer name hide a weaker boundary."
+A third-party bridge is the weakest boundary in the system and `Skill` is
+the friendliest available name for it. The Alexa reading makes it worse:
+that skill owns its intents, its dialogue and its voice, which is
+ADR 0127's module, not this.
+
+`Card` collides with the Recovery Card, `Add-on` with the Home Assistant
+host that ADR 0128 spent an ADR separating, `Connector` and `Provider`
+with ADR 0127's module kinds, `Capability` with ADR 0036 and ADR 0127 M5,
+and `Link` with Pico Link.
+
+**`Bridge` is not free either, and the residual is stated rather than
+waved through.** The word is this tree's most reused generic noun -
+renderer bridge, option bridge, typed bridge, worker bridge. Most of that
+is harmless: the `Pico ` prefix is how ADR 0026's map already separates
+Pico Link from a link and Pico Home from a home. One case is not harmless.
+The Companion's Electron preload bridge is itself a security boundary with
+nine named methods, and two boundaries under one word is the failure
+ADR 0128 had to spend an ADR undoing. It is therefore always **the preload
+bridge** - Electron's own term, qualified - and never "the bridge" in
+companion documentation.
+
+## Rejected alternatives
+
+### Turn ADR 0127's modules into plugins
+
+The proposal this ADR started from. It blurs two questions that are
+currently clean: ADR 0127 decides where a product feature lives in the
+tree, ADR 0036 decides where a capability's implementation comes from. A
+supplier is not a kind of module; it is the slot beneath one, and issue #4
+draws that line itself - "VesselFinder ist damit Provider, nicht
+fachlicher Modulname." Converting also costs the closed module list and
+the static offline check, and buys nothing a slot does not.
+
+### One concept covering bridges and libraries
+
+The shape this ADR had until the user asked what happens to a static
+lexicon, and the objection was correct. It bundled two independent
+properties - *authored elsewhere* and *reached at runtime* - into one word,
+the same error ADR 0128 corrected when it made effect-bearing a declared
+property rather than a fourth module kind. The offline floor separates
+them categorically, so one word would have had to lie about one of them.
+
+### A third kind for attached knowledge bases
+
+Considered when `rchkb` arrived, and refused for the reason that produced
+the second kind in the first place. Frozen and tracked libraries differ in
+how they are pinned and in nothing else that matters: both answer offline,
+neither is metered, neither is Pico's to delete. Pinning is a declared
+property.
+
+### In-process suppliers, as Home Assistant does it
+
+The honest description of HA's model is that there is no boundary: an
+integration runs in the core process with full access, safety comes from
+reviewing the ones in core, and HACS sits outside that story by design. It
+works for HA because HA does not have this threat model. Here, one
+in-process supplier turns every single-place guard into several places.
+
+### Ingest the knowledge base into memory items
+
+The obvious implementation and the one ADR 0133 exists to prevent. It
+turns 1.4 GB of someone's life into rows under ceilings sized for
+memories, makes every ADR 0119 Q5 limit a function of how much a person
+happens to have written, and creates a second copy that drifts from the
+first the moment a commit lands. Derivation keeps one authority.
+
+### Let each bridge define its own DTOs
+
+Issue #4's structure, and the reason the slot list is closed. Normalizing
+inside the supplier puts the judgement in the one place that cannot be
+checked, and leaves the core with as many shapes as it has suppliers.
+
+### Treat model providers as suppliers
+
+ADR 0049 already has a provider registry, provider identity and locality,
+trust states, supported job types, input classes, retention modes,
+tool-use modes and a result envelope. A model transforms rather than
+supplies, and it is quarantined under ADR 0117 X4 for reasons that do not
+apply to a port-code table.
+
+### Wait for the Action Runner
+
+Tempting, because effects need it and it does not exist. But reads do not,
+and issue #4's MVP is three reads. Deferring the whole shape until the
+action path exists would leave the next five supplier requests with
+nowhere to go, which is the state ADR 0127 was written to end.
+
+## Gates
+
+- **BR1 - The slot list (open):** the three shapes are enumerated in one
+  place in the core, and a supplier manifest declares which it fills. A
+  manifest naming an unlisted shape is a boundary error, not a review
+  comment. The list is closed; extending it is an ADR 0127 M5 lift.
+- **BR2 - The processing boundary (open):** supplier code - a bridge's
+  client, a library's extractor - runs outside the core process behind a
+  private socket with named request families, and no supplier package is
+  reachable from the core's static import hull. The method already exists
+  twice, in ADR 0129 SR5's sensor hull and the companion tray hull, which
+  is what makes this checkable rather than reviewed.
+- **BR3 - Threshold labeling and the identity proof (open):** everything
+  crossing a slot inward carries `external_content`, assigned by the core;
+  the supplier has no way to express a class. Proved as ADR 0128 H4 proves
+  it: an item that arrived through a slot and an ordinary memory item give
+  identical results through crypto-shred, retention sweep and
+  backup/restore.
+- **BR4 - Three clocks and a certainty (open):** asked-at, measured-at and
+  a certainty tag are separate fields; a value cannot be constructed
+  without its certainty; no supplier output reaches `known`. A library
+  carries a version or commit in the measured-at position.
+- **BR5 - Credential, cost and consent (open):** the credential lives
+  under core custody and never in host configuration; the typed states are
+  a closed vocabulary extending ADR 0118 O2; reaching outside is a durable
+  per-Pico decision, off by default, recorded as a content-free event plus
+  projection, with background polling and library fetching separate
+  decisions again.
+- **BR6 - Libraries are pinned, read in place, and never held (open):** a
+  frozen library verifies against a pinned hash and a tracked one against
+  a commit id, failing loudly rather than substituting; nothing is
+  ingested, derived items carry the pin they were read at, and detaching
+  deletes nothing while a domain shred reaches every derived item. A
+  library may appear in an ADR 0118 floor family and a bridge may not, and
+  the floor check enforces the asymmetry.
+- **BR7 - One instance, one Private Space, and instances are named
+  (open):** an attachment names exactly one ADR 0075 domain, one stable
+  person-chosen identifier that is neither a path nor an address, one
+  subtree or site, and what it covers; it refuses an attach that would span
+  several domains. The mapping is a person's decision with no default.
+  Derived items carry that identifier and the pin rather than a location,
+  so provenance survives a move, a re-clone, a new IP and a detach. An
+  effect carries its instance and the ADR 0106 approval statement renders
+  it; no inferred location may select the instance. A union over instances
+  reports which did not answer, and `out of scope` is a state distinct from
+  not-found. Attachments are counted against a ceiling in the ADR 0119 Q5
+  idiom, because this list is open where the slot list is closed and an
+  open list with no ceiling is how a resource limit gets discovered rather
+  than enforced. The terminology rows land in ADR 0026, and the leak test -
+  no sentence in which a bridge, library or skill decides, allows or knows -
+  is checked the way `product:check` checks product prose.
+
+## Failure ledger
+
+| Situation | Posture |
+|---|---|
+| A bridge is unreachable | A typed state, shown as configured-but-unavailable. Never a floor degradation, because a bridge was never in the floor (BR5). |
+| A bridge's credits run out mid-answer | `budget exhausted` is content, not an error string, and the partial answer says which half it has (BR5). |
+| Cached data is served as current | Refused by construction: asked-at and measured-at are separate fields and a value cannot be built without its certainty (BR4). |
+| A supplier claims its content is Pico's own | It cannot express a class at all; the core assigns `external_content` at the threshold (BR3). |
+| A malformed PDF crashes the extractor | It crashes outside the core process, and the library reports a per-document failure rather than an outage (BR2). |
+| A bridge wants its own cache table | It gets the ADR 0129 observation buffer; what is worth keeping compacts into a memory item. A private table is storage under another word. |
+| A supplier wants a shape the core lacks | The shape is lifted to a core capability and migrated by the core (ADR 0127 M5), or the supplier waits (BR1). |
+| A library's commit moves under a derived item | The item keeps the commit it was read at, so drift is visible rather than silent (BR6). |
+| A person shreds a domain holding a library | Every derived item goes. The library does not, because it was never Pico's - and Pico says so instead of reporting a deletion it did not perform (BR6). |
+| A library is attached at its root, spanning domains | Refused. One attachment names one domain and one subtree (BR7). |
+| Two instances answer the same question differently | Both answers are given with their identifiers and pins, and certainty drops. Pico does not pick - picking would be a decision a supplier made (BR7). |
+| A working copy is moved or a site's address changes | Provenance survives: a derived item holds the attachment identifier and the pin, never a path or a URL (BR7). |
+| One of three sites does not answer | The union names it. "No motion anywhere" over two of three houses is a true sentence about the wrong subject (BR7). |
+| A question is asked of an instance that does not cover it | `out of scope`, which is not `not found`. The ship is elsewhere; the light is in another building (BR5, BR7). |
+| An effect is requested with three sites attached | The effect carries its instance, and the ADR 0106 approval statement shows which building. A derived location may suggest and may never select (BR7). |
+| Someone reads the slot boundary as a security boundary | It is one only where BR2 puts a process between. Containment of content is BR3, and the two are different claims. |
+| A supplier is removed while its derived items exist | Items stay under core custody. ADR 0127 M3's rule is unchanged: data outlives the thing that produced it. |
+
+## Consequences
+
+Positive:
+
+- five outstanding supplier requests - AIS, Home Assistant, a messenger, a
+  location sensor, a git knowledge base - stop being five designs and
+  become five instances, and two of them already have their ports
+  declared;
+- the boundary is a process rather than a convention, so ADR 0127's
+  one-guard-one-place property survives contact with code Pico did not
+  write;
+- ADR 0134 keeps almost all of its reach, because only the supplier
+  protocol becomes an identity someone holds;
+- a library can be part of the offline floor, which is a capability this
+  tree wanted and had no word for - and it is the case where the floor
+  matters most, since a personal archive is exactly what a person needs
+  when the network is gone.
+
+Negative and residual:
+
+- this is a new protocol surface, and its version is the first thing here
+  a third party could hold - the freeze in ADR 0134 F1 will have to speak
+  to it explicitly;
+- an out-of-process supplier costs a process, a socket and a serialization
+  boundary each, and the tray memory budget is already the tightest number
+  in the tree - a cost that multiplies with attachments, since libraries
+  are meant to be held several at a time;
+- the closed slot list will be wrong at least once, and the recovery is an
+  M5 lift with a migration - deliberately expensive, so it is not extended
+  by reflex;
+- a library is readable only through a quarantined read job, so the most
+  requested case is blocked behind ADR 0117 X4 and a model runtime that do
+  not exist. This ADR places it; it does not deliver it;
+- nothing here reduces content risk. A bridge that lies produces a
+  correctly labeled lie, and a library with a hostile document is pinned to
+  that document. Labeling is containment, never verification;
+- `Bridge` overlaps a heavily used generic noun and one real security
+  boundary in the Companion, managed by discipline rather than by a check
+  until BR7 lands.
+
+## Relationship to other ADRs
+
+- Completes ADR `0036`: capability first, connector second, with the
+  boundary that ADR left unstated, and consolidates its `provider_id`
+  against ADR `0127`'s provider module kind.
+- Leaves ADR `0127` intact and fills its stated exclusion. A module is
+  still vocabulary, composition and surface; a supplier is none of the
+  three. ADR 0127 gains a status note under ADR `0128`'s record rule.
+- Reuses ADR `0128` H4 wholesale for the threshold, and follows its
+  correction method twice: a property that varies independently is
+  declared, not made into a new kind.
+- Depends on ADR `0129` for the observation buffer, the place capability,
+  the certainty axis and the stopping-is-not-forgetting rule; SR5's sensor
+  port becomes the first supplier port in shape if not yet in fact.
+- Applies ADR `0133` to libraries: derive from the source, and treat every
+  index over it as a cache with a named correction point.
+- Bounded by ADR `0118` O1/O2 - the floor decides bridge from library -
+  and extends O2's vocabulary with cost.
+- Bounded by ADR `0116` W2 and ADR `0117` X4, which together decide that a
+  library is placeable now and answerable later.
+- Attaches into ADR `0075` privacy domains, which is BR7 and the least
+  settled part of this decision.
+- Governed by ADR `0026` for both new terms and ADR `0104` for where the
+  credential lives.
+- Pins integrity the way ADR `0013` pins reference assets.
+
+## References
+
+- [ADR 0013](0013-visual-design-language.md)
+- [ADR 0026](0026-product-terminology-and-naming.md)
+- [ADR 0036](0036-capabilities-connectors-and-mcp-boundary.md)
+- [ADR 0049](0049-model-provider-registry-and-job-envelope.md)
+- [ADR 0075](0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md)
+- [ADR 0097](0097-deployable-vault-process-and-local-ipc-authority-boundary.md)
+- [ADR 0104](0104-settings-belong-to-pico-not-to-host-configuration.md)
+- [ADR 0116](0116-untrusted-content-and-self-replicating-prompt-threat-model-and-hardening-gates.md)
+- [ADR 0117](0117-planner-reader-split-and-origin-aware-data-flow-policy.md)
+- [ADR 0118](0118-offline-and-model-free-degradation-contract.md)
+- [ADR 0127](0127-pico-modules-mandatory-delivery-independent-code-declared-dependencies.md)
+- [ADR 0128](0128-home-assistant-is-a-host-not-a-frame-and-the-effect-bearing-module.md)
+- [ADR 0129](0129-spatial-recall-observations-are-not-memories-and-uncertainty-is-not-origin.md)
+- [ADR 0133](0133-derive-from-the-source-until-the-medium-is-known.md)
+- [ADR 0134](0134-formats-revise-in-place-until-the-first-kept-identity.md)
+</content>
