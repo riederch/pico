@@ -81,6 +81,8 @@ export const picoModuleActivationMigrationId =
   '0013_pico_module_activation' as const;
 export const picoMemoryItemAnnouncedAtMigrationId =
   '0014_memory_item_announced_at' as const;
+export const picoObservationMigrationId =
+  '0015_pico_observation' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -979,6 +981,40 @@ const migrations: readonly MigrationDefinition[] = [
         CREATE INDEX idx_memory_item_unannounced
         ON memory_item (due_at)
         WHERE due_at IS NOT NULL AND announced_at IS NULL AND deletion_state = 'active';
+      `);
+    },
+  },
+  {
+    id: picoObservationMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0129 SR2. The second kind of store the core owns.
+        --
+        -- High-rate, short-lived and never individually governed: no retention
+        -- policy reference, no origin class, no readership decision, no
+        -- deletion state. A memory item carries all of those because it is a
+        -- memory; a reading is a measurement that may become one.
+        --
+        -- The domain is the only custody it carries, and it is not optional:
+        -- the ADR 0071 shred cascade keys on it, and a sample nobody can reach
+        -- is a sample nobody can destroy.
+        CREATE TABLE pico_observation (
+          observation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          privacy_domain TEXT NOT NULL,
+          kind TEXT NOT NULL CHECK (kind IN ('location_fix', 'mobility_sample')),
+          observed_at TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
+
+        -- The window read and the age prune both order by the instant.
+        CREATE INDEX idx_pico_observation_observed
+        ON pico_observation (observed_at);
+
+        -- The shred deletes by domain, so it must not scan.
+        CREATE INDEX idx_pico_observation_domain
+        ON pico_observation (privacy_domain);
       `);
     },
   },

@@ -1132,6 +1132,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
   }
 
+  /**
+   * ADR 0129 SR2. The observation buffer is pruned at open.
+   *
+   * This answers two of the five places at once. It is boot reconciliation,
+   * and it is what a restore does to a buffer: a snapshot older than the
+   * window comes back empty, because a buffer restored from last week
+   * describes a past the derivation would read as recent.
+   */
+  const prunedObservations = store.prunePicoObservations();
+  if (prunedObservations > 0) {
+    app.log.info({ prunedObservations }, 'observation buffer pruned to its window');
+  }
+
   runRetentionSweep();
   const retentionSweep = setInterval(runRetentionSweep, RETENTION_SWEEP_INTERVAL_MS);
   retentionSweep.unref();
@@ -3641,7 +3654,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       });
     }
 
-    const { removedKeyVersions } = shredDomainWithAudit(
+    const { removedKeyVersions, removedObservations } = shredDomainWithAudit(
       store.memory(),
       (audit) => {
         appendServerEvent('memory.domain_shredded', audit);
@@ -3650,9 +3663,17 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         privacyDomain,
         ...(body.reason === undefined ? {} : { reason: body.reason as string }),
       },
+      // ADR 0129 SR2. The observation buffer is a store the core owns, so the
+      // shred reaches it too. Deleted rather than made unreadable: these rows
+      // carry no key envelope, and data designed not to outlive its window has
+      // nothing worth leaving behind undecryptable.
+      (domain) => store.deletePicoObservationsInDomain(domain),
     );
 
-    request.log.warn({ privacyDomain, removedKeyVersions }, 'Privacy domain crypto-shredded.');
+    request.log.warn(
+      { privacyDomain, removedKeyVersions, removedObservations },
+      'Privacy domain crypto-shredded.',
+    );
     reconcileShareEnvelopes();
 
     return sendNoStore(reply, { privacyDomain, removedKeyVersions });

@@ -30,6 +30,7 @@ const tableByStore: Record<PicoDurableStore, string> = {
   memory_item: 'memory_item',
   audit_record: 'pico_audit_record',
   share_envelope: 'pico_share_envelope',
+  observation: 'pico_observation',
 };
 
 export class PicoStoreRowCounter {

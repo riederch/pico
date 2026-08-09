@@ -23,6 +23,10 @@
       "types": "./dist/module.d.ts",
       "import": "./dist/module.js"
     },
+    "./observation": {
+      "types": "./dist/observation.d.ts",
+      "import": "./dist/observation.js"
+    },
     "./offline-floor": {
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"

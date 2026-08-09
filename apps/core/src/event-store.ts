@@ -5,6 +5,12 @@ import {
   picoModuleIdentifiers,
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
+import {
+  maxPicoObservationAgeMs,
+  parsePicoObservation,
+  type PicoObservation,
+  type PicoObservationKind,
+} from '@pico/protocol/observation';
 import type {
   FoundationEventType,
   PayloadPosture,
@@ -6060,6 +6066,149 @@ export class EventStore {
         WHERE memory_item_id = ? AND announced_at IS NULL AND due_at IS NOT NULL
       `)
       .run(input.announcedAt, new Date().toISOString(), input.memoryItemId).changes === 1;
+  }
+
+  /**
+   * ADR 0129 SR2. Appends readings to the observation buffer.
+   *
+   * Every sample goes through the protocol parser rather than being trusted:
+   * this is the one write path into the buffer, and a producer that has come
+   * loose is exactly what the bound on a single payload is for.
+   *
+   * The ADR 0119 Q5 ceiling applies here as it does to every store the core
+   * owns. A buffer that refused a memory item by filling up would be a working
+   * store crowding out a record, so it is counted like the rest and the
+   * refusal names the store.
+   */
+  public appendPicoObservations(observations: readonly unknown[]): number {
+    this.ensureOpen();
+    const parsed = observations.map((entry) => parsePicoObservation(entry));
+    if (parsed.length === 0) {
+      return 0;
+    }
+
+    const reached = this.storageCondition().reasons.some(
+      (reason) => reason.cause === 'store_ceiling' && reason.store === 'observation',
+    );
+    if (reached) {
+      // Named rather than generic, so a surface can say which store filled.
+      // `storageCondition` re-counts a reached ceiling before believing it, so
+      // a buffer that was just pruned is not refused on a stale number.
+      throw new Error('pico_observation_ceiling_reached');
+    }
+
+    const statement = this.db.prepare(`
+      INSERT INTO pico_observation (privacy_domain, kind, observed_at, payload, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const createdAt = new Date().toISOString();
+    const write = this.db.transaction((rows: readonly PicoObservation[]) => {
+      for (const row of rows) {
+        statement.run(row.privacyDomain, row.kind, row.observedAt, row.payload, createdAt);
+      }
+    });
+    write(parsed);
+    this.rowCounter.recordInsert('observation', parsed.length);
+    return parsed.length;
+  }
+
+  /**
+   * ADR 0129 SR2. The readings a condensation pass works on, oldest first.
+   *
+   * Oldest first because a derivation walks a sequence forward; handing it the
+   * newest would make every caller re-sort what the index already ordered.
+   */
+  public picoObservationWindow(input: {
+    kind: PicoObservationKind;
+    privacyDomain: string;
+    sinceIso?: string;
+    limit?: number;
+  }): Array<PicoObservation & { observationId: number }> {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT observation_id AS observationId,
+               privacy_domain AS privacyDomain,
+               kind,
+               observed_at AS observedAt,
+               payload
+        FROM pico_observation
+        WHERE kind = ?
+          AND privacy_domain = ?
+          AND observed_at >= ?
+        ORDER BY observed_at ASC
+        LIMIT ?
+      `)
+      .all(
+        input.kind,
+        input.privacyDomain,
+        input.sinceIso ?? '0000-01-01T00:00:00.000Z',
+        input.limit ?? 10_000,
+      ) as Array<PicoObservation & { observationId: number }>;
+    return rows;
+  }
+
+  /**
+   * ADR 0129 SR2. Drops readings the buffer is no longer allowed to hold.
+   *
+   * Called at open, which is what makes this the answer to two of the five
+   * places at once. It is boot reconciliation, and it is what a restore does
+   * to a buffer: a snapshot older than the window comes back empty, because a
+   * buffer restored from last week is worse than no buffer.
+   */
+  public prunePicoObservations(nowIso = new Date().toISOString()): number {
+    this.ensureOpen();
+    const cutoff = new Date(Date.parse(nowIso) - maxPicoObservationAgeMs).toISOString();
+    const removed = this.db
+      .prepare('DELETE FROM pico_observation WHERE observed_at < ?')
+      .run(cutoff).changes;
+    if (removed > 0) {
+      // Deletions are not counted (see PicoStoreRowCounter), so the cached
+      // number can only run high. Resyncing here is what stops a pruned buffer
+      // from refusing writes on a count that is no longer true.
+      this.rowCounter.resync();
+    }
+    return removed;
+  }
+
+  /**
+   * ADR 0129 SR2 with ADR 0071. The shred cascade reaches the buffer.
+   *
+   * Deleted rather than crypto-shredded, and that is the stronger of the two
+   * for this shape: these rows carry no key envelope of their own, and data
+   * designed not to outlive its window has nothing worth leaving behind
+   * undecryptable. What survives a shred is what survived it before - nothing
+   * in that domain.
+   */
+  public deletePicoObservationsInDomain(privacyDomain: string): number {
+    this.ensureOpen();
+    const removed = this.db
+      .prepare('DELETE FROM pico_observation WHERE privacy_domain = ?')
+      .run(privacyDomain).changes;
+    if (removed > 0) {
+      this.rowCounter.resync();
+    }
+    return removed;
+  }
+
+  /** ADR 0129 SR2. Drops exactly the readings a condensation pass consumed. */
+  public deletePicoObservations(observationIds: readonly number[]): number {
+    this.ensureOpen();
+    if (observationIds.length === 0) {
+      return 0;
+    }
+    const statement = this.db.prepare('DELETE FROM pico_observation WHERE observation_id = ?');
+    let removed = 0;
+    const drop = this.db.transaction((ids: readonly number[]) => {
+      for (const id of ids) {
+        removed += statement.run(id).changes;
+      }
+    });
+    drop(observationIds);
+    if (removed > 0) {
+      this.rowCounter.resync();
+    }
+    return removed;
   }
 
   /**

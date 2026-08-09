@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as a storage-shape, degradation and answer-honesty constraint;
-the use case arrived as issue #3 from the user on 2026-08-07. SR1 and SR4
-are implemented. SR2, SR3, SR5 and SR6 are open.
+the use case arrived as issue #3 from the user on 2026-08-07. SR1, SR2 and
+SR4 are implemented. SR3, SR5 and SR6 are open.
 
 ## Context
 
@@ -170,10 +170,55 @@ Two things follow, and both are why this ADR can be more than a plan:
   `@pico/module-spatial-recall` composes it into transition detection and
   parking-candidate derivation. Pure functions over supplied samples, on
   the ADR 0118 floor as `spatial_recall`, verified by `offline:check`.
-- **SR2 - The observation store (open):** the second store kind, with
-  answers to all five places above, a ceiling, and condensation that
-  turns samples into memory items and then removes them. Until it exists,
-  nothing is stored and the derivation runs on what a caller holds.
+- **SR2 - The observation store (implemented):** `pico_observation` is the
+  second kind. It carries a domain, a kind, an instant and a payload, and
+  nothing else - no retention-policy reference, no origin class, no
+  readership decision, no deletion state - because it is a measurement
+  rather than a memory. Every write goes through the protocol parser, so
+  the one path in is also the bound on what a loose producer can write.
+
+  The five places, answered:
+
+  1. **The ADR 0071 shred cascade** reaches it through
+     `shredDomainWithAudit`'s own port rather than a second call site, so
+     a shred is one act. The rows are **deleted** rather than
+     crypto-shredded: they carry no key envelope, and for data designed
+     not to outlive its window that is the stronger of the two, because
+     nothing survives to be decrypted later.
+  2. **Backup** and 3. **boot reconciliation** are one mechanism, not
+     two. The buffer travels in the backup bytes - it is in the same file
+     - and the 48-hour window empties it at the next open. A snapshot
+     older than the window comes back empty, because a buffer restored
+     from last week describes a past the derivation would read as recent.
+  4. **The ADR 0119 Q5 ceiling** counts it like any store the core owns,
+     at 200,000 rows: two orders of magnitude below the record stores,
+     because this is a working buffer. Under the adaptive capture this
+     ADR asks for, a 48-hour window holds roughly twelve thousand rows.
+     A reached ceiling refuses by name, and a pruned buffer accepts
+     writes again rather than staying refused on a stale count.
+  5. **The ADR 0119 Q3 byte-identity proof** already measures it: Q3
+     hashes the database file, so a row written by anyone would move the
+     digest, and there is no route into the buffer for anyone to use.
+
+  **Condensation writes before it deletes.** A window becomes an ordinary
+  memory item and the readings that were used are dropped - but only once
+  the memory exists, for the reason the ADR 0118 O1 scheduler gives: a
+  record that failed to be written is one the next pass retries, while
+  readings deleted before the memory exists are gone with nothing to show
+  for them. A pass that derived nothing consumes nothing, because a drive
+  that has not finished is not a drive that produced nothing.
+
+  **The buffer is not per-item encrypted, and that is a named cost.** A
+  memory item carries a key envelope each; a sample stream through that
+  machinery would write two rows per measurement and defeat the reason
+  this store kind exists. What mitigates it is the short window, the low
+  ceiling, and a shred that deletes - and the derived memory item, which
+  is the thing that actually persists, is encrypted like every other one.
+
+  What is not exercised: nothing writes to the buffer in the product,
+  because SR5's capture path needs a mobile runtime. The store answers
+  its five places and its condensation is proven against readings a test
+  supplies, which is as far as this can honestly go without a device.
 - **SR3 - A place is a core capability (open):** position and accuracy as
   generically named columns on `memory_item`, migrated by the core, with
   the partial index the query needs - the shape `due_at` already has.

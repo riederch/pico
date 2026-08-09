@@ -29,12 +29,28 @@ export interface ShredDomainInput {
   reason?: string;
 }
 
+/**
+ * ADR 0129 SR2. The observation buffer, which the shred must also reach.
+ *
+ * A port rather than a second call site, because "shred a domain" is one act
+ * and a cascade with two entry points is a cascade someone forgets half of.
+ * The buffer carries no key envelope, so the rows are deleted: for data
+ * designed not to outlive its window that is stronger than making it
+ * unreadable, since nothing survives to be decrypted later.
+ */
+export type DeleteDomainObservations = (privacyDomain: string) => number;
+
 export function shredDomainWithAudit(
   memory: MemoryStore,
   appendAudit: AppendShredAudit,
   input: ShredDomainInput,
-): { removedKeyVersions: number } {
+  deleteObservations?: DeleteDomainObservations,
+): { removedKeyVersions: number; removedObservations: number } {
   const { removed } = memory.cryptoShredDomain(input.privacyDomain);
+  // After the keys, so a failure between the two leaves readings whose domain
+  // key is already gone rather than keys for readings that are already gone.
+  // Both are bad; only one of them is recoverable by running the shred again.
+  const removedObservations = deleteObservations?.(input.privacyDomain) ?? 0;
 
   appendAudit({
     privacyDomain: input.privacyDomain,
@@ -42,5 +58,5 @@ export function shredDomainWithAudit(
     ...(input.reason === undefined ? {} : { reason: input.reason }),
   });
 
-  return { removedKeyVersions: removed };
+  return { removedKeyVersions: removed, removedObservations };
 }

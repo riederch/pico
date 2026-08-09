@@ -122,6 +122,11 @@ export const picoDurableStores = [
   'memory_item',
   'audit_record',
   'share_envelope',
+  /**
+   * ADR 0129 SR2. The observation buffer, which is a store the core owns and
+   * therefore a store that answers to this ceiling like the rest.
+   */
+  'observation',
 ] as const;
 
 export type PicoDurableStore = typeof picoDurableStores[number];
@@ -141,6 +146,12 @@ export const defaultPicoStoreCeilingRows: Record<PicoDurableStore, number> = {
   memory_item: 1_000_000,
   audit_record: 5_000_000,
   share_envelope: 100_000,
+  // ADR 0129 SR2. Two orders of magnitude below the record stores, because
+  // this one is a working buffer and not a record. Under the adaptive capture
+  // ADR 0129 asks for - a reading every half minute across two streams - a
+  // 48-hour window holds roughly twelve thousand rows, so this leaves ample
+  // headroom while still stopping a producer that has come loose.
+  observation: 200_000,
 };
 
 export interface PicoStoreCeiling {
