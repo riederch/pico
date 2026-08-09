@@ -85,6 +85,8 @@ export const picoObservationMigrationId =
   '0015_pico_observation' as const;
 export const picoMemoryItemPlaceMigrationId =
   '0016_memory_item_place' as const;
+export const picoModuleCaptureMigrationId =
+  '0017_pico_module_capture' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -1046,6 +1048,28 @@ const migrations: readonly MigrationDefinition[] = [
         CREATE INDEX idx_memory_item_place
         ON memory_item (latitude_deg, longitude_deg)
         WHERE latitude_deg IS NOT NULL AND deletion_state = 'active';
+      `);
+    },
+  },
+  {
+    id: picoModuleCaptureMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0129 SR6. Whether a module may record, which is not whether it
+        -- is switched on.
+        --
+        -- The table already holds this person's durable decisions about a
+        -- module; activation was the first of them. A second column rather
+        -- than a second table, because they are decisions about the same
+        -- subject and splitting them would invite one to be read without the
+        -- other.
+        --
+        -- Nullable, and null is not "off": it is "nobody has been asked",
+        -- which stays distinguishable the same way an absent activation row
+        -- does. Both read as no capture; only one of them is a decision.
+        ALTER TABLE pico_module_activation ADD COLUMN capture_consented INTEGER NULL
+          CHECK (capture_consented IS NULL OR capture_consented IN (0, 1));
       `);
     },
   },

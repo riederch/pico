@@ -445,6 +445,12 @@ export interface PicoModuleActivationEntry {
   identifier: PicoModuleIdentifier;
   kind: PicoModuleKind;
   active: boolean;
+  /**
+   * ADR 0129 SR6. Whether this module may record. Shown beside `active`
+   * because they are different questions and a surface that offered only one
+   * would make a person choose between a feature and their privacy.
+   */
+  capturing: boolean;
   /** ADR 0128 H3, carried here so a person can see what an active module can do. */
   effectBearing: boolean;
   dependencies: readonly PicoModuleIdentifier[];
@@ -457,13 +463,16 @@ export interface PicoModuleActivationView {
 export function toPicoModuleActivationView(input: {
   manifests: readonly PicoModuleManifest[];
   active: readonly PicoModuleIdentifier[];
+  capturing?: readonly PicoModuleIdentifier[];
 }): PicoModuleActivationView {
   const active = new Set(input.active);
+  const capturing = new Set(input.capturing ?? []);
   return Object.freeze({
     modules: Object.freeze(orderPicoModuleManifests(input.manifests).map((manifest) => Object.freeze({
       identifier: manifest.identifier,
       kind: manifest.kind,
       active: active.has(manifest.identifier),
+      capturing: capturing.has(manifest.identifier),
       effectBearing: picoModuleIsEffectBearing(manifest),
       dependencies: manifest.dependencies,
     }))),
@@ -548,4 +557,79 @@ export function toPicoModuleDeactivationStatement(input: {
     total: bounded.total,
     shown: bounded.shown,
   });
+}
+
+/**
+ * ADR 0129 SR6, binding ADR 0127 M3. Whether a module may record.
+ *
+ * A **second** decision beside activation, not the same one, and the
+ * difference is the whole point. Activation says whether a feature exists;
+ * capture says whether Pico may write down where a person goes. Someone who
+ * turns capture off for an afternoon still wants to be told where they parked
+ * this morning - and switching the module off would take that away too.
+ *
+ * ADR 0127 M3 already stated the rule this implements: **activating a module
+ * is not consent to record.** M3 gave activation a default of on, because a
+ * Home whose calendar was off would look broken. Capture gets the opposite
+ * default for the opposite reason: a Home that began writing down its person's
+ * movements because they installed it would not be broken, it would be wrong.
+ */
+export interface PicoModuleCaptureDecision {
+  identifier: PicoModuleIdentifier;
+  capturing: boolean;
+}
+
+/**
+ * ADR 0129 SR6. Capture is off until somebody says otherwise.
+ *
+ * Absent is not merely "off": it is "nobody has been asked", which stays
+ * distinguishable in the store the same way activation does. Both read as off,
+ * and only one of them is a decision - which is what lets a surface ask once
+ * rather than every time.
+ */
+export const picoModuleCaptureDefault = false as const;
+
+/**
+ * ADR 0129 SR6 with ADR 0127 M3. What a request to change capture does.
+ *
+ * There is no cascade in either direction. Capture is a statement about one
+ * module's recording, and a dependency graph is about what code needs what
+ * code - a module that depends on another has not thereby been given consent
+ * to record on its behalf.
+ *
+ * **Capture off never implies the module is off**, and vice versa. Collapsing
+ * them would make "stop recording" and "remove the feature" the same act, and
+ * a person asking for the first would silently get the second.
+ */
+export function resolvePicoModuleCapture(input: {
+  manifests: readonly PicoModuleManifest[];
+  capturing: readonly PicoModuleIdentifier[];
+  request: PicoModuleCaptureDecision;
+}): { outcome: 'changed' | 'unchanged'; capturing: readonly PicoModuleIdentifier[] } {
+  const ordered = orderPicoModuleManifests(input.manifests);
+  if (!ordered.some((manifest) => manifest.identifier === input.request.identifier)) {
+    throw new Error('unknown_pico_module');
+  }
+
+  const capturing = new Set(input.capturing);
+  const already = capturing.has(input.request.identifier);
+  if (already === input.request.capturing) {
+    return { outcome: 'unchanged', capturing: inCatalogueOrder(ordered, capturing) };
+  }
+
+  if (input.request.capturing) {
+    capturing.add(input.request.identifier);
+  } else {
+    capturing.delete(input.request.identifier);
+  }
+  return { outcome: 'changed', capturing: inCatalogueOrder(ordered, capturing) };
+}
+
+function inCatalogueOrder(
+  ordered: readonly PicoModuleManifest[],
+  wanted: ReadonlySet<PicoModuleIdentifier>,
+): readonly PicoModuleIdentifier[] {
+  return Object.freeze(ordered
+    .map((manifest) => manifest.identifier)
+    .filter((identifier) => wanted.has(identifier)));
 }

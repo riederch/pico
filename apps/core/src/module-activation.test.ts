@@ -143,7 +143,7 @@ describe('ADR 0127 M3 activation is readable and durable', () => {
     try {
       const view = await readModules(app);
       expect(view.modules.map((entry) => `${entry.identifier}:${entry.active}`))
-        .toEqual(['calendar:true', 'spatial-recall:true']);
+        .toEqual(['calendar:true', 'home-assistant:true', 'spatial-recall:true']);
       // A capability missing on purpose must not present as one that is broken,
       // so the surface gets the kind and what the module can cause too.
       expect(view.modules[0]?.kind).toBe('product');
@@ -569,6 +569,120 @@ describe('ADR 0118 O1 delivery semantics, end to end', () => {
         method: 'POST',
         url: `/api/memory/time-bound-entries/${memoryItemId}/acknowledge`,
       })).statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('ADR 0129 SR6 capture is a second decision, and it starts off', () => {
+  it('is off for every module until somebody says otherwise', async () => {
+    // The opposite default from activation, for the opposite reason: a Home
+    // whose calendar was off would look broken; a Home that began writing
+    // down its person's movements because they installed it would be wrong.
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      const view = await readModules(app, session);
+      expect(view.modules.map((entry) => `${entry.identifier}:${entry.active}:${entry.capturing}`))
+        .toEqual([
+          'calendar:true:false',
+          'home-assistant:true:false',
+          'spatial-recall:true:false',
+        ]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('turns capture on and off without touching activation', async () => {
+    // The separation is the point: someone who stops recording for an
+    // afternoon still wants to be told where they parked this morning.
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      const setCapture = (capturing: boolean) => app.inject({
+        method: 'POST',
+        url: '/api/home/modules/capture',
+        headers: { authorization: `Bearer ${session}` },
+        payload: { identifier: 'spatial-recall', capturing },
+      });
+
+      expect((await setCapture(true)).statusCode).toBe(200);
+      let entry = (await readModules(app, session)).modules
+        .find((row) => row.identifier === 'spatial-recall');
+      expect(entry?.capturing).toBe(true);
+      expect(entry?.active).toBe(true);
+
+      expect((await setCapture(false)).statusCode).toBe(200);
+      entry = (await readModules(app, session)).modules
+        .find((row) => row.identifier === 'spatial-recall');
+      expect(entry?.capturing).toBe(false);
+      // Still on. "Stop recording" and "remove the feature" are different acts.
+      expect(entry?.active).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('does not turn capture on when a module is switched on', async () => {
+    // ADR 0127 M3 says it in words; this is the mechanism.
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      await setModuleActive(app, session, 'spatial-recall', false);
+      await setModuleActive(app, session, 'spatial-recall', true);
+      expect((await readModules(app, session)).modules
+        .find((row) => row.identifier === 'spatial-recall')?.capturing).toBe(false);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('survives a restart, and records the change as a content-free event', async () => {
+    const databasePath = createDatabasePath();
+    const app = await openApp(databasePath);
+    try {
+      const session = await hostAdminSession(app);
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/home/modules/capture',
+        headers: { authorization: `Bearer ${session}` },
+        payload: { identifier: 'spatial-recall', capturing: true },
+      })).statusCode).toBe(200);
+
+      const change = (await readEvents(app, session))
+        .find((event) => event.type === 'home.module_capture_changed');
+      expect(change?.payload).toEqual({ identifier: 'spatial-recall', capturing: true });
+    } finally {
+      await app.close();
+    }
+
+    const restarted = await openApp(databasePath);
+    try {
+      const session = await login(restarted);
+      expect((await readModules(restarted, session)).modules
+        .find((row) => row.identifier === 'spatial-recall')?.capturing).toBe(true);
+    } finally {
+      await restarted.close();
+    }
+  });
+
+  it('refuses an unauthenticated change and a module nobody ships', async () => {
+    const app = await openApp(createDatabasePath());
+    try {
+      const session = await hostAdminSession(app);
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/home/modules/capture',
+        payload: { identifier: 'spatial-recall', capturing: true },
+      })).statusCode).toBe(401);
+      expect((await app.inject({
+        method: 'POST',
+        url: '/api/home/modules/capture',
+        headers: { authorization: `Bearer ${session}` },
+        payload: { identifier: 'nonsense', capturing: true },
+      })).statusCode).toBe(400);
     } finally {
       await app.close();
     }

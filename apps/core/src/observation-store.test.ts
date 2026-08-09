@@ -316,3 +316,71 @@ describe('ADR 0129 SR2 condensation: readings become a memory and stop existing'
     })).toHaveLength(2);
   });
 });
+
+describe('ADR 0129 SR6 erasing goes through the paths that already exist', () => {
+  it('erases the buffer and the placed items with one domain shred', () => {
+    // "The local history can be erased through the paths that already exist."
+    // Both halves of that history are reachable: the readings by the shred's
+    // own port, the derived places by the crypto-shred that governs every
+    // memory item. No third mechanism, and nothing to remember separately.
+    const { store } = openStore('erase', { encrypted: true });
+    const factory = new EventFactory(new LamportClock(store.maxLamport()));
+    store.appendPicoObservations([fix(30), fix(20)]);
+    store.memory().create({
+      memoryItemId: 'mem_parked',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'application/vnd.pico.parking-event',
+      content: 'Level 2, near the lift',
+      contentPosture: 'domain_encrypted',
+    });
+    store.setPicoMemoryItemPlace({
+      memoryItemId: 'mem_parked',
+      place: { latitudeDeg: 48.2, longitudeDeg: 16.37, accuracyM: 12 },
+    });
+
+    const result = shredDomainWithAudit(
+      store.memory(),
+      ({ privacyDomain, removedKeyVersions }) => {
+        store.append(factory.create({
+          deviceId: 'pico-core',
+          type: 'memory.domain_shredded',
+          payload: { privacyDomain, removedKeyVersions },
+        }));
+      },
+      { privacyDomain: 'domain-private' },
+      (domain) => store.deletePicoObservationsInDomain(domain),
+    );
+
+    expect(result.removedObservations).toBe(2);
+    expect(store.picoObservationWindow({
+      kind: 'location_fix',
+      privacyDomain: 'domain-private',
+    })).toEqual([]);
+    // The words are gone with the key; the coordinates are a column on an item
+    // whose content nobody can read any more.
+    expect(String(store.memory().getInDomain('mem_parked', 'domain-private')?.content))
+      .not.toContain('near the lift');
+  });
+
+  it('does not erase anything when capture is merely switched off', () => {
+    // A module being off must not mean nobody is responsible for what it
+    // recorded. Stopping and forgetting are different acts, and a person who
+    // asked for the first would be badly served by getting the second.
+    const { store } = openStore('capture-off');
+    store.appendPicoObservations([fix(30), fix(20)]);
+
+    store.setPicoModuleCapture({
+      identifier: 'spatial-recall',
+      capturing: false,
+      decidedAt: new Date(now).toISOString(),
+    });
+
+    expect(store.picoCapturingModules()).toEqual([]);
+    expect(store.picoObservationWindow({
+      kind: 'location_fix',
+      privacyDomain: 'domain-private',
+    })).toHaveLength(2);
+  });
+});

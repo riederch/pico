@@ -94,6 +94,7 @@ import {
   picoMemoryItemAnnouncedAtMigrationId,
   picoObservationMigrationId,
   picoMemoryItemPlaceMigrationId,
+  picoModuleCaptureMigrationId,
   picoMemoryItemOriginMigrationId,
   picoAuditRecordMigrationId,
   picoHomeHostContinuityMigrationId,
@@ -399,6 +400,7 @@ describe('Pico Home Core app', () => {
           { id: picoMemoryItemAnnouncedAtMigrationId, appliedAt: expect.any(String) },
           { id: picoObservationMigrationId, appliedAt: expect.any(String) },
           { id: picoMemoryItemPlaceMigrationId, appliedAt: expect.any(String) },
+          { id: picoModuleCaptureMigrationId, appliedAt: expect.any(String) },
         ],
       },
       // ADR 0119 Q5. A development host has no free-space source and
@@ -409,12 +411,24 @@ describe('Pico Home Core app', () => {
       // that is broken, so every shipped module is named with its state - all
       // on, because a Home that has decided nothing has not switched anything
       // off.
+      // ADR 0129 SR6. Capture is a second decision and starts off: a Home
+      // that began writing down its person's movements because they
+      // installed it would not be broken, it would be wrong.
       modules: {
         modules: [
           {
             identifier: 'calendar',
             kind: 'product',
             active: true,
+            capturing: false,
+            effectBearing: false,
+            dependencies: [],
+          },
+          {
+            identifier: 'home-assistant',
+            kind: 'connector',
+            active: true,
+            capturing: false,
             effectBearing: false,
             dependencies: [],
           },
@@ -422,6 +436,7 @@ describe('Pico Home Core app', () => {
             identifier: 'spatial-recall',
             kind: 'product',
             active: true,
+            capturing: false,
             effectBearing: false,
             dependencies: [],
           },

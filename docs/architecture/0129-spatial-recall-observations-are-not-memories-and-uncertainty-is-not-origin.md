@@ -3,8 +3,9 @@
 ## Status
 
 Accepted as a storage-shape, degradation and answer-honesty constraint;
-the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR5 are
-implemented. SR6 is open.
+the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR6 are implemented. What is not built is the mobile runtime that
+would fill the capture port, which is a product decision rather than a
+gate.
 
 ## Context
 
@@ -277,10 +278,46 @@ Two things follow, and both are why this ADR can be more than a plan:
   this port is a mobile runtime that does not exist, and an adapter that
   cannot be run against a real device would be code nobody can verify.
   What the gate asks for is the boundary, and the boundary is checked.
-- **SR6 - Switching off and erasing (open, binds ADR 0127 M3):** capture
-  can be switched off as a durable Pico-side decision, and the local
-  history can be erased through the paths that already exist. A module
-  being off must not mean nobody is responsible for what it recorded.
+- **SR6 - Switching off and erasing (implemented):** capture is a
+  **second decision beside activation**, recorded the way M3 records the
+  first - a content-free `home.module_capture_changed` event and a
+  projection, over an authenticated `host-admin` surface rather than host
+  configuration.
+
+  Separate on purpose. Activation says whether a feature exists; capture
+  says whether Pico may write down where a person goes. Someone who turns
+  capture off for an afternoon still wants to be told where they parked
+  this morning, and switching the module off would take that away too -
+  collapsing the two would make "stop recording" and "remove the feature"
+  the same act, and a person asking for the first would silently get the
+  second.
+
+  **Capture is off by default**, which is the opposite of activation and
+  for the opposite reason. M3 defaults a module on because a Home whose
+  calendar was off would look broken; a Home that began writing down its
+  person's movements because they installed it would not be broken, it
+  would be wrong. This is the mechanism for the sentence M3 could only
+  state: *activating a module is not consent to record.*
+
+  **Erasing goes through the paths that already exist**, and nothing was
+  added for it: one domain shred reaches both halves of the history - the
+  readings through the cascade's own port (SR2), the derived places
+  through the crypto-shred that governs every memory item. No third
+  mechanism, nothing to remember separately.
+
+  **Switching capture off erases nothing.** Stopping and forgetting are
+  different acts, and a person who asked for the first would be badly
+  served by getting the second. What was recorded stays under custody,
+  because a module being off must never mean nobody is responsible for
+  what it holds.
+
+  Building this found a real gap: the core registered two of three
+  shipped modules, so Home Assistant was absent from the activation view
+  with nothing saying so. `module:check` verifies the closed list against
+  `modules/`, but the runtime's own list was a second place that could
+  disagree. It is now asserted at boot, in the idiom `assertClassified`
+  already uses for routes: a module the runtime forgot fails to start
+  rather than quietly not existing.
 
 ## Failure ledger
 

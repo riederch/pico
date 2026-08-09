@@ -232,6 +232,7 @@ home.identity_root_rotation_vetoed
 home.host_key_rotated
 home.clock_divergence_detected
 home.module_activation_changed
+home.module_capture_changed
 home.version_changed
 ```
 
@@ -259,6 +260,7 @@ home.identity_root_rotation_vetoed
 home.host_key_rotated
 home.clock_divergence_detected
 home.module_activation_changed
+home.module_capture_changed
 home.version_changed
 ```
 

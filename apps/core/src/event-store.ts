@@ -6389,6 +6389,41 @@ export class EventStore {
   }
 
   /**
+   * ADR 0129 SR6. Which modules a person has allowed to record.
+   *
+   * **Absent means no**, and that is the opposite default from activation on
+   * purpose. A Home whose calendar was off would look broken, so activation
+   * defaults on; a Home that began writing down its person's movements because
+   * they installed it would not be broken, it would be wrong.
+   */
+  public picoCapturingModules(): readonly PicoModuleIdentifier[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare('SELECT identifier, capture_consented AS capturing FROM pico_module_activation')
+      .all() as Array<{ identifier: string; capturing: number | null }>;
+    const consented = new Map(rows.map((row) => [row.identifier, row.capturing === 1]));
+    return Object.freeze(picoModuleIdentifiers
+      .filter((identifier) => consented.get(identifier) === true));
+  }
+
+  /** ADR 0129 SR6. Records the consent decision for one module. */
+  public setPicoModuleCapture(input: {
+    identifier: PicoModuleIdentifier;
+    capturing: boolean;
+    decidedAt: string;
+  }): void {
+    this.ensureOpen();
+    this.db
+      .prepare(`
+        INSERT INTO pico_module_activation (identifier, active, capture_consented, decided_at)
+        VALUES (?, 1, ?, ?)
+        ON CONFLICT(identifier) DO UPDATE
+          SET capture_consented = excluded.capture_consented, decided_at = excluded.decided_at
+      `)
+      .run(input.identifier, input.capturing ? 1 : 0, input.decidedAt);
+  }
+
+  /**
    * ADR 0127 M3. Records what a person decided, for exactly the modules that
    * changed.
    *

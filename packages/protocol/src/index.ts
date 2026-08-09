@@ -52,6 +52,14 @@ export const foundationEventTypes = [
    */
   'home.module_activation_changed',
   /**
+   * ADR 0129 SR6. A person said whether a module may record.
+   *
+   * Separate from activation because they are separate decisions: one is
+   * whether a feature exists, the other whether Pico may write down where
+   * somebody goes. Content-free - an identifier and a direction.
+   */
+  'home.module_capture_changed',
+  /**
    * ADR 0122 Y6. The running code changed. Content-free by construction: two
    * version strings and a direction, because an installation that cannot tell
    * it was downgraded cannot notice the one update that matters most.
@@ -100,6 +108,10 @@ export const serverSynthesizedFoundationEventTypes = [
   // off. A client writing its own activation record would be describing a
   // decision the Home, not the client, is responsible for.
   'home.module_activation_changed',
+  // ADR 0129 SR6. Consent to record is the person's to give, so the record of
+  // it is the Home's to write - a client asserting it would be asserting
+  // somebody else's permission.
+  'home.module_capture_changed',
   // ADR 0122 Y6. The server appends it at boot from its own observation; a
   // client claiming its code changed would be claiming something only the
   // process itself can know.

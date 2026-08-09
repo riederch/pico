@@ -126,9 +126,12 @@ import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
 import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitments';
 import { parsePicoPlace } from '@pico/protocol/place';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
+import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
 import {
+  picoModuleIdentifiers,
   resolvePicoModuleActivation,
+  resolvePicoModuleCapture,
   toPicoModuleActivationView,
   toPicoModuleDeactivationStatement,
   type PicoModuleCommitment,
@@ -1632,6 +1635,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // ADR 0118 O1. A surface says it told the person. Authenticated, because
   // clearing someone's outstanding promise is a claim about their life.
   accessClasses.register('POST', '/api/memory/time-bound-entries/:memoryItemId/acknowledge', 'authenticated');
+  // ADR 0129 SR6. Consent to record is a decision about the person's own life,
+  // so it carries the same class as the other durable decisions about this
+  // Home rather than a lighter one.
+  accessClasses.register('POST', '/api/home/modules/capture', 'host-admin');
   accessClasses.register('POST', '/api/realtime/tickets', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/events', 'foundation-diagnostic');
   accessClasses.register('GET', '/api/events/tail', 'foundation-diagnostic');
@@ -1663,8 +1670,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    */
   const shippedModuleManifests = [
     picoCalendarModuleManifest,
+    picoHomeAssistantModuleManifest,
     picoSpatialRecallModuleManifest,
   ];
+
+  // The closed list and this one are two places, so they can disagree - and
+  // they did: the Home Assistant module shipped, was listed in the protocol,
+  // and was never registered here, so it was absent from the activation view
+  // without anything saying so. Asserted at boot, in the idiom
+  // `assertClassified` already uses for routes: a module the runtime forgot
+  // fails to start rather than quietly not existing.
+  for (const identifier of picoModuleIdentifiers) {
+    if (!shippedModuleManifests.some((manifest) => manifest.identifier === identifier)) {
+      throw new Error(`unregistered_pico_module:${identifier}`);
+    }
+  }
 
   /**
    * ADR 0127 M4. Where a module's outstanding promises come from.
@@ -1694,6 +1714,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return toPicoModuleActivationView({
       manifests: shippedModuleManifests,
       active: store.picoActiveModules(),
+      // ADR 0129 SR6. Shown beside activation because they are different
+      // questions: whether a feature exists, and whether Pico may write down
+      // where somebody goes.
+      capturing: store.picoCapturingModules(),
     });
   }
 
@@ -1724,6 +1748,66 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.get('/api/system/status', async (_request, reply) => {
     return sendNoStore(reply, readSystemStatus());
+  });
+
+  /**
+   * ADR 0129 SR6. Whether a module may record.
+   *
+   * A separate decision from activation, and separate on purpose: someone who
+   * turns capture off for an afternoon still wants to be told where they
+   * parked this morning, and switching the module off would take that away
+   * too. Collapsing the two would make "stop recording" and "remove the
+   * feature" the same act.
+   *
+   * **Off by default**, which is the opposite of activation and for the
+   * opposite reason. A Home whose calendar was off would look broken; a Home
+   * that began writing down its person's movements because they installed it
+   * would not be broken, it would be wrong.
+   *
+   * Switching capture off records the decision and stops nothing else: what
+   * was already recorded stays under custody, because a module being off must
+   * never mean nobody is responsible for what it holds. Erasing is a separate
+   * act, through the paths that already exist.
+   */
+  app.post('/api/home/modules/capture', async (request, reply) => {
+    const body = request.body as { identifier?: unknown; capturing?: unknown } | undefined;
+    const identifier = body?.identifier;
+    const capturing = body?.capturing;
+
+    if (typeof identifier !== 'string'
+      || !shippedModuleManifests.some((manifest) => manifest.identifier === identifier)) {
+      return sendNoStore(reply.code(400), { error: 'identifier must name a shipped module.' });
+    }
+    if (typeof capturing !== 'boolean') {
+      return sendNoStore(reply.code(400), { error: 'capturing must be a boolean.' });
+    }
+
+    const decision = resolvePicoModuleCapture({
+      manifests: shippedModuleManifests,
+      capturing: store.picoCapturingModules(),
+      request: { identifier: identifier as PicoModuleIdentifier, capturing },
+    });
+
+    if (decision.outcome === 'unchanged') {
+      return sendNoStore(reply, { modules: readModuleActivation() });
+    }
+
+    store.setPicoModuleCapture({
+      identifier: identifier as PicoModuleIdentifier,
+      capturing,
+      decidedAt: new Date().toISOString(),
+    });
+
+    const event = factory.create({
+      deviceId: config.deviceId,
+      type: 'home.module_capture_changed',
+      // Content-free: which module, and which way.
+      payload: { identifier, capturing },
+    });
+    store.append(event);
+    broadcast(event);
+
+    return sendNoStore(reply, { modules: readModuleActivation() });
   });
 
   /**
