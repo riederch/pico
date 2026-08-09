@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted as a product-surface and platform-order decision; not implemented.
-The user decided on 2026-08-09 that desktop operation runs entirely through
+Accepted as a product-surface and platform-order decision; E6 implemented,
+E1-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
 the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
@@ -206,9 +206,27 @@ Node host beside each of them.
   `rotate-host-key` and `issue-membership` as product surfaces.
 - **E5 - Domain and readership vertical (open):** create/rotate domain,
   grant reader, publish checkpoint.
-- **E6 - Product-path check (open):** a repository check that fails when a
-  product-facing document routes a person through `pico-vault`, with
-  developer and runbook paths exempt by name.
+- **E6 - Product-path check (implemented):** `scripts/check-product-path.mjs`
+  runs in `release:verify` over nine enumerated product-facing documents and
+  fails when one routes a person through `pico-vault`. It draws the line
+  between describing the tool and routing through it: inside a fenced code
+  block any mention is an invocation, outside one the name plus a
+  subcommand is an instruction even in prose, and a bare prose mention is
+  left alone because ADR 0105 requires product documentation to be able to
+  say what the tool is. A longer hyphenated token never counts - the ADR
+  filename `0081-pico-vault-person-role-...` is cited across the tree and
+  would otherwise light up every document that references it.
+
+  Exemptions are enumerated with their reasons rather than globbed: ADRs
+  and the status matrix are records (ADR 0128), `progress.md` must be able
+  to report that founding currently needs the CLI, `docs/development/**` is
+  the tool's home, `docs/release/**` is maintainer procedure, and
+  `CONTRIBUTING.md` addresses developers by definition.
+
+  It starts green: no product-facing document contains such an instruction
+  today, and every command-shaped occurrence in the tree sits in an ADR or
+  the status matrix. Its value is refusing the first regression, so it
+  carries three probes that must fire and three that must not.
 - **E7 - Windows (open):** named-pipe transport with token-based peer
   authorization and a user-restricted pipe ACL; DPAPI keystore tranche;
   Registry autostart; signed package; re-measured budget; E1 satisfied.

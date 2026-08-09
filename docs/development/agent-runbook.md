@@ -56,10 +56,10 @@ npx pnpm@9.0.0 release:verify
 Enthalten sind:
 
 ```text
-license:check -> version:check -> addon:check -> design-system:check ->
-companion:check -> browser:check -> time:check -> offline:check ->
-supply:check -> build -> module:check -> companion:release-check ->
-check -> test
+license:check -> version:check -> addon:check -> product:check ->
+design-system:check -> companion:check -> browser:check -> time:check ->
+offline:check -> supply:check -> build -> module:check ->
+companion:release-check -> check -> test
 ```
 
 Fokussierte Beispiele:
