@@ -67,5 +67,30 @@
       "XMLHttpRequest",
       "EventSource"
     ]
+  },
+  "familyForbidden": {
+    "$comment": "ADR 0129 SR5. Forbidden to one family rather than to all. A mobile runtime that captures location has to call a sensor API; the derivation must not, or the port is a suggestion and the meaning of parking is tied to one operating system.",
+    "spatial_recall": {
+      "specifiers": [
+        "expo-location",
+        "react-native-geolocation-service",
+        "@react-native-community/geolocation",
+        "geolocation",
+        "serialport",
+        "gps",
+        "node:dgram"
+      ],
+      "specifierPrefixes": [
+        "@capacitor/geolocation",
+        "@capacitor/motion",
+        "@nativescript/geolocation",
+        "cordova-plugin-geolocation",
+        "geoclue"
+      ],
+      "globalCalls": [
+        "getCurrentPosition",
+        "watchPosition"
+      ]
+    }
   }
 }

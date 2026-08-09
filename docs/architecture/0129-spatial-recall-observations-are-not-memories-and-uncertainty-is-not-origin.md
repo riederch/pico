@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as a storage-shape, degradation and answer-honesty constraint;
-the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR4 are
-implemented. SR5 and SR6 are open, and both need a mobile runtime.
+the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR5 are
+implemented. SR6 is open.
 
 ## Context
 
@@ -246,10 +246,37 @@ Two things follow, and both are why this ADR can be more than a plan:
   a low-confidence answer cannot be phrased as a known fact, and a
   person's confirmation or rejection outranks a later derivation of the
   same event.
-- **SR5 - Capture through a port (open, binds the first mobile
-  runtime):** no operating-system location API is reachable from the
-  derivation; samples arrive through the declared port. Proven the way
-  ADR 0118 O1 proves its families - by the import closure, not by review.
+- **SR5 - Capture through a port (implemented):**
+  `@pico/module-spatial-recall/ports` declares what the derivation needs -
+  fixes and mobility samples since an instant, already parsed - and no
+  operating-system location API is reachable from the closure that
+  computes anything.
+
+  **Proven by the import closure, not by review**, which is what this gate
+  asks for and what makes it hold without a mobile runtime existing. It
+  needed one extension: the ADR 0118 forbidden set was global, and a
+  sensor API cannot be. **A mobile runtime that captures location has to
+  call one.** So `offline-floor.json` gained a family-scoped ban, applied
+  to `spatial_recall` alone, and banning the names everywhere would have
+  made the capture path unimplementable rather than making the derivation
+  pure - a check that looked stricter while being less useful.
+
+  Six probes, and the fifth is the one that keeps it honest: the same
+  sensor package imported from another family **passes**. The scanner's
+  own negative probes carry the scoped case too, so removing the ban from
+  the manifest is reported rather than silently accepted, and the family
+  argument is required rather than defaulted - a caller that omitted it
+  would lose that family's ban with nothing to show for it.
+
+  The port has no `start`, `stop` or `setEnabled`, deliberately. Whether
+  Pico may record where a person goes is a durable decision about their
+  life (SR6), not a method on a sensor adapter, and putting it here would
+  put consent in the layer least able to enforce it.
+
+  Unimplemented, and that is the point rather than a gap: whoever fills
+  this port is a mobile runtime that does not exist, and an adapter that
+  cannot be run against a real device would be code nobody can verify.
+  What the gate asks for is the boundary, and the boundary is checked.
 - **SR6 - Switching off and erasing (open, binds ADR 0127 M3):** capture
   can be switched off as a durable Pico-side decision, and the local
   history can be erased through the paths that already exist. A module

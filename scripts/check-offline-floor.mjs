@@ -144,11 +144,43 @@ function resolveSpecifier(specifier, fromFile, exists) {
   return null;
 }
 
-function isForbidden(specifier) {
-  if (manifest.forbidden.specifiers.includes(specifier)) {
+/**
+ * ADR 0129 SR5. Some things are forbidden to one family rather than to all.
+ *
+ * The global set is about reaching *out* - a network, a model - and applies
+ * everywhere. A sensor API is different: a mobile runtime that captures
+ * location has to call one, and forbidding the name everywhere would make the
+ * capture path unimplementable rather than making the derivation pure.
+ *
+ * So the sensor ban is scoped to `spatial_recall`, whose whole claim is that
+ * the rules are pure functions over readings somebody hands them. A module
+ * that reached a sensor itself would make the port a suggestion, and would tie
+ * the meaning of parking to one operating system's API - the thing issue #3
+ * named as the requirement.
+ */
+function forbiddenSetFor(family) {
+  const scoped = manifest.familyForbidden?.[family];
+  return {
+    specifiers: [
+      ...manifest.forbidden.specifiers,
+      ...(scoped?.specifiers ?? []),
+    ],
+    specifierPrefixes: [
+      ...manifest.forbidden.specifierPrefixes,
+      ...(scoped?.specifierPrefixes ?? []),
+    ],
+    globalCalls: [
+      ...manifest.forbidden.globalCalls,
+      ...(scoped?.globalCalls ?? []),
+    ],
+  };
+}
+
+function isForbidden(specifier, forbidden) {
+  if (forbidden.specifiers.includes(specifier)) {
     return true;
   }
-  return manifest.forbidden.specifierPrefixes.some((prefix) => specifier.startsWith(prefix));
+  return forbidden.specifierPrefixes.some((prefix) => specifier.startsWith(prefix));
 }
 
 /**
@@ -156,8 +188,15 @@ function isForbidden(specifier) {
  * injected so the negative probes below can run the real scanner over a virtual
  * tree instead of writing files.
  */
-export function scanFloorClosure(entryFiles, io) {
+export function scanFloorClosure(entryFiles, io, family) {
   const { readFile, exists } = io;
+  if (typeof family !== 'string' || family === '') {
+    // Required rather than defaulted. A caller that omitted it would get the
+    // global set and lose that family's own ban with no sign that anything
+    // was missing - the quiet failure this whole check exists to avoid.
+    throw new Error('scanFloorClosure needs the family whose closure it walks');
+  }
+  const forbidden = forbiddenSetFor(family);
   const violations = [];
   const seen = new Set();
   const queue = [...entryFiles];
@@ -171,14 +210,14 @@ export function scanFloorClosure(entryFiles, io) {
     const source = readFile(file);
     const stripped = stripCommentsAndStrings(source);
 
-    for (const call of manifest.forbidden.globalCalls) {
+    for (const call of forbidden.globalCalls) {
       if (new RegExp(`(?:^|[^\\w$.])${call}\\s*\\(`, 'u').test(stripped)) {
         violations.push({ file, kind: 'global', detail: call });
       }
     }
 
     for (const specifier of importsOf(source)) {
-      if (isForbidden(specifier)) {
+      if (isForbidden(specifier, forbidden)) {
         violations.push({ file, kind: 'import', detail: specifier });
         continue;
       }
@@ -231,7 +270,7 @@ for (const [family, declaration] of Object.entries(manifest.families)) {
     continue;
   }
 
-  const { violations, modules } = scanFloorClosure(entries, realIo);
+  const { violations, modules } = scanFloorClosure(entries, realIo, family);
   for (const module of modules) {
     enforcedModules.add(module);
   }
@@ -292,6 +331,16 @@ const probes = [
       '/probe/entry.ts': "import { thing } from '@pico/model-provider';\nexport const x = thing;\n",
     },
   },
+  {
+    // ADR 0129 SR5. The derivation must not reach an operating-system location
+    // API, or the port is a suggestion and the meaning of parking is tied to
+    // one platform's plumbing.
+    name: 'a sensor API reached from the spatial-recall derivation',
+    family: 'spatial_recall',
+    files: {
+      '/probe/entry.ts': "import { getCurrentPosition } from 'expo-location';\nexport const x = getCurrentPosition;\n",
+    },
+  },
 ];
 
 for (const probe of probes) {
@@ -304,10 +353,34 @@ for (const probe of probes) {
     },
     exists: (file) => file in probe.files,
   };
-  const { violations } = scanFloorClosure(['/probe/entry.ts'], io);
+  const { violations } = scanFloorClosure(['/probe/entry.ts'], io, probe.family ?? 'capture');
   if (violations.length === 0) {
     errors.push(`Offline-floor scanner failed its negative probe: ${probe.name} was not caught.`);
   }
+}
+
+/**
+ * ADR 0129 SR5. The scoping itself, which is the part that could quietly be
+ * wrong in the useful direction.
+ *
+ * A sensor package is forbidden to `spatial_recall` and allowed everywhere
+ * else, because a mobile runtime that captures location has to call one.
+ * Banning the name globally would make the capture path unimplementable rather
+ * than making the derivation pure, and a check that did so would look stricter
+ * while being less useful.
+ */
+const scopedProbe = {
+  '/probe/entry.ts': "import { getCurrentPosition } from 'expo-location';\nexport const x = getCurrentPosition;\n",
+};
+const scopedIo = {
+  readFile: (file) => scopedProbe[file],
+  exists: (file) => file in scopedProbe,
+};
+if (scanFloorClosure(['/probe/entry.ts'], scopedIo, 'capture').violations.length > 0) {
+  errors.push(
+    'Offline-floor scanner applied a spatial_recall ban to another family; '
+    + 'a mobile runtime that captures location has to call a sensor API.',
+  );
 }
 
 // A positive probe too, so the scanner is not merely flagging everything.
@@ -318,7 +391,7 @@ const cleanProbe = {
 const cleanResult = scanFloorClosure(['/probe/entry.ts'], {
   readFile: (file) => cleanProbe[file],
   exists: (file) => file in cleanProbe,
-});
+}, 'capture');
 if (cleanResult.violations.length > 0) {
   errors.push(
     'Offline-floor scanner flagged a clean probe: '

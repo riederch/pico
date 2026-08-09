@@ -16,6 +16,10 @@
     "./parking": {
       "types": "./dist/parking.d.ts",
       "import": "./dist/parking.js"
+    },
+    "./ports": {
+      "types": "./dist/ports.d.ts",
+      "import": "./dist/ports.js"
     }
   },
   "files": [
