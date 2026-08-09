@@ -124,6 +124,7 @@ import { EventFactory } from './event-factory.js';
 // edge points one way, or the two packages form a cycle.
 import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
 import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitments';
+import { parsePicoPlace } from '@pico/protocol/place';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
 import {
@@ -262,6 +263,14 @@ interface MemoryRecordedRequest {
   retentionPolicyRef?: string;
   /** ADR 0118 O1. Present turns this into a time-bound entry. */
   dueAt?: string;
+  /**
+   * ADR 0129 SR3. Where this was, if it was anywhere.
+   *
+   * Optional, and all three of its parts or none - which is the manual path
+   * issue #3 asks for: a person confirming where they left the car is
+   * recording a place, and that must not need a sensor.
+   */
+  place?: { latitudeDeg: number; longitudeDeg: number; accuracyM: number };
 }
 
 interface RealtimeSocket {
@@ -3876,6 +3885,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       if (typeof dueAt === 'string') {
         store.setPicoTimeBoundEntryDue({ memoryItemId, dueAt });
       }
+      // ADR 0129 SR3. A place is a core column, set the same way a due
+      // instant is: the item exists first, and the capability is attached to
+      // it rather than being a second kind of item.
+      if (request_.place !== undefined) {
+        store.setPicoMemoryItemPlace({ memoryItemId, place: request_.place });
+      }
 
       const recordedPayload: MemoryRecordedPayload = {
         memoryItemId,
@@ -5372,7 +5387,7 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
   }
 
   for (const key of Object.keys(payload)) {
-    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller', 'retentionPolicyRef', 'dueAt'].includes(key)) {
+    if (!['privacyDomain', 'contentType', 'content', 'summary', 'owner', 'controller', 'retentionPolicyRef', 'dueAt', 'place'].includes(key)) {
       return { ok: false, error: `memory.recorded payload has unexpected field: ${key}.` };
     }
   }
@@ -5409,6 +5424,21 @@ function validateMemoryRecordedRequest(body: Record<string, unknown>): { ok: tru
       || Number.isNaN(Date.parse(payload.dueAt))
       || new Date(payload.dueAt).toISOString() !== payload.dueAt)) {
     return { ok: false, error: 'dueAt must be a canonical ISO-8601 instant when provided.' };
+  }
+
+  // ADR 0129 SR3. All three parts or none, refused here so a caller that lost
+  // one is told which rather than meeting a column constraint. The meaning of
+  // the three values is the protocol's, so this cannot drift from what a
+  // location fix considers usable.
+  if (payload.place !== undefined) {
+    try {
+      parsePicoPlace(payload.place);
+    } catch (error) {
+      return {
+        ok: false,
+        error: `place is not a usable position (${error instanceof Error ? error.message : 'unknown'}).`,
+      };
+    }
   }
 
   return {

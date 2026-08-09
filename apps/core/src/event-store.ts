@@ -5,6 +5,7 @@ import {
   picoModuleIdentifiers,
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
+import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
 import {
   maxPicoObservationAgeMs,
   parsePicoObservation,
@@ -6066,6 +6067,107 @@ export class EventStore {
         WHERE memory_item_id = ? AND announced_at IS NULL AND due_at IS NOT NULL
       `)
       .run(input.announcedAt, new Date().toISOString(), input.memoryItemId).changes === 1;
+  }
+
+  /**
+   * ADR 0129 SR3. Records where a memory item was.
+   *
+   * All three values or none, checked here as well as by the column CHECK,
+   * because a caller that lost one of them should be told which rather than
+   * meeting a constraint error. The validation is the protocol's, so the
+   * column and the spatial-recall fix cannot drift into disagreeing about what
+   * a usable position is.
+   *
+   * Generic on purpose: this is the shape `due_at` already has, and a module
+   * that needed its own place column would be inventing a second answer to a
+   * question the core already answers.
+   */
+  public setPicoMemoryItemPlace(input: {
+    memoryItemId: string;
+    place: PicoPlace;
+  }): boolean {
+    this.ensureOpen();
+    const place = assertPicoPlace(input.place as unknown as Record<string, unknown>);
+    return this.db
+      .prepare(`
+        UPDATE memory_item
+        SET latitude_deg = ?, longitude_deg = ?, accuracy_m = ?, updated_at = ?
+        WHERE memory_item_id = ? AND deletion_state = 'active'
+      `)
+      .run(
+        place.latitudeDeg,
+        place.longitudeDeg,
+        place.accuracyM,
+        new Date().toISOString(),
+        input.memoryItemId,
+      ).changes === 1;
+  }
+
+  /**
+   * ADR 0129 SR3. Where a memory item was, or `undefined` if it has no place.
+   *
+   * A partial row is treated as no place rather than as two thirds of one. The
+   * column CHECK makes that unreachable through this code, and the reading
+   * stays defensive because a database restored from somewhere else is not
+   * this code's promise to keep.
+   */
+  public picoMemoryItemPlace(memoryItemId: string): PicoPlace | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT latitude_deg AS latitudeDeg,
+               longitude_deg AS longitudeDeg,
+               accuracy_m AS accuracyM
+        FROM memory_item
+        WHERE memory_item_id = ?
+      `)
+      .get(memoryItemId) as
+        | { latitudeDeg: number | null; longitudeDeg: number | null; accuracyM: number | null }
+        | undefined;
+    if (row === undefined
+      || row.latitudeDeg === null
+      || row.longitudeDeg === null
+      || row.accuracyM === null) {
+      return undefined;
+    }
+    return Object.freeze({
+      latitudeDeg: row.latitudeDeg,
+      longitudeDeg: row.longitudeDeg,
+      accuracyM: row.accuracyM,
+    });
+  }
+
+  /**
+   * ADR 0129 SR3. Placed memory items, most recent first, bounded.
+   *
+   * The ground a later "where was I yesterday afternoon" stands on. Bounded
+   * because every read a person can trigger is, and most recent first because
+   * a spatial question is nearly always about the last time rather than the
+   * first.
+   */
+  public picoPlacedMemoryItems(input: {
+    privacyDomain: string;
+    limit?: number;
+  }): Array<PicoPlace & { memoryItemId: string; contentType: string; createdAt: string }> {
+    this.ensureOpen();
+    return this.db
+      .prepare(`
+        SELECT memory_item_id AS memoryItemId,
+               content_type AS contentType,
+               created_at AS createdAt,
+               latitude_deg AS latitudeDeg,
+               longitude_deg AS longitudeDeg,
+               accuracy_m AS accuracyM
+        FROM memory_item
+        WHERE privacy_domain = ?
+          AND latitude_deg IS NOT NULL
+          AND deletion_state = 'active'
+        ORDER BY created_at DESC
+        LIMIT ?
+      `)
+      .all(input.privacyDomain, input.limit ?? 100) as Array<
+        PicoPlace & { memoryItemId: string; contentType: string; createdAt: string }
+      >;
   }
 
   /**

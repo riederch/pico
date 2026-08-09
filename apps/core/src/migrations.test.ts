@@ -18,6 +18,7 @@ import {
   picoModuleActivationMigrationId,
   picoMemoryItemAnnouncedAtMigrationId,
   picoObservationMigrationId,
+  picoMemoryItemPlaceMigrationId,
   picoHomeHostContinuityMigrationId,
   picoHomeFoundingFirstDeviceEvidenceMigrationId,
   picoSchemaBaselineMigrationId,
@@ -104,6 +105,10 @@ describe('database migrations', () => {
         },
         {
           id: picoObservationMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: picoMemoryItemPlaceMigrationId,
           requiresBackup: false,
         },
       ],
@@ -206,6 +211,10 @@ describe('database migrations', () => {
       },
       {
         id: picoObservationMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoMemoryItemPlaceMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -327,12 +336,13 @@ describe('database migrations', () => {
   picoModuleActivationMigrationId,
   picoMemoryItemAnnouncedAtMigrationId,
   picoObservationMigrationId,
+  picoMemoryItemPlaceMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(15);
+    expect(listAppliedMigrations(db)).toHaveLength(16);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -347,7 +357,7 @@ describe('database migrations', () => {
       requireBackupBeforeMigration: true,
       backupConfirmed: true,
     })).not.toThrow();
-    expect(listAppliedMigrations(db)).toHaveLength(15);
+    expect(listAppliedMigrations(db)).toHaveLength(16);
 
     db.close();
   });
@@ -386,7 +396,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(15);
+    expect(listAppliedMigrations(db)).toHaveLength(16);
 
     db.close();
   });
@@ -412,6 +422,7 @@ describe('database migrations', () => {
   picoModuleActivationMigrationId,
   picoMemoryItemAnnouncedAtMigrationId,
   picoObservationMigrationId,
+  picoMemoryItemPlaceMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -435,6 +446,7 @@ describe('database migrations', () => {
   picoModuleActivationMigrationId,
   picoMemoryItemAnnouncedAtMigrationId,
   picoObservationMigrationId,
+  picoMemoryItemPlaceMigrationId,
         ],
       },
     ]);
@@ -510,6 +522,7 @@ describe('database migrations', () => {
   picoModuleActivationMigrationId,
   picoMemoryItemAnnouncedAtMigrationId,
   picoObservationMigrationId,
+  picoMemoryItemPlaceMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as a storage-shape, degradation and answer-honesty constraint;
-the use case arrived as issue #3 from the user on 2026-08-07. SR1, SR2 and
-SR4 are implemented. SR3, SR5 and SR6 are open.
+the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR4 are
+implemented. SR5 and SR6 are open, and both need a mobile runtime.
 
 ## Context
 
@@ -219,9 +219,28 @@ Two things follow, and both are why this ADR can be more than a plan:
   because SR5's capture path needs a mobile runtime. The store answers
   its five places and its condensation is proven against readings a test
   supplies, which is as far as this can honestly go without a device.
-- **SR3 - A place is a core capability (open):** position and accuracy as
-  generically named columns on `memory_item`, migrated by the core, with
-  the partial index the query needs - the shape `due_at` already has.
+- **SR3 - A place is a core capability (implemented):**
+  `latitude_deg`, `longitude_deg` and `accuracy_m` on `memory_item`,
+  migrated by the core, with a partial index for the same reason the due
+  index is partial - the overwhelming majority of memory items have no
+  place, and a full index would be mostly nulls.
+
+  **All three or none**, and the meaning of the three lives in
+  `@pico/protocol/place`. The location fix composes it rather than
+  repeating it, so the column and the sensor reading cannot drift into
+  disagreeing about what a usable position is - the M5 lift rule applied
+  to a definition rather than to a mechanic. That refactor moved the
+  refusal names from `invalid_pico_location_fix_*` to
+  `invalid_pico_place_*`, which is what they were always about.
+
+  **The manual path exists.** `POST /api/events` accepts an optional
+  `place` on `memory.recorded`, refused as a whole with the part that is
+  wrong named, because issue #3 asks for a person to be able to confirm
+  where they left the car and that must not need a sensor.
+
+  Governed by the paths that govern the item: a placed memory item is
+  shredded and restored exactly as one without a place, asserted as an
+  equality rather than as two separate expectations.
 - **SR4 - Uncertainty cannot be dropped (implemented for the derived
   answer):** a spatial answer cannot be constructed without its certainty,
   a low-confidence answer cannot be phrased as a known fact, and a

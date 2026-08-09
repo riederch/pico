@@ -83,6 +83,8 @@ export const picoMemoryItemAnnouncedAtMigrationId =
   '0014_memory_item_announced_at' as const;
 export const picoObservationMigrationId =
   '0015_pico_observation' as const;
+export const picoMemoryItemPlaceMigrationId =
+  '0016_memory_item_place' as const;
 
 // Pico has no deployed database yet. The pre-deployment 0001-0020 development
 // chain was therefore consolidated into this one final-schema baseline. Future
@@ -1015,6 +1017,35 @@ const migrations: readonly MigrationDefinition[] = [
         -- The shred deletes by domain, so it must not scan.
         CREATE INDEX idx_pico_observation_domain
         ON pico_observation (privacy_domain);
+      `);
+    },
+  },
+  {
+    id: picoMemoryItemPlaceMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        -- ADR 0129 SR3. Where something was, as a core capability.
+        --
+        -- Generically named, in the shape \`due_at\` already has: no parking
+        -- column and no calendar column, so "where was I yesterday afternoon"
+        -- composes the same capability and a later module inventing its own
+        -- would be inventing a second answer to a question already answered.
+        --
+        -- All three or none, enforced here rather than trusted to writers.
+        -- A coordinate without its accuracy is not a less precise position, it
+        -- is an unusable one: every honest thing a surface can say about a
+        -- remembered place depends on how well it was known.
+        ALTER TABLE memory_item ADD COLUMN latitude_deg REAL NULL;
+        ALTER TABLE memory_item ADD COLUMN longitude_deg REAL NULL;
+        ALTER TABLE memory_item ADD COLUMN accuracy_m REAL NULL;
+
+        -- Partial, for the same reason the due index is: the overwhelming
+        -- majority of memory items have no place at all, and a full index
+        -- would be mostly nulls.
+        CREATE INDEX idx_memory_item_place
+        ON memory_item (latitude_deg, longitude_deg)
+        WHERE latitude_deg IS NOT NULL AND deletion_state = 'active';
       `);
     },
   },

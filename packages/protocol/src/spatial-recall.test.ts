@@ -59,11 +59,11 @@ describe('ADR 0129 SR1 a position without its accuracy is unusable', () => {
 
   it.each([
     ['no accuracy at all', { at: fix.at, latitudeDeg: 48.2, longitudeDeg: 16.37 }, 'invalid_pico_location_fix'],
-    ['a zero accuracy claiming a perfect reading', { ...fix, accuracyM: 0 }, 'invalid_pico_location_fix_accuracy'],
-    ['a negative accuracy', { ...fix, accuracyM: -5 }, 'invalid_pico_location_fix_accuracy'],
-    ['a latitude off the planet', { ...fix, latitudeDeg: 91 }, 'invalid_pico_location_fix_latitude'],
-    ['a longitude off the planet', { ...fix, longitudeDeg: 181 }, 'invalid_pico_location_fix_longitude'],
-    ['a NaN coordinate', { ...fix, latitudeDeg: Number.NaN }, 'invalid_pico_location_fix_latitude'],
+    ['a zero accuracy claiming a perfect reading', { ...fix, accuracyM: 0 }, 'invalid_pico_place_accuracy'],
+    ['a negative accuracy', { ...fix, accuracyM: -5 }, 'invalid_pico_place_accuracy'],
+    ['a latitude off the planet', { ...fix, latitudeDeg: 91 }, 'invalid_pico_place_latitude'],
+    ['a longitude off the planet', { ...fix, longitudeDeg: 181 }, 'invalid_pico_place_longitude'],
+    ['a NaN coordinate', { ...fix, latitudeDeg: Number.NaN }, 'invalid_pico_place_latitude'],
     ['a non-canonical instant', { ...fix, at: '2026-08-07 08:36:00Z' }, 'invalid_pico_location_fix_at'],
     ['an unrecognised field', { ...fix, speedMps: 3 }, 'invalid_pico_location_fix'],
   ])('refuses %s', (_name, value, reason) => {
@@ -92,7 +92,7 @@ describe('ADR 0129 SR1 mobility samples and parking candidates', () => {
     // a usable position is.
     expect(() => parsePicoParkingCandidate(candidate)).not.toThrow();
     expect(() => parsePicoParkingCandidate({ ...candidate, accuracyM: 0 }))
-      .toThrow('invalid_pico_location_fix_accuracy');
+      .toThrow('invalid_pico_place_accuracy');
   });
 
   it.each([

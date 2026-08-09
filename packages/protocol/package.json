@@ -31,6 +31,10 @@
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"
     },
+    "./place": {
+      "types": "./dist/place.d.ts",
+      "import": "./dist/place.js"
+    },
     "./planner-reader": {
       "types": "./dist/planner-reader.d.ts",
       "import": "./dist/planner-reader.js"

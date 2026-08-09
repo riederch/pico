@@ -1,3 +1,5 @@
+import { assertPicoPlace, type PicoPlace } from './place.js';
+
 /**
  * ADR 0129 SR1. The vocabulary of a place a person remembers being.
  *
@@ -56,13 +58,9 @@ const confidenceRank: Record<PicoSpatialConfidence, number> = {
  * remembered place depends on how well it was known, and a reading that lost
  * its accuracy is unusable rather than merely imprecise.
  */
-export interface PicoLocationFix {
+export interface PicoLocationFix extends PicoPlace {
   /** Canonical instant, on the wall clock the person lives on. */
   at: string;
-  latitudeDeg: number;
-  longitudeDeg: number;
-  /** Radius of uncertainty in metres. Always present, always positive. */
-  accuracyM: number;
 }
 
 /** One reading of how the person was moving, as the device understood it. */
@@ -134,27 +132,10 @@ export function parsePicoLocationFix(value: unknown): PicoLocationFix {
   if (!isCanonicalInstant(record.at)) {
     throw new Error('invalid_pico_location_fix_at');
   }
-  if (!isFiniteNumber(record.latitudeDeg)
-    || record.latitudeDeg < -90
-    || record.latitudeDeg > 90) {
-    throw new Error('invalid_pico_location_fix_latitude');
-  }
-  if (!isFiniteNumber(record.longitudeDeg)
-    || record.longitudeDeg < -180
-    || record.longitudeDeg > 180) {
-    throw new Error('invalid_pico_location_fix_longitude');
-  }
-  if (!isFiniteNumber(record.accuracyM) || record.accuracyM <= 0) {
-    // Zero would claim a perfect reading, which no sensor gives. Absent would
-    // be worse: the surface cannot tell an unknown accuracy from a good one.
-    throw new Error('invalid_pico_location_fix_accuracy');
-  }
-  return Object.freeze({
-    at: record.at,
-    latitudeDeg: record.latitudeDeg,
-    longitudeDeg: record.longitudeDeg,
-    accuracyM: record.accuracyM,
-  });
+  // The position half is the core capability, validated by its own code so
+  // this and the memory-item column cannot disagree about what is usable.
+  const place = assertPicoPlace(record);
+  return Object.freeze({ at: record.at, ...place });
 }
 
 export function parsePicoMobilitySample(value: unknown): PicoMobilitySample {
