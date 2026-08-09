@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted; not implemented. The user established on 2026-08-09 that no Pico
-is in operation and proposed that formats stay at v1 until the first
+Accepted; F1 implemented, F2 and F3 open. The user established on
+2026-08-09 that no Pico is in operation and proposed that formats stay at v1 until the first
 go-live. This ADR accepts that with one correction to the trigger, and
 turns it into the rule that governs both the Recovery Card cleanup and a
 sweep for compatibility kept on behalf of nobody.
@@ -128,10 +128,12 @@ freeze, which is when it becomes dangerous.
 
 ## Gates
 
-- **F1 - The freeze marker (open):** one dated line in
-  `docs/release/versioning.md` recording whether the first kept identity
-  exists, set by the user, with this rule stated next to it so it is read
-  where a version decision is made.
+- **F1 - The freeze marker (implemented):** `docs/release/versioning.md`
+  carries a dated line stating that no kept identity exists as of
+  2026-08-09, declared by the user, with the rule and its four obligations
+  beside it - so it is read where a version decision is made rather than
+  in an ADR nobody reopens. When the answer changes, that line changes
+  first and everything else follows from it.
 - **F2 - The card collapses to one format (open):** the v2 layout becomes
   the only Recovery Card format and keeps the name `v1`. The second
   schema, the dual QR transport, the Vault's

@@ -34,6 +34,35 @@ When the Pico version changes, update all version-bearing files in the same comm
 `scripts/check-version.mjs` enforces this table. If a version-bearing location
 is added, add it there rather than relying on this list being read.
 
+## Format freeze: has a kept identity been founded?
+
+```text
+Nein. Stand 2026-08-09, erklaert vom Nutzer.
+```
+
+**As long as this says no, a surface that carries no compatibility claim may
+change its bytes under its existing version name** (ADR 0134). No v2, no
+deprecation branch: the format is corrected and the old shape ceases to exist.
+
+The freeze is *not* a launch, a release tag or an announcement. It is the first
+identity someone intends to keep. A Recovery Card is printed on paper and a
+founded Home holds signed records; both outlive the decisions that produced
+them, and the moment that binds is the moment the first such artifact stops
+being disposable. That can be your own first real Pico, long before anything is
+public.
+
+No code can detect that intent, so it is declared here rather than derived.
+When it changes, change this line first — everything else follows from it.
+
+An in-place revision still owes four things, whatever this line says:
+regenerated vectors under the same name; ADR status notes rather than rewritten
+bodies (ADR 0128); a statement of what becomes unreadable, since development
+artifacts are disposable by declaration and not by assumption; and
+applicability only where `docs/protocol/public-surfaces.md` and
+`docs/protocol/compatibility-levels.md` record no claim.
+
+After the freeze this section is spent, and ordinary versioning applies.
+
 ## Protocol version is a separate axis
 
 The wire-contract version lives in `packages/protocol/src/index.ts` as
