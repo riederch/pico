@@ -39,7 +39,24 @@ keinem Commit. Getrennt davon zu pruefen ist, ob die Rechteinhaberschaft aus
 `COMMERCIAL.md` und die Marke aus `TRADEMARK.md` bei einer Privatperson oder
 einer Organisation liegen sollen - das haengt nicht an der Attestation.
 
-## Mehrere gleichzeitige Praesenzen einer PICO-Identitaet
+## Mehrere gleichzeitige Praesenzen einer PICO-Identitaet — entschieden
+
+**Am 2026-08-09 als ADR 0126 geschrieben.** Die vier Punkte, die hier vor dem
+Schreiben zu klaeren waren, sind beantwortet: Praesenz ist eine zweite Achse
+neben den ADR-0015-Knotenrollen (die Rolle wird Eigenschaft einer Praesenz,
+ADR 0015 bleibt unveraendert), was eine Praesenz deklariert heisst
+**Affordance** und ist von ADR 0036s Capability getrennt (`riskClass` und
+`requiresConfirmation` bleiben an der Handlung), die Nummer ist vergeben, und
+ADR 0113s Companion wird ueber eine Statusnotiz als erste Praesenz benannt
+statt umgeschrieben. Der Auftrag unten bleibt als Quelle stehen; abgewichen
+wurde nur beim Namen `PresenceCapability`, und das steht in der ADR unter den
+verworfenen Alternativen.
+
+Offen sind jetzt Implementierungs-Gates in der ADR, keine Vorfragen mehr:
+P2 Registry, P3 die Zustandsgrenze samt Umzug des Beobachtungspuffers,
+P4 blockiert am fehlenden Action Runner, P5 Statusnotiz, P6 Abschaltbarkeit.
+
+### Urspruenglicher Arbeitsauftrag
 
 Arbeitsauftrag liegt als `docs/development/briefs/multi-presence.md` vor
 (Stand 2026-08-02). Ziel ist eine Architektur, in der eine PICO-Identitaet
@@ -57,7 +74,7 @@ sicherheitskritischer Echtzeitsteuerung aus dem Core, Praesenz-Registry mit
 Heartbeat, Uebergabe/Idempotenz/Ownership sowie Datenminimierung fuer
 Sensorpraesenzen.
 
-Vor dem Schreiben zu entscheiden:
+Vor dem Schreiben zu entscheiden war (alles beantwortet, siehe oben):
 
 - **Terminologie gegen ADR 0015.** Dort stehen bereits Full Client, Light
   Client, Relay Server und Core Host als Knotenrollen. Der Auftrag verbietet
@@ -68,7 +85,7 @@ Vor dem Schreiben zu entscheiden:
   (mit `riskClass` und `requiresConfirmation`) muss darauf aufbauen statt
   denselben Namen zweimal zu vergeben. Auch ADR 0010 (Tool-Policy und
   Executor) und ADR 0048 (Model-Capability-Delegation) sind zu pruefen.
-- **ADR-Nummer 0126.** 0124 ist an die Character-Architektur vergeben, 0125
+- **ADR-Nummer 0126.** Vergeben und geschrieben. 0124 ist an die Character-Architektur vergeben, 0125
   an PAS.
 - **Verhaeltnis zu ADR 0113.** Der Companion ist heute eine einzelne
   Desktop-Praesenz. Ob C1/C2 rueckwirkend als Praesenz beschrieben wird oder

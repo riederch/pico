@@ -71,19 +71,23 @@ Terminal, und damit waere Phase 4 von Phase 1 abgeschnitten.
 
 E4 und E5 duerfen nach hinten rutschen oder neben Phase 4 laufen; E3 nicht.
 
-## Phase 3 - ADR 0126: wo ein Modul laeuft
+## Phase 3 - ADR 0126 P3: die Zustandsgrenze
 
-Klein an Code, gross an Entscheidung, und der Angelpunkt der ganzen Roadmap.
-Die konkrete Frage, die der Multi-Presence-Brief beantworten muss: bekommt ein
-Geraet lokalen dauerhaften Zustand und leitet offline ab, oder bleibt Erfassung
-eine Heimnetz-Funktion? Vom zweiten Fall haengt ab, ob Phase 6 ueberhaupt
-liefern kann, was sie verspricht.
+Die Entscheidung ist seit 2026-08-09 getroffen und steht als ADR 0126: eine
+Praesenz haelt lokalen, kurzlebigen Zustand - **einschliesslich der lokalen
+Position** -, und nur ausdruecklich freigegebene Information wird dauerhaft.
+Die beiden Begriffsfragen aus dem Brief sind mitentschieden: Praesenz ist eine
+zweite Achse neben den ADR-0015-Knotenrollen, und was eine Praesenz deklariert
+heisst Affordance und bleibt von ADR 0036s Capability getrennt.
 
-Mitzuentscheiden, weil derselbe Brief sie aufwirft: das Verhaeltnis von
-"Praesenz" zu den Knotenrollen aus ADR 0015, und `PresenceCapability` gegen die
-belegten Capabilities aus ADR 0036.
+Was bleibt, ist Gate P3 und damit der Angelpunkt der Roadmap: die Uebergabe
+von praesenzlokalem in dauerhaften Zustand als ausdruecklicher, auditierter
+Schritt, mit den fuenf Stellen aus ADR 0129 an der Grenze statt am Store.
+Praktisch zieht das den Beobachtungspuffer aus dem Core ins Geraet - womit das
+Home ueberhaupt keine Rohstandorte mehr sieht und Phase 6 offline antworten
+kann.
 
-Ein bis zwei Bloecke. **Fable 5 + xhigh** - echte Architekturgabel mit
+Ein bis zwei Bloecke. **Fable 5 + xhigh** - der Umzug eines Stores mit
 Custody- und Datenschutzfolgen.
 
 ## Phase 4 - Android-Fundament
