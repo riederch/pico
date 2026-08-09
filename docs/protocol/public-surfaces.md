@@ -26,6 +26,44 @@ Commercial permission does not automatically grant compatibility status.
 | Reserved | Name exists as design direction but is not writable or fully implemented yet. |
 | Internal | Implementation detail that must not be relied upon as a stable public surface. |
 
+### The class is the first word, and it is what decides a change
+
+A route's status **begins with one of those terms**. That first word is its
+class; everything after it describes what the surface is for.
+`experimental setup surface` and `experimental foundation API` are both class
+`Experimental` and differ only in description. The canonical forms table names
+its class in a column of its own, because a byte form has no equivalent
+descriptive status to lead with.
+
+This matters because ADR 0134 asks this document to decide something: whether a
+format may be revised in place before the first kept identity is founded.
+`Experimental`, `Reserved` and `Internal` say yes - none of them promises
+anything to a holder. `Pico-compatible` and `Pico Home-compatible` say no.
+Nothing else may be read into a status, and a surface whose class cannot be
+read from its first word is a defect in this document rather than a judgement
+call at the call site.
+
+**Published fixtures are evidence, not a promise.** A vector suite under
+`docs/protocol/fixtures/` pins what a form is today so a change is visible and
+a conformance runner has something to run. It becomes a promise when someone
+claims compatibility against it (L4 in `compatibility-levels.md`), and nobody
+has. So a fixture-backed experimental form may still be revised in place - the
+vectors are regenerated with it, which ADR 0134's first obligation already
+requires.
+
+## Canonical forms and their class
+
+The tables of routes below do not cover the byte forms, which is what ADR 0134
+actually judges. They are listed here for the same reason: so the class is read
+rather than inferred.
+
+| Form | Class | Notes |
+|---|---|---|
+| `pico.recovery.card.v1` and its scan transport | Internal | Stated below already: the card forms and the PDF generator are local implementation surfaces, not Pico Link compatibility. Vectors live under `fixtures/home-device-recovery/`. |
+| `pico.home.founding-record.v1` / `.v2` | Experimental | The durable form of the experimental `POST /api/home/claim` setup route, with vectors under `fixtures/home-first-device-founding/` and `fixtures/home-signature-input/`. Classified here on 2026-08-09; the route's class was documented, the record's was not, and ADR 0134 F3 needed it. |
+| ADR 0034 signature-input families | Experimental | Fixture-backed canonical bytes for identity, Home, Vault, Link, recovery and rotation families. Their protocol version is the axis that moves when they change. |
+| Draft `pico.link.*` packet, credential and envelope shapes | Reserved | ADR 0042-0066 draft-only fixtures. Not writable, no runtime, and explicitly no compatibility claim (ADR 0046). |
+
 ## Current public surfaces
 
 The following surfaces are visible today but should be treated as foundation-stage and experimental:

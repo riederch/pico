@@ -57,8 +57,8 @@ Enthalten sind:
 
 ```text
 license:check -> version:check -> addon:check -> product:check ->
-design-system:check -> companion:check -> browser:check -> time:check ->
-offline:check -> supply:check -> build -> module:check ->
+surface:check -> design-system:check -> companion:check -> browser:check ->
+time:check -> offline:check -> supply:check -> build -> module:check ->
 companion:release-check -> check -> test
 ```
 

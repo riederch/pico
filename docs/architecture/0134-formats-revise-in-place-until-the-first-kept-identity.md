@@ -87,10 +87,21 @@ spent.
    scanned under the old shape stops working, and that is stated rather
    than discovered. Development artifacts are disposable *by declaration*,
    not by assumption.
-4. **Apply only where no claim exists.** Any surface at L1 or above in
-   `compatibility-levels.md`, and anything a published fixture suite backs
-   as a compatibility promise, is out of scope. `public-surfaces.md` is
-   the list that decides, not a judgement at the call site.
+4. **Apply only where no claim exists.** `public-surfaces.md` decides, and
+   since 2026-08-09 it decides by a readable value rather than by prose:
+   every status there begins with one of its defined terms, and that first
+   word is the class. `Experimental`, `Reserved` and `Internal` license an
+   in-place revision - none of them promises anything to a holder.
+   `Pico-compatible` and `Pico Home-compatible` do not. Canonical byte
+   forms, which are what this obligation actually judges, now have their
+   own table there instead of being inferred from the route that stores
+   them.
+
+   Published fixtures do not change that answer. A vector suite pins what
+   a form is today so a change is visible; it becomes a promise only when
+   someone claims compatibility against it (L4), and nobody has. The
+   vectors are regenerated with the change, which obligation 1 already
+   requires.
 
 ### What this does not license
 
@@ -171,23 +182,16 @@ freeze, which is when it becomes dangerous.
     honestly means collapsing that pair - the same shape and roughly the
     same size as F2.
 
-    And unlike the card, it is not clear this ADR licenses it at all.
-    Obligation 4 names `public-surfaces.md` as the list that decides, and
-    that list treats the two surfaces differently: it says of the card and
-    its generator that they "are local implementation surfaces, not Pico
-    Link compatibility", an explicit exclusion, while the founding record
-    is documented at length as part of `POST /api/home/claim` - an
-    "experimental setup surface" that "does not implement Pico Home Link
-    compatibility". Experimental and excluded are not the same statement,
-    and deciding between them requires reading prose that says different
-    things in different paragraphs.
-
-    That is a gap in this ADR rather than in the sweep: obligation 4 needs
-    an input that can actually decide, and `public-surfaces.md` records
-    claims per surface only in prose. Resolve that before touching the
-    founding record - a collapse performed under a misread of which class
-    a surface belongs to is precisely the failure the obligation exists to
-    prevent.
+    Whether this ADR licensed it was undecidable when the sweep was
+    written, because obligation 4 pointed at a document that recorded
+    claims only in prose - explicit exclusion for the card, "experimental
+    setup surface" for the route that stores the founding record, and
+    nothing at all for the record itself. That gap was closed on
+    2026-08-09: `public-surfaces.md` now states that the class is the
+    first word of a status, and gives the canonical byte forms their own
+    table. The founding record is **Experimental**, so the collapse is
+    licensed - it is the size, not the permission, that keeps it out of a
+    tail-end block.
   - **Recovery Card v1**, handled by F2.
   - **`foundationAccessModeAlias`** - the `ha-ingress` name kept under ADR
     0128 H5 because it "steht in installierten Umgebungen". Whether such
