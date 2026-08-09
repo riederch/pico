@@ -10,6 +10,11 @@ ADR 0097 recorded, which had mobile arriving "later as a delegated device
 (device keys under Pico Link ceremonies), never as the first home of the
 identity root". iOS is not decided here.
 
+Amended the same day with gate A7: the first Android client ships as a
+home-network client, because Pico Link Direct reaches only the person's own
+Home directly and no relay exists. That limit is a product statement, not a
+temporary gap to be quietly outgrown.
+
 ## Context
 
 ADR 0097 reasoned about mobile three times, and all three arguments were
@@ -152,6 +157,28 @@ then, the reachable veto guarantee is anchored on the desktop or appliance
 client, and Android is an additional channel rather than the one the
 guarantee rests on.
 
+### The first Android client is a home-network client, and says so
+
+ADR 0107 carries envelopes to the person's **own Home, directly**, and
+explicitly excludes the relay, discovery and streaming. For a desktop that
+costs nothing: it sits in the house. For a phone it is the defining
+constraint, because a phone's whole point is leaving. Away from the home
+network there is no Home to reach - no authenticated lifecycle read, no
+alarm delivery, no ceremony.
+
+The first Android client therefore ships with that limit spoken rather than
+discovered. It states when it cannot reach its Home instead of presenting
+an unreachable Home as a quiet one - the same rule ADR 0118 already applies
+to a failed read, where "nothing is waiting" and "nobody looked" are
+different claims. No product surface, document or release note may describe
+the Android client as working away from home.
+
+The relay stays a separate undertaking. Putting it in front of the first
+client would trade the whole path to a working product for a packet layer
+carrying its own operational, privacy and cost questions - and the ADR 0112
+alarm already has its anchor on a desktop or appliance client, which is
+exactly why that anchor was placed there.
+
 ### The Surface role stays, for watches and small displays
 
 A Pico Surface is still a real node role, and it is what a smartwatch, a
@@ -219,6 +246,11 @@ local-first product's most security-critical moment.
   order, on Android.
 - **A6 - Identity root founding on Android (open, separate decision):**
   opens only after A3, and only by an explicit user decision.
+- **A7 - The home-network limit is spoken (open):** the client names an
+  unreachable Home rather than presenting it as a quiet one, and no product
+  surface or document claims away-from-home function. Decided 2026-08-09
+  together with the sequencing in
+  `docs/development/roadmap-to-first-client.md`.
 
 ## Consequences
 

@@ -53,6 +53,19 @@ Vor dem Schreiben zu entscheiden:
 - **Verhaeltnis zu ADR 0113.** Der Companion ist heute eine einzelne
   Desktop-Praesenz. Ob C1/C2 rueckwirkend als Praesenz beschrieben wird oder
   erst kuenftige Blocks, ist eine bewusste Entscheidung.
+- **Darf eine Praesenz eigenen dauerhaften Zustand halten?** Das ist die
+  Frage, die den Auftrag von einer Aufraeumarbeit zu einer Vorbedingung
+  macht. `pico_observation` (ADR 0129 SR2) liegt im Core: Migration,
+  Q5-Obergrenze, Shred-Kaskade. Die Ableitung SR1/SR4 sind reine Funktionen,
+  aber die *Erfassung* schreibt ins Home. Ein Telefon in der Tiefgarage hat
+  kein Home - "wo habe ich geparkt" funktioniert damit ausgerechnet offline
+  nicht, also genau dort, wo Issue #3 es verlangt. Entweder bekommt eine
+  Praesenz lokalen Puffer plus lokale Ableitung, oder die Erfassung bleibt
+  eine Heimnetzfunktion und Issue #3 bleibt unerfuellt.
+
+Seit 2026-08-09 ist dieser Auftrag terminiert: `docs/development/`
+`roadmap-to-first-client.md` fuehrt ihn als Phase 3 und macht Phase 6
+(Nuetzlichkeit auf dem Telefon) davon abhaengig.
 
 Beruehrt ausserdem: ADR 0104 (Einstellungen gehoeren nach Pico), ADR 0117
 (Origin-bewusster Datenfluss), ADR 0118 (Offline-Degradation) und
