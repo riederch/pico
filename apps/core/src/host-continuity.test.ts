@@ -22,6 +22,7 @@ import {
 import { buildPicoIdentityKeyRecordSignatureInput } from '@pico/protocol';
 import { followPicoHomeContinuityChain } from '@pico/identity';
 import { EventStore } from './event-store.js';
+import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 
 const tempDirs: string[] = [];
 const HOME_ID = 'home_host_continuity';
@@ -378,6 +379,7 @@ function createFixture() {
     hostKeyAgreementKeyFingerprintHex: 'aa'.repeat(32),
     foundingRecord: createFoundingRecord(founder, hostA),
     claimedAt: foundedAt,
+    sodium,
   });
 
   return { databasePath, store, founder, hostA, hostB };
@@ -480,6 +482,7 @@ function createSigningKey(
   return {
     keyRecord,
     publicKeyHex,
+    privateKey: pair.privateKey,
     fingerprintHex: Buffer.from(sodium.crypto_generichash(
       32,
       buildPicoIdentityKeyRecordSignatureInput(keyRecord),
@@ -496,6 +499,11 @@ function createFoundingRecord(
   founder: ReturnType<typeof createSigningKey>,
   host: ReturnType<typeof createSigningKey>,
 ): PicoHomeFoundingRecord {
+  const evidence = createPicoTestFirstDeviceEvidence({
+    sodium,
+    claimantIdentityPrivateKey: founder.privateKey,
+    claimantIdentityKeyFingerprintHex: founder.fingerprintHex,
+  });
   return {
     schema: picoHomeFoundingRecordSchema,
     founding: {
@@ -509,7 +517,12 @@ function createFoundingRecord(
       hostNonceHex: 'cc'.repeat(32),
       foundedAt,
       lifecycleOrder: 'seq:0000000000000001',
+      ...evidence.foundingFields,
     },
+    firstDeviceSigningKeyRecord: evidence.firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord: evidence.firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation: evidence.firstDeviceDelegation,
+    firstDeviceRevocations: evidence.firstDeviceRevocations,
     claimantIdentityKeyRecord: founder.keyRecord,
     claimantFoundingSignatureHex: 'ee'.repeat(64),
     hostClaimResponse: {

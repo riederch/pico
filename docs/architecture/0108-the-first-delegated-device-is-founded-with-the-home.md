@@ -8,6 +8,18 @@ the bootstrap dependency ADR 0107 D3 recorded: a v2-founded Home can run
 post-claim authority operations over Pico Link from its first device without
 the local `open-identity-session` route.
 
+**Status note (ADR 0134 F2, 2026-08-10):** the body calls the founding record
+that carries first-device evidence a "v2-founded Home", against a v1 record
+that carried none. There is now one founding record format, keeping the name
+`pico.home.founding-record.v1`, and its three first-device fields are
+required - so every founded Home is what this ADR calls v2-founded, and the
+`legacyFounding` state that described the other case no longer exists. Two
+consequences were only visible once the second format was gone: the store's
+reconciliation and its row mapper had both been comparing the surviving
+schema constant with itself, so first-device evidence was neither
+re-projected on restart nor returned by a read. Both are fixed. The text is
+kept rather than rewritten (ADR 0128).
+
 ## Context
 
 ADR 0107 built the authenticated direct channel and held its authority

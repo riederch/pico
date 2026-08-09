@@ -7,9 +7,9 @@ import {
   buildPicoHomeDeviceRecoveryPrepareSignatureInput,
   buildPicoHomeDeviceRecoveryReceiptSignatureInput,
   buildPicoRecoveryCardPayload,
-  buildPicoRecoveryCardV2ScanTransport,
+  buildPicoRecoveryCardScanTransport,
   parsePicoRecoveryCardPayload,
-  parsePicoRecoveryCardV2ScanTransport,
+  parsePicoRecoveryCardScanTransport,
   picoHomeDeviceRecoveryCanonicalLabels,
   picoHomeDeviceRecoveryClaimDigestHex,
   picoHomeDeviceRecoveryEvidenceDigestHex,
@@ -18,14 +18,12 @@ import {
   picoHomeDeviceRecoveryTiming,
   picoProtocolVersion,
   picoRecoveryCardSchema,
-  picoRecoveryCardV2ScanPrefix,
-  picoRecoveryCardV2Schema,
+  picoRecoveryCardScanPrefix,
   type PicoHomeDeviceRecoveryClaimSignatureInput,
   type PicoHomeDeviceRecoveryPrepareSignatureInput,
   type PicoHomeDeviceRecoveryEvidence,
   type PicoHomeDeviceRecoveryReceiptSignatureInput,
   type PicoRecoveryCardPayload,
-  type PicoRecoveryCardPayloadV2,
 } from './index.js';
 
 type JsonRecord = Record<string, unknown>;
@@ -70,14 +68,12 @@ describe('ADR 0110 recovery protocol forms', () => {
 
   it('exports a closed schema and canonical-label vocabulary', () => {
     expect(picoRecoveryCardSchema).toBe('pico.recovery.card.v1');
-    expect(picoRecoveryCardV2Schema).toBe('pico.recovery.card.v2');
     expect(picoHomeDeviceRecoverySubmissionSchema)
       .toBe('pico.home.device-recovery-submission.v1');
     expect(picoHomeDeviceRecoveryRecordSchema)
       .toBe('pico.home.device-recovery-record.v1');
     expect(picoHomeDeviceRecoveryCanonicalLabels).toEqual({
       card: 'pico.recovery.card.v1',
-      cardV2: 'pico.recovery.card.v2',
       prepare: 'pico.home.device-recovery-prepare.v1',
       evidenceDigest:
         'pico.home.device-recovery-evidence-digest.v1',
@@ -91,18 +87,11 @@ describe('ADR 0110 recovery protocol forms', () => {
     });
   });
 
-  it('round-trips additive Card v2 and keeps v1 parsing exact', () => {
-    const suite = fixtureSuite();
-    const v1 = (suite.card as JsonRecord)
-      .fields as unknown as PicoRecoveryCardPayload;
-    expect(parsePicoRecoveryCardPayload(
-      buildPicoRecoveryCardPayload(v1),
-    )).toEqual(v1);
-
-    const vector = fixtureCardV2();
-    const v2 = vector.fields;
-    const canonical = buildPicoRecoveryCardPayload(v2);
-    expect(parsePicoRecoveryCardPayload(canonical)).toEqual(v2);
+  it('round-trips the one card form and pins its bytes', () => {
+    const vector = fixtureCard();
+    const fields = vector.fields;
+    const canonical = buildPicoRecoveryCardPayload(fields);
+    expect(parsePicoRecoveryCardPayload(canonical)).toEqual(fields);
     expect(Buffer.from(canonical).toString('hex'))
       .toBe(vector.canonicalPayloadHex);
 
@@ -113,42 +102,41 @@ describe('ADR 0110 recovery protocol forms', () => {
       .toThrow('invalid_recovery_card_payload_length');
   });
 
-  it('pins the v2 scan transport and refuses every alternate spelling', () => {
-    const vector = fixtureCardV2();
+  it('pins the scan transport and refuses every alternate spelling', () => {
+    const vector = fixtureCard();
     const canonical = buildPicoRecoveryCardPayload(vector.fields);
-    const transport = buildPicoRecoveryCardV2ScanTransport(canonical);
+    const transport = buildPicoRecoveryCardScanTransport(canonical);
 
     expect(transport).toBe(vector.scanTransport);
-    expect(transport.startsWith(picoRecoveryCardV2ScanPrefix)).toBe(true);
-    const scan = parsePicoRecoveryCardV2ScanTransport(transport);
+    expect(transport.startsWith(picoRecoveryCardScanPrefix)).toBe(true);
+    const scan = parsePicoRecoveryCardScanTransport(transport);
     expect(scan.payload).toEqual(vector.fields);
     expect(Buffer.from(scan.canonicalPayload).toString('hex'))
       .toBe(vector.canonicalPayloadHex);
 
-    const body = transport.slice(picoRecoveryCardV2ScanPrefix.length);
+    const body = transport.slice(picoRecoveryCardScanPrefix.length);
     // Padding, the standard alphabet and surrounding whitespace are all
     // spellings a tolerant decoder would accept for these same bytes.
-    expect(() => parsePicoRecoveryCardV2ScanTransport(`${transport}=`))
+    expect(() => parsePicoRecoveryCardScanTransport(`${transport}=`))
       .toThrow('invalid_recovery_card_scan_charset');
     for (const outside of ['+', '/', '=', ' ', 'ä']) {
-      expect(() => parsePicoRecoveryCardV2ScanTransport(
-        picoRecoveryCardV2ScanPrefix + body.slice(0, -1) + outside,
+      expect(() => parsePicoRecoveryCardScanTransport(
+        picoRecoveryCardScanPrefix + body.slice(0, -1) + outside,
       )).toThrow('invalid_recovery_card_scan_charset');
     }
-    expect(() => parsePicoRecoveryCardV2ScanTransport(`${transport}\n`))
+    expect(() => parsePicoRecoveryCardScanTransport(`${transport}\n`))
       .toThrow('invalid_recovery_card_scan_charset');
-    expect(() => parsePicoRecoveryCardV2ScanTransport(` ${transport}`))
+    expect(() => parsePicoRecoveryCardScanTransport(` ${transport}`))
       .toThrow('invalid_recovery_card_scan_prefix');
-    expect(() => parsePicoRecoveryCardV2ScanTransport(
-      `pico-recovery-card-v1:${body}`,
+    // Case is part of the prefix: an upper-cased spelling is a different
+    // string carrying the same bytes, which is the class this parser refuses.
+    expect(() => parsePicoRecoveryCardScanTransport(
+      `PICO-RECOVERY-CARD-V1:${body}`,
     )).toThrow('invalid_recovery_card_scan_prefix');
-    expect(() => parsePicoRecoveryCardV2ScanTransport(
-      `PICO-RECOVERY-CARD-V2:${body}`,
-    )).toThrow('invalid_recovery_card_scan_prefix');
-    expect(() => parsePicoRecoveryCardV2ScanTransport(
-      picoRecoveryCardV2ScanPrefix,
+    expect(() => parsePicoRecoveryCardScanTransport(
+      picoRecoveryCardScanPrefix,
     )).toThrow('invalid_recovery_card_scan_length');
-    expect(() => parsePicoRecoveryCardV2ScanTransport(`${transport}A`))
+    expect(() => parsePicoRecoveryCardScanTransport(`${transport}A`))
       .toThrow('invalid_recovery_card_scan_length');
 
     // A body of length 4n+3 carries two bits that encode nothing. Flipping
@@ -161,21 +149,13 @@ describe('ADR 0110 recovery protocol forms', () => {
     expect(alternate).not.toBe(short);
     expect(Buffer.from(alternate, 'base64url'))
       .toEqual(Buffer.from(short, 'base64url'));
-    expect(() => parsePicoRecoveryCardV2ScanTransport(
-      picoRecoveryCardV2ScanPrefix + alternate,
+    expect(() => parsePicoRecoveryCardScanTransport(
+      picoRecoveryCardScanPrefix + alternate,
     )).toThrow('noncanonical_recovery_card_scan');
 
-    // A v1 card has its own raw-byte QR; wrapping it here would give a frozen
-    // card a second representation.
-    const v1 = (fixtureSuite().card as JsonRecord)
-      .fields as unknown as PicoRecoveryCardPayload;
-    expect(() => parsePicoRecoveryCardV2ScanTransport(
-      buildPicoRecoveryCardV2ScanTransport(buildPicoRecoveryCardPayload(v1)),
-    )).toThrow('invalid_recovery_card_scan_schema');
-
-    expect(() => buildPicoRecoveryCardV2ScanTransport(new Uint8Array(4_097)))
+    expect(() => buildPicoRecoveryCardScanTransport(new Uint8Array(4_097)))
       .toThrow('invalid_recovery_card_payload_length');
-    expect(() => buildPicoRecoveryCardV2ScanTransport(new Uint8Array(0)))
+    expect(() => buildPicoRecoveryCardScanTransport(new Uint8Array(0)))
       .toThrow('invalid_recovery_card_payload_length');
   });
 
@@ -296,17 +276,16 @@ function flipUnusedBits(character: string): string {
   return base64UrlAlphabet[base64UrlAlphabet.indexOf(character) ^ 1];
 }
 
-function fixtureCardV2(): {
-  fields: PicoRecoveryCardPayloadV2;
+function fixtureCard(): {
+  fields: PicoRecoveryCardPayload;
   canonicalPayloadHex: string;
   scanTransport: string;
 } {
-  return JSON.parse(readFileSync(resolve(
-    process.cwd(),
-    '../../docs/protocol/fixtures/home-device-recovery/card-v2.json',
-  ), 'utf8')) as {
-    fields: PicoRecoveryCardPayloadV2;
-    canonicalPayloadHex: string;
-    scanTransport: string;
-  };
+  return (fixtureSuite() as unknown as {
+    card: {
+      fields: PicoRecoveryCardPayload;
+      canonicalPayloadHex: string;
+      scanTransport: string;
+    };
+  }).card;
 }

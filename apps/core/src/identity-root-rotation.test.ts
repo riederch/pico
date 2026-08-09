@@ -30,6 +30,7 @@ import {
   type PicoHomeDeviceLifecycleSponsor,
   type PicoIdentityRotationSuccessorFirstDevice,
 } from './event-store.js';
+import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 
 const tempDirs: string[] = [];
 const HOME_ID = 'home_root_rotation';
@@ -871,6 +872,7 @@ function createFixture(options: {
       founding.founding.hostKeyAgreementKeyFingerprintHex,
     foundingRecord: founding,
     claimedAt: foundedAt,
+    sodium,
   });
 
   // The rotating identity is a member, not the founder: the founder's root is
@@ -1011,6 +1013,7 @@ function createSigningKey(
   return {
     keyRecord,
     publicKeyHex,
+    privateKey: pair.privateKey,
     fingerprintHex: fingerprint(keyRecord),
     sign: (input: Uint8Array) =>
       Buffer.from(
@@ -1123,6 +1126,11 @@ function createFoundingRecord(
   host: ReturnType<typeof createSigningKey>,
   homeId = HOME_ID,
 ): PicoHomeFoundingRecord {
+  const evidence = createPicoTestFirstDeviceEvidence({
+    sodium,
+    claimantIdentityPrivateKey: founder.privateKey,
+    claimantIdentityKeyFingerprintHex: founder.fingerprintHex,
+  });
   return {
     schema: picoHomeFoundingRecordSchema,
     founding: {
@@ -1136,7 +1144,12 @@ function createFoundingRecord(
       hostNonceHex: 'cc'.repeat(32),
       foundedAt,
       lifecycleOrder: 'seq:0000000000000001',
+      ...evidence.foundingFields,
     },
+    firstDeviceSigningKeyRecord: evidence.firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord: evidence.firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation: evidence.firstDeviceDelegation,
+    firstDeviceRevocations: evidence.firstDeviceRevocations,
     claimantIdentityKeyRecord: founder.keyRecord,
     claimantFoundingSignatureHex: 'ee'.repeat(64),
     hostClaimResponse: {

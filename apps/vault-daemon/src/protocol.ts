@@ -4,7 +4,7 @@ import {
   picoHomeV2SignatureInputLabels,
   picoVaultPersonKeyRoles,
   parsePicoRecoveryCardPayload,
-  picoRecoveryCardV2Schema,
+  picoRecoveryCardSchema,
   type PicoVaultPersonKeyRole,
 } from '@pico/protocol';
 import {
@@ -38,7 +38,6 @@ export const picoVaultDaemonRequestFamilies = {
   ceremonyRotateDomain: 'pico.vault.daemon.ceremony.rotate-domain.v1',
   ceremonyCreateReaderGrant: 'pico.vault.daemon.ceremony.create-reader-grant.v1',
   ceremonyIssueRecoveryCard: 'pico.vault.daemon.ceremony.issue-recovery-card.v1',
-  ceremonyIssueRecoveryCardV2: 'pico.vault.daemon.ceremony.issue-recovery-card.v2',
   recoveryBootstrap: 'pico.vault.daemon.recovery.bootstrap.v1',
 } as const;
 
@@ -280,6 +279,7 @@ export interface PicoVaultDaemonCeremonyIssueRecoveryCardRequest {
   picoName: string;
   homeNameOrId: string;
   homeId: string;
+  homeHostPicoIdentityFingerprintHex: string;
   hostSigningKeyFingerprintHex: string;
   hostKeyAgreementKeyFingerprintHex: string;
   hostKeyAgreementPublicKeyHex: string;
@@ -293,27 +293,6 @@ export interface PicoVaultDaemonCeremonyIssueRecoveryCardResult {
   recoveryPhrase: string;
   canonicalPayloadHex: string;
 }
-
-/** Additive ADR 0115 card issuance; the v1 request remains byte-for-byte valid. */
-export interface PicoVaultDaemonCeremonyIssueRecoveryCardV2Request {
-  family:
-    typeof picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2;
-  requestId: string;
-  signerKeyFingerprintHex: string;
-  picoName: string;
-  homeNameOrId: string;
-  homeId: string;
-  homeHostPicoIdentityFingerprintHex: string;
-  hostSigningKeyFingerprintHex: string;
-  hostKeyAgreementKeyFingerprintHex: string;
-  hostKeyAgreementPublicKeyHex: string;
-  endpointHint: string;
-  issuedAt: string;
-  pin: string;
-}
-
-export type PicoVaultDaemonCeremonyIssueRecoveryCardV2Result =
-  PicoVaultDaemonCeremonyIssueRecoveryCardResult;
 
 export interface PicoVaultDaemonRecoveryBootstrapRequest {
   family: typeof picoVaultDaemonRequestFamilies.recoveryBootstrap;
@@ -387,7 +366,6 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyRotateDomainRequest
   | PicoVaultDaemonCeremonyCreateReaderGrantRequest
   | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
-  | PicoVaultDaemonCeremonyIssueRecoveryCardV2Request
   | PicoVaultDaemonRecoveryBootstrapRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
@@ -653,12 +631,11 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         || !lowercaseHexPattern.test(canonicalCardPayloadHex)) {
         throw new Error('invalid_request');
       }
-      const card = parsePicoRecoveryCardPayload(
+      // Parsing is the check: a payload that is not this format cannot be
+      // read at all, and the format always carries the acceptor pin.
+      parsePicoRecoveryCardPayload(
         Buffer.from(canonicalCardPayloadHex, 'hex'),
       );
-      if (card.schema !== picoRecoveryCardV2Schema) {
-        throw new Error('recovery_card_v1_requires_trusted_acceptor_pin');
-      }
       const pin = parsed.pin;
       if (typeof pin !== 'string'
         || pin.length < picoRecoveryPinProtection.minLength
@@ -881,16 +858,13 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
           : { receivedAt: requireBoundedString(parsed, 'receivedAt') }),
       };
     }
-    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard:
-    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2: {
-      const v2 = family
-        === picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2;
+    case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard: {
       assertExactKeys(
         parsed,
         [
           'family', 'requestId', 'signerKeyFingerprintHex',
           'picoName', 'homeNameOrId', 'homeId',
-          ...(v2 ? ['homeHostPicoIdentityFingerprintHex'] : []),
+          'homeHostPicoIdentityFingerprintHex',
           'hostSigningKeyFingerprintHex',
           'hostKeyAgreementKeyFingerprintHex',
           'hostKeyAgreementPublicKeyHex', 'endpointHint', 'issuedAt', 'pin',
@@ -905,7 +879,8 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
       ) {
         throw new Error('invalid_request');
       }
-      const common = {
+      return {
+        family: picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
         requestId,
         signerKeyFingerprintHex:
           requireFingerprintHex(parsed, 'signerKeyFingerprintHex'),
@@ -930,22 +905,11 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         endpointHint: requireBoundedString(parsed, 'endpointHint'),
         issuedAt: requireBoundedString(parsed, 'issuedAt'),
         pin,
-      };
-      if (v2) {
-        return {
-          family:
-            picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2,
-          ...common,
-          homeHostPicoIdentityFingerprintHex:
-            requireFingerprintHex(
-              parsed,
-              'homeHostPicoIdentityFingerprintHex',
-            ),
-        };
-      }
-      return {
-        family: picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
-        ...common,
+        homeHostPicoIdentityFingerprintHex:
+          requireFingerprintHex(
+            parsed,
+            'homeHostPicoIdentityFingerprintHex',
+          ),
       };
     }
     case picoVaultDaemonRequestFamilies.approvalWait: {

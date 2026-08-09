@@ -2,7 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs
 import { join } from 'node:path';
 import {
   buildPicoRecoveryCardPayload,
-  buildPicoRecoveryCardV2ScanTransport,
+  buildPicoRecoveryCardScanTransport,
+  picoRecoveryCardSchema,
 } from '@pico/protocol';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -130,26 +131,33 @@ describe('ADR 0112 S3 first run', () => {
     expect(daemon.unlocks).toHaveLength(0);
   });
 
-  it('refuses a Card v1 transport before the vault is touched', async () => {
+  it('refuses a transport this card format cannot read, before the vault is touched', async () => {
     const paths = temporaryPaths();
     const daemon = fakeDaemonClient();
-    const v1Transport = buildPicoRecoveryCardV2ScanTransport(
-      buildPicoRecoveryCardPayload({
-        schema: 'pico.recovery.card.v1',
-        suite: 'pico.suite.id.v1',
-        picoName: 'Ada',
-        homeNameOrId: 'Home Vector',
-        seedMaterialHex: '00'.repeat(32),
-        pinProtected: true,
-        identityKeyFingerprintHex: '11'.repeat(32),
-        homeId: 'home_vector_01',
-        hostSigningKeyFingerprintHex: '66'.repeat(32),
-        hostKeyAgreementKeyFingerprintHex: '77'.repeat(32),
-        hostKeyAgreementPublicKeyHex: '88'.repeat(32),
-        endpointHint: 'https://home.example/link',
-        issuedAt: '2026-07-31T08:00:00.000Z',
-      }),
-    );
+    // A payload with the right element count but a schema label from another
+    // format: the one thing a scanner can hand over that still looks like a
+    // card. Flipping the label in place keeps every canonical length valid, so
+    // the refusal can only come from the label itself.
+    const canonical = buildPicoRecoveryCardPayload({
+      schema: picoRecoveryCardSchema,
+      suite: 'pico.suite.id.v1',
+      picoName: 'Ada',
+      homeNameOrId: 'Home Vector',
+      seedMaterialHex: '00'.repeat(32),
+      pinProtected: true,
+      identityKeyFingerprintHex: '11'.repeat(32),
+      homeId: 'home_vector_01',
+      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
+      hostSigningKeyFingerprintHex: '66'.repeat(32),
+      hostKeyAgreementKeyFingerprintHex: '77'.repeat(32),
+      hostKeyAgreementPublicKeyHex: '88'.repeat(32),
+      endpointHint: 'https://home.example/link',
+      issuedAt: '2026-07-31T08:00:00.000Z',
+    });
+    const labelAt = Buffer.from(canonical).indexOf(picoRecoveryCardSchema);
+    expect(labelAt).toBeGreaterThanOrEqual(0);
+    canonical[labelAt + picoRecoveryCardSchema.length - 1] = '2'.charCodeAt(0);
+    const foreignTransport = buildPicoRecoveryCardScanTransport(canonical);
 
     await expect(runPicoCompanionFirstRun({
       ...paths,
@@ -158,12 +166,12 @@ describe('ADR 0112 S3 first run', () => {
       decisions: silentDecisions(),
       connect: daemon.connect,
       secrets: {
-        cardTransport: v1Transport,
+        cardTransport: foreignTransport,
         pin: '123456',
         passphrase: 'device passphrase',
       },
       notifications: silentNotifications(),
-    })).rejects.toThrow('invalid_recovery_card_scan_schema');
+    })).rejects.toThrow('invalid_recovery_card_schema');
 
     // Nothing irreversible may happen on a card this run cannot use.
     expect(daemon.bootstraps).toHaveLength(0);

@@ -1,7 +1,7 @@
 import {
   buildPicoRecoveryCardPayload,
-  buildPicoRecoveryCardV2ScanTransport,
-  picoRecoveryCardV2ScanPrefix,
+  buildPicoRecoveryCardScanTransport,
+  picoRecoveryCardScanPrefix,
   type PicoRecoveryCardPayload,
 } from '@pico/protocol';
 import type { PicoVaultRecoveryCard } from '@pico/vault';
@@ -32,7 +32,7 @@ export const PICO_RECOVERY_CARD_PDF_LAYOUT = {
  * The transport contract itself is protocol, not presentation: the scanning
  * side must not import the PDF writer to know what it is reading.
  */
-export const PICO_RECOVERY_CARD_V2_QR_PREFIX = picoRecoveryCardV2ScanPrefix;
+export const PICO_RECOVERY_CARD_QR_PREFIX = picoRecoveryCardScanPrefix;
 
 export interface PicoRecoveryCardPdfOptions {
   /**
@@ -54,22 +54,18 @@ export interface PicoRecoveryCardQrMatrix {
 }
 
 /**
- * V1 preserves its binary canonical QR bytes. V2 wraps the same canonical
- * bytes in a fixed ASCII/base64url transport so commodity Linux camera and
- * USB scanners can return it to Electron Main without a browser renderer ever
- * receiving the secret QR result. Neither form is a second JSON serialization.
+ * The canonical bytes travel in a fixed ASCII/base64url transport so commodity
+ * Linux camera and USB scanners can return them to Electron Main without a
+ * browser renderer ever receiving the secret QR result. The transport is not a
+ * second serialization: it wraps the same canonical bytes.
  */
 export function picoRecoveryCardQrPayload(
   card: PicoVaultRecoveryCard,
 ): Uint8Array {
   assertRecoveryCard(card);
-  const canonical = hexToBytes(card.canonicalPayloadHex);
-  if (card.payload.schema === 'pico.recovery.card.v2') {
-    return new TextEncoder().encode(
-      buildPicoRecoveryCardV2ScanTransport(canonical),
-    );
-  }
-  return canonical;
+  return new TextEncoder().encode(
+    buildPicoRecoveryCardScanTransport(hexToBytes(card.canonicalPayloadHex)),
+  );
 }
 
 export function createPicoRecoveryCardQrMatrix(

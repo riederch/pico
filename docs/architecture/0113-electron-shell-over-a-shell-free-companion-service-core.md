@@ -146,6 +146,23 @@ cannot silently disappear from the total. The report is written and emitted
 before either budget assertion, making a failed reference-build measurement
 actionable without weakening the gate.
 
+**Open on 2026-08-10: the PSS budget is exceeded on the development
+machine.** Four measurements of the packaged `0.1.9` build with Electron
+43.2.0 gave 237.7, 238.0, 238.6 and 241.2 MB against the 225 MB limit -
+5.7 to 7.2 percent over, and stable enough that this is not measurement
+noise. The private dirty-plus-hugetlb class stays inside its own budget
+(about 105 MB against 110 MB), so only the PSS gate fails. It was
+attributed rather than assumed: the 238.6 MB reading comes from a clean
+`HEAD` worktree built and measured on the same machine in the same
+session, so it predates the ADR 0134 F2 work that surfaced it and is not
+caused by it. What is not yet known is whether the cause is this machine
+(PSS attributes shared pages by how many processes map them, so the
+number is a property of the host as much as of the build) or a real
+growth in the packaged tree since the budget was last met. That question
+is the next step, and it has to be answered before either number is
+touched: raising a budget to meet a measurement is how a budget stops
+meaning anything, and the limits were chosen by the user, not derived.
+
 ### Chromium currency is a release obligation
 
 Shipping Chromium means owning its security cadence. From C3 on, a

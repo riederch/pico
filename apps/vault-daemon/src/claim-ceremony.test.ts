@@ -569,6 +569,7 @@ async function issueRecoveryCard(
       picoName: 'Mira',
       homeNameOrId: homeId,
       homeId,
+      homeHostPicoIdentityFingerprintHex: ownerIdentity.keyFingerprintHex,
       hostSigningKeyFingerprintHex: core.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex:
         core.hostKeyAgreementKeyFingerprintHex,

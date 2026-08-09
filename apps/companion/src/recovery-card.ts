@@ -50,7 +50,7 @@ export async function issuePicoCompanionRecoveryCard(input: {
   if (!Number.isFinite(now.getTime())) {
     throw new Error('invalid_recovery_card_issuance_time');
   }
-  const card = await input.daemonClient.ceremonyIssueRecoveryCardV2({
+  const card = await input.daemonClient.ceremonyIssueRecoveryCard({
     signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
     picoName: input.picoName,
     homeNameOrId: input.homeNameOrId,

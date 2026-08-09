@@ -21,6 +21,10 @@ import {
   type PicoIdentityRevocationSignatureInput,
 } from '@pico/protocol';
 import { EventStore, type PicoHomeDeviceLifecycleSponsor } from './event-store.js';
+import {
+  createPicoTestFirstDeviceEvidence,
+  type PicoTestFirstDeviceEvidence,
+} from './test-first-device-evidence.js';
 
 const tempDirs: string[] = [];
 
@@ -442,9 +446,23 @@ function createFoundedLifecycleFixture() {
   const sponsorAgreement = createAgreementKey();
   const homeId = 'home_device_lifecycle';
   const acceptedAt = '2026-07-30T10:05:00.000Z';
+  // The founding delegates to the sponsor device: a Home founded on one device
+  // has exactly one delegation until it enrolls a second.
+  const sponsorEvidence = createPicoTestFirstDeviceEvidence({
+    sodium,
+    claimantIdentityPrivateKey: identity.privateKey,
+    claimantIdentityKeyFingerprintHex: identity.fingerprintHex,
+    signingKeyRecord: sponsorSigning.keyRecord,
+    keyAgreementKeyRecord: sponsorAgreement.keyRecord,
+    delegationId: 'delegation_sponsor',
+    validFrom: '2026-07-30T10:00:00.000Z',
+    validUntil: '2027-07-30T10:00:00.000Z',
+  });
   const founding = createFoundingRecord({
     homeId,
     identityFingerprintHex: identity.fingerprintHex,
+    identityKeyRecord: identity.keyRecord,
+    evidence: sponsorEvidence,
     hostFingerprintHex: host.fingerprintHex,
   });
   store.claimPicoHome({
@@ -453,25 +471,10 @@ function createFoundedLifecycleFixture() {
     hostSigningKeyFingerprintHex: host.fingerprintHex,
     hostKeyAgreementKeyFingerprintHex: founding.founding.hostKeyAgreementKeyFingerprintHex,
     foundingRecord: founding,
+    sodium,
   });
 
-  const sponsorDelegation = delegation({
-    delegationId: 'delegation_sponsor',
-    issuerIdentityKeyFingerprintHex: identity.fingerprintHex,
-    signingFingerprintHex: sponsorSigning.fingerprintHex,
-    agreementFingerprintHex: sponsorAgreement.fingerprintHex,
-    lifecycleOrder: 'seq:0000000000000001',
-  });
-  expect(store.recordPicoIdentityLifecycleEvidence({
-    identityKeyRecord: identity.keyRecord,
-    delegation: {
-      record: sponsorDelegation,
-      signatureHex: identity.sign(buildPicoIdentityDelegationSignatureInput(sponsorDelegation)),
-    },
-    revocations: [],
-    sodium,
-    recordedAt: acceptedAt,
-  })).toEqual({ ok: true });
+  const sponsorDelegation = sponsorEvidence.firstDeviceDelegation.record;
   expect(store.registerPicoIdentityReaderKey({
     picoIdentityFingerprintHex: identity.fingerprintHex,
     deviceSigningKeyFingerprintHex: sponsorSigning.fingerprintHex,
@@ -706,6 +709,7 @@ function createSigningKey(keyRole: 'pico_identity' | 'device_signing' | 'home_ho
   };
   return {
     keyRecord,
+    privateKey: pair.privateKey,
     fingerprintHex: fingerprint(keyRecord),
     sign: (input: Uint8Array) =>
       Buffer.from(sodium.crypto_sign_detached(input, pair.privateKey)).toString('hex'),
@@ -756,6 +760,8 @@ function delegation(input: {
 function createFoundingRecord(input: {
   homeId: string;
   identityFingerprintHex: string;
+  identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  evidence: PicoTestFirstDeviceEvidence;
   hostFingerprintHex: string;
 }): PicoHomeFoundingRecord {
   const foundingId = 'founding_device_lifecycle';
@@ -774,12 +780,13 @@ function createFoundingRecord(input: {
       hostNonceHex: 'c'.repeat(64),
       foundedAt,
       lifecycleOrder: 'seq:0000000000000001',
+      ...input.evidence.foundingFields,
     },
-    claimantIdentityKeyRecord: {
-      suite: picoIdentitySuite,
-      keyRole: 'pico_identity',
-      publicKeyHex: 'd'.repeat(64),
-    },
+    firstDeviceSigningKeyRecord: input.evidence.firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord: input.evidence.firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation: input.evidence.firstDeviceDelegation,
+    firstDeviceRevocations: input.evidence.firstDeviceRevocations,
+    claimantIdentityKeyRecord: input.identityKeyRecord,
     claimantFoundingSignatureHex: 'e'.repeat(128),
     hostClaimResponse: {
       schema: picoHomeClaimResponseRecordSchema,

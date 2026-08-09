@@ -2,14 +2,18 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
-import { afterEach, describe, expect, it } from 'vitest';
+import sodium from 'libsodium-wrappers-sumo';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import {
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingRecordSchema,
+  buildPicoIdentityKeyRecordSignatureInput,
   picoHomeMembershipScopes,
   type PicoEvent,
   type PicoHomeFoundingRecord,
+  type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
+import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 import { EventStore } from './event-store.js';
 import type { MigrationDefinition } from './migrations.js';
 
@@ -25,6 +29,10 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+beforeAll(async () => {
+  await sodium.ready;
 });
 
 describe('EventStore', () => {
@@ -417,6 +425,7 @@ describe('EventStore', () => {
       hostSigningKeyFingerprintHex: '1'.repeat(64),
       hostKeyAgreementKeyFingerprintHex: '2'.repeat(64),
       claimedAt: '2026-07-18T09:00:00.000Z',
+      sodium,
     });
 
     expect(claimed).toEqual({
@@ -460,6 +469,7 @@ describe('EventStore', () => {
       hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
       foundingRecord,
+      sodium,
     });
 
     expect(claimed.homeId).toBe(foundingRecord.founding.homeId);
@@ -502,6 +512,7 @@ describe('EventStore', () => {
       hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
       foundingRecord,
+      sodium,
     });
     store.close();
 
@@ -546,6 +557,7 @@ describe('EventStore', () => {
       hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
       foundingRecord,
+      sodium,
     });
     store.close();
 
@@ -602,6 +614,7 @@ describe('EventStore', () => {
       hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
       foundingRecord,
+      sodium,
     });
 
     const fingerprint = foundingRecord.founding.homeHostPicoIdentityFingerprintHex;
@@ -627,6 +640,7 @@ describe('EventStore', () => {
       hostSigningKeyFingerprintHex: foundingRecord.founding.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex: foundingRecord.founding.hostKeyAgreementKeyFingerprintHex,
       foundingRecord,
+      sodium,
     });
     store.close();
 
@@ -752,12 +766,27 @@ function createEvent(overrides: Partial<PicoEvent> = {}): PicoEvent {
 }
 
 function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
+  const claimant = sodium.crypto_sign_keypair();
+  const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
+    suite: 'pico.suite.id.v1',
+    keyRole: 'pico_identity',
+    publicKeyHex: hex(claimant.publicKey),
+  };
+  const homeHostPicoIdentityFingerprintHex = hex(sodium.crypto_generichash(
+    32,
+    buildPicoIdentityKeyRecordSignatureInput(claimantIdentityKeyRecord),
+    null,
+  ));
+  const evidence = createPicoTestFirstDeviceEvidence({
+    sodium,
+    claimantIdentityPrivateKey: claimant.privateKey,
+    claimantIdentityKeyFingerprintHex: homeHostPicoIdentityFingerprintHex,
+  });
   const homeId = 'home_20260719';
   const foundingId = 'founding_20260719';
   const claimId = 'claim_20260719';
   const hostSigningKeyFingerprintHex = '1'.repeat(64);
   const hostKeyAgreementKeyFingerprintHex = '2'.repeat(64);
-  const homeHostPicoIdentityFingerprintHex = '3'.repeat(64);
   const claimantNonceHex = '4'.repeat(64);
   const hostNonceHex = '5'.repeat(64);
   const foundedAt = '2026-07-19T10:00:00.000Z';
@@ -775,12 +804,13 @@ function createPicoHomeFoundingRecord(): PicoHomeFoundingRecord {
       hostNonceHex,
       foundedAt,
       lifecycleOrder: 'seq:0000000000000001',
+      ...evidence.foundingFields,
     },
-    claimantIdentityKeyRecord: {
-      suite: 'pico.suite.id.v1',
-      keyRole: 'pico_identity',
-      publicKeyHex: '6'.repeat(64),
-    },
+    firstDeviceSigningKeyRecord: evidence.firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord: evidence.firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation: evidence.firstDeviceDelegation,
+    firstDeviceRevocations: evidence.firstDeviceRevocations,
+    claimantIdentityKeyRecord,
     claimantFoundingSignatureHex: '8'.repeat(128),
     hostClaimResponse: {
       schema: picoHomeClaimResponseRecordSchema,
@@ -824,4 +854,8 @@ function backupAwareTestMigrations(): readonly MigrationDefinition[] {
       },
     },
   ];
+}
+
+function hex(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString('hex');
 }

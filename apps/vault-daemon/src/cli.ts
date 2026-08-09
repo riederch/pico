@@ -343,6 +343,7 @@ const flagNamesByCeremony: Record<CeremonySubcommand, readonly string[]> = {
     'pico-name',
     'home-name',
     'home-id',
+    'home-host-identity-fingerprint',
     'host-signing-fingerprint',
     'host-agreement-fingerprint',
     'host-agreement-public-key',
@@ -819,6 +820,8 @@ async function runDeviceRecoveryCli(
         picoName: requireFlag(flags, 'pico-name'),
         homeNameOrId: flags.get('home-name') ?? homeId,
         homeId,
+        homeHostPicoIdentityFingerprintHex:
+          requireFlag(flags, 'home-host-identity-fingerprint'),
         hostSigningKeyFingerprintHex: requireFlag(flags, 'host-signing-fingerprint'),
         hostKeyAgreementKeyFingerprintHex: requireFlag(flags, 'host-agreement-fingerprint'),
         hostKeyAgreementPublicKeyHex: requireFlag(flags, 'host-agreement-public-key'),

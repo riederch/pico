@@ -50,7 +50,6 @@ import {
   picoVaultKeyfileFormat,
   picoVaultPersonKeyRoles,
   picoRecoveryCardSchema,
-  picoRecoveryCardV2Schema,
 } from '@pico/protocol';
 import type {
   PicoVaultAeadAlgorithm,
@@ -81,7 +80,6 @@ import type {
   PicoReaderCustodyWriterGrantSignatureInput,
   PicoShareEnvelopeRecord,
   PicoRecoveryCardPayload,
-  PicoRecoveryCardPayloadV2,
 } from '@pico/protocol';
 
 export const picoVaultKeyfileEnvelopeSchema = 'pico.vault.keyfile.encrypted.v1' as const;
@@ -125,17 +123,13 @@ export interface IssuePicoVaultRecoveryCardInput {
   picoName: string;
   homeNameOrId: string;
   homeId: string;
+  homeHostPicoIdentityFingerprintHex: string;
   hostSigningKeyFingerprintHex: string;
   hostKeyAgreementKeyFingerprintHex: string;
   hostKeyAgreementPublicKeyHex: string;
   endpointHint: string;
   issuedAt: string;
   pin: string;
-}
-
-export interface IssuePicoVaultRecoveryCardV2Input
-  extends IssuePicoVaultRecoveryCardInput {
-  homeHostPicoIdentityFingerprintHex: string;
 }
 
 export interface PicoVaultRecoveryCard {
@@ -639,32 +633,6 @@ export class PicoVaultSession {
    */
   public issueRecoveryCard(
     input: IssuePicoVaultRecoveryCardInput,
-    options: PicoVaultSessionUseOptions = {},
-  ): PicoVaultRecoveryCard {
-    assertOptionalTimestampMs(options.nowMs);
-    this.#assertUnlocked(options.nowMs ?? Date.now());
-    if (this.#metadata.keyRole !== 'pico_identity') {
-      throw new Error('recovery_card_requires_identity_root');
-    }
-    const seed =
-      this.#sodium.crypto_sign_ed25519_sk_to_seed(this.#privateKey);
-    try {
-      const card = issuePicoVaultRecoveryCardFromSeed(
-        this.#sodium,
-        seed,
-        this.#metadata.keyFingerprintHex,
-        input,
-      );
-      this.#markUsed(options.nowMs ?? Date.now());
-      return card;
-    } finally {
-      this.#sodium.memzero(seed);
-    }
-  }
-
-  /** ADR 0115-capable additive card form; v1 issuance remains unchanged. */
-  public issueRecoveryCardV2(
-    input: IssuePicoVaultRecoveryCardV2Input,
     options: PicoVaultSessionUseOptions = {},
   ): PicoVaultRecoveryCard {
     assertOptionalTimestampMs(options.nowMs);
@@ -2089,7 +2057,7 @@ function issuePicoVaultRecoveryCardFromSeed(
   sodium: VaultSodium,
   seed: Uint8Array,
   identityKeyFingerprintHex: string,
-  input: IssuePicoVaultRecoveryCardInput | IssuePicoVaultRecoveryCardV2Input,
+  input: IssuePicoVaultRecoveryCardInput,
 ): PicoVaultRecoveryCard {
   assertSodiumConstants(sodium);
   if (seed.byteLength !== 32) {
@@ -2104,7 +2072,6 @@ function issuePicoVaultRecoveryCardFromSeed(
     });
     sodium.memzero(seedMaterial);
     seedMaterial = protectedSeed;
-    const v2 = 'homeHostPicoIdentityFingerprintHex' in input;
     const common = {
       suite: picoIdentitySuite,
       picoName: input.picoName,
@@ -2124,15 +2091,13 @@ function issuePicoVaultRecoveryCardFromSeed(
       endpointHint: input.endpointHint,
       issuedAt: input.issuedAt,
     };
-    const payload: PicoRecoveryCardPayload = v2
-      ? {
-        schema: picoRecoveryCardV2Schema,
-        ...common,
-        homeHostPicoIdentityFingerprintHex:
-          input.homeHostPicoIdentityFingerprintHex,
-        ...tail,
-      } satisfies PicoRecoveryCardPayloadV2
-      : { schema: picoRecoveryCardSchema, ...common, ...tail };
+    const payload: PicoRecoveryCardPayload = {
+      schema: picoRecoveryCardSchema,
+      ...common,
+      homeHostPicoIdentityFingerprintHex:
+        input.homeHostPicoIdentityFingerprintHex,
+      ...tail,
+    };
     const canonicalPayload = buildPicoRecoveryCardPayload(payload);
     return {
       payload,

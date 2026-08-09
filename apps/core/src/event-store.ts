@@ -75,7 +75,6 @@ import {
   payloadPostures,
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingRecordSchema,
-  picoHomeFoundingRecordV2Schema,
   picoHomeMembershipRoles,
   picoHomeMembershipScopes,
   picoHomeMembershipStatuses,
@@ -198,14 +197,8 @@ export interface PicoHomeFoundingReconciliationResult {
 
 export type PicoHomeFirstDeviceReconciliationResult =
   | { foundingRecordPresent: false; reconciled: false }
-  | { foundingRecordPresent: true; reconciled: false; legacyFounding: true }
-  | { foundingRecordPresent: true; reconciled: true; legacyFounding: false }
-  | {
-    foundingRecordPresent: true;
-    reconciled: false;
-    legacyFounding: false;
-    reason: string;
-  };
+  | { foundingRecordPresent: true; reconciled: true }
+  | { foundingRecordPresent: true; reconciled: false; reason: string };
 
 export type PicoHomeMembershipSource = 'founding_record' | 'membership_credential';
 
@@ -1074,7 +1067,7 @@ export class EventStore {
       if (input.foundingRecord !== undefined) {
         this.insertPicoHomeFoundingRecord(input.foundingRecord);
         this.upsertPicoHomeMembership(picoHomeFoundingMembershipFromRecord(input.foundingRecord));
-        if (input.foundingRecord.schema === picoHomeFoundingRecordV2Schema) {
+        if (input.foundingRecord.schema === picoHomeFoundingRecordSchema) {
           if (input.sodium === undefined) {
             throw new Error('Pico Home v2 founding requires identity verification.');
           }
@@ -1308,10 +1301,13 @@ export class EventStore {
   }
 
   /**
-   * ADR 0108 restart projection. A v2 founding record is the durable root for
+   * ADR 0108 restart projection. The founding record is the durable root for
    * the first device just as it is for the founder membership. Rebuild
-   * lifecycle evidence before the reader-key projection, in one transaction;
-   * v1 founding records deliberately remain unchanged.
+   * lifecycle evidence before the reader-key projection, in one transaction.
+   *
+   * ADR 0134 F2 removed the second founding format, and with it the branch that
+   * left a record without device evidence unreconciled: every founding record
+   * carries that evidence, so every one of them reconciles.
    */
   public reconcilePicoHomeFirstDeviceEvidence(
     sodium: IdentityVerificationSodium,
@@ -1321,14 +1317,6 @@ export class EventStore {
     if (record === undefined) {
       return { foundingRecordPresent: false, reconciled: false };
     }
-    if (record.schema === picoHomeFoundingRecordSchema) {
-      return {
-        foundingRecordPresent: true,
-        reconciled: false,
-        legacyFounding: true,
-      };
-    }
-
     const reconcile = this.db.transaction(() => {
       const lifecycle = this.recordPicoIdentityLifecycleEvidence({
         sodium,
@@ -1358,16 +1346,11 @@ export class EventStore {
 
     try {
       reconcile();
-      return {
-        foundingRecordPresent: true,
-        reconciled: true,
-        legacyFounding: false,
-      };
+      return { foundingRecordPresent: true, reconciled: true };
     } catch (error) {
       return {
         foundingRecordPresent: true,
         reconciled: false,
-        legacyFounding: false,
         reason: (error as Error).message,
       };
     }
@@ -6799,14 +6782,12 @@ export class EventStore {
         record.claimantFoundingSignatureHex,
         record.hostClaimResponse.hostSignatureHex,
         record.hostFoundingSignatureHex,
-        record.schema === picoHomeFoundingRecordV2Schema
-          ? serializePayload({
-            firstDeviceSigningKeyRecord: record.firstDeviceSigningKeyRecord,
-            firstDeviceKeyAgreementKeyRecord: record.firstDeviceKeyAgreementKeyRecord,
-            firstDeviceDelegation: record.firstDeviceDelegation,
-            firstDeviceRevocations: record.firstDeviceRevocations,
-          })
-          : null,
+        serializePayload({
+          firstDeviceSigningKeyRecord: record.firstDeviceSigningKeyRecord,
+          firstDeviceKeyAgreementKeyRecord: record.firstDeviceKeyAgreementKeyRecord,
+          firstDeviceDelegation: record.firstDeviceDelegation,
+          firstDeviceRevocations: record.firstDeviceRevocations,
+        }),
         record.createdAt,
       );
   }
@@ -7111,8 +7092,7 @@ function mapPicoHomeClaimState(row: PicoHomeClaimStateRow): PicoHomeClaimState {
 }
 
 function mapPicoHomeFoundingRecord(row: PicoHomeFoundingRecordRow): PicoHomeFoundingRecord {
-  if (row.schema !== picoHomeFoundingRecordSchema
-    && row.schema !== picoHomeFoundingRecordV2Schema) {
+  if (row.schema !== picoHomeFoundingRecordSchema) {
     throw new Error('Pico Home founding record is invalid.');
   }
 
@@ -7128,18 +7108,12 @@ function mapPicoHomeFoundingRecord(row: PicoHomeFoundingRecordRow): PicoHomeFoun
     hostFoundingSignatureHex: row.hostFoundingSignatureHex,
     createdAt: row.createdAt,
   };
-  if (row.schema === picoHomeFoundingRecordSchema) {
-    return {
-      schema: picoHomeFoundingRecordSchema,
-      ...common,
-    } as PicoHomeFoundingRecord;
-  }
   if (row.firstDeviceEvidenceJson === null) {
-    throw new Error('Pico Home v2 founding evidence is missing.');
+    throw new Error('Pico Home founding evidence is missing.');
   }
   const evidence = JSON.parse(row.firstDeviceEvidenceJson) as PicoHomeFirstDeviceEvidence;
   return {
-    schema: picoHomeFoundingRecordV2Schema,
+    schema: picoHomeFoundingRecordSchema,
     ...common,
     ...evidence,
   } as PicoHomeFoundingRecord;
@@ -7326,8 +7300,7 @@ function assertPicoHomeMembershipScopes(scopes: readonly PicoHomeMembershipScope
 }
 
 function assertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord, claim: PicoHomeClaimInput): void {
-  if (record.schema !== picoHomeFoundingRecordSchema
-    && record.schema !== picoHomeFoundingRecordV2Schema) {
+  if (record.schema !== picoHomeFoundingRecordSchema) {
     throw new Error('Pico Home founding record schema is invalid.');
   }
 
@@ -7357,27 +7330,24 @@ function assertPicoHomeFoundingRecord(record: PicoHomeFoundingRecord, claim: Pic
   assertDetachedSignature(record.hostFoundingSignatureHex, 'hostFoundingSignatureHex');
   assertNonEmptyString(record.createdAt, 'createdAt');
 
-  if (record.schema === picoHomeFoundingRecordV2Schema) {
-    const foundingV2 = record.founding;
-    assertAsciiToken(foundingV2.firstDeviceDelegationId, 'founding.firstDeviceDelegationId');
-    assertFingerprint(
-      foundingV2.firstDeviceSigningKeyFingerprintHex,
-      'founding.firstDeviceSigningKeyFingerprintHex',
-    );
-    assertFingerprint(
-      foundingV2.firstDeviceKeyAgreementKeyFingerprintHex,
-      'founding.firstDeviceKeyAgreementKeyFingerprintHex',
-    );
-    if (record.firstDeviceDelegation.record.delegationId
-      !== foundingV2.firstDeviceDelegationId
-      || record.firstDeviceDelegation.record.issuerIdentityKeyFingerprintHex
-        !== foundingV2.homeHostPicoIdentityFingerprintHex
-      || record.firstDeviceDelegation.record.subjectSigningKeyFingerprintHex
-        !== foundingV2.firstDeviceSigningKeyFingerprintHex
-      || record.firstDeviceDelegation.record.subjectKeyAgreementKeyFingerprintHex
-        !== foundingV2.firstDeviceKeyAgreementKeyFingerprintHex) {
-      throw new Error('Pico Home first-device evidence is not bound to the founding record.');
-    }
+  assertAsciiToken(founding.firstDeviceDelegationId, 'founding.firstDeviceDelegationId');
+  assertFingerprint(
+    founding.firstDeviceSigningKeyFingerprintHex,
+    'founding.firstDeviceSigningKeyFingerprintHex',
+  );
+  assertFingerprint(
+    founding.firstDeviceKeyAgreementKeyFingerprintHex,
+    'founding.firstDeviceKeyAgreementKeyFingerprintHex',
+  );
+  if (record.firstDeviceDelegation.record.delegationId
+    !== founding.firstDeviceDelegationId
+    || record.firstDeviceDelegation.record.issuerIdentityKeyFingerprintHex
+      !== founding.homeHostPicoIdentityFingerprintHex
+    || record.firstDeviceDelegation.record.subjectSigningKeyFingerprintHex
+      !== founding.firstDeviceSigningKeyFingerprintHex
+    || record.firstDeviceDelegation.record.subjectKeyAgreementKeyFingerprintHex
+      !== founding.firstDeviceKeyAgreementKeyFingerprintHex) {
+    throw new Error('Pico Home first-device evidence is not bound to the founding record.');
   }
 
   if (

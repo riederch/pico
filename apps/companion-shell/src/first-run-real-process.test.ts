@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  buildPicoRecoveryCardV2ScanTransport,
+  buildPicoRecoveryCardScanTransport,
   picoHomeDeviceRecoveryTiming,
 } from '@pico/protocol';
 import {
@@ -297,7 +297,7 @@ async function issueCardV2(
   });
   try {
     await client.hello();
-    const issued = await client.ceremonyIssueRecoveryCardV2({
+    const issued = await client.ceremonyIssueRecoveryCard({
       signerKeyFingerprintHex: identity.keyFingerprintHex,
       picoName: 'Ada',
       homeNameOrId: 'First Run Home',
@@ -313,7 +313,7 @@ async function issueCardV2(
       issuedAt: new Date(startedAtMs).toISOString(),
       pin: cardPin,
     });
-    return buildPicoRecoveryCardV2ScanTransport(
+    return buildPicoRecoveryCardScanTransport(
       Uint8Array.from(Buffer.from(issued.canonicalPayloadHex, 'hex')),
     );
   } finally {

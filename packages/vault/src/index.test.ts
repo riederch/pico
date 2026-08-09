@@ -127,6 +127,9 @@ describe('Pico Vault keyfile runtime (ADR 0081 P2 slice)', () => {
       hostNonceHex: '55'.repeat(32),
       foundedAt: '2026-07-18T09:00:00.000Z',
       lifecycleOrder: 'seq:0000000000000001',
+      firstDeviceDelegationId: 'del_first_device_0001',
+      firstDeviceSigningKeyFingerprintHex: '55'.repeat(32),
+      firstDeviceKeyAgreementKeyFingerprintHex: '99'.repeat(32),
     });
 
     for (const signatureInput of [claim, founding]) {

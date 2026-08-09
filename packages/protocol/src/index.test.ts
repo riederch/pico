@@ -57,7 +57,6 @@ import {
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
-  picoHomeFoundingRecordV2Schema,
   picoHomeSealedClaimPayloadSchema,
   picoHomeSealedClaimPayloadV2Schema,
   picoHomeMembershipLifecycleReasonCategories,
@@ -475,7 +474,6 @@ describe('Pico protocol types', () => {
     expect(picoHomeFoundingAcceptanceSchema).toBe('pico.home.founding-acceptance.v1');
     expect(picoHomeFoundingRecordSchema).toBe('pico.home.founding-record.v1');
     expect(picoHomeSealedClaimPayloadV2Schema).toBe('pico.home.claim-payload.v2');
-    expect(picoHomeFoundingRecordV2Schema).toBe('pico.home.founding-record.v2');
     expect(picoHomeV2SignatureInputLabels).toEqual({
       claim: 'pico.home.claim.v2',
       founding: 'pico.home.founding.v2',
@@ -1367,6 +1365,9 @@ describe('Pico protocol types', () => {
         hostNonceHex: '44'.repeat(32),
         foundedAt: instant,
         lifecycleOrder: 'seq:0000000000000001',
+        firstDeviceDelegationId: 'del_first_device_0001',
+        firstDeviceSigningKeyFingerprintHex: '55'.repeat(32),
+        firstDeviceKeyAgreementKeyFingerprintHex: '66'.repeat(32),
       })).toThrow('invalid_instant');
 
       expect(() => buildPicoHomeMembershipSignatureInput({
@@ -4154,6 +4155,9 @@ function buildPicoHomeVector(homeFamily: string, fields: Record<string, unknown>
       ...stringProperty(fields, 'hostNonceHex'),
       ...stringProperty(fields, 'foundedAt'),
       ...stringProperty(fields, 'lifecycleOrder'),
+      ...stringProperty(fields, 'firstDeviceDelegationId'),
+      ...stringProperty(fields, 'firstDeviceSigningKeyFingerprintHex'),
+      ...stringProperty(fields, 'firstDeviceKeyAgreementKeyFingerprintHex'),
       ...optionalFieldOrder(fields),
     } as unknown as Parameters<typeof buildPicoHomeFoundingSignatureInput>[0]);
   }

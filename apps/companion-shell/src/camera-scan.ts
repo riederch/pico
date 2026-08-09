@@ -1,6 +1,6 @@
 import { spawn as nodeSpawn, type ChildProcessByStdio } from 'node:child_process';
 import type { Readable } from 'node:stream';
-import { picoRecoveryCardV2ScanPrefix } from '@pico/protocol';
+import { picoRecoveryCardScanPrefix } from '@pico/protocol';
 
 /**
  * ADR 0112 S3 camera scan path.
@@ -131,7 +131,7 @@ const maxBufferedChars = 64 * 1_024;
 function firstTransportLine(buffered: string): string | null {
   for (const line of buffered.split('\n')) {
     const candidate = line.endsWith('\r') ? line.slice(0, -1) : line;
-    if (candidate.startsWith(picoRecoveryCardV2ScanPrefix)) {
+    if (candidate.startsWith(picoRecoveryCardScanPrefix)) {
       return candidate;
     }
   }

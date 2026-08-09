@@ -31,8 +31,6 @@ export type {
   PicoVaultDaemonCeremonyCreateDomainResult,
   PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
   PicoVaultDaemonCeremonyIssueRecoveryCardResult,
-  PicoVaultDaemonCeremonyIssueRecoveryCardV2Request,
-  PicoVaultDaemonCeremonyIssueRecoveryCardV2Result,
   PicoVaultDaemonCeremonyRotateDomainRequest,
   PicoVaultDaemonCeremonyRotateDomainResult,
   PicoVaultDaemonErrorResponse,
@@ -119,7 +117,7 @@ export {
   createPicoRecoveryCardQrMatrix,
   generatePicoRecoveryCardPdfs,
   picoRecoveryCardQrPayload,
-  PICO_RECOVERY_CARD_V2_QR_PREFIX,
+  PICO_RECOVERY_CARD_QR_PREFIX,
   PICO_RECOVERY_CARD_PDF_LAYOUT,
 } from './recovery-card-pdf.js';
 export type {

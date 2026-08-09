@@ -13,7 +13,14 @@ fail-closed Platform Keystore unlock owner for the target device keys.
 First run is a proven vertical: a scanned or camera-decoded v2 card, secrets
 captured in Main, a crash-replay journal, the unchanged initiation ceremony,
 and a committed profile with its keystore binding. A trusted v1 acceptor-pin
-fallback remains open, as does S4 on ADR 0105 B3. This ADR takes over the product half
+fallback remains open, as does S4 on ADR 0105 B3. **Status note (ADR 0134 F2, 2026-08-10):** where the paragraph above says
+"Card v2" and "a scanned or camera-decoded v2 card", read "the Recovery Card":
+ADR 0134 F2 collapsed the two card layouts into one, which keeps the name
+`v1` and always carries the acceptor pin. The "trusted v1 acceptor-pin
+fallback" listed as open is closed with it - there is no format left that
+lacks the pin, so there is nothing for a fallback to accept.
+
+This ADR takes over the product half
 of ADR 0110's R5:
 where a person actually issues a card, restores from it, sees a pending
 alarm, vetoes, and completes a recovery. It deliberately does not choose

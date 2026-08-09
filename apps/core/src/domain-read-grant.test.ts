@@ -22,6 +22,7 @@ import {
   verifyPicoHomeDomainReadGrant,
   verifyPicoHomeDomainReadGrantLifecycle,
 } from './domain-read-grant.js';
+import { createPicoTestFirstDeviceEvidence } from './test-first-device-evidence.js';
 
 const stores: EventStore[] = [];
 const tempDirs: string[] = [];
@@ -195,6 +196,7 @@ function openClaimedStore(): EventStore {
     hostSigningKeyFingerprintHex: founding.founding.hostSigningKeyFingerprintHex,
     hostKeyAgreementKeyFingerprintHex: founding.founding.hostKeyAgreementKeyFingerprintHex,
     foundingRecord: founding,
+    sodium,
   });
   return store;
 }
@@ -253,6 +255,11 @@ function issueLifecycle(
 }
 
 function foundingRecord(): PicoHomeFoundingRecord {
+  const evidence = createPicoTestFirstDeviceEvidence({
+    sodium,
+    claimantIdentityPrivateKey: controller.privateKey,
+    claimantIdentityKeyFingerprintHex: controllerFingerprint,
+  });
   return {
     schema: picoHomeFoundingRecordSchema,
     founding: {
@@ -266,7 +273,12 @@ function foundingRecord(): PicoHomeFoundingRecord {
       hostNonceHex: '4'.repeat(64),
       foundedAt: '2026-01-01T00:00:00.000Z',
       lifecycleOrder: 'seq:0000000000000001',
+      ...evidence.foundingFields,
     },
+    firstDeviceSigningKeyRecord: evidence.firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord: evidence.firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation: evidence.firstDeviceDelegation,
+    firstDeviceRevocations: evidence.firstDeviceRevocations,
     claimantIdentityKeyRecord: controllerKeyRecord,
     claimantFoundingSignatureHex: '5'.repeat(128),
     hostClaimResponse: {

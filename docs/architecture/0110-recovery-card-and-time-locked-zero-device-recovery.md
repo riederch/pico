@@ -7,7 +7,20 @@ holds across a restore rather than within one snapshot. R5's documentation
 half is done and its product half is decided by ADR 0112, whose companion
 surfaces remain open. The additive `pico.recovery.card.v2` canonical form and
 fresh-Vault daemon bootstrap are implemented as prerequisites for that
-surface; v1 remains valid but lacks ADR 0115's Home acceptor pin. This ADR
+surface; v1 remains valid but lacks ADR 0115's Home acceptor pin. **Status note (ADR 0134 F2, 2026-08-10):** the body below describes two card
+formats, an additive `pico.recovery.card.v2` beside a frozen `v1`. There is
+now one. The v2 layout is the only Recovery Card format and it keeps the name
+`pico.recovery.card.v1`; the scan transport prefix follows that name, the
+authoritative vector moved from `card-v2.json` into the card node of
+`docs/protocol/fixtures/home-device-recovery/suite.json`, and the daemon's
+second issuance family and the Vault's second issuance method are gone. The
+schema check that refused a card without the acceptor pin went with them,
+because the pin is now part of every card and parsing is the check. **The
+development cards printed on 2026-07-31 are unreadable.** The text is kept
+rather than rewritten (ADR 0128): it records what was decided and why the
+acceptor pin belongs in the card at all, and that reasoning did not change.
+
+This ADR
 decides the path ADR 0109 deliberately left
 missing: how an identity whose Home projects no active delegated device
 regains exactly one. The person's instrument is the

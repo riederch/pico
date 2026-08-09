@@ -31,6 +31,10 @@ import {
   EventStore,
   type PicoHomeDeviceLifecycleSponsor,
 } from './event-store.js';
+import {
+  createPicoTestFirstDeviceEvidence,
+  type PicoTestFirstDeviceEvidence,
+} from './test-first-device-evidence.js';
 
 const tempDirs: string[] = [];
 const acceptedAt = '2026-07-31T10:00:00.000Z';
@@ -616,9 +620,21 @@ function createFixture(options: {
   const sponsorSigning = createSigningKey('device_signing');
   const sponsorAgreement = createAgreementKey();
   const homeId = 'home_device_recovery';
+  const sponsorEvidence = createPicoTestFirstDeviceEvidence({
+    sodium,
+    claimantIdentityPrivateKey: identity.privateKey,
+    claimantIdentityKeyFingerprintHex: identity.fingerprintHex,
+    signingKeyRecord: sponsorSigning.keyRecord,
+    keyAgreementKeyRecord: sponsorAgreement.keyRecord,
+    delegationId: 'delegation_sponsor',
+    validFrom: '2026-07-31T09:00:00.000Z',
+    validUntil: '2027-07-31T09:00:00.000Z',
+  });
   const founding = createFoundingRecord({
     homeId,
     identityFingerprintHex: identity.fingerprintHex,
+    identityKeyRecord: identity.keyRecord,
+    evidence: sponsorEvidence,
     hostFingerprintHex: host.fingerprintHex,
   });
   store.claimPicoHome({
@@ -628,26 +644,9 @@ function createFixture(options: {
     hostKeyAgreementKeyFingerprintHex:
       founding.founding.hostKeyAgreementKeyFingerprintHex,
     foundingRecord: founding,
-  });
-  const sponsorDelegation = delegation({
-    delegationId: 'delegation_sponsor',
-    identityFingerprintHex: identity.fingerprintHex,
-    signingFingerprintHex: sponsorSigning.fingerprintHex,
-    agreementFingerprintHex: sponsorAgreement.fingerprintHex,
-    lifecycleOrder: 'seq:0000000000000001',
-  });
-  expect(store.recordPicoIdentityLifecycleEvidence({
-    identityKeyRecord: identity.keyRecord,
-    delegation: {
-      record: sponsorDelegation,
-      signatureHex: identity.sign(
-        buildPicoIdentityDelegationSignatureInput(sponsorDelegation),
-      ),
-    },
-    revocations: [],
     sodium,
-    recordedAt: acceptedAt,
-  })).toEqual({ ok: true });
+  });
+  const sponsorDelegation = sponsorEvidence.firstDeviceDelegation.record;
   expect(store.registerPicoIdentityReaderKey({
     picoIdentityFingerprintHex: identity.fingerprintHex,
     deviceSigningKeyFingerprintHex: sponsorSigning.fingerprintHex,
@@ -883,6 +882,7 @@ function createSigningKey(
   };
   return {
     keyRecord,
+    privateKey: pair.privateKey,
     fingerprintHex: fingerprint(keyRecord),
     sign: (input: Uint8Array) =>
       Buffer.from(
@@ -938,9 +938,12 @@ function delegation(input: {
 function createFoundingRecord(input: {
   homeId: string;
   identityFingerprintHex: string;
+  identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+  evidence: PicoTestFirstDeviceEvidence;
   hostFingerprintHex: string;
 }): PicoHomeFoundingRecord {
   const foundedAt = '2026-07-31T09:00:00.000Z';
+  const { evidence } = input;
   return {
     schema: picoHomeFoundingRecordSchema,
     founding: {
@@ -955,12 +958,13 @@ function createFoundingRecord(input: {
       hostNonceHex: 'cc'.repeat(32),
       foundedAt,
       lifecycleOrder: 'seq:0000000000000001',
+      ...evidence.foundingFields,
     },
-    claimantIdentityKeyRecord: {
-      suite: picoIdentitySuite,
-      keyRole: 'pico_identity',
-      publicKeyHex: 'dd'.repeat(32),
-    },
+    firstDeviceSigningKeyRecord: evidence.firstDeviceSigningKeyRecord,
+    firstDeviceKeyAgreementKeyRecord: evidence.firstDeviceKeyAgreementKeyRecord,
+    firstDeviceDelegation: evidence.firstDeviceDelegation,
+    firstDeviceRevocations: evidence.firstDeviceRevocations,
+    claimantIdentityKeyRecord: input.identityKeyRecord,
     claimantFoundingSignatureHex: 'ee'.repeat(64),
     hostClaimResponse: {
       schema: picoHomeClaimResponseRecordSchema,

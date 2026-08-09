@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; F1 implemented, F2 and F3 open. The user established on
+Accepted; F1 and F2 implemented, F3 open. The user established on
 2026-08-09 that no Pico is in operation and proposed that formats stay at v1 until the first
 go-live. This ADR accepts that with one correction to the trigger, and
 turns it into the rule that governs both the Recovery Card cleanup and a
@@ -146,7 +146,7 @@ freeze, which is when it becomes dangerous.
   in an ADR nobody reopens. When the answer changes, that line changes
   first and everything else follows from it.
 - **F2 - The card and the founding record collapse to one format each
-  (open):** two formats, one operation, done together because they are the
+  (implemented 2026-08-10):** two formats, one operation, done together because they are the
   same branch pattern - `'homeHostPicoIdentityFingerprintHex' in input` on
   the card, `'firstDeviceDelegationId' in input` on the founding signature
   input - and separating them would establish the proof method twice.
@@ -171,6 +171,22 @@ freeze, which is when it becomes dangerous.
   regenerated, because a negative asserts a rejection and only reading it
   says whether that rejection still means the same thing. ADR 0108 gains a
   status note and keeps its text.
+
+  What the collapse turned up, and what it says about this rule: removing
+  the second schema left three comparisons in the tree that had asked
+  which format a record was, and now compared the surviving constant with
+  itself. Two of them were load-bearing and silently wrong -
+  `reconcilePicoHomeFirstDeviceEvidence` took its legacy exit for *every*
+  founding record, so first-device evidence was never re-projected on
+  restart, and `mapPicoHomeFoundingRecord` returned every stored record
+  without that evidence. Two more comparisons had become unreachable and
+  kept a name that no longer described anything:
+  `recovery_card_v1_requires_trusted_acceptor_pin`, on a path where
+  parsing already *is* the check. A dual-format branch does not fail loudly
+  when its second arm is deleted; it keeps running, on one arm, in whatever
+  direction the comparison happens to fall. That is the cost this rule is
+  about, and it is why a format revision has to remove the branches with
+  the format rather than leave them to be discovered.
 - **F3 - Compatibility sweep (open):** every property the tree keeps "for
   compatibility" either goes or gets its population written down. A sweep
   on 2026-08-09 found four, and each ends with a removal or a named

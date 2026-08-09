@@ -11,16 +11,14 @@ import {
 } from './index.js';
 
 export const picoRecoveryCardSchema = 'pico.recovery.card.v1' as const;
-export const picoRecoveryCardV2Schema = 'pico.recovery.card.v2' as const;
 
 /**
  * ADR 0110 R5: the fixed ASCII transport a commodity camera or USB scanner
- * returns for a v2 card. V1 keeps its raw canonical QR bytes, so the prefix
- * belongs to v2 alone. It lives beside the canonical form rather than beside
- * the issuing PDF writer because the scanning side must be able to read a card
- * without depending on the side that printed it.
+ * returns. It lives beside the canonical form rather than beside the issuing
+ * PDF writer because the scanning side must be able to read a card without
+ * depending on the side that printed it.
  */
-export const picoRecoveryCardV2ScanPrefix = 'pico-recovery-card-v2:' as const;
+export const picoRecoveryCardScanPrefix = 'pico-recovery-card-v1:' as const;
 
 const maxPicoRecoveryCardCanonicalBytes = 4_096;
 export const picoHomeDeviceRecoverySubmissionSchema =
@@ -30,7 +28,6 @@ export const picoHomeDeviceRecoveryRecordSchema =
 
 export const picoHomeDeviceRecoveryCanonicalLabels = {
   card: picoRecoveryCardSchema,
-  cardV2: picoRecoveryCardV2Schema,
   prepare: 'pico.home.device-recovery-prepare.v1',
   evidenceDigest: 'pico.home.device-recovery-evidence-digest.v1',
   claim: 'pico.home.device-recovery-claim.v1',
@@ -59,7 +56,7 @@ export const picoHomeDeviceRecoveryTiming = {
   completionWindowMs: 7 * 24 * 60 * 60 * 1_000,
 } as const;
 
-export interface PicoRecoveryCardPayloadV1 {
+export interface PicoRecoveryCardPayload {
   schema: typeof picoRecoveryCardSchema;
   suite: string;
   picoName: string;
@@ -68,27 +65,10 @@ export interface PicoRecoveryCardPayloadV1 {
   pinProtected: boolean;
   identityKeyFingerprintHex: string;
   homeId: string;
-  hostSigningKeyFingerprintHex: string;
-  hostKeyAgreementKeyFingerprintHex: string;
-  hostKeyAgreementPublicKeyHex: string;
-  endpointHint: string;
-  issuedAt: string;
-}
-
-/**
- * Additive Recovery Card revision for ADR 0115. V1 remains parseable, but it
- * cannot carry the non-rotating Home acceptor pin and therefore cannot by
- * itself establish a trustworthy first-run profile.
- */
-export interface PicoRecoveryCardPayloadV2 {
-  schema: typeof picoRecoveryCardV2Schema;
-  suite: string;
-  picoName: string;
-  homeNameOrId: string;
-  seedMaterialHex: string;
-  pinProtected: boolean;
-  identityKeyFingerprintHex: string;
-  homeId: string;
+  // ADR 0115. The non-rotating Home acceptor pin is required: a card without
+  // it cannot establish a trustworthy first-run profile, and before the
+  // format freeze there is no population holding one that lacks it
+  // (ADR 0134 F2).
   homeHostPicoIdentityFingerprintHex: string;
   hostSigningKeyFingerprintHex: string;
   hostKeyAgreementKeyFingerprintHex: string;
@@ -96,10 +76,6 @@ export interface PicoRecoveryCardPayloadV2 {
   endpointHint: string;
   issuedAt: string;
 }
-
-export type PicoRecoveryCardPayload =
-  | PicoRecoveryCardPayloadV1
-  | PicoRecoveryCardPayloadV2;
 
 export interface PicoHomeDeviceRecoveryEvidence {
   identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
@@ -251,7 +227,6 @@ export function buildPicoHomeDeviceRecoveryPrepareSignatureInput(
 export function buildPicoRecoveryCardPayload(
   input: PicoRecoveryCardPayload,
 ): Uint8Array {
-  const isV2 = input.schema === picoRecoveryCardV2Schema;
   assertExactKeys(input as unknown as Record<string, unknown>, [
     'schema',
     'suite',
@@ -261,14 +236,14 @@ export function buildPicoRecoveryCardPayload(
     'pinProtected',
     'identityKeyFingerprintHex',
     'homeId',
-    ...(isV2 ? ['homeHostPicoIdentityFingerprintHex'] : []),
+    'homeHostPicoIdentityFingerprintHex',
     'hostSigningKeyFingerprintHex',
     'hostKeyAgreementKeyFingerprintHex',
     'hostKeyAgreementPublicKeyHex',
     'endpointHint',
     'issuedAt',
   ]);
-  if (input.schema !== picoRecoveryCardSchema && !isV2) {
+  if (input.schema !== picoRecoveryCardSchema) {
     throw new Error('invalid_recovery_card_schema');
   }
   if (input.suite !== picoIdentitySuite) {
@@ -287,9 +262,7 @@ export function buildPicoRecoveryCardPayload(
   }
 
   return concatCanonicalElements([
-    asciiBytes(isV2
-      ? picoHomeDeviceRecoveryCanonicalLabels.cardV2
-      : picoHomeDeviceRecoveryCanonicalLabels.card),
+    asciiBytes(picoHomeDeviceRecoveryCanonicalLabels.card),
     asciiBytes(input.suite),
     utf8Bytes(input.picoName),
     utf8Bytes(input.homeNameOrId),
@@ -297,13 +270,11 @@ export function buildPicoRecoveryCardPayload(
     asciiBytes('pin_protected'),
     fixedHexBytes(input.identityKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     asciiBytes(input.homeId),
-    ...(isV2
-      ? [fixedHexBytes(
-        input.homeHostPicoIdentityFingerprintHex,
-        32,
-        'invalid_fingerprint_length',
-      )]
-      : []),
+    fixedHexBytes(
+      input.homeHostPicoIdentityFingerprintHex,
+      32,
+      'invalid_fingerprint_length',
+    ),
     fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.hostKeyAgreementPublicKeyHex, 32, 'invalid_public_key_length'),
@@ -327,11 +298,10 @@ export function parsePicoRecoveryCardPayload(
     maxPicoRecoveryCardCanonicalBytes,
   );
   const label = decodeAsciiElement(elements[0], 'invalid_recovery_card_schema');
-  const v2 = label === picoRecoveryCardV2Schema;
-  if (label !== picoRecoveryCardSchema && !v2) {
+  if (label !== picoRecoveryCardSchema) {
     throw new Error('invalid_recovery_card_schema');
   }
-  if (elements.length !== (v2 ? 14 : 13)) {
+  if (elements.length !== 14) {
     throw new Error('invalid_recovery_card_element_count');
   }
   let index = 1;
@@ -346,9 +316,7 @@ export function parsePicoRecoveryCardPayload(
     identityKeyFingerprintHex: bytesToHex(elements[index++]),
     homeId: decodeAsciiElement(elements[index++], 'invalid_field_charset'),
   };
-  const homeHostPicoIdentityFingerprintHex = v2
-    ? bytesToHex(elements[index++])
-    : undefined;
+  const homeHostPicoIdentityFingerprintHex = bytesToHex(elements[index++]);
   const tail = {
     hostSigningKeyFingerprintHex: bytesToHex(elements[index++]),
     hostKeyAgreementKeyFingerprintHex: bytesToHex(elements[index++]),
@@ -356,15 +324,12 @@ export function parsePicoRecoveryCardPayload(
     endpointHint: decodeUtf8Element(elements[index++]),
     issuedAt: decodeAsciiElement(elements[index++], 'invalid_instant'),
   };
-  const payload: PicoRecoveryCardPayload = v2
-    ? {
-      schema: picoRecoveryCardV2Schema,
-      ...common,
-      homeHostPicoIdentityFingerprintHex:
-        homeHostPicoIdentityFingerprintHex!,
-      ...tail,
-    }
-    : { schema: picoRecoveryCardSchema, ...common, ...tail };
+  const payload: PicoRecoveryCardPayload = {
+    schema: picoRecoveryCardSchema,
+    ...common,
+    homeHostPicoIdentityFingerprintHex,
+    ...tail,
+  };
   const rebuilt = buildPicoRecoveryCardPayload(payload);
   if (!equalBytes(rebuilt, canonicalPayload)) {
     throw new Error('noncanonical_recovery_card_payload');
@@ -372,16 +337,16 @@ export function parsePicoRecoveryCardPayload(
   return Object.freeze(payload);
 }
 
-export interface PicoRecoveryCardV2Scan {
+export interface PicoRecoveryCardScan {
   canonicalPayload: Uint8Array;
-  payload: PicoRecoveryCardPayloadV2;
+  payload: PicoRecoveryCardPayload;
 }
 
 /**
- * The single writer of the v2 scan transport. Issuing surfaces call it so the
+ * The single writer of the scan transport. Issuing surfaces call it so the
  * printed string and the accepted string can never drift apart.
  */
-export function buildPicoRecoveryCardV2ScanTransport(
+export function buildPicoRecoveryCardScanTransport(
   canonicalPayload: Uint8Array,
 ): string {
   if (!(canonicalPayload instanceof Uint8Array)
@@ -389,34 +354,29 @@ export function buildPicoRecoveryCardV2ScanTransport(
     || canonicalPayload.byteLength > maxPicoRecoveryCardCanonicalBytes) {
     throw new Error('invalid_recovery_card_payload_length');
   }
-  return `${picoRecoveryCardV2ScanPrefix}${encodeBase64Url(canonicalPayload)}`;
+  return `${picoRecoveryCardScanPrefix}${encodeBase64Url(canonicalPayload)}`;
 }
 
 /**
- * Strict inverse of the v2 scan transport, and deliberately intolerant: the
+ * Strict inverse of the scan transport, and deliberately intolerant: the
  * exact prefix, the unpadded base64url alphabet only, and a re-encode
  * byte-comparison that refuses a body whose final unused bits are non-zero -
  * the variant a tolerant decoder would silently accept as a second spelling of
  * the same card. Whitespace is not trimmed; a transport adapter must hand over
  * exactly what the scanner produced, minus its own framing.
- *
- * A v1 canonical payload wrapped in this prefix is refused rather than parsed.
- * V1 has its own raw-byte QR, so accepting it here would invent a second
- * representation for a frozen card, and v1 cannot carry the ADR 0115 acceptor
- * pin a first-run profile needs anyway.
  */
-export function parsePicoRecoveryCardV2ScanTransport(
+export function parsePicoRecoveryCardScanTransport(
   transport: string,
-): PicoRecoveryCardV2Scan {
+): PicoRecoveryCardScan {
   if (typeof transport !== 'string'
-    || transport.length <= picoRecoveryCardV2ScanPrefix.length
-    || transport.length > maxPicoRecoveryCardV2ScanChars) {
+    || transport.length <= picoRecoveryCardScanPrefix.length
+    || transport.length > maxPicoRecoveryCardScanChars) {
     throw new Error('invalid_recovery_card_scan_length');
   }
-  if (!transport.startsWith(picoRecoveryCardV2ScanPrefix)) {
+  if (!transport.startsWith(picoRecoveryCardScanPrefix)) {
     throw new Error('invalid_recovery_card_scan_prefix');
   }
-  const body = transport.slice(picoRecoveryCardV2ScanPrefix.length);
+  const body = transport.slice(picoRecoveryCardScanPrefix.length);
   if (!base64UrlPattern.test(body)) {
     throw new Error('invalid_recovery_card_scan_charset');
   }
@@ -430,9 +390,6 @@ export function parsePicoRecoveryCardV2ScanTransport(
     throw new Error('noncanonical_recovery_card_scan');
   }
   const payload = parsePicoRecoveryCardPayload(canonicalPayload);
-  if (payload.schema !== picoRecoveryCardV2Schema) {
-    throw new Error('invalid_recovery_card_scan_schema');
-  }
   return Object.freeze({ canonicalPayload, payload });
 }
 
@@ -853,7 +810,7 @@ function parseCanonicalElements(
 const base64UrlAlphabet =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 const base64UrlPattern = /^[A-Za-z0-9_-]+$/;
-const maxPicoRecoveryCardV2ScanChars = picoRecoveryCardV2ScanPrefix.length
+const maxPicoRecoveryCardScanChars = picoRecoveryCardScanPrefix.length
   + Math.ceil(maxPicoRecoveryCardCanonicalBytes / 3) * 4;
 
 function encodeBase64Url(bytes: Uint8Array): string {

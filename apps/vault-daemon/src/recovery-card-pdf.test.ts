@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { PicoVaultRecoveryCard } from '@pico/vault';
-import { buildPicoRecoveryCardPayload } from '@pico/protocol';
+import { picoRecoveryCardSchema } from '@pico/protocol';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import {
@@ -9,44 +9,26 @@ import {
   generatePicoRecoveryCardPdfs,
   picoRecoveryCardQrPayload,
   PICO_RECOVERY_CARD_PDF_LAYOUT,
-  PICO_RECOVERY_CARD_V2_QR_PREFIX,
+  PICO_RECOVERY_CARD_QR_PREFIX,
 } from './recovery-card-pdf.js';
 
 describe('ADR 0110 reproducible Recovery Card PDFs', () => {
-  it('encodes the exact canonical payload bytes in the QR matrix', () => {
+  it('carries the canonical payload bytes through the fixed ASCII transport', () => {
     const card = fixtureCard();
-    expect(Buffer.from(picoRecoveryCardQrPayload(card)).toString('hex'))
-      .toBe(card.canonicalPayloadHex);
+    const transport = Buffer.from(picoRecoveryCardQrPayload(card))
+      .toString('ascii');
+    expect(transport.startsWith(PICO_RECOVERY_CARD_QR_PREFIX)).toBe(true);
+    expect(Buffer.from(
+      transport.slice(PICO_RECOVERY_CARD_QR_PREFIX.length),
+      'base64url',
+    ).toString('hex')).toBe(card.canonicalPayloadHex);
+
     const matrix = createPicoRecoveryCardQrMatrix(card);
     expect(matrix.size).toBeGreaterThan(20);
     expect(matrix.data).toHaveLength(matrix.size * matrix.size);
     expect([...matrix.data].some((value) => value === 0)).toBe(true);
     expect([...matrix.data].some((value) => value === 1)).toBe(true);
-    expect(Buffer.from(matrix.payload).toString('hex'))
-      .toBe(card.canonicalPayloadHex);
-  });
-
-  it('uses the fixed ASCII scanner transport for Card v2', () => {
-    const v1 = fixtureCard();
-    const payload = {
-      ...v1.payload,
-      schema: 'pico.recovery.card.v2' as const,
-      homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
-    };
-    const canonicalPayloadHex = Buffer.from(
-      buildPicoRecoveryCardPayload(payload),
-    ).toString('hex');
-    const qr = picoRecoveryCardQrPayload({
-      ...v1,
-      payload,
-      canonicalPayloadHex,
-    });
-    const transport = Buffer.from(qr).toString('ascii');
-    expect(transport.startsWith(PICO_RECOVERY_CARD_V2_QR_PREFIX)).toBe(true);
-    expect(Buffer.from(
-      transport.slice(PICO_RECOVERY_CARD_V2_QR_PREFIX.length),
-      'base64url',
-    ).toString('hex')).toBe(canonicalPayloadHex);
+    expect(Buffer.from(matrix.payload).toString('ascii')).toBe(transport);
   });
 
   it('generates exact ID-1 duplex pages and one actual-size A4 fold sheet', async () => {
@@ -125,6 +107,7 @@ function fixtureCard(): PicoVaultRecoveryCard {
         picoName: string;
         homeNameOrId: string;
         homeId: string;
+        homeHostPicoIdentityFingerprintHex: string;
         hostSigningKeyFingerprintHex: string;
         hostKeyAgreementKeyFingerprintHex: string;
         hostKeyAgreementPublicKeyHex: string;
@@ -136,7 +119,7 @@ function fixtureCard(): PicoVaultRecoveryCard {
   const vector = fixture.mnemonicPin;
   return {
     payload: {
-      schema: 'pico.recovery.card.v1',
+      schema: picoRecoveryCardSchema,
       suite: 'pico.suite.id.v1',
       picoName: vector.issuance.picoName,
       homeNameOrId: vector.issuance.homeNameOrId,
@@ -145,6 +128,8 @@ function fixtureCard(): PicoVaultRecoveryCard {
       identityKeyFingerprintHex:
         vector.identityKeyFingerprintHex,
       homeId: vector.issuance.homeId,
+      homeHostPicoIdentityFingerprintHex:
+        vector.issuance.homeHostPicoIdentityFingerprintHex,
       hostSigningKeyFingerprintHex:
         vector.issuance.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex:

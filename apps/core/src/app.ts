@@ -17,7 +17,6 @@ import {
   picoHomeClaimResponseRecordSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
-  picoHomeFoundingRecordV2Schema,
   picoHomeSealedClaimPayloadSchema,
   picoHomeSealedClaimPayloadV2Schema,
   buildPicoHomeContinuitySignatureInput,
@@ -56,7 +55,6 @@ import {
   type PicoHomeClaimSignatureInput,
   type PicoHomeFoundingAcceptance,
   type PicoHomeFoundingRecord,
-  type PicoHomeFoundingRecordV2,
   type PicoHomeFoundingSignatureInput,
   type PicoHomePendingClaimResponse,
   type PicoHomeSealedClaimPayload,
@@ -860,7 +858,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     if ('reason' in firstDeviceReconciliation) {
       app.log.error(
         firstDeviceReconciliation,
-        'Pico Home first-device evidence could not be re-projected from v2 founding evidence.',
+        'Pico Home first-device evidence could not be re-projected from the founding record.',
       );
     }
     const deviceLifecycleReconciliation =
@@ -2967,8 +2965,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         sodium,
         buildPicoHomeFoundingSignatureInput(pending.founding),
       );
-      const foundingRecord: PicoHomeFoundingRecordV2 = {
-        schema: picoHomeFoundingRecordV2Schema,
+      const foundingRecord: PicoHomeFoundingRecord = {
+        schema: picoHomeFoundingRecordSchema,
         founding: pending.founding,
         claimantIdentityKeyRecord: pending.claimantIdentityKeyRecord,
         firstDeviceSigningKeyRecord: pending.firstDeviceSigningKeyRecord,
@@ -4660,8 +4658,7 @@ function verifyPicoHomeFoundingEvidence(
   const claimantKey = record.claimantIdentityKeyRecord;
 
   try {
-    if (record.schema !== picoHomeFoundingRecordSchema
-      && record.schema !== picoHomeFoundingRecordV2Schema) {
+    if (record.schema !== picoHomeFoundingRecordSchema) {
       return { ok: false, reason: 'invalid_founding_record_schema' };
     }
     if (claimantKey.suite !== picoIdentitySuite || claimantKey.keyRole !== 'pico_identity') {
@@ -4675,45 +4672,43 @@ function verifyPicoHomeFoundingEvidence(
       return { ok: false, reason: 'claimant_key_fingerprint_mismatch' };
     }
 
-    if (record.schema === picoHomeFoundingRecordV2Schema) {
-      const founding = record.founding;
-      if (record.firstDeviceSigningKeyRecord.suite !== picoIdentitySuite
-        || record.firstDeviceSigningKeyRecord.keyRole !== 'device_signing'
-        || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
-          keyRecord: record.firstDeviceSigningKeyRecord,
-          expectedFingerprintHex: founding.firstDeviceSigningKeyFingerprintHex,
-        })) {
-        return { ok: false, reason: 'first_device_signing_key_mismatch' };
-      }
-      if (record.firstDeviceKeyAgreementKeyRecord.suite !== picoIdentitySuite
-        || record.firstDeviceKeyAgreementKeyRecord.keyRole !== 'device_key_agreement'
-        || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
-          keyRecord: record.firstDeviceKeyAgreementKeyRecord,
-          expectedFingerprintHex: founding.firstDeviceKeyAgreementKeyFingerprintHex,
-        })) {
-        return { ok: false, reason: 'first_device_agreement_key_mismatch' };
-      }
-      const delegation = record.firstDeviceDelegation.record;
-      if (delegation.delegationId !== founding.firstDeviceDelegationId
-        || delegation.issuerIdentityKeyFingerprintHex
-          !== founding.homeHostPicoIdentityFingerprintHex
-        || delegation.subjectSigningKeyFingerprintHex
-          !== founding.firstDeviceSigningKeyFingerprintHex
-        || delegation.subjectKeyAgreementKeyFingerprintHex
-          !== founding.firstDeviceKeyAgreementKeyFingerprintHex) {
-        return { ok: false, reason: 'first_device_delegation_mismatch' };
-      }
-      const lifecycle = createVerifiedPicoIdentityLifecycleIndex(sodium, {
-        issuerIdentityKeyRecord: claimantKey,
-        signedDelegations: [record.firstDeviceDelegation],
-        signedRevocations: record.firstDeviceRevocations,
-      });
-      if (lifecycle.lookupDelegation(founding.firstDeviceDelegationId, {
-        at: founding.foundedAt,
-        requiredScopes: ['surface_session'],
-      }).status !== 'active') {
-        return { ok: false, reason: 'inactive_first_device_delegation' };
-      }
+    const founding = record.founding;
+    if (record.firstDeviceSigningKeyRecord.suite !== picoIdentitySuite
+      || record.firstDeviceSigningKeyRecord.keyRole !== 'device_signing'
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: record.firstDeviceSigningKeyRecord,
+        expectedFingerprintHex: founding.firstDeviceSigningKeyFingerprintHex,
+      })) {
+      return { ok: false, reason: 'first_device_signing_key_mismatch' };
+    }
+    if (record.firstDeviceKeyAgreementKeyRecord.suite !== picoIdentitySuite
+      || record.firstDeviceKeyAgreementKeyRecord.keyRole !== 'device_key_agreement'
+      || !verifyPicoIdentityKeyRecordFingerprint(sodium, {
+        keyRecord: record.firstDeviceKeyAgreementKeyRecord,
+        expectedFingerprintHex: founding.firstDeviceKeyAgreementKeyFingerprintHex,
+      })) {
+      return { ok: false, reason: 'first_device_agreement_key_mismatch' };
+    }
+    const delegation = record.firstDeviceDelegation.record;
+    if (delegation.delegationId !== founding.firstDeviceDelegationId
+      || delegation.issuerIdentityKeyFingerprintHex
+        !== founding.homeHostPicoIdentityFingerprintHex
+      || delegation.subjectSigningKeyFingerprintHex
+        !== founding.firstDeviceSigningKeyFingerprintHex
+      || delegation.subjectKeyAgreementKeyFingerprintHex
+        !== founding.firstDeviceKeyAgreementKeyFingerprintHex) {
+      return { ok: false, reason: 'first_device_delegation_mismatch' };
+    }
+    const lifecycle = createVerifiedPicoIdentityLifecycleIndex(sodium, {
+      issuerIdentityKeyRecord: claimantKey,
+      signedDelegations: [record.firstDeviceDelegation],
+      signedRevocations: record.firstDeviceRevocations,
+    });
+    if (lifecycle.lookupDelegation(founding.firstDeviceDelegationId, {
+      at: founding.foundedAt,
+      requiredScopes: ['surface_session'],
+    }).status !== 'active') {
+      return { ok: false, reason: 'inactive_first_device_delegation' };
     }
 
     if (!verifyPicoIdentityDetachedSignature(sodium, {

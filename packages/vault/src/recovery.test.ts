@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { picoRecoveryCardSchema } from '@pico/protocol';
 import {
   createPicoVaultKeyfile,
   decodePicoRecoveryPhrase,
@@ -81,7 +82,7 @@ describe('ADR 0110 Recovery Card identity-root material', () => {
     expect(card.canonicalPayloadHex)
       .toBe(vector.issuedCanonicalPayloadHex);
     expect(card.payload).toEqual({
-      schema: 'pico.recovery.card.v1',
+      schema: picoRecoveryCardSchema,
       suite: 'pico.suite.id.v1',
       picoName: vector.issuance.picoName,
       homeNameOrId: vector.issuance.homeNameOrId,
@@ -90,6 +91,8 @@ describe('ADR 0110 Recovery Card identity-root material', () => {
       identityKeyFingerprintHex:
         vector.identityKeyFingerprintHex,
       homeId: vector.issuance.homeId,
+      homeHostPicoIdentityFingerprintHex:
+        vector.issuance.homeHostPicoIdentityFingerprintHex,
       hostSigningKeyFingerprintHex:
         vector.issuance.hostSigningKeyFingerprintHex,
       hostKeyAgreementKeyFingerprintHex:
@@ -101,7 +104,7 @@ describe('ADR 0110 Recovery Card identity-root material', () => {
     });
   });
 
-  it('issues additive Card v2 with the non-rotating Home acceptor pin', () => {
+  it('binds the non-rotating Home acceptor pin into the canonical bytes', () => {
     const vector = fixtureVector();
     const restored = restorePicoVaultIdentityFromRecovery(sodium, {
       recoveryPhrase: vector.protectedRecoveryPhrase,
@@ -114,13 +117,13 @@ describe('ADR 0110 Recovery Card identity-root material', () => {
       keyfile: restored.keyfile,
       passphrase: 'fixture identity passphrase',
     });
-    const card = session.issueRecoveryCardV2({
+    const card = session.issueRecoveryCard({
       ...vector.issuance,
       homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
       pin: vector.pin,
     });
     expect(card.payload).toMatchObject({
-      schema: 'pico.recovery.card.v2',
+      schema: picoRecoveryCardSchema,
       homeHostPicoIdentityFingerprintHex: '99'.repeat(32),
     });
     expect(card.canonicalPayloadHex).not.toBe(

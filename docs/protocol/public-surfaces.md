@@ -60,7 +60,7 @@ rather than inferred.
 | Form | Class | Notes |
 |---|---|---|
 | `pico.recovery.card.v1` and its scan transport | Internal | Stated below already: the card forms and the PDF generator are local implementation surfaces, not Pico Link compatibility. Vectors live under `fixtures/home-device-recovery/`. |
-| `pico.home.founding-record.v1` / `.v2` | Experimental | The durable form of the experimental `POST /api/home/claim` setup route, with vectors under `fixtures/home-first-device-founding/` and `fixtures/home-signature-input/`. Classified here on 2026-08-09; the route's class was documented, the record's was not, and ADR 0134 F3 needed it. |
+| `pico.home.founding-record.v1` | Experimental | The durable form of the experimental `POST /api/home/claim` setup route, with vectors under `fixtures/home-first-device-founding/` and `fixtures/home-signature-input/`. Classified here on 2026-08-09; the route's class was documented, the record's was not, and ADR 0134 F3 needed it. The `.v2` name existed until 2026-08-10, when ADR 0134 F2 collapsed the pair into this one and made the three first-device fields required. |
 | ADR 0034 signature-input families | Experimental | Fixture-backed canonical bytes for identity, Home, Vault, Link, recovery and rotation families. Their protocol version is the axis that moves when they change. |
 | Draft `pico.link.*` packet, credential and envelope shapes | Reserved | ADR 0042-0066 draft-only fixtures. Not writable, no runtime, and explicitly no compatibility claim (ADR 0046). |
 

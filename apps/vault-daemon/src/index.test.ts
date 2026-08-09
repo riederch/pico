@@ -652,6 +652,7 @@ describe('pico-vault CLI argument contract (ADR 0097 D5)', () => {
       '--fingerprint', identityFixture.keyFingerprintHex,
       '--pico-name', 'Mira',
       '--home-id', 'home_cli_contract_0001',
+      '--home-host-identity-fingerprint', '44'.repeat(32),
       '--host-signing-fingerprint', '11'.repeat(32),
       '--host-agreement-fingerprint', '22'.repeat(32),
       '--host-agreement-public-key', '33'.repeat(32),

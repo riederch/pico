@@ -26,7 +26,7 @@ import type {
 } from '@pico/protocol';
 import {
   parsePicoRecoveryCardPayload,
-  picoRecoveryCardV2Schema,
+  picoRecoveryCardSchema,
 } from '@pico/protocol';
 import {
   buildPicoVaultSignatureInputFromFields,
@@ -553,8 +553,7 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         });
         return;
       }
-      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard:
-      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2: {
+      case picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard: {
         this.#handleCeremony(socket, frame, request, {
           summary: {
             picoName: request.picoName,
@@ -565,29 +564,12 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
           },
           statement: `Issue a Recovery Card for Pico ${request.picoName} in ${request.homeNameOrId}. This exports the identity-root recovery material once for printing; PIN protection is mandatory and enabled.`,
           execute: (session) => {
-            if (request.family
-              === picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2) {
-              return session.issueRecoveryCardV2({
-                picoName: request.picoName,
-                homeNameOrId: request.homeNameOrId,
-                homeId: request.homeId,
-                homeHostPicoIdentityFingerprintHex:
-                  request.homeHostPicoIdentityFingerprintHex,
-                hostSigningKeyFingerprintHex:
-                  request.hostSigningKeyFingerprintHex,
-                hostKeyAgreementKeyFingerprintHex:
-                  request.hostKeyAgreementKeyFingerprintHex,
-                hostKeyAgreementPublicKeyHex:
-                  request.hostKeyAgreementPublicKeyHex,
-                endpointHint: request.endpointHint,
-                issuedAt: request.issuedAt,
-                pin: request.pin,
-              }) as unknown as Record<string, unknown>;
-            }
             return session.issueRecoveryCard({
               picoName: request.picoName,
               homeNameOrId: request.homeNameOrId,
               homeId: request.homeId,
+              homeHostPicoIdentityFingerprintHex:
+                request.homeHostPicoIdentityFingerprintHex,
               hostSigningKeyFingerprintHex:
                 request.hostSigningKeyFingerprintHex,
               hostKeyAgreementKeyFingerprintHex:
@@ -1464,14 +1446,6 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
     const card = parsePicoRecoveryCardPayload(
       Buffer.from(request.canonicalCardPayloadHex, 'hex'),
     );
-    if (card.schema !== picoRecoveryCardV2Schema) {
-      this.#respondError(
-        socket,
-        request.requestId,
-        'recovery_card_v1_requires_trusted_acceptor_pin',
-      );
-      return;
-    }
 
     const paths: string[] = [];
     try {

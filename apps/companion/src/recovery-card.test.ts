@@ -8,9 +8,9 @@ describe('Companion Recovery Card product issuance', () => {
     const cardPrinterPdf = Uint8Array.from([1, 2, 3]);
     const paperPrintablePdf = Uint8Array.from([4, 5, 6]);
     const printedBytes: number[][] = [];
-    const ceremonyIssueRecoveryCardV2 = vi.fn(async () => card());
+    const ceremonyIssueRecoveryCard = vi.fn(async () => card());
     const result = await issuePicoCompanionRecoveryCard({
-      daemonClient: { ceremonyIssueRecoveryCardV2 } as unknown as PicoVaultDaemonClient,
+      daemonClient: { ceremonyIssueRecoveryCard } as unknown as PicoVaultDaemonClient,
       profile: profile(),
       picoName: 'Mira',
       homeNameOrId: 'home_product_1',
@@ -27,7 +27,7 @@ describe('Companion Recovery Card product issuance', () => {
       generatePdfs: async () => ({ cardPrinterPdf, paperPrintablePdf }),
     });
 
-    expect(ceremonyIssueRecoveryCardV2).toHaveBeenCalledWith({
+    expect(ceremonyIssueRecoveryCard).toHaveBeenCalledWith({
       signerKeyFingerprintHex: '55'.repeat(32),
       picoName: 'Mira',
       homeNameOrId: 'home_product_1',
@@ -62,7 +62,7 @@ describe('Companion Recovery Card product issuance', () => {
     const paperPrintablePdf = Uint8Array.from([2]);
     await expect(issuePicoCompanionRecoveryCard({
       daemonClient: {
-        ceremonyIssueRecoveryCardV2: async () => card(),
+        ceremonyIssueRecoveryCard: async () => card(),
       } as unknown as PicoVaultDaemonClient,
       profile: profile(),
       picoName: 'Mira',

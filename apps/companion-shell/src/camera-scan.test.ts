@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { Readable } from 'node:stream';
-import { picoRecoveryCardV2ScanPrefix } from '@pico/protocol';
+import { picoRecoveryCardScanPrefix } from '@pico/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   picoCompanionCameraScanArguments,
@@ -8,7 +8,7 @@ import {
   type PicoCompanionCameraScanSpawn,
 } from './camera-scan.js';
 
-const transport = `${picoRecoveryCardV2ScanPrefix}AAAAFXBpY28`;
+const transport = `${picoRecoveryCardScanPrefix}AAAAFXBpY28`;
 
 describe('ADR 0112 S3 camera scan path', () => {
   it('returns the transport line and kills the decoder immediately', async () => {

@@ -38,7 +38,6 @@ import {
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeFoundingRecordSchema,
-  picoHomeFoundingRecordV2Schema,
   picoHomeDomainReadGrantLifecycleRecordSchema,
   picoHomeDomainReadGrantRecordSchema,
   picoHomeDeviceLifecycleEvidenceDigestHex,
@@ -59,8 +58,7 @@ import {
   type PicoHomeClaimResponse,
   type PicoHomeClaimSignatureInput,
   type PicoHomeFoundingAcceptance,
-  type PicoHomeFoundingRecordV1,
-  type PicoHomeFoundingSignatureInputV1,
+  type PicoHomeFoundingRecord,
   type PicoHomeFoundingSignatureInput,
   type PicoHomeDomainReadGrantLifecycleSignatureInput,
   type PicoHomeDomainReadGrantSignatureInput,
@@ -571,7 +569,7 @@ describe('Pico Home Core app', () => {
       },
       claimResponse: pending.pendingClaim.claimResponse,
       foundingRecord: {
-        schema: picoHomeFoundingRecordV2Schema,
+        schema: picoHomeFoundingRecordSchema,
         founding: pending.pendingClaim.founding,
         claimantIdentityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
         firstDeviceSigningKeyRecord: sealedClaim.firstDeviceSigningKeyRecord,
@@ -829,85 +827,6 @@ describe('Pico Home Core app', () => {
     expect(reconciled.prepare('SELECT COUNT(*) AS count FROM pico_identity_reader_key').get())
       .toEqual({ count: 1 });
     reconciled.close();
-  });
-
-  it('keeps a durable v1 founding record verifiable without projecting v2 device evidence', async () => {
-    const databasePath = createDatabasePath();
-    const first = await buildAppWithCapturedLog({ databasePath });
-    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(first);
-    await first.close();
-
-    const v2Record = claimResponse.foundingRecord;
-    if (v2Record?.schema !== picoHomeFoundingRecordV2Schema) {
-      throw new Error('Expected the setup ceremony to create a v2 founding record.');
-    }
-    const v1Founding: PicoHomeFoundingSignatureInputV1 = {
-      suite: v2Record.founding.suite,
-      foundingId: v2Record.founding.foundingId,
-      homeId: v2Record.founding.homeId,
-      hostSigningKeyFingerprintHex: v2Record.founding.hostSigningKeyFingerprintHex,
-      hostKeyAgreementKeyFingerprintHex:
-        v2Record.founding.hostKeyAgreementKeyFingerprintHex,
-      homeHostPicoIdentityFingerprintHex:
-        v2Record.founding.homeHostPicoIdentityFingerprintHex,
-      claimantNonceHex: v2Record.founding.claimantNonceHex,
-      hostNonceHex: v2Record.founding.hostNonceHex,
-      foundedAt: v2Record.founding.foundedAt,
-      lifecycleOrder: v2Record.founding.lifecycleOrder,
-    };
-    const signatureInput = buildPicoHomeFoundingSignatureInput(v1Founding);
-    const v1Record: PicoHomeFoundingRecordV1 = {
-      schema: picoHomeFoundingRecordSchema,
-      founding: v1Founding,
-      claimantIdentityKeyRecord: v2Record.claimantIdentityKeyRecord,
-      claimantFoundingSignatureHex: bytesToHex(sodium.crypto_sign_detached(
-        signatureInput,
-        sealedClaim.claimantPrivateKey,
-      )),
-      hostClaimResponse: v2Record.hostClaimResponse,
-      hostFoundingSignatureHex: new HomeHostKeyStore(
-        join(dirname(databasePath), 'home-host-keys'),
-      ).signWithHostSigningKey(sodium, signatureInput),
-      createdAt: v2Record.createdAt,
-    };
-
-    const legacy = new Database(databasePath);
-    legacy.prepare(`
-      UPDATE pico_home_founding_record
-      SET schema = ?,
-          founding_json = ?,
-          claimant_founding_signature_hex = ?,
-          host_founding_signature_hex = ?,
-          first_device_evidence_json = NULL
-      WHERE id = 1
-    `).run(
-      v1Record.schema,
-      JSON.stringify(v1Record.founding),
-      v1Record.claimantFoundingSignatureHex,
-      v1Record.hostFoundingSignatureHex,
-    );
-    legacy.prepare('DELETE FROM pico_identity_reader_key').run();
-    legacy.prepare('DELETE FROM pico_identity_delegation').run();
-    legacy.close();
-
-    const restarted = await buildAppWithCapturedLog({ databasePath });
-    expect((await restarted.inject({
-      method: 'POST',
-      url: '/api/auth/identity-challenges',
-    })).statusCode).toBe(201);
-    expect(logLines(restarted).some((line) =>
-      line.includes('founding evidence signature verification failed'))).toBe(false);
-    await restarted.close();
-
-    const restored = new EventStore(databasePath);
-    expect(restored.picoHomeFoundingRecord()).toEqual(v1Record);
-    restored.close();
-    const projected = new Database(databasePath, { readonly: true });
-    expect(projected.prepare('SELECT COUNT(*) AS count FROM pico_identity_delegation').get())
-      .toEqual({ count: 0 });
-    expect(projected.prepare('SELECT COUNT(*) AS count FROM pico_identity_reader_key').get())
-      .toEqual({ count: 0 });
-    projected.close();
   });
 
   it('keeps setup mode closed when restored founding evidence has no matching host key custody', async () => {

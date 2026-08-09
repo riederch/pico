@@ -15,8 +15,6 @@ import {
   type PicoVaultDaemonCeremonyCreateReaderGrantResult,
   type PicoVaultDaemonCeremonyIssueRecoveryCardRequest,
   type PicoVaultDaemonCeremonyIssueRecoveryCardResult,
-  type PicoVaultDaemonCeremonyIssueRecoveryCardV2Request,
-  type PicoVaultDaemonCeremonyIssueRecoveryCardV2Result,
   type PicoVaultDaemonCeremonyRotateDomainRequest,
   type PicoVaultDaemonCeremonyRotateDomainResult,
   type PicoVaultDaemonRecoveryBootstrapRequest,
@@ -61,9 +59,6 @@ export interface PicoVaultDaemonClient {
   ceremonyIssueRecoveryCard(
     input: Omit<PicoVaultDaemonCeremonyIssueRecoveryCardRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonCeremonyIssueRecoveryCardResult>;
-  ceremonyIssueRecoveryCardV2(
-    input: Omit<PicoVaultDaemonCeremonyIssueRecoveryCardV2Request, 'family' | 'requestId'>,
-  ): Promise<PicoVaultDaemonCeremonyIssueRecoveryCardV2Result>;
   recoveryBootstrap(
     input: Omit<PicoVaultDaemonRecoveryBootstrapRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonRecoveryBootstrapResult>;
@@ -207,11 +202,6 @@ export async function connectPicoVaultDaemonClient(
         picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
       ...ceremonyInput,
     }) as unknown as PicoVaultDaemonCeremonyIssueRecoveryCardResult,
-    ceremonyIssueRecoveryCardV2: async (ceremonyInput) => await request({
-      family:
-        picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCardV2,
-      ...ceremonyInput,
-    }) as unknown as PicoVaultDaemonCeremonyIssueRecoveryCardV2Result,
     recoveryBootstrap: async (bootstrapInput) => await request({
       family: picoVaultDaemonRequestFamilies.recoveryBootstrap,
       ...bootstrapInput,

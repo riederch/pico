@@ -211,7 +211,6 @@ export const picoHomeSealedClaimPayloadV2Schema = 'pico.home.claim-payload.v2' a
 export const picoHomeClaimResponseRecordSchema = 'pico.home.claim-response-record.v1' as const;
 export const picoHomeFoundingAcceptanceSchema = 'pico.home.founding-acceptance.v1' as const;
 export const picoHomeFoundingRecordSchema = 'pico.home.founding-record.v1' as const;
-export const picoHomeFoundingRecordV2Schema = 'pico.home.founding-record.v2' as const;
 export const picoHomeDeviceLifecycleSubmissionSchema =
   'pico.home.device-lifecycle-submission.v1' as const;
 export const picoHomeDeviceLifecycleRecordSchema =
@@ -1271,9 +1270,9 @@ export interface PicoHomeFoundingAcceptance {
   claimantFoundingSignatureHex: string;
 }
 
-export interface PicoHomeFoundingRecordV1 {
+export interface PicoHomeFoundingRecord extends PicoHomeFirstDeviceEvidence {
   schema: typeof picoHomeFoundingRecordSchema;
-  founding: PicoHomeFoundingSignatureInputV1;
+  founding: PicoHomeFoundingSignatureInput;
   claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
   // No claimant signature over the claim: the claim's signed bytes carry the
   // Move-In Code and the host setup nonce, and neither is kept, so such a field
@@ -1285,18 +1284,6 @@ export interface PicoHomeFoundingRecordV1 {
   hostFoundingSignatureHex: string;
   createdAt: string;
 }
-
-export interface PicoHomeFoundingRecordV2 extends PicoHomeFirstDeviceEvidence {
-  schema: typeof picoHomeFoundingRecordV2Schema;
-  founding: PicoHomeFoundingSignatureInput;
-  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
-  claimantFoundingSignatureHex: string;
-  hostClaimResponse: PicoHomeClaimResponseRecord;
-  hostFoundingSignatureHex: string;
-  createdAt: string;
-}
-
-export type PicoHomeFoundingRecord = PicoHomeFoundingRecordV1 | PicoHomeFoundingRecordV2;
 
 /**
  * What the Home Host Pico produces and hands over: the authority half on its
@@ -1360,7 +1347,7 @@ export interface PicoHomeClaimResponseSignatureInput {
   foundingRecordId: string;
 }
 
-export interface PicoHomeFoundingSignatureInputV1 {
+export interface PicoHomeFoundingSignatureInput {
   suite: string;
   foundingId: string;
   homeId: string;
@@ -1371,13 +1358,15 @@ export interface PicoHomeFoundingSignatureInputV1 {
   hostNonceHex: string;
   foundedAt: string;
   lifecycleOrder: string;
-}
-
-export interface PicoHomeFoundingSignatureInput extends PicoHomeFoundingSignatureInputV1 {
+  // ADR 0108. First-device evidence is required: a founding without it cannot
+  // be reconciled into a device set, and before the format freeze no record
+  // exists that lacks it (ADR 0134 F2).
   firstDeviceDelegationId: string;
   firstDeviceSigningKeyFingerprintHex: string;
   firstDeviceKeyAgreementKeyFingerprintHex: string;
 }
+
+
 
 export interface PicoHomeMembershipSignatureInput {
   suite: string;
@@ -1493,7 +1482,6 @@ export type PicoHomeSignatureInput =
   | PicoHomeClaimSignatureInputV1
   | PicoHomeClaimSignatureInput
   | PicoHomeClaimResponseSignatureInput
-  | PicoHomeFoundingSignatureInputV1
   | PicoHomeFoundingSignatureInput
   | PicoHomeMembershipSignatureInput
   | PicoHomeMembershipLifecycleSignatureInput
@@ -3260,12 +3248,8 @@ export function buildPicoHomeClaimResponseSignatureInput(input: PicoHomeClaimRes
 }
 
 export function buildPicoHomeFoundingSignatureInput(
-  input: PicoHomeFoundingSignatureInput | PicoHomeFoundingSignatureInputV1,
+  input: PicoHomeFoundingSignatureInput,
 ): Uint8Array {
-  if (!('firstDeviceDelegationId' in input)) {
-    return buildPicoHomeFoundingSignatureInputV1(input);
-  }
-
   assertExactKeys(input as unknown as Record<string, unknown>, [
     'suite',
     'foundingId',
@@ -3299,42 +3283,6 @@ export function buildPicoHomeFoundingSignatureInput(
     fixedHexBytes(input.firstDeviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.firstDeviceKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
     asciiBytes(input.firstDeviceDelegationId),
-    fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
-    fixedHexBytes(input.hostNonceHex, 32, 'invalid_nonce_length'),
-    asciiBytes(input.foundedAt),
-    asciiBytes(input.lifecycleOrder),
-  ]);
-}
-
-export function buildPicoHomeFoundingSignatureInputV1(
-  input: PicoHomeFoundingSignatureInputV1,
-): Uint8Array {
-  assertExactKeys(input as unknown as Record<string, unknown>, [
-    'suite',
-    'foundingId',
-    'homeId',
-    'hostSigningKeyFingerprintHex',
-    'hostKeyAgreementKeyFingerprintHex',
-    'homeHostPicoIdentityFingerprintHex',
-    'claimantNonceHex',
-    'hostNonceHex',
-    'foundedAt',
-    'lifecycleOrder',
-  ]);
-  assertAsciiToken(input.suite);
-  assertAsciiToken(input.foundingId);
-  assertAsciiToken(input.homeId);
-  assertInstant(input.foundedAt);
-  assertLifecycleOrder(input.lifecycleOrder);
-
-  return concatCanonicalElements([
-    asciiBytes(picoHomeSignatureInputLabels.founding),
-    asciiBytes(input.suite),
-    asciiBytes(input.foundingId),
-    asciiBytes(input.homeId),
-    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
-    fixedHexBytes(input.hostKeyAgreementKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
-    fixedHexBytes(input.homeHostPicoIdentityFingerprintHex, 32, 'invalid_fingerprint_length'),
     fixedHexBytes(input.claimantNonceHex, 32, 'invalid_nonce_length'),
     fixedHexBytes(input.hostNonceHex, 32, 'invalid_nonce_length'),
     asciiBytes(input.foundedAt),

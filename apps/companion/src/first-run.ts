@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import {
-  parsePicoRecoveryCardV2ScanTransport,
+  parsePicoRecoveryCardScanTransport,
   type PicoHomeDeviceRecoveryPendingView,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
@@ -252,7 +252,7 @@ async function bootstrapFreshVault(input: RunPicoCompanionFirstRunInput & {
   if (cardTransport === undefined || pin === undefined) {
     throw new Error('first_run_requires_card_and_pin');
   }
-  const scan = parsePicoRecoveryCardV2ScanTransport(cardTransport);
+  const scan = parsePicoRecoveryCardScanTransport(cardTransport);
   const card = scan.payload;
 
   const refreshed = await refreshPicoHomeHostPins(input.sodium, {
