@@ -15,6 +15,12 @@ home-network client, because Pico Link Direct reaches only the person's own
 Home directly and no relay exists. That limit is a product statement, not a
 temporary gap to be quietly outgrown.
 
+Amended again on 2026-08-09 after the two open questions in here were put
+to the user directly. iOS is deferred rather than undecided: two findings
+about it are settled now and the reopening trigger is named. A6 stays
+closed and its trigger is sharpened from "after A3" to three conditions,
+because keystore strength was never what the gate was about.
+
 ## Context
 
 ADR 0097 reasoned about mobile three times, and all three arguments were
@@ -186,15 +192,45 @@ small home display or a similar constrained device is. Those devices hold
 minimal cache and session state and require a Vault behind them. What
 changes here is only that a phone is not one of them.
 
-### iOS is not decided here
+### iOS is deferred, and two things about it are already settled
 
-This ADR plans Android. iOS grants none of the conditional guarantees above
-- no long-running background process a person cannot end, and no
-notification path that survives an app the OS has terminated - so it cannot
-inherit this decision by analogy. Whether iOS arrives as a full client
-under a different reachability contract, as a Surface, or not at all is an
-open user decision, and no iOS support is claimed or implied by anything in
-here.
+Whether to build an iOS client is deferred, because the three expensive
+unknowns - the JavaScript runtime, a reviewed libsodium build, and the
+keystore tranche - are answered by A1 and A3 on Android and transfer almost
+entirely. Deciding before that evidence exists spends a decision to buy
+nothing.
+
+Two findings do not depend on that evidence and are recorded now, so a
+later decision starts from them rather than rediscovering them:
+
+**iOS can never carry the ADR 0112 alarm duty.** It offers opportunistic
+background refresh with no interval guarantee, and an app a person has
+terminated stays terminated. The two mechanisms that would work are both
+closed: silent push needs a server in the middle of the most
+security-critical moment Pico has, and continuous location authorisation
+would mean claiming location for something that is not location - an
+argument this project should not want to make. Android v1 does not carry
+that duty either (A7), but for Android that is a stage; for iOS it is the
+permanent shape.
+
+**iOS forecloses A2.** There is no second process to put custody in - an
+app is one process, and extensions are not a daemon. Where Android chooses
+between a separate custody process and an in-process seam, iOS is handed
+the seam. Custody would live in the process that draws the interface, not
+as a trade-off but as a platform fact.
+
+Against both, iOS is the strongest custody hardware in reach: Secure
+Enclave and Keychain behind biometrics, with data-protection classes Linux
+has no equivalent for. ADR 0081 already says these promises differ per
+platform and must be written down rather than averaged. Two further facts
+belong in that later decision: automatic cloud backup is a live hazard to
+the ADR 0072 rule that keys and data never share a backup artifact, and
+distribution runs through review and a paid account rather than through
+this project.
+
+The reopening trigger is A1 through A4 measured on real Android hardware.
+Until then no iOS support is claimed or implied anywhere, and "mobile"
+means Android in every statement this project makes.
 
 ## Rejected alternatives
 
@@ -244,8 +280,21 @@ local-first product's most security-critical moment.
   ADR 0112 claim is made for Android.
 - **A5 - Ceremony parity (open):** the ADR 0130 verticals, in the same
   order, on Android.
-- **A6 - Identity root founding on Android (open, separate decision):**
-  opens only after A3, and only by an explicit user decision.
+- **A6 - Identity root founding on Android (closed; three conditions to
+  reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
+  Recovery Card reachable without a printer. The trigger was sharpened on
+  2026-08-09, because "after A3" answers the wrong question: A3 measures
+  how strong the keystore is, and strength was never the objection.
+  ADR 0081 V5 biases the root toward *low exposure* - it signs rarely, has
+  no online duty - and a phone is unlocked dozens of times a day and, if
+  A2 lands on the seam, draws its own interface. The second condition is
+  the honest one: while the Home is an app or a container, every Pico
+  owner already has a general-purpose computer to found on, so the
+  phone-only person this gate exists for does not yet exist; the appliance
+  image is what creates them. The third is the sharpest: ADR 0112 wants
+  the Card printed and laminated and warns against the file export, so a
+  root on a phone whose owner has no printer is one loss from identity
+  loss - and that is exactly the person A6 would be opened for.
 - **A7 - The home-network limit is spoken (open):** the client names an
   unreachable Home rather than presenting it as a quiet one, and no product
   surface or document claims away-from-home function. Decided 2026-08-09
@@ -274,10 +323,15 @@ Negative and residual:
   that - it would be a stated property of the Android client;
 - the mobile veto guarantee stays conditional until A4 measures it, and it
   may turn out to be conditional permanently on some manufacturers;
-- ADR 0097's root-minimisation sequencing survives only as long as A6 stays
-  closed, and A6 is a user decision rather than a technical barrier;
+- ADR 0097's root-minimisation sequencing survives as long as A6 stays
+  closed, and two of A6's three reopening conditions are things this
+  project must build anyway - so the gate will come due rather than
+  lapse;
 - iOS remains unplanned, so "mobile" means Android in every claim this
-  project makes until that changes.
+  project makes until A1-A4 have been measured;
+- a person whose only personal computer is a phone cannot found a Pico at
+  all, and will not be able to until A6 reopens. That is a stated
+  consequence of ADR 0081 V5, not an oversight.
 
 ## Relationship to other ADRs
 

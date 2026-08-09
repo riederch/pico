@@ -19,6 +19,26 @@ Formulierungen.** Die zwei Stellen mit dem meisten Gewicht sind
 Bis dahin keine Aussenkommunikation, die die neue Erlaubnis als rechtlich
 geprueft darstellt.
 
+**Daran haengt die Repository-Sichtbarkeit, entschieden am 2026-08-09.** Ein
+oeffentliches Repository *ist* diese Aussenkommunikation: README,
+`COMMERCIAL.md` und `LICENSE-FAQ.md` tragen die Erlaubnis zur betrieblichen
+Eigennutzung und den Hosting-Vorbehalt, und oeffentlich ist unumkehrbar. Die
+Sichtbarkeit bleibt deshalb, wie sie ist, bis L3 erledigt ist *und* der
+Entschluss gefallen ist, fremde Nutzer einzuladen.
+
+Damit bleibt auch ADR 0122 Y2 offen: GitHub speichert fuer nutzereigene
+private Repositories keine Build-Attestation. Das ist bewusst getragen, weil
+Provenance erst dann traegt, wenn es einen fremden Konsumenten gibt - denselben
+Moment, den L3 ohnehin absteckt. Der Workflow laesst die Attestation aus und
+nennt die Auslassung; `supply:check` verweigert eine stille.
+
+Eine Veroeffentlichung waere aus Geheimnissicht unbedenklich: 716 Commits ohne
+Schluesselmaterial, Tokens oder verdaechtige Dateien, geprueft am 2026-08-09,
+und die beiden Recovery-Card-PDFs sind namentlich in `.gitignore` und in
+keinem Commit. Getrennt davon zu pruefen ist, ob die Rechteinhaberschaft aus
+`COMMERCIAL.md` und die Marke aus `TRADEMARK.md` bei einer Privatperson oder
+einer Organisation liegen sollen - das haengt nicht an der Attestation.
+
 ## Mehrere gleichzeitige Praesenzen einer PICO-Identitaet
 
 Arbeitsauftrag liegt als `docs/development/briefs/multi-presence.md` vor
