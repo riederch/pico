@@ -3,9 +3,10 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist. **IN1, IN2 and IN3 are implemented**
-in `@pico/protocol/supplier` and `@pico/protocol/supplier-condition` on
-2026-08-10; IN4 and IN5 are open, and IN5's domain half landed with IN1.
+kind coexist. **IN1, IN2, IN3 and IN4 are
+implemented** on 2026-08-10 across `@pico/protocol/supplier`,
+`supplier-condition` and `supplier-union`; IN5 is open, and its domain
+half landed with IN1.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than
@@ -242,10 +243,21 @@ a guess.
   rather than through prose - it carries no content, needs no person, and
   will not resolve itself, which is exactly what makes it worth re-asking
   somewhere else rather than waiting.
-- **IN4 - A union is honest about its parts (open):** an answer assembled
-  from several instances names those that did not respond, and two
-  instances that disagree yield both answers with their identifiers and
-  pins rather than one. No precedence order exists to be configured.
+- **IN4 - A union is honest about its parts (implemented):**
+  `unionPicoSupplierAnswers` returns `silent` with the condition that says
+  why, and derives `incomplete` rather than leaving a surface to notice -
+  the failure this gate exists for is a caller that renders the values and
+  forgets the silence. `out_of_scope` and `not_configured` count as
+  silence; `stale_but_present` and `partial` do not, because they carry
+  content.
+
+  Disagreement comes back as both answers with identifiers and pins, and
+  there is **no precedence to configure - not "none by default", none at
+  all**, which a test states by asserting that a conflict produces no
+  agreed value in either direction. Agreement is attributable too: an
+  agreed value names every instance that gave it. Two answers from one
+  instance are refused rather than unioned, because unioning them would
+  invent a disagreement the instance never had.
 - **IN5 - An effect names its instance (open):** the instance is part of
   the effect and part of what the ADR 0106 approval statement renders from
   validated fields; a derived location may propose an instance and may
