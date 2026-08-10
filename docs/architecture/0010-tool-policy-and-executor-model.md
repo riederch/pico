@@ -4,6 +4,20 @@
 
 Accepted for the foundation phase as a concept note.
 
+Status note, 2026-08-10: ADR 0139, 0140 and 0141 turn this note into
+decisions and this text keeps its wording under ADR 0128's record rule.
+What survives unchanged is the substance: the six risk classes, the three
+policy outcomes, the separation of static risk from contextual decision,
+the executor constraints, the redaction requirement and the design rule
+at the end. What no longer holds is the layering. The reasoning layer is
+two roles with different trust since ADR 0117 split planner from
+quarantined reader; tools are module-declared effects since ADR 0128 H3
+rather than a registry the core owns; and the audit log is a chain over
+the event log since ADR 0121, so ADR 0141 makes Action History a view
+rather than a fourth component. The framing "the LLM may propose an
+action" is also narrower than the path needs: ADR 0139 decides that every
+requester is untrusted, and the first one is a person.
+
 ## Context
 
 Pico will eventually call tools and act on local devices, Home Assistant, external services, files, and user data.

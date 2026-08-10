@@ -1,0 +1,341 @@
+# 0140 - Pico Rules Decide From a Closed Input and Are Not Themselves an Action
+
+## Status
+
+Accepted as the decision contract for the action path; nothing is
+implemented. RL1-RL6 are open.
+
+Second of three replacing ADR 0010's concept note. ADR 0139 says what an
+action is and who may request one; this says who decides and on what;
+ADR 0141 says who acts and what is remembered.
+
+## Context
+
+ADR 0010 already separated two things that are easy to conflate, and the
+separation holds: a tool's **risk class** is static and describes what it
+does, while a **policy decision** is contextual and describes what may
+happen this time. `forbidden` is not a risk class, and that is stated in
+0010 for the right reason.
+
+What 0010 left open is the input. It lists nine things a policy decision
+"may depend on" - user identity, device identity, location of execution,
+tool risk class, relationship context, privacy zone, data domain, recent
+confirmations, current safety mode - as prose, in a document written
+before any of them existed.
+
+**"May depend on" is not a contract.** A rule engine whose input is open
+cannot be tested against a counter-proof, because there is no statement
+of what it was allowed to see. Worse, an open input is how the model's
+own words end up as a policy input: a rationale is text, text is
+available, and nothing written down says it must not be read.
+
+Meanwhile the tree has grown the inputs that actually exist. ADR 0075
+has privacy domains. ADR 0139 gives every argument a derivation label
+and pins a risk class per effect. ADR 0137 gives an effect its instance.
+ADR 0138 puts a person-level decision in front of anything that reaches
+outside. ADR 0129 gives certainty a place. These are typed values, and
+they are enough.
+
+**And there is a question 0010 never asks.** If Pico can act, the
+highest-value action in the system is "make everything allowed". Rules
+have to be something the action path cannot reach, or the whole path is
+one successful request away from having no rules.
+
+## Scope
+
+Covers: the outcomes of a decision; the closed input a decision may read;
+what happens to an unknown; where rules live and who may change them; why
+a rule change is not an action; and how a decision relates to the
+separate permission to reach outside.
+
+Does not cover:
+
+- the request contract and argument labels (ADR 0139);
+- execution, approval rendering and the record (ADR 0141);
+- the rule *language*, editor or authoring surface, which is product
+  work this ADR constrains rather than designs;
+- relationship tiers and the social model behind them, which stay
+  concept notes (ADR 0002, ADR 0017) and are named here only as an input
+  slot that does not yet exist;
+- ADR 0119's quotas and ceilings, which protect the Home against load
+  rather than the person against an action.
+
+## Decision
+
+### Three outcomes, and none of them is an exception
+
+`allow`, `require_approval`, `deny` - the vocabulary already reserved as
+`PicoRulesDecision`, unchanged.
+
+A denial is **content**: it carries a reason, it reaches the surface that
+asked, and a person can read it. It is not a thrown error and not a
+silent no-op. This is the same posture ADR 0138 takes for condition
+states and ADR 0119 Q5 takes for storage pressure, and for the same
+reason: a refusal a person cannot see is indistinguishable from a bug.
+
+The reason is Pico's own text, composed from the decision's inputs. It
+never quotes a requester and never quotes a reader.
+
+### The input is closed, typed, and free of prose
+
+A decision reads exactly this and nothing else:
+
+- the **effect name**, and the **risk class pinned** with it at consent
+  (ADR 0139);
+- the **derivation label of every argument** (ADR 0139), per argument;
+- the **privacy domain** the action would act in (ADR 0075);
+- the **person present**, if any, and the **device** the request came
+  from;
+- the **instance** the effect targets (ADR 0137);
+- whether the effect **reaches outside** and whether that permission
+  exists (ADR 0138);
+- **recent decisions** on the same effect, as facts rather than as
+  precedent;
+- the **clock facts** ADR 0120 already distinguishes, where a rule is
+  time-bounded.
+
+Closed for two reasons. A rule that can be tested is a rule whose input
+can be enumerated, and every guard in this tree is proved by a
+counter-proof that removes it. And an open input is a path: **Pico Rules
+never reads prose.** Not the planner's rationale, not a reader's summary,
+not an argument's text content, not a description supplied by a
+requester. A rule reads the label on a value, never the value's words.
+
+That is the sharpest line here, and it follows from ADR 0117 rather than
+from caution. The entire planner-reader split exists so that untrusted
+text never reaches something that acts. A policy engine that read the
+text would be exactly that thing, one layer lower and with more
+authority.
+
+### Unknown is deny
+
+An effect with no rule, an argument with no label, a risk class the core
+does not recognise, an instance that is not attached, a domain that
+cannot be resolved: each is `deny`, with a reason naming which of them it
+was.
+
+ADR 0116 W4 states this for tool families - "unknown families gated by
+default" - and it generalises. Fail-closed is the tree's existing
+posture, and the alternative is a system whose safety depends on a rule
+author having anticipated every effect that will ever be declared.
+
+Note what this makes cheap: **a module that ships a new effect is inert
+until someone decides about it.** That is the correct default for a
+system where modules are always shipped and activation is a
+configuration question (ADR 0127).
+
+### Rules are not an action, and they are not host configuration
+
+**No effect may change a rule.** There is no `rules.allow`, no
+`rules.disable`, no effect whose declared behaviour is to widen what is
+permitted. Editing rules is a durable decision a person makes over an
+authenticated surface, recorded the way this codebase records durable
+decisions - a content-free event plus a projection - exactly like module
+activation (ADR 0127) and capture consent (ADR 0129 SR6).
+
+The reason is short. If a rule change were an action, it would be an
+action governed by rules, and the first thing worth requesting would be
+the one that removes the governor. Recursion here is not an elegance
+problem, it is the whole attack.
+
+And rules live under Pico custody, not in host configuration. ADR 0104
+already refuses a fourth entry on its debt list, and rules are the most
+consequential setting Pico has: a rule set that a container rebuild could
+replace is not a rule set.
+
+### A decision is made once, before anything runs, and it is what the runner reads
+
+The decision is recorded as a fact of the action (ADR 0139) before any
+execution begins, and the runner executes against that record. **The
+runner never re-decides**, and no component consults the rules a second
+time with a different question.
+
+One decision in one place is the property every guard in this tree has.
+Two evaluations of the same request are two chances to disagree, and the
+disagreement would be resolved by whichever ran last.
+
+If anything about the request changes after the decision, it is a new
+request with a new decision. There is no amendment.
+
+### Reaching outside is a different question, asked earlier
+
+An `allow` from Pico Rules does not create reach. ADR 0138 CO3 is a
+prior, person-level decision about whether Pico may contact a system at
+all, and it is not a policy input that a rule can outvote - it is a
+precondition that has either been met or has not.
+
+The two are separate because they answer different questions to
+different audiences. CO3 asks a person, once, whether Pico may talk to
+this service at all. Pico Rules asks, every time, whether *this* request
+is allowed. A design that merged them would let a rule grant reach, which
+is the person's decision, or would ask a person about reach on every
+request, which is how consent becomes noise.
+
+### Rules are scoped, and the decision says where it applied
+
+A rule may be scoped to a privacy domain (ADR 0075), and the recorded
+decision names the domain it was made in. A rule set with no scope would
+mean a permission granted for the household calendar silently covering
+the financial documents, which is the failure ADR 0137 IN5 already
+refuses at attachment time.
+
+This ADR does not decide the scoping *language* - whether rules nest,
+inherit or compose is product work - only that a decision is never
+domain-blind and that its record says which domain it spoke for.
+
+## Rejected alternatives
+
+### Keep "may depend on" as the input
+
+ADR 0010's prose list, carried forward. It cannot be tested, because
+there is no statement of what the engine was allowed to see, and it
+cannot be defended, because nothing in it says prose is excluded. The
+nine items are good items; what they lacked was a boundary around them.
+
+### Let a rule read the planner's rationale
+
+Attractive because a rationale is exactly the context a human would want.
+It is also model-authored text arriving at the component with the most
+authority in the system, which is the thing ADR 0117 was written to
+prevent. A rule reads labels; a person reads reasons.
+
+### Default allow for effects nobody has ruled on
+
+It would make new modules useful immediately, and it makes the system's
+safety a function of whether a rule author kept up with every module
+ever shipped. Fail-closed is the tree's posture everywhere else, and
+ADR 0116 W4 already decided it for tool families.
+
+### Make the risk class the decision
+
+Simple: destructive always asks, read-only never does. ADR 0010 already
+refused this and the refusal is right - `forbidden` is not a risk class.
+A read of a stranger's document and a read of the person's own calendar
+are the same risk class and not the same decision, and the difference is
+in the labels, not in the verb.
+
+### Rules as host configuration
+
+A file the deployment provides. It puts the most consequential setting
+Pico has outside Pico, where a second Pico on the same host inherits it
+and a rebuild replaces it, and it would be a fourth entry on ADR 0104's
+debt list.
+
+### Let rules be changed by an action, with a high risk class
+
+The tempting compromise: make it `security_sensitive` and require
+approval. It still makes the governor reachable from the path it
+governs, and it means a single successful approval - the thing an
+attacker is trying to obtain anyway - can remove every other approval
+that would ever be required.
+
+### One decision per action, re-evaluated at execution
+
+Meant to catch a world that changed between decision and execution. It
+creates two evaluations that can disagree and gives the later one
+authority nobody granted it. A changed world produces a new request, not
+a revised verdict.
+
+## Gates
+
+- **RL1 - Three outcomes, and a denial is content (open):** decisions
+  are `allow`, `require_approval` or `deny`; a denial carries a
+  Pico-composed reason to the surface that asked and is never a thrown
+  error or a silent no-op.
+- **RL2 - The input is a closed record (open):** the decision function
+  takes exactly the enumerated inputs and has no parameter through which
+  free text could enter - the same construction ADR 0117 X1 uses, where
+  the gate is the absence of a parameter rather than a filter. A
+  counter-proof is a call site holding a rationale with nowhere to put
+  it.
+- **RL3 - Unknown is deny, by name (open):** an unruled effect, an
+  unlabelled argument, an unrecognised risk class, an unattached
+  instance and an unresolvable domain each deny with a reason naming
+  which.
+- **RL4 - No effect changes a rule (open):** no manifest may declare an
+  effect that edits rules, and the check refuses one that tries; rule
+  changes are a durable person decision over an authenticated surface,
+  recorded as a content-free event plus projection, and never read from
+  host configuration.
+- **RL5 - One decision, before execution (open):** the decision is
+  recorded before the runner starts and is what the runner reads; no
+  second evaluation exists; a changed request is a new request.
+- **RL6 - A decision names its domain (open):** every recorded decision
+  carries the ADR 0075 domain it applied to, and a rule may be scoped to
+  one.
+
+## Failure ledger
+
+| Situation | Posture |
+|---|---|
+| A module ships an effect nobody has ruled on | `deny`, naming the missing rule. The module is inert rather than permitted (RL3). |
+| A planner supplies a persuasive rationale | There is no parameter for it. The decision reads labels, never prose (RL2). |
+| An argument arrives without a label | `deny`. An unlabelled value is not a safe value, it is an unmeasured one (RL3). |
+| A request asks to widen the rules | No such effect can be declared; the check refuses the manifest (RL4). |
+| A person approves a `security_sensitive` action | It is that action. It does not become standing permission for the next one (RL5). |
+| The world changes between decision and execution | The runner executes what was decided or nothing. A changed request is a new one (RL5). |
+| A rule allows an effect that reaches an unconfigured service | Still refused, by ADR 0138 CO3. An allow does not create reach. |
+| A permission granted in one domain is used in another | The decision names its domain, so the reuse is visible rather than implicit (RL6). |
+| Host configuration supplies a rules file | Ignored and refused. Rules are Pico's (RL4, ADR 0104). |
+
+## Consequences
+
+Positive:
+
+- the decision becomes testable, because its input is enumerable and a
+  counter-proof can remove one input at a time;
+- the prose channel is closed at the layer with the most authority,
+  which is where ADR 0117's split would otherwise have leaked;
+- new modules are safe by default rather than useful by default, and the
+  difference is visible as a named denial rather than as silence;
+- the governor is unreachable from the path it governs, which removes
+  the single most valuable request an attacker could make.
+
+Negative and residual:
+
+- a closed input will be wrong at least once, and widening it means an
+  ADR rather than a configuration change - deliberately, so it is not
+  widened by reflex;
+- every new effect needs a decision before it does anything, which is
+  real setup friction and will read as the system being broken until a
+  person has ruled on it;
+- rules that read no prose cannot express intent that only prose
+  captures; a person who wants "not while the children are home" has
+  nowhere to put it until ADR 0002 and ADR 0017 stop being concept
+  notes;
+- nothing here decides the rule language, so the first implementation
+  will make choices this ADR does not constrain, and some of them will
+  be hard to undo.
+
+## Relationship to other ADRs
+
+- Second of three replacing ADR `0010`'s layering; keeps its
+  risk-versus-decision separation and its three outcomes verbatim.
+- Consumes ADR `0139`'s request contract, argument labels and pinned
+  risk, and is consumed by ADR `0141`.
+- Applies ADR `0117` X1's construction - the gate is the absence of a
+  parameter - to the decision input, and honours ADR `0116` W4's
+  unknown-is-gated rule.
+- Follows ADR `0127` and ADR `0129` SR6 for how a durable person
+  decision is recorded, and ADR `0104` for where it may not live.
+- Defers to ADR `0138` CO3, which is a precondition rather than an
+  input.
+- Scoped by ADR `0075` privacy domains.
+- Names ADR `0002` and ADR `0017` as the missing relationship inputs
+  rather than inventing them.
+
+## References
+
+- [ADR 0002](0002-peer-trust-and-relationships.md)
+- [ADR 0010](0010-tool-policy-and-executor-model.md)
+- [ADR 0017](0017-contextual-interaction-safety-and-trust-signals.md)
+- [ADR 0075](0075-foundation-local-authentication-session-and-membership-threat-model-and-scoping.md)
+- [ADR 0104](0104-settings-belong-to-pico-not-to-host-configuration.md)
+- [ADR 0116](0116-untrusted-content-and-self-replicating-prompt-threat-model-and-hardening-gates.md)
+- [ADR 0117](0117-planner-reader-split-and-origin-aware-data-flow-policy.md)
+- [ADR 0127](0127-pico-modules-mandatory-delivery-independent-code-declared-dependencies.md)
+- [ADR 0129](0129-spatial-recall-observations-are-not-memories-and-uncertainty-is-not-origin.md)
+- [ADR 0138](0138-reaching-outside-costs-something-and-is-off-until-someone-says-so.md)
+- [ADR 0139](0139-every-action-is-requested-by-someone-pico-does-not-trust.md)
+- [ADR 0141](0141-the-runner-executes-what-was-decided-and-history-is-a-view.md)
+</content>
