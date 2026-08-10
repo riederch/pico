@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted as the execution and record contract for the action path;
-nothing is implemented. RN1-RN6 are open.
+Accepted as the execution and record contract for the action path. **RN3
+is implemented** in `@pico/protocol/approval-statement` on 2026-08-10;
+RN1, RN2, RN4, RN5 and RN6 are open, and each of them needs a runtime
+that does not exist yet.
 
 Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
@@ -225,12 +227,28 @@ answered long after the situation that justified it has gone.
 - **RN2 - No escalation (open):** an effect pinned `read_only` that
   attempts a write is a runner failure recorded as such, never an
   approval prompt.
-- **RN3 - The statement is the fields (open):** the approval statement is
-  composed from the validated fields the runner will use (ADR 0106),
-  names the ADR 0137 instance, shows each argument's ADR 0139 label, and
-  contains no text originating outside Pico (ADR 0117 X5). A
-  counter-proof feeds reader prose at every entry point and finds no
-  route into the sentence.
+- **RN3 - The statement is the fields (implemented):**
+  `buildPicoApprovalStatement` composes `sentence` from the request and
+  the **consented** effect - not the currently declared one, so an update
+  cannot rewrite what a person agreed to - and refuses a consented effect
+  whose name differs from the request's, which is the drift ADR 0106
+  exists to make impossible. It names the ADR 0137 instance, and each
+  argument appears with the ADR 0139 origin class it arrived with.
+
+  The shape turned out to be ADR 0116 W3's, and the ADR now says so: a
+  person reading an approval is in the same position as a model reading a
+  context, so the statement splits into Pico's own sentence and labeled
+  data. There is no parameter for a prompt, a summary or a rationale -
+  ADR 0117 X1's construction - and the counter-proof exists twice: a test
+  feeds an injection string through an argument value and asserts the
+  sentence does not contain it, and
+  `picoApprovalSentenceForeignFields` returns the sentence fields whose
+  text is neither Pico's nor the person's, which is empty by construction
+  and non-empty the moment a description was never consented to.
+
+  The asymmetry with RN6 is deliberate and stated at the site: a
+  statement *shows* external content, because nobody can approve sending
+  to an address they cannot see, while history never records it verbatim.
 - **RN4 - Presence-bound and expiring (open):** an approval is answered
   inside a session with established presence and expires; an expired
   approval is recorded as unanswered and the action does not run.

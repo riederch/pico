@@ -15,6 +15,10 @@
       "types": "./dist/action.d.ts",
       "import": "./dist/action.js"
     },
+    "./approval-statement": {
+      "types": "./dist/approval-statement.d.ts",
+      "import": "./dist/approval-statement.js"
+    },
     "./bounded-projection": {
       "types": "./dist/bounded-projection.d.ts",
       "import": "./dist/bounded-projection.js"
