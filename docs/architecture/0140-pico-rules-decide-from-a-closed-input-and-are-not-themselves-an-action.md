@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted as the decision contract for the action path; nothing is
-implemented. RL1-RL6 are open.
+Accepted as the decision contract for the action path. **RL1, RL2 and RL3
+are implemented** in `@pico/protocol/pico-rules` on 2026-08-10; RL4, RL5
+and RL6 are open.
 
 Second of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is and who may request one; this says who decides and on what;
@@ -240,20 +241,27 @@ a revised verdict.
 
 ## Gates
 
-- **RL1 - Three outcomes, and a denial is content (open):** decisions
-  are `allow`, `require_approval` or `deny`; a denial carries a
-  Pico-composed reason to the surface that asked and is never a thrown
-  error or a silent no-op.
-- **RL2 - The input is a closed record (open):** the decision function
-  takes exactly the enumerated inputs and has no parameter through which
-  free text could enter - the same construction ADR 0117 X1 uses, where
-  the gate is the absence of a parameter rather than a filter. A
-  counter-proof is a call site holding a rationale with nowhere to put
-  it.
-- **RL3 - Unknown is deny, by name (open):** an unruled effect, an
-  argument with no origin class, an unrecognised risk class, an
-  unattached instance and an unresolvable domain each deny with a reason
-  naming which.
+- **RL1 - Three outcomes, and a denial is content (implemented):**
+  `picoRulesDecisions` is the runtime list and the barrel's
+  `PicoRulesDecision` is derived from it rather than restated.
+  `picoRulesFloorOutcome` answers `deny` with reasons instead of throwing
+  or going quiet. The reasons are **codes**, not sentences: a surface has
+  to be able to act on them, and a reason composed as free text is one a
+  requester could eventually influence.
+- **RL2 - The input is a closed record (implemented):** `PicoRulesInput`
+  names nine fields and `parsePicoRulesInput` refuses any other key, so a
+  rationale, a summary, a description or an argument *value* has nowhere
+  to arrive - four tests, one per shape. The classes are present and the
+  words are not: origins arrive per argument name, never with the value
+  they classify. Origin is validated through `picoOriginTrustRank` rather
+  than a local copy of the ordering, so an unknown class cannot enter by
+  a side door.
+- **RL3 - Unknown is deny, by name (implemented):**
+  `picoRulesMissingInput` returns every unknown rather than the first,
+  from the closed `picoRulesMissingInputCodes`. It takes the request's
+  own argument names, because an unclassified argument and an absent one
+  look identical from inside the classification map. A module shipping a
+  new effect is therefore inert until someone rules on it.
 - **RL4 - No effect changes a rule (open):** no manifest may declare an
   effect that edits rules, and the check refuses one that tries; rule
   changes are a durable person decision over an authenticated surface,

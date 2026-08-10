@@ -35,6 +35,10 @@
       "types": "./dist/offline-floor.d.ts",
       "import": "./dist/offline-floor.js"
     },
+    "./pico-rules": {
+      "types": "./dist/pico-rules.d.ts",
+      "import": "./dist/pico-rules.js"
+    },
     "./place": {
       "types": "./dist/place.d.ts",
       "import": "./dist/place.js"

@@ -1,4 +1,5 @@
 import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
+import type { PicoRulesDecisionValue } from './pico-rules.js';
 import type { PicoStorageCondition } from './storage-pressure.js';
 export const foundationEventTypes = [
   'device.registered',
@@ -2178,7 +2179,17 @@ export type MemoryRetentionMode = typeof memoryRetentionModes[number];
 export type ActionRisk = PicoActionRisk;
 export { picoActionRiskClasses } from './module.js';
 
-export type PicoRulesDecision = 'allow' | 'require_approval' | 'deny';
+// ADR 0140 RL1 moved the runtime list to `./pico-rules.js`, and the type is
+// derived from it rather than restated - the reason ADR 0139 AC4 gives about
+// `ActionRisk`.
+//
+// The list itself is deliberately *not* re-exported here. A value re-export
+// would make this barrel import `pico-rules.js`, which imports
+// `model-context.js`, which imports this barrel - a cycle that happens to work
+// today only because the values are read inside functions rather than at
+// module evaluation. A type-only import is erased and carries no such edge.
+// Consumers take the list from `@pico/protocol/pico-rules`.
+export type PicoRulesDecision = PicoRulesDecisionValue;
 
 export interface PicoEvent<TPayload = unknown> {
   eventId: string;
