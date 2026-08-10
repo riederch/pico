@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted as the execution and record contract for the action path. **RN1, RN2, RN3, RN4 and RN6
-are implemented** on 2026-08-10; RN5 is open.
+Accepted as the execution and record contract for the action path. **RN1-RN6 are implemented** on
+2026-08-10, and this ADR is complete.
 
 Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
@@ -303,10 +303,18 @@ answered long after the situation that justified it has gone.
   `PicoApprovalOutcome` of `approved | refused | unanswered`, under
   ADR 0134: reserved, never writable, nothing holds an artifact produced
   under it.
-- **RN5 - History is a view (open):** no history store and no history
-  event type exist; Action History is a projection over the event log
-  and the ADR 0121 chain, and the reserved names are revised in place
-  under ADR 0134 with their vectors regenerated.
+- **RN5 - History is a view (implemented):** `picoActionHistory` is a
+  read over `pico_event` left-joined to `pico_audit_record`, filtered to
+  the action facts. There is no history table and no history event type -
+  ADR 0139 AC5 removed the latter, and the former was never built because
+  a projection over rows that are already governed owes none of the five
+  obligations ADR 0127 counts.
+
+  `chained` is reported per row rather than assumed, and the join is a
+  **left** join for that reason: a fact with no chain record is shown as
+  unchained rather than dropped. A history that quietly omitted unchained
+  rows would be the one place a tampering would not show, which is the
+  opposite of what an audit is for.
 - **RN6 - External content is never recorded verbatim (implemented):**
   `picoRecordedArgument` records an ordinary argument as it is and an
   `external_content` one as a reference, with the ADR 0010 redaction mode

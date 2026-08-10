@@ -648,6 +648,35 @@ export interface PicoAuditSodium {
   crypto_generichash(length: number, message: Uint8Array, key: null): Uint8Array;
 }
 
+/**
+ * ADR 0139's five facts, as the event types a history view reads. The list is
+ * here rather than derived from `actionEventTypes` because that list also
+ * holds `approval.requested`, and a history is a record of what happened
+ * rather than of what was asked - the asking is a fact too, so it is included
+ * deliberately rather than by accident.
+ */
+export const picoActionHistoryFactTypes = [
+  'action.requested',
+  'pico_rules.decision_created',
+  'approval.requested',
+  'approval.resolved',
+  'action_runner.action_started',
+  'action_runner.action_completed',
+] as const;
+
+export type PicoActionHistoryFactType = typeof picoActionHistoryFactTypes[number];
+
+export interface PicoActionHistoryRecord {
+  eventId: string;
+  type: PicoActionHistoryFactType;
+  occurredAt: string;
+  payload: Record<string, unknown>;
+  /** ADR 0121: whether this fact carries a chain record. Reported, never assumed. */
+  chained: boolean;
+  writerId?: string;
+  chainPosition?: number;
+}
+
 export class EventStore {
   private readonly db: Database.Database;
   private readonly memoryCrypto?: MemoryContentCrypto;
@@ -6471,6 +6500,72 @@ export class EventStore {
       }
     });
     apply();
+  }
+
+  /**
+   * ADR 0141 RN5. Action History, which is a **view** and not a store.
+   *
+   * ADR 0026 already says what Action History is, in one line: the product
+   * name for the audit log. So there is no table here and no event type
+   * announcing that an event happened - `pico_audit_record` is keyed on
+   * `event_id` with `REFERENCES pico_event`, which puts the chain *over* the
+   * log rather than beside it, and writing a record about a record would add a
+   * row rather than an assurance.
+   *
+   * The consequence is the reason to do it this way. A separate store would
+   * have to join the shred cascade, the backup exclusions, boot
+   * reconciliation, the ADR 0119 Q5 ceilings and the chain - the five places
+   * ADR 0127 counts - against zero for a projection over rows that are already
+   * governed. An action's record is shredded, retained, restored and chained
+   * because it is an event, not because someone remembered to make it so.
+   *
+   * `chained` is reported per row rather than assumed. An action fact with no
+   * chain record is not hidden here: the whole point of the chain is that a
+   * gap is visible, and a history that quietly dropped unchained rows would be
+   * the one place a tampering would not show.
+   */
+  public picoActionHistory(options: { limit?: number } = {}): readonly PicoActionHistoryRecord[] {
+    this.ensureOpen();
+    const limit = options.limit ?? 100;
+    if (!Number.isSafeInteger(limit) || limit < 1) {
+      throw new Error('invalid_pico_action_history_limit');
+    }
+    const placeholders = picoActionHistoryFactTypes.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare(`
+        SELECT
+          e.event_id AS eventId,
+          e.type AS type,
+          e.wall_time AS wallTime,
+          e.payload_json AS payloadJson,
+          r.writer_id AS writerId,
+          r.chain_position AS chainPosition,
+          r.digest_hex AS digestHex
+        FROM pico_event e
+        LEFT JOIN pico_audit_record r ON r.event_id = e.event_id
+        WHERE e.type IN (${placeholders})
+        ORDER BY e.lamport DESC, e.event_id DESC
+        LIMIT ?
+      `)
+      .all(...picoActionHistoryFactTypes, limit) as Array<{
+        eventId: string;
+        type: string;
+        wallTime: string;
+        payloadJson: string;
+        writerId: string | null;
+        chainPosition: number | null;
+        digestHex: string | null;
+      }>;
+
+    return Object.freeze(rows.map((row) => Object.freeze({
+      eventId: row.eventId,
+      type: row.type as PicoActionHistoryFactType,
+      occurredAt: row.wallTime,
+      payload: JSON.parse(row.payloadJson) as Record<string, unknown>,
+      chained: row.digestHex !== null,
+      ...(row.writerId === null ? {} : { writerId: row.writerId }),
+      ...(row.chainPosition === null ? {} : { chainPosition: row.chainPosition }),
+    })));
   }
 
   /**
