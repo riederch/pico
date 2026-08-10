@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import sodium from 'libsodium-wrappers-sumo';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type {
-  ActionHistoryEventPayload,
+  PicoActionRecordRedaction,
   ActionRequestedPayload,
   AvatarStateChangedPayload,
   PicoEvent,
@@ -17,6 +17,7 @@ import type {
 import {
   buildPicoHomeAuditRecordDigestInput,
   actionEventTypes,
+  picoActionRecordRedactionModes,
   avatarIntensities,
   avatarModes,
   avatarStates,
@@ -2135,7 +2136,7 @@ describe('Pico protocol types', () => {
       'action.requested',
       'pico_rules.decision_created',
       'action_runner.action_started',
-      'action_history.event_created',
+      'action_runner.action_completed',
       'pico_home.claim_requested',
       'pico_home.invite_created',
     ]);
@@ -2230,18 +2231,28 @@ describe('Pico protocol types', () => {
     expect(payload.decision).toBe('require_approval');
   });
 
-  it('supports product-named action history records', () => {
-    const payload: ActionHistoryEventPayload = {
-      subjectEventId: 'evt-pico-rules-decision',
-      actorDeviceId: 'desktop-dev',
-      action: 'pico_rules.decision_created',
-      decision: 'deny',
-      dataSpace: 'private',
-      redaction: 'summary',
-      summary: 'Pico Rules result was recorded without storing the original payload.',
-    };
+  it('keeps the redaction vocabulary after the action-history event type left', () => {
+    // ADR 0139 AC5 / ADR 0141 RN5: history became a view over the log and the
+    // ADR 0121 chain, so `ActionHistoryEventPayload` went with its event type.
+    // ADR 0010's redaction requirement did not go with it (RN6).
+    const redaction: PicoActionRecordRedaction = 'reference_only';
 
-    expect(payload.redaction).toBe('summary');
+    expect(picoActionRecordRedactionModes).toEqual(['none', 'summary', 'reference_only']);
+    expect(picoActionRecordRedactionModes).toContain(redaction);
+  });
+
+  it('reserves six action event names for five facts', () => {
+    expect([...actionEventTypes]).toEqual([
+      'action.requested',
+      'pico_rules.decision_created',
+      'approval.requested',
+      'approval.resolved',
+      'action_runner.action_started',
+      'action_runner.action_completed',
+    ]);
+    // The two that left, named so a reintroduction has to argue with a test.
+    expect(actionEventTypes).not.toContain('action.completed');
+    expect(actionEventTypes).not.toContain('action_history.event_created');
   });
 
   it('accepts reserved payload posture terminology without changing the current event shape', () => {

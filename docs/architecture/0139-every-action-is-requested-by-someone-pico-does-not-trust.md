@@ -2,9 +2,8 @@
 
 ## Status
 
-Accepted as the request contract for the action path. **AC1, AC2 and AC3
-are implemented** in `@pico/protocol/action` on 2026-08-10; AC4, AC5 and
-AC6 are open.
+Accepted as the request contract for the action path. **AC1, AC2, AC3 and AC5
+are implemented** on 2026-08-10; AC4 and AC6 are open.
 
 First of three that replace ADR 0010's concept note with decisions:
 this one says what an action is and who may request one, ADR 0140 says
@@ -294,9 +293,25 @@ records. ADR 0134 makes correcting them free now and expensive later.
   carries a risk class from the closed six; name, description and risk
   are recorded together at activation; a change to any of the three in
   an update requires a new decision instead of inheriting consent.
-- **AC5 - Five facts, six names (open):** the reserved event surface is
-  revised in place under ADR 0134 to the facts in this ADR, the
-  duplicate completion and the history event go, and the vectors follow.
+- **AC5 - Five facts, six names (implemented):** `actionEventTypes` holds
+  six names for the five facts. `action.completed` left as a duplicate of
+  `action_runner.action_completed`, and `action_history.event_created`
+  left because ADR 0141 makes Action History a view over the event log
+  and the ADR 0121 chain. `ActionCompletedPayload` and
+  `ActionHistoryEventPayload` went with them; ADR 0010's redaction
+  requirement did not, and survives as
+  `picoActionRecordRedactionModes` for ADR 0141 RN6.
+
+  The vector for a reserved name is the text fence in
+  `public-surfaces.md` that `index.test.ts` pins, and it followed. One
+  edit went further than ADR 0134 obligation 2 normally allows: ADR 0026's
+  wire-naming example named `action_history.event_created`, and a test
+  asserts every name in that fence is a live event type - so an
+  illustration of a naming rule would have failed a check rather than
+  read as history. The example moved to a surviving name and ADR 0026
+  gained a status note saying so; its prose naming
+  `ActionHistoryEventPayload` was deliberately left alone, which is the
+  ordinary handling.
 - **AC6 - A person is the first requester (open):** the first slice
   triggers a declared effect from the Companion with no model and no
   bridge, exercising all five facts; and the executor's existence is

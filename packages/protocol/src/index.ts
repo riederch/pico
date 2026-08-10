@@ -138,15 +138,20 @@ export type SessionCreatedPayload = Record<string, never>;
 // Reserved product protocol direction. The current Foundation POST /api/events
 // endpoint must reject these names until dedicated Pico Rules, Action Runner or
 // Action History write paths exist.
+//
+// ADR 0139 AC5, 2026-08-10: six names for five facts. `action.completed` left
+// as a duplicate of `action_runner.action_completed`, and
+// `action_history.event_created` left because ADR 0141 makes Action History a
+// view over the event log and the ADR 0121 chain - an event announcing that an
+// event happened adds a row, not an assurance. Revised in place under ADR 0134:
+// reserved, never writable, nothing holds an artifact produced under them.
 export const actionEventTypes = [
   'action.requested',
-  'action.completed',
   'pico_rules.decision_created',
   'approval.requested',
   'approval.resolved',
   'action_runner.action_started',
   'action_runner.action_completed',
-  'action_history.event_created',
 ] as const;
 
 export type ActionEventType = typeof actionEventTypes[number];
@@ -2519,12 +2524,6 @@ export interface ActionRequestedPayload {
   input: Record<string, unknown>;
 }
 
-export interface ActionCompletedPayload {
-  actionName: string;
-  success: boolean;
-  summary: string;
-}
-
 export interface PicoRulesDecisionCreatedPayload {
   requestedEventId: string;
   decision: PicoRulesDecision;
@@ -2559,15 +2558,18 @@ export interface ActionRunnerCompletedPayload {
   summary: string;
 }
 
-export interface ActionHistoryEventPayload {
-  subjectEventId?: string;
-  actorDeviceId?: string;
-  action: string;
-  decision?: PicoRulesDecision;
-  dataSpace?: string;
-  redaction: 'none' | 'summary' | 'reference_only';
-  summary: string;
-}
+// ADR 0010's redaction requirement, kept by ADR 0141 RN6: a record holds a
+// reference or a Pico-composed summary where it could hold a payload. The
+// vocabulary outlived `ActionHistoryEventPayload`, which went with its event
+// type when ADR 0141 made Action History a view over the log and the ADR 0121
+// chain rather than a store of its own.
+export const picoActionRecordRedactionModes = [
+  'none',
+  'summary',
+  'reference_only',
+] as const;
+
+export type PicoActionRecordRedaction = typeof picoActionRecordRedactionModes[number];
 
 export function buildPicoIdentityKeyRecordSignatureInput(
   input: PicoIdentityKeyRecordSignatureInput,

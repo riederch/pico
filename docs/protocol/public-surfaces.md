@@ -485,14 +485,14 @@ These names are product-facing protocol direction. They are reserved and not wri
 
 ```text
 action.requested
-action.completed
 pico_rules.decision_created
 approval.requested
 approval.resolved
 action_runner.action_started
 action_runner.action_completed
-action_history.event_created
 ```
+
+Six names for the five facts of ADR 0139: requested, decided, answered where a person was required, started, finished. Two names left on 2026-08-10 under ADR 0139 AC5. `action.completed` duplicated `action_runner.action_completed`, and `action_history.event_created` recorded a fact the ADR 0121 chain already makes tamper-evident, which is why ADR 0141 makes Action History a view over the event log rather than a store beside it. Revised in place under ADR 0134: these names are reserved, never writable, and nothing holds an artifact produced under them.
 
 ### Pre-release action terminology consolidation
 

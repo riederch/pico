@@ -4,6 +4,27 @@
 
 Accepted as a product and code naming direction.
 
+Status note, 2026-08-10: ADR 0139 AC5 removed two reserved action event
+names - `action.completed` as a duplicate, and `action_history.event_created`
+because ADR 0141 makes Action History a view over the event log and the
+ADR 0121 chain rather than a store beside it. Two consequences here, and
+they are handled differently on purpose.
+
+The wire-naming example above **was edited**, replacing
+`action_history.event_created` with `action_runner.action_completed`. That
+is an exception to ADR 0128's rule against rewriting an ADR body, and the
+reason is mechanical: `index.test.ts` asserts every name in that fence is a
+live event type, so an illustration naming something that no longer exists
+would fail a check rather than merely read as history. The naming *rule* is
+untouched; only an illustration whose subject ceased to exist moved.
+
+The prose under "Code naming direction" **was not edited**. It still names
+`ActionHistoryEventPayload` as the canonical shape for future
+action-history APIs. That type is gone; its redaction vocabulary survives as
+`picoActionRecordRedactionModes` under ADR 0141 RN6, and Action History
+remains this ADR's product term for the audit log - which is exactly why
+ADR 0141 could make it a view.
+
 ## Context
 
 Pico's early architecture used precise but technical names such as Core Host, Full Client, Light Client, Policy Layer, Executor and Audit Log.
@@ -131,7 +152,7 @@ Examples:
 action.requested
 pico_rules.decision_created
 action_runner.action_started
-action_history.event_created
+action_runner.action_completed
 pico_home.claim_requested
 pico_home.invite_created
 ```
