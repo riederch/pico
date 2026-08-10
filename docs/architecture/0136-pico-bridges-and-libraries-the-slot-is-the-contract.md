@@ -10,7 +10,13 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. BR1-BR7 are open.
+than kind. BR1-BR6 are open.
+
+Split on 2026-08-10 at the user's request: everything about **several**
+suppliers - identity, coverage, unions, effect targeting and the privacy
+domain an instance lands in - is ADR 0137. The two are one decision in two
+readable halves, applying ADR 0135's rule to an ADR rather than to a
+design system.
 
 The claim is deliberately narrow. This decides **where outside content
 comes from and what it may say on arrival**. It does not decide what Pico
@@ -34,9 +40,8 @@ else to supply the content.
 **None of them arrives once.** The knowledge base has siblings belonging
 to an association or a company; Home Assistant runs at home, in a camper
 van and in a holiday house. Multiplicity is the normal case rather than a
-later extension, and taking it as normal from the start changes what the
-supplier record has to carry - which is why it is a decision below and not
-a note.
+later extension, and it changes what the supplier record has to carry -
+which is why ADR 0137 decides it rather than a footnote here.
 
 **ADR 0127 does not have a place for that, and said so on purpose.** Its
 scope excludes "third-party or externally authored modules, which would
@@ -114,7 +119,11 @@ Does not cover:
 - distribution, signing, discovery or a marketplace, which are ADR 0036
   non-goals and stay non-goals here;
 - ADR 0127's module boundary, which is unchanged. A module is still
-  vocabulary, composition and surface.
+  vocabulary, composition and surface;
+- everything that follows from there being several suppliers, which is
+  ADR 0137: what names an instance, how coverage decides unions against
+  alternatives, what a partial or empty answer owes, and which Private
+  Space an instance attaches into.
 
 ## Decision
 
@@ -259,102 +268,16 @@ stopping and forgetting are different acts. Derived items are Pico's and
 are shredded normally, which means a domain shred reaches everything Pico
 ever concluded and nothing it merely read.
 
-### A supplier lands in a Private Space, not in a Pico
+### Where a supplier lands, and what happens when there are several
 
-`rchkb` holds `Finanz`, `Privat` and `Feuerwehr` in one working copy. A
-library that attached to a Pico rather than to a domain would cross every
-ADR 0075 privacy boundary in a single act, silently, at attach time.
-
-Bridges are no different, and the holiday house makes it obvious: that
-Home Assistant may be shared with family while the camper van's is not, so
-the two belong in different spaces even though they are the same kind of
-supplier talking the same protocol. Where a supplier lands is a property
-of the instance, never of the kind.
-
-A supplier therefore attaches **into exactly one Private Space**, and a
-corpus or a site spanning several is attached as several instances over
-stated subtrees or it does not attach. This is the least settled part of
-this ADR
-and the reason BR7 exists: mapping directories to domains is a person's
-judgement about their own life, and no default is safe. The failure to
-avoid is the quiet one - a single attach that makes financial documents
-readable wherever the household calendar is.
-
-### Suppliers are instances, and that list is open
-
-A person has more than one of almost everything here. `rchkb` is personal
-material; the next knowledge base is an association's or a company's. One
-Home Assistant runs at home, a second in a camper van, a third in a
-holiday house. Multiplicity is therefore not an extension of this design,
-it is the normal case, and it is how the previous section becomes
-workable: splitting by domain is something a person has usually already
-done, and attaching separately respects it rather than asking them to
-re-derive it inside one corpus.
-
-Five consequences, and the first runs against this codebase's habit.
-
-**The slot list is closed; the attachment list is not.** Module
-identifiers are enumerated in one place under ADR 0127 because adding a
-module is Pico's decision, spoken once. Adding a library is a person's
-decision about their own material, so no enumeration can exist ahead of
-it. Every guard that would have leaned on a closed list has to lean on the
-attachment record instead, and the two asymmetries have to stay
-distinguishable: what a supplier may produce is fixed, how many suppliers
-exist is not.
-
-**An instance carries a stable identifier the person chooses, and it is
-never an address.** Working copies move, get re-cloned and change host; a
-camper van's Home Assistant changes IP with every campsite. An identifier
-that was a path or a URL would lose its meaning to a `mv` or a DHCP lease.
-The identifier plus the pin - a commit for a library, nothing for a bridge -
-is what a derived item keeps, and it belongs to the item rather than to
-the attachment, so provenance survives detaching.
-
-**Coverage is declared, and it decides whether instances add up.** The
-first draft of this section said libraries add up while bridges are
-alternatives, and three houses disprove it: those are bridges, and nobody
-wants two of them switched off. The axis is not the kind but the subject.
-Two AIS providers cover the same ships and are therefore alternatives,
-where metering makes keeping both a matter of paying twice for one answer.
-Three Home Assistants cover three buildings and are additive, as two
-knowledge bases covering different material are. An instance therefore
-declares what it covers, and Pico unions or chooses according to that
-rather than according to what kind of supplier it is.
-
-**An empty answer must say which kind of empty it is.** Once coverage is
-declared, "not there" splits in two, and conflating them is how a person
-gets misled by a true statement. The vocabulary of ADR 0118 O2 gains **out
-of scope** beside not-found: the ship is not in this provider's waters,
-the light is not in this house. Asking the wrong instance is a different
-fact from an answer that does not exist.
-
-**A partial answer names who was silent.** The camper is off-grid in a
-garage; the holiday house is reachable but nobody is in it. A union over
-three instances where one did not respond must say so, because "no motion
-anywhere" reads as safety and would here be a report about two houses
-presented as a report about three. Absence of evidence and evidence of
-absence are different answers, and a supplier is exactly the place where
-they get quietly merged.
-
-**Disagreement is reported, never resolved.** Where two instances answer
-the same question differently, Pico gives both with their identifiers and
-pins rather than picking. Under ADR 0129 neither answer was `known` to
-begin with, so a conflict lowers certainty instead of being settled by an
-order nobody chose. A silent winner would be the worst available outcome:
-a decision, taken by a supplier, which is the thing this ADR exists to
-prevent.
-
-**An effect names its instance, and the instance is never inferred.** This
-is where multiplicity stops being a modelling question. Under ADR 0128 H3
-a module declares `<module>.<verb>`; with three houses attached, an effect
-that did not carry its target could switch on a light in a building the
-person is not standing in. The instance is part of the effect, and the
-ADR 0106 approval statement renders it from the same validated fields the
-signature covers, so what a person approves says *Ferienhaus* rather than
-*light on*. Pico may **suggest** an instance from a derived location - it
-is usually right - but a derived location never reaches `known` under
-ADR 0129, and an unconfirmed guess is not permitted to select the building
-that gets acted on.
+Both are ADR 0137. A supplier attaches into exactly one ADR 0075 Private
+Space rather than into a Pico, and every real case is plural - one
+knowledge base beside another, one Home Assistant per building. That ADR
+decides what identifies an instance, how declared coverage rather than
+supplier kind decides whether instances add up, what an empty or partial
+answer owes, and why an effect must name its own instance. It is not
+optional reading: this ADR describes suppliers in the singular, and
+nothing here is deployable at the singular.
 
 ### Foreign content is labeled at the threshold, and the core assigns the label
 
@@ -467,9 +390,10 @@ ADR 0127 already has the sentence: "a capability that is missing on
 purpose must not present as a capability that is broken." Pulling a card
 removes a port; it does not break the laptop.
 
-ADR 0118 O2's rule holds in the shape the hardware suggests: two AIS
-bridges are alternatives for one slot, and no supplier substitutes across
-slots. HDMI is not Ethernet.
+ADR 0118 O2's rule holds in the shape the hardware suggests: no supplier
+substitutes across slots. HDMI is not Ethernet. Whether two suppliers *on*
+one slot are alternatives or add up is ADR 0137's question, and the answer
+is their declared coverage.
 
 ### The names
 
@@ -615,22 +539,8 @@ nowhere to go, which is the state ADR 0127 was written to end.
   deletes nothing while a domain shred reaches every derived item. A
   library may appear in an ADR 0118 floor family and a bridge may not, and
   the floor check enforces the asymmetry.
-- **BR7 - One instance, one Private Space, and instances are named
-  (open):** an attachment names exactly one ADR 0075 domain, one stable
-  person-chosen identifier that is neither a path nor an address, one
-  subtree or site, and what it covers; it refuses an attach that would span
-  several domains. The mapping is a person's decision with no default.
-  Derived items carry that identifier and the pin rather than a location,
-  so provenance survives a move, a re-clone, a new IP and a detach. An
-  effect carries its instance and the ADR 0106 approval statement renders
-  it; no inferred location may select the instance. A union over instances
-  reports which did not answer, and `out of scope` is a state distinct from
-  not-found. Attachments are counted against a ceiling in the ADR 0119 Q5
-  idiom, because this list is open where the slot list is closed and an
-  open list with no ceiling is how a resource limit gets discovered rather
-  than enforced. The terminology rows land in ADR 0026, and the leak test -
-  no sentence in which a bridge, library or skill decides, allows or knows -
-  is checked the way `product:check` checks product prose.
+ADR 0137 carries IN1-IN5 for the plural case, and the terminology rows
+for Pico Bridge and Pico Library land in ADR 0026 with BR6.
 
 ## Failure ledger
 
@@ -645,12 +555,6 @@ nowhere to go, which is the state ADR 0127 was written to end.
 | A supplier wants a shape the core lacks | The shape is lifted to a core capability and migrated by the core (ADR 0127 M5), or the supplier waits (BR1). |
 | A library's commit moves under a derived item | The item keeps the commit it was read at, so drift is visible rather than silent (BR6). |
 | A person shreds a domain holding a library | Every derived item goes. The library does not, because it was never Pico's - and Pico says so instead of reporting a deletion it did not perform (BR6). |
-| A library is attached at its root, spanning domains | Refused. One attachment names one domain and one subtree (BR7). |
-| Two instances answer the same question differently | Both answers are given with their identifiers and pins, and certainty drops. Pico does not pick - picking would be a decision a supplier made (BR7). |
-| A working copy is moved or a site's address changes | Provenance survives: a derived item holds the attachment identifier and the pin, never a path or a URL (BR7). |
-| One of three sites does not answer | The union names it. "No motion anywhere" over two of three houses is a true sentence about the wrong subject (BR7). |
-| A question is asked of an instance that does not cover it | `out of scope`, which is not `not found`. The ship is elsewhere; the light is in another building (BR5, BR7). |
-| An effect is requested with three sites attached | The effect carries its instance, and the ADR 0106 approval statement shows which building. A derived location may suggest and may never select (BR7). |
 | Someone reads the slot boundary as a security boundary | It is one only where BR2 puts a process between. Containment of content is BR3, and the two are different claims. |
 | A supplier is removed while its derived items exist | Items stay under core custody. ADR 0127 M3's rule is unchanged: data outlives the thing that produced it. |
 
@@ -692,10 +596,12 @@ Negative and residual:
   that document. Labeling is containment, never verification;
 - `Bridge` overlaps a heavily used generic noun and one real security
   boundary in the Companion, managed by discipline rather than by a check
-  until BR7 lands.
+  until BR6 lands.
 
 ## Relationship to other ADRs
 
+- Split with ADR `0137`, which decides everything that follows from there
+  being several suppliers. Neither half is deployable alone.
 - Completes ADR `0036`: capability first, connector second, with the
   boundary that ADR left unstated, and consolidates its `provider_id`
   against ADR `0127`'s provider module kind.
@@ -737,4 +643,5 @@ Negative and residual:
 - [ADR 0129](0129-spatial-recall-observations-are-not-memories-and-uncertainty-is-not-origin.md)
 - [ADR 0133](0133-derive-from-the-source-until-the-medium-is-known.md)
 - [ADR 0134](0134-formats-revise-in-place-until-the-first-kept-identity.md)
+- [ADR 0137](0137-suppliers-are-instances-coverage-decides-whether-they-add-up.md)
 </content>
