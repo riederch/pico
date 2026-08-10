@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted as the execution and record contract for the action path. **RN2, RN3 and RN4 are
-implemented** on 2026-08-10; RN1, RN5 and RN6 are open.
+Accepted as the execution and record contract for the action path. **RN1, RN2, RN3, RN4 and RN6
+are implemented** on 2026-08-10; RN5 is open.
 
 Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
@@ -223,10 +223,16 @@ answered long after the situation that justified it has gone.
 
 ## Gates
 
-- **RN1 - Executed as decided (open):** the runner executes the recorded
-  request against the recorded decision, supplies no default, resolves
-  no ambiguity, never consults the rules, and fails rather than adapting;
-  a changed request is a new request.
+- **RN1 - Executed as decided (implemented):** `executePicoAction` takes
+  the ADR 0140 RL5 decision record and nothing else, so "never consults
+  the rules" is not a discipline but an absence - there is nothing in
+  scope to consult them with. It supplies no default and resolves no
+  ambiguity: a missing implementation is recorded as
+  `unsupplied_pico_module_effect` rather than skipped, and a throwing
+  effect is recorded as failed rather than retried.
+
+  "A changed request is a new request" is structural: the record carries
+  the request, so there is no second copy to drift.
 - **RN2 - No escalation (implemented):** not a detection, because the
   runner cannot look inside an implementation and see a write. The
   capability is simply not there - the construction ADR 0117 X1 uses for
@@ -301,10 +307,20 @@ answered long after the situation that justified it has gone.
   event type exist; Action History is a projection over the event log
   and the ADR 0121 chain, and the reserved names are revised in place
   under ADR 0134 with their vectors regenerated.
-- **RN6 - External content is never recorded verbatim (open):** an
-  argument labelled `external_content` is stored as a reference or a
-  Pico-composed summary; results are typed values; failures are recorded
-  with the same weight as successes.
+- **RN6 - External content is never recorded verbatim (implemented):**
+  `picoRecordedArgument` records an ordinary argument as it is and an
+  `external_content` one as a reference, with the ADR 0010 redaction mode
+  named beside it. A test asserts the injection string never appears in
+  the recorded fact.
+
+  `reference_only` rather than a summary, deliberately: Pico has no
+  summariser here, and inventing one would be the thing ADR 0117 forbids.
+  The reference is a short stable handle, and what it is *not* is stated
+  at the site - it exists so a reader can tell two records apart, not so
+  anyone can prove anything about the value.
+
+  Failures are recorded with the same weight as successes, which RN1's
+  tests pin.
 
 ## Failure ledger
 

@@ -125,7 +125,12 @@ import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitmen
 import { parsePicoPlace } from '@pico/protocol/place';
 import { picoDeclaredEffectNames, type PicoActionRequest } from '@pico/protocol/action';
 import { bindPicoModuleEffects } from '@pico/protocol/module';
-import { runPicoAction, type PicoEffectCapabilities } from './action-path.js';
+import {
+  decidePicoAction,
+  executePicoAction,
+  type PicoActionFactType,
+  type PicoEffectCapabilities,
+} from './action-path.js';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
@@ -1216,6 +1221,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     manifest: picoCalendarModuleManifest,
     supplied: moduleEffects,
   });
+  const emitActionFact = (type: PicoActionFactType, payload: Record<string, unknown>): string => {
+    const fact = factory.create({ deviceId: config.deviceId, type, payload });
+    store.append(fact);
+    broadcast(fact);
+    return fact.eventId;
+  };
   // Named here rather than reaching for the later registry: the declared list
   // is ADR 0139 AC1's authority, and it is collected from manifests rather
   // than from anything the core keeps.
@@ -1235,7 +1246,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // effect (user decision, 2026-08-10). So the scheduler stops writing the
       // event itself and becomes a *requester* - untrusted like any other,
       // because being Pico's own code buys no exemption.
-      runPicoAction({
+      // ADR 0140 RL5: decide first, record it, then execute against the
+      // record. The runner is never handed the inputs.
+      const decided = decidePicoAction({
         requested: {
           effectName: 'calendar.raise-entry',
           arguments: [
@@ -1255,14 +1268,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         instance: null,
         reachesOutside: false,
         reachPermitted: false,
-        effects: moduleEffects,
-        emit: (type, payload) => {
-          const fact = factory.create({ deviceId: config.deviceId, type, payload });
-          store.append(fact);
-          broadcast(fact);
-          return fact.eventId;
-        },
+        emit: emitActionFact,
       });
+      if (decided.decision === 'allow') {
+        executePicoAction({ decided, effects: moduleEffects, emit: emitActionFact });
+      }
     },
   });
 

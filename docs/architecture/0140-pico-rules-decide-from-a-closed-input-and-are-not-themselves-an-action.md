@@ -2,9 +2,8 @@
 
 ## Status
 
-Accepted as the decision contract for the action path. **RL1, RL2 and RL3 are
-implemented** in `@pico/protocol/pico-rules` on 2026-08-10 and **RL4 is
-half implemented**; RL5 and RL6 are open.
+Accepted as the decision contract for the action path. **RL1, RL2, RL3, RL5 and RL6
+are implemented** on 2026-08-10 and **RL4 is half implemented**.
 
 Second of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is and who may request one; this says who decides and on what;
@@ -280,12 +279,25 @@ a revised verdict.
   over an authenticated surface, recorded as a content-free event plus
   projection and never read from host configuration, needs a runtime and
   a migration - the same place AC4's second half waits.
-- **RL5 - One decision, before execution (open):** the decision is
-  recorded before the runner starts and is what the runner reads; no
-  second evaluation exists; a changed request is a new request.
-- **RL6 - A decision names its domain (open):** every recorded decision
-  carries the ADR 0075 domain it applied to, and a rule may be scoped to
-  one.
+- **RL5 - One decision, before execution (implemented):** deciding and
+  executing are two functions. `decidePicoAction` records the decision and
+  hands back a record; `executePicoAction` takes that record and **has
+  nothing to re-decide with** - no inputs, no rules, no requester. Two
+  evaluations of the same request would be two chances to disagree,
+  resolved by whichever ran last.
+
+  The record carries the request itself rather than pointing at it, which
+  makes ADR 0141 RN1's "a changed request is a new request" structural
+  instead of a promise: there is no second copy that could differ. And
+  anything other than `allow` refuses to execute, `require_approval`
+  included - that decision means a question is standing, and running it
+  would answer the question by doing the thing.
+- **RL6 - A decision names its domain (implemented):** the recorded
+  decision fact carries `dataSpace`, and the record the runner reads
+  carries `privacyDomain`, so a permission granted in one domain being
+  used in another is visible rather than implicit. Rule *scoping* is
+  product work this ADR constrains rather than designs; what is built is
+  that no decision is domain-blind.
 
 ## Failure ledger
 

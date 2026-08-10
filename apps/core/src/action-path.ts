@@ -19,7 +19,7 @@ import {
 } from '@pico/protocol/pico-rules';
 
 /**
- * ADR 0139 AC6 - the first action, with no model and no bridge.
+ * ADR 0139 AC6, ADR 0140 RL5/RL6, ADR 0141 RN1/RN2/RN4 - the action path.
  *
  * ADR 0010 opens with "the LLM may propose an action", and that framing is
  * what made this look blocked for as long as it did. It never needed
@@ -32,6 +32,17 @@ import {
  * untrusted requester from its first caller, and a planner arriving later
  * changes nothing about the contract.
  *
+ * **Deciding and executing are two functions, and that is ADR 0140 RL5.** The
+ * decision is recorded before anything runs, and `executePicoAction` takes the
+ * *record* rather than the inputs - so it has nothing to re-decide with. One
+ * decision in one place is the property every guard in this tree has; two
+ * evaluations of the same request are two chances to disagree, resolved by
+ * whichever ran last.
+ *
+ * The record carries the request rather than pointing at it, which is ADR 0141
+ * RN1's "a changed request is a new request" made structural: there is no
+ * second copy that could differ from the one that was decided.
+ *
  * **What stands in for Pico Rules, and what does not.** ADR 0140 leaves the
  * rule language undecided, so this runs the *floor* only: the RL3 answer that
  * holds before any rule is consulted. `hasRuleForEffect` is answered from the
@@ -39,47 +50,7 @@ import {
  * about exactly this effect - they read its description and its risk class
  * when they switched the module on. A real rule engine adds contextual
  * decisions above this; nothing here is one.
- *
- * **`require_approval` waits, and the waiting is bounded.** ADR 0141 RN4: the
- * question is recorded with the session presence was established in and a
- * window that expires on two clocks, and `resolvePicoActionApproval` finishes
- * it. Nothing runs until someone in that session answers, and an expired
- * question is recorded as unanswered rather than as a refusal - a person who
- * was asleep did not say no.
  */
-export interface PicoActionPathInput {
-  /** What the requester asked for. It cannot state its arguments' origin. */
-  requested: PicoActionRequestInput;
-  /** Controller knowledge: where each argument came from (ADR 0139 AC2/AC3). */
-  argumentSources: Readonly<Record<string, readonly PicoEventOriginClass[]>>;
-  /** ADR 0139 AC1: the effects a manifest declared and the runtime wired. */
-  declaredEffectNames: readonly string[];
-  /** ADR 0139 AC4: what the person consented to, as they read it. */
-  consentedEffects: readonly PicoModuleEffect[];
-  privacyDomain: string;
-  personPresent: boolean;
-  instance: string | null;
-  reachesOutside: boolean;
-  reachPermitted: boolean;
-  /** The wired effect implementations, by declared name (ADR 0128 H3). */
-  effects: Readonly<Record<string, (
-    request: PicoActionRequest,
-    capabilities: PicoEffectCapabilities,
-  ) => void>>;
-  /** Records one fact and returns its event id. */
-  emit: (type: PicoActionFactType, payload: Record<string, unknown>) => string;
-  /**
-   * ADR 0141 RN4. Required as soon as a decision could be
-   * `require_approval`: the session presence was established in, and how long
-   * the question stands.
-   */
-  approvalWindow?: {
-    presenceSessionId: string;
-    endsAtMs: number;
-    startedAtMs: number;
-    durationMs: number;
-  };
-}
 
 /**
  * ADR 0141 RN2 - what a `read_only` effect is handed.
@@ -123,19 +94,71 @@ export type PicoActionFactType =
   | 'action_runner.action_started'
   | 'action_runner.action_completed';
 
-export interface PicoActionPathOutcome {
+export type PicoActionEffect = (
+  request: PicoActionRequest,
+  capabilities: PicoEffectCapabilities,
+) => void;
+
+export type PicoActionEmit = (
+  type: PicoActionFactType,
+  payload: Record<string, unknown>,
+) => string;
+
+/**
+ * ADR 0140 RL5. What the runner is given, and the only thing it is given.
+ *
+ * It carries the request rather than a reference to it, so nothing can drift
+ * between what was decided and what runs.
+ */
+export interface PicoActionDecision {
   requestedEventId: string;
+  decisionEventId: string;
   decision: PicoRulesDecisionValue;
   reasons: readonly PicoRulesMissingInputCode[];
-  /** Whether the effect actually ran. */
-  ran: boolean;
-  /** Present only when it ran. */
-  succeeded?: boolean;
-  /** Present only for `require_approval`: the question now standing. */
+  request: PicoActionRequest;
+  risk: string;
+  /** ADR 0140 RL6. The domain this decision spoke for. */
+  privacyDomain: string;
+  /** Present only for `require_approval`. */
   pending?: PicoPendingApproval;
 }
 
-export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome {
+export interface PicoActionDecisionInput {
+  /** What the requester asked for. It cannot state its arguments' origin. */
+  requested: PicoActionRequestInput;
+  /** Controller knowledge: where each argument came from (ADR 0139 AC2/AC3). */
+  argumentSources: Readonly<Record<string, readonly PicoEventOriginClass[]>>;
+  /** ADR 0139 AC1: the effects a manifest declared and the runtime wired. */
+  declaredEffectNames: readonly string[];
+  /** ADR 0139 AC4: what the person consented to, as they read it. */
+  consentedEffects: readonly PicoModuleEffect[];
+  privacyDomain: string;
+  personPresent: boolean;
+  instance: string | null;
+  reachesOutside: boolean;
+  reachPermitted: boolean;
+  emit: PicoActionEmit;
+  /**
+   * ADR 0141 RN4. Required as soon as a decision could be
+   * `require_approval`: the session presence was established in, and how long
+   * the question stands.
+   */
+  approvalWindow?: {
+    presenceSessionId: string;
+    endsAtMs: number;
+    startedAtMs: number;
+    durationMs: number;
+  };
+}
+
+/**
+ * ADR 0140 RL5. Decides once, records it, and hands back the record.
+ *
+ * Nothing here runs an effect. A caller that wants the action to happen takes
+ * the record to `executePicoAction`, which is the only way an effect is
+ * reached.
+ */
+export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDecision {
   const consented = input.consentedEffects
     .find((effect) => effect.name === input.requested.effectName);
   if (consented === undefined) {
@@ -158,7 +181,7 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
     risk: consented.risk,
     input: Object.fromEntries(request.arguments.map((argument) => [
       argument.name,
-      { value: argument.value, originClass: argument.originClass },
+      picoRecordedArgument(argument),
     ])),
   });
 
@@ -197,18 +220,17 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
       : 'require_approval');
 
   const reasons = floor?.reasons ?? Object.freeze([]);
-  input.emit('pico_rules.decision_created', {
+  const decisionEventId = input.emit('pico_rules.decision_created', {
     requestedEventId,
     decision,
     reason: reasons.length > 0 ? reasons.join(',') : decision,
     risk: consented.risk,
+    // ADR 0140 RL6. A decision is never domain-blind, and its record says
+    // which domain it spoke for.
     dataSpace: input.privacyDomain,
   });
 
-  if (decision === 'deny') {
-    return Object.freeze({ requestedEventId, decision, reasons, ran: false });
-  }
-
+  let pending: PicoPendingApproval | undefined;
   if (decision === 'require_approval') {
     // ADR 0141 RN4. The question is recorded with the session it was asked
     // into and a window that expires on two clocks; nothing runs until it is
@@ -218,7 +240,7 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
       // grant with a number attached.
       throw new Error('pico_action_requires_approval_window');
     }
-    const pending: PicoPendingApproval = Object.freeze({
+    pending = Object.freeze({
       requestedEventId,
       presenceSessionId: input.approvalWindow.presenceSessionId,
       endsAtMs: input.approvalWindow.endsAtMs,
@@ -231,38 +253,90 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
       risk: consented.risk,
       expiresAt: new Date(pending.endsAtMs).toISOString(),
     });
-    return Object.freeze({ requestedEventId, decision, reasons, ran: false, pending });
   }
 
-  const startedEventId = input.emit('action_runner.action_started', {
+  return Object.freeze({
     requestedEventId,
-    actionName: request.effectName,
+    decisionEventId,
+    decision,
+    reasons,
+    request,
     risk: consented.risk,
+    privacyDomain: input.privacyDomain,
+    ...(pending === undefined ? {} : { pending }),
+  });
+}
+
+export interface PicoActionExecution {
+  ran: boolean;
+  succeeded?: boolean;
+}
+
+/**
+ * ADR 0141 RN1. Executes the decided request and infers nothing.
+ *
+ * No default is supplied, no ambiguity is resolved, nothing is retried with an
+ * adjusted argument, and the rules are not consulted a second time - there is
+ * nothing here to consult them with. A request that cannot be executed as
+ * decided fails and is recorded as failed.
+ *
+ * Anything other than `allow` refuses rather than running, including
+ * `require_approval`: that decision means a question is standing, and running
+ * it here would answer the question by acting.
+ */
+export function executePicoAction(input: {
+  decided: PicoActionDecision;
+  effects: Readonly<Record<string, PicoActionEffect>>;
+  emit: PicoActionEmit;
+}): PicoActionExecution {
+  if (input.decided.decision !== 'allow') {
+    throw new Error('pico_action_not_allowed');
+  }
+  return runDecidedEffect({
+    requestedEventId: input.decided.requestedEventId,
+    request: input.decided.request,
+    risk: input.decided.risk,
+    effects: input.effects,
+    emit: input.emit,
+  });
+}
+
+function runDecidedEffect(input: {
+  requestedEventId: string;
+  request: PicoActionRequest;
+  risk: string;
+  effects: Readonly<Record<string, PicoActionEffect>>;
+  emit: PicoActionEmit;
+}): PicoActionExecution {
+  const startedEventId = input.emit('action_runner.action_started', {
+    requestedEventId: input.requestedEventId,
+    actionName: input.request.effectName,
+    risk: input.risk,
   });
 
-  // ADR 0141 RN1. Executes the decided request and infers nothing; a failure
-  // is recorded with the same weight as a success.
   let succeeded = true;
   let summary = 'ran';
   try {
-    const run = input.effects[request.effectName];
+    const run = input.effects[input.request.effectName];
     if (run === undefined) {
       throw new Error('unsupplied_pico_module_effect');
     }
-    run(request, picoEffectCapabilitiesFor(consented.risk));
+    run(input.request, picoEffectCapabilitiesFor(input.risk));
   } catch (error) {
+    // A failure is recorded with the same weight as a success. An audit that
+    // only holds what worked cannot be audited against.
     succeeded = false;
     summary = error instanceof Error ? error.message : 'failed';
   }
 
   input.emit('action_runner.action_completed', {
     startedEventId,
-    actionName: request.effectName,
+    actionName: input.request.effectName,
     success: succeeded,
     summary,
   });
 
-  return Object.freeze({ requestedEventId, decision, reasons, ran: true, succeeded });
+  return { ran: true, succeeded };
 }
 
 /**
@@ -275,23 +349,22 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
  * two paths.
  */
 export function resolvePicoActionApproval(input: {
-  pending: PicoPendingApproval;
-  effectName: string;
+  decided: PicoActionDecision;
   presenceSessionId: string;
   approved?: boolean;
   nowMs: number;
   monotonicNowMs: number;
   anchorFloorMs?: number | null;
-  request: PicoActionRequest;
-  risk: string;
-  effects: Readonly<Record<string, (
-    request: PicoActionRequest,
-    capabilities: PicoEffectCapabilities,
-  ) => void>>;
-  emit: (type: PicoActionFactType, payload: Record<string, unknown>) => string;
+  effects: Readonly<Record<string, PicoActionEffect>>;
+  emit: PicoActionEmit;
 }): { outcome: PicoApprovalOutcome; ran: boolean; succeeded?: boolean } {
+  const pending = input.decided.pending;
+  if (pending === undefined) {
+    throw new Error('pico_action_has_no_pending_approval');
+  }
+
   const resolution = resolvePicoApproval({
-    pending: input.pending,
+    pending,
     presenceSessionId: input.presenceSessionId,
     approved: input.approved,
     nowMs: input.nowMs,
@@ -300,7 +373,7 @@ export function resolvePicoActionApproval(input: {
   });
 
   input.emit('approval.resolved', {
-    approvalEventId: input.pending.requestedEventId,
+    approvalEventId: pending.requestedEventId,
     outcome: resolution.outcome,
     resolvedAt: new Date(input.nowMs).toISOString(),
   });
@@ -309,31 +382,57 @@ export function resolvePicoActionApproval(input: {
     return { outcome: resolution.outcome, ran: false };
   }
 
-  const startedEventId = input.emit('action_runner.action_started', {
-    requestedEventId: input.pending.requestedEventId,
-    actionName: input.effectName,
-    risk: input.risk,
-  });
+  return {
+    outcome: resolution.outcome,
+    ...runDecidedEffect({
+      requestedEventId: pending.requestedEventId,
+      request: input.decided.request,
+      risk: input.decided.risk,
+      effects: input.effects,
+      emit: input.emit,
+    }),
+  };
+}
 
-  let succeeded = true;
-  let summary = 'ran';
-  try {
-    const run = input.effects[input.effectName];
-    if (run === undefined) {
-      throw new Error('unsupplied_pico_module_effect');
-    }
-    run(input.request, picoEffectCapabilitiesFor(input.risk));
-  } catch (error) {
-    succeeded = false;
-    summary = error instanceof Error ? error.message : 'failed';
+/**
+ * ADR 0141 RN6. What a recorded argument may hold.
+ *
+ * An argument that carried `external_content` is never recorded verbatim. The
+ * reason is not storage cost: history is read by a person today and is exactly
+ * the durable, trusted-looking store a model would later be given access to,
+ * and verbatim untrusted text sitting in it would undo ADR 0117's containment
+ * through the back door - a year later, by someone with no reason to suspect
+ * the history.
+ *
+ * `reference_only` rather than a summary, because Pico has no summariser here
+ * and inventing one would be the thing ADR 0117 forbids. The reference is a
+ * digest of the value, which is enough to recognise the same value again
+ * without holding it.
+ */
+export function picoRecordedArgument(argument: {
+  name: string;
+  value: string | number | boolean;
+  originClass: PicoEventOriginClass;
+}): Record<string, unknown> {
+  if (argument.originClass !== 'external_content') {
+    return { value: argument.value, originClass: argument.originClass, redaction: 'none' };
   }
+  return {
+    originClass: argument.originClass,
+    redaction: 'reference_only',
+    reference: picoArgumentReference(argument.value),
+  };
+}
 
-  input.emit('action_runner.action_completed', {
-    startedEventId,
-    actionName: input.effectName,
-    success: succeeded,
-    summary,
-  });
-
-  return { outcome: resolution.outcome, ran: true, succeeded };
+function picoArgumentReference(value: string | number | boolean): string {
+  // A short stable handle rather than a cryptographic commitment: this exists
+  // so a reader can tell two records apart, not so anyone can prove anything
+  // about the value. Stating that is cheaper than a hash nobody may rely on.
+  const text = String(value);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `ref_${hash.toString(16).padStart(8, '0')}_${text.length}`;
 }
