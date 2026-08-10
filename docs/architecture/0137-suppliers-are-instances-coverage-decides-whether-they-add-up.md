@@ -128,8 +128,9 @@ inside.
 Where two instances answer the same question differently, Pico gives both
 with their identifiers and pins rather than picking.
 
-Under ADR 0129 neither answer was `known` to begin with, so a conflict
-lowers certainty instead of being settled by an order nobody chose. A
+Under ADR 0129 neither answer carried more than a level of confidence to
+begin with, so a conflict lowers certainty instead of being settled by an
+order nobody chose. A
 silent winner would be the worst available outcome: a decision, taken by a
 supplier, which is the thing ADR 0136 exists to prevent.
 
@@ -145,9 +146,9 @@ the same validated fields the signature covers, so what a person approves
 says *Ferienhaus* rather than *light on*.
 
 Pico may **suggest** an instance from a derived location, and it will
-usually be right. But a derived location never reaches `known` under
-ADR 0129, and an unconfirmed guess is not permitted to select the building
-that gets acted on. Suggesting and selecting are different acts, and the
+usually be right. But under ADR 0129 a derivation carries a confidence
+level and never a person's confirmation, and an unconfirmed guess is not
+permitted to select the building that gets acted on. Suggesting and selecting are different acts, and the
 difference is only visible in the failure.
 
 ### An instance lands in a Private Space, not in a Pico
@@ -193,8 +194,8 @@ this, and lowering it is the honest move.
 
 Correct almost always, and the failure is switching on a light in a
 building nobody is in. ADR 0129 already refused to let a derivation reach
-`known`; letting one select an effect target would be that refusal undone
-at the only place where it costs something physical.
+confirm itself; letting one select an effect target would be that refusal
+undone at the only place where it costs something physical.
 
 ### Make each instance its own module
 
@@ -274,7 +275,7 @@ a guess.
 | One of three sites does not answer | The union names it. "No motion anywhere" over two of three houses is a true sentence about the wrong subject (IN4). |
 | A question is asked of an instance that does not cover it | `out of scope`, which is not `not found`, and only one of the two is worth re-asking elsewhere (IN3). |
 | An effect is requested with three sites attached | The effect carries its instance and the approval statement shows which building (IN5). |
-| The person is demonstrably in the camper van | Pico proposes that instance. It still does not select it, because a derived location never reaches `known` (IN5). |
+| The person is demonstrably in the camper van | Pico proposes that instance. It still does not select it, because a derivation carries confidence and never a person's confirmation (IN5). |
 | Someone adds a precedence order to settle conflicts | There is none to add. IN4 has no configured winner, by construction rather than by default. |
 | Attachments accumulate without bound | Refused at the ceiling. The list is open, so the limit is enforced rather than discovered (IN1). |
 
@@ -315,7 +316,7 @@ Negative and residual:
 - Extends ADR `0118` O2's vocabulary with `out of scope` and keeps its
   no-join-across-classes rule.
 - Depends on ADR `0129` for certainty: conflicts lower it, and no
-  derivation reaches `known`, which is what forbids inferred effect
+  derivation confirms itself, which is what forbids inferred effect
   targeting.
 - Binds ADR `0106`: the instance is rendered in the approval statement
   from the same validated fields the signature covers.

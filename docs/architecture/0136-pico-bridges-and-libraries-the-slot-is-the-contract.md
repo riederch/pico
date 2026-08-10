@@ -326,8 +326,9 @@ stale answer, it is a false one.
 Certainty is the third because origin does not imply it: a value carries
 Pico's own origin once derived and can still be a guess. Following
 ADR 0129, a slot value is a tagged value that cannot be constructed
-without its certainty, and **no supplier output ever reaches `known`** -
-only a person's confirmation does.
+without its certainty, and **no supplier output may present itself as
+certain** - ADR 0129's certainty is one of three levels, and confirmation
+is a separate axis that only a person moves.
 
 For a library the middle value is a commit or a version, and the same rule
 applies: it is content, not bookkeeping.
@@ -492,7 +493,8 @@ nowhere to go, which is the state ADR 0127 was written to end.
   backup/restore.
 - **BR4 - Three clocks and a certainty (open):** asked-at, measured-at and
   a certainty tag are separate fields; a value cannot be constructed
-  without its certainty; no supplier output reaches `known`. A library
+  without its certainty; no supplier output presents itself as confirmed. A
+  library
   carries a version or commit in the measured-at position.
 - **BR6 - Libraries are pinned, read in place, and never held (open):** a
   frozen library verifies against a pinned hash and a tracked one against
