@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted as the decision contract for the action path. **RL1, RL2 and RL3
-are implemented** in `@pico/protocol/pico-rules` on 2026-08-10; RL4, RL5
-and RL6 are open.
+Accepted as the decision contract for the action path. **RL1, RL2 and RL3 are
+implemented** in `@pico/protocol/pico-rules` on 2026-08-10 and **RL4 is
+half implemented**; RL5 and RL6 are open.
 
 Second of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is and who may request one; this says who decides and on what;
@@ -262,11 +262,24 @@ a revised verdict.
   own argument names, because an unclassified argument and an absent one
   look identical from inside the classification map. A module shipping a
   new effect is therefore inert until someone rules on it.
-- **RL4 - No effect changes a rule (open):** no manifest may declare an
-  effect that edits rules, and the check refuses one that tries; rule
-  changes are a durable person decision over an authenticated surface,
-  recorded as a content-free event plus projection, and never read from
-  host configuration.
+- **RL4 - No effect changes a rule (half implemented):** the manifest
+  half turned out to be structural already. ADR 0128 H3 namespaces an
+  effect by its declaring module's identifier, so `calendar` can declare
+  `calendar.*` and nothing else - there is no name a module could use to
+  declare an effect over rules, and no check is needed for what cannot be
+  written down.
+
+  What was missing is the link, and `module:check` now refuses it: a
+  module that value-imports `@pico/protocol/pico-rules` could construct a
+  decision input, and a module that can construct one is arguing about
+  its own permission. Type-only imports pass, because a type vanishes at
+  emit and decides nothing - proved both ways by adding each import to a
+  real module and running the check. The eighteenth probe.
+
+  **The durable half is not built.** Rule changes as a person's decision
+  over an authenticated surface, recorded as a content-free event plus
+  projection and never read from host configuration, needs a runtime and
+  a migration - the same place AC4's second half waits.
 - **RL5 - One decision, before execution (open):** the decision is
   recorded before the runner starts and is what the runner reads; no
   second evaluation exists; a changed request is a new request.

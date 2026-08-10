@@ -15,6 +15,14 @@ of the three, which makes it smaller than a module rather than a variant
 of one. "Three module kinds, three trust postures" keeps its text, and
 ADR 0136 consolidates its `provider` against ADR 0036's `provider_id`.
 
+Status note, 2026-08-10: M2's probe count is now eighteen. ADR 0140 RL4
+added one - a module may not value-import the decision contract
+`@pico/protocol/pico-rules`, because a module that can construct a
+decision input is arguing about its own permission. The manifest side of
+that rule needed no probe: H3's namespacing already means a module can
+only declare effects under its own identifier, so there is no name it
+could use to declare an effect over rules.
+
 The claim is deliberately narrow: this decides **organisation**, not
 protection. A module boundary makes features easier to find and harder
 to confuse. It does not make them safer, and the safeguards below exist

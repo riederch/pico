@@ -91,6 +91,26 @@ const worldReachingImports = new Set([
   'node:worker_threads',
 ]);
 
+/**
+ * ADR 0140 RL4. A module may ask; it may not decide - and it may not link
+ * against the thing that decides.
+ *
+ * If a rule change were reachable from the path rules govern, the most
+ * valuable request in the system would be the one that removes the governor.
+ * The manifest side of that is already structural: ADR 0128 H3 namespaces an
+ * effect by its declaring module's identifier, so `calendar` can declare
+ * `calendar.*` and nothing else - there is no name a module could use to
+ * declare an effect over rules.
+ *
+ * What is left to check is the link. A module that imported the decision
+ * contract could construct a decision input, and a module that can construct
+ * one is a module arguing about its own permission. Value imports only: a
+ * type vanishes at emit and decides nothing.
+ */
+const decisionReachingImports = new Set([
+  '@pico/protocol/pico-rules',
+]);
+
 const worldReachingGlobals = [
   { pattern: /(?:^|[^\w$.])fetch\s*\(/u, what: 'a network call through fetch()' },
   { pattern: /(?:^|[^\w$.])process\.(?:env|exit|kill)\b/u, what: 'direct process access' },
@@ -310,6 +330,17 @@ for (const module_ of modules) {
             + 'port, it does not permit going around one.',
           );
         }
+        continue;
+      }
+
+      if (decisionReachingImports.has(specifier) && !isTypeOnly) {
+        errors.push(
+          `${fileLabel}: imports ${specifier}. ADR 0140 RL4: a module may ask `
+          + 'for an action and may not decide about one, so it does not link '
+          + 'against the decision contract. Rules are changed by a person over '
+          + 'an authenticated surface, never by anything the action path can '
+          + 'reach.',
+        );
         continue;
       }
 
