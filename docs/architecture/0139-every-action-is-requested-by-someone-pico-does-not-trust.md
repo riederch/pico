@@ -116,32 +116,40 @@ for a person, it is a refusal.
 
 ### Every argument carries where it came from, and the label is never raised
 
-ADR 0117 X3 in full. Each argument in the canonical action request
-carries a **derivation label**, computed by the controller and never
-claimed by the requester:
+ADR 0117 X3 in full, and with the vocabulary that already exists rather
+than a new one. Each argument in the canonical action request carries a
+**`PicoEventOriginClass`** - the closed six of ADR 0116 W1/W2, already
+enumerated in `packages/protocol/src/index.ts`, already ordered by
+`picoOriginTrustDescending`, and already carried by every event and
+memory item under a CHECK constraint - computed by the controller and
+never claimed by the requester.
 
-- `person_present` - supplied by the person at a device where presence
-  was established;
-- `external_content` - arrived through a supplier threshold (ADR 0136
-  BR3), a connector (ADR 0128 H4) or a reader output (ADR 0117 X2);
-- `derived` - computed by Pico from material it already holds.
+There is deliberately no seventh class for "Pico worked this out". A
+value Pico computed is not a class, it is the *result* of a derivation,
+and `lowestPicoOriginClass` already answers what class that result
+carries: the lowest among its sources. An earlier draft of this ADR
+invented a three-name vocabulary with `derived` in it, which would have
+been a second, weaker origin model beside the one the store already
+enforces.
 
-Two properties make this worth carrying.
+Two properties make this worth carrying, and only the first is new.
 
 **A label belongs to an argument, not to a request.** "Send my arrival
-time to this address" is one `derived` value and one address that may be
+time to this address" is one value Pico computed and one address that may be
 either the person's own or a line from a stranger's mail. A
 request-level label would have to pick one and would pick the wrong one.
 
-**A label is never upgraded.** Nothing turns `external_content` into
-`person_present` - not passing through a reader, not being summarised,
-not being stored and read back. This is the confused-deputy defence
-stated as a data-flow rule rather than as vigilance: the dangerous
-action is not "send a message", it is "send a message to an address that
-came from the thing asking you to send it".
+**A label is never upgraded** - and this half is not new. ADR 0116's
+derivation rule already says a summary, extraction, embedding or model
+restatement inherits the lowest class among its sources, and
+`lowestPicoOriginClass` implements it, refusing an empty source list
+rather than silently answering the floor. What this ADR adds is only
+that an action argument is one of the things that rule governs.
 
-Downgrading is allowed and needs no ceremony: a value derived from
-external content is external content.
+The property is worth naming even though it is inherited, because it is
+the confused-deputy defence: the dangerous action is not "send a
+message", it is "send a message to an address that came from the thing
+asking you to send it".
 
 ### Risk is declared by the module and pinned by the person's consent
 
@@ -260,15 +268,17 @@ records. ADR 0134 makes correcting them free now and expensive later.
   request names an effect that a manifest declared and the runtime
   wired; anything else is refused, not attempted, and an unknown effect
   is a refusal rather than a question (ADR 0116 W4).
-- **AC2 - Arguments carry controller-computed labels (open):** every
-  argument in the canonical action request carries `person_present`,
-  `external_content` or `derived`; the requester has no field in which
-  to assert one; labels are per-argument.
-- **AC3 - A label never rises (open):** no path turns
-  `external_content` into `derived` or `person_present` - not
-  summarising, not storing and reading back, not passing through a
-  reader. A counter-proof is a test that tries each of the three and
-  fails.
+- **AC2 - Arguments carry controller-computed origin (open):** every
+  argument in the canonical action request carries a
+  `PicoEventOriginClass` from the existing closed six; the requester has
+  no field in which to assert one; the class is per-argument, not per
+  request. A counter-proof is a call site holding a claimed class with
+  nowhere to put it.
+- **AC3 - Derivation reuses the existing rule (open):** an argument
+  derived from several sources takes `lowestPicoOriginClass` of them,
+  by calling it rather than by reimplementing the ordering. The
+  counter-proof is that a second implementation of the rank order fails
+  the test that names it.
 - **AC4 - Risk is declared and pinned (open):** `PicoModuleEffect`
   carries a risk class from the closed six; name, description and risk
   are recorded together at activation; a change to any of the three in
@@ -286,8 +296,8 @@ records. ADR 0134 makes correcting them free now and expensive later.
 | Situation | Posture |
 |---|---|
 | A request names an effect no manifest declared | Refused at the request contract, before any decision is asked for (AC1). |
-| A requester supplies its own origin labels | There is no field for them. Labels are controller-computed (AC2). |
-| A stranger's address is summarised and re-used as a destination | Still `external_content`. Summarising is not laundering, and the label does not rise (AC3). |
+| A requester supplies its own origin class | There is no field for it. The class is controller-computed (AC2). |
+| A stranger's address is summarised and re-used as a destination | Still `external_content`, by ADR 0116's derivation rule rather than by a new one (AC3). |
 | A module updates and raises its own risk class | The pinned triple no longer matches, so consent is asked again rather than inherited (AC4). |
 | Pico's own scheduler requests an effect | It is a requester like any other. Being Pico's code is not a standing (this ADR's first rule). |
 | A planner arrives later and requests an effect | Nothing in the contract changes. It is a requester whose arguments carry what they carry. |

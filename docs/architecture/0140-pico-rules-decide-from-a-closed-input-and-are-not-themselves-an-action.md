@@ -30,8 +30,9 @@ own words end up as a policy input: a rationale is text, text is
 available, and nothing written down says it must not be read.
 
 Meanwhile the tree has grown the inputs that actually exist. ADR 0075
-has privacy domains. ADR 0139 gives every argument a derivation label
-and pins a risk class per effect. ADR 0137 gives an effect its instance.
+has privacy domains. ADR 0139 gives every argument an origin class from
+that closed vocabulary and pins a risk class per effect. ADR 0137 gives
+an effect its instance.
 ADR 0138 puts a person-level decision in front of anything that reaches
 outside. ADR 0129 gives certainty a place. These are typed values, and
 they are enough.
@@ -50,7 +51,7 @@ separate permission to reach outside.
 
 Does not cover:
 
-- the request contract and argument labels (ADR 0139);
+- the request contract and argument origin classes (ADR 0139);
 - execution, approval rendering and the record (ADR 0141);
 - the rule *language*, editor or authoring surface, which is product
   work this ADR constrains rather than designs;
@@ -82,7 +83,8 @@ A decision reads exactly this and nothing else:
 
 - the **effect name**, and the **risk class pinned** with it at consent
   (ADR 0139);
-- the **derivation label of every argument** (ADR 0139), per argument;
+- the **`PicoEventOriginClass` of every argument** (ADR 0139), per
+  argument rather than per request;
 - the **privacy domain** the action would act in (ADR 0075);
 - the **person present**, if any, and the **device** the request came
   from;
@@ -109,10 +111,10 @@ authority.
 
 ### Unknown is deny
 
-An effect with no rule, an argument with no label, a risk class the core
-does not recognise, an instance that is not attached, a domain that
-cannot be resolved: each is `deny`, with a reason naming which of them it
-was.
+An effect with no rule, an argument with no origin class, a risk class
+the core does not recognise, an instance that is not attached, a domain
+that cannot be resolved: each is `deny`, with a reason naming which of
+them it was.
 
 ADR 0116 W4 states this for tool families - "unknown families gated by
 default" - and it generalises. Fail-closed is the tree's existing
@@ -249,9 +251,9 @@ a revised verdict.
   counter-proof is a call site holding a rationale with nowhere to put
   it.
 - **RL3 - Unknown is deny, by name (open):** an unruled effect, an
-  unlabelled argument, an unrecognised risk class, an unattached
-  instance and an unresolvable domain each deny with a reason naming
-  which.
+  argument with no origin class, an unrecognised risk class, an
+  unattached instance and an unresolvable domain each deny with a reason
+  naming which.
 - **RL4 - No effect changes a rule (open):** no manifest may declare an
   effect that edits rules, and the check refuses one that tries; rule
   changes are a durable person decision over an authenticated surface,
@@ -270,7 +272,7 @@ a revised verdict.
 |---|---|
 | A module ships an effect nobody has ruled on | `deny`, naming the missing rule. The module is inert rather than permitted (RL3). |
 | A planner supplies a persuasive rationale | There is no parameter for it. The decision reads labels, never prose (RL2). |
-| An argument arrives without a label | `deny`. An unlabelled value is not a safe value, it is an unmeasured one (RL3). |
+| An argument arrives without an origin class | `deny`. An unclassified value is not a safe value, it is an unmeasured one (RL3). |
 | A request asks to widen the rules | No such effect can be declared; the check refuses the manifest (RL4). |
 | A person approves a `security_sensitive` action | It is that action. It does not become standing permission for the next one (RL5). |
 | The world changes between decision and execution | The runner executes what was decided or nothing. A changed request is a new one (RL5). |
