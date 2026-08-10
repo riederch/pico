@@ -389,7 +389,9 @@ describe('Pico Home Core app', () => {
             kind: 'product',
             active: true,
             capturing: false,
-            effectBearing: false,
+            // ADR 0139 AC6: reaching a person is an effect, so the calendar is
+            // the first module here that can cause anything.
+            effectBearing: true,
             dependencies: [],
           },
           {

@@ -123,6 +123,9 @@ import { EventFactory } from './event-factory.js';
 import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
 import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitments';
 import { parsePicoPlace } from '@pico/protocol/place';
+import { picoDeclaredEffectNames, type PicoActionRequest } from '@pico/protocol/action';
+import { bindPicoModuleEffects } from '@pico/protocol/module';
+import { runPicoAction } from './action-path.js';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
@@ -1173,21 +1176,86 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * same as forgotten. Whether anyone was *told* is a separate fact that only
    * the device that told them can report.
    */
+  /**
+   * ADR 0128 H3 wiring, which exists for the first time because a module
+   * finally declares an effect (ADR 0139 AC6). `bindPicoModuleEffects` refuses
+   * both directions: power supplied that no manifest declared, and a
+   * declaration the runtime does not implement.
+   *
+   * The implementation is what the scheduler used to do inline - record that
+   * the instant passed, content-free. What changed is that it now happens
+   * because an action was requested, decided and started, rather than because
+   * a timer fired.
+   */
+  const moduleEffects: Record<string, (request: PicoActionRequest) => void> = {
+    'calendar.raise-entry': (request) => {
+      const argument = (name: string) => request.arguments
+        .find((entry) => entry.name === name)?.value as string;
+      const event = factory.create({
+        deviceId: config.deviceId,
+        type: 'memory.time_bound_entry_due',
+        // Content-free: which item and when it was due. The words stay in the
+        // privacy domain that governs them.
+        payload: {
+          memoryItemId: argument('memory_item_id'),
+          dueAt: argument('due_at'),
+        },
+      });
+      store.append(event);
+      broadcast(event);
+    },
+  };
+  bindPicoModuleEffects({
+    manifest: picoCalendarModuleManifest,
+    supplied: moduleEffects,
+  });
+  // Named here rather than reaching for the later registry: the declared list
+  // is ADR 0139 AC1's authority, and it is collected from manifests rather
+  // than from anything the core keeps.
+  const declaredModuleEffectNames = picoDeclaredEffectNames([
+    picoCalendarModuleManifest,
+    picoHomeAssistantModuleManifest,
+    picoSpatialRecallModuleManifest,
+  ]);
+
   const timeBoundScheduler = startPicoTimeBoundScheduler({
     store: {
       picoUnannouncedTimeBoundEntries: (limit) => store.picoUnannouncedTimeBoundEntries(limit),
       markPicoTimeBoundEntryAnnounced: (input) => store.markPicoTimeBoundEntryAnnounced(input),
     },
     announce: (entry) => {
-      const event = factory.create({
-        deviceId: config.deviceId,
-        type: 'memory.time_bound_entry_due',
-        // Content-free: which item and when it was due. The words stay in the
-        // privacy domain that governs them.
-        payload: { memoryItemId: entry.memoryItemId, dueAt: entry.dueAt },
+      // ADR 0139 AC6. Announcing is reaching a person, and reaching is an
+      // effect (user decision, 2026-08-10). So the scheduler stops writing the
+      // event itself and becomes a *requester* - untrusted like any other,
+      // because being Pico's own code buys no exemption.
+      runPicoAction({
+        requested: {
+          effectName: 'calendar.raise-entry',
+          arguments: [
+            { name: 'memory_item_id', value: entry.memoryItemId },
+            { name: 'due_at', value: entry.dueAt },
+          ],
+        },
+        // Both are values Pico computed from what it already holds.
+        argumentSources: {
+          memory_item_id: ['own_pico'],
+          due_at: ['own_pico'],
+        },
+        declaredEffectNames: declaredModuleEffectNames,
+        consentedEffects: store.picoModuleEffectConsent('calendar'),
+        privacyDomain: 'private',
+        personPresent: false,
+        instance: null,
+        reachesOutside: false,
+        reachPermitted: false,
+        effects: moduleEffects,
+        emit: (type, payload) => {
+          const fact = factory.create({ deviceId: config.deviceId, type, payload });
+          store.append(fact);
+          broadcast(fact);
+          return fact.eventId;
+        },
       });
-      store.append(event);
-      broadcast(event);
     },
   });
 

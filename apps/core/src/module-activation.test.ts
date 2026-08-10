@@ -147,7 +147,11 @@ describe('ADR 0127 M3 activation is readable and durable', () => {
       // A capability missing on purpose must not present as one that is broken,
       // so the surface gets the kind and what the module can cause too.
       expect(view.modules[0]?.kind).toBe('product');
-      expect(view.modules[0]?.effectBearing).toBe(false);
+      // ADR 0139 AC6: the calendar can cause a person to be interrupted, which
+      // is an effect (user decision, 2026-08-10). It is the first module in
+      // this tree that can cause anything at all.
+      expect(view.modules[0]?.effectBearing).toBe(true);
+      expect(view.modules[1]?.effectBearing).toBe(false);
     } finally {
       await app.close();
     }

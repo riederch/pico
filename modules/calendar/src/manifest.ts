@@ -46,5 +46,23 @@ export const picoCalendarModuleManifest: PicoModuleManifest = Object.freeze({
    * appointment in an external calendar, say - the effect would be declared
    * here first, and the core would decide whether to allow it.
    */
-  effects: Object.freeze([]),
+  /**
+   * ADR 0139 AC6. Reaching a person is an effect, decided by the user on
+   * 2026-08-10.
+   *
+   * The calendar does not do the reaching itself - the core records that the
+   * instant passed and a surface tells someone - but ADR 0128 H3 asks what a
+   * module can *cause*, and an interruption is caused here. `local_write` is
+   * the honest class from ADR 0010's six: it writes locally and reaches a
+   * surface on the same machine. None of the six names "interrupts a person",
+   * which is a gap worth stating rather than filling with a seventh invented
+   * on the spot.
+   */
+  effects: Object.freeze([
+    Object.freeze({
+      name: 'calendar.raise-entry',
+      description: 'Tells you an appointment is due.',
+      risk: 'local_write' as const,
+    }),
+  ]),
 });

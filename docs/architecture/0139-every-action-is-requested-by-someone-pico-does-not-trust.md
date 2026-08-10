@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted as the request contract for the action path. **AC1, AC2, AC3, AC4 and AC5
-are implemented** on 2026-08-10; AC6 is open, and has no subject until a
-module declares an effect.
+Accepted as the request contract for the action path. **AC1-AC6 are implemented** on
+2026-08-10. AC6 became possible when the user decided that reaching a
+person is an effect.
 
 First of three that replace ADR 0010's concept note with decisions:
 this one says what an action is and who may request one, ADR 0140 says
@@ -346,10 +346,38 @@ records. ADR 0134 makes correcting them free now and expensive later.
   gained a status note saying so; its prose naming
   `ActionHistoryEventPayload` was deliberately left alone, which is the
   ordinary handling.
-- **AC6 - A person is the first requester (open):** the first slice
-  triggers a declared effect from the Companion with no model and no
-  bridge, exercising all five facts; and the executor's existence is
-  reflected wherever `mayPicoUseSingleContextAssembly` is consulted.
+- **AC6 - The first requester (implemented, and not the one this gate
+  expected):** the user decided on 2026-08-10 that **reaching a person is
+  an effect**, which gave the action path its first subject. The calendar
+  declares `calendar.raise-entry` - the first effect-bearing module in this
+  tree - and the ADR 0118 O1 scheduler stopped writing the due event
+  itself and became a *requester*.
+
+  That is a better first caller than the Companion would have been, and
+  the reason is this ADR's own first rule: the requester is never trusted,
+  and being Pico's own code buys no exemption. A path whose first caller
+  was a person pressing a button would have been built against the easy
+  case. This one was built against Pico itself.
+
+  All five facts are recorded - requested, decided, started, finished, and
+  the approval question where one is required - with each argument
+  carrying the origin class the controller computed. `require_approval`
+  parks rather than proceeding, because ADR 0141 RN4 does not exist:
+  recording the question and stopping is honest, running it because nobody
+  could answer would not be.
+
+  What stands in for Pico Rules is the floor only (ADR 0140 RL3), with
+  `hasRuleForEffect` answered from the AC4 consent record - a person read
+  that effect's description and risk class when they switched the module
+  on. A rule engine adds contextual decisions above this; nothing here is
+  one, and the ADR says so at the call site.
+
+  Two things this turned up. `bindPicoModuleEffects` had never run at
+  runtime, because no module had ever declared an effect; the declaration
+  is what forced the wiring to exist. And ADR 0010's six risk classes have
+  no name for *interrupting a person* - `local_write` is the honest
+  nearest, and the gap is stated rather than filled with a seventh class
+  invented on the spot.
 
 ## Failure ledger
 
