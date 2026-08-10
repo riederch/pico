@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted as the request contract for the action path; nothing is
-implemented. AC1-AC6 are open.
+Accepted as the request contract for the action path. **AC1, AC2 and AC3
+are implemented** in `@pico/protocol/action` on 2026-08-10; AC4, AC5 and
+AC6 are open.
 
 First of three that replace ADR 0010's concept note with decisions:
 this one says what an action is and who may request one, ADR 0140 says
@@ -264,21 +265,31 @@ records. ADR 0134 makes correcting them free now and expensive later.
 
 ## Gates
 
-- **AC1 - The effect list is the manifest list (open):** an action
-  request names an effect that a manifest declared and the runtime
-  wired; anything else is refused, not attempted, and an unknown effect
-  is a refusal rather than a question (ADR 0116 W4).
-- **AC2 - Arguments carry controller-computed origin (open):** every
-  argument in the canonical action request carries a
-  `PicoEventOriginClass` from the existing closed six; the requester has
-  no field in which to assert one; the class is per-argument, not per
-  request. A counter-proof is a call site holding a claimed class with
-  nowhere to put it.
-- **AC3 - Derivation reuses the existing rule (open):** an argument
-  derived from several sources takes `lowestPicoOriginClass` of them,
-  by calling it rather than by reimplementing the ordering. The
-  counter-proof is that a second implementation of the rank order fails
-  the test that names it.
+- **AC1 - The effect list is the manifest list (implemented):**
+  `buildPicoActionRequest` takes `declaredEffectNames` and refuses a name
+  that is not on it, and `picoDeclaredEffectNames` collects that list from
+  manifests rather than from anything the core keeps - ADR 0128's refusal
+  to hold a closed list of effects, honoured. The refusal has its own
+  error, `pico_action_effect_not_declared`, separate from a malformed
+  name: a well-formed effect that does not exist is a refusal, not a
+  question (ADR 0116 W4).
+- **AC2 - Arguments carry controller-computed origin (implemented):**
+  `PicoActionRequestArgumentInput` has exactly `name` and `value`, so a
+  requester holding a claimed origin has nowhere to put it - ADR 0117
+  X1's construction, where the gate is the absence of a field. The
+  runtime refuses one anyway, under its own error
+  `pico_action_argument_cannot_declare_origin`, because a requester
+  asserting provenance is the attack rather than a typo. The class is
+  per argument: a request may carry one `own_pico` value beside one
+  `external_content` value, and a test pins exactly that.
+- **AC3 - Derivation reuses the existing rule (implemented):** the
+  controller supplies each argument's *sources* and the class is
+  `lowestPicoOriginClass` of them - called, never reimplemented, so an
+  empty source list throws `pico_origin_derivation_requires_sources` and
+  an unknown class throws `invalid_pico_origin_class` from the shared
+  rank check rather than from a local copy. The same call sits on the
+  re-parse path over a single source, which is why an unknown class
+  cannot survive a round trip either.
 - **AC4 - Risk is declared and pinned (open):** `PicoModuleEffect`
   carries a risk class from the closed six; name, description and risk
   are recorded together at activation; a change to any of the three in

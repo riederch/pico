@@ -11,6 +11,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./action": {
+      "types": "./dist/action.d.ts",
+      "import": "./dist/action.js"
+    },
     "./bounded-projection": {
       "types": "./dist/bounded-projection.d.ts",
       "import": "./dist/bounded-projection.js"
