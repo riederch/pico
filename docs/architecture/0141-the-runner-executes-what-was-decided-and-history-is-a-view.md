@@ -2,10 +2,8 @@
 
 ## Status
 
-Accepted as the execution and record contract for the action path. **RN3
-is implemented** in `@pico/protocol/approval-statement` on 2026-08-10;
-RN1, RN2, RN4, RN5 and RN6 are open, and each of them needs a runtime
-that does not exist yet.
+Accepted as the execution and record contract for the action path. **RN3 and RN4 are
+implemented** on 2026-08-10; RN1, RN2, RN5 and RN6 are open.
 
 Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
@@ -254,9 +252,31 @@ answered long after the situation that justified it has gone.
   The asymmetry with RN6 is deliberate and stated at the site: a
   statement *shows* external content, because nobody can approve sending
   to an address they cannot see, while history never records it verbatim.
-- **RN4 - Presence-bound and expiring (open):** an approval is answered
-  inside a session with established presence and expires; an expired
-  approval is recorded as unanswered and the action does not run.
+- **RN4 - Presence-bound and expiring (implemented):**
+  `resolvePicoApproval` binds the answer to the session the question was
+  asked into - another session answering is refused under its own error
+  rather than folded into a refusal, because it is not an answer at all
+  but someone agreeing on the person's behalf.
+
+  Expiry reuses `hasPicoExposureWindowElapsed` rather than a fresh
+  comparison, so an approval is an ADR 0120 exposure window like every
+  other: it ends at the earliest instant any available clock allows, and a
+  wall clock wound backward cannot extend it. Tests prove all three
+  directions - wall clock, monotonic, durable floor. Expiry is checked
+  **before** the answer is read, so a late click is not consent.
+
+  The action path refuses to ask without a window rather than defaulting
+  to one: a window nobody chose is a standing grant with a number
+  attached.
+
+  **The reserved payload could not express this, and was revised in
+  place.** `ApprovalResolvedPayload` carried `approved: boolean`, which has
+  room for two answers where there are three. A person who was asleep did
+  not refuse - the question expired, and recording that as a refusal would
+  put a decision in their mouth. It now carries a
+  `PicoApprovalOutcome` of `approved | refused | unanswered`, under
+  ADR 0134: reserved, never writable, nothing holds an artifact produced
+  under it.
 - **RN5 - History is a view (open):** no history store and no history
   event type exist; Action History is a projection over the event log
   and the ADR 0121 chain, and the reserved names are revised in place

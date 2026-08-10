@@ -4,6 +4,11 @@ import {
   type PicoActionRequestInput,
 } from '@pico/protocol/action';
 import type { PicoEventOriginClass } from '@pico/protocol';
+import {
+  resolvePicoApproval,
+  type PicoApprovalOutcome,
+  type PicoPendingApproval,
+} from '@pico/protocol/approval';
 import type { PicoModuleEffect } from '@pico/protocol/module';
 import {
   picoRulesFloorOutcome,
@@ -35,12 +40,12 @@ import {
  * when they switched the module on. A real rule engine adds contextual
  * decisions above this; nothing here is one.
  *
- * **`require_approval` parks.** ADR 0141 RN4 wants an approval bound to
- * established presence and expiring, and that does not exist. So the request
- * is recorded, the decision is recorded, the approval is asked - and the
- * action does not run. Recording the question and stopping is the honest
- * behaviour; running it because nobody could answer would be the dishonest
- * one.
+ * **`require_approval` waits, and the waiting is bounded.** ADR 0141 RN4: the
+ * question is recorded with the session presence was established in and a
+ * window that expires on two clocks, and `resolvePicoActionApproval` finishes
+ * it. Nothing runs until someone in that session answers, and an expired
+ * question is recorded as unanswered rather than as a refusal - a person who
+ * was asleep did not say no.
  */
 export interface PicoActionPathInput {
   /** What the requester asked for. It cannot state its arguments' origin. */
@@ -60,12 +65,24 @@ export interface PicoActionPathInput {
   effects: Readonly<Record<string, (request: PicoActionRequest) => void>>;
   /** Records one fact and returns its event id. */
   emit: (type: PicoActionFactType, payload: Record<string, unknown>) => string;
+  /**
+   * ADR 0141 RN4. Required as soon as a decision could be
+   * `require_approval`: the session presence was established in, and how long
+   * the question stands.
+   */
+  approvalWindow?: {
+    presenceSessionId: string;
+    endsAtMs: number;
+    startedAtMs: number;
+    durationMs: number;
+  };
 }
 
 export type PicoActionFactType =
   | 'action.requested'
   | 'pico_rules.decision_created'
   | 'approval.requested'
+  | 'approval.resolved'
   | 'action_runner.action_started'
   | 'action_runner.action_completed';
 
@@ -77,6 +94,8 @@ export interface PicoActionPathOutcome {
   ran: boolean;
   /** Present only when it ran. */
   succeeded?: boolean;
+  /** Present only for `require_approval`: the question now standing. */
+  pending?: PicoPendingApproval;
 }
 
 export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome {
@@ -154,14 +173,28 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
   }
 
   if (decision === 'require_approval') {
-    // ADR 0141 RN4 does not exist yet, so the question is recorded and the
-    // action does not happen. An unanswered approval is not an allow.
+    // ADR 0141 RN4. The question is recorded with the session it was asked
+    // into and a window that expires on two clocks; nothing runs until it is
+    // answered there.
+    if (input.approvalWindow === undefined) {
+      // Refused rather than defaulted: a window nobody chose is a standing
+      // grant with a number attached.
+      throw new Error('pico_action_requires_approval_window');
+    }
+    const pending: PicoPendingApproval = Object.freeze({
+      requestedEventId,
+      presenceSessionId: input.approvalWindow.presenceSessionId,
+      endsAtMs: input.approvalWindow.endsAtMs,
+      startedAtMs: input.approvalWindow.startedAtMs,
+      durationMs: input.approvalWindow.durationMs,
+    });
     input.emit('approval.requested', {
       requestedEventId,
       prompt: consented.description,
       risk: consented.risk,
+      expiresAt: new Date(pending.endsAtMs).toISOString(),
     });
-    return Object.freeze({ requestedEventId, decision, reasons, ran: false });
+    return Object.freeze({ requestedEventId, decision, reasons, ran: false, pending });
   }
 
   const startedEventId = input.emit('action_runner.action_started', {
@@ -193,4 +226,74 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
   });
 
   return Object.freeze({ requestedEventId, decision, reasons, ran: true, succeeded });
+}
+
+/**
+ * ADR 0141 RN4. Finishes a question that was left standing.
+ *
+ * The outcome is recorded whatever it is - approved, refused or unanswered -
+ * because an audit that only holds the answers somebody gave is missing the
+ * ones nobody did. Only `approved` runs, and it runs through the same start
+ * and finish facts an immediate allow does, because the runner does not have
+ * two paths.
+ */
+export function resolvePicoActionApproval(input: {
+  pending: PicoPendingApproval;
+  effectName: string;
+  presenceSessionId: string;
+  approved?: boolean;
+  nowMs: number;
+  monotonicNowMs: number;
+  anchorFloorMs?: number | null;
+  request: PicoActionRequest;
+  risk: string;
+  effects: Readonly<Record<string, (request: PicoActionRequest) => void>>;
+  emit: (type: PicoActionFactType, payload: Record<string, unknown>) => string;
+}): { outcome: PicoApprovalOutcome; ran: boolean; succeeded?: boolean } {
+  const resolution = resolvePicoApproval({
+    pending: input.pending,
+    presenceSessionId: input.presenceSessionId,
+    approved: input.approved,
+    nowMs: input.nowMs,
+    monotonicNowMs: input.monotonicNowMs,
+    anchorFloorMs: input.anchorFloorMs,
+  });
+
+  input.emit('approval.resolved', {
+    approvalEventId: input.pending.requestedEventId,
+    outcome: resolution.outcome,
+    resolvedAt: new Date(input.nowMs).toISOString(),
+  });
+
+  if (!resolution.mayRun) {
+    return { outcome: resolution.outcome, ran: false };
+  }
+
+  const startedEventId = input.emit('action_runner.action_started', {
+    requestedEventId: input.pending.requestedEventId,
+    actionName: input.effectName,
+    risk: input.risk,
+  });
+
+  let succeeded = true;
+  let summary = 'ran';
+  try {
+    const run = input.effects[input.effectName];
+    if (run === undefined) {
+      throw new Error('unsupplied_pico_module_effect');
+    }
+    run(input.request);
+  } catch (error) {
+    succeeded = false;
+    summary = error instanceof Error ? error.message : 'failed';
+  }
+
+  input.emit('action_runner.action_completed', {
+    startedEventId,
+    actionName: input.effectName,
+    success: succeeded,
+    summary,
+  });
+
+  return { outcome: resolution.outcome, ran: true, succeeded };
 }

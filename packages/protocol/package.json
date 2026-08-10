@@ -15,6 +15,10 @@
       "types": "./dist/action.d.ts",
       "import": "./dist/action.js"
     },
+    "./approval": {
+      "types": "./dist/approval.d.ts",
+      "import": "./dist/approval.js"
+    },
     "./approval-statement": {
       "types": "./dist/approval-statement.d.ts",
       "import": "./dist/approval-statement.js"

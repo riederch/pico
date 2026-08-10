@@ -1,4 +1,5 @@
 import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
+import type { PicoApprovalOutcome } from './approval.js';
 import type { PicoRulesDecisionValue } from './pico-rules.js';
 import type { PicoStorageCondition } from './storage-pressure.js';
 export const foundationEventTypes = [
@@ -2557,7 +2558,12 @@ export interface ApprovalRequestedPayload {
 
 export interface ApprovalResolvedPayload {
   approvalEventId: string;
-  approved: boolean;
+  // ADR 0141 RN4, revised in place on 2026-08-10 under ADR 0134: `approved:
+  // boolean` had room for two answers, and the third state is neither. A
+  // person who was asleep did not refuse - the question expired, and recording
+  // that as a refusal would put a decision in their mouth. The vocabulary
+  // lives in `./approval.js`.
+  outcome: PicoApprovalOutcome;
   resolvedAt: string;
 }
 

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { runPicoAction, type PicoActionFactType } from './action-path.js';
+import {
+  resolvePicoActionApproval,
+  runPicoAction,
+  type PicoActionFactType,
+} from './action-path.js';
 
 const consented = [{
   name: 'calendar.raise-entry',
@@ -101,10 +105,16 @@ describe('ADR 0139 AC6 - the first action, with no model and no bridge', () => {
 
 describe('ADR 0139 AC6 - what does not run, and why', () => {
   it('asks for approval on a higher risk class and does not act', () => {
-    // ADR 0141 RN4 does not exist, so the question is recorded and the action
-    // does not happen. An unanswered approval is not an allow.
+    // ADR 0141 RN4: the question stands in a bounded window and nothing runs
+    // until someone answers in the session it was asked into.
     const { facts, ran, outcome } = harness({
       consentedEffects: [{ ...consented[0], risk: 'external_write' }],
+      approvalWindow: {
+        presenceSessionId: 'session-a',
+        endsAtMs: 1_000_000,
+        startedAtMs: 500,
+        durationMs: 60_000,
+      },
     });
     expect(facts.map((f) => f.type)).toEqual([
       'action.requested',
@@ -136,5 +146,118 @@ describe('ADR 0139 AC6 - what does not run, and why', () => {
     const { facts, outcome } = harness({ effects: {} });
     expect(outcome.succeeded).toBe(false);
     expect(facts[3]?.payload.summary).toBe('unsupplied_pico_module_effect');
+  });
+});
+
+describe('ADR 0141 RN4 - approval is presence-bound and expires', () => {
+  const highRisk = [{ ...consented[0], risk: 'external_write' as const }];
+  const window_ = {
+    presenceSessionId: 'session-a',
+    endsAtMs: 1_000_000,
+    startedAtMs: 500,
+    durationMs: 60_000,
+  };
+
+  function ask() {
+    const facts: Array<{ type: PicoActionFactType; payload: Record<string, unknown> }> = [];
+    const outcome = runPicoAction({
+      requested: {
+        effectName: 'calendar.raise-entry',
+        arguments: [{ name: 'memory_item_id', value: 'item_1' }],
+      },
+      argumentSources: { memory_item_id: ['own_pico'] },
+      declaredEffectNames: ['calendar.raise-entry'],
+      consentedEffects: highRisk as never,
+      privacyDomain: 'private',
+      personPresent: true,
+      instance: null,
+      reachesOutside: false,
+      reachPermitted: false,
+      effects: {},
+      approvalWindow: window_,
+      emit: (type: PicoActionFactType, payload: Record<string, unknown>) => {
+        facts.push({ type, payload });
+        return `evt-${facts.length}`;
+      },
+    });
+    return { facts, outcome };
+  }
+
+  it('records the question with the session and the window it stands in', () => {
+    const { facts, outcome } = ask();
+    expect(outcome.decision).toBe('require_approval');
+    expect(outcome.pending).toMatchObject({ presenceSessionId: 'session-a', endsAtMs: 1_000_000 });
+    expect(facts[2]?.payload.expiresAt).toBe(new Date(1_000_000).toISOString());
+  });
+
+  it('refuses to ask without a window rather than defaulting to one', () => {
+    // A window nobody chose is a standing grant with a number attached.
+    expect(() => runPicoAction({
+      requested: { effectName: 'calendar.raise-entry', arguments: [] },
+      argumentSources: {},
+      declaredEffectNames: ['calendar.raise-entry'],
+      consentedEffects: highRisk as never,
+      privacyDomain: 'private',
+      personPresent: true,
+      instance: null,
+      reachesOutside: false,
+      reachPermitted: false,
+      effects: {},
+      emit: () => 'x',
+    })).toThrow('pico_action_requires_approval_window');
+  });
+
+  function resolve(over: Record<string, unknown> = {}) {
+    const { outcome } = ask();
+    const facts: Array<{ type: PicoActionFactType; payload: Record<string, unknown> }> = [];
+    const ran: string[] = [];
+    const result = resolvePicoActionApproval({
+      pending: outcome.pending!,
+      effectName: 'calendar.raise-entry',
+      presenceSessionId: 'session-a',
+      approved: true,
+      nowMs: 900_000,
+      monotonicNowMs: 1_000,
+      request: { schema: 'pico.action.request.v1', effectName: 'calendar.raise-entry', arguments: [] },
+      risk: 'external_write',
+      effects: { 'calendar.raise-entry': () => { ran.push('raised'); } },
+      emit: (type: PicoActionFactType, payload: Record<string, unknown>) => {
+        facts.push({ type, payload });
+        return `res-${facts.length}`;
+      },
+      ...over,
+    } as never);
+    return { facts, ran, result };
+  }
+
+  it('runs through the same start and finish facts an immediate allow does', () => {
+    const { facts, ran, result } = resolve();
+    expect(result).toMatchObject({ outcome: 'approved', ran: true, succeeded: true });
+    expect(facts.map((f) => f.type)).toEqual([
+      'approval.resolved',
+      'action_runner.action_started',
+      'action_runner.action_completed',
+    ]);
+    expect(ran).toEqual(['raised']);
+  });
+
+  it('records a refusal and does not act', () => {
+    const { facts, ran, result } = resolve({ approved: false });
+    expect(result).toMatchObject({ outcome: 'refused', ran: false });
+    expect(facts.map((f) => f.type)).toEqual(['approval.resolved']);
+    expect(ran).toEqual([]);
+  });
+
+  it('records an expired question as unanswered, not as a refusal', () => {
+    // A person who was asleep did not say no.
+    const { facts, ran, result } = resolve({ nowMs: 1_000_001 });
+    expect(result).toMatchObject({ outcome: 'unanswered', ran: false });
+    expect(facts[0]?.payload.outcome).toBe('unanswered');
+    expect(ran).toEqual([]);
+  });
+
+  it('refuses an answer from another session', () => {
+    expect(() => resolve({ presenceSessionId: 'session-b' }))
+      .toThrow('pico_approval_wrong_presence_session');
   });
 });
