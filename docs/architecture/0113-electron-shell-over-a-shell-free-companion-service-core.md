@@ -146,22 +146,53 @@ cannot silently disappear from the total. The report is written and emitted
 before either budget assertion, making a failed reference-build measurement
 actionable without weakening the gate.
 
-**Open on 2026-08-10: the PSS budget is exceeded on the development
-machine.** Four measurements of the packaged `0.1.9` build with Electron
-43.2.0 gave 237.7, 238.0, 238.6 and 241.2 MB against the 225 MB limit -
-5.7 to 7.2 percent over, and stable enough that this is not measurement
-noise. The private dirty-plus-hugetlb class stays inside its own budget
-(about 105 MB against 110 MB), so only the PSS gate fails. It was
-attributed rather than assumed: the 238.6 MB reading comes from a clean
-`HEAD` worktree built and measured on the same machine in the same
-session, so it predates the ADR 0134 F2 work that surfaced it and is not
-caused by it. What is not yet known is whether the cause is this machine
-(PSS attributes shared pages by how many processes map them, so the
-number is a property of the host as much as of the build) or a real
-growth in the packaged tree since the budget was last met. That question
-is the next step, and it has to be answered before either number is
-touched: raising a budget to meet a measurement is how a budget stops
-meaning anything, and the limits were chosen by the user, not derived.
+**Raised as a finding on 2026-08-10 and closed the same day as a
+measurement error, kept here because the error is the useful part.**
+Four measurements of the packaged `0.1.9` build with Electron 43.2.0
+gave 237.7, 238.0, 238.6 and 241.2 MB against the 225 MB limit, stable
+enough not to be noise, and they were recorded as an open question about
+whether the machine or the packaged tree had grown. Both halves of that
+question were already answered in the tree.
+
+The report names its own mode. `tray-memory-linux-amd64.json` carries
+`chromiumSandboxProbe: "user_namespace"`, and
+`docs/development/agent-runbook.md` states in bold that a local
+`user_namespace` run measures about 17.5 MB above the root-owned package
+probe and therefore breaks the PSS budget **at unchanged HEAD** - adding,
+exactly, that whoever sees a budget deviation should check the `probe`
+field before suspecting the import graph. The overrun was 15,092,160
+bytes, which is less than that documented mode difference. Against the
+mode the budget was defined for, this build is inside it.
+
+The second class settles the growth question on its own, and it is
+measured rather than derived. Between the last recorded `user_namespace`
+run and this one - same mode, same host, same Electron - PSS moved
++25.7 MB while `Private_Dirty + Private_Hugetlb` moved **+0.4 MB**.
+Private dirty is the memory the process actually owns, so a larger import
+hull or a bigger bundle appears there. It did not. PSS divides each
+shared page by the number of processes mapping it, so a jump in PSS with
+flat private memory is a change in sharing on the host, not in the
+application.
+
+**The budget was never in danger and both numbers stay unchanged.**
+
+What this leaves is a note about the gate rather than about the build,
+and it is not that the mode was hidden. The mode is in the report field,
+in the runbook in bold, in this repository's handoff document, and in the
+failure message itself, which appends `sandbox ${sandboxProbe.mode}` to
+every budget assertion. Four places named it and it was still read as a
+code finding.
+
+So the residual is the shape of the check, not its reporting: **a gate
+that is expected to fail in the mode people run it in trains its reader
+to explain failures away.** The runbook says plainly that a local
+`user_namespace` run breaks this budget at unchanged HEAD - which makes
+red the normal local outcome, and a red that is usually meaningless is a
+red nobody reads carefully. The narrow fix is for the assertion to know
+which mode it is in: in a mode the budget was not defined for it should
+say so and decline to assert the strict limit, rather than failing and
+relying on prose elsewhere to explain that the failure does not count.
+That is a change to the check and belongs to whoever next touches C3.
 
 ### Chromium currency is a release obligation
 
