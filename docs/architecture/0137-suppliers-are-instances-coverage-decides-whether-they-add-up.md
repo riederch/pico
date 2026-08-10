@@ -3,9 +3,9 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist. **IN1 and IN2 are implemented** in
-`@pico/protocol/supplier` on 2026-08-10; IN3, IN4 and IN5 are open, and
-IN5's domain half landed with IN1.
+kind coexist. **IN1, IN2 and IN3 are implemented**
+in `@pico/protocol/supplier` and `@pico/protocol/supplier-condition` on
+2026-08-10; IN4 and IN5 are open, and IN5's domain half landed with IN1.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than
@@ -236,9 +236,12 @@ a guess.
   dropping the one that knows more. `picoSupplierCovers` answers before
   anything is spent, so `out of scope` costs neither money nor
   disclosure (ADR 0138).
-- **IN3 - Empty is typed (open):** `out of scope` exists beside not-found
-  in the ADR 0118 O2 vocabulary, and a consumer can tell them apart
-  without reading prose.
+- **IN3 - Empty is typed (implemented):** `out_of_scope` is in
+  `picoSupplierConditions` beside the conditions that mean an answer did
+  not come back, and a consumer separates them through the predicates
+  rather than through prose - it carries no content, needs no person, and
+  will not resolve itself, which is exactly what makes it worth re-asking
+  somewhere else rather than waiting.
 - **IN4 - A union is honest about its parts (open):** an answer assembled
   from several instances names those that did not respond, and two
   instances that disagree yield both answers with their identifiers and

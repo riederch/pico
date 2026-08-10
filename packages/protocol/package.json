@@ -59,6 +59,10 @@
       "types": "./dist/supplier.d.ts",
       "import": "./dist/supplier.js"
     },
+    "./supplier-condition": {
+      "types": "./dist/supplier-condition.d.ts",
+      "import": "./dist/supplier-condition.js"
+    },
     "./time-bound-entry": {
       "types": "./dist/time-bound-entry.d.ts",
       "import": "./dist/time-bound-entry.js"

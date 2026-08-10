@@ -3,7 +3,9 @@
 ## Status
 
 Accepted as a constraint on suppliers that reach a system Pico does not
-run; nothing is implemented. CO1-CO5 are open.
+run. **CO2 is implemented** in `@pico/protocol/supplier-condition` on
+2026-08-10; CO1, CO3, CO4 and CO5 are open, and each needs a runtime or
+a store.
 
 This was the third part of ADR 0136 until 2026-08-10, when the user asked
 for a second cut. ADR 0136 keeps what a supplier is and where its code
@@ -221,12 +223,28 @@ receives the credential; it does not keep it.
   configuration or the environment, and a check refuses one that is. Read
   scope where reading is all that is needed, and no push path for a git
   library.
-- **CO2 - Condition is a typed value (open):** the states are a closed
-  vocabulary extending ADR 0118 O2 - not configured, unreachable, rate
-  limited, budget exhausted, stale but present, partial - carried as
-  content that a surface renders, never as a thrown string. `rate limited`
-  and `budget exhausted` are distinguishable by a consumer without reading
-  prose.
+- **CO2 - Condition is a typed value (implemented):**
+  `picoSupplierConditions` is the closed list, with `out_of_scope` from
+  ADR 0137 IN3 beside it, and `assertPicoSupplierCondition` refuses
+  anything else - including `error`, which is the name this vocabulary
+  exists to avoid.
+
+  It sits *beside* ADR 0118 O2 rather than inside it, and the distinction
+  is worth stating: O2 types why a **capability** is unavailable on this
+  device, and a condition says what happened with **one supplier**. A
+  device with a network can still hold a bridge whose credits ran out.
+
+  The load-bearing pair is distinguishable without prose:
+  `picoSupplierConditionResolvesItself` is true for `rate_limited` and
+  false for `budget_exhausted`, while
+  `picoSupplierConditionNeedsPerson` is the other way round.
+  `picoSupplierConditionCarriesContent` keeps `stale_but_present` and
+  `partial` as answers rather than failures, and
+  `picoSupplierConditionSpentNothing` names the only two conditions
+  decided before reaching out - no credential to try with, or a subject
+  the instance never claimed to cover. An unreachable attempt spent
+  disclosure: the request left, and the answer not coming back does not
+  unsay it.
 - **CO3 - Reaching outside is a decision of its own (open):** default off,
   separate from ADR 0127 module activation, recorded as a content-free
   event plus projection over an authenticated surface, and visible in the
