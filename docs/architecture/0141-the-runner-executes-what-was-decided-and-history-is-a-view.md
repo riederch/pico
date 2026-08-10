@@ -148,12 +148,17 @@ those names, and the vectors are regenerated with the change.
 ### A record holds a reference where it could hold a payload
 
 ADR 0010 asked for this and the reserved `ActionHistoryEventPayload`
-already carries `redaction: 'none' | 'summary' | 'reference_only'`. It is
-kept, with one rule made explicit that 0010 could not have known to
-write:
+already carried `redaction: 'none' | 'summary' | 'reference_only'`. The
+vocabulary is kept, with one rule made explicit that 0010 could not have
+known to write:
 
 **an argument that carried `external_content` is never recorded
 verbatim.** It is stored as a reference or a Pico-composed summary.
+
+Written on 2026-08-10 while `ActionHistoryEventPayload` still existed;
+ADR 0139 AC5 removed it that same day together with its event type, and
+the vocabulary survives as `picoActionRecordRedactionModes`. The rule is
+unchanged - only the place the three words live.
 
 The reason is not storage cost. History is read by a person today and is
 exactly the kind of durable, trusted-looking store a model would later be
