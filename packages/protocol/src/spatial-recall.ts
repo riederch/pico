@@ -1,3 +1,8 @@
+import {
+  picoConfidenceLevels,
+  picoConfidenceRank,
+  type PicoConfidenceLevel,
+} from './confidence.js';
 import { assertPicoPlace, type PicoPlace } from './place.js';
 
 /**
@@ -41,14 +46,14 @@ export type PicoMobilityKind = typeof picoMobilityKinds[number];
  * probability, and `0.73` would claim one; these are what can be said honestly
  * and what a person can act on differently.
  */
-export const picoSpatialConfidences = ['low', 'medium', 'high'] as const;
-export type PicoSpatialConfidence = typeof picoSpatialConfidences[number];
+// Lifted to `./confidence.js` on 2026-08-10 (ADR 0136 BR4): nothing about
+// three honest levels is spatial, and the comment above always said so. The
+// name stays here so spatial recall keeps its own word without keeping its own
+// list.
+export const picoSpatialConfidences = picoConfidenceLevels;
+export type PicoSpatialConfidence = PicoConfidenceLevel;
 
-const confidenceRank: Record<PicoSpatialConfidence, number> = {
-  low: 0,
-  medium: 1,
-  high: 2,
-};
+
 
 /**
  * One reading of where the device was.
@@ -209,14 +214,14 @@ export function lowerPicoSpatialConfidence(
   left: PicoSpatialConfidence,
   right: PicoSpatialConfidence,
 ): PicoSpatialConfidence {
-  return confidenceRank[left] <= confidenceRank[right] ? left : right;
+  return picoConfidenceRank(left) <= picoConfidenceRank(right) ? left : right;
 }
 
 export function isPicoSpatialConfidenceAtLeast(
   value: PicoSpatialConfidence,
   floor: PicoSpatialConfidence,
 ): boolean {
-  return confidenceRank[value] >= confidenceRank[floor];
+  return picoConfidenceRank(value) >= picoConfidenceRank(floor);
 }
 
 /**

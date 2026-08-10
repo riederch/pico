@@ -23,6 +23,10 @@
       "types": "./dist/bounded-projection.d.ts",
       "import": "./dist/bounded-projection.js"
     },
+    "./confidence": {
+      "types": "./dist/confidence.d.ts",
+      "import": "./dist/confidence.js"
+    },
     "./home-assistant": {
       "types": "./dist/home-assistant.d.ts",
       "import": "./dist/home-assistant.js"
@@ -58,6 +62,10 @@
     "./supplier": {
       "types": "./dist/supplier.d.ts",
       "import": "./dist/supplier.js"
+    },
+    "./supplier-answer": {
+      "types": "./dist/supplier-answer.d.ts",
+      "import": "./dist/supplier-answer.js"
     },
     "./supplier-condition": {
       "types": "./dist/supplier-condition.d.ts",

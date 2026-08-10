@@ -10,8 +10,8 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. **BR1 is implemented** in `@pico/protocol/supplier` on
-2026-08-10; BR2, BR3, BR4 and BR6 are open, and BR5 moved with the cost
+than kind. **BR1 and BR4 are implemented** on
+2026-08-10; BR2, BR3 and BR6 are open, and BR5 moved with the cost
 decision.
 
 Split on 2026-08-10 at the user's request: everything about **several**
@@ -491,11 +491,30 @@ nowhere to go, which is the state ADR 0127 was written to end.
   it: an item that arrived through a slot and an ordinary memory item give
   identical results through crypto-shred, retention sweep and
   backup/restore.
-- **BR4 - Three clocks and a certainty (open):** asked-at, measured-at and
-  a certainty tag are separate fields; a value cannot be constructed
-  without its certainty; no supplier output presents itself as confirmed. A
-  library
-  carries a version or commit in the measured-at position.
+- **BR4 - Three clocks and a certainty (implemented):**
+  `picoSupplierCacheAgeMs` and `picoSupplierContentAgeMs` are two functions
+  with two names, so confusing them takes an edit rather than an oversight -
+  which is what issue #4 asked for in its own words. The library case
+  answers `null` rather than `0`, because a commit is not a time and zero
+  would be this exact confusion dressed as a convenience; `measured` is a
+  tagged union for the same reason.
+
+  A value cannot be built without its confidence, under its own error: not
+  a value with a default, one nobody measured. And a supplier cannot claim
+  a person's confirmation - `confirmedByPerson` is typed as a field that
+  can only be `false`, the construction ADR 0117 X1 uses for
+  `picoReaderCapabilities`, with no parameter to set it and its own
+  refusal on the parse path.
+
+  Building it corrected this ADR twice over. The certainty vocabulary was
+  named `known` here and in ADR 0137, a tag that exists nowhere - ADR 0129
+  has three levels and a separate confirmation status, and the only
+  `'known'` in the tree is an unrelated `ContextSignalLevel`. And the three
+  levels themselves were sitting in `spatial-recall.ts` under a spatial
+  name while their own comment said they are independent of where a value
+  came from; they are now `@pico/protocol/confidence`, lifted in the
+  ADR 0127 M5 move, with `picoSpatialConfidences` derived from them so
+  spatial recall keeps its word without keeping its list.
 - **BR6 - Libraries are pinned, read in place, and never held (open):** a
   frozen library verifies against a pinned hash and a tracked one against
   a commit id, failing loudly rather than substituting; nothing is
