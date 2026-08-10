@@ -18,6 +18,31 @@ export const picoModuleKinds = ['product', 'connector', 'provider'] as const;
 export type PicoModuleKind = typeof picoModuleKinds[number];
 
 /**
+ * ADR 0010's six risk classes, unchanged, and ADR 0139 AC4.
+ *
+ * They live beside the effect rather than in the barrel because the module
+ * declaring an effect is the only thing that knows what it does: the core
+ * cannot classify `home-assistant.turn-on-light` without knowing what a light
+ * is, which is the knowledge the module boundary exists to keep out of it.
+ *
+ * That sits uncomfortably beside ADR 0127's "a module may ask; it may not
+ * decide", and the resolution is not to pretend the core can classify. The
+ * declaration is *pinned* at the moment a person consents to it - see
+ * `picoModuleConsentDrift` - so a module may say what it does and may not
+ * quietly become something else.
+ */
+export const picoActionRiskClasses = [
+  'read_only',
+  'local_write',
+  'external_write',
+  'destructive',
+  'security_sensitive',
+  'privileged_system_action',
+] as const;
+
+export type PicoActionRisk = typeof picoActionRiskClasses[number];
+
+/**
  * Every module Pico ships. Activation is a separate question (ADR 0127 M3):
  * being listed here says the code exists, not that it is running.
  */
@@ -74,6 +99,8 @@ export interface PicoModuleEffect {
   name: string;
   /** What a person would say happened. Prose, for the surface that asks. */
   description: string;
+  /** ADR 0139 AC4. Declared by the module, pinned by the person's consent. */
+  risk: PicoActionRisk;
 }
 
 function isDistinctStringArray(value: unknown): value is readonly string[] {
@@ -161,7 +188,10 @@ function parsePicoModuleEffects(
     }
     const record = entry as Record<string, unknown>;
     const keys = Object.keys(record).sort();
-    if (keys.length !== 2 || keys[0] !== 'description' || keys[1] !== 'name') {
+    if (keys.length !== 3
+      || keys[0] !== 'description'
+      || keys[1] !== 'name'
+      || keys[2] !== 'risk') {
       throw new Error('invalid_pico_module_effect');
     }
     if (typeof record.name !== 'string' || !namePattern.test(record.name)) {
@@ -174,12 +204,87 @@ function parsePicoModuleEffects(
       // describe is one nobody can consent to.
       throw new Error('invalid_pico_module_effect_description');
     }
-    return Object.freeze({ name: record.name, description: record.description });
+    if (typeof record.risk !== 'string'
+      || !(picoActionRiskClasses as readonly string[]).includes(record.risk)) {
+      // Absent is not `read_only`. A module that never said what it does has
+      // not said the safest thing, it has said nothing (ADR 0139 AC4).
+      throw new Error('invalid_pico_module_effect_risk');
+    }
+    return Object.freeze({
+      name: record.name,
+      description: record.description,
+      risk: record.risk as PicoActionRisk,
+    });
   });
   if (new Set(effects.map((effect) => effect.name)).size !== effects.length) {
     throw new Error('duplicate_pico_module_effect');
   }
   return Object.freeze(effects);
+}
+
+/**
+ * ADR 0139 AC4. What a person consented to, against what a module now
+ * declares.
+ *
+ * The pin is the whole point. A module declares its own risk because only it
+ * knows what its effects do, which would hand every module a privilege
+ * escalation - declare `local_write` today, ship `destructive` in an update,
+ * inherit the consent. Recording name, description and risk together at
+ * activation turns that silent change into a question.
+ *
+ * Returns the drift rather than a boolean, in the posture ADR 0127 M4 already
+ * uses for deactivation with standing promises: a person who is being asked
+ * again is told what changed, not merely that something did.
+ */
+export interface PicoModuleConsentDrift {
+  /** Declared now, not present in what was consented to. */
+  added: readonly string[];
+  /** Consented to, no longer declared. */
+  removed: readonly string[];
+  /** Same name, different description or different risk. */
+  changed: readonly string[];
+}
+
+export function picoModuleConsentDrift(
+  consented: readonly PicoModuleEffect[],
+  declared: readonly PicoModuleEffect[],
+): PicoModuleConsentDrift {
+  const consentedByName = new Map(consented.map((effect) => [effect.name, effect]));
+  const declaredByName = new Map(declared.map((effect) => [effect.name, effect]));
+
+  const added = [...declaredByName.keys()]
+    .filter((name) => !consentedByName.has(name))
+    .sort();
+  const removed = [...consentedByName.keys()]
+    .filter((name) => !declaredByName.has(name))
+    .sort();
+  const changed = [...declaredByName.keys()]
+    .filter((name) => {
+      const before = consentedByName.get(name);
+      const after = declaredByName.get(name)!;
+      // Description counts as much as risk: it is the sentence a person read
+      // when they agreed, so changing it changes what was agreed to.
+      return before !== undefined
+        && (before.description !== after.description || before.risk !== after.risk);
+    })
+    .sort();
+
+  return Object.freeze({
+    added: Object.freeze(added),
+    removed: Object.freeze(removed),
+    changed: Object.freeze(changed),
+  });
+}
+
+/**
+ * ADR 0139 AC4. True only when nothing moved. A module whose consent is not
+ * current has not lost its data or its history - it has lost its permission to
+ * act until someone answers again.
+ */
+export function picoModuleConsentIsCurrent(drift: PicoModuleConsentDrift): boolean {
+  return drift.added.length === 0
+    && drift.removed.length === 0
+    && drift.changed.length === 0;
 }
 
 /**

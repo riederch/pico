@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted as the request contract for the action path. **AC1, AC2, AC3 and AC5
-are implemented** on 2026-08-10; AC4 and AC6 are open.
+Accepted as the request contract for the action path. **AC1, AC2, AC3 and AC5 are
+implemented** on 2026-08-10 and **AC4 is half implemented**; AC6 is open.
 
 First of three that replace ADR 0010's concept note with decisions:
 this one says what an action is and who may request one, ADR 0140 says
@@ -289,10 +289,23 @@ records. ADR 0134 makes correcting them free now and expensive later.
   rank check rather than from a local copy. The same call sits on the
   re-parse path over a single source, which is why an unknown class
   cannot survive a round trip either.
-- **AC4 - Risk is declared and pinned (open):** `PicoModuleEffect`
-  carries a risk class from the closed six; name, description and risk
-  are recorded together at activation; a change to any of the three in
-  an update requires a new decision instead of inheriting consent.
+- **AC4 - Risk is declared and pinned (half implemented):** the contract
+  half is done. `PicoModuleEffect` carries a `risk` from
+  `picoActionRiskClasses` - ADR 0010's six, moved beside the effect that
+  declares one, with `ActionRisk` in the barrel derived from it rather
+  than restated. Absent is refused rather than defaulted: a module that
+  never said what it does has not said the safest thing, it has said
+  nothing. `picoModuleConsentDrift` compares what a person consented to
+  against what a module now declares and returns *what* moved - added,
+  removed, changed - in the posture ADR 0127 M4 uses for deactivation,
+  because a person being asked again should be told what changed. A
+  changed description counts as much as a changed risk: it is the
+  sentence they read when they agreed.
+
+  **The durable half is not built.** Nothing yet records the consented
+  triples, so nothing yet compares them at boot. That needs a column on
+  `pico_module_activation` and a migration, which is core work under
+  ADR 0127 M5 and belongs with AC6.
 - **AC5 - Five facts, six names (implemented):** `actionEventTypes` holds
   six names for the five facts. `action.completed` left as a duplicate of
   `action_runner.action_completed`, and `action_history.event_created`

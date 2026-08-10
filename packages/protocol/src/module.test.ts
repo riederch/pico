@@ -3,6 +3,9 @@ import {
   bindPicoModuleEffects,
   orderPicoModuleManifests,
   parsePicoModuleManifest,
+  picoModuleConsentIsCurrent,
+  picoModuleConsentDrift,
+  picoActionRiskClasses,
   picoModuleIdentifiers,
   picoModuleActivationClosure,
   picoModuleDependents,
@@ -78,11 +81,11 @@ describe('ADR 0127 M1 module manifest vocabulary', () => {
     ['effects missing entirely', omit(wellFormed, 'effects'), 'invalid_pico_module_manifest'],
     ['effects that is not a list', { ...wellFormed, effects: {} }, 'invalid_pico_module_effects'],
     ['an effect with extra keys', { ...wellFormed, effects: [{ name: 'calendar.x', description: 'd', reversible: true }] }, 'invalid_pico_module_effect'],
-    ['an effect namespaced to another module', { ...wellFormed, effects: [{ name: 'shopping.buy', description: 'd' }] }, 'invalid_pico_module_effect_name'],
-    ['an effect with no namespace at all', { ...wellFormed, effects: [{ name: 'raise', description: 'd' }] }, 'invalid_pico_module_effect_name'],
-    ['an effect name in the wrong case', { ...wellFormed, effects: [{ name: 'calendar.RaiseEntry', description: 'd' }] }, 'invalid_pico_module_effect_name'],
-    ['an effect nobody described', { ...wellFormed, effects: [{ name: 'calendar.x', description: '  ' }] }, 'invalid_pico_module_effect_description'],
-    ['the same effect twice', { ...wellFormed, effects: [{ name: 'calendar.x', description: 'a' }, { name: 'calendar.x', description: 'b' }] }, 'duplicate_pico_module_effect'],
+    ['an effect namespaced to another module', { ...wellFormed, effects: [{ name: 'shopping.buy', description: 'd', risk: 'local_write' }] }, 'invalid_pico_module_effect_name'],
+    ['an effect with no namespace at all', { ...wellFormed, effects: [{ name: 'raise', description: 'd', risk: 'local_write' }] }, 'invalid_pico_module_effect_name'],
+    ['an effect name in the wrong case', { ...wellFormed, effects: [{ name: 'calendar.RaiseEntry', description: 'd', risk: 'local_write' }] }, 'invalid_pico_module_effect_name'],
+    ['an effect nobody described', { ...wellFormed, effects: [{ name: 'calendar.x', description: '  ', risk: 'local_write' }] }, 'invalid_pico_module_effect_description'],
+    ['the same effect twice', { ...wellFormed, effects: [{ name: 'calendar.x', description: 'a', risk: 'local_write' }, { name: 'calendar.x', description: 'b', risk: 'local_write' }] }, 'duplicate_pico_module_effect'],
   ])('refuses %s', (_name, value, reason) => {
     expect(() => parsePicoModuleManifest(value)).toThrow(reason);
   });
@@ -150,7 +153,7 @@ describe('ADR 0127 M2 dependency ordering', () => {
 });
 
 describe('ADR 0128 H3 effects are declared, and effect-bearing is derived', () => {
-  const withEffects = (...effects: Array<{ name: string; description: string }>) =>
+  const withEffects = (...effects: Array<{ name: string; description: string; risk: string }>) =>
     parsePicoModuleManifest({ ...wellFormed, effects });
 
   it('treats an empty list as a declaration that nothing changes', () => {
@@ -162,10 +165,10 @@ describe('ADR 0128 H3 effects are declared, and effect-bearing is derived', () =
 
   it('accepts effects namespaced to the declaring module', () => {
     const parsed = withEffects(
-      { name: 'calendar.raise-entry', description: 'Tells you an appointment is due.' },
+      { name: 'calendar.raise-entry', description: 'Tells you an appointment is due.', risk: 'local_write' },
     );
     expect(parsed.effects).toEqual([
-      { name: 'calendar.raise-entry', description: 'Tells you an appointment is due.' },
+      { name: 'calendar.raise-entry', description: 'Tells you an appointment is due.', risk: 'local_write' },
     ]);
     expect(picoModuleIsEffectBearing(parsed)).toBe(true);
   });
@@ -183,7 +186,7 @@ describe('ADR 0128 H3 effects are declared, and effect-bearing is derived', () =
 describe('ADR 0128 H3 the runtime supplies exactly what was declared', () => {
   const manifestWith = (...names: string[]) => parsePicoModuleManifest({
     ...wellFormed,
-    effects: names.map((name) => ({ name, description: `does ${name}` })),
+    effects: names.map((name) => ({ name, description: `does ${name}`, risk: 'local_write' })),
   });
 
   it('accepts an exact match, including the empty case', () => {
@@ -310,5 +313,81 @@ describe('ADR 0127 M3 activation', () => {
       .toEqual(['list']);
     expect(picoModuleActivationClosure({ manifests: shipped, identifier: 'calendar' as never }))
       .toEqual(['calendar']);
+  });
+});
+
+describe('ADR 0139 AC4 - risk is declared by the module and pinned by consent', () => {
+  const effect = (over: Partial<{ name: string; description: string; risk: string }> = {}) => ({
+    name: 'calendar.raise-entry',
+    description: 'Tells you an appointment is due.',
+    risk: 'local_write',
+    ...over,
+  });
+
+  it('carries a risk class from ADR 0010 six', () => {
+    expect(picoActionRiskClasses).toEqual([
+      'read_only',
+      'local_write',
+      'external_write',
+      'destructive',
+      'security_sensitive',
+      'privileged_system_action',
+    ]);
+  });
+
+  it('refuses an effect with no risk class', () => {
+    // Absent is not `read_only`. A module that never said what it does has not
+    // said the safest thing, it has said nothing.
+    const { risk, ...withoutRisk } = effect();
+    expect(() => parsePicoModuleManifest({ ...wellFormed, effects: [withoutRisk] }))
+      .toThrow('invalid_pico_module_effect');
+    expect(risk).toBe('local_write');
+  });
+
+  it('refuses a risk class outside the closed six', () => {
+    expect(() => parsePicoModuleManifest({
+      ...wellFormed,
+      effects: [effect({ risk: 'mostly_harmless' })],
+    })).toThrow('invalid_pico_module_effect_risk');
+  });
+
+  it('sees no drift when the declaration is what was consented to', () => {
+    const drift = picoModuleConsentDrift([effect()] as never, [effect()] as never);
+    expect(drift).toEqual({ added: [], removed: [], changed: [] });
+    expect(picoModuleConsentIsCurrent(drift)).toBe(true);
+  });
+
+  it('names a raised risk class rather than inheriting the consent', () => {
+    // The escalation this gate exists for: declare local_write today, ship
+    // destructive in an update, keep the answer a person already gave.
+    const drift = picoModuleConsentDrift(
+      [effect()] as never,
+      [effect({ risk: 'destructive' })] as never,
+    );
+    expect(drift.changed).toEqual(['calendar.raise-entry']);
+    expect(picoModuleConsentIsCurrent(drift)).toBe(false);
+  });
+
+  it('treats a changed description as a changed effect', () => {
+    // The description is the sentence a person read when they agreed, so
+    // changing it changes what was agreed to.
+    const drift = picoModuleConsentDrift(
+      [effect()] as never,
+      [effect({ description: 'Silently forwards it somewhere.' })] as never,
+    );
+    expect(drift.changed).toEqual(['calendar.raise-entry']);
+  });
+
+  it('separates a new effect from a withdrawn one', () => {
+    const drift = picoModuleConsentDrift(
+      [effect(), effect({ name: 'calendar.gone' })] as never,
+      [effect(), effect({ name: 'calendar.new' })] as never,
+    );
+    expect(drift).toEqual({ added: ['calendar.new'], removed: ['calendar.gone'], changed: [] });
+    expect(picoModuleConsentIsCurrent(drift)).toBe(false);
+  });
+
+  it('is current for a module that declares no effects at all', () => {
+    expect(picoModuleConsentIsCurrent(picoModuleConsentDrift([], []))).toBe(true);
   });
 });

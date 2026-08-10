@@ -1,4 +1,4 @@
-import type { PicoModuleActivationView } from './module.js';
+import type { PicoActionRisk, PicoModuleActivationView } from './module.js';
 import type { PicoStorageCondition } from './storage-pressure.js';
 export const foundationEventTypes = [
   'device.registered',
@@ -2172,13 +2172,11 @@ export type MemoryRetentionMode = typeof memoryRetentionModes[number];
 // exports these shapes for product planning only; it must not accept them on
 // the generic event write path until dedicated product APIs and policy gates
 // exist.
-export type ActionRisk =
-  | 'read_only'
-  | 'local_write'
-  | 'external_write'
-  | 'destructive'
-  | 'security_sensitive'
-  | 'privileged_system_action';
+// ADR 0139 AC4 moved the six to `./module.js`, beside the effect that declares
+// one. Derived rather than restated: a second hand-written union would be a
+// second place for the list to be wrong.
+export type ActionRisk = PicoActionRisk;
+export { picoActionRiskClasses } from './module.js';
 
 export type PicoRulesDecision = 'allow' | 'require_approval' | 'deny';
 
