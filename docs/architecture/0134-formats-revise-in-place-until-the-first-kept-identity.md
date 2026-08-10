@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted; F1 and F2 implemented, F3 open. The user established on
+Accepted; F1, F2 and F3 implemented. The user established on
 2026-08-09 that no Pico is in operation and proposed that formats stay at v1 until the first
 go-live. This ADR accepts that with one correction to the trigger, and
 turns it into the rule that governs both the Recovery Card cleanup and a
@@ -187,7 +187,7 @@ freeze, which is when it becomes dangerous.
   direction the comparison happens to fall. That is the cost this rule is
   about, and it is why a format revision has to remove the branches with
   the format rather than leave them to be discovered.
-- **F3 - Compatibility sweep (open):** every property the tree keeps "for
+- **F3 - Compatibility sweep (implemented):** every property the tree keeps "for
   compatibility" either goes or gets its population written down. A sweep
   on 2026-08-09 found four, and each ends with a removal or a named
   population, never with a shrug:
@@ -276,10 +276,33 @@ freeze, which is when it becomes dangerous.
     conclusion in its own words: dropping it is a release decision, not a
     cleanup. It stays, and it leaves this sweep.
 
-  Two sites marked "Additive, optional" in `packages/protocol/src/index.ts`
-  are unjudged: one is the ADR 0116 W1 origin, which is server-assigned at
-  intake and therefore probably not a legacy affordance at all. Read before
-  listing.
+  **Read on 2026-08-10, and neither is a legacy affordance.** Both were
+  measured rather than reasoned about, which is what the instruction to
+  read before listing was for.
+
+  `payloadPosture` is live: `app.ts` sets `reference_only` where ADR 0069
+  splits content from the event, and the client write path accepts one.
+  Optional means most events are `inline_operational` and do not say so -
+  a default, not a concession.
+
+  `origin` is optional because a client may not assert it, not because old
+  rows lack it. It is assigned at intake from the authenticated write
+  authority on the ADR 0116 W1 path; the seven server-synthesised events in
+  `app.ts` do not go through that path and carry none, which is W2 open
+  rather than history.
+
+  What *was* wrong was one clause in each comment. `payloadPosture`
+  promised that "existing events stay valid without change", and `origin`
+  offered "the row predates origin labeling" - a population that does not
+  exist and a row that is nowhere. Both clauses are gone, and both
+  comments now say what the optionality is actually for, so the next sweep
+  does not re-flag them.
+
+  **With that, F3 is complete.** Its four items ended as two removals
+  (migrations, and the founding record by moving to F2), one item F2
+  absorbed (Recovery Card v1), and one kept with its population written
+  down (`foundationAccessModeAlias`, which protects a container
+  environment variable rather than an artifact a Pico produced).
 
 ## Consequences
 

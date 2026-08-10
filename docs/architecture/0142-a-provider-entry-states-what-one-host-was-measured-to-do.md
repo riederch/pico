@@ -2,13 +2,15 @@
 
 ## Status
 
-**Draft.** Proposed as the registry-entry contract ADR 0049 named and ADR 0061
-reserved a placeholder shape for. Nothing is implemented; PE1-PE6 are open.
+Accepted as the provider entry contract for delegated model execution, filling
+what ADR 0049 named and ADR 0061 reserved a placeholder shape for. **PE1-PE6
+are open** and nothing is implemented.
 
-Written on 2026-08-10 after the first reachable local inference host was
-measured. Two questions are marked in "Questions this draft does not decide"
-and are deliberately left to the user, because both are boundary decisions
-rather than engineering ones.
+Accepted on 2026-08-10, the day the first reachable local inference host was
+measured; the numbers this ADR is built on are in "Context" together with the
+hardware they were taken on. Two questions stay open under "Questions this ADR
+does not decide" and are deliberately left to the user, because both are
+boundary decisions rather than engineering ones.
 
 ## Context
 
@@ -145,7 +147,7 @@ Pico works around by lowering a timeout.
 
 ### An endpoint that cannot be authenticated is not an entry
 
-Provider authentication is listed as missing in ADR 0049. This draft makes
+Provider authentication is listed as missing in ADR 0049. This ADR makes
 its absence disqualifying rather than pending: **an endpoint Pico reaches
 without proving who it is does not become a registry entry.**
 
@@ -244,7 +246,7 @@ first chance to change that, and it does not require the queue to exist.
 | The provider can reach a cloud model | Out of scope for the entry and governed by ADR 0048's consent decision. The measured host disables it structurally, which is a property worth recording. |
 | The model answers with prose where a schema was demanded | ADR 0117 X2's parse refuses it. The entry claims capability, never obedience (ADR 0050). |
 
-## Questions this draft does not decide
+## Questions this ADR does not decide
 
 **What provider class is a bare inference host on the home LAN?** ADR 0048
 lists five: the same device, a Pico Home in the same Home, a stronger Pico

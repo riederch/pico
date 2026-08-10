@@ -2201,12 +2201,19 @@ export interface PicoEvent<TPayload = unknown> {
   stream: string;
   payload: TPayload;
   signature?: string;
-  // Additive, optional (ADR 0014 / ADR 0067). Absent is treated as
-  // `inline_operational`; existing events stay valid without change.
+  // Optional by design, not for compatibility (ADR 0014 / ADR 0067).
+  // Judged under ADR 0134 F3 on 2026-08-10: absent means
+  // `inline_operational`, which is what most events are, and the write path
+  // sets `reference_only` where ADR 0069 splits content from the event. The
+  // earlier note here said existing events stay valid without change, which
+  // was a promise to a population that does not exist.
   payloadPosture?: PayloadPosture;
-  // Additive, optional (ADR 0116 W1). Server-assigned at intake from the
-  // authenticated write authority, never client-assertable. Absent means the
-  // row predates origin labeling or awaits a W2 class - never "trusted".
+  // Optional because a client may not assert it, not because old rows lack it
+  // (ADR 0116 W1). Server-assigned at intake from the authenticated write
+  // authority. Judged under ADR 0134 F3 on 2026-08-10: absent means a
+  // server-synthesised event awaiting a W2 class - seven of them exist today -
+  // and never "trusted". The earlier note also offered "predates origin
+  // labeling", which describes no row anywhere.
   origin?: PicoEventOriginClass;
 }
 
