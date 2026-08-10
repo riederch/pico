@@ -3,14 +3,16 @@
 ## Status
 
 Accepted as a structural constraint on where content Pico did not author
-enters it; nothing is implemented. The initiative and its scope were
+enters it. The initiative and its scope were
 chosen by the user on 2026-08-10, prompted by issue #4 and shaped by three
 of the user's own corrections during drafting - the Framework laptop
 expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. BR1-BR4 and BR6 are open; BR5 moved with the cost decision.
+than kind. **BR1 is implemented** in `@pico/protocol/supplier` on
+2026-08-10; BR2, BR3, BR4 and BR6 are open, and BR5 moved with the cost
+decision.
 
 Split on 2026-08-10 at the user's request: everything about **several**
 suppliers - identity, coverage, unions, effect targeting and the privacy
@@ -465,10 +467,17 @@ nowhere to go, which is the state ADR 0127 was written to end.
 
 ## Gates
 
-- **BR1 - The slot list (open):** the three shapes are enumerated in one
-  place in the core, and a supplier manifest declares which it fills. A
-  manifest naming an unlisted shape is a boundary error, not a review
-  comment. The list is closed; extending it is an ADR 0127 M5 lift.
+- **BR1 - The slot list (implemented):** `picoSupplierSlots` holds
+  observation, memory item and effect, and nothing else;
+  `parsePicoSupplierManifest` refuses an unlisted shape under
+  `pico_supplier_slot_not_listed` - a boundary error rather than a review
+  comment - and refuses a supplier that fills no slot at all, because
+  something filling none supplies nothing. Extending the list stays an
+  ADR 0127 M5 lift.
+
+  Events stayed off the list and a test says why: origin is
+  server-assigned at intake under ADR 0116 W1, so a supplier that could
+  write an event directly could claim its own origin.
 - **BR2 - The processing boundary (open):** supplier code - a bridge's
   client, a library's extractor - runs outside the core process behind a
   private socket with named request families, and no supplier package is

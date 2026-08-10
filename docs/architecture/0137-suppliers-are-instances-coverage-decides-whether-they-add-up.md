@@ -3,7 +3,9 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist; nothing is implemented. IN1-IN5 are open.
+kind coexist. **IN1 and IN2 are implemented** in
+`@pico/protocol/supplier` on 2026-08-10; IN3, IN4 and IN5 are open, and
+IN5's domain half landed with IN1.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than
@@ -209,15 +211,31 @@ a guess.
 
 ## Gates
 
-- **IN1 - An instance is named, and never by address (open):** the
-  identifier is stable, person-chosen and neither a path nor a URL;
-  derived items carry it together with the pin they were read at, so
-  provenance survives a move, a re-clone, a new address and a detach.
-  Instances are counted against a ceiling in the ADR 0119 Q5 idiom.
-- **IN2 - Coverage is declared (open):** every instance declares what it
-  covers; instances with the same coverage are alternatives and instances
-  with different coverage are unioned, decided by the declaration rather
-  than by the supplier kind. No instance joins across ADR 0136 slots.
+- **IN1 - An instance is named, and never by address (half
+  implemented):** `parsePicoSupplierManifest` refuses a path and an
+  address under their own errors rather than as a shape failure, because
+  the reason is not "wrong characters" but "that is not an identity".
+  Address is checked before path, since a URL contains a slash and
+  reporting it as a path would name the wrong reason for a correct
+  refusal - a test found that ordering. The manifest also carries exactly
+  one ADR 0075 domain, which is IN5's first half.
+
+  Open: derived items carrying the identifier and pin, and the ADR 0119
+  Q5 ceiling on attachments. Both need a store.
+- **IN2 - Coverage is declared (implemented):** a manifest without
+  coverage is refused, because undeclared coverage makes an empty answer
+  permanently ambiguous. `picoSupplierRelation` answers `alternatives`,
+  `additive` or `unrelated` from the declaration rather than from the
+  kind - two AIS providers over the same ships are alternatives, three
+  Home Assistants over three buildings are additive although all three
+  are bridges, and different slots are unrelated because nothing
+  substitutes across them (ADR 0118 O2).
+
+  Partial overlap answers `additive` deliberately: where one provider
+  knows strictly more, calling them interchangeable would licence
+  dropping the one that knows more. `picoSupplierCovers` answers before
+  anything is spent, so `out of scope` costs neither money nor
+  disclosure (ADR 0138).
 - **IN3 - Empty is typed (open):** `out of scope` exists beside not-found
   in the ADR 0118 O2 vocabulary, and a consumer can tell them apart
   without reading prose.

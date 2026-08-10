@@ -55,6 +55,10 @@
       "types": "./dist/spatial-recall.d.ts",
       "import": "./dist/spatial-recall.js"
     },
+    "./supplier": {
+      "types": "./dist/supplier.d.ts",
+      "import": "./dist/supplier.js"
+    },
     "./time-bound-entry": {
       "types": "./dist/time-bound-entry.d.ts",
       "import": "./dist/time-bound-entry.js"
