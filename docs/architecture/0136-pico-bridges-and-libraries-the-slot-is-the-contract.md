@@ -10,11 +10,13 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. BR1-BR6 are open.
+than kind. BR1-BR4 and BR6 are open; BR5 moved with the cost decision.
 
 Split on 2026-08-10 at the user's request: everything about **several**
 suppliers - identity, coverage, unions, effect targeting and the privacy
-domain an instance lands in - is ADR 0137. The two are one decision in two
+domain an instance lands in - is ADR 0137, and everything a supplier costs
+to use - credential, disclosure, condition states, consent to reach out -
+is ADR 0138. The two are one decision in two
 readable halves, applying ADR 0135's rule to an ADR rather than to a
 design system.
 
@@ -100,9 +102,8 @@ the five: Pico must be able to read it without ever pretending it owns it.
 
 Covers: what a slot is and what fills one; where a supplier's code runs;
 what arrives with foreign content; how freshness, certainty and cache age
-stay separate facts; whether a corpus is read or ingested; where a
-credential lives; what a metered dependency may cost before a person says
-yes; what detaching means; and the product terminology for all of it.
+stay separate facts; whether a corpus is read or ingested; what detaching
+means; and the product terminology for all of it.
 
 Does not cover:
 
@@ -123,7 +124,11 @@ Does not cover:
 - everything that follows from there being several suppliers, which is
   ADR 0137: what names an instance, how coverage decides unions against
   alternatives, what a partial or empty answer owes, and which Private
-  Space an instance attaches into.
+  Space an instance attaches into;
+- what using a supplier costs, which is ADR 0138: the credential, the
+  disclosure every outbound request spends whether or not it is billed,
+  the condition vocabulary, and the decisions that stand between an
+  installed supplier and one reaching out unasked.
 
 ## Decision
 
@@ -341,59 +346,13 @@ consequence of storing observations rather than a mechanism of its own -
 the same reasoning by which ADR 0129 refused to encrypt the buffer per
 row.
 
-### The credential belongs to Pico
+### What it costs to use a supplier
 
-A bridge credential is a decision a person makes about their own Pico, so
-ADR 0104 rules out a host configuration option. Issue #4's proposed
-`VESSELFINDER_API_KEY` environment variable would be **a third entry on
-that ADR's debt list** beside `memory_encryption` and
-`pico_foundation_token` - the outcome ADR 0127 explicitly refused for
-module activation and refuses again here.
-
-The credential is held under core custody, handed to the supplier process
-for use and never stored by it. ADR 0036 already reserved the field
-("secrets location") and already stated the rule that matters most once a
-model exists: connectors must not hand raw secrets to the language model,
-which may see a tool name, a schema and results.
-
-A git library has the same shape when its remote is private, and one
-addition: a deploy credential that can only read is the correct one, and
-Pico never pushes.
-
-### Cost is a state, and reaching out is off by default
-
-No existing ADR covers a metered dependency. ADR 0118 O2 has the
-vocabulary for typed unavailability and the rule against failover across
-provider classes; it has nothing about money.
-
-A bridge therefore declares its states as content, extending O2's
-vocabulary rather than returning an error string: **not configured**,
-**unreachable**, **rate-limited**, **budget exhausted**, **stale but
-present**, **partial**. Each is a fact a surface can show and a person can
-act on; a string is neither.
-
-**A bridge is off until a person turns it on**, inverted from module
-activation and for ADR 0129 SR6's reason. Activation says whether a
-feature exists; reaching outside says whether Pico may spend a person's
-money and disclose that they asked. Those are different decisions, and the
-second is recorded the way this codebase records durable decisions - a
-content-free event plus a projection over an authenticated surface.
-Background polling is a third decision and not implied by the second.
-
-A library needs none of this. It costs nothing and tells nobody - and a
-git fetch is the one moment it does reach a network, which is why fetching
-is a bridge-shaped decision even though reading is not.
-
-### An absent supplier is configured, not broken
-
-ADR 0127 already has the sentence: "a capability that is missing on
-purpose must not present as a capability that is broken." Pulling a card
-removes a port; it does not break the laptop.
-
-ADR 0118 O2's rule holds in the shape the hardware suggests: no supplier
-substitutes across slots. HDMI is not Ethernet. Whether two suppliers *on*
-one slot are alternatives or add up is ADR 0137's question, and the answer
-is their declared coverage.
+ADR 0138. Where the credential lives, that reaching outside spends money
+*and* disclosure so a free supplier is governed like a paid one, the
+closed vocabulary of condition states, and the three separate decisions
+between an installed supplier and one that reaches out unasked. A library
+is exempt from all of it except at the moment it fetches.
 
 ### The names
 
@@ -526,12 +485,6 @@ nowhere to go, which is the state ADR 0127 was written to end.
   a certainty tag are separate fields; a value cannot be constructed
   without its certainty; no supplier output reaches `known`. A library
   carries a version or commit in the measured-at position.
-- **BR5 - Credential, cost and consent (open):** the credential lives
-  under core custody and never in host configuration; the typed states are
-  a closed vocabulary extending ADR 0118 O2; reaching outside is a durable
-  per-Pico decision, off by default, recorded as a content-free event plus
-  projection, with background polling and library fetching separate
-  decisions again.
 - **BR6 - Libraries are pinned, read in place, and never held (open):** a
   frozen library verifies against a pinned hash and a tracked one against
   a commit id, failing loudly rather than substituting; nothing is
@@ -539,15 +492,18 @@ nowhere to go, which is the state ADR 0127 was written to end.
   deletes nothing while a domain shred reaches every derived item. A
   library may appear in an ADR 0118 floor family and a bridge may not, and
   the floor check enforces the asymmetry.
-ADR 0137 carries IN1-IN5 for the plural case, and the terminology rows
-for Pico Bridge and Pico Library land in ADR 0026 with BR6.
+**BR5 is deliberately absent.** It was credential, cost and consent, and
+it left with ADR 0138, where it is CO1-CO5. The number is not reused,
+because gate identifiers are cited in commits and in the status matrix and
+a reused one would silently point at the wrong obligation - the same
+posture ADR 0121 takes with its closed J3. ADR 0137 carries IN1-IN5 for
+the plural case, and the terminology rows for Pico Bridge and Pico Library
+land in ADR 0026 with BR6.
 
 ## Failure ledger
 
 | Situation | Posture |
 |---|---|
-| A bridge is unreachable | A typed state, shown as configured-but-unavailable. Never a floor degradation, because a bridge was never in the floor (BR5). |
-| A bridge's credits run out mid-answer | `budget exhausted` is content, not an error string, and the partial answer says which half it has (BR5). |
 | Cached data is served as current | Refused by construction: asked-at and measured-at are separate fields and a value cannot be built without its certainty (BR4). |
 | A supplier claims its content is Pico's own | It cannot express a class at all; the core assigns `external_content` at the threshold (BR3). |
 | A malformed PDF crashes the extractor | It crashes outside the core process, and the library reports a per-document failure rather than an outage (BR2). |
@@ -601,7 +557,8 @@ Negative and residual:
 ## Relationship to other ADRs
 
 - Split with ADR `0137`, which decides everything that follows from there
-  being several suppliers. Neither half is deployable alone.
+  being several suppliers, and ADR `0138`, which decides what using one
+  costs. No part is deployable alone.
 - Completes ADR `0036`: capability first, connector second, with the
   boundary that ADR left unstated, and consolidates its `provider_id`
   against ADR `0127`'s provider module kind.
@@ -644,4 +601,5 @@ Negative and residual:
 - [ADR 0133](0133-derive-from-the-source-until-the-medium-is-known.md)
 - [ADR 0134](0134-formats-revise-in-place-until-the-first-kept-identity.md)
 - [ADR 0137](0137-suppliers-are-instances-coverage-decides-whether-they-add-up.md)
+- [ADR 0138](0138-reaching-outside-costs-something-and-is-off-until-someone-says-so.md)
 </content>
