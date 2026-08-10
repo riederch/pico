@@ -62,7 +62,10 @@ export interface PicoActionPathInput {
   reachesOutside: boolean;
   reachPermitted: boolean;
   /** The wired effect implementations, by declared name (ADR 0128 H3). */
-  effects: Readonly<Record<string, (request: PicoActionRequest) => void>>;
+  effects: Readonly<Record<string, (
+    request: PicoActionRequest,
+    capabilities: PicoEffectCapabilities,
+  ) => void>>;
   /** Records one fact and returns its event id. */
   emit: (type: PicoActionFactType, payload: Record<string, unknown>) => string;
   /**
@@ -76,6 +79,40 @@ export interface PicoActionPathInput {
     startedAtMs: number;
     durationMs: number;
   };
+}
+
+/**
+ * ADR 0141 RN2 - what a `read_only` effect is handed.
+ *
+ * The runner cannot look inside an implementation and see a write, so this is
+ * not a detection. It is the construction ADR 0117 X1 uses for
+ * `picoReaderCapabilities` and ADR 0136 BR4 for `confirmedByPerson`: the
+ * capability is simply not there.
+ *
+ * Two layers, because they catch different mistakes. The **type** omits
+ * `write` for a read-only effect, so a call site that tries does not compile.
+ * The **runtime** still hands over a named thrower rather than nothing,
+ * because an absent property produces a `TypeError` whose message says
+ * nothing, and what gets recorded has to say what happened.
+ *
+ * And it is a **runner failure**, never an approval prompt. Asking would put
+ * the escalation in front of a person as a normal-looking question at exactly
+ * the moment the system has evidence that a declaration is false.
+ */
+export interface PicoEffectCapabilities {
+  /** Present for every risk class except `read_only`. */
+  write: (perform: () => void) => void;
+}
+
+export function picoEffectCapabilitiesFor(risk: string): PicoEffectCapabilities {
+  if (risk === 'read_only') {
+    return Object.freeze({
+      write: () => {
+        throw new Error('pico_effect_read_only_attempted_write');
+      },
+    });
+  }
+  return Object.freeze({ write: (perform: () => void) => { perform(); } });
 }
 
 export type PicoActionFactType =
@@ -212,7 +249,7 @@ export function runPicoAction(input: PicoActionPathInput): PicoActionPathOutcome
     if (run === undefined) {
       throw new Error('unsupplied_pico_module_effect');
     }
-    run(request);
+    run(request, picoEffectCapabilitiesFor(consented.risk));
   } catch (error) {
     succeeded = false;
     summary = error instanceof Error ? error.message : 'failed';
@@ -247,7 +284,10 @@ export function resolvePicoActionApproval(input: {
   anchorFloorMs?: number | null;
   request: PicoActionRequest;
   risk: string;
-  effects: Readonly<Record<string, (request: PicoActionRequest) => void>>;
+  effects: Readonly<Record<string, (
+    request: PicoActionRequest,
+    capabilities: PicoEffectCapabilities,
+  ) => void>>;
   emit: (type: PicoActionFactType, payload: Record<string, unknown>) => string;
 }): { outcome: PicoApprovalOutcome; ran: boolean; succeeded?: boolean } {
   const resolution = resolvePicoApproval({
@@ -282,7 +322,7 @@ export function resolvePicoActionApproval(input: {
     if (run === undefined) {
       throw new Error('unsupplied_pico_module_effect');
     }
-    run(input.request);
+    run(input.request, picoEffectCapabilitiesFor(input.risk));
   } catch (error) {
     succeeded = false;
     summary = error instanceof Error ? error.message : 'failed';

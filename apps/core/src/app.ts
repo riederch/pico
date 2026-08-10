@@ -125,7 +125,7 @@ import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitmen
 import { parsePicoPlace } from '@pico/protocol/place';
 import { picoDeclaredEffectNames, type PicoActionRequest } from '@pico/protocol/action';
 import { bindPicoModuleEffects } from '@pico/protocol/module';
-import { runPicoAction } from './action-path.js';
+import { runPicoAction, type PicoEffectCapabilities } from './action-path.js';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
@@ -1187,8 +1187,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * because an action was requested, decided and started, rather than because
    * a timer fired.
    */
-  const moduleEffects: Record<string, (request: PicoActionRequest) => void> = {
-    'calendar.raise-entry': (request) => {
+  const moduleEffects: Record<string, (
+    request: PicoActionRequest,
+    capabilities: PicoEffectCapabilities,
+  ) => void> = {
+    'calendar.raise-entry': (request, capabilities) => {
       const argument = (name: string) => request.arguments
         .find((entry) => entry.name === name)?.value as string;
       const event = factory.create({
@@ -1201,8 +1204,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           dueAt: argument('due_at'),
         },
       });
-      store.append(event);
-      broadcast(event);
+      // ADR 0141 RN2: the write goes through the capability the runner handed
+      // over, which a `read_only` effect would not have received.
+      capabilities.write(() => {
+        store.append(event);
+        broadcast(event);
+      });
     },
   };
   bindPicoModuleEffects({

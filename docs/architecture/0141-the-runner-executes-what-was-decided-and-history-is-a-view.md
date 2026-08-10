@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted as the execution and record contract for the action path. **RN3 and RN4 are
-implemented** on 2026-08-10; RN1, RN2, RN5 and RN6 are open.
+Accepted as the execution and record contract for the action path. **RN2, RN3 and RN4 are
+implemented** on 2026-08-10; RN1, RN5 and RN6 are open.
 
 Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
@@ -227,9 +227,29 @@ answered long after the situation that justified it has gone.
   request against the recorded decision, supplies no default, resolves
   no ambiguity, never consults the rules, and fails rather than adapting;
   a changed request is a new request.
-- **RN2 - No escalation (open):** an effect pinned `read_only` that
-  attempts a write is a runner failure recorded as such, never an
-  approval prompt.
+- **RN2 - No escalation (implemented):** not a detection, because the
+  runner cannot look inside an implementation and see a write. The
+  capability is simply not there - the construction ADR 0117 X1 uses for
+  `picoReaderCapabilities` and ADR 0136 BR4 for `confirmedByPerson`, used
+  a third time because it is the only kind of guard that does not depend
+  on the guarded thing behaving.
+
+  `picoEffectCapabilitiesFor` derives what an effect is handed from its
+  AC4-pinned risk class, and an effect writes only through that. The
+  calendar's raise-entry writes its due event through the capability
+  rather than reaching for the store, which is what makes the rule real
+  rather than declarative.
+
+  Two layers, catching different mistakes: the type omits `write` for a
+  read-only effect so a call site that tries does not compile, and the
+  runtime hands over a **named thrower** rather than nothing, because an
+  absent property produces a `TypeError` whose message says nothing and
+  what gets recorded has to say what happened.
+
+  A test asserts the *absence* of the approval fact, not only the presence
+  of the failure. Asking would put the escalation in front of a person as
+  a normal-looking question at exactly the moment the system has evidence
+  that a declaration is false.
 - **RN3 - The statement is the fields (implemented):**
   `buildPicoApprovalStatement` composes `sentence` from the request and
   the **consented** effect - not the currently declared one, so an update

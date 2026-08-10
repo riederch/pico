@@ -3,6 +3,7 @@ import {
   resolvePicoActionApproval,
   runPicoAction,
   type PicoActionFactType,
+  type PicoEffectCapabilities,
 } from './action-path.js';
 
 const consented = [{
@@ -259,5 +260,66 @@ describe('ADR 0141 RN4 - approval is presence-bound and expires', () => {
   it('refuses an answer from another session', () => {
     expect(() => resolve({ presenceSessionId: 'session-b' }))
       .toThrow('pico_approval_wrong_presence_session');
+  });
+});
+
+describe('ADR 0141 RN2 - read-only never becomes a write', () => {
+  it('hands a writing capability to an effect whose pinned class permits it', () => {
+    const wrote: string[] = [];
+    const { outcome } = harness({
+      effects: {
+        'calendar.raise-entry': (_request: unknown, capabilities: PicoEffectCapabilities) => {
+          capabilities.write(() => { wrote.push('event'); });
+        },
+      },
+    });
+    expect(outcome).toMatchObject({ ran: true, succeeded: true });
+    expect(wrote).toEqual(['event']);
+  });
+
+  it('records a runner failure when a read_only effect attempts a write', () => {
+    // Not a detection: the capability is simply not there, in the
+    // construction ADR 0117 X1 uses for picoReaderCapabilities.
+    const { facts, outcome } = harness({
+      consentedEffects: [{ ...consented[0], risk: 'read_only' }],
+      effects: {
+        'calendar.raise-entry': (_request: unknown, capabilities: PicoEffectCapabilities) => {
+          capabilities.write(() => { throw new Error('should never run'); });
+        },
+      },
+    });
+    expect(outcome).toMatchObject({ decision: 'allow', ran: true, succeeded: false });
+    expect(facts[3]?.payload).toMatchObject({
+      success: false,
+      summary: 'pico_effect_read_only_attempted_write',
+    });
+  });
+
+  it('never turns the escalation into an approval prompt', () => {
+    // Asking would put it in front of a person as a normal-looking question
+    // at exactly the moment a declaration has been shown false.
+    const { facts } = harness({
+      consentedEffects: [{ ...consented[0], risk: 'read_only' }],
+      effects: {
+        'calendar.raise-entry': (_request: unknown, capabilities: PicoEffectCapabilities) => {
+          capabilities.write(() => {});
+        },
+      },
+    });
+    expect(facts.map((f) => f.type)).not.toContain('approval.requested');
+    expect(facts.map((f) => f.type)).toEqual([
+      'action.requested',
+      'pico_rules.decision_created',
+      'action_runner.action_started',
+      'action_runner.action_completed',
+    ]);
+  });
+
+  it('lets a read_only effect that reads nothing but reads finish cleanly', () => {
+    const { outcome } = harness({
+      consentedEffects: [{ ...consented[0], risk: 'read_only' }],
+      effects: { 'calendar.raise-entry': () => { /* reads only */ } },
+    });
+    expect(outcome).toMatchObject({ ran: true, succeeded: true });
   });
 });
