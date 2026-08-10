@@ -259,7 +259,7 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   for cadence and re-arming; a real spawned-process proof for the Linux
   notify-send adapter; the boundary check wired into `release:verify`.
 - **C2 - Shell wiring and real-process alarm (implemented):**
-  `apps/companion-shell` pins Electron 43.2.0 and hosts C1 in the main
+  `apps/companion-shell` pins Electron 43.3.0 and hosts C1 in the main
   process over the existing profile, Vault-daemon socket and Link client.
   Tray, critical desktop notifications, resume and false-to-true network
   regain are adapters around `checkNow`; the default state owns no window,
@@ -349,9 +349,36 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   bytes. Its 136,916,992 total private bytes included 81,616,896 clean bytes;
   this evidence is why clean pages remain visible but do not decide the v2
   private gate. Static
-  upstream evidence pins Electron 43.2.0 as the reviewed latest stable
-  version and expires at the next scheduled stable-major date, so stale
-  currency evidence blocks `release:verify`.
+  upstream evidence pins the reviewed latest stable version and expires at
+  the next scheduled stable-major date, so stale currency evidence blocks
+  `release:verify`.
+
+  **Currency step on 2026-08-10: 43.2.0 to 43.3.0**, with C3 re-proved
+  rather than assumed. The check demands `pin === latestStableVersion`, not
+  merely a pin inside the supported window, and 43.3.0 shipped on
+  2026-08-04 - the same day the evidence was last reviewed, which is how
+  the file came to name a version that upstream had already replaced.
+
+  The re-proof is a comparison in the same probe mode on the same host, and
+  the answer is that a patch-level Chromium refresh costs nothing worth
+  reading: PSS moved from 240,092,160 to 240,180,224 bytes, 88,064 bytes,
+  and `Private_Dirty + Private_Hugetlb` from 105,250,816 to 105,680,896,
+  430,080 bytes and still inside its own budget. The Debian lifecycle
+  passed install, upgrade, remove and purge with person data preserved,
+  core dump limits stayed at 0/0, and the process count stayed at seven.
+  The PSS assertion failed exactly as the runbook predicts for a local
+  `user_namespace` run - 15,180,224 bytes over, inside the documented
+  ~17.5 MB mode difference - which is the artefact described above and not
+  a property of the new version.
+
+  **Electron 44 could not be taken and the reason is not a judgement
+  call.** On 2026-08-10 the npm registry carries `latest` 43.3.0 and
+  `beta` 44.0.0-beta.2; there is no stable 44 to pin, and pinning a beta
+  would break the stated policy. The 2026-08-25 date is confirmed rather
+  than assumed: 41.0.0 shipped 2026-03-11, 42.0.0 on 2026-05-06 and 43.0.0
+  on 2026-06-30, an eight-week cadence that lands 44.0.0 exactly there. The
+  work that reopens C3 for real is still ahead, and it is now a one-major
+  jump from a current pin rather than from a stale one.
 - **C4 - Further desktop platforms (open):** Windows and macOS from the
   same codebase and discipline.
 
