@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   listAppliedMigrations,
+  picoModuleEffectConsentMigrationId,
   picoSchemaBaselineMigrationId,
   runMigrations,
 } from './migrations.js';
@@ -220,6 +221,10 @@ describe('restoreSqliteBackup', () => {
     expect(listAppliedMigrations(restored)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoModuleEffectConsentMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

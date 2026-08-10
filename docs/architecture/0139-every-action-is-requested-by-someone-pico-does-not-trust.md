@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted as the request contract for the action path. **AC1, AC2, AC3 and AC5 are
-implemented** on 2026-08-10 and **AC4 is half implemented**; AC6 is open.
+Accepted as the request contract for the action path. **AC1, AC2, AC3, AC4 and AC5
+are implemented** on 2026-08-10; AC6 is open, and has no subject until a
+module declares an effect.
 
 First of three that replace ADR 0010's concept note with decisions:
 this one says what an action is and who may request one, ADR 0140 says
@@ -302,10 +303,30 @@ records. ADR 0134 makes correcting them free now and expensive later.
   changed description counts as much as a changed risk: it is the
   sentence they read when they agreed.
 
-  **The durable half is not built.** Nothing yet records the consented
-  triples, so nothing yet compares them at boot. That needs a column on
-  `pico_module_activation` and a migration, which is core work under
-  ADR 0127 M5 and belongs with AC6.
+  **The durable half landed the same day.** Migration
+  `0002_pico_module_effect_consent` gives the triples their own table, and
+  `setPicoModuleActivation` records them in the same transaction as the
+  activation - the `effects` field is **required** rather than optional,
+  which is the mechanism rather than a detail: an optional field is one a
+  caller forgets, and what would be forgotten is the record of what was
+  agreed. `picoModulesAwaitingConsent` compares declared against consented
+  through `picoModuleConsentDrift` and returns what moved.
+
+  Two asymmetries are deliberate and tested. Switching a module **off**
+  leaves its consent standing, because ADR 0127 M3 says deactivation stops
+  behaviour and re-enabling restores everything - dropping it would make
+  off-and-on-again an interrogation. And a module nobody ever activated
+  reads as *current* rather than drifted: nothing was lost, nothing has
+  been asked yet.
+
+  ADR 0127's five admission questions are answered at the migration rather
+  than skipped. The crypto shred deliberately does not reach this table -
+  consent is a decision about a module, not data about a life, and a
+  domain shred that erased it would silently re-grant what nobody
+  re-granted. It needs no ADR 0119 Q5 ceiling for the reason
+  `pico_module_activation` needs none: bounded by the closed module list
+  times what those shipped modules declare, neither of which a writer can
+  grow at runtime.
 - **AC5 - Five facts, six names (implemented):** `actionEventTypes` holds
   six names for the five facts. `action.completed` left as a duplicate of
   `action_runner.action_completed`, and `action_history.event_created`

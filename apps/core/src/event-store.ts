@@ -2,7 +2,11 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import {
+  picoModuleConsentDrift,
+  picoModuleConsentIsCurrent,
   picoModuleIdentifiers,
+  type PicoModuleConsentDrift,
+  type PicoModuleEffect,
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
 import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
@@ -6415,7 +6419,20 @@ export class EventStore {
    * Home that never expressed a preference and leave alone one that did.
    */
   public setPicoModuleActivation(input: {
-    changes: ReadonlyArray<{ identifier: PicoModuleIdentifier; active: boolean }>;
+    changes: ReadonlyArray<{
+      identifier: PicoModuleIdentifier;
+      active: boolean;
+      /**
+       * ADR 0139 AC4. What a person is consenting to as this is switched on.
+       *
+       * Required rather than optional, and that is the whole mechanism: an
+       * optional field is one a caller forgets, and the thing forgotten would
+       * be the record of what was agreed. Every shipped module declares an
+       * empty list today, so supplying it costs nothing and stops costing
+       * nothing the moment a module declares an effect.
+       */
+      effects: readonly PicoModuleEffect[];
+    }>;
     decidedAt: string;
   }): void {
     this.ensureOpen();
@@ -6424,12 +6441,92 @@ export class EventStore {
       VALUES (?, ?, ?)
       ON CONFLICT(identifier) DO UPDATE SET active = excluded.active, decided_at = excluded.decided_at
     `);
+    const clearConsent = this.db
+      .prepare('DELETE FROM pico_module_effect_consent WHERE identifier = ?');
+    const recordConsent = this.db.prepare(`
+      INSERT INTO pico_module_effect_consent
+        (identifier, effect_name, description, risk, consented_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
     const apply = this.db.transaction(() => {
       for (const change of input.changes) {
         statement.run(change.identifier, change.active ? 1 : 0, input.decidedAt);
+        if (!change.active) {
+          // ADR 0127 M3: deactivation stops behaviour, never custody, and
+          // re-enabling restores everything. Dropping the consent here would
+          // make switching a module off and on again an interrogation, and
+          // would lose the record of what was agreed while it was off.
+          continue;
+        }
+        clearConsent.run(change.identifier);
+        for (const effect of change.effects) {
+          recordConsent.run(
+            change.identifier,
+            effect.name,
+            effect.description,
+            effect.risk,
+            input.decidedAt,
+          );
+        }
       }
     });
     apply();
+  }
+
+  /**
+   * ADR 0139 AC4. The effects a person consented to for one module, as they
+   * read at the moment they agreed.
+   */
+  public picoModuleEffectConsent(
+    identifier: PicoModuleIdentifier,
+  ): readonly PicoModuleEffect[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT effect_name AS name, description, risk
+        FROM pico_module_effect_consent
+        WHERE identifier = ?
+        ORDER BY effect_name
+      `)
+      .all(identifier) as Array<{ name: string; description: string; risk: string }>;
+    return Object.freeze(rows.map((row) => Object.freeze({
+      name: row.name,
+      description: row.description,
+      risk: row.risk,
+    })) as PicoModuleEffect[]);
+  }
+
+  /**
+   * ADR 0139 AC4. Which modules now declare something other than what was
+   * agreed to, and what moved.
+   *
+   * Asked at boot and before an effect is requested. Returns the drift rather
+   * than a boolean, in ADR 0127 M4's posture: a person being asked again is
+   * told what changed, not merely that something did.
+   *
+   * A module that was never activated has no consent rows and no declared
+   * effects to compare against until someone switches it on, which is why the
+   * empty case reads as current rather than as drifted - it is not that
+   * consent was lost, it is that nothing has been asked yet.
+   */
+  public picoModulesAwaitingConsent(
+    manifests: ReadonlyArray<{
+      identifier: PicoModuleIdentifier;
+      effects: readonly PicoModuleEffect[];
+    }>,
+  ): ReadonlyArray<{ identifier: PicoModuleIdentifier; drift: PicoModuleConsentDrift }> {
+    this.ensureOpen();
+    const awaiting: Array<{ identifier: PicoModuleIdentifier; drift: PicoModuleConsentDrift }> = [];
+    for (const manifest of manifests) {
+      const drift = picoModuleConsentDrift(
+        this.picoModuleEffectConsent(manifest.identifier),
+        manifest.effects,
+      );
+      if (!picoModuleConsentIsCurrent(drift)) {
+        awaiting.push({ identifier: manifest.identifier, drift });
+      }
+    }
+    return Object.freeze(awaiting);
   }
 
   /**

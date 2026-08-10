@@ -688,3 +688,141 @@ describe('ADR 0129 SR6 capture is a second decision, and it starts off', () => {
     }
   });
 });
+
+/**
+ * ADR 0139 AC4. The consent record beside the activation decision.
+ *
+ * A module declares its own risk class because only it knows what its effects
+ * do. Pinning name, description and risk at the moment a person agrees is what
+ * stops that from being a privilege escalation an update can take.
+ */
+describe('ADR 0139 AC4 module effect consent', () => {
+  const effect = (over: Partial<{ name: string; description: string; risk: string }> = {}) => ({
+    name: 'calendar.raise-entry',
+    description: 'Tells you an appointment is due.',
+    risk: 'local_write' as const,
+    ...over,
+  });
+
+  function openStore() {
+    return new EventStore(createDatabasePath());
+  }
+
+  it('records what was consented to when a module is switched on', () => {
+    const store = openStore();
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+
+    expect(store.picoModuleEffectConsent('calendar')).toEqual([effect()]);
+    store.close();
+  });
+
+  it('sees no drift while the declaration matches what was agreed to', () => {
+    const store = openStore();
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+
+    expect(store.picoModulesAwaitingConsent([
+      { identifier: 'calendar', effects: [effect()] as never },
+    ])).toEqual([]);
+    store.close();
+  });
+
+  it('names a raised risk class instead of inheriting the answer', () => {
+    // The escalation this exists for: declare local_write today, ship
+    // destructive in an update, keep the consent a person already gave.
+    const store = openStore();
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+
+    expect(store.picoModulesAwaitingConsent([
+      { identifier: 'calendar', effects: [effect({ risk: 'destructive' })] as never },
+    ])).toEqual([
+      { identifier: 'calendar', drift: { added: [], removed: [], changed: ['calendar.raise-entry'] } },
+    ]);
+    store.close();
+  });
+
+  it('treats a rewritten description as a changed effect', () => {
+    // It is the sentence a person read when they agreed, and ADR 0141 RN3
+    // renders the consented one in the approval statement for that reason.
+    const store = openStore();
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+
+    const awaiting = store.picoModulesAwaitingConsent([
+      { identifier: 'calendar', effects: [effect({ description: 'Also tells other people.' })] as never },
+    ]);
+    expect(awaiting[0]?.drift.changed).toEqual(['calendar.raise-entry']);
+    store.close();
+  });
+
+  it('keeps consent while a module is switched off, so re-enabling is not an interrogation', () => {
+    // ADR 0127 M3: deactivation stops behaviour, never custody, and
+    // re-enabling restores everything.
+    const store = openStore();
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T11:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: false, effects: [] }],
+    });
+
+    expect(store.picoModuleEffectConsent('calendar')).toEqual([effect()]);
+    store.close();
+  });
+
+  it('replaces the whole set on re-consent, so a withdrawn effect goes', () => {
+    const store = openStore();
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{
+        identifier: 'calendar',
+        active: true,
+        effects: [effect(), effect({ name: 'calendar.gone' })] as never,
+      }],
+    });
+    store.setPicoModuleActivation({
+      decidedAt: '2026-08-10T12:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+
+    expect(store.picoModuleEffectConsent('calendar').map((e) => e.name))
+      .toEqual(['calendar.raise-entry']);
+    store.close();
+  });
+
+  it('reads a module nobody has activated as current rather than drifted', () => {
+    // Nothing was lost; nothing has been asked yet. A module declaring no
+    // effects - which every shipped module does today - is the same case.
+    const store = openStore();
+    expect(store.picoModulesAwaitingConsent([
+      { identifier: 'calendar', effects: [] },
+    ])).toEqual([]);
+    store.close();
+  });
+
+  it('survives a restart, because consent is a durable decision', () => {
+    const path = createDatabasePath();
+    const first = new EventStore(path);
+    first.setPicoModuleActivation({
+      decidedAt: '2026-08-10T10:00:00.000Z',
+      changes: [{ identifier: 'calendar', active: true, effects: [effect()] as never }],
+    });
+    first.close();
+
+    const second = new EventStore(path);
+    expect(second.picoModuleEffectConsent('calendar')).toEqual([effect()]);
+    second.close();
+  });
+});

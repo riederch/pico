@@ -7,6 +7,7 @@ import {
   describeMigrationState,
   listAppliedMigrations,
   listMigrationAuditRecords,
+  picoModuleEffectConsentMigrationId,
   picoSchemaBaselineMigrationId,
   runMigrations,
 } from './migrations.js';
@@ -34,6 +35,10 @@ describe('database migrations', () => {
       pendingMigrations: [
         {
           id: picoSchemaBaselineMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: picoModuleEffectConsentMigrationId,
           requiresBackup: false,
         },
       ],
@@ -80,6 +85,10 @@ describe('database migrations', () => {
     expect(listAppliedMigrations(db)).toEqual([
       {
         id: picoSchemaBaselineMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoModuleEffectConsentMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -187,12 +196,13 @@ describe('database migrations', () => {
     expect(describeMigrationState(db)).toEqual({
       appliedMigrationIds: [
         picoSchemaBaselineMigrationId,
+        picoModuleEffectConsentMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -266,7 +276,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(1);
+    expect(listAppliedMigrations(db)).toHaveLength(2);
 
     db.close();
   });
@@ -278,6 +288,7 @@ describe('database migrations', () => {
 
     expect(result.appliedMigrationIds).toEqual([
       picoSchemaBaselineMigrationId,
+      picoModuleEffectConsentMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -287,6 +298,7 @@ describe('database migrations', () => {
         status: 'applied',
         migrationIds: [
           picoSchemaBaselineMigrationId,
+          picoModuleEffectConsentMigrationId,
         ],
       },
     ]);
@@ -348,6 +360,7 @@ describe('database migrations', () => {
         status: 'failed',
         migrationIds: [
           picoSchemaBaselineMigrationId,
+          picoModuleEffectConsentMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

@@ -1899,8 +1899,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     store.setPicoModuleActivation({
       decidedAt,
       changes: [
-        ...decision.enabled.map((entry) => ({ identifier: entry, active: true })),
-        ...decision.disabled.map((entry) => ({ identifier: entry, active: false })),
+        // ADR 0139 AC4: what is switched on carries what is being consented
+        // to, recorded in the same transaction so the two cannot part.
+        ...decision.enabled.map((entry) => ({
+          identifier: entry,
+          active: true,
+          effects: shippedModuleManifests
+            .find((manifest) => manifest.identifier === entry)?.effects ?? [],
+        })),
+        ...decision.disabled.map((entry) => ({
+          identifier: entry,
+          active: false,
+          effects: [],
+        })),
       ],
     });
 

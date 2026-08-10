@@ -57,6 +57,9 @@ export interface MigrationDefinition {
 
 export const picoSchemaBaselineMigrationId = '0001_initial_schema' as const;
 
+/** ADR 0139 AC4. The consent record beside the activation decision. */
+export const picoModuleEffectConsentMigrationId = '0002_pico_module_effect_consent' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -745,6 +748,50 @@ const migrations: readonly MigrationDefinition[] = [
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(1, 'unclaimed', null, null, now, now, null, null, null);
+    },
+  },
+  {
+    /**
+     * ADR 0139 AC4. What a person consented to, kept beside what a module now
+     * declares so the two can disagree out loud.
+     *
+     * A module declares its own risk class because only it knows what its
+     * effects do, and that would hand every module a privilege escalation -
+     * declare `local_write` today, ship `destructive` in an update, inherit
+     * the answer a person already gave. Recording name, description and risk
+     * at the moment of consent turns that silent change into a question.
+     *
+     * The description is stored with the rest because it is the sentence a
+     * person read when they agreed. Changing it changes what was agreed to,
+     * and ADR 0141 RN3 renders the *consented* description in an approval
+     * statement for the same reason.
+     *
+     * **ADR 0127's five admission questions, answered rather than skipped.**
+     * This is not a memory item and holds no person content, so the crypto
+     * shred does not reach it and must not: consent is a decision about a
+     * module, not data about a life, and a domain shred that erased it would
+     * silently re-grant what nobody re-granted. It rides ordinary backup and
+     * restore with the rest of the schema. Boot reconciliation is the drift
+     * comparison itself. It needs no ADR 0119 Q5 ceiling for the reason
+     * `pico_module_activation` needs none - it is bounded by the closed module
+     * list times the effects those shipped modules declare, neither of which a
+     * writer can grow at runtime. And the ADR 0119 Q3 byte digest covers it
+     * already, because that digest hashes the file.
+     */
+    id: picoModuleEffectConsentMigrationId,
+    // Additive: a new table cannot lose a row that already exists.
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_module_effect_consent (
+          identifier TEXT NOT NULL,
+          effect_name TEXT NOT NULL,
+          description TEXT NOT NULL,
+          risk TEXT NOT NULL,
+          consented_at TEXT NOT NULL,
+          PRIMARY KEY (identifier, effect_name)
+        );
+      `);
     },
   },
 ];
