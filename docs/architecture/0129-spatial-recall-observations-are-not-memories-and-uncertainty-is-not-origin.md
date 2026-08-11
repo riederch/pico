@@ -7,6 +7,20 @@ the use case arrived as issue #3 from the user on 2026-08-07. SR1-SR6 are implem
 would fill the capture port, which is a product decision rather than a
 gate.
 
+Status note, 2026-08-11: ADR 0145 adds a third observation kind for a
+measured quantity and this text keeps its wording under ADR 0128's record
+rule. SR2's store shape is unchanged and deliberately so - "a domain, a
+kind, an instant and a payload, and nothing else" is the sentence that ADR
+reasons from, so the new kind's value is typed in the protocol rather than
+in columns. What the addition shows is that **the second store kind was
+never spatial**, the same way BR4 found the three confidence levels sitting
+under a spatial name while their own comment said they were independent of
+where a value came from. The buffer, its forty-eight-hour window, its
+ADR 0119 Q5 ceiling and its shred cascade are general; only this ADR's two
+kinds are about a device and a person. No lift follows from that today -
+the store is the core's either way - and it is recorded so the next reader
+does not conclude that a level reading is a spatial fact.
+
 ## Context
 
 The issue asks for one thing a person can check: *"Where did I park my

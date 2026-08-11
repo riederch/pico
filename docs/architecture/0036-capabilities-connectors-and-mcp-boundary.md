@@ -4,6 +4,50 @@
 
 Accepted as a capability and integration boundary concept.
 
+Status note, 2026-08-11: ADR 0136 and ADR 0144 turn the connector half of
+this note into decisions, and this text keeps its wording under ADR 0128's
+record rule. What survives unchanged is the substance this ADR is cited
+for: the core rule that MCP is a tool connection method and not Pico
+authority, capability before connector, the same capability having several
+providers, the refusal to make MCP the only tool interface, and the rule
+that connectors never hand raw secrets to a model.
+
+Four illustrations no longer hold.
+
+The **direct tool connection** shape - `Pico Assistant -> MCP server ->
+target system` - has no process boundary in it, and ADR 0136 BR2 requires
+one: supplier code runs outside the core process wherever Pico authored
+neither the parser nor the bytes. "A Pico Assistant may act as an MCP
+client" is therefore no longer the placement. An MCP client is a bridge's
+implementation and, under ADR 0144, the lower half of a supplier stack
+inside one depot.
+
+The **connector registry** here carries "available capabilities", which
+would make a connector's advertised list the set of things Pico may do.
+Since ADR 0128 H3 an effect is declared by the module that bears it, and
+since ADR 0139 AC1 the effect list is the manifest list, refused at the
+request contract before any decision is asked for. A connector describes
+itself; it does not extend the catalog.
+
+The **capability metadata** table lists `risk_class`,
+`confirmation_default`, `audit_requirement` and `privacy_domain_access` as
+properties travelling with a capability. Those are now decided elsewhere
+and by parties that are not the connector: risk and outcome by ADR 0140
+from a closed typed input, approval and its statement by ADR 0141 RN3/RN4,
+history as a view over log plus chain, and the privacy domain by ADR 0137
+IN5 as a person's judgement with no safe default.
+
+The **model reads the tool surface** framing - "the model may see a tool
+name, schema, scoped descriptions and returned results" - is narrower than
+the path now allows. ADR 0116 W2 labels foreign content at the threshold
+and ADR 0117 splits the planner from a quarantined reader, so the acting
+model does not receive a description written on the far side of a network.
+ADR 0140 states the same refusal for the decision layer: a closed typed
+input, never prose.
+
+The non-goals stand, including "an MCP client", which nothing in the tree
+implements.
+
 ## Context
 
 Pico will need to use tools from many sources: Home Assistant, MQTT, local files, databases, cloud APIs, Meshtastic adapters, vendor systems, local scripts, and future domain-specific connectors.
