@@ -39,6 +39,25 @@ export const picoSupplierKinds = ['bridge', 'library'] as const;
 export type PicoSupplierKind = typeof picoSupplierKinds[number];
 
 /**
+ * ADR 0136 BR6. The asymmetry the floor draws between the two kinds.
+ *
+ * A library answers from local disk, so an operation over it can belong to an
+ * ADR 0118 floor family - `local_recall` already promises "finding and reading
+ * what is already on the device", and a working copy is on the device. A bridge
+ * needs the network per query and can never be on the floor, whatever it
+ * declares and however reliable its provider happens to be.
+ *
+ * This is a categorical test rather than a matter of degree, which is why it is
+ * a function of the kind alone and takes nothing else. A bridge that answered
+ * from a cache would still be a bridge: the floor promises the *operation*, and
+ * an operation that needs a network on the query after next does not become a
+ * floor operation by having succeeded once.
+ */
+export function picoSupplierMayBeOnOfflineFloor(kind: PicoSupplierKind): boolean {
+  return kind === 'library';
+}
+
+/**
  * ADR 0137 IN1. A person-chosen token. Working copies move, are re-cloned and
  * change host; a camper van's Home Assistant changes IP at every campsite. An
  * identifier that was a path or a URL would lose its meaning to a `mv` or a

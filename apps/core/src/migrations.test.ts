@@ -7,6 +7,7 @@ import {
   describeMigrationState,
   listAppliedMigrations,
   listMigrationAuditRecords,
+  picoLibraryDerivationMigrationId,
   picoModuleEffectConsentMigrationId,
   picoRuleDecisionMigrationId,
   picoSchemaBaselineMigrationId,
@@ -54,6 +55,10 @@ describe('database migrations', () => {
         },
         {
           id: picoSupplierCredentialScopeMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: picoLibraryDerivationMigrationId,
           requiresBackup: false,
         },
       ],
@@ -116,6 +121,10 @@ describe('database migrations', () => {
       },
       {
         id: picoSupplierCredentialScopeMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoLibraryDerivationMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -227,12 +236,13 @@ describe('database migrations', () => {
         picoRuleDecisionMigrationId,
         picoSupplierAttachmentMigrationId,
         picoSupplierCredentialScopeMigrationId,
+        picoLibraryDerivationMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -306,7 +316,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(5);
+    expect(listAppliedMigrations(db)).toHaveLength(6);
 
     db.close();
   });
@@ -322,6 +332,7 @@ describe('database migrations', () => {
       picoRuleDecisionMigrationId,
       picoSupplierAttachmentMigrationId,
       picoSupplierCredentialScopeMigrationId,
+      picoLibraryDerivationMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -335,6 +346,7 @@ describe('database migrations', () => {
           picoRuleDecisionMigrationId,
           picoSupplierAttachmentMigrationId,
           picoSupplierCredentialScopeMigrationId,
+          picoLibraryDerivationMigrationId,
         ],
       },
     ]);
@@ -400,6 +412,7 @@ describe('database migrations', () => {
           picoRuleDecisionMigrationId,
           picoSupplierAttachmentMigrationId,
           picoSupplierCredentialScopeMigrationId,
+          picoLibraryDerivationMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

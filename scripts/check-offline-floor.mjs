@@ -259,6 +259,29 @@ for (const [family, declaration] of Object.entries(manifest.families)) {
 
   const entries = [];
   for (const module of declaration.modules) {
+    if (module === 'bridges' || module.startsWith('bridges/')) {
+      // ADR 0136 BR6. The asymmetry between the two supplier kinds, at the one
+      // place it could be crossed by writing a line in a JSON file.
+      //
+      // A library may belong to a floor family - `local_recall` already
+      // promises finding and reading what is already on the device, and a
+      // working copy is on the device. A bridge never can, because it needs
+      // the network per query, and the floor promises the *operation* rather
+      // than the content: an operation that needs a network on the query after
+      // next does not become a floor operation by having succeeded once.
+      //
+      // `bridges/` holds supplier code of both kinds and nothing distinguishes
+      // them from here, so the whole root is refused rather than half of it.
+      // A library's read path is core code and lands in the family as core
+      // code, which is where the floor can actually see it (ADR 0136 BR2).
+      errors.push(
+        `offline-floor.json: family ${family} names ${module}. ADR 0136 BR6: a `
+        + 'bridge can never be on the floor, and supplier code is reached over '
+        + 'the socket rather than imported, so nothing under bridges/ has an '
+        + 'import hull this check could walk.',
+      );
+      continue;
+    }
     const path = join(repoRoot, module);
     if (!realIo.exists(path)) {
       errors.push(`offline-floor.json: family ${family} names ${module}, which does not exist.`);

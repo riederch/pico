@@ -25,6 +25,23 @@ action-history APIs. That type is gone; its redaction vocabulary survives as
 remains this ADR's product term for the audit log - which is exactly why
 ADR 0141 could make it a view.
 
+Status note, 2026-08-11: the terminology map gained **Pico Bridge** and **Pico
+Library** with ADR 0136 BR6, which is where that ADR said they would land. This
+is an addition to a registry rather than a rewrite of an argument - the map is
+the one part of this ADR meant to grow - and it changes nothing already in it.
+
+Two rejections are recorded in ADR 0136 rather than here, because the reasoning
+belongs with the decision that produced it. **Skill** fails this ADR's core
+rule: a skill is an ability, which is the one thing a supplier does not have,
+and it would be the friendliest available name for the weakest boundary in the
+system. **Bridge** is not free either - it is this tree's most reused generic
+noun - so the Companion's Electron preload bridge is always *the preload
+bridge* and never "the bridge", because two security boundaries under one word
+is the failure ADR 0128 had to spend an ADR undoing.
+
+**Pico Depot** from ADR 0143 is deliberately not here yet. It lands with that
+ADR's DP-gates, none of which are built.
+
 ## Context
 
 Pico's early architecture used precise but technical names such as Core Host, Full Client, Light Client, Policy Layer, Executor and Audit Log.
@@ -73,6 +90,8 @@ Technical terms may remain as legacy aliases, protocol compatibility names or in
 | Self-Set Rules | Self-Binding Policy | User-owned rules for bounded interventions. |
 | Motivation Style | Motivation Profile | User-controlled tone and nudging style. |
 | Origin Light | Decorative Origin Marker | Subtle, hideable, non-authoritative marker for Pico #1. |
+| Pico Bridge | Connector / provider adapter | Runs beside Pico, connects exactly one outside system, and speaks only Pico's shapes inward. |
+| Pico Library | Attached or pinned corpus | A body of documents Pico may read but does not own, answering without a network. |
 
 ## Product language examples
 

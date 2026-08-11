@@ -31,6 +31,10 @@
       "types": "./dist/confidence.d.ts",
       "import": "./dist/confidence.js"
     },
+    "./library-pin": {
+      "types": "./dist/library-pin.d.ts",
+      "import": "./dist/library-pin.js"
+    },
     "./home-assistant": {
       "types": "./dist/home-assistant.d.ts",
       "import": "./dist/home-assistant.js"

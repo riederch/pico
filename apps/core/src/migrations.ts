@@ -69,6 +69,9 @@ export const picoSupplierAttachmentMigrationId = '0004_pico_supplier_attachment'
 /** ADR 0138 CO1. What a supplier's credential is allowed to do. */
 export const picoSupplierCredentialScopeMigrationId = '0005_pico_supplier_credential_scope' as const;
 
+/** ADR 0136 BR6. The revision a derived item was read at, on the item itself. */
+export const picoLibraryDerivationMigrationId = '0006_pico_library_derivation' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -931,6 +934,60 @@ const migrations: readonly MigrationDefinition[] = [
         ALTER TABLE pico_supplier_attachment
         ADD COLUMN credential_present INTEGER NOT NULL DEFAULT 0
           CHECK (credential_present IN (0, 1));
+      `);
+    },
+  },
+  {
+    /**
+     * ADR 0136 BR6. What a derived item was read from, and at what revision.
+     *
+     * **Columns rather than a table, and that is the decision.** ADR 0127 asks
+     * five questions of a new store kind - shred cascade, backup exclusions,
+     * boot reconciliation, ADR 0119 Q5 ceilings, the Q3 byte-identity proof -
+     * and a derivation would have had to answer all five for a fact that has no
+     * life apart from the item it is a fact about. On the item, it inherits
+     * every one of them for free: a domain shred reaches it because the item is
+     * shredded, the retention sweep reaches it for the same reason, and the
+     * memory ceiling counts it exactly once.
+     *
+     * That inheritance is also what makes ADR 0136's two halves true rather
+     * than promised. **Detaching deletes nothing** - `detachPicoSupplier`
+     * touches `pico_supplier_attachment` and nothing here, so what Pico
+     * concluded outlives the attachment it concluded it from. **A domain shred
+     * reaches every derived item** - because there is no second place holding
+     * a copy of what was derived.
+     *
+     * `derived_pin_covers_content` is a third state as well as a boolean: NULL
+     * means this item is not a derivation at all.
+     *
+     * The four columns have to arrive together - a pin without a supplier, or a
+     * supplier without a pin, is a quotation without a source - and that is
+     * held at the single insert site rather than by a CHECK, because SQLite's
+     * `ALTER TABLE ADD COLUMN` cannot add a table-level constraint. The
+     * protocol's `buildPicoLibraryDerivation` is what the write path takes, so
+     * a partial derivation cannot be constructed to be written in the first
+     * place; the column-level CHECKs above still hold the vocabulary.
+     */
+    id: picoLibraryDerivationMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE memory_item
+        ADD COLUMN derived_from_supplier TEXT NULL;
+      `);
+      db.exec(`
+        ALTER TABLE memory_item
+        ADD COLUMN derived_pin_kind TEXT NULL
+          CHECK (derived_pin_kind IS NULL OR derived_pin_kind IN ('content_hash', 'commit'));
+      `);
+      db.exec(`
+        ALTER TABLE memory_item
+        ADD COLUMN derived_pin_value TEXT NULL;
+      `);
+      db.exec(`
+        ALTER TABLE memory_item
+        ADD COLUMN derived_pin_covers_content INTEGER NULL
+          CHECK (derived_pin_covers_content IS NULL OR derived_pin_covers_content IN (0, 1));
       `);
     },
   },

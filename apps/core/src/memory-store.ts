@@ -11,6 +11,8 @@ import type {
   PicoEventOriginClass,
   ReferenceTargetResolutionState,
 } from '@pico/protocol';
+import { buildPicoLibraryDerivation } from '@pico/protocol/library-pin';
+import type { PicoLibraryDerivation, PicoLibraryPinKind } from '@pico/protocol/library-pin';
 import type { KeyEnvelopeRecord, MemoryContentCrypto } from './memory-content-crypto.js';
 import type { PicoStoreRowCounter } from './store-row-counter.js';
 
@@ -53,6 +55,15 @@ export interface MemoryItemInput {
    * assembler refuses unlabeled content rather than defaulting it.
    */
   origin?: PicoEventOriginClass;
+  /**
+   * ADR 0136 BR6. Set when this item was derived from an attached Pico
+   * Library, carrying the revision it was read at.
+   *
+   * Built by `buildPicoLibraryDerivation`, which refuses one missing its pin or
+   * its content coverage - so a partial derivation cannot be constructed here,
+   * and the four columns cannot arrive apart.
+   */
+  derivedFrom?: PicoLibraryDerivation;
 }
 
 /** Why an encrypted item's content could not be returned in plaintext. */
@@ -77,6 +88,12 @@ export interface MemoryItem {
   keyEnvelopeRef?: string;
   sourceRef?: string;
   origin?: PicoEventOriginClass;
+  /**
+   * ADR 0136 BR6. Present only for an item derived from a Pico Library. It
+   * lives on the item rather than in a table of its own, which is why a domain
+   * shred reaches it and detaching the library does not.
+   */
+  derivedFrom?: PicoLibraryDerivation;
   createdAt: string;
   updatedAt: string;
 }
@@ -174,9 +191,13 @@ export class MemoryStore {
             key_envelope_ref,
             source_ref,
             origin,
+            derived_from_supplier,
+            derived_pin_kind,
+            derived_pin_value,
+            derived_pin_covers_content,
             created_at,
             updated_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `)
         .run(
           input.memoryItemId,
@@ -190,6 +211,15 @@ export class MemoryStore {
           keyEnvelopeRef,
           input.sourceRef ?? null,
           input.origin ?? null,
+          // ADR 0136 BR6. All four together or all four absent: the derivation
+          // was validated by the protocol builder in assertMemoryItemInput, so
+          // nothing partial can reach here.
+          input.derivedFrom?.supplierIdentifier ?? null,
+          input.derivedFrom?.pin.kind ?? null,
+          input.derivedFrom?.pin.value ?? null,
+          input.derivedFrom === undefined
+            ? null
+            : (input.derivedFrom.pinCoversContent ? 1 : 0),
           now,
           now,
         );
@@ -675,6 +705,10 @@ interface MemoryItemRow {
   key_envelope_ref: string | null;
   source_ref: string | null;
   origin: string | null;
+  derived_from_supplier: string | null;
+  derived_pin_kind: string | null;
+  derived_pin_value: string | null;
+  derived_pin_covers_content: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -702,6 +736,21 @@ function mapRow(row: MemoryItemRow): MemoryItem {
     ...(row.origin === null || row.origin === undefined
       ? {}
       : { origin: row.origin as PicoEventOriginClass }),
+    // ADR 0136 BR6. Read back through the same builder that wrote it, so a row
+    // that lost one of its four columns is reported rather than returned as a
+    // derivation missing a field.
+    ...(row.derived_from_supplier === null || row.derived_from_supplier === undefined
+      ? {}
+      : {
+        derivedFrom: buildPicoLibraryDerivation({
+          supplierIdentifier: row.derived_from_supplier,
+          pin: {
+            kind: row.derived_pin_kind as PicoLibraryPinKind,
+            value: row.derived_pin_value as string,
+          },
+          pinCoversContent: row.derived_pin_covers_content === 1,
+        }),
+      }),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -726,6 +775,13 @@ function assertMemoryItemInput(input: MemoryItemInput): void {
 
   if (input.sourceRef !== undefined) {
     assertNonEmptyString(input.sourceRef, 'sourceRef');
+  }
+
+  if (input.derivedFrom !== undefined) {
+    // ADR 0136 BR6. Re-built rather than trusted, so a caller that assembled a
+    // derivation by hand meets the same refusals as one that used the builder:
+    // no pin, no determined content coverage, no supplier, nothing written.
+    buildPicoLibraryDerivation(input.derivedFrom);
   }
 }
 

@@ -10,9 +10,11 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. **BR1, BR4 and BR2 are implemented**
-(2026-08-10 to 2026-08-11) and **BR3 in its core half**; BR6 is
-open, and BR5 moved with the cost decision.
+than kind. **BR1, BR2, BR4 and BR6 are implemented**
+(2026-08-10 to 2026-08-11) and **BR3 in its core half**; BR5 moved with the
+cost decision, so what is left of this ADR is one comparison in BR3 - the
+retention-sweep and backup/restore halves - and a real supplier to run it
+against.
 
 Split on 2026-08-10 at the user's request: everything about **several**
 suppliers - identity, coverage, unions, effect targeting and the privacy
@@ -690,16 +692,66 @@ nowhere to go, which is the state ADR 0127 was written to end.
   came from; they are now `@pico/protocol/confidence`, lifted in the
   ADR 0127 M5 move, with `picoSpatialConfidences` derived from them so
   spatial recall keeps its word without keeping its list.
-- **BR6 - Libraries are pinned, read in place, and never held (open):** a
-  frozen library verifies against a pinned hash and a tracked one against
-  a commit id, failing loudly rather than substituting - **and asks first
-  whether the commit pins the content at all**, because under git-LFS it
-  pins a pointer and the bytes come from somewhere with its own
-  availability and its own retention; nothing is
-  ingested, derived items carry the pin they were read at, and detaching
-  deletes nothing while a domain shred reaches every derived item. A
-  library may appear in an ADR 0118 floor family and a bridge may not, and
-  the floor check enforces the asymmetry.
+- **BR6 - Libraries are pinned, read in place, and never held (implemented
+  2026-08-11):** `@pico/protocol/library-pin` carries the two pin kinds, the
+  coverage question, the verification and the provenance a derived item
+  gets; migration `0006_pico_library_derivation` carries it at rest.
+
+  **A pin verifies loudly and never substitutes.** `verifyPicoLibraryPin`
+  answers `matches` or `differs` and nothing else - no nearest revision, no
+  repaired value - because an answer citing a commit it did not come from is
+  worse than no answer: it is indistinguishable from a correct one. A
+  cross-kind comparison **throws** rather than answering `differs`, since a
+  frozen corpus and a tracked working copy are pinned by different facts and
+  `differs` would suggest re-pinning could fix it.
+
+  **The coverage question is asked, not assumed, and it is the sharp part.**
+  A commit id looks like it pins bytes; under git-LFS it pins a *pointer*,
+  and the bytes come from a server with its own availability and its own
+  retention that can change while the id does not.
+  `picoLibraryPinCoversContent` therefore **cannot answer for a commit pin
+  without being handed the `.gitattributes` the core read** - an empty string
+  is a valid answer, not looking is not. Omitting it throws rather than
+  defaulting to `true`, because the default that reads as safe is the one
+  that quietly claims coverage nobody checked. `picoLibraryPointerPaths`
+  names what is uncovered, so a surface can say which parts rather than
+  report an unexplained "partly pinned". And a supplier has no parameter
+  anywhere here through which it could declare its own coverage - the fifth
+  appearance of ADR 0117 X1's construction, because a supplier asserting its
+  own content is verified is the laundering step rather than a convenience.
+
+  **The provenance is columns on the memory item, not a store.** That is the
+  decision the rest of BR6 rests on. ADR 0127 asks five questions of a new
+  store kind - shred cascade, backup exclusions, boot reconciliation, ADR 0119
+  Q5 ceilings, the Q3 byte-identity proof - and a derivation table would have
+  had to answer all five for a fact with no life apart from the item it is a
+  fact about. On the item it inherits every one for free, and that inheritance
+  is exactly what makes the two halves below true rather than promised.
+  **Detaching deletes nothing**: `detachPicoSupplier` touches the attachment
+  and nothing else, so a passage that outlived its library can still say which
+  commit it came from. **A domain shred reaches every derived item**: proved
+  in BR3's comparison shape - a derived item and an ordinary item asserted
+  identical *to each other* after the shred, with an item in another domain
+  surviving to show the comparison can fail - and it reaches the pin with the
+  content, because there is no second place holding a copy.
+
+  Neither field may be omitted, in ADR 0136 BR4's idiom: a derivation without
+  a pin is a quotation without a source, and one whose coverage was never
+  determined claims more than its pin can carry. The write path re-runs the
+  builder rather than trusting a hand-assembled record, so a caller that
+  skipped it meets the same refusals.
+
+  **The floor asymmetry is enforced where it could be crossed.**
+  `picoSupplierMayBeOnOfflineFloor` answers from the kind alone - a library
+  may be on the floor, a bridge never can - and `offline:check` refuses a
+  floor family naming anything under `bridges/`. A bridge that answered from
+  a cache would still be a bridge: the floor promises the *operation*, and an
+  operation that needs a network on the query after next does not become a
+  floor operation by having succeeded once.
+
+  Open: nothing in BR6 itself. What is missing is a library to run it
+  against - the read path is still ADR 0117 X4's quarantined read, which does
+  not exist, so no derivation has yet been produced from real material.
 **BR5 is deliberately absent.** It was credential, cost and consent, and
 it left with ADR 0138, where it is CO1-CO5. The number is not reused,
 because gate identifiers are cited in commits and in the status matrix and
