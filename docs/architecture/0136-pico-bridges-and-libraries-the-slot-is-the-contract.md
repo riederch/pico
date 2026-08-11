@@ -10,11 +10,11 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. **BR1, BR2, BR4 and BR6 are implemented**
-(2026-08-10 to 2026-08-11) and **BR3 in its core half**; BR5 moved with the
-cost decision, so what is left of this ADR is one comparison in BR3 - the
-retention-sweep and backup/restore halves - and a real supplier to run it
-against.
+than kind. **BR1, BR2, BR3, BR4 and BR6 are implemented**
+(2026-08-10 to 2026-08-11) and BR5 moved with the cost decision, so **this ADR
+is complete**. What it does not have is a supplier actually offering content
+over the BR2 socket: every proof here stands in for one, and the first real
+attachment is where the contract meets something that can disagree with it.
 
 Split on 2026-08-10 at the user's request: everything about **several**
 suppliers - identity, coverage, unions, effect targeting and the privacy
@@ -642,8 +642,8 @@ nowhere to go, which is the state ADR 0127 was written to end.
   Open: the daemon itself. What exists is the contract and the hull, not a
   process on the far side of the socket - there is no supplier to run in
   one yet.
-- **BR3 - Threshold labeling and the identity proof (core half
-  implemented 2026-08-11):** `intakePicoSupplierContent` assigns
+- **BR3 - Threshold labeling and the identity proof (implemented
+  2026-08-11):** `intakePicoSupplierContent` assigns
   `external_content` and has no parameter through which a supplier could
   claim one - the fourth appearance of the construction ADR 0117 X1 uses
   for `picoReaderCapabilities`, ADR 0136 BR4 for `confirmedByPerson` and
@@ -658,16 +658,39 @@ nowhere to go, which is the state ADR 0127 was written to end.
   cannot tell a sentence the person wrote from one they pasted.
 
   The identity proof runs in the shape ADR 0127 M1 and ADR 0128 H4 already
-  use: a supplied item and an ordinary item go through the same crypto
-  shred, and the outcomes are asserted *identical to each other* rather
-  than each on its own, because two separate assertions could both pass
-  while the core treated the two kinds differently in a way neither
-  happened to look at. An item in another domain survives, which shows the
+  use: a supplied item and an ordinary item go through the same core path,
+  and the outcomes are asserted *identical to each other* rather than each
+  on its own, because two separate assertions could both pass while the
+  core treated the two kinds differently in a way neither happened to look
+  at. An item that is out of scope survives each time, which shows the
   comparison can fail.
 
-  Open: the retention-sweep and backup/restore halves of the same
-  comparison, and everything that needs a supplier actually offering
-  content.
+  **All three halves are proved as of 2026-08-11.** Crypto shred landed
+  first. The **retention sweep** followed, with a second test beside the
+  comparison that is the structural reason it holds: the candidate
+  projection carries four fields - id, domain, policy ref, created-at - and
+  a test pins that list, because retention deciding from where content came
+  from is the supplier-specific handling this gate rules out, and no
+  comparison over two items would necessarily notice it. **Backup and
+  restore** is three: a round trip returning both alike; a restore into a
+  shredded domain leaving both identically unreadable, which is the case
+  where a supplier-specific path would actually show, since the keys live
+  outside the database and a backup therefore carries ciphertext but never
+  the means to read it; and a stale restore over a recorded deletion, taken
+  in the window between the sweeper's record and its enforce, where
+  reconciliation puts both back down together.
+
+  **Building the two new halves found a hole in the first one.** The helper
+  that created the supplied item asserted `external_content` on the way past
+  and then did not write it, so every comparison had been running over two
+  rows identical in every column - unable in principle to catch a core that
+  branched on origin. With the label carried into the row, a planted
+  supplier-specific branch in the sweeper fails the comparison; before the
+  fix it passed. The shred proof was never wrong, only weaker than it read.
+
+  Open: nothing in the comparison. What is left is everything that needs a
+  supplier actually offering content over the BR2 socket, rather than a
+  test standing in for one.
 - **BR4 - Three clocks and a certainty (implemented):**
   `picoSupplierCacheAgeMs` and `picoSupplierContentAgeMs` are two functions
   with two names, so confusing them takes an edit rather than an oversight -
@@ -837,8 +860,9 @@ Negative and residual:
   and extends O2's vocabulary with cost.
 - Bounded by ADR `0116` W2 and ADR `0117` X4, which together decide that a
   library is placeable now and answerable later.
-- Attaches into ADR `0075` privacy domains, which is BR7 and the least
-  settled part of this decision.
+- Attaches into ADR `0075` privacy domains. That is ADR `0137` IN5's, and
+  the "BR7" this line once called it never existed - the gate list here has
+  always run BR1-BR4 and BR6.
 - Governed by ADR `0026` for both new terms and ADR `0104` for where the
   credential lives.
 - Pins integrity the way ADR `0013` pins reference assets.
