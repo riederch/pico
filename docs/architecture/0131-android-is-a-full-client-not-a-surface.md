@@ -2,6 +2,16 @@
 
 ## Status
 
+Status note, 2026-08-11: ADR 0136 gained an input for the open question
+this ADR frames as "what does a full client on Android have to say out
+loud". A library may be declared **essential**, meaning every Pico Vault
+holds it - and the first one is about 2 GB, 1.4 GB of working tree beside
+612 MB of git objects. A full client that must carry two gigabytes of
+somebody's filing cabinet is a different proposition on a phone than on a
+desktop, and this ADR's scope covers exactly that: what full client
+includes and what it deliberately does not. The text below is unchanged;
+the question is now larger than when it was written.
+
 Accepted role decision; not implemented. The user decided on 2026-08-09
 that Android must become a full client of the same standing as the desktop,
 and that the Pico Surface role belongs to smartwatches, small home displays

@@ -250,6 +250,47 @@ data and needs no concept; naming it would add a boundary without adding a
 decision. A library is what a person or a deployment may select, omit or
 replace.
 
+**A library may be declared essential, and then it is not optional per
+device** - decided by the user on 2026-08-11 for `rchkb`, which is a
+part of the knowledge rather than an accessory to it. The choice stays
+where it was: *which* libraries exist is a person's decision. What the
+declaration adds is that an essential one is held by **every Pico Vault**,
+so a Vault without it is incomplete rather than merely unconfigured.
+
+Three things follow, and the second is the one that decides an
+implementation.
+
+**The attachment is identity state; the working copy is presence-local.**
+ADR 0126 draws exactly this line - durable state belongs to the identity,
+local and short-lived state to the presence - and a library falls on both
+sides of it. Which libraries exist, in which domain, with which coverage
+and which reaching decisions: identity, and it replicates. The 1.4 GB on
+disk: presence-local, and it does not.
+
+**The pin is the agreement, not the transport.** Two Vaults at the same
+commit hold the same content, and a derived item that records the commit
+it was read at is verifiable on any of them - which is why ADR 0137 IN1
+put the pin on the item rather than on the attachment. So an essential
+library is **re-derived on each Vault from the same remote**, not shipped
+between them: pushing 1.4 GB through ADR 0089's reader-addressed sealed
+batches would be inventing a second replication mechanism beside the one
+git already is, and the two could then disagree.
+
+**And the vocabulary has no word yet for the state this creates.**
+ADR 0138 CO2's `not_configured` means nobody supplied a credential. A
+Vault that has the attachment, has the credential, and has not finished
+cloning is in a different state - configured, incomplete, and working on
+it. Naming it is left open here deliberately rather than invented in
+passing, because three vocabularies were invented and withdrawn while
+these ADRs were being written.
+
+The cost is stated rather than discovered: **about 2 GB per Vault** for
+this corpus, 1.4 GB of working tree and 612 MB of git objects. ADR 0131
+makes Android a full client, and a full client that must hold two
+gigabytes of somebody's filing cabinet is a different proposition from a
+desktop that does. That ADR covers "what full client includes and what it
+deliberately does not", and this is an input to it.
+
 ### A supplier carries; it never decides
 
 A supplier has **no surface, no vocabulary and no storage**, which makes
