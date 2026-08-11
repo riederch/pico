@@ -432,6 +432,25 @@ compatibility a property of a commit a person accepted.
   several suppliers, and because attaching one is the heavier of the two
   decisions: it is a decision about code that will execute rather than
   about material to read.
+
+  **A third thing did not fall out, and had to be added on 2026-08-11.**
+  The table shipped without ADR 0138 CO3/CO4, so attaching a depot implied
+  permission to fetch it and there was no separate decision for fetching it
+  unasked. Modelling a depot as a delivery vehicle with no domain made that
+  look defensible; ADR 0138 CO1 says why it is not, about the neighbouring
+  case and in so many words: *"A git fetch reaches outside, discloses that
+  this Pico is pulling, and may need a credential. Fetching is therefore a
+  bridge-shaped decision under this ADR even though reading is not."*
+
+  `may_fetch` and `may_fetch_unasked` now default to off, in the shape the
+  supplier table has had all along. CO4's dependence on CO3 is held at the
+  single write site rather than by a table CHECK - SQLite's `ALTER TABLE`
+  cannot add one, and the supplier table got its CHECK by being created
+  with it - which reaches the same guarantee because that method is the
+  only door into the columns. Accepting a newer commit keeps the grant,
+  because accepting is not re-attaching and asking per commit would train a
+  person to click through it; detaching and re-attaching starts from the
+  defaults.
 - **DP2 - What runs is vendored (implemented 2026-08-11):**
   `supplier:check` refuses three shapes over the depot root, and each is a
   different way of expecting to resolve something. A **lockfile**, because

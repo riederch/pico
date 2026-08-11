@@ -695,6 +695,10 @@ export interface PicoActionHistoryRecord {
 export interface PicoDepotAttachment {
   pin: PicoDepotPin;
   acceptedAt: string;
+  /** ADR 0138 CO3. May Pico fetch this depot at all? Default off. */
+  mayFetch: boolean;
+  /** ADR 0138 CO4. May Pico fetch it without being asked? Default off. */
+  mayFetchUnasked: boolean;
 }
 
 export interface PicoSupplierAttachment {
@@ -6765,17 +6769,53 @@ export class EventStore {
     this.ensureOpen();
     const row = this.db
       .prepare(`
-        SELECT remote, running_commit AS runningCommit, accepted_at AS acceptedAt
+        SELECT remote, running_commit AS runningCommit, accepted_at AS acceptedAt,
+               may_fetch AS mayFetch, may_fetch_unasked AS mayFetchUnasked
         FROM pico_depot_attachment WHERE remote = ?
       `)
-      .get(remote) as { remote: string; runningCommit: string; acceptedAt: string } | undefined;
+      .get(remote) as {
+        remote: string; runningCommit: string; acceptedAt: string;
+        mayFetch: number; mayFetchUnasked: number;
+      } | undefined;
     if (row === undefined) {
       return undefined;
     }
     return Object.freeze({
       pin: parsePicoDepotPin({ remote: row.remote, commit: row.runningCommit }),
       acceptedAt: row.acceptedAt,
+      mayFetch: row.mayFetch === 1,
+      mayFetchUnasked: row.mayFetchUnasked === 1,
     });
+  }
+
+  /**
+   * ADR 0138 CO3/CO4 for depots. The two decisions that stand between an
+   * attached depot and one Pico pulls from while nobody is watching.
+   *
+   * Unasked fetching cannot be granted without fetching, and this method
+   * carries that rather than a table CHECK, because SQLite cannot add one to
+   * an existing table. The guarantee is the same because this is the only door
+   * into those columns.
+   */
+  public setPicoDepotReach(input: {
+    remote: string;
+    mayFetch: boolean;
+    mayFetchUnasked: boolean;
+  }): void {
+    this.ensureOpen();
+    if (input.mayFetchUnasked && !input.mayFetch) {
+      throw new Error('pico_depot_unasked_requires_fetch');
+    }
+    const changed = this.db
+      .prepare(`
+        UPDATE pico_depot_attachment
+        SET may_fetch = ?, may_fetch_unasked = ?
+        WHERE remote = ?
+      `)
+      .run(input.mayFetch ? 1 : 0, input.mayFetchUnasked ? 1 : 0, input.remote);
+    if (changed.changes === 0) {
+      throw new Error('pico_depot_not_attached');
+    }
   }
 
   public picoDepotAttachments(): readonly PicoDepotAttachment[] {

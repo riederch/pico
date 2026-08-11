@@ -75,6 +75,9 @@ export const picoLibraryDerivationMigrationId = '0006_pico_library_derivation' a
 /** ADR 0143 DP1. Which depots are attached, and at which commit each runs. */
 export const picoDepotAttachmentMigrationId = '0007_pico_depot_attachment' as const;
 
+/** ADR 0138 CO3/CO4. Whether Pico may fetch a depot, and whether unasked. */
+export const picoDepotReachMigrationId = '0008_pico_depot_reach' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1027,6 +1030,47 @@ const migrations: readonly MigrationDefinition[] = [
           running_commit TEXT NOT NULL,
           accepted_at TEXT NOT NULL
         );
+      `);
+    },
+  },
+  {
+    /**
+     * ADR 0138 CO3/CO4 for depots - a gap the depot table left open.
+     *
+     * `pico_supplier_attachment` has carried these two decisions since
+     * 2026-08-11, and the depot table did not. That looked defensible while a
+     * depot was modelled as a delivery vehicle with no domain (ADR 0143 DP6),
+     * and it was wrong for a reason ADR 0138 CO1 states in so many words about
+     * the neighbouring case: **"A git fetch reaches outside, discloses that
+     * this Pico is pulling, and may need a credential. Fetching is therefore a
+     * bridge-shaped decision under this ADR even though reading is not."**
+     *
+     * Without these columns, attaching a depot implied permission to fetch it,
+     * and there was no separate decision for fetching it *unasked* - exactly
+     * the merge CO3 and CO4 exist to prevent, and for the reason they give: an
+     * answered question is visible to the person who asked it, and a
+     * background sweep is visible to nobody.
+     *
+     * Both default to off. CO4's dependence on CO3 is held at the single
+     * write site rather than by a table CHECK, because SQLite's
+     * `ALTER TABLE ADD COLUMN` cannot add one - the supplier table got its
+     * CHECK by being created with it. The column-level CHECKs above still
+     * hold the vocabulary, and `setPicoDepotReach` refuses the forbidden
+     * combination under its own error, which is the same guarantee reached
+     * through the only door this schema change leaves open.
+     */
+    id: picoDepotReachMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_depot_attachment
+        ADD COLUMN may_fetch INTEGER NOT NULL DEFAULT 0
+          CHECK (may_fetch IN (0, 1));
+      `);
+      db.exec(`
+        ALTER TABLE pico_depot_attachment
+        ADD COLUMN may_fetch_unasked INTEGER NOT NULL DEFAULT 0
+          CHECK (may_fetch_unasked IN (0, 1));
       `);
     },
   },

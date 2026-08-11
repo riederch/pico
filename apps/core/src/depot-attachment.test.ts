@@ -50,6 +50,8 @@ describe('ADR 0143 DP1 - a depot is attached at a commit', () => {
     })).toEqual({
       pin: { remote, commit: accepted },
       acceptedAt: '2026-08-11T09:00:00.000Z',
+      mayFetch: false,
+      mayFetchUnasked: false,
     });
     expect(store.picoDepotAttachments().map((a) => a.pin.remote)).toEqual([remote]);
     store.close();
@@ -84,7 +86,11 @@ describe('ADR 0143 DP1 - a depot is attached at a commit', () => {
       .all()
       .map((row) => (row as { name: string }).name);
     raw.close();
-    expect(columns).toEqual(['remote', 'running_commit', 'accepted_at']);
+    // ADR 0143 DP6 unchanged: still no privacy domain. The two reach columns
+    // are ADR 0138 CO3/CO4 and say nothing about where a depot lives.
+    expect(columns).toEqual([
+      'remote', 'running_commit', 'accepted_at', 'may_fetch', 'may_fetch_unasked',
+    ]);
   });
 });
 
@@ -104,6 +110,8 @@ describe('ADR 0143 DP1 - a newer commit is an offer', () => {
     expect(store.picoDepotAttachment(remote)).toEqual({
       pin: { remote, commit: accepted },
       acceptedAt: '2026-08-11T09:00:00.000Z',
+      mayFetch: false,
+      mayFetchUnasked: false,
     });
     store.close();
   });
@@ -142,6 +150,8 @@ describe('ADR 0143 DP1 - accepting is a decision about a named commit', () => {
     })).toEqual({
       pin: { remote, commit: newer },
       acceptedAt: '2026-08-11T10:00:00.000Z',
+      mayFetch: false,
+      mayFetchUnasked: false,
     });
     store.close();
   });
@@ -292,6 +302,99 @@ describe('ADR 0143 DP6 - a depot lives in no space; its suppliers do', () => {
 
     expect(store.picoDepotAttachment(remote)).toBeUndefined();
     expect(store.picoSupplierAttachment('rchkb')?.privacyDomain).toBe('privat');
+    store.close();
+  });
+});
+
+describe('ADR 0138 CO3/CO4 - attaching a depot grants no fetching', () => {
+  it('attaches with both decisions off', () => {
+    // ADR 0138 CO1 says it about the neighbouring case in so many words: a git
+    // fetch reaches outside and discloses that this Pico is pulling. Attaching
+    // a depot says it exists; it does not say Pico may go and get it.
+    const { store } = openStore('reach-default');
+    expect(store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    })).toMatchObject({ mayFetch: false, mayFetchUnasked: false });
+    store.close();
+  });
+
+  it('cannot grant unasked fetching without fetching', () => {
+    // They fail differently, which is why they are two: a fetch someone asked
+    // for is visible to the person who asked, and a background pull is visible
+    // to nobody.
+    const { store } = openStore('reach-order');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    expect(() => store.setPicoDepotReach({
+      remote,
+      mayFetch: false,
+      mayFetchUnasked: true,
+    })).toThrow('pico_depot_unasked_requires_fetch');
+    expect(store.picoDepotAttachment(remote))
+      .toMatchObject({ mayFetch: false, mayFetchUnasked: false });
+    store.close();
+  });
+
+  it('records both when both are granted', () => {
+    const { store } = openStore('reach-grant');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.setPicoDepotReach({ remote, mayFetch: true, mayFetchUnasked: true });
+    expect(store.picoDepotAttachment(remote))
+      .toMatchObject({ mayFetch: true, mayFetchUnasked: true });
+    store.close();
+  });
+
+  it('keeps the grant when a newer commit is accepted', () => {
+    // Accepting a commit is not re-attaching. A person who permitted fetching
+    // and then accepted an offer has not withdrawn anything, and asking again
+    // per commit would train them to click through it.
+    const { store } = openStore('reach-accept');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.setPicoDepotReach({ remote, mayFetch: true, mayFetchUnasked: false });
+    const offer = store.picoDepotOffer({ remote, seenCommit: newer })!;
+    store.acceptPicoDepotOffer({
+      offer,
+      acceptedCommit: newer,
+      acceptedAt: '2026-08-11T10:00:00.000Z',
+    });
+    expect(store.picoDepotAttachment(remote))
+      .toMatchObject({ pin: { commit: newer }, mayFetch: true, mayFetchUnasked: false });
+    store.close();
+  });
+
+  it('does not silently keep a grant it never re-asked for', () => {
+    // Detaching removes the row, so re-attaching starts from the defaults -
+    // the same property `attachPicoSupplier` has, for the same reason.
+    const { store } = openStore('reach-reattach');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.setPicoDepotReach({ remote, mayFetch: true, mayFetchUnasked: true });
+    store.detachPicoDepot(remote);
+    expect(store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T11:00:00.000Z',
+    })).toMatchObject({ mayFetch: false, mayFetchUnasked: false });
+    store.close();
+  });
+
+  it('refuses to speak about a depot nobody attached', () => {
+    const { store } = openStore('reach-unattached');
+    expect(() => store.setPicoDepotReach({
+      remote,
+      mayFetch: true,
+      mayFetchUnasked: false,
+    })).toThrow('pico_depot_not_attached');
     store.close();
   });
 });
