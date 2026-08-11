@@ -17,20 +17,20 @@ import {
   type PDFFont,
   type PDFPage,
 } from 'pdf-lib';
-import QRCode from 'qrcode';
-import { picoTokens } from './pico-design-tokens.generated.js';
+import QRCode, { type QRCodeErrorCorrectionLevel } from 'qrcode';
+import {
+  picoRecoveryCardDesign,
+  type PicoRecoveryCardDesign,
+} from './recovery-card-design.js';
 
 const POINTS_PER_MM = 72 / 25.4;
 
-export const PICO_RECOVERY_CARD_PDF_LAYOUT = {
-  cardWidthPt: 85.6 * POINTS_PER_MM,
-  cardHeightPt: 53.98 * POINTS_PER_MM,
-  paperWidthPt: 210 * POINTS_PER_MM,
-  paperHeightPt: 297 * POINTS_PER_MM,
-  paperCardScale: 0.98,
-  qrErrorCorrectionLevel: 'M',
-  qrQuietZoneModules: 4,
-} as const;
+/**
+ * ADR 0132 G2. Kept as an export because callers and tests read it, and now
+ * derived from the design rather than declared beside it - two copies of the
+ * card's dimensions would be two places for them to disagree.
+ */
+export const PICO_RECOVERY_CARD_PDF_LAYOUT = picoRecoveryCardDesign.geometry;
 
 /**
  * The transport contract itself is protocol, not presentation: the scanning
@@ -91,7 +91,8 @@ function picoRecoveryCardQrMatrixFor(
     [{ data: Buffer.from(payload), mode: 'byte' }],
     {
       errorCorrectionLevel:
-        PICO_RECOVERY_CARD_PDF_LAYOUT.qrErrorCorrectionLevel,
+        PICO_RECOVERY_CARD_PDF_LAYOUT
+          .qrErrorCorrectionLevel as QRCodeErrorCorrectionLevel,
     },
   );
   return {
@@ -118,13 +119,15 @@ export async function generatePicoRecoveryCardPdfs(
   const content = picoRecoveryCardContent(card);
   // ADR 0132 G5. The last thing checked is the thing that gets laid on paper.
   assertPicoRecoveryCardContent(content, card);
-  const cardDocument = await createCardPrinterDocument(content, options);
+  const design = picoRecoveryCardDesign;
+  const cardDocument = await createCardPrinterDocument(content, design, options);
   const cardPrinterPdf = await cardDocument.save({
     addDefaultPage: false,
     useObjectStreams: false,
   });
   const paperDocument = await createPaperPrintableDocument(
     cardPrinterPdf,
+    design,
     content.issuedAt,
   );
   const paperPrintablePdf = await paperDocument.save({
@@ -136,13 +139,16 @@ export async function generatePicoRecoveryCardPdfs(
 
 async function createCardPrinterDocument(
   content: PicoRecoveryCardContent,
+  design: PicoRecoveryCardDesign,
   options: PicoRecoveryCardPdfOptions,
 ): Promise<PDFDocument> {
   const document = await PDFDocument.create();
-  setStableMetadata(document, content.issuedAt);
-  const regular = await document.embedFont(StandardFonts.Helvetica);
-  const bold = await document.embedFont(StandardFonts.HelveticaBold);
-  const mono = await document.embedFont(StandardFonts.Courier);
+  setStableMetadata(document, design, content.issuedAt);
+  // ADR 0132 G2. The names come from the design; resolving them here is what
+  // keeps a caller from handing the generator a font object it did not choose.
+  const regular = await document.embedFont(standardFont(design.fonts.regular));
+  const bold = await document.embedFont(standardFont(design.fonts.bold));
+  const mono = await document.embedFont(standardFont(design.fonts.mono));
   const front = document.addPage([
     PICO_RECOVERY_CARD_PDF_LAYOUT.cardWidthPt,
     PICO_RECOVERY_CARD_PDF_LAYOUT.cardHeightPt,
@@ -151,23 +157,24 @@ async function createCardPrinterDocument(
     PICO_RECOVERY_CARD_PDF_LAYOUT.cardWidthPt,
     PICO_RECOVERY_CARD_PDF_LAYOUT.cardHeightPt,
   ]);
-  drawFront(front, content, regular, bold, mono);
-  drawBack(back, content, regular, bold, mono);
+  drawFront(front, content, design, regular, bold, mono);
+  drawBack(back, content, design, regular, bold, mono);
   if (options.specimen === true) {
-    drawSpecimen(front, bold);
-    drawSpecimen(back, bold);
+    drawSpecimen(front, design, bold);
+    drawSpecimen(back, design, bold);
   }
   return document;
 }
 
 async function createPaperPrintableDocument(
   cardPrinterPdf: Uint8Array,
+  design: PicoRecoveryCardDesign,
   issuedAt: string,
 ): Promise<PDFDocument> {
   const document = await PDFDocument.create();
-  setStableMetadata(document, issuedAt);
-  const regular = await document.embedFont(StandardFonts.Helvetica);
-  const bold = await document.embedFont(StandardFonts.HelveticaBold);
+  setStableMetadata(document, design, issuedAt);
+  const regular = await document.embedFont(standardFont(design.fonts.regular));
+  const bold = await document.embedFont(standardFont(design.fonts.bold));
   const [front, back] = await document.embedPdf(cardPrinterPdf, [0, 1]);
   const page = document.addPage([
     PICO_RECOVERY_CARD_PDF_LAYOUT.paperWidthPt,
@@ -182,7 +189,7 @@ async function createPaperPrintableDocument(
   const left = (page.getWidth() - width) / 2;
   const foldY = page.getHeight() / 2;
 
-  page.drawText('Pico Recovery Card', {
+  page.drawText(design.labels.sheetTitle, {
     x: left,
     y: foldY + height + mm(14),
     font: bold,
@@ -190,7 +197,7 @@ async function createPaperPrintableDocument(
     color: NAVY,
   });
   page.drawText(
-    'At 100% / actual size printen. Nicht an Seite anpassen.',
+    design.labels.sheetScaleNotice,
     {
       x: left,
       y: foldY + height + mm(8),
@@ -200,7 +207,7 @@ async function createPaperPrintableDocument(
     },
   );
   page.drawText(
-    'Ausschneiden, an der gemeinsamen Kante falten und laminieren.',
+    design.labels.sheetFoldNotice,
     {
       x: left,
       y: foldY + height + mm(4.5),
@@ -246,6 +253,7 @@ async function createPaperPrintableDocument(
 function drawFront(
   page: PDFPage,
   payload: PicoRecoveryCardContent,
+  design: PicoRecoveryCardDesign,
   regular: PDFFont,
   bold: PDFFont,
   mono: PDFFont,
@@ -266,7 +274,7 @@ function drawFront(
     color: CYAN,
     opacity: 0.18,
   });
-  page.drawText('PICO', {
+  page.drawText(design.labels.brandMark, {
     x: mm(7),
     y: height - mm(10),
     font: bold,
@@ -280,14 +288,14 @@ function drawFront(
     size: 20,
     color: WHITE,
   });
-  page.drawText('Recovery Card', {
+  page.drawText(design.labels.cardKind, {
     x: mm(7),
     y: height - mm(28),
     font: regular,
     size: 8,
     color: PALE,
   });
-  page.drawText('IDENTITY FINGERPRINT', {
+  page.drawText(design.labels.fingerprintCaption, {
     x: mm(7),
     y: height - mm(36),
     font: bold,
@@ -323,6 +331,7 @@ function drawFront(
 function drawBack(
   page: PDFPage,
   content: PicoRecoveryCardContent,
+  design: PicoRecoveryCardDesign,
   regular: PDFFont,
   bold: PDFFont,
   mono: PDFFont,
@@ -336,14 +345,14 @@ function drawBack(
     height,
     color: PAPER,
   });
-  page.drawText('24-WORT RECOVERY PHRASE', {
+  page.drawText(design.labels.phraseCaption, {
     x: mm(6),
     y: height - mm(8),
     font: bold,
     size: 6.5,
     color: NAVY,
   });
-  page.drawText('PIN erforderlich', {
+  page.drawText(design.labels.pinNotice, {
     x: mm(6),
     y: height - mm(12),
     font: regular,
@@ -374,7 +383,7 @@ function drawBack(
     y: height - mm(31),
     size: mm(24),
   });
-  page.drawText('SCAN', {
+  page.drawText(design.labels.scanCaption, {
     x: width - mm(30),
     y: height - mm(35),
     font: bold,
@@ -435,8 +444,12 @@ function drawQrMatrix(
   }
 }
 
-function drawSpecimen(page: PDFPage, bold: PDFFont): void {
-  const text = 'SPECIMEN';
+function drawSpecimen(
+  page: PDFPage,
+  design: PicoRecoveryCardDesign,
+  bold: PDFFont,
+): void {
+  const text = design.labels.specimen;
   const size = 27;
   page.drawText(text, {
     x: (page.getWidth() - bold.widthOfTextAtSize(text, size)) / 2,
@@ -493,16 +506,37 @@ function drawCropMarks(
   }
 }
 
-function setStableMetadata(document: PDFDocument, issuedAt: string): void {
+function setStableMetadata(
+  document: PDFDocument,
+  design: PicoRecoveryCardDesign,
+  issuedAt: string,
+): void {
   const timestamp = new Date(issuedAt);
-  document.setTitle('Pico Recovery Card');
-  document.setAuthor('Pico');
-  document.setSubject('Pico identity recovery material');
-  document.setCreator('Pico Recovery Card PDF Generator');
-  document.setProducer('Pico Recovery Card PDF Generator');
+  // Printed nowhere and read by every viewer, so it belongs in the labels
+  // rather than in the code that happens to write it.
+  document.setTitle(design.labels.documentTitle);
+  document.setAuthor(design.labels.documentAuthor);
+  document.setSubject(design.labels.documentSubject);
+  document.setCreator(design.labels.documentProducer);
+  document.setProducer(design.labels.documentProducer);
   document.setCreationDate(timestamp);
   document.setModificationDate(timestamp);
-  document.setKeywords(['Pico', 'Recovery Card']);
+  document.setKeywords([...design.labels.documentKeywords]);
+}
+
+/**
+ * ADR 0132 G2. Resolves a design's font name against pdf-lib's standard set.
+ *
+ * Refused rather than defaulted when the name is not one of them: a card drawn
+ * in a substituted font is a card whose bytes no longer match the test that
+ * nails them, and silently falling back would turn that into a mystery.
+ */
+function standardFont(name: string): StandardFonts {
+  const known = Object.values(StandardFonts) as string[];
+  if (!known.includes(name)) {
+    throw new Error('invalid_recovery_card_font');
+  }
+  return name as StandardFonts;
 }
 
 function fitText(
@@ -534,13 +568,13 @@ function mm(value: number): number {
   return value * POINTS_PER_MM;
 }
 
-const NAVY = pdfColor(picoTokens.color.background.deep);
-const CYAN = pdfColor(picoTokens.color.brand.primary);
-const WHITE = pdfColor(picoTokens.theme.light.color.surface.primary);
-const PALE = pdfColor(picoTokens.color.text.secondary);
-const PAPER = pdfColor(picoTokens.theme.light.color.background.base);
-const SLATE = pdfColor(picoTokens.theme.light.color.text.secondary);
-const BLOCKED = pdfColor(picoTokens.color.status.blocked);
+const NAVY = pdfColor(picoRecoveryCardDesign.palette.deep);
+const CYAN = pdfColor(picoRecoveryCardDesign.palette.brand);
+const WHITE = pdfColor(picoRecoveryCardDesign.palette.bright);
+const PALE = pdfColor(picoRecoveryCardDesign.palette.muted);
+const PAPER = pdfColor(picoRecoveryCardDesign.palette.paper);
+const SLATE = pdfColor(picoRecoveryCardDesign.palette.slate);
+const BLOCKED = pdfColor(picoRecoveryCardDesign.palette.specimen);
 
 function pdfColor(hex: string) {
   const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/iu.exec(hex);

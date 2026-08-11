@@ -335,12 +335,37 @@ for (const [path, remedy] of literalFreeMarkupAndCode) {
 if (!read('apps/companion-shell/src/window-options.ts').includes("from './pico-design-tokens.generated.js'")) {
   errors.push('apps/companion-shell/src/window-options.ts does not import generated PICO design tokens.');
 }
-const recoveryPdf = read('apps/vault-daemon/src/recovery-card-pdf.ts');
-if (/rgb\(\s*(?:[0-9]|\.)/u.test(recoveryPdf)) {
-  errors.push('Recovery Card PDF contains a copied numeric RGB literal.');
+/**
+ * ADR 0132 G2. The card's colours come from the generated tokens, and after
+ * the content/design split that is a statement about two files rather than
+ * one: `recovery-card-design.ts` holds the palette and imports the tokens,
+ * `recovery-card-pdf.ts` draws from the design and holds no colour of its own.
+ *
+ * Checked as a pair rather than relaxed to "somewhere in the daemon". The
+ * original check pointed at the PDF module because that is where the palette
+ * used to live; following the split keeps the same claim, and covering both
+ * files makes it slightly stronger than it was - neither may carry a literal.
+ */
+const recoveryCardColourFiles = [
+  ['apps/vault-daemon/src/recovery-card-design.ts', 'Recovery Card design'],
+  ['apps/vault-daemon/src/recovery-card-pdf.ts', 'Recovery Card PDF'],
+];
+for (const [path, label] of recoveryCardColourFiles) {
+  const source = read(path);
+  if (/rgb\(\s*(?:[0-9]|\.)/u.test(source)) {
+    errors.push(`${label} contains a copied numeric RGB literal.`);
+  }
+  if (/#[0-9a-f]{3,8}\b/iu.test(source)) {
+    errors.push(`${label} contains a copied color literal; read the generated PICO design tokens instead.`);
+  }
 }
-if (!recoveryPdf.includes("from './pico-design-tokens.generated.js'")) {
-  errors.push('Recovery Card PDF does not import generated PICO design tokens.');
+if (!read('apps/vault-daemon/src/recovery-card-design.ts')
+  .includes("from './pico-design-tokens.generated.js'")) {
+  errors.push('Recovery Card design does not import generated PICO design tokens.');
+}
+if (!read('apps/vault-daemon/src/recovery-card-pdf.ts')
+  .includes("from './recovery-card-design.js'")) {
+  errors.push('Recovery Card PDF does not draw from the Recovery Card design.');
 }
 
 if (errors.length > 0) {

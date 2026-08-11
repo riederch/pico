@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 import { picoRecoveryCardSchema } from '@pico/protocol';
 import type { PicoVaultRecoveryCard } from '@pico/vault';
 import { describe, expect, it } from 'vitest';
+import { picoRecoveryCardDesign } from './recovery-card-design.js';
+import { picoTokens } from './pico-design-tokens.generated.js';
+import { PICO_RECOVERY_CARD_PDF_LAYOUT } from './recovery-card-pdf.js';
 import {
   assertPicoRecoveryCard,
   assertPicoRecoveryCardContent,
@@ -157,5 +160,63 @@ describe('ADR 0132 G5 - a content whose halves disagree is refused', () => {
     const card = fixtureCard();
     expect(() => assertPicoRecoveryCardContent(picoRecoveryCardContent(card), card))
       .not.toThrow();
+  });
+});
+
+describe('ADR 0132 G2/G3/G4 - the design carries appearance and nothing else', () => {
+  it('resolves every colour through the design system', () => {
+    // Not "looks like the tokens" - is the tokens. `design-system:check` in
+    // `release:verify` already holds them, so a token change reaches the card
+    // without anyone editing it.
+    expect(picoRecoveryCardDesign.palette).toEqual({
+      deep: picoTokens.color.background.deep,
+      brand: picoTokens.color.brand.primary,
+      bright: picoTokens.theme.light.color.surface.primary,
+      muted: picoTokens.color.text.secondary,
+      paper: picoTokens.theme.light.color.background.base,
+      slate: picoTokens.theme.light.color.text.secondary,
+      specimen: picoTokens.color.status.blocked,
+    });
+  });
+
+  it('holds every printed string, including the ones nobody reads', () => {
+    // ADR 0132 G3. PDF metadata is printed nowhere and read by every viewer,
+    // so it belongs with the labels rather than in the code that writes it.
+    const labels = picoRecoveryCardDesign.labels;
+    expect(labels.pinNotice).toBe('PIN erforderlich');
+    expect(labels.sheetScaleNotice).toContain('100% / actual size');
+    expect(labels.documentTitle).toBe('Pico Recovery Card');
+    expect([...labels.documentKeywords]).toEqual(['Pico', 'Recovery Card']);
+    for (const value of Object.values(labels)) {
+      expect(Array.isArray(value) || typeof value === 'string').toBe(true);
+    }
+  });
+
+  it('offers no depiction slot', () => {
+    // ADR 0132 G4. ADR 0013 forbids this card a Character depiction today, so
+    // a slot would pre-empt a product decision nobody has taken - and an
+    // unused field is one a later caller fills in.
+    expect(Object.keys(picoRecoveryCardDesign).sort())
+      .toEqual(['fonts', 'geometry', 'labels', 'palette']);
+    const flat = JSON.stringify(picoRecoveryCardDesign).toLowerCase();
+    for (const forbidden of ['image', 'avatar', 'bake', 'depiction', 'portrait']) {
+      expect(flat).not.toContain(forbidden);
+    }
+  });
+
+  it('says which font it draws, and the design system still disagrees', () => {
+    // Written down rather than smoothed over: the design system specifies
+    // Inter, the card draws Helvetica, and ADR 0132 G2 ends that by embedding
+    // a subset - a binary asset and a licence in a package that has neither.
+    expect(picoRecoveryCardDesign.fonts).toEqual({
+      regular: 'Helvetica',
+      bold: 'Helvetica-Bold',
+      mono: 'Courier',
+    });
+    expect(picoTokens.typography.fontFamily.sans).toContain('Inter');
+  });
+
+  it('is the one place the card dimensions live', () => {
+    expect(PICO_RECOVERY_CARD_PDF_LAYOUT).toBe(picoRecoveryCardDesign.geometry);
   });
 });

@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted. **G1's content half, G4's content half and G5 are implemented**
-(2026-08-11); G2, G3 and G1's `design` half are open. Decided by the user on
+Accepted. **G1, G3, G4 and G5 are implemented, and G2 apart from the font**
+(2026-08-11). What is left is one asset decision: the design system specifies
+`Inter`, the card draws Helvetica, and ending that means bringing a binary
+font and a licence into a package that ships neither. Decided by the user on
 2026-08-09 after reading the generator: its input should be the essential
 facts, split into Pico content and design, so the card's appearance can be
 worked on without touching anything else.
@@ -219,7 +221,40 @@ count and determinism are pinned; layout is free.
   Byte identity held throughout: the existing PDF test nails the output and
   passed unchanged at every step.
 - **G2 - Drawing takes design, and its defaults come from the design
-  system where the medium allows (open):** the three drawing functions
+  system where the medium allows (part implemented 2026-08-11):**
+  `picoRecoveryCardDesign` holds the palette, the font names, the labels and
+  the card geometry; every drawing function takes it, and
+  `PICO_RECOVERY_CARD_PDF_LAYOUT` is now that geometry rather than a second
+  declaration of the same dimensions. Every colour resolves through
+  `picoTokens`, so a token change reaches the card without anyone editing
+  it.
+
+  `design-system:check` followed the split rather than being relaxed for
+  it. It used to require that `recovery-card-pdf.ts` import the generated
+  tokens, which was true when the palette lived there; it now checks the
+  pair - the design module imports the tokens, the PDF module draws from the
+  design, and **neither** may carry a colour literal. That is slightly
+  stronger than before, and it was made to fail once against a planted
+  `#0a1628`.
+
+  A font name the standard set does not have is refused rather than
+  substituted, because a card drawn in a fallback is a card whose bytes no
+  longer match the test that nails them, and a silent substitution would
+  turn that into a mystery.
+
+  **Open: the font itself.** The design system says `Inter`, the card draws
+  Helvetica and Courier, and the names above are the current truth rather
+  than the intended one. Ending that means bringing a binary asset and a
+  licence into a package that has neither - an asset decision, not a
+  refactor, so it did not ride along with one.
+
+  Also open: the millimetre positions inside the drawing functions. They are
+  arrangement rather than appearance - what somebody actually changes is a
+  colour, a word or a font - and hoisting every `mm(7)` into a data
+  structure would produce a blob nobody can read while making the split look
+  more complete than it is.
+
+  Original text: the three drawing functions
   read colours, fonts and geometry from `design` instead of module
   constants, with defaults that reproduce today's card byte-for-byte.
   Where a token group is deliberately not consumed, the reason is written
@@ -231,14 +266,17 @@ count and determinism are pinned; layout is free.
   the SIL Open Font License permits it, and embedding keeps the output
   deterministic. The package ships no font file, so this gate brings one
   in and says why.
-- **G3 - Labels are data (open):** every string on both faces and the A4
-  sheet moves into `design`; the mixed-language instruction is fixed as a
-  value, not as code.
-- **G4 - No depiction field (content half implemented 2026-08-11):**
-  `content` offers no image, bake or avatar slot, asserted over the type's
-  keys rather than left as an unused field - an unused field is one a later
-  caller fills in. The `design` half waits on G2. `design` carries no image, bake or
-  avatar slot, and the drawing code gains no path to one. ADR 0013
+- **G3 - Labels are data (implemented 2026-08-11):** every string on both
+  faces and the A4 sheet is in `design.labels`, and so is the PDF metadata -
+  printed nowhere, read by every viewer, and therefore a label rather than
+  something the code that writes it happens to know. The mixed-language
+  instruction is a value: "100% / actual size" is what print dialogues say
+  in both languages, and a translated instruction that does not match the
+  button is worse than an untranslated one that does.
+- **G4 - No depiction field (implemented 2026-08-11):** neither `content`
+  nor `design` offers an image, bake or avatar slot, asserted over each
+  type's keys and over the serialised design - an unused field is one a
+  later caller fills in. The drawing code gains no path to one. ADR 0013
   forbids this card a Character depiction today, so a slot would
   pre-empt a product decision nobody has taken. The gate is satisfied by
   a test proving the type offers no such field, not by leaving one
