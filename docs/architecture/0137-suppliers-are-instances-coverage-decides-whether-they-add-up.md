@@ -3,9 +3,10 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist. **IN1-IN5 are implemented**
-(2026-08-10, IN5 completed 2026-08-11), and this ADR is complete except
-for the ADR 0119 Q5 ceiling named under IN1.
+kind coexist. **IN1-IN4 are implemented** and
+**IN5 in two of its three parts** (2026-08-10, attachment 2026-08-11).
+Open: the ADR 0119 Q5 ceiling named under IN1, and the structural refusal
+of an inferred instance under IN5.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than
@@ -258,11 +259,28 @@ a guess.
   agreed value names every instance that gave it. Two answers from one
   instance are refused rather than unioned, because unioning them would
   invent a disagreement the instance never had.
-- **IN5 - An effect names its instance (open):** the instance is part of
-  the effect and part of what the ADR 0106 approval statement renders from
-  validated fields; a derived location may propose an instance and may
-  never select it. Attachment names exactly one ADR 0075 domain and one
-  subtree or site, refusing an attach that would span several.
+- **IN5 - An effect names its instance (half implemented):** two halves,
+  and they landed separately.
+
+  **The attachment half is built (2026-08-11).** Migration
+  `0004_pico_supplier_attachment` holds one row per instance with exactly
+  one ADR 0075 domain, and `attachPicoSupplier` parses the manifest rather
+  than trusting it - a path or an address is refused at the store boundary
+  as firmly as at the parser, because this is where the record actually
+  crosses. Several instances stand side by side with their own domains,
+  which is how a corpus spanning `Finanz`, `Privat` and `Feuerwehr` is
+  attached: three times, not once at its root. Detaching removes the
+  attachment and nothing else, and re-attaching does not restore a
+  reaching grant it never re-asked for; tests state both.
+
+  **The rendering half is built through ADR 0141 RN3:** the approval
+  statement composes the instance from validated fields, so what a person
+  approves says *Ferienhaus* rather than *light on*.
+
+  **Open: a derived location may propose an instance and may never select
+  it.** Today the instance is an input the caller supplies, and nothing
+  prevents that caller from having inferred it. Making the refusal
+  structural needs a location source to refuse, which needs a supplier.
 
 ## Failure ledger
 
