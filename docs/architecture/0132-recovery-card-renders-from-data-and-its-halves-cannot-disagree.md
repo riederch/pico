@@ -2,10 +2,16 @@
 
 ## Status
 
-Accepted; not implemented. Decided by the user on 2026-08-09 after reading
-the generator: its input should be the essential facts, split into Pico
-content and design, so the card's appearance can be worked on without
-touching anything else.
+Accepted. **G1's content half, G4's content half and G5 are implemented**
+(2026-08-11); G2, G3 and G1's `design` half are open. Decided by the user on
+2026-08-09 after reading the generator: its input should be the essential
+facts, split into Pico content and design, so the card's appearance can be
+worked on without touching anything else.
+
+The safety half went first on purpose. Splitting content from design is what
+*creates* the possibility of two halves disagreeing, so the mapping and its
+counter-proof are worth having before the appearance work that needs them -
+and they need no font, which G2 does.
 
 ## Context
 
@@ -189,9 +195,29 @@ count and determinism are pinned; layout is free.
 
 ## Gates
 
-- **G1 - Types and the guarded mapping (open):** `content` and `design`
-  types, the single card-to-content mapping with `assertRecoveryCard` plus
-  the canonical round-trip comparison, and refusal on mismatch.
+- **G1 - Types and the guarded mapping (content half implemented
+  2026-08-11):** `PicoRecoveryCardContent` and the single
+  `picoRecoveryCardContent` mapping, with `assertPicoRecoveryCard`'s
+  canonical round-trip in front of it and refusal on mismatch. The
+  generator derives a content once and draws from it; the QR matrix is
+  built from **the content's own bytes**, so what is printed and what is
+  scanned are one array rather than two derivations that agree today.
+
+  **Every printed field is read out of the payload the QR carries**, which
+  is the part that makes the invariant structural rather than checked. The
+  mapping does not accept printed fields beside a payload and compare them
+  afterwards - it reads both halves from the same bytes, so there is no
+  arrangement of inputs that produces a content whose halves differ. The
+  round-trip is proved first: `canonicalPayloadHex` has to be the
+  canonicalization of the card's own payload, not a hex string sitting
+  beside it.
+
+  The `design` type is not built. It belongs with G2 and G3, and G2 brings
+  a font file into a package that ships none - an asset and a licence
+  decision that should not ride along with a refactor.
+
+  Byte identity held throughout: the existing PDF test nails the output and
+  passed unchanged at every step.
 - **G2 - Drawing takes design, and its defaults come from the design
   system where the medium allows (open):** the three drawing functions
   read colours, fonts and geometry from `design` instead of module
@@ -208,7 +234,10 @@ count and determinism are pinned; layout is free.
 - **G3 - Labels are data (open):** every string on both faces and the A4
   sheet moves into `design`; the mixed-language instruction is fixed as a
   value, not as code.
-- **G4 - No depiction field (open):** `design` carries no image, bake or
+- **G4 - No depiction field (content half implemented 2026-08-11):**
+  `content` offers no image, bake or avatar slot, asserted over the type's
+  keys rather than left as an unused field - an unused field is one a later
+  caller fills in. The `design` half waits on G2. `design` carries no image, bake or
   avatar slot, and the drawing code gains no path to one. ADR 0013
   forbids this card a Character depiction today, so a slot would
   pre-empt a product decision nobody has taken. The gate is satisfied by
@@ -225,9 +254,21 @@ count and determinism are pinned; layout is free.
   ADR 0113 C3 budget; and it must carry **print resolution**, which
   today's assets do not - every depiction in the tree is a crop of one
   303x347 rendering, and a laminated 85.6 mm card is not a screen.
-- **G5 - Counter-proof (open):** a test that hands the generator a
-  `content` whose printed fingerprint disagrees with its QR bytes and
-  proves the mapping refuses it. Without this the invariant is a comment.
+- **G5 - Counter-proof (implemented 2026-08-11):**
+  `assertPicoRecoveryCardContent` refuses a content whose halves disagree,
+  and the generator calls it immediately before it prints, so the last
+  thing checked is the thing that gets laid on paper. Five corruptions are
+  tested, plus the uncorrupted content, so the refusals are about
+  disagreement rather than about a check that rejects everything.
+
+  **One of the five is the reason the comparison re-derives instead of
+  spot-checking.** A weaker check - does the fingerprint appear in the
+  payload - passes for a content where only the *name* was changed, and a
+  person restoring from a card that names someone else's Pico is exactly
+  the failure this gate is about. `picoRecoveryCardContent` cannot produce
+  a bad content, which is the point; this exists for the case the split
+  creates, where a content is assembled by hand, read back from somewhere,
+  or edited between mapping and drawing.
 
 ## Consequences
 

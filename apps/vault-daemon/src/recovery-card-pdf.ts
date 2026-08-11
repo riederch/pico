@@ -1,10 +1,14 @@
 import {
-  buildPicoRecoveryCardPayload,
   buildPicoRecoveryCardScanTransport,
   picoRecoveryCardScanPrefix,
-  type PicoRecoveryCardPayload,
 } from '@pico/protocol';
 import type { PicoVaultRecoveryCard } from '@pico/vault';
+import {
+  assertPicoRecoveryCard,
+  assertPicoRecoveryCardContent,
+  picoRecoveryCardContent,
+  type PicoRecoveryCardContent,
+} from './recovery-card-content.js';
 import {
   degrees,
   PDFDocument,
@@ -62,7 +66,7 @@ export interface PicoRecoveryCardQrMatrix {
 export function picoRecoveryCardQrPayload(
   card: PicoVaultRecoveryCard,
 ): Uint8Array {
-  assertRecoveryCard(card);
+  assertPicoRecoveryCard(card);
   return new TextEncoder().encode(
     buildPicoRecoveryCardScanTransport(hexToBytes(card.canonicalPayloadHex)),
   );
@@ -71,7 +75,18 @@ export function picoRecoveryCardQrPayload(
 export function createPicoRecoveryCardQrMatrix(
   card: PicoVaultRecoveryCard,
 ): PicoRecoveryCardQrMatrix {
-  const payload = picoRecoveryCardQrPayload(card);
+  return picoRecoveryCardQrMatrixFor(picoRecoveryCardContent(card));
+}
+
+/**
+ * ADR 0132 G1. The matrix is built from the **content's** bytes, so what is
+ * printed and what is scanned are the same array rather than two derivations
+ * that happen to agree today.
+ */
+function picoRecoveryCardQrMatrixFor(
+  content: PicoRecoveryCardContent,
+): PicoRecoveryCardQrMatrix {
+  const payload = content.qrPayload;
   const code = QRCode.create(
     [{ data: Buffer.from(payload), mode: 'byte' }],
     {
@@ -100,15 +115,17 @@ export async function generatePicoRecoveryCardPdfs(
   card: PicoVaultRecoveryCard,
   options: PicoRecoveryCardPdfOptions = {},
 ): Promise<PicoRecoveryCardPdfs> {
-  assertRecoveryCard(card);
-  const cardDocument = await createCardPrinterDocument(card, options);
+  const content = picoRecoveryCardContent(card);
+  // ADR 0132 G5. The last thing checked is the thing that gets laid on paper.
+  assertPicoRecoveryCardContent(content, card);
+  const cardDocument = await createCardPrinterDocument(content, options);
   const cardPrinterPdf = await cardDocument.save({
     addDefaultPage: false,
     useObjectStreams: false,
   });
   const paperDocument = await createPaperPrintableDocument(
     cardPrinterPdf,
-    card.payload.issuedAt,
+    content.issuedAt,
   );
   const paperPrintablePdf = await paperDocument.save({
     addDefaultPage: false,
@@ -118,11 +135,11 @@ export async function generatePicoRecoveryCardPdfs(
 }
 
 async function createCardPrinterDocument(
-  card: PicoVaultRecoveryCard,
+  content: PicoRecoveryCardContent,
   options: PicoRecoveryCardPdfOptions,
 ): Promise<PDFDocument> {
   const document = await PDFDocument.create();
-  setStableMetadata(document, card.payload.issuedAt);
+  setStableMetadata(document, content.issuedAt);
   const regular = await document.embedFont(StandardFonts.Helvetica);
   const bold = await document.embedFont(StandardFonts.HelveticaBold);
   const mono = await document.embedFont(StandardFonts.Courier);
@@ -134,8 +151,8 @@ async function createCardPrinterDocument(
     PICO_RECOVERY_CARD_PDF_LAYOUT.cardWidthPt,
     PICO_RECOVERY_CARD_PDF_LAYOUT.cardHeightPt,
   ]);
-  drawFront(front, card.payload, regular, bold, mono);
-  drawBack(back, card, regular, bold, mono);
+  drawFront(front, content, regular, bold, mono);
+  drawBack(back, content, regular, bold, mono);
   if (options.specimen === true) {
     drawSpecimen(front, bold);
     drawSpecimen(back, bold);
@@ -228,7 +245,7 @@ async function createPaperPrintableDocument(
 
 function drawFront(
   page: PDFPage,
-  payload: PicoRecoveryCardPayload,
+  payload: PicoRecoveryCardContent,
   regular: PDFFont,
   bold: PDFFont,
   mono: PDFFont,
@@ -305,7 +322,7 @@ function drawFront(
 
 function drawBack(
   page: PDFPage,
-  card: PicoVaultRecoveryCard,
+  content: PicoRecoveryCardContent,
   regular: PDFFont,
   bold: PDFFont,
   mono: PDFFont,
@@ -334,7 +351,7 @@ function drawBack(
     color: SLATE,
   });
 
-  const words = card.recoveryPhrase.trim().split(/\s+/u);
+  const words = content.recoveryPhrase.trim().split(/\s+/u);
   const columnWidth = mm(16.5);
   for (let index = 0; index < words.length; index += 1) {
     const column = Math.floor(index / 8);
@@ -351,7 +368,7 @@ function drawBack(
     );
   }
 
-  const matrix = createPicoRecoveryCardQrMatrix(card);
+  const matrix = picoRecoveryCardQrMatrixFor(content);
   drawQrMatrix(page, matrix, {
     x: width - mm(30),
     y: height - mm(31),
@@ -365,7 +382,7 @@ function drawBack(
     color: SLATE,
   });
   page.drawText(
-    fitText(card.payload.endpointHint, regular, 4.5, mm(24)),
+    fitText(content.endpointHint, regular, 4.5, mm(24)),
     {
       x: width - mm(30),
       y: height - mm(38),
@@ -476,34 +493,6 @@ function drawCropMarks(
   }
 }
 
-function assertRecoveryCard(card: PicoVaultRecoveryCard): void {
-  if (
-    !isRecord(card)
-    || !hasExactKeys(card, [
-      'payload',
-      'recoveryPhrase',
-      'canonicalPayloadHex',
-    ])
-    || !isRecord(card.payload)
-    || card.payload.pinProtected !== true
-    || typeof card.recoveryPhrase !== 'string'
-    || card.recoveryPhrase.trim().split(/\s+/u).length !== 24
-    || typeof card.canonicalPayloadHex !== 'string'
-    || !/^(?:[0-9a-f]{2})+$/u.test(card.canonicalPayloadHex)
-  ) {
-    throw new Error('invalid_recovery_card');
-  }
-  const canonical = buildPicoRecoveryCardPayload(
-    card.payload as unknown as PicoRecoveryCardPayload,
-  );
-  if (
-    Buffer.from(canonical).toString('hex')
-    !== card.canonicalPayloadHex
-  ) {
-    throw new Error('recovery_card_payload_mismatch');
-  }
-}
-
 function setStableMetadata(document: PDFDocument, issuedAt: string): void {
   const timestamp = new Date(issuedAt);
   document.setTitle('Pico Recovery Card');
@@ -539,19 +528,6 @@ function hexToBytes(value: string): Uint8Array {
   return Uint8Array.from(
     value.match(/../gu)?.map((pair) => Number.parseInt(pair, 16)) ?? [],
   );
-}
-
-function hasExactKeys(
-  record: Record<string, unknown>,
-  keys: readonly string[],
-): boolean {
-  const expected = new Set(keys);
-  return Object.keys(record).length === expected.size
-    && Object.keys(record).every((key) => expected.has(key));
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function mm(value: number): number {
