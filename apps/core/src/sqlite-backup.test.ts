@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   listAppliedMigrations,
   picoModuleEffectConsentMigrationId,
+  picoRuleDecisionMigrationId,
   picoSchemaBaselineMigrationId,
   runMigrations,
 } from './migrations.js';
@@ -225,6 +226,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoModuleEffectConsentMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoRuleDecisionMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

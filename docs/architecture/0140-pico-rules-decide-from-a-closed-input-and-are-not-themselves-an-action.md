@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted as the decision contract for the action path. **RL1, RL2, RL3, RL5 and RL6
-are implemented** on 2026-08-10 and **RL4 is half implemented**.
+Accepted as the decision contract for the action path. **RL1-RL6 are implemented**
+(2026-08-10, RL4 completed 2026-08-11), and this ADR is complete.
 
 Second of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is and who may request one; this says who decides and on what;
@@ -275,10 +275,26 @@ a revised verdict.
   emit and decides nothing - proved both ways by adding each import to a
   real module and running the check. The eighteenth probe.
 
-  **The durable half is not built.** Rule changes as a person's decision
-  over an authenticated surface, recorded as a content-free event plus
-  projection and never read from host configuration, needs a runtime and
-  a migration - the same place AC4's second half waits.
+  **The durable half landed on 2026-08-11.** Migration
+  `0003_pico_rule_decision` holds one recorded outcome per effect and
+  domain, `home.rule_decision_changed` is the content-free event beside
+  it - the third decision recorded in the shape ADR 0127 activation and
+  ADR 0129 SR6 capture already use, and the one that decides *about* the
+  other two. Nothing reads a rule from the environment, and a test sets
+  `PICO_RULES_*` to prove it changes nothing (ADR 0104).
+
+  **A recorded rule refines and never grants.** It chooses among the
+  answers that remain: it can tighten an `allow` into an approval or a
+  denial, and it cannot overrule the RL3 floor or ADR 0138 CO3's reach
+  precondition - tests state both. Absence is not `deny`, because the
+  ADR 0139 AC4 consent record already carries a person's decision that
+  this effect may exist; a Home where nobody wrote an explicit rule is not
+  a Home that forbade everything, which is the asymmetry ADR 0127 M3 draws
+  between never-decided and decided-to-leave-off.
+
+  **This is the base case, not the rule language.** Whether rules nest,
+  inherit or compose stays product work; what is built is one outcome per
+  effect and domain, which is the thing those would be built on.
 - **RL5 - One decision, before execution (implemented):** deciding and
   executing are two functions. `decidePicoAction` records the decision and
   hands back a record; `executePicoAction` takes that record and **has

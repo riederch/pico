@@ -62,6 +62,19 @@ export const foundationEventTypes = [
    */
   'home.module_capture_changed',
   /**
+   * ADR 0140 RL4. A person said what may happen when an effect is requested.
+   *
+   * The third decision recorded in this shape, and the one that decides about
+   * the other two: activation says a feature exists, capture says Pico may
+   * write down where somebody goes, and this says what a request for a
+   * declared effect is answered with. It is emphatically **not** an action -
+   * if a rule change were reachable from the path rules govern, the most
+   * valuable request in the system would be the one that removes the
+   * governor. Content-free: an effect name, a domain and one of three
+   * outcomes.
+   */
+  'home.rule_decision_changed',
+  /**
    * ADR 0122 Y6. The running code changed. Content-free by construction: two
    * version strings and a direction, because an installation that cannot tell
    * it was downgraded cannot notice the one update that matters most.
@@ -114,6 +127,10 @@ export const serverSynthesizedFoundationEventTypes = [
   // it is the Home's to write - a client asserting it would be asserting
   // somebody else's permission.
   'home.module_capture_changed',
+  // ADR 0140 RL4. A rule is what answers a request; a client writing its own
+  // rule record would be granting itself the permission it is about to ask
+  // for.
+  'home.rule_decision_changed',
   // ADR 0122 Y6. The server appends it at boot from its own observation; a
   // client claiming its code changed would be claiming something only the
   // process itself can know.

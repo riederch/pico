@@ -6503,6 +6503,83 @@ export class EventStore {
   }
 
   /**
+   * ADR 0140 RL4, the durable half. What a person decided a requested effect
+   * is answered with, in the domain they decided it for.
+   *
+   * There is no host-configuration path into this and no effect that can
+   * reach it - `module:check` refuses a module that even links against the
+   * decision contract. A rule change arrives over an authenticated surface or
+   * not at all.
+   */
+  public setPicoRuleDecision(input: {
+    effectName: string;
+    privacyDomain: string;
+    decision: 'allow' | 'require_approval' | 'deny';
+    decidedAt: string;
+  }): void {
+    this.ensureOpen();
+    this.db
+      .prepare(`
+        INSERT INTO pico_rule_decision (effect_name, privacy_domain, decision, decided_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(effect_name, privacy_domain) DO UPDATE
+          SET decision = excluded.decision, decided_at = excluded.decided_at
+      `)
+      .run(input.effectName, input.privacyDomain, input.decision, input.decidedAt);
+  }
+
+  /**
+   * ADR 0140 RL4/RL6. The decision recorded for one effect in one domain, or
+   * `undefined` where a person has not decided.
+   *
+   * Undefined is not `deny` here, and the distinction is load-bearing: ADR 0139
+   * AC4's consent record already carries a person's decision that this effect
+   * may exist, and this refines it. A Home where nobody has written an explicit
+   * rule is not a Home that forbade everything - that is the same asymmetry
+   * ADR 0127 M3 draws between "never decided" and "decided to leave off".
+   */
+  public picoRuleDecision(input: {
+    effectName: string;
+    privacyDomain: string;
+  }): 'allow' | 'require_approval' | 'deny' | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT decision FROM pico_rule_decision
+        WHERE effect_name = ? AND privacy_domain = ?
+      `)
+      .get(input.effectName, input.privacyDomain) as { decision: string } | undefined;
+    return row?.decision as 'allow' | 'require_approval' | 'deny' | undefined;
+  }
+
+  /** ADR 0140 RL4. Every recorded rule, for a surface that shows them. */
+  public picoRuleDecisions(): ReadonlyArray<{
+    effectName: string;
+    privacyDomain: string;
+    decision: 'allow' | 'require_approval' | 'deny';
+    decidedAt: string;
+  }> {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT
+          effect_name AS effectName,
+          privacy_domain AS privacyDomain,
+          decision,
+          decided_at AS decidedAt
+        FROM pico_rule_decision
+        ORDER BY effect_name, privacy_domain
+      `)
+      .all() as Array<{
+        effectName: string;
+        privacyDomain: string;
+        decision: 'allow' | 'require_approval' | 'deny';
+        decidedAt: string;
+      }>;
+    return Object.freeze(rows.map((row) => Object.freeze(row)));
+  }
+
+  /**
    * ADR 0141 RN5. Action History, which is a **view** and not a store.
    *
    * ADR 0026 already says what Action History is, in one line: the product

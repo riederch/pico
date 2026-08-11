@@ -60,6 +60,9 @@ export const picoSchemaBaselineMigrationId = '0001_initial_schema' as const;
 /** ADR 0139 AC4. The consent record beside the activation decision. */
 export const picoModuleEffectConsentMigrationId = '0002_pico_module_effect_consent' as const;
 
+/** ADR 0140 RL4. What a person decided a requested effect is answered with. */
+export const picoRuleDecisionMigrationId = '0003_pico_rule_decision' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -790,6 +793,51 @@ const migrations: readonly MigrationDefinition[] = [
           risk TEXT NOT NULL,
           consented_at TEXT NOT NULL,
           PRIMARY KEY (identifier, effect_name)
+        );
+      `);
+    },
+  },
+{
+    /**
+     * ADR 0140 RL4, the durable half. A rule is a person's decision about what
+     * a requested effect is answered with, and it is recorded the way this
+     * codebase records durable decisions - the same shape as ADR 0127
+     * activation and ADR 0129 SR6 capture, which are the two decisions this
+     * one decides *about*.
+     *
+     * **Not an action, and that is the point.** No effect may change a rule;
+     * if one could, the most valuable request in the system would be the one
+     * that removes the governor. `module:check` refuses a module that even
+     * links against the decision contract, and this table has no write path
+     * that an effect can reach.
+     *
+     * **Not host configuration** (ADR 0104). A rule set a container rebuild
+     * could replace is not a rule set.
+     *
+     * Scoped by domain because ADR 0140 RL6 says no decision is domain-blind.
+     * What this is *not* is a rule language: whether rules nest, inherit or
+     * compose is product work, and this is the base case those would be built
+     * on - one recorded outcome per effect and domain.
+     *
+     * ADR 0127's five questions, answered: the crypto shred does not reach it,
+     * for the reason consent is not reachable either - a decision about what
+     * Pico may do is not data about a life, and a domain shred that erased it
+     * would silently re-grant what nobody re-granted. It rides ordinary backup
+     * and restore, boot reconciliation is the read itself, it needs no
+     * ADR 0119 Q5 ceiling because it is bounded by declared effects times
+     * domains rather than by anything a writer can grow, and the Q3 byte
+     * digest covers it because that digest hashes the file.
+     */
+    id: picoRuleDecisionMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_rule_decision (
+          effect_name TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          decision TEXT NOT NULL CHECK (decision IN ('allow', 'require_approval', 'deny')),
+          decided_at TEXT NOT NULL,
+          PRIMARY KEY (effect_name, privacy_domain)
         );
       `);
     },

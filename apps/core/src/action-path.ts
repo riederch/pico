@@ -137,6 +137,13 @@ export interface PicoActionDecisionInput {
   instance: string | null;
   reachesOutside: boolean;
   reachPermitted: boolean;
+  /**
+   * ADR 0140 RL4. What a person recorded for this effect in this domain, if
+   * anything. Absent is not `deny`: the ADR 0139 AC4 consent record already
+   * carries a decision that this effect may exist, and an explicit rule
+   * refines it rather than being its precondition.
+   */
+  recordedRule?: PicoRulesDecisionValue;
   emit: PicoActionEmit;
   /**
    * ADR 0141 RN4. Required as soon as a decision could be
@@ -213,11 +220,15 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
   // rule can outvote.
   const reachRefused = input.reachesOutside && !input.reachPermitted;
 
+  // The floor and the reach precondition are not overridable: a recorded rule
+  // decides between the answers that remain, and cannot grant what ADR 0140
+  // RL3 refused for want of an input or what ADR 0138 CO3 never permitted.
   const decision: PicoRulesDecisionValue = floor !== null || reachRefused
     ? 'deny'
-    : (consented.risk === 'read_only' || consented.risk === 'local_write'
-      ? 'allow'
-      : 'require_approval');
+    : input.recordedRule
+      ?? (consented.risk === 'read_only' || consented.risk === 'local_write'
+        ? 'allow'
+        : 'require_approval');
 
   const reasons = floor?.reasons ?? Object.freeze([]);
   const decisionEventId = input.emit('pico_rules.decision_created', {
