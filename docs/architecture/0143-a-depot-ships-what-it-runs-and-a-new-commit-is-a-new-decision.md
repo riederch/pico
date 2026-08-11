@@ -725,9 +725,37 @@ compatibility a property of a commit a person accepted.
   core's; it keeps the history from filling with questions whose answer is
   already known.
 
-  Open: the `startPicoTimeBoundScheduler` generalisation, and the
-  `offline:check` line over a preparation path, which needs a preparation
-  path to walk.
+  **The generalisation this gate asked for is the wrong shape, found on
+  2026-08-11 and corrected here rather than left to be discovered.** The
+  sentence above says a fetch should run on a generalised
+  `startPicoTimeBoundScheduler`. That scheduler is a **declared entry of
+  ADR 0118's `time_bound_entry` floor family**, so generalising it would
+  have pulled `git` into a floor hull - and `offline:check` would not have
+  said a word, because its forbidden list bans specifiers that reach out
+  and a spawn is not a direction.
+
+  The list cannot simply gain `node:child_process` either. Five of the six
+  families already reach it or `node:worker_threads` through
+  `platform-anchor.ts`, which shells out to `tpm2_*`, and
+  `reader-access.ts`, which starts a worker. Both are local calls with no
+  network in them, and banning the mechanism would fail five families for
+  doing something legitimate while still not distinguishing `tpm2_getcap`
+  from `git fetch`.
+
+  So the guard names the **module** instead of the mechanism:
+  `offline:check` now asserts that `depot-fetch.ts` is reachable from no
+  floor family's hull, and fails for the right reason - *this reaches the
+  network* rather than *this spawns something*. Made to fail once by
+  planting the import in the time-bound scheduler.
+
+  It follows that a depot fetch gets a **separate periodic scheduler**
+  rather than a widened one, and the reason is a gate rather than taste.
+  The two disciplines are different anyway: a time-bound entry sleeps until
+  an instant that comes from data and being late is the failure; a fetch
+  runs every so often and being late costs nothing.
+
+  Open: that scheduler, and the `offline:check` line over a preparation
+  path, which needs a preparation path to walk.
 
 **The last unnamed state got its name on 2026-08-11: `materializing`.** A
 library that is attached, whose credential is present, and whose clone has

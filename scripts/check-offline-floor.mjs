@@ -329,6 +329,67 @@ if (listMatch === null) {
   }
 }
 
+// --- Outward-reaching modules stay out of every floor hull -------------------
+
+/**
+ * ADR 0118 O1 with ADR 0143 DP8. A guard for the hole the forbidden list
+ * cannot cover.
+ *
+ * The list bans *specifiers* that reach out - `undici`, `node:tls`, a model
+ * provider - and it cannot ban a spawn, because a spawn is not a direction.
+ * `platform-anchor.ts` shells out to `tpm2_*` and `reader-access.ts` starts a
+ * worker, and five of the six families already reach one or the other: both
+ * are local calls with no network in them. Adding `node:child_process` to the
+ * forbidden list would fail those five for doing something legitimate, and
+ * leaving it out means a floor module could shell out to `git` or `curl` and
+ * this check would stay green.
+ *
+ * So the guard is the other way round. Rather than banning the mechanism, it
+ * names the modules that **do** reach out through one and asserts that no
+ * floor family's hull contains them. That is narrower, it is checkable, and it
+ * fails for the right reason - "this reaches the network" rather than "this
+ * spawns something".
+ *
+ * It also settles a design question that looked like a matter of taste.
+ * ADR 0143 DP8 asked for `startPicoTimeBoundScheduler` to be *generalised* to
+ * carry a depot fetch. That scheduler is a declared entry of the
+ * `time_bound_entry` family, so generalising it would have pulled `git` into a
+ * floor hull - and because `node:child_process` is not on the forbidden list,
+ * this check would not have said a word. Two scheduling disciplines, one
+ * floor obligation, and the wrong merge is the silent one.
+ */
+const outwardReachingModules = [
+  ['apps/core/src/depot-fetch.ts', 'invokes `git`, which reaches a remote'],
+];
+for (const [path, why] of outwardReachingModules) {
+  const absolute = join(repoRoot, path);
+  if (!realIo.exists(absolute)) {
+    errors.push(`offline-floor: ${path} is named as outward-reaching and does not exist.`);
+    continue;
+  }
+  for (const [family, declaration] of Object.entries(manifest.families)) {
+    if (!Array.isArray(declaration.modules)) {
+      continue;
+    }
+    const entries = declaration.modules
+      .map((module) => join(repoRoot, module))
+      .filter((entry) => realIo.exists(entry));
+    if (entries.length === 0) {
+      continue;
+    }
+    const { modules } = scanFloorClosure(entries, realIo, family);
+    if (modules.has(absolute)) {
+      errors.push(
+        `${path}: reachable from floor family ${family}, and it ${why}. `
+        + 'ADR 0118 O1: a floor operation answers with no network. The '
+        + 'forbidden list cannot catch this one, because a spawn is not a '
+        + 'direction - `platform-anchor.ts` spawns tpm2 and stays on the floor '
+        + 'legitimately - so the module is named instead of the mechanism.',
+      );
+    }
+  }
+}
+
 // --- Negative probes: the scanner has to be able to fail ---------------------
 
 const probes = [
