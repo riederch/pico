@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   acceptPicoDepotOffer,
+  defaultPicoDepotApprovalThresholdBytes,
   parsePicoDepotPin,
+  parsePicoDepotTask,
   picoDepotOffer,
+  picoDepotTransferNeedsApproval,
   type PicoDepotOffer,
 } from './depot.js';
 
@@ -113,5 +116,60 @@ describe('ADR 0143 DP1 - accepting names the commit', () => {
       offer: { remote, offered: newer } as unknown as PicoDepotOffer,
       acceptedCommit: newer,
     })).toThrow('invalid_pico_depot_offer');
+  });
+});
+
+describe('ADR 0143 DP8 - a task asks, and never acts', () => {
+  it('is an identifier, an interval and a request', () => {
+    // The third field is the load-bearing one: scheduled work goes through the
+    // action path rather than beside it.
+    expect(parsePicoDepotTask({
+      identifier: 'rchkb-fetch',
+      intervalMs: 3_600_000,
+      requestsEffect: 'depot.fetch',
+    })).toEqual({
+      identifier: 'rchkb-fetch',
+      intervalMs: 3_600_000,
+      requestsEffect: 'depot.fetch',
+    });
+  });
+
+  it('has no field through which a task could do something itself', () => {
+    const task = parsePicoDepotTask({
+      identifier: 'rchkb-fetch',
+      intervalMs: 3_600_000,
+      requestsEffect: 'depot.fetch',
+    });
+    expect(Object.keys(task).sort()).toEqual(['identifier', 'intervalMs', 'requestsEffect']);
+  });
+
+  it('refuses an interval that turns a task into a poller', () => {
+    // ADR 0138 CO4's distinction between answering and sweeping stops meaning
+    // anything at a one-second cadence.
+    expect(() => parsePicoDepotTask({
+      identifier: 'rchkb-fetch',
+      intervalMs: 1_000,
+      requestsEffect: 'depot.fetch',
+    })).toThrow('invalid_pico_depot_task_interval');
+  });
+});
+
+describe('ADR 0143 DP8 - a large transfer becomes a question', () => {
+  it('leaves a routine fetch routine', () => {
+    expect(picoDepotTransferNeedsApproval({ estimatedBytes: 4 * 1024 * 1024 })).toBe(false);
+  });
+
+  it('asks about a clone the size of a knowledge base', () => {
+    expect(picoDepotTransferNeedsApproval({ estimatedBytes: 2 * 1024 * 1024 * 1024 }))
+      .toBe(true);
+    expect(defaultPicoDepotApprovalThresholdBytes).toBe(500 * 1024 * 1024);
+  });
+
+  it('asks when nobody could estimate the size', () => {
+    // ADR 0119 Q5's posture: the one case that cannot be measured must not be
+    // the one case that is unprotected.
+    expect(picoDepotTransferNeedsApproval({})).toBe(true);
+    expect(picoDepotTransferNeedsApproval({ estimatedBytes: Number.NaN })).toBe(true);
+    expect(picoDepotTransferNeedsApproval({ estimatedBytes: -1 })).toBe(true);
   });
 });

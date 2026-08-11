@@ -160,3 +160,89 @@ export function acceptPicoDepotOffer(input: {
     commit: input.acceptedCommit,
   });
 }
+
+/**
+ * ADR 0143 DP8 - a task is an identifier, an interval and a request it makes.
+ *
+ * Fetching and preparing run as **scheduler tasks**, not as resident processes.
+ * There is nothing to supervise, no restart behaviour to define, and the
+ * ADR 0113 tray budget is untouched.
+ *
+ * The third field is the load-bearing one. A task does not *do* something; it
+ * **asks**, which routes scheduled work through ADR 0139's request, ADR 0140's
+ * decision and ADR 0141's history rather than beside them. A task that acted
+ * directly would be a second privileged path running while nobody is looking -
+ * exactly what ADR 0138 CO4 separates from answering a question.
+ */
+export interface PicoDepotTask {
+  identifier: string;
+  intervalMs: number;
+  /** The effect it requests. Never a function it calls. */
+  requestsEffect: string;
+}
+
+export const minPicoDepotTaskIntervalMs = 60_000;
+
+export function parsePicoDepotTask(value: unknown): PicoDepotTask {
+  const record = isRecord(value) ? value : undefined;
+  if (record === undefined) {
+    throw new Error('invalid_pico_depot_task');
+  }
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 3
+    || keys[0] !== 'identifier' || keys[1] !== 'intervalMs' || keys[2] !== 'requestsEffect') {
+    throw new Error('invalid_pico_depot_task');
+  }
+  if (typeof record.identifier !== 'string' || record.identifier === '') {
+    throw new Error('invalid_pico_depot_task');
+  }
+  if (typeof record.intervalMs !== 'number'
+    || !Number.isInteger(record.intervalMs)
+    || record.intervalMs < minPicoDepotTaskIntervalMs) {
+    // A floor rather than a free number: a task that can be scheduled every
+    // second is a poller, and ADR 0138 CO4's distinction between answering and
+    // sweeping stops meaning anything at that rate.
+    throw new Error('invalid_pico_depot_task_interval');
+  }
+  if (typeof record.requestsEffect !== 'string' || record.requestsEffect === '') {
+    throw new Error('invalid_pico_depot_task');
+  }
+  return Object.freeze({
+    identifier: record.identifier,
+    intervalMs: record.intervalMs,
+    requestsEffect: record.requestsEffect,
+  });
+}
+
+/**
+ * ADR 0143 DP8. The default above which a transfer stops being routine.
+ *
+ * 500 MB, from the case that raised the question: cloning a knowledge base is
+ * not something to do on a schedule without saying so. A deployment may lower
+ * it; raising it past the point where a person would notice the disk is a
+ * decision this constant makes visible rather than one buried in a caller.
+ */
+export const defaultPicoDepotApprovalThresholdBytes = 500 * 1024 * 1024;
+
+/**
+ * ADR 0143 DP8. Whether a transfer crosses into approval territory.
+ *
+ * An unknown size answers **true**, in ADR 0119 Q5's posture: the one case that
+ * cannot be measured must not be the one case that is unprotected. A fetch
+ * whose size nobody could estimate is precisely the one worth asking about.
+ */
+export function picoDepotTransferNeedsApproval(input: {
+  estimatedBytes?: number;
+  thresholdBytes?: number;
+}): boolean {
+  const threshold = input.thresholdBytes ?? defaultPicoDepotApprovalThresholdBytes;
+  if (!Number.isFinite(threshold) || threshold <= 0) {
+    throw new Error('invalid_pico_depot_transfer_threshold');
+  }
+  if (typeof input.estimatedBytes !== 'number'
+    || !Number.isFinite(input.estimatedBytes)
+    || input.estimatedBytes < 0) {
+    return true;
+  }
+  return input.estimatedBytes >= threshold;
+}

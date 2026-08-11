@@ -455,3 +455,79 @@ describe('ADR 0137 IN5 with ADR 0140 RL3 - a named instance has to be attached',
     expect(decided.reasons).toContain('instance_not_attached');
   });
 });
+
+describe('ADR 0143 DP8 - a large transfer becomes a question, through one mechanism', () => {
+  it('turns an allow into require_approval', () => {
+    // A size threshold does not get its own consent machinery. The scheduler
+    // is already a requester (AC6), so it escalates and ADR 0141 RN4's
+    // presence-bound expiring approval does the rest.
+    const { decided } = decide({
+      escalations: ['large_transfer'],
+      approvalWindow: {
+        presenceSessionId: 'sess-1',
+        endsAtMs: 60_000,
+        startedAtMs: 0,
+        durationMs: 60_000,
+      },
+    });
+    expect(decided.decision).toBe('require_approval');
+  });
+
+  it('cannot loosen a deny', () => {
+    // Escalation only. This is a caller saying "ask about this one", never
+    // "do not bother asking", and the direction is enforced rather than
+    // trusted to the call site.
+    const { decided } = decide({
+      recordedRule: 'allow',
+      reachesOutside: true,
+      reachPermitted: false,
+      escalations: ['large_transfer'],
+    });
+    expect(decided.decision).toBe('deny');
+  });
+
+  it('cannot be cancelled by a recorded rule', () => {
+    const { decided } = decide({
+      recordedRule: 'allow',
+      escalations: ['large_transfer'],
+      approvalWindow: {
+        presenceSessionId: 'sess-1',
+        endsAtMs: 60_000,
+        startedAtMs: 0,
+        durationMs: 60_000,
+      },
+    });
+    expect(decided.decision).toBe('require_approval');
+  });
+
+  it('changes nothing when nothing escalates', () => {
+    expect(decide({ escalations: [] }).decided.decision).toBe('allow');
+  });
+});
+
+describe('ADR 0143 DP8 - an escalated decision says what escalated it', () => {
+  it('records the reason on the decision fact and on the record', () => {
+    // Without this a person asked about a two-gigabyte clone would be asked
+    // with no reason attached: the ADR 0140 RL3 codes cover refusals, and
+    // nothing covered a request being tightened rather than refused.
+    const { facts, decided } = decide({
+      escalations: ['large_transfer'],
+      approvalWindow: {
+        presenceSessionId: 'sess-1',
+        endsAtMs: 60_000,
+        startedAtMs: 0,
+        durationMs: 60_000,
+      },
+    });
+    const decision = facts.find((f) => f.type === 'pico_rules.decision_created');
+    expect(decision?.payload.reason).toBe('large_transfer');
+    expect(decided.escalations).toEqual(['large_transfer']);
+  });
+
+  it('leaves an unescalated decision as it was', () => {
+    const { facts, decided } = decide();
+    expect(facts.find((f) => f.type === 'pico_rules.decision_created')?.payload.reason)
+      .toBe('allow');
+    expect(decided.escalations).toBeUndefined();
+  });
+});

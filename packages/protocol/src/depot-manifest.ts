@@ -1,3 +1,4 @@
+import { assertPicoSupplierProtocolVersion } from './supplier-transport.js';
 import {
   maxPicoSupplierCoverage,
   picoSupplierCoveragePattern,
@@ -101,6 +102,20 @@ export interface PicoDepotSupplierDeclaration {
   coverage: readonly string[];
   /** ADR 0143 DP3. A file inside the depot. Pico supplies the runtime. */
   entryPoint: string;
+  /**
+   * ADR 0143 DP7. The slot-contract version this supplier speaks. An unknown
+   * one is refused here rather than negotiated later.
+   */
+  protocolVersion: number;
+  /**
+   * ADR 0143 DP5. Another supplier **in this depot** that this one sits on.
+   *
+   * A bare identifier and never a remote, which is the whole cross-depot
+   * refusal: there is no field in which another depot could be named, so
+   * attaching one party cannot silently attach a second. Absent means this
+   * supplier stands on its own.
+   */
+  dependsOn?: string;
 }
 
 export interface PicoDepotManifest {
@@ -142,9 +157,10 @@ function parseSupplierDeclaration(value: unknown): PicoDepotSupplierDeclaration 
     // way an author learns that this is the person's decision.
     throw new Error('pico_depot_cannot_choose_a_domain');
   }
+  const optional = 'dependsOn' in record ? ['dependsOn'] : [];
   assertExactKeys(
     record,
-    ['identifier', 'kind', 'slots', 'coverage', 'entryPoint'],
+    ['identifier', 'kind', 'slots', 'coverage', 'entryPoint', 'protocolVersion', ...optional],
     'invalid_pico_depot_supplier',
   );
 
@@ -192,12 +208,29 @@ function parseSupplierDeclaration(value: unknown): PicoDepotSupplierDeclaration 
     throw new Error('invalid_pico_depot_entry_point');
   }
 
+  // ADR 0143 DP7. Refused here rather than carried and negotiated later.
+  assertPicoSupplierProtocolVersion(record.protocolVersion);
+
+  if (record.dependsOn !== undefined) {
+    if (typeof record.dependsOn !== 'string'
+      || !picoSupplierIdentifierPattern.test(record.dependsOn)) {
+      throw new Error('invalid_pico_depot_dependency');
+    }
+    if (record.dependsOn === record.identifier) {
+      throw new Error('pico_depot_supplier_depends_on_itself');
+    }
+  }
+
   return Object.freeze({
     identifier: record.identifier,
     kind: record.kind as PicoSupplierKind,
     slots: Object.freeze([...(record.slots as PicoSupplierSlot[])]),
     coverage: Object.freeze([...(record.coverage as string[])]),
     entryPoint: record.entryPoint,
+    protocolVersion: record.protocolVersion as number,
+    ...(record.dependsOn === undefined
+      ? {}
+      : { dependsOn: record.dependsOn as string }),
   });
 }
 
@@ -233,6 +266,26 @@ export function parsePicoDepotManifest(value: unknown): PicoDepotManifest {
     // identity.
     throw new Error('duplicate_pico_depot_supplier_identifier');
   }
+  // ADR 0143 DP5. A dependency names a supplier in *this* depot, so an
+  // unresolvable one is a manifest describing a stack it does not contain -
+  // and the only way it could resolve elsewhere is a field that does not exist.
+  for (const supplier of suppliers) {
+    if (supplier.dependsOn !== undefined && !identifiers.has(supplier.dependsOn)) {
+      throw new Error('pico_depot_dependency_not_in_depot');
+    }
+  }
+  for (const supplier of suppliers) {
+    const seen = new Set<string>([supplier.identifier]);
+    let next = supplier.dependsOn;
+    while (next !== undefined) {
+      if (seen.has(next)) {
+        throw new Error('pico_depot_dependency_cycle');
+      }
+      seen.add(next);
+      next = suppliers.find((other) => other.identifier === next)?.dependsOn;
+    }
+  }
+
   const entryPoints = new Set(suppliers.map((supplier) => supplier.entryPoint));
   if (entryPoints.size !== suppliers.length) {
     // Two suppliers entering one file is one supplier wearing two names, and
@@ -245,6 +298,73 @@ export function parsePicoDepotManifest(value: unknown): PicoDepotManifest {
     schema: picoDepotManifestSchema,
     suppliers: Object.freeze(suppliers),
   });
+}
+
+/**
+ * ADR 0143 DP5. The suppliers a person attaches, which is not all of them.
+ *
+ * A supplier may sit on another **in the same depot** - a git supplier
+ * underneath doing transport and pin verification, a knowledge-base supplier
+ * above it doing extraction. Only the top one is attached. The lower one is
+ * not separately configured, does not appear as an ADR 0137 instance, and
+ * inherits the Private Space, the credential and the ADR 0138 CO3/CO4 reach
+ * decisions of the attachment above it - ADR 0127's activation shell applied
+ * one level down, because the person made one decision about one thing and the
+ * composition beneath it is the author's business.
+ *
+ * **Stacking across depots is not refused here; it is unsayable.** `dependsOn`
+ * is a bare identifier resolved inside this manifest, so there is no field in
+ * which a second depot could be named. Attaching one party therefore cannot
+ * silently attach a second, which is the supply-chain move ADR 0143 exists to
+ * prevent.
+ */
+export function picoDepotTopLevelSuppliers(
+  manifest: PicoDepotManifest,
+): readonly PicoDepotSupplierDeclaration[] {
+  const depended = new Set(
+    manifest.suppliers
+      .map((supplier) => supplier.dependsOn)
+      .filter((identifier): identifier is string => identifier !== undefined),
+  );
+  return Object.freeze(
+    manifest.suppliers.filter((supplier) => !depended.has(supplier.identifier)),
+  );
+}
+
+/**
+ * ADR 0143 DP5. The stack under one attached supplier, top first.
+ *
+ * Returned as a list rather than walked by a caller, because the core sees
+ * **one** supplier and everything below it is composition - a caller assembling
+ * this itself would be a caller deciding what the stack is.
+ */
+export function picoDepotSupplierStack(
+  manifest: PicoDepotManifest,
+  identifier: string,
+): readonly PicoDepotSupplierDeclaration[] {
+  const byIdentifier = new Map(
+    manifest.suppliers.map((supplier) => [supplier.identifier, supplier]),
+  );
+  const stack: PicoDepotSupplierDeclaration[] = [];
+  const seen = new Set<string>();
+  let current = byIdentifier.get(identifier);
+  if (current === undefined) {
+    throw new Error('pico_depot_supplier_not_declared');
+  }
+  while (current !== undefined) {
+    if (seen.has(current.identifier)) {
+      // Unreachable through `parsePicoDepotManifest`, which refuses a cycle.
+      // Kept because this function is exported and a hand-built manifest is a
+      // caller's mistake rather than a reason to loop forever.
+      throw new Error('pico_depot_dependency_cycle');
+    }
+    seen.add(current.identifier);
+    stack.push(current);
+    current = current.dependsOn === undefined
+      ? undefined
+      : byIdentifier.get(current.dependsOn);
+  }
+  return Object.freeze(stack);
 }
 
 /**

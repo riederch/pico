@@ -30,6 +30,52 @@ export const picoRulesDecisions = ['allow', 'require_approval', 'deny'] as const
 export type PicoRulesDecisionValue = typeof picoRulesDecisions[number];
 
 /**
+ * ADR 0143 DP8 - a named reason a decision must be stricter than it would be.
+ *
+ * A large pull is not a bridge feature. ADR 0139 AC6 already made the scheduler
+ * a requester, so a size threshold turns its `allow` into `require_approval`
+ * and ADR 0141 RN4's presence-bound expiring approval does the rest: **one
+ * consent mechanism, not two**. A second one built for transfers would have its
+ * own expiry, its own presence rule and its own way of being wrong.
+ *
+ * Closed and named rather than a boolean, for the reason ADR 0140 RL3 gives
+ * about missing-input codes: a reason has to reach a surface that can act on
+ * it, and "the scheduler said so" is not something a person can answer.
+ */
+export const picoActionEscalations = ['large_transfer'] as const;
+
+export type PicoActionEscalation = typeof picoActionEscalations[number];
+
+const decisionStrictness: Readonly<Record<PicoRulesDecisionValue, number>> =
+  Object.freeze({ allow: 0, require_approval: 1, deny: 2 });
+
+/**
+ * ADR 0143 DP8. Applies escalations, and **only ever tightens**.
+ *
+ * A `deny` stays a `deny` and a `require_approval` never becomes an `allow`,
+ * whatever a caller passes. That direction is the whole safety of letting a
+ * requester influence a decision at all: this is a caller saying *ask about
+ * this one*, never a caller saying *do not bother asking*, and the ordering is
+ * enforced here rather than trusted to every call site.
+ */
+export function escalatePicoRulesDecision(
+  decision: PicoRulesDecisionValue,
+  escalations: readonly PicoActionEscalation[] = [],
+): PicoRulesDecisionValue {
+  if (escalations.length === 0) {
+    return decision;
+  }
+  for (const escalation of escalations) {
+    if (!(picoActionEscalations as readonly string[]).includes(escalation)) {
+      throw new Error('pico_action_escalation_not_listed');
+    }
+  }
+  return decisionStrictness[decision] >= decisionStrictness.require_approval
+    ? decision
+    : 'require_approval';
+}
+
+/**
  * ADR 0140 RL3. The closed set of reasons a decision can be refused *for want
  * of an input*, as codes rather than sentences.
  *

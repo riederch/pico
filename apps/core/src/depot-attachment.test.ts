@@ -219,3 +219,79 @@ describe('ADR 0143 DP1 with ADR 0119 Q5 - the depot ceiling', () => {
     store.close();
   });
 });
+
+describe('ADR 0143 DP6 - a depot lives in no space; its suppliers do', () => {
+  const fromOneDepot = (identifier: string, privacyDomain: string) => ({
+    identifier,
+    kind: 'library' as const,
+    slots: ['memory_item' as const],
+    coverage: ['knowledge_base'],
+    privacyDomain,
+  });
+
+  it('lets two suppliers from one depot land in two different spaces', () => {
+    // The property the missing domain column exists for. A depot produces
+    // nothing, so it has nothing to place, and where its suppliers land is a
+    // person's judgement per instance (ADR 0137 IN5).
+    const { store } = openStore('spaces');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.attachPicoSupplier({
+      manifest: fromOneDepot('rchkb', 'privat'),
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.attachPicoSupplier({
+      manifest: fromOneDepot('wwgkb', 'arbeit'),
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+
+    expect(store.picoSupplierAttachment('rchkb')?.privacyDomain).toBe('privat');
+    expect(store.picoSupplierAttachment('wwgkb')?.privacyDomain).toBe('arbeit');
+    store.close();
+  });
+
+  it('detaching one leaves the other and the depot standing', () => {
+    const { store } = openStore('independent');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.attachPicoSupplier({
+      manifest: fromOneDepot('rchkb', 'privat'),
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.attachPicoSupplier({
+      manifest: fromOneDepot('wwgkb', 'arbeit'),
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+
+    store.detachPicoSupplier('rchkb');
+
+    expect(store.picoSupplierAttachment('rchkb')).toBeUndefined();
+    expect(store.picoSupplierAttachment('wwgkb')?.privacyDomain).toBe('arbeit');
+    expect(store.picoDepotAttachment(remote)).toBeDefined();
+    store.close();
+  });
+
+  it('detaching the depot leaves supplier decisions where they were', () => {
+    // A depot is a delivery vehicle. Removing it removes the record of where
+    // code came from, and nothing about what a person decided.
+    const { store } = openStore('depot-detach');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.attachPicoSupplier({
+      manifest: fromOneDepot('rchkb', 'privat'),
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+
+    store.detachPicoDepot(remote);
+
+    expect(store.picoDepotAttachment(remote)).toBeUndefined();
+    expect(store.picoSupplierAttachment('rchkb')?.privacyDomain).toBe('privat');
+    store.close();
+  });
+});

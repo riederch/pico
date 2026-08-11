@@ -4,10 +4,11 @@
 
 Accepted as the distribution contract for suppliers: where a Pico Bridge or
 a Pico Library comes from, how it arrives, what pins it and what runtime it
-is given. **DP1, DP3 and DP4 are implemented** (2026-08-11) - DP4 together
-with ADR 0136 BR2, because the two are one boundary stated from opposite
-sides. DP2 and DP5-DP8 are open, and nothing here has met a real depot:
-there is no fetch and no supplier inside one.
+is given. **DP1-DP7 are implemented and DP8 in its consent half**
+(2026-08-11); DP4 landed together with ADR 0136 BR2, because the two are one
+boundary stated from opposite sides. What is left is what a real depot would
+bring: the `git` fetch, the per-attachment scratch area and the scheduler
+generalisation. Nothing here has yet met a depot that exists.
 
 Decided in conversation on 2026-08-11, from an ask that was a product
 decision rather than an engineering one: **as few mandatory bridges as
@@ -431,11 +432,20 @@ compatibility a property of a commit a person accepted.
   several suppliers, and because attaching one is the heavier of the two
   decisions: it is a decision about code that will execute rather than
   about material to read.
-- **DP2 - What runs is vendored (open):** the depot check refuses a depot
-  that would need a package-manager step to run - no unvendored dependency
-  manifest, no install script, no registry access at attachment. `git` is
-  the one fetch path, which is the same one ADR 0136 BR6 already uses for a
-  tracked library.
+- **DP2 - What runs is vendored (implemented 2026-08-11):**
+  `supplier:check` refuses three shapes over the depot root, and each is a
+  different way of expecting to resolve something. A **lockfile**, because
+  vendoring means there is nothing to resolve, so one is either dead weight
+  or a plan. An **unvendored dependency**, where `package.json` names a
+  package not in the tree - that depot runs on whatever a registry hands it
+  on the day it is attached, on a machine that may be offline. And an
+  **install script**, which is arbitrary code executing before the process
+  boundary, before consent, and before the person has seen what they
+  attached. `git` stays the one fetch path, the same one ADR 0136 BR6
+  already uses for a tracked library.
+
+  Open here: nothing in the rule. What is missing is the fetch itself,
+  which needs a real depot to fetch.
 - **DP3 - An entry point, not a command (implemented 2026-08-11):**
   `@pico/protocol/depot-manifest` carries a path to a file and no field in
   which an interpreter, an argument vector or a shell string could be
@@ -529,32 +539,87 @@ compatibility a property of a commit a person accepted.
   knows works. The check says so on success rather than letting exit zero
   imply more than it means.
 - **DP5 - Stacking is composition inside a depot and refused across depots
-  (open):** a supplier may declare a dependency on another supplier in the
-  **same** depot, inheriting space, credential and the ADR 0138 CO3/CO4
-  decisions of the attachment above it; a cross-depot dependency is
-  refused, because attaching one party would otherwise silently attach a
-  second. ADR 0137 sees one instance, and a test asserts the lower layer
-  never appears as one.
+  (implemented 2026-08-11):** a declaration may carry `dependsOn`, and
+  `picoDepotTopLevelSuppliers` answers which suppliers a person actually
+  attaches - the lower layer is not one, so ADR 0137 sees a single
+  instance and the stack beneath it inherits space, credential and the
+  ADR 0138 CO3/CO4 decisions of the attachment above. That is ADR 0127's
+  activation shell one level down: the person made one decision about one
+  thing, and the composition beneath it is the author's business.
+
+  **Cross-depot stacking is not refused; it is unsayable.** `dependsOn` is
+  a bare identifier resolved inside this manifest, so there is no field in
+  which a second depot could be named - attaching one party cannot silently
+  attach a second, which is the supply-chain move this ADR exists to
+  prevent. A dependency naming something the depot does not contain is
+  refused, as is a cycle and a self-dependency; `picoDepotSupplierStack`
+  refuses a cycle again at its own boundary, because it is exported and a
+  hand-built manifest is a caller's mistake rather than a reason to loop
+  forever.
 - **DP6 - A depot lives in no space, and the shipped one is not special
-  (open):** a depot has no Private Space, its instances have one each under
-  ADR 0137 IN5, and two instances from one depot may sit in two spaces
-  independently. The in-tree `bridges/` depot is pinned to the release,
-  passes DP4 like any other, and its suppliers are attached the same way -
-  a test asserts it holds no privilege an external depot lacks.
-- **DP7 - An unknown protocol version is refused (open):** a supplier
-  declares its slot-contract version, an unknown one is refused as an
-  ADR 0138 CO2 condition rather than adapted to, and no code path
-  translates between versions. This is the point at which ADR 0134's "first
-  kept identity" becomes real for the supplier protocol.
-- **DP8 - Fetching is a task and the workspace is not a store (open):**
-  depot fetch and library preparation run as scheduler tasks that make
-  ADR 0139 action requests, so they carry ADR 0140's decision and
-  ADR 0141's history; a size threshold turns `allow` into
-  `require_approval` under RN4's expiring, presence-bound approval rather
-  than inventing a second consent mechanism. Each attachment holds a
-  transient scratch area that is not backed up and is removed with the
-  attachment. `offline:check` sees the preparation path's import hull and
-  refuses a model reachable from it.
+  (implemented 2026-08-11):** `pico_depot_attachment` has three columns and
+  no privacy domain, asserted against the live schema rather than promised
+  in prose. Tests place two suppliers from one depot in two different
+  spaces, detach one and leave the other and the depot standing, and detach
+  the depot while every supplier decision stays exactly where it was - a
+  depot is a delivery vehicle, so removing it removes the record of where
+  code came from and nothing about what a person decided.
+
+  The in-tree `bridges/` depot holds no privilege an external one lacks:
+  `supplier:check` walks it with no exemption, and reads
+  `bridges/pico-depot.json` through the product's own parser rather than a
+  second one written for the occasion.
+- **DP7 - An unknown protocol version is refused (implemented
+  2026-08-11):** a declaration carries `protocolVersion` and
+  `assertPicoSupplierProtocolVersion` refuses anything outside
+  `picoSupportedSupplierProtocolVersions` under its own error, so a surface
+  can say *this supplier speaks a version this Pico does not know* - the
+  person's remedy is a different depot commit, not a bug report. No code
+  path translates between versions.
+
+  The supported set is **enumerated rather than expressed as a range**,
+  because a `>=` would let every future version through on the day it is
+  written; widening it is an edit somebody makes on purpose. This is the
+  point at which ADR 0134's "first kept identity" becomes real for the
+  supplier protocol: refusal is how a kept identity behaves, and
+  negotiation would have made it a range.
+- **DP8 - Fetching is a task and the workspace is not a store (part
+  implemented 2026-08-11):** the consent half is built and the runtime half
+  is not.
+
+  **A task is an identifier, an interval and a request it makes**, and the
+  third field is the load-bearing one: a task does not *do* something, it
+  asks, which routes scheduled work through ADR 0139's request, ADR 0140's
+  decision and ADR 0141's history rather than beside them. A task that
+  acted directly would be a second privileged path running while nobody is
+  looking - what ADR 0138 CO4 separates from answering a question. The
+  interval has a floor, because at a one-second cadence that distinction
+  stops meaning anything.
+
+  **A large transfer becomes a question through the mechanism that already
+  exists.** `picoActionEscalations` is a closed, named list and
+  `escalatePicoRulesDecision` **only ever tightens**: an `allow` becomes
+  `require_approval`, a `deny` stays a `deny`, and no escalation cancels the
+  ADR 0140 RL3 floor or the ADR 0138 CO3 precondition. That direction is
+  the whole safety of letting a requester influence a decision - this is a
+  caller saying *ask about this one*, never *do not bother asking*. Named
+  rather than a boolean for ADR 0140 RL3's reason: a reason has to reach a
+  surface that can act on it, and "the scheduler said so" is not something
+  a person can answer. An unestimatable transfer escalates, in ADR 0119
+  Q5's posture that the one case which cannot be measured must not be the
+  one case that is unprotected.
+
+  Building it turned up a gap in the recorded decision. The `reason` field
+  carried the ADR 0140 RL3 codes, which cover *refusals*, and nothing
+  covered a request being **tightened** - so a person asked about a
+  two-gigabyte clone would have been asked with no reason attached. An
+  escalated decision now names what escalated it, on the fact and on the
+  record.
+
+  Open: the fetch, the scratch area and the `startPicoTimeBoundScheduler`
+  generalisation. All three need a real depot to fetch into, and the
+  `offline:check` line over a preparation path needs a preparation path to
+  walk.
 
 **One state is deliberately unnamed.** A library that is attached, whose
 credential is present, and whose clone has not finished is neither
@@ -572,7 +637,7 @@ first has a supplier in that state.
 | A depot's dependency is yanked from a registry | Irrelevant. Nothing resolves at attachment time; the code is in the commit (DP2). |
 | A depot manifest asks to run `python3 ./run.py` | Refused under its own error. There is no field for it, and a command-shaped field is a refusal rather than an omission (DP3). |
 | A bridge imports a core internal | The depot check fails, in the release rather than at runtime (DP4). |
-| A depot declares a dependency on a supplier in another depot | Refused. Attaching one party must not attach a second (DP5). |
+| A depot declares a dependency on a supplier in another depot | There is no field for it. `dependsOn` resolves inside one manifest, so attaching one party cannot attach a second (DP5). |
 | A person shreds a Private Space holding one of two instances from a depot | The other instance is untouched, and the depot itself is untouched. It holds nothing of theirs (DP6). |
 | A supplier speaks a slot-contract version the core does not know | Refused, reported as a condition. No fallback, no partial acceptance (DP7). |
 | A knowledge base needs a 2 GB initial clone | An action request that crosses the size threshold and becomes an approval, with ADR 0141 RN3's statement built from the executing fields (DP8). |

@@ -4,6 +4,8 @@ import {
   parsePicoDepotManifest,
   picoDepotManifestSchema,
   picoDepotSupplierNeedsFromPerson,
+  picoDepotSupplierStack,
+  picoDepotTopLevelSuppliers,
 } from './depot-manifest.js';
 
 const supplier = {
@@ -12,6 +14,7 @@ const supplier = {
   slots: ['memory_item' as const],
   coverage: ['knowledge_base'],
   entryPoint: 'suppliers/rchkb/index.js',
+  protocolVersion: 1,
 };
 
 const manifest = { schema: picoDepotManifestSchema, suppliers: [supplier] };
@@ -118,7 +121,7 @@ describe('ADR 0143 DP3 with ADR 0137 IN5 - a depot may not choose a domain', () 
 
     // A declaration is not an attachable manifest until the person's decision
     // is added, and it is attachable the moment it is.
-    const { entryPoint: _entryPoint, ...declared } = declaration;
+    const { entryPoint: _entryPoint, protocolVersion: _version, ...declared } = declaration;
     expect(() => parsePicoSupplierManifest(declared)).toThrow();
     expect(parsePicoSupplierManifest({ ...declared, privacyDomain: 'privat' }).identifier)
       .toBe('rchkb');
@@ -172,5 +175,106 @@ describe('ADR 0143 DP3 - what a depot must not be able to say', () => {
   it('refuses a manifest under a schema it does not know', () => {
     expect(() => parsePicoDepotManifest({ ...manifest, schema: 'pico.depot.manifest.v2' }))
       .toThrow('invalid_pico_depot_manifest_schema');
+  });
+});
+
+const git = {
+  identifier: 'gitea-rch',
+  kind: 'library' as const,
+  slots: ['memory_item' as const],
+  coverage: ['transport'],
+  entryPoint: 'suppliers/git/index.js',
+  protocolVersion: 1,
+};
+
+const stacked = {
+  schema: picoDepotManifestSchema,
+  suppliers: [git, { ...supplier, dependsOn: 'gitea-rch' }],
+};
+
+describe('ADR 0143 DP7 - an unknown protocol version is refused', () => {
+  it('takes the version this core speaks', () => {
+    expect(parsePicoDepotManifest(manifest).suppliers[0]?.protocolVersion).toBe(1);
+  });
+
+  it('refuses a version it does not know, rather than adapting to it', () => {
+    // No fallback and no subset. The code that decides what an old supplier
+    // still supports would live in the core, grow a branch per version, and
+    // every branch would be a path through which a supplier selects the core's
+    // behaviour.
+    for (const protocolVersion of [0, 2, 99, 1.5, '1', undefined]) {
+      expect(() => parsePicoDepotManifest({
+        ...manifest,
+        suppliers: [{ ...supplier, protocolVersion }],
+      })).toThrow('pico_supplier_protocol_version_not_supported');
+    }
+  });
+});
+
+describe('ADR 0143 DP5 - suppliers stack inside one depot', () => {
+  it('attaches only the top of a stack', () => {
+    // The core sees one supplier. The lower layer inherits space, credential
+    // and reach decisions from the attachment above it, and never appears as
+    // an ADR 0137 instance of its own.
+    const parsed = parsePicoDepotManifest(stacked);
+    expect(picoDepotTopLevelSuppliers(parsed).map((s) => s.identifier))
+      .toEqual(['rchkb']);
+  });
+
+  it('hands back the whole stack, top first', () => {
+    const parsed = parsePicoDepotManifest(stacked);
+    expect(picoDepotSupplierStack(parsed, 'rchkb').map((s) => s.identifier))
+      .toEqual(['rchkb', 'gitea-rch']);
+  });
+
+  it('has no field in which another depot could be named', () => {
+    // Cross-depot stacking is not refused, it is unsayable: `dependsOn` is a
+    // bare identifier resolved inside this manifest, so attaching one party
+    // cannot silently attach a second.
+    const declaration = parsePicoDepotManifest(stacked).suppliers
+      .find((s) => s.identifier === 'rchkb')!;
+    expect(typeof declaration.dependsOn).toBe('string');
+    expect(declaration.dependsOn).not.toContain('/');
+    expect(declaration.dependsOn).not.toContain(':');
+  });
+
+  it('refuses a dependency this depot does not contain', () => {
+    expect(() => parsePicoDepotManifest({
+      ...manifest,
+      suppliers: [{ ...supplier, dependsOn: 'somewhere-else' }],
+    })).toThrow('pico_depot_dependency_not_in_depot');
+  });
+
+  it('refuses a dependency that is an address', () => {
+    expect(() => parsePicoDepotManifest({
+      ...manifest,
+      suppliers: [{ ...supplier, dependsOn: 'https://other.invalid/depot.git#git' }],
+    })).toThrow('invalid_pico_depot_dependency');
+  });
+
+  it('refuses a cycle and a self-dependency', () => {
+    expect(() => parsePicoDepotManifest({
+      ...manifest,
+      suppliers: [{ ...supplier, dependsOn: 'rchkb' }],
+    })).toThrow('pico_depot_supplier_depends_on_itself');
+
+    expect(() => parsePicoDepotManifest({
+      schema: picoDepotManifestSchema,
+      suppliers: [
+        { ...git, dependsOn: 'rchkb' },
+        { ...supplier, dependsOn: 'gitea-rch' },
+      ],
+    })).toThrow('pico_depot_dependency_cycle');
+  });
+
+  it('leaves an independent supplier top-level', () => {
+    const parsed = parsePicoDepotManifest({
+      schema: picoDepotManifestSchema,
+      suppliers: [git, supplier],
+    });
+    expect(picoDepotTopLevelSuppliers(parsed).map((s) => s.identifier).sort())
+      .toEqual(['gitea-rch', 'rchkb']);
+    expect(picoDepotSupplierStack(parsed, 'rchkb').map((s) => s.identifier))
+      .toEqual(['rchkb']);
   });
 });

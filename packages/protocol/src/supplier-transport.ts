@@ -30,10 +30,55 @@ import { picoSupplierSlots, type PicoSupplierSlot } from './supplier.js';
  * names the supplier protocol as the first identity this tree keeps, because a
  * third-party depot is built against it and cannot be revised in place with the
  * rest of the tree. The version constant below is therefore a promise, and
- * ADR 0143 DP7 owns what happens when a supplier declares one the core does not
- * know: refused, never negotiated. That refusal is not implemented here.
+ * ADR 0143 DP7's refusal sits beside it: a version this core does not know is
+ * refused, never negotiated.
  */
 export const picoSupplierProtocolVersion = 1 as const;
+
+/**
+ * ADR 0143 DP7 - an unknown version is refused, never negotiated.
+ *
+ * A supplier declares the slot-contract version it speaks. A core that does
+ * not know that version refuses the supplier and says so; it does not fall
+ * back, adapt or accept a subset.
+ *
+ * Negotiation is the alternative and it fails in a specific way: the code
+ * deciding what an old supplier still supports lives in the core, grows one
+ * branch per version, and every branch is a path through which a supplier
+ * selects the core's behaviour. Refusing keeps the compatibility question in
+ * one place - the depot's commit, which a person is already deciding about
+ * under DP1.
+ *
+ * It is also what makes ADR 0134 true after suppliers exist. That ADR lets
+ * internal formats be revised in place until the first kept identity, and
+ * ADR 0136 named the supplier protocol as the identity that becomes kept.
+ * Refusal is how a kept identity behaves; negotiation would make it a range.
+ *
+ * The list is enumerated rather than expressed as a range, so widening it is
+ * an edit somebody makes on purpose. A `>=` would let every future version
+ * through on the day it is written.
+ */
+export const picoSupportedSupplierProtocolVersions: readonly number[] =
+  Object.freeze([picoSupplierProtocolVersion]);
+
+export function isPicoSupplierProtocolVersionSupported(value: unknown): boolean {
+  return typeof value === 'number'
+    && Number.isInteger(value)
+    && picoSupportedSupplierProtocolVersions.includes(value);
+}
+
+/**
+ * ADR 0143 DP7 with ADR 0138 CO2. Refuses under its own error, so a surface
+ * can say *this supplier speaks a version this Pico does not know* rather than
+ * reporting a malformed manifest - the person's remedy is a different depot
+ * commit, not a bug report.
+ */
+export function assertPicoSupplierProtocolVersion(value: unknown): number {
+  if (!isPicoSupplierProtocolVersionSupported(value)) {
+    throw new Error('pico_supplier_protocol_version_not_supported');
+  }
+  return value as number;
+}
 
 /**
  * The closed set of families that cross the socket, all of them core-to-

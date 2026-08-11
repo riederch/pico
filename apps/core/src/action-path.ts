@@ -15,8 +15,10 @@ import {
 } from '@pico/protocol/instance-selection';
 import type { PicoModuleEffect } from '@pico/protocol/module';
 import {
+  escalatePicoRulesDecision,
   picoRulesFloorOutcome,
   picoRulesMissingInput,
+  type PicoActionEscalation,
   type PicoRulesDecisionValue,
   type PicoRulesInput,
   type PicoRulesMissingInputCode,
@@ -123,6 +125,8 @@ export interface PicoActionDecision {
   risk: string;
   /** ADR 0140 RL6. The domain this decision spoke for. */
   privacyDomain: string;
+  /** ADR 0143 DP8. Present only when something tightened this decision. */
+  escalations?: readonly PicoActionEscalation[];
   /** Present only for `require_approval`. */
   pending?: PicoPendingApproval;
 }
@@ -159,6 +163,16 @@ export interface PicoActionDecisionInput {
    * attachment store existed, a named instance denied unconditionally.
    */
   attachedInstances?: readonly string[];
+  /**
+   * ADR 0143 DP8. Named reasons this decision must be stricter than the risk
+   * class alone would make it - a large transfer, today.
+   *
+   * Escalation only: an `allow` can become `require_approval` and nothing here
+   * can loosen a `deny`. That direction is what makes it safe to let a
+   * requester influence a decision at all - this is a caller saying *ask about
+   * this one*, never *do not bother asking*.
+   */
+  escalations?: readonly PicoActionEscalation[];
   reachesOutside: boolean;
   reachPermitted: boolean;
   /**
@@ -256,18 +270,28 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
   // The floor and the reach precondition are not overridable: a recorded rule
   // decides between the answers that remain, and cannot grant what ADR 0140
   // RL3 refused for want of an input or what ADR 0138 CO3 never permitted.
-  const decision: PicoRulesDecisionValue = floor !== null || reachRefused
+  const decided: PicoRulesDecisionValue = floor !== null || reachRefused
     ? 'deny'
     : input.recordedRule
       ?? (consented.risk === 'read_only' || consented.risk === 'local_write'
         ? 'allow'
         : 'require_approval');
+  // ADR 0143 DP8. Applied last and only ever tightening, so a recorded rule
+  // cannot cancel an escalation and an escalation cannot cancel the floor.
+  const decision = escalatePicoRulesDecision(decided, input.escalations ?? []);
 
   const reasons = floor?.reasons ?? Object.freeze([]);
+  const escalations = input.escalations ?? [];
   const decisionEventId = input.emit('pico_rules.decision_created', {
     requestedEventId,
     decision,
-    reason: reasons.length > 0 ? reasons.join(',') : decision,
+    // ADR 0143 DP8. An escalated decision says what escalated it. Without
+    // this, a person asked about a two-gigabyte clone would be asked with no
+    // reason attached - the floor's codes cover the refusals, and nothing
+    // covered the case where a request was *tightened* rather than refused.
+    reason: reasons.length > 0
+      ? reasons.join(',')
+      : (escalations.length > 0 ? escalations.join(',') : decision),
     risk: consented.risk,
     // ADR 0140 RL6. A decision is never domain-blind, and its record says
     // which domain it spoke for.
@@ -304,6 +328,7 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
     decisionEventId,
     decision,
     reasons,
+    ...(escalations.length === 0 ? {} : { escalations }),
     request,
     risk: consented.risk,
     privacyDomain: input.privacyDomain,

@@ -463,6 +463,80 @@ if (depotManifest !== null) {
   }
 }
 
+// --- DP2: what runs is vendored ---------------------------------------------
+
+/**
+ * ADR 0143 DP2 - the user's decision, checked rather than trusted.
+ *
+ * A depot vendors its dependencies. There is no package-manager step, no
+ * registry and no network at attachment beyond the `git` fetch itself, because
+ * `rchkb` already arrives by `git` and a second fetch path would give an
+ * installation two integrity stories and two ways to be offline.
+ *
+ * Three shapes say a depot expects to resolve something, and each is refused
+ * for its own reason:
+ *
+ * - **a lockfile**, which is an instruction to resolve. Vendoring means there
+ *   is nothing to resolve, so a lockfile is either dead weight or a plan;
+ * - **an undeclared-but-unvendored dependency**, where `package.json` names a
+ *   package that is not in the tree. That depot runs on whatever a registry
+ *   hands it on the day it is attached, on a machine that may be offline;
+ * - **an install script**, which is arbitrary code executing at a moment when
+ *   nobody has decided anything yet - before the process boundary, before
+ *   consent, before the person has seen what they attached.
+ */
+const lockfiles = ['pnpm-lock.yaml', 'package-lock.json', 'yarn.lock', 'npm-shrinkwrap.json'];
+const installScriptNames = ['preinstall', 'install', 'postinstall', 'prepare', 'prepack'];
+
+function checkVendoring(root, label) {
+  for (const lockfile of lockfiles) {
+    if (existsSync(join(root, lockfile))) {
+      errors.push(
+        `${label}/${lockfile}: ADR 0143 DP2 vendors what runs, so there is `
+        + 'nothing to resolve and a lockfile is either dead weight or a plan to '
+        + 'fetch. `git` is the one fetch path.',
+      );
+    }
+  }
+  const packageJsonPath = join(root, 'package.json');
+  if (!existsSync(packageJsonPath)) {
+    return;
+  }
+  let packageJson;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  } catch (error) {
+    errors.push(`${label}/package.json: unreadable (${error.message}).`);
+    return;
+  }
+  for (const name of installScriptNames) {
+    if (packageJson.scripts?.[name] !== undefined) {
+      errors.push(
+        `${label}/package.json: declares a ${name} script. ADR 0143 DP2: `
+        + 'installing runs no code. An install hook executes before the process '
+        + 'boundary, before consent and before the person has seen what they '
+        + 'attached.',
+      );
+    }
+  }
+  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const name of Object.keys(packageJson[section] ?? {})) {
+      if (!existsSync(join(root, 'node_modules', name))) {
+        errors.push(
+          `${label}/package.json: ${section} names ${name}, which is not vendored `
+          + 'in this depot. ADR 0143 DP2: what runs is in the repository, so the '
+          + 'commit means what it appears to mean and a reviewer who read it has '
+          + 'read the code.',
+        );
+      }
+    }
+  }
+}
+
+if (existsSync(bridgesRoot) && statSync(bridgesRoot).isDirectory()) {
+  checkVendoring(bridgesRoot, 'bridges');
+}
+
 // --- DP4: supplier code cannot reach the core -------------------------------
 
 const suppliers = [];

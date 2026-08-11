@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  escalatePicoRulesDecision,
   parsePicoRulesInput,
+  picoActionEscalations,
   picoRulesDecisions,
   picoRulesFloorOutcome,
   picoRulesMissingInput,
@@ -145,5 +147,34 @@ describe('ADR 0140 RL1 - a denial is content', () => {
     // Codes, so a surface can act on it and so nothing a requester wrote can
     // end up in the sentence a person reads.
     expect(outcome?.reasons).toEqual(['no_rule_for_effect']);
+  });
+});
+
+describe('ADR 0143 DP8 - escalation only ever tightens', () => {
+  it('turns an allow into a question', () => {
+    expect(escalatePicoRulesDecision('allow', ['large_transfer'])).toBe('require_approval');
+  });
+
+  it('leaves a deny a deny, whatever a caller passes', () => {
+    // The direction is the whole safety of letting a requester influence a
+    // decision: a caller may say "ask about this one", never "do not bother".
+    expect(escalatePicoRulesDecision('deny', ['large_transfer'])).toBe('deny');
+    expect(escalatePicoRulesDecision('require_approval', ['large_transfer']))
+      .toBe('require_approval');
+  });
+
+  it('changes nothing without a reason', () => {
+    for (const decision of picoRulesDecisions) {
+      expect(escalatePicoRulesDecision(decision)).toBe(decision);
+      expect(escalatePicoRulesDecision(decision, [])).toBe(decision);
+    }
+  });
+
+  it('refuses a reason the list does not have', () => {
+    // Closed and named rather than a boolean: a reason has to reach a surface
+    // that can act on it, and "the scheduler said so" is not answerable.
+    expect(() => escalatePicoRulesDecision('allow', ['because' as never]))
+      .toThrow('pico_action_escalation_not_listed');
+    expect([...picoActionEscalations]).toEqual(['large_transfer']);
   });
 });
