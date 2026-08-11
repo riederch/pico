@@ -95,7 +95,9 @@ port-code table and a knowledge base are suppliers that reach outside at
 no point. `rchkb` is concrete about the scale: 1.4 GB, 2,657 files, 534
 Markdown documents beside 466 PDFs, 449 JSON files, 300 text files and 261
 spreadsheets, organised into personal domains including `Finanz`, `Privat`
-and `Feuerwehr`. It answers without a network. It is not shipped with
+and `Feuerwehr`. Cloned to disk it answers without a network - and it is
+also a self-hosted Gitea repository with an MCP server, which is what the
+access-path rule below exists to sort out. It is not shipped with
 Pico, and it is not frozen - it moves with commits. And it is the person's
 own content rather than a third party's, which makes it the sharpest of
 the five: Pico must be able to read it without ever pretending it owns it.
@@ -188,6 +190,36 @@ pin than a hash because it carries history. Both answer offline, neither
 is metered, and both sit outside Pico's custody. Making "it updates" into
 a separate kind would repeat the error ADR 0128 corrected when it made
 effect-bearing a declared property rather than a fourth module kind.
+
+**The kind follows the access path, not the material** - added 2026-08-11,
+when the user pointed out that `rchkb` is not a static corpus but a
+self-hosted Gitea repository with an MCP server in front of it. Both are
+true at once, and the design holds because the floor test asks about
+*answering*, not about what is being answered from:
+
+- cloned to disk, it is a **library**. The working copy answers with the
+  network gone, pinned by a commit. Only the fetch reaches out, which is
+  why ADR 0138 gates fetching and not reading.
+- reached through its MCP server, the same material is a **bridge**. Every
+  question crosses a network, and a self-hosted host on a LAN is still a
+  network - the camper van in ADR 0137 is exactly the case where it is
+  not there.
+
+So one corpus can be attached twice, and under ADR 0137 IN2 those two
+instances are **alternatives**: same coverage, so keeping both is a choice
+rather than a union. The choice is not symmetric, though. The library
+survives the network going away and the bridge does not, and an index the
+MCP server offers is a cache over the same source under ADR 0133 rather
+than a second authority. Attaching the bridge *instead of* the library
+would put a personal knowledge base behind a network dependency for a
+convenience.
+
+**MCP is a transport here, not a second boundary.** ADR 0036 settled that
+already - "MCP is a tool connection method. It is not Pico authority" -
+and it holds unchanged: an MCP client is a bridge's implementation, and
+its output still crosses a slot where BR3 assigns the class. What MCP
+does make cheap is BR2: a server that is already a separate process is a
+process boundary nobody has to build.
 
 **Not every shipped table is a library.** The test is whether it is
 *chosen*. A small vocabulary every Pico carries identically is module
