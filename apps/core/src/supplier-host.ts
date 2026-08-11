@@ -10,6 +10,7 @@ import {
 } from '@pico/protocol/supplier-transport';
 import {
   assertPicoSupplierCondition,
+  picoSupplierConditionWhileMaterializing,
   type PicoSupplierCondition,
 } from '@pico/protocol/supplier-condition';
 
@@ -44,6 +45,13 @@ import {
  * class on it is assigned at ADR 0136 BR3's threshold by code that has no
  * parameter for a supplier's opinion. Putting interpretation here would have
  * put it inside the boundary it exists to draw.
+ *
+ * The one exception proves the rule rather than bending it. `condition` takes
+ * a second argument for what **Pico** knows and the supplier cannot - whether
+ * a working copy is still arriving - and applies ADR 0136 BR6's substitution
+ * with it. That is not interpretation of the supplier's answer; it is a fact
+ * from the other side of the boundary, kept in a separate parameter precisely
+ * so a supplier can never declare itself patient.
  */
 export interface PicoSupplierHello {
   protocolVersion: number;
@@ -141,14 +149,24 @@ export class PicoSupplierHost {
    * The condition is asserted against the closed list, so a supplier inventing
    * a state gets a refusal rather than a place in the vocabulary.
    */
-  public async condition(payload: Record<string, unknown> = {}): Promise<PicoSupplierConditionReport> {
+  public async condition(
+    payload: Record<string, unknown> = {},
+    knowledge: { materializing?: boolean } = {},
+  ): Promise<PicoSupplierConditionReport> {
     const answer = await this.#request(picoSupplierRequestFamilies.condition, payload);
     if (answer.status !== 'ok') {
       throw new Error(answer.reason);
     }
     const result = answer.result as { condition?: unknown; detail?: unknown };
     return Object.freeze({
-      condition: assertPicoSupplierCondition(result?.condition),
+      // ADR 0136 BR6. The supplier answers what it can see; whether a working
+      // copy is still arriving is something only the side that started the
+      // fetch knows, so it arrives here as *knowledge* rather than as part of
+      // the request - a supplier must not be able to declare itself patient.
+      condition: picoSupplierConditionWhileMaterializing(
+        assertPicoSupplierCondition(result?.condition),
+        knowledge.materializing === true,
+      ),
       ...(result?.detail === undefined ? {} : { detail: result.detail }),
     });
   }

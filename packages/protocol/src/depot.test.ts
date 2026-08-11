@@ -4,6 +4,7 @@ import {
   defaultPicoDepotApprovalThresholdBytes,
   parsePicoDepotPin,
   parsePicoDepotTask,
+  picoDepotFetchPermission,
   picoDepotOffer,
   picoDepotTransferNeedsApproval,
   type PicoDepotOffer,
@@ -178,5 +179,46 @@ describe('ADR 0143 DP8 - a large transfer becomes a question', () => {
     expect(picoDepotTransferNeedsApproval({})).toBe(true);
     expect(picoDepotTransferNeedsApproval({ estimatedBytes: Number.NaN })).toBe(true);
     expect(picoDepotTransferNeedsApproval({ estimatedBytes: -1 })).toBe(true);
+  });
+});
+
+describe('ADR 0138 CO3/CO4 - a permission the fetch actually reads', () => {
+  it('refuses everything by default', () => {
+    expect(picoDepotFetchPermission({ mayFetch: false, mayFetchUnasked: false, asked: true }))
+      .toEqual({ status: 'refused', reason: 'fetch_not_permitted' });
+    expect(picoDepotFetchPermission({ mayFetch: false, mayFetchUnasked: false, asked: false }))
+      .toEqual({ status: 'refused', reason: 'fetch_not_permitted' });
+  });
+
+  it('separates asked from unasked, because they fail differently', () => {
+    // A person who pressed "check for updates" is watching; a scheduler at
+    // three in the morning is not, and the outside system learns the same
+    // thing either way.
+    expect(picoDepotFetchPermission({ mayFetch: true, mayFetchUnasked: false, asked: true }))
+      .toEqual({ status: 'permitted' });
+    expect(picoDepotFetchPermission({ mayFetch: true, mayFetchUnasked: false, asked: false }))
+      .toEqual({ status: 'refused', reason: 'unasked_fetch_not_permitted' });
+    expect(picoDepotFetchPermission({ mayFetch: true, mayFetchUnasked: true, asked: false }))
+      .toEqual({ status: 'permitted' });
+  });
+
+  it('names which decision is missing', () => {
+    // "You have not allowed this" and "you allowed it only when you ask" send
+    // a person to two different switches.
+    const reasons = new Set([
+      picoDepotFetchPermission({ mayFetch: false, mayFetchUnasked: false, asked: false }),
+      picoDepotFetchPermission({ mayFetch: true, mayFetchUnasked: false, asked: false }),
+    ].map((p) => (p.status === 'refused' ? p.reason : 'permitted')));
+    expect([...reasons].sort())
+      .toEqual(['fetch_not_permitted', 'unasked_fetch_not_permitted']);
+  });
+
+  it('treats an absent flag as absent permission', () => {
+    // Not `undefined means yes`, which is how a default becomes a grant.
+    expect(picoDepotFetchPermission({
+      mayFetch: undefined as never,
+      mayFetchUnasked: true,
+      asked: true,
+    })).toEqual({ status: 'refused', reason: 'fetch_not_permitted' });
   });
 });

@@ -249,3 +249,63 @@ describe('ADR 0136 BR2 - the runner ships with the product', () => {
     expect(existsSync(built)).toBe(true);
   });
 });
+
+describe('ADR 0136 BR6 - materializing is Pico knowledge, not a supplier answer', () => {
+  it('reports materializing where the supplier said unreachable', async () => {
+    // The shipped supplier cannot tell a clone in progress from a damaged
+    // repository - checked, not assumed: both have .git/HEAD naming a ref that
+    // does not resolve. Only the side that started the fetch knows.
+    const host = openHost();
+    await host.hello();
+    const dir = mkdtempSync(join(tmpdir(), 'pico-not-a-repo-yet-'));
+    tempDirs.push(dir);
+
+    expect((await host.condition({ workingCopy: dir })).condition).toBe('unreachable');
+    expect((await host.condition({ workingCopy: dir }, { materializing: true })).condition)
+      .toBe('materializing');
+  });
+
+  it('gives the supplier no way to declare itself patient', async () => {
+    // The knowledge is a second argument rather than part of the request, so
+    // nothing a supplier returns can produce it.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-patient-supplier-'));
+    tempDirs.push(dir);
+    writeFileSync(join(dir, 'index.js'), [
+      "export default async function handle(request) {",
+      "  if (request.family === 'pico.supplier.hello.v1') {",
+      "    return { protocolVersion: 1, slots: ['memory_item'] };",
+      "  }",
+      "  return { condition: 'materializing' };",
+      '}',
+      '',
+    ].join('\n'));
+
+    const host = openHost(join(dir, 'index.js'));
+    await host.hello();
+    // It can *say* it, because the word is in the closed list - what it cannot
+    // do is have Pico substitute it, and it cannot turn a real failure into
+    // patience either.
+    expect((await host.condition()).condition).toBe('materializing');
+    expect((await host.condition({}, { materializing: true })).condition)
+      .toBe('materializing');
+  });
+
+  it('never launders another condition into patience', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-budget-supplier-'));
+    tempDirs.push(dir);
+    writeFileSync(join(dir, 'index.js'), [
+      "export default async function handle(request) {",
+      "  if (request.family === 'pico.supplier.hello.v1') {",
+      "    return { protocolVersion: 1, slots: ['memory_item'] };",
+      "  }",
+      "  return { condition: 'budget_exhausted' };",
+      '}',
+      '',
+    ].join('\n'));
+
+    const host = openHost(join(dir, 'index.js'));
+    await host.hello();
+    expect((await host.condition({}, { materializing: true })).condition)
+      .toBe('budget_exhausted');
+  });
+});

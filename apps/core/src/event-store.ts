@@ -12,7 +12,9 @@ import {
 import {
   acceptPicoDepotOffer,
   parsePicoDepotPin,
+  picoDepotFetchPermission,
   picoDepotOffer,
+  type PicoDepotFetchPermission,
   type PicoDepotOffer,
   type PicoDepotPin,
 } from '@pico/protocol/depot';
@@ -6876,6 +6878,27 @@ export class EventStore {
       .prepare('UPDATE pico_depot_attachment SET running_commit = ?, accepted_at = ? WHERE remote = ?')
       .run(pin.commit, input.acceptedAt, pin.remote);
     return this.picoDepotAttachment(pin.remote)!;
+  }
+
+  /**
+   * ADR 0138 CO3/CO4. Whether this depot may be fetched right now, read from
+   * the attachment rather than from a caller's belief about it.
+   *
+   * A depot nobody attached is refused as unpermitted rather than reported as
+   * missing: from the fetcher's side the two are the same answer, and naming
+   * the absence separately would invite a caller to treat "not attached" as a
+   * reason to attach one.
+   */
+  public picoDepotFetchPermission(input: {
+    remote: string;
+    asked: boolean;
+  }): PicoDepotFetchPermission {
+    const attachment = this.picoDepotAttachment(input.remote);
+    return picoDepotFetchPermission({
+      mayFetch: attachment?.mayFetch ?? false,
+      mayFetchUnasked: attachment?.mayFetchUnasked ?? false,
+      asked: input.asked,
+    });
   }
 
   /** ADR 0143 DP1. Removes the depot record and nothing else. */

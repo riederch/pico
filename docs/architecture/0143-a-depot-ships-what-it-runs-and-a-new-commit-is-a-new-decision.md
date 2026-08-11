@@ -443,7 +443,13 @@ compatibility a property of a commit a person accepted.
   bridge-shaped decision under this ADR even though reading is not."*
 
   `may_fetch` and `may_fetch_unasked` now default to off, in the shape the
-  supplier table has had all along. CO4's dependence on CO3 is held at the
+  supplier table has had all along, and `picoDepotFetchPermission` is what
+  reads them - because two flags in a table nothing consults would have been
+  DP3's own warning turned around: a field that is ignored is a field an
+  author believes in, and here the believer would have been a person. The
+  refusal is named rather than folded into `false`, since *you have not
+  allowed this* and *you allowed it only when you ask* send someone to two
+  different switches. CO4's dependence on CO3 is held at the
   single write site rather than by a table CHECK - SQLite's `ALTER TABLE`
   cannot add one, and the supplier table got its CHECK by being created
   with it - which reaches the same guarantee because that method is the

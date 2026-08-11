@@ -380,6 +380,14 @@ fetch knows which it is looking at, so
 else - a not-yet-materialized copy can produce no other condition, and turning
 any other one into "please wait" would launder a failure into patience.
 
+The host takes it as a **second argument** rather than as part of the request,
+which is what keeps a supplier from declaring itself patient: the substitution
+is applied to the answer, and nothing a supplier returns can reach the
+parameter that triggers it. Proved against the shipped `git-library` over a
+directory that is not a working copy - `unreachable` without the knowledge,
+`materializing` with it - and against a supplier that answers
+`budget_exhausted`, which stays exactly that.
+
 So when the read path exists, the work is one line in
 `offline-floor.json`. After it, `offline:check` walks that path's import
 hull and refuses a model or a network reachable from it, statically and

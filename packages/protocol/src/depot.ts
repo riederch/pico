@@ -257,3 +257,47 @@ export function picoDepotTransferNeedsApproval(input: {
   }
   return input.estimatedBytes >= threshold;
 }
+
+/**
+ * ADR 0138 CO3/CO4 for depots - the decision the two columns exist to feed.
+ *
+ * Added on 2026-08-11 with the columns themselves, because a permission
+ * nothing reads is the shape ADR 0143 DP3 warns about from the other side: a
+ * field that is ignored is a field an author believes in. Two flags in a table
+ * that no code consults would have been exactly that, and the belief would
+ * have been a person's.
+ *
+ * **Asked and unasked are the same fetch and different decisions.** A person
+ * who pressed "check for updates" is watching; a scheduler at three in the
+ * morning is not, and the outside system learns the same thing either way.
+ * That is CO4's whole argument, and the reason the second flag is not simply a
+ * wider first one.
+ *
+ * Refusals are named rather than folded into `false`, so a surface can say
+ * which decision is missing - "you have not allowed this" and "you allowed it
+ * only when you ask" send a person to two different switches.
+ */
+export type PicoDepotFetchPermission =
+  | { status: 'permitted' }
+  /** ADR 0138 CO3 was never granted. Nothing may be fetched at all. */
+  | { status: 'refused'; reason: 'fetch_not_permitted' }
+  /** CO3 granted, CO4 not. A person may ask for this; a schedule may not. */
+  | { status: 'refused'; reason: 'unasked_fetch_not_permitted' };
+
+export function picoDepotFetchPermission(input: {
+  mayFetch: boolean;
+  mayFetchUnasked: boolean;
+  /** True when a person asked for this fetch now; false for a schedule. */
+  asked: boolean;
+}): PicoDepotFetchPermission {
+  if (input.mayFetch !== true) {
+    return Object.freeze({ status: 'refused' as const, reason: 'fetch_not_permitted' as const });
+  }
+  if (input.asked !== true && input.mayFetchUnasked !== true) {
+    return Object.freeze({
+      status: 'refused' as const,
+      reason: 'unasked_fetch_not_permitted' as const,
+    });
+  }
+  return Object.freeze({ status: 'permitted' as const });
+}

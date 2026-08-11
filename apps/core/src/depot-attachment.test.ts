@@ -398,3 +398,32 @@ describe('ADR 0138 CO3/CO4 - attaching a depot grants no fetching', () => {
     store.close();
   });
 });
+
+describe('ADR 0138 CO3/CO4 - the store answers whether a fetch may happen', () => {
+  it('reads the decision from the attachment, not from a caller belief', () => {
+    const { store } = openStore('permission');
+    store.attachPicoDepot({
+      pin: { remote, commit: accepted },
+      acceptedAt: '2026-08-11T09:00:00.000Z',
+    });
+    expect(store.picoDepotFetchPermission({ remote, asked: true }))
+      .toEqual({ status: 'refused', reason: 'fetch_not_permitted' });
+
+    store.setPicoDepotReach({ remote, mayFetch: true, mayFetchUnasked: false });
+    expect(store.picoDepotFetchPermission({ remote, asked: true }))
+      .toEqual({ status: 'permitted' });
+    expect(store.picoDepotFetchPermission({ remote, asked: false }))
+      .toEqual({ status: 'refused', reason: 'unasked_fetch_not_permitted' });
+    store.close();
+  });
+
+  it('refuses a depot nobody attached rather than reporting it missing', () => {
+    // From the fetcher's side the two are one answer, and naming the absence
+    // separately would invite a caller to treat "not attached" as a reason to
+    // attach one.
+    const { store } = openStore('permission-unattached');
+    expect(store.picoDepotFetchPermission({ remote, asked: true }))
+      .toEqual({ status: 'refused', reason: 'fetch_not_permitted' });
+    store.close();
+  });
+});
