@@ -104,3 +104,78 @@ export function picoSupplierConditionSpentNothing(
 ): boolean {
   return condition === 'not_configured' || condition === 'out_of_scope';
 }
+
+/**
+ * ADR 0138 CO5 - a limit is announced, not discovered.
+ *
+ * The posture ADR 0119 Q5 already uses for storage pressure: told while there
+ * is still room to act, never as a surprise afterwards. A budget that only
+ * speaks when it is gone turns the moment it is reached into an unexplained
+ * outage, which is the failure this ADR names for spend and that ADR named for
+ * disk.
+ *
+ * Two limits rather than one, and the refusal names which. `rate_limited`
+ * resolves itself and needs nobody; `budget_exhausted` resolves itself never
+ * and needs a person. A caller that could not tell them apart would report
+ * "try later" for a question that will never work again.
+ */
+export const picoSupplierLimitKinds = ['rate', 'budget'] as const;
+
+export type PicoSupplierLimitKind = typeof picoSupplierLimitKinds[number];
+
+export const picoSupplierLimitStates = [
+  /** Room left, nothing to say. */
+  'normal',
+  /** Close enough that a person can still act on it. */
+  'approaching',
+  /** Reached. The condition that follows is `rate_limited` or `budget_exhausted`. */
+  'reached',
+] as const;
+
+export type PicoSupplierLimitState = typeof picoSupplierLimitStates[number];
+
+/**
+ * The share of a limit at which it starts speaking. Ten percent left, chosen
+ * for the same reason ADR 0119's reserve is: it is enough room to do something
+ * about it, and a deployment may widen it.
+ */
+export const defaultPicoSupplierLimitHeadroom = 0.1;
+
+export function evaluatePicoSupplierLimit(input: {
+  used: number;
+  ceiling: number;
+  headroom?: number;
+}): PicoSupplierLimitState {
+  const headroom = input.headroom ?? defaultPicoSupplierLimitHeadroom;
+  if (!Number.isFinite(input.ceiling) || input.ceiling <= 0) {
+    throw new Error('invalid_pico_supplier_limit_ceiling');
+  }
+  if (!Number.isFinite(headroom) || headroom < 0 || headroom >= 1) {
+    throw new Error('invalid_pico_supplier_limit_headroom');
+  }
+  if (!Number.isFinite(input.used) || input.used < 0) {
+    // An unreadable usage reading is not evidence of room, for the reason
+    // ADR 0119 gives about free space: the one case that cannot be measured
+    // must not be the one case that is unprotected.
+    return 'reached';
+  }
+  if (input.used >= input.ceiling) {
+    return 'reached';
+  }
+  return input.used >= input.ceiling * (1 - headroom) ? 'approaching' : 'normal';
+}
+
+/**
+ * ADR 0138 CO5/CO2. Which condition a reached limit produces, named rather
+ * than collapsed. Returns `null` while there is still room, because a limit
+ * that has not been reached has no condition to report.
+ */
+export function picoSupplierLimitCondition(input: {
+  kind: PicoSupplierLimitKind;
+  state: PicoSupplierLimitState;
+}): PicoSupplierCondition | null {
+  if (input.state !== 'reached') {
+    return null;
+  }
+  return input.kind === 'rate' ? 'rate_limited' : 'budget_exhausted';
+}

@@ -4,7 +4,7 @@
 
 Accepted as a constraint on suppliers that reach a system Pico does not
 run. **CO2 is implemented** (2026-08-10),
-**CO3 and CO4** (2026-08-11), and **CO1 in part**; CO5 is open.
+**CO3, CO4 and CO5** (2026-08-11), and **CO1 in part**.
 
 This was the third part of ADR 0136 until 2026-08-10, when the user asked
 for a second cut. ADR 0136 keeps what a supplier is and where its code
@@ -278,10 +278,21 @@ receives the credential; it does not keep it.
 
   Still open here: a library's git fetch counting as reaching, which needs
   a library that fetches.
-- **CO5 - A limit is announced, not discovered (open):** approaching a
-  budget or a rate ceiling is reported while there is still room to act,
-  in the posture ADR 0119 Q5 uses for storage pressure, and the
-  refusal that follows names which of the two it was.
+- **CO5 - A limit is announced, not discovered (implemented
+  2026-08-11):** `evaluatePicoSupplierLimit` answers `normal`,
+  `approaching` or `reached` in the shape
+  `evaluatePicoStoragePressure` already has, including the property that
+  matters most: an unreadable usage reading answers `reached` rather than
+  `normal`, because the one case that cannot be measured must not be the
+  one case that is unprotected.
+
+  `picoSupplierLimitCondition` names which limit was hit, and returns
+  `null` while there is room - a limit that has not been reached has no
+  condition to report. The two conditions are answered differently, which
+  is why they are two: `rate_limited` resolves itself and needs nobody,
+  `budget_exhausted` resolves itself never and needs a person, and a
+  caller that could not tell them apart would say "try later" about a
+  question that will never work again.
 
 ## Failure ledger
 

@@ -10,9 +10,9 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. **BR1 and BR4 are implemented** on
-2026-08-10; BR2, BR3 and BR6 are open, and BR5 moved with the cost
-decision.
+than kind. **BR1 and BR4 are implemented**
+(2026-08-10) and **BR3 in its core half** (2026-08-11); BR2 and BR6 are
+open, and BR5 moved with the cost decision.
 
 Split on 2026-08-10 at the user's request: everything about **several**
 suppliers - identity, coverage, unions, effect targeting and the privacy
@@ -485,12 +485,32 @@ nowhere to go, which is the state ADR 0127 was written to end.
   reachable from the core's static import hull. The method already exists
   twice, in ADR 0129 SR5's sensor hull and the companion tray hull, which
   is what makes this checkable rather than reviewed.
-- **BR3 - Threshold labeling and the identity proof (open):** everything
-  crossing a slot inward carries `external_content`, assigned by the core;
-  the supplier has no way to express a class. Proved as ADR 0128 H4 proves
-  it: an item that arrived through a slot and an ordinary memory item give
-  identical results through crypto-shred, retention sweep and
-  backup/restore.
+- **BR3 - Threshold labeling and the identity proof (core half
+  implemented 2026-08-11):** `intakePicoSupplierContent` assigns
+  `external_content` and has no parameter through which a supplier could
+  claim one - the fourth appearance of the construction ADR 0117 X1 uses
+  for `picoReaderCapabilities`, ADR 0136 BR4 for `confirmedByPerson` and
+  ADR 0139 AC2 for an argument's origin, because it is the only guard that
+  does not depend on the guarded thing behaving. An offering that carries
+  an `originClass` is refused under its own error, since a supplier
+  asserting provenance is the attack rather than a typo.
+
+  A test states the harsh case on purpose: a person's **own** knowledge
+  base is labelled `external_content` too. That is not a judgement about
+  the author, it is an admission about what the core can verify - it
+  cannot tell a sentence the person wrote from one they pasted.
+
+  The identity proof runs in the shape ADR 0127 M1 and ADR 0128 H4 already
+  use: a supplied item and an ordinary item go through the same crypto
+  shred, and the outcomes are asserted *identical to each other* rather
+  than each on its own, because two separate assertions could both pass
+  while the core treated the two kinds differently in a way neither
+  happened to look at. An item in another domain survives, which shows the
+  comparison can fail.
+
+  Open: the retention-sweep and backup/restore halves of the same
+  comparison, and everything that needs a supplier actually offering
+  content.
 - **BR4 - Three clocks and a certainty (implemented):**
   `picoSupplierCacheAgeMs` and `picoSupplierContentAgeMs` are two functions
   with two names, so confusing them takes an edit rather than an oversight -
