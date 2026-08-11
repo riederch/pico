@@ -407,6 +407,18 @@ describe('Pico Home Core app', () => {
             dependencies: [],
           },
           {
+            identifier: 'depot',
+            kind: 'product',
+            // ADR 0138 CO3's first decision: the feature exists, default on.
+            // The second and third - may Pico fetch, and may it fetch unasked -
+            // live on the depot attachment and are off, so an active module
+            // still reaches nothing.
+            active: true,
+            capturing: false,
+            effectBearing: true,
+            dependencies: [],
+          },
+          {
             identifier: 'home-assistant',
             kind: 'connector',
             active: true,

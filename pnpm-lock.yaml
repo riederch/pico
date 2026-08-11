@@ -76,6 +76,9 @@ importers:
       '@pico/module-calendar':
         specifier: workspace:*
         version: link:../../modules/calendar
+      '@pico/module-depot':
+        specifier: workspace:*
+        version: link:../../modules/depot
       '@pico/module-home-assistant':
         specifier: workspace:*
         version: link:../../modules/home-assistant
@@ -140,6 +143,12 @@ importers:
         version: link:../../packages/protocol
 
   modules/calendar:
+    dependencies:
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+
+  modules/depot:
     dependencies:
       '@pico/protocol':
         specifier: workspace:*

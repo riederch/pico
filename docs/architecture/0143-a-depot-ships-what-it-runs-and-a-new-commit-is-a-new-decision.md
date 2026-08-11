@@ -693,6 +693,38 @@ compatibility a property of a commit a person accepted.
   is still an address, which a bare path is not: `../depots/bridges` is a
   position relative to whoever is asking.
 
+  **Depot management became a module on 2026-08-11**, which is the answer to
+  a question that looks like a namespace question and is a consent question.
+  ADR 0139 AC4 requires a consent record for every effect - name,
+  description, risk class, pinned when a person read them - and that record
+  is keyed by module identifier. An effect with no module has nowhere to
+  live in it: it would be something Pico can cause that nobody agreed to and
+  nobody *could* agree to.
+
+  So `depot` is the fourth entry on ADR 0127's closed list, declaring one
+  effect. `depot.fetch` is **`external_write`** rather than the calendar's
+  `local_write`, which is the honest class from ADR 0010's six: it contacts a
+  system Pico does not run, tells it this Pico is pulling, and brings back
+  code that will execute. Under ADR 0140's floor that also means it does not
+  resolve to `allow` from the risk class alone - the correct default for the
+  only effect in the tree that installs code.
+
+  **The module cannot do the fetching, and that is the design.**
+  `module:check` refuses `node:child_process` in a module and the fetch is
+  `git`, so this is ADR 0128 H3 working as written: the module declares what
+  it can cause, the core decides whether to cause it, and `fetchPicoDepot`
+  lives where reaching the world is allowed. Both refusals were made to fail
+  once against a planted import.
+
+  What the module does own is composition: `picoDepotFetchIntent` decides
+  whether a fetch is worth *requesting*, and skips when ADR 0138 CO3/CO4
+  refuse - because a requester that submitted an action it may not perform
+  would produce a request, a decision and a refusal on every scheduler tick,
+  three facts about something that was never going to happen, carried
+  forever by the ADR 0121 chain. It is not a second guard in front of the
+  core's; it keeps the history from filling with questions whose answer is
+  already known.
+
   Open: the `startPicoTimeBoundScheduler` generalisation, and the
   `offline:check` line over a preparation path, which needs a preparation
   path to walk.

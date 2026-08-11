@@ -61,7 +61,8 @@ describe('ADR 0127 M1 module manifest vocabulary', () => {
   it('holds a closed list of identifiers and kinds', () => {
     // Listed, not derived. If this ever grows by directory scan the enumeration
     // has stopped being a decision spoken in one place.
-    expect([...picoModuleIdentifiers]).toEqual(['calendar', 'home-assistant', 'spatial-recall']);
+    expect([...picoModuleIdentifiers])
+      .toEqual(['calendar', 'depot', 'home-assistant', 'spatial-recall']);
     expect([...picoModuleKinds]).toEqual(['product', 'connector', 'provider']);
   });
 

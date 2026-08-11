@@ -143,15 +143,23 @@ describe('ADR 0127 M3 activation is readable and durable', () => {
     try {
       const view = await readModules(app);
       expect(view.modules.map((entry) => `${entry.identifier}:${entry.active}`))
-        .toEqual(['calendar:true', 'home-assistant:true', 'spatial-recall:true']);
+        .toEqual(['calendar:true', 'depot:true', 'home-assistant:true', 'spatial-recall:true']);
       // A capability missing on purpose must not present as one that is broken,
       // so the surface gets the kind and what the module can cause too.
-      expect(view.modules[0]?.kind).toBe('product');
+      const byIdentifier = new Map(view.modules.map((entry) => [entry.identifier, entry]));
+      expect(byIdentifier.get('calendar')?.kind).toBe('product');
+      // Read by identifier rather than by position: an earlier version indexed
+      // into the array, and adding `depot` between `calendar` and
+      // `home-assistant` moved what index 1 meant. A test that a fourth module
+      // can break by sorting ahead of the third is testing the order.
+      //
       // ADR 0139 AC6: the calendar can cause a person to be interrupted, which
-      // is an effect (user decision, 2026-08-10). It is the first module in
-      // this tree that can cause anything at all.
-      expect(view.modules[0]?.effectBearing).toBe(true);
-      expect(view.modules[1]?.effectBearing).toBe(false);
+      // is an effect (user decision, 2026-08-10). ADR 0143 DP8 added the
+      // second - `depot.fetch` reaches a system Pico does not run.
+      expect(byIdentifier.get('calendar')?.effectBearing).toBe(true);
+      expect(byIdentifier.get('depot')?.effectBearing).toBe(true);
+      expect(byIdentifier.get('home-assistant')?.effectBearing).toBe(false);
+      expect(byIdentifier.get('spatial-recall')?.effectBearing).toBe(false);
     } finally {
       await app.close();
     }
@@ -591,6 +599,10 @@ describe('ADR 0129 SR6 capture is a second decision, and it starts off', () => {
       expect(view.modules.map((entry) => `${entry.identifier}:${entry.active}:${entry.capturing}`))
         .toEqual([
           'calendar:true:false',
+          // ADR 0143 DP8: the depot module is active and captures nothing.
+          // Whether it may *fetch* is two further decisions on the depot
+          // attachment, both off - ADR 0138 CO3/CO4.
+          'depot:true:false',
           'home-assistant:true:false',
           'spatial-recall:true:false',
         ]);

@@ -132,6 +132,7 @@ import {
   type PicoEffectCapabilities,
 } from './action-path.js';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
+import { picoDepotModuleManifest } from '@pico/module-depot/manifest';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
 import {
@@ -1753,6 +1754,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    */
   const shippedModuleManifests = [
     picoCalendarModuleManifest,
+    picoDepotModuleManifest,
     picoHomeAssistantModuleManifest,
     picoSpatialRecallModuleManifest,
   ];
