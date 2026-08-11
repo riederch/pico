@@ -63,6 +63,9 @@ export const picoModuleEffectConsentMigrationId = '0002_pico_module_effect_conse
 /** ADR 0140 RL4. What a person decided a requested effect is answered with. */
 export const picoRuleDecisionMigrationId = '0003_pico_rule_decision' as const;
 
+/** ADR 0137 IN5 / ADR 0138 CO3-CO4. Which suppliers are attached, and to what. */
+export const picoSupplierAttachmentMigrationId = '0004_pico_supplier_attachment' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -838,6 +841,60 @@ const migrations: readonly MigrationDefinition[] = [
           decision TEXT NOT NULL CHECK (decision IN ('allow', 'require_approval', 'deny')),
           decided_at TEXT NOT NULL,
           PRIMARY KEY (effect_name, privacy_domain)
+        );
+      `);
+    },
+  },
+{
+    /**
+     * ADR 0137 IN5, ADR 0136 BR7 and ADR 0138 CO3/CO4 in one row, because they
+     * are one record: an attachment names a supplier, says where it lands, and
+     * says what it may do.
+     *
+     * **One domain per attachment (IN5).** `rchkb` holds `Finanz`, `Privat`
+     * and `Feuerwehr` in one working copy, and an attachment bound to a Pico
+     * rather than a domain would cross every ADR 0075 boundary in a single
+     * silent act. A corpus spanning several is attached several times.
+     *
+     * **Both reaching flags default to off (CO3/CO4)**, and they are two
+     * columns rather than one because they answer different questions. Whether
+     * Pico may contact a system at all is where money and disclosure enter;
+     * whether it may do so unprompted is a further question, and an
+     * implementation that folded them would grant the second with the first.
+     * They fail differently too: an answered question that cost money is
+     * visible to the person who asked, a background sweep is visible to
+     * nobody.
+     *
+     * The identifier is the person's token (IN1) and never a path or an
+     * address, which the ADR 0136 parser enforces before anything reaches
+     * here.
+     *
+     * ADR 0127's five questions: the crypto shred does not reach this, for the
+     * reason it does not reach consent or rules - detaching is not forgetting
+     * (ADR 0129 SR6), and a domain shred that removed the attachment would
+     * silently stop something nobody stopped. Ordinary backup and restore.
+     * Boot reconciliation is the read. A ceiling in the ADR 0119 Q5 idiom is
+     * owed here and *is* the open part of IN1, because this is the tree's
+     * first deliberately open identifier list. The Q3 byte digest covers it.
+     */
+    id: picoSupplierAttachmentMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_supplier_attachment (
+          identifier TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK (kind IN ('bridge', 'library')),
+          slots_json TEXT NOT NULL,
+          coverage_json TEXT NOT NULL,
+          privacy_domain TEXT NOT NULL,
+          may_reach_outside INTEGER NOT NULL DEFAULT 0
+            CHECK (may_reach_outside IN (0, 1)),
+          may_reach_unasked INTEGER NOT NULL DEFAULT 0
+            CHECK (may_reach_unasked IN (0, 1)),
+          attached_at TEXT NOT NULL,
+          -- CO4 is a further decision, never implied by CO3. The database says
+          -- so rather than trusting every future writer to remember.
+          CHECK (may_reach_unasked = 0 OR may_reach_outside = 1)
         );
       `);
     },

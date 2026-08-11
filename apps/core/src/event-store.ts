@@ -10,6 +10,7 @@ import {
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
 import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
+import { parsePicoSupplierManifest } from '@pico/protocol/supplier';
 import {
   maxPicoObservationAgeMs,
   parsePicoObservation,
@@ -675,6 +676,20 @@ export interface PicoActionHistoryRecord {
   chained: boolean;
   writerId?: string;
   chainPosition?: number;
+}
+
+export interface PicoSupplierAttachment {
+  identifier: string;
+  kind: 'bridge' | 'library';
+  slots: readonly string[];
+  coverage: readonly string[];
+  /** ADR 0137 IN5. Exactly one, and never a Pico. */
+  privacyDomain: string;
+  /** ADR 0138 CO3. Default off. */
+  mayReachOutside: boolean;
+  /** ADR 0138 CO4. Default off, and never implied by CO3. */
+  mayReachUnasked: boolean;
+  attachedAt: string;
 }
 
 export class EventStore {
@@ -6500,6 +6515,135 @@ export class EventStore {
       }
     });
     apply();
+  }
+
+  /**
+   * ADR 0137 IN5. Attaches a supplier into exactly one Private Space.
+   *
+   * The manifest is parsed rather than trusted, so ADR 0136 BR1's slot list
+   * and ADR 0137 IN1's identifier rules decide before anything is stored: a
+   * path or an address is refused here as firmly as at the parser, because
+   * this is the boundary the record crosses.
+   *
+   * Both reaching flags start at **off** (ADR 0138 CO3/CO4). Attaching a
+   * supplier says it exists; it does not say Pico may spend a person's money
+   * or tell anyone they asked.
+   */
+  public attachPicoSupplier(input: {
+    manifest: unknown;
+    attachedAt: string;
+  }): PicoSupplierAttachment {
+    this.ensureOpen();
+    const manifest = parsePicoSupplierManifest(input.manifest);
+    this.db
+      .prepare(`
+        INSERT INTO pico_supplier_attachment (
+          identifier, kind, slots_json, coverage_json, privacy_domain,
+          may_reach_outside, may_reach_unasked, attached_at
+        ) VALUES (?, ?, ?, ?, ?, 0, 0, ?)
+        ON CONFLICT(identifier) DO UPDATE SET
+          kind = excluded.kind,
+          slots_json = excluded.slots_json,
+          coverage_json = excluded.coverage_json,
+          privacy_domain = excluded.privacy_domain,
+          attached_at = excluded.attached_at
+      `)
+      .run(
+        manifest.identifier,
+        manifest.kind,
+        JSON.stringify(manifest.slots),
+        JSON.stringify(manifest.coverage),
+        manifest.privacyDomain,
+        input.attachedAt,
+      );
+    return this.picoSupplierAttachment(manifest.identifier)!;
+  }
+
+  /**
+   * ADR 0138 CO3/CO4. The two decisions that stand between an attached
+   * supplier and one reaching out unasked.
+   *
+   * Unasked reaching cannot be granted without reaching, and the database
+   * carries that as a CHECK rather than leaving it to whoever writes next.
+   */
+  public setPicoSupplierReach(input: {
+    identifier: string;
+    mayReachOutside: boolean;
+    mayReachUnasked: boolean;
+    decidedAt: string;
+  }): void {
+    this.ensureOpen();
+    if (input.mayReachUnasked && !input.mayReachOutside) {
+      throw new Error('pico_supplier_unasked_requires_reach');
+    }
+    const changed = this.db
+      .prepare(`
+        UPDATE pico_supplier_attachment
+        SET may_reach_outside = ?, may_reach_unasked = ?, attached_at = ?
+        WHERE identifier = ?
+      `)
+      .run(
+        input.mayReachOutside ? 1 : 0,
+        input.mayReachUnasked ? 1 : 0,
+        input.decidedAt,
+        input.identifier,
+      );
+    if (changed.changes === 0) {
+      throw new Error('pico_supplier_not_attached');
+    }
+  }
+
+  public picoSupplierAttachment(identifier: string): PicoSupplierAttachment | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT identifier, kind, slots_json AS slotsJson, coverage_json AS coverageJson,
+               privacy_domain AS privacyDomain, may_reach_outside AS mayReachOutside,
+               may_reach_unasked AS mayReachUnasked, attached_at AS attachedAt
+        FROM pico_supplier_attachment WHERE identifier = ?
+      `)
+      .get(identifier) as {
+        identifier: string; kind: string; slotsJson: string; coverageJson: string;
+        privacyDomain: string; mayReachOutside: number; mayReachUnasked: number;
+        attachedAt: string;
+      } | undefined;
+    if (row === undefined) {
+      return undefined;
+    }
+    return Object.freeze({
+      identifier: row.identifier,
+      kind: row.kind as PicoSupplierAttachment['kind'],
+      slots: Object.freeze(JSON.parse(row.slotsJson) as string[]),
+      coverage: Object.freeze(JSON.parse(row.coverageJson) as string[]),
+      privacyDomain: row.privacyDomain,
+      mayReachOutside: row.mayReachOutside === 1,
+      mayReachUnasked: row.mayReachUnasked === 1,
+      attachedAt: row.attachedAt,
+    });
+  }
+
+  public picoSupplierAttachments(): readonly PicoSupplierAttachment[] {
+    this.ensureOpen();
+    const identifiers = this.db
+      .prepare('SELECT identifier FROM pico_supplier_attachment ORDER BY identifier')
+      .all() as Array<{ identifier: string }>;
+    return Object.freeze(identifiers
+      .map((row) => this.picoSupplierAttachment(row.identifier)!));
+  }
+
+  /**
+   * ADR 0136. Detaching stops derivation and deletes nothing.
+   *
+   * ADR 0129 SR6's distinction, unchanged: stopping and forgetting are
+   * different acts. What Pico derived from a library is an ordinary memory
+   * item under ordinary custody and stays exactly where it was; what it never
+   * owned was the library.
+   */
+  public detachPicoSupplier(identifier: string): void {
+    this.ensureOpen();
+    this.db
+      .prepare('DELETE FROM pico_supplier_attachment WHERE identifier = ?')
+      .run(identifier);
   }
 
   /**

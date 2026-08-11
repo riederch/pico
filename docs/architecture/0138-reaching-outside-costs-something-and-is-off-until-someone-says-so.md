@@ -3,9 +3,8 @@
 ## Status
 
 Accepted as a constraint on suppliers that reach a system Pico does not
-run. **CO2 is implemented** in `@pico/protocol/supplier-condition` on
-2026-08-10; CO1, CO3, CO4 and CO5 are open, and each needs a runtime or
-a store.
+run. **CO2 is implemented** (2026-08-10)
+and **CO3 and CO4** (2026-08-11); CO1 and CO5 are open.
 
 This was the third part of ADR 0136 until 2026-08-10, when the user asked
 for a second cut. ADR 0136 keeps what a supplier is and where its code
@@ -245,15 +244,23 @@ receives the credential; it does not keep it.
   the instance never claimed to cover. An unreachable attempt spent
   disclosure: the request left, and the answer not coming back does not
   unsay it.
-- **CO3 - Reaching outside is a decision of its own (open):** default off,
-  separate from ADR 0127 module activation, recorded as a content-free
-  event plus projection over an authenticated surface, and visible in the
-  system status so that a deliberately silent supplier does not present as
-  a broken one.
-- **CO4 - Unprompted traffic is a third decision (open):** background
-  polling, scheduled refresh and prefetch are off by default and are never
-  implied by CO3; a library's git fetch counts as reaching outside and is
-  gated here, while reading an attached library is not gated at all.
+- **CO3 - Reaching outside is a decision of its own (implemented
+  2026-08-11):** `may_reach_outside` defaults to off on
+  `pico_supplier_attachment`, separate from ADR 0127 module activation,
+  with `home.supplier_attachment_changed` as the content-free event beside
+  it. Attaching a supplier says it exists; it does not say Pico may spend
+  a person's money or tell anyone they asked.
+- **CO4 - Unprompted traffic is a third decision (implemented
+  2026-08-11):** `may_reach_unasked` is a second column rather than a
+  wider first one, defaults to off, and **cannot be granted without CO3** -
+  carried as a database CHECK rather than left to whoever writes next,
+  because the implementation that folds them is the one that grants the
+  second with the first. They fail differently, which is the reason to
+  keep them apart: an answered question that cost money is visible to the
+  person who asked, and a background sweep is visible to nobody.
+
+  Still open here: a library's git fetch counting as reaching, which needs
+  a library that fetches.
 - **CO5 - A limit is announced, not discovered (open):** approaching a
   budget or a rate ceiling is reported while there is still room to act,
   in the posture ADR 0119 Q5 uses for storage pressure, and the

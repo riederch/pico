@@ -3,10 +3,9 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist. **IN1, IN2, IN3 and IN4 are
-implemented** on 2026-08-10 across `@pico/protocol/supplier`,
-`supplier-condition` and `supplier-union`; IN5 is open, and its domain
-half landed with IN1.
+kind coexist. **IN1-IN5 are implemented**
+(2026-08-10, IN5 completed 2026-08-11), and this ADR is complete except
+for the ADR 0119 Q5 ceiling named under IN1.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than

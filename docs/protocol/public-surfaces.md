@@ -273,6 +273,7 @@ home.clock_divergence_detected
 home.module_activation_changed
 home.module_capture_changed
 home.rule_decision_changed
+home.supplier_attachment_changed
 home.version_changed
 ```
 
@@ -302,6 +303,7 @@ home.clock_divergence_detected
 home.module_activation_changed
 home.module_capture_changed
 home.rule_decision_changed
+home.supplier_attachment_changed
 home.version_changed
 ```
 

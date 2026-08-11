@@ -75,6 +75,16 @@ export const foundationEventTypes = [
    */
   'home.rule_decision_changed',
   /**
+   * ADR 0136 BR7 / ADR 0137 IN5 / ADR 0138 CO3-CO4. A person attached a
+   * supplier, moved it, or changed what it may do.
+   *
+   * The fourth decision in this shape. Content-free: an identifier, a kind, a
+   * domain and two flags. What the supplier *holds* never appears here - a
+   * knowledge base is 1.4 GB of somebody's life and this is a record that it
+   * is attached, not a record of what is in it.
+   */
+  'home.supplier_attachment_changed',
+  /**
    * ADR 0122 Y6. The running code changed. Content-free by construction: two
    * version strings and a direction, because an installation that cannot tell
    * it was downgraded cannot notice the one update that matters most.
@@ -131,6 +141,10 @@ export const serverSynthesizedFoundationEventTypes = [
   // rule record would be granting itself the permission it is about to ask
   // for.
   'home.rule_decision_changed',
+  // ADR 0138 CO3. Whether Pico may reach a system at all is the person's
+  // decision about their own money and their own disclosure; a client writing
+  // it would be granting itself an outbound path.
+  'home.supplier_attachment_changed',
   // ADR 0122 Y6. The server appends it at boot from its own observation; a
   // client claiming its code changed would be claiming something only the
   // process itself can know.
