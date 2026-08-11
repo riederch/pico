@@ -45,7 +45,12 @@ export type PicoLibraryPinKind = typeof picoLibraryPinKinds[number];
  * exactly the repositories most likely to be careful.
  */
 const contentHashPattern = /^[0-9a-f]{64}$/u;
-const commitPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
+/**
+ * What a git commit id looks like, in one place because two things pin one:
+ * a tracked library here, and a Pico Depot under ADR 0143 DP1. Two copies of
+ * this would be two places for it to be wrong about the same fact.
+ */
+export const picoGitCommitPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 
 export interface PicoLibraryPin {
   kind: PicoLibraryPinKind;
@@ -72,7 +77,7 @@ export function parsePicoLibraryPin(value: unknown): PicoLibraryPin {
   if (typeof record.value !== 'string') {
     throw new Error('invalid_pico_library_pin');
   }
-  const pattern = record.kind === 'content_hash' ? contentHashPattern : commitPattern;
+  const pattern = record.kind === 'content_hash' ? contentHashPattern : picoGitCommitPattern;
   if (!pattern.test(record.value)) {
     throw new Error('invalid_pico_library_pin_value');
   }

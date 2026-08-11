@@ -72,6 +72,9 @@ export const picoSupplierCredentialScopeMigrationId = '0005_pico_supplier_creden
 /** ADR 0136 BR6. The revision a derived item was read at, on the item itself. */
 export const picoLibraryDerivationMigrationId = '0006_pico_library_derivation' as const;
 
+/** ADR 0143 DP1. Which depots are attached, and at which commit each runs. */
+export const picoDepotAttachmentMigrationId = '0007_pico_depot_attachment' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -988,6 +991,42 @@ const migrations: readonly MigrationDefinition[] = [
         ALTER TABLE memory_item
         ADD COLUMN derived_pin_covers_content INTEGER NULL
           CHECK (derived_pin_covers_content IS NULL OR derived_pin_covers_content IN (0, 1));
+      `);
+    },
+  },
+  {
+    /**
+     * ADR 0143 DP1. What a depot is and what it runs.
+     *
+     * **Three columns, and the absent fourth is the gate.** There is no
+     * `branch`, no `ref` and no `channel`, so "follow main" is not a thing this
+     * schema can hold - which is stronger than a rule against auto-updating,
+     * because a rule needs something to keep obeying it. ADR 0122 refuses a
+     * build that reads anything mutable; a depot following a branch would be
+     * the same exposure through a door that ADR has no sentence about.
+     *
+     * **No privacy domain, and that is ADR 0143 DP6 rather than an
+     * omission.** A depot produces nothing, so it has nothing to place. Its
+     * suppliers each land in exactly one Private Space under ADR 0137 IN5, and
+     * two instances from one depot may sit in two different spaces - a column
+     * here would have made that impossible to express and would have put a
+     * delivery vehicle inside a person's privacy boundary.
+     *
+     * The remote is the primary key because a depot **is** its address
+     * (ADR 0143 DP1). That is deliberately the opposite of ADR 0137 IN1, where
+     * an instance identifier is a person-chosen token precisely so it survives
+     * a move: a supplier instance is a thing in a person's life, a depot is the
+     * place code comes from, and if the place changes it is a different place.
+     */
+    id: picoDepotAttachmentMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_depot_attachment (
+          remote TEXT PRIMARY KEY,
+          running_commit TEXT NOT NULL,
+          accepted_at TEXT NOT NULL
+        );
       `);
     },
   },

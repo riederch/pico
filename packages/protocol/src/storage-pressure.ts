@@ -134,6 +134,11 @@ export const picoDurableStores = [
    * enumeration ADR 0127 gives modules.
    */
   'supplier_attachment',
+  /**
+   * ADR 0143 DP1. Attached depots. A person adds these the way they add a
+   * supplier, and there are fewer of them, since one depot provides several.
+   */
+  'depot_attachment',
 ] as const;
 
 export type PicoDurableStore = typeof picoDurableStores[number];
@@ -177,6 +182,11 @@ export const defaultPicoStoreCeilingRows: Record<PicoDurableStore, number> = {
   // Q5's rule is that the one thing which cannot be enumerated must not be the
   // one thing that is unprotected.
   supplier_attachment: 1_000,
+  // ADR 0143 DP1. Tighter again, for the same reason and one step further: a
+  // depot provides one or more suppliers, so a person attaches fewer depots
+  // than suppliers. Attaching one is also the heavier decision of the two -
+  // it is a decision about code that will execute, not about material to read.
+  depot_attachment: 100,
 };
 
 export interface PicoStoreCeiling {

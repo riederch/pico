@@ -9,6 +9,13 @@ import {
   type PicoModuleEffect,
   type PicoModuleIdentifier,
 } from '@pico/protocol/module';
+import {
+  acceptPicoDepotOffer,
+  parsePicoDepotPin,
+  picoDepotOffer,
+  type PicoDepotOffer,
+  type PicoDepotPin,
+} from '@pico/protocol/depot';
 import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
 import { parsePicoSupplierManifest } from '@pico/protocol/supplier';
 import {
@@ -676,6 +683,18 @@ export interface PicoActionHistoryRecord {
   chained: boolean;
   writerId?: string;
   chainPosition?: number;
+}
+
+/**
+ * ADR 0143 DP1. A depot and the commit it runs at.
+ *
+ * No privacy domain, which is ADR 0143 DP6 rather than an omission: a depot
+ * produces nothing, so it has nothing to place, and its suppliers each land in
+ * exactly one Private Space of their own.
+ */
+export interface PicoDepotAttachment {
+  pin: PicoDepotPin;
+  acceptedAt: string;
 }
 
 export interface PicoSupplierAttachment {
@@ -6697,6 +6716,132 @@ export class EventStore {
       .all() as Array<{ identifier: string }>;
     return Object.freeze(identifiers
       .map((row) => this.picoSupplierAttachment(row.identifier)!));
+  }
+
+  /**
+   * ADR 0143 DP1. Attaches a depot at a commit a person accepted.
+   *
+   * The pin is parsed rather than trusted, so a record carrying a `branch` is
+   * refused here as firmly as at the parser - this is the boundary the decision
+   * actually crosses, and a schema without a branch column plus a parser
+   * without a branch field is two places saying the same thing rather than one
+   * saying it and one hoping.
+   *
+   * Re-attaching the same remote at the same commit is not an error and not a
+   * change: it writes the same row, which is what makes attaching idempotent
+   * for a caller that cannot tell whether it already ran.
+   */
+  public attachPicoDepot(input: {
+    pin: unknown;
+    acceptedAt: string;
+  }): PicoDepotAttachment {
+    this.ensureOpen();
+    const pin = parsePicoDepotPin(input.pin);
+
+    // ADR 0119 Q5. A new store answers the ceiling question like every other.
+    if (this.picoDepotAttachment(pin.remote) === undefined) {
+      const reached = this.storageCondition().reasons.some(
+        (reason) => reason.cause === 'store_ceiling' && reason.store === 'depot_attachment',
+      );
+      if (reached) {
+        throw new Error('pico_depot_attachment_ceiling_reached');
+      }
+    }
+
+    this.db
+      .prepare(`
+        INSERT INTO pico_depot_attachment (remote, running_commit, accepted_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(remote) DO UPDATE SET
+          running_commit = excluded.running_commit,
+          accepted_at = excluded.accepted_at
+      `)
+      .run(pin.remote, pin.commit, input.acceptedAt);
+    this.rowCounter.recordInsert('depot_attachment');
+    return this.picoDepotAttachment(pin.remote)!;
+  }
+
+  public picoDepotAttachment(remote: string): PicoDepotAttachment | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT remote, running_commit AS runningCommit, accepted_at AS acceptedAt
+        FROM pico_depot_attachment WHERE remote = ?
+      `)
+      .get(remote) as { remote: string; runningCommit: string; acceptedAt: string } | undefined;
+    if (row === undefined) {
+      return undefined;
+    }
+    return Object.freeze({
+      pin: parsePicoDepotPin({ remote: row.remote, commit: row.runningCommit }),
+      acceptedAt: row.acceptedAt,
+    });
+  }
+
+  public picoDepotAttachments(): readonly PicoDepotAttachment[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare('SELECT remote FROM pico_depot_attachment ORDER BY remote')
+      .all() as Array<{ remote: string }>;
+    return Object.freeze(rows.map((row) => this.picoDepotAttachment(row.remote)!));
+  }
+
+  /**
+   * ADR 0143 DP1. What a fetch found, as an offer or as nothing.
+   *
+   * **Reading this changes nothing.** It takes what was seen on the remote and
+   * answers whether there is a decision to put in front of a person; the row
+   * is not touched, and a caller that never accepts leaves the depot running
+   * exactly where it was. That is the whole of "a newer commit is an offer".
+   */
+  public picoDepotOffer(input: {
+    remote: string;
+    seenCommit: string;
+  }): PicoDepotOffer | null {
+    const attachment = this.picoDepotAttachment(input.remote);
+    if (attachment === undefined) {
+      throw new Error('pico_depot_not_attached');
+    }
+    return picoDepotOffer({ pin: attachment.pin, seenCommit: input.seenCommit });
+  }
+
+  /**
+   * ADR 0143 DP1. Moves a depot to a commit a person named.
+   *
+   * The acceptance names the commit, so this is a decision about a specific
+   * revision rather than about "the update", and an offer that moved between
+   * the question and the answer is refused. It also re-reads the running
+   * commit and refuses an offer that no longer starts where the depot is,
+   * because an acceptance computed against a stale row would move the depot
+   * from somewhere the person was not looking at.
+   */
+  public acceptPicoDepotOffer(input: {
+    offer: PicoDepotOffer;
+    acceptedCommit: string;
+    acceptedAt: string;
+  }): PicoDepotAttachment {
+    this.ensureOpen();
+    const attachment = this.picoDepotAttachment(input.offer.remote);
+    if (attachment === undefined) {
+      throw new Error('pico_depot_not_attached');
+    }
+    if (attachment.pin.commit !== input.offer.running) {
+      throw new Error('pico_depot_offer_is_stale');
+    }
+    const pin = acceptPicoDepotOffer({
+      offer: input.offer,
+      acceptedCommit: input.acceptedCommit,
+    });
+    this.db
+      .prepare('UPDATE pico_depot_attachment SET running_commit = ?, accepted_at = ? WHERE remote = ?')
+      .run(pin.commit, input.acceptedAt, pin.remote);
+    return this.picoDepotAttachment(pin.remote)!;
+  }
+
+  /** ADR 0143 DP1. Removes the depot record and nothing else. */
+  public detachPicoDepot(remote: string): void {
+    this.ensureOpen();
+    this.db.prepare('DELETE FROM pico_depot_attachment WHERE remote = ?').run(remote);
   }
 
   /**

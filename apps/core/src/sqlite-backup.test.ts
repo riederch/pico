@@ -9,6 +9,7 @@ import {
   picoRuleDecisionMigrationId,
   picoSchemaBaselineMigrationId,
   picoSupplierAttachmentMigrationId,
+  picoDepotAttachmentMigrationId,
   picoLibraryDerivationMigrationId,
   picoSupplierCredentialScopeMigrationId,
   runMigrations,
@@ -245,6 +246,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoLibraryDerivationMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoDepotAttachmentMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

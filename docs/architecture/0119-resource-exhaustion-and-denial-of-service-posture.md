@@ -12,21 +12,30 @@ existing bounds this builds on are named rather than claimed as
 sufficient. It is due before the Link intake port is published and
 before any deployment that is not a trusted-local development host.
 
-Status note, 2026-08-11: **Q5's list of counted stores is now six**, and
+Status note, 2026-08-11: **Q5's list of counted stores is now seven**, and
 its body below still says four. The body is left as it was written, per
-ADR 0128's rule that an ADR keeps its text and gains a note. The two
-additions arrived from other decisions and each brought its own reason:
-the **observation buffer** (ADR 0129 SR2), because a working store that
-filled up would otherwise crowd out a record; and **supplier
-attachments** (ADR 0137 IN1), where the ceiling does a different job
-from the rest. Everywhere else it bounds a store; there it stands in
-place of an enumeration, because ADR 0137 makes the instance list
-deliberately open and a limit is what remains once nothing can be
-listed in advance. It is also the only ceiling sized against a runaway
-rather than against use - every row is a person deciding something, so
-nothing loops it and no peer can add to it, which is the exact inverse
-of the pending inbox and why it is the tightest number in the set at
-1,000.
+ADR 0128's rule that an ADR keeps its text and gains a note. The three
+additions arrived from other decisions and each brought its own reason.
+
+The **observation buffer** (ADR 0129 SR2), because a working store that
+filled up would otherwise crowd out a record.
+
+**Supplier attachments** (ADR 0137 IN1), where the ceiling does a
+different job from the rest: everywhere else it bounds a store, and
+there it stands in place of an enumeration, because ADR 0137 makes the
+instance list deliberately open and a limit is what remains once nothing
+can be listed in advance.
+
+**Depot attachments** (ADR 0143 DP1), at 100 - tighter still, because
+one depot provides several suppliers and because attaching one is the
+heavier of the two decisions: it is about code that will execute rather
+than about material to read.
+
+The last two are the only ceilings in this ADR sized against a runaway
+rather than against use. Every row in them is a person deciding
+something, so nothing loops them and no peer can add to them, which is
+the exact inverse of the pending inbox and why they carry the tightest
+numbers in the set.
 
 ## Context
 

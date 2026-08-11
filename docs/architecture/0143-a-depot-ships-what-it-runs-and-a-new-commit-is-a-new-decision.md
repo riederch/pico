@@ -4,9 +4,10 @@
 
 Accepted as the distribution contract for suppliers: where a Pico Bridge or
 a Pico Library comes from, how it arrives, what pins it and what runtime it
-is given. **DP4 is implemented** (2026-08-11), built together with ADR 0136
-BR2 because the two are one boundary stated from opposite sides; DP1-DP3 and
-DP5-DP8 are open.
+is given. **DP1 and DP4 are implemented** (2026-08-11) - DP4 together with
+ADR 0136 BR2, because the two are one boundary stated from opposite sides.
+DP2, DP3 and DP5-DP8 are open, and nothing here has met a real depot: there
+is no fetch, no manifest and no supplier inside one.
 
 Decided in conversation on 2026-08-11, from an ask that was a product
 decision rather than an engineering one: **as few mandatory bridges as
@@ -383,11 +384,53 @@ compatibility a property of a commit a person accepted.
 
 ## Gates
 
-- **DP1 - A depot is attached at a commit (open):** a depot is identified
-  by its remote and pinned to a commit, an attachment records which commit
-  it runs at, and a newer commit is presented as an offer that changes
-  nothing until it is accepted. Nothing auto-follows a branch, and a test
-  states that a moved branch head leaves a running attachment untouched.
+- **DP1 - A depot is attached at a commit (implemented 2026-08-11):**
+  `@pico/protocol/depot` carries the pin and the offer; migration
+  `0007_pico_depot_attachment` carries them at rest.
+
+  **The enforcement is the absence of a field.** There is nowhere in a
+  depot record - in the type or in the table - to write a branch, a ref, a
+  tag or a channel, so "track main" is not a configuration this system can
+  express. That is stronger than a rule against auto-updating, because a
+  rule needs something to keep obeying it and an absent field needs
+  nothing. A caller reaching for one of those names is refused under
+  `pico_depot_cannot_follow_a_ref` rather than as a shape failure, because
+  it is not a typo - it is a request for the thing this gate exists to
+  prevent, and it should be told so. The schema has no branch column and
+  the parser has no branch field: two places saying the same thing rather
+  than one saying it and one hoping.
+
+  **A newer commit is an offer, and reading one changes nothing.**
+  `picoDepotOffer` compares what is running against what a fetch saw and
+  answers `null` when they match, because an up-to-date depot has no
+  decision to put in front of anyone. There is no `apply`. The one route
+  across names the commit, so accepting is a decision about a specific
+  revision rather than about "the update", and an offer that moved between
+  the question and the answer is refused - the difference between a person
+  having agreed to run *this code* and having agreed to run whatever was
+  newest when they clicked. The store adds a second refusal the protocol
+  cannot make: an offer computed against a row that has since moved is
+  stale, because an acceptance built on an old reading would move the
+  depot from somewhere the person was not looking at.
+
+  **A depot is identified by its remote, which is the opposite of an
+  instance and deliberately so.** ADR 0137 IN1 makes a supplier instance a
+  person-chosen token *because* a working copy moves and a camper van's
+  Home Assistant changes address at every campsite - the identity has to
+  survive the address. A depot is not a thing in a person's life; it is
+  the place code comes from, and if the place changes it is a different
+  place. Pretending otherwise would let a rename silently redirect what
+  executes.
+
+  Two things fall out of the schema. It holds **no privacy domain**, which
+  is DP6 as a property rather than a promise: a column there would have
+  made two instances from one depot in two different spaces impossible to
+  express, and would have put a delivery vehicle inside a person's privacy
+  boundary. And the new store answers ADR 0119 Q5 like any other, at 100
+  rows - tighter than supplier attachments because one depot provides
+  several suppliers, and because attaching one is the heavier of the two
+  decisions: it is a decision about code that will execute rather than
+  about material to read.
 - **DP2 - What runs is vendored (open):** the depot check refuses a depot
   that would need a package-manager step to run - no unvendored dependency
   manifest, no install script, no registry access at attachment. `git` is
