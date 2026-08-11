@@ -214,6 +214,29 @@ than a second authority. Attaching the bridge *instead of* the library
 would put a personal knowledge base behind a network dependency for a
 convenience.
 
+**Decided on 2026-08-11: git, not MCP** - by the user, and for an
+operational reason worth keeping rather than re-discovering. MCP struggles
+with large files, and this corpus is made of them: no `.gitattributes` and
+no LFS, a 612 MB `.git`, and single documents of 57 MB, 41 MB and 29 MB.
+A tool protocol is the wrong shape for moving those; git already does it.
+
+**"Git bridge" is a good name for half of it, and the half matters.** The
+thing that *fetches* is bridge-shaped - it reaches outside, it discloses
+that this Pico is pulling, and ADR 0138 CO4 gates it. The thing that
+*answers* is the working copy, and it is a library. Letting the name move
+the whole supplier to `bridge` would cost the floor eligibility of
+something that answers perfectly well with the network gone, which is the
+one property this corpus most needs when somebody is standing in a
+basement looking for a wiring diagram.
+
+**And the pin is honest here, which is not automatic.** A commit id pins
+content only when the content is in the repository. Under git-LFS it
+would pin a *pointer*, with the bytes fetched separately from somewhere
+that has its own availability and its own retention - so a library whose
+remote uses LFS is pinned in name only, and BR6 has to ask before it
+claims otherwise. This one does not use it; the question stands for the
+next one.
+
 **MCP is a transport here, not a second boundary.** ADR 0036 settled that
 already - "MCP is a tool connection method. It is not Pico authority" -
 and it holds unchanged: an MCP client is a bridge's implementation, and
@@ -569,7 +592,10 @@ nowhere to go, which is the state ADR 0127 was written to end.
   spatial recall keeps its word without keeping its list.
 - **BR6 - Libraries are pinned, read in place, and never held (open):** a
   frozen library verifies against a pinned hash and a tracked one against
-  a commit id, failing loudly rather than substituting; nothing is
+  a commit id, failing loudly rather than substituting - **and asks first
+  whether the commit pins the content at all**, because under git-LFS it
+  pins a pointer and the bytes come from somewhere with its own
+  availability and its own retention; nothing is
   ingested, derived items carry the pin they were read at, and detaching
   deletes nothing while a domain shred reaches every derived item. A
   library may appear in an ADR 0118 floor family and a bridge may not, and
