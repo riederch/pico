@@ -31,6 +31,10 @@
       "types": "./dist/confidence.d.ts",
       "import": "./dist/confidence.js"
     },
+    "./instance-selection": {
+      "types": "./dist/instance-selection.d.ts",
+      "import": "./dist/instance-selection.js"
+    },
     "./library-pin": {
       "types": "./dist/library-pin.d.ts",
       "import": "./dist/library-pin.js"

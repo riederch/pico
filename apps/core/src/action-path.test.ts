@@ -1,3 +1,9 @@
+import {
+  confirmPicoInstanceProposal,
+  proposePicoInstance,
+  selectPicoInstanceAsSoleCandidate,
+  selectPicoInstanceByPerson,
+} from '@pico/protocol/instance-selection';
 import { describe, expect, it } from 'vitest';
 import {
   decidePicoAction,
@@ -356,5 +362,96 @@ describe('ADR 0141 RN6 - external content is never recorded verbatim', () => {
       argumentSources: { memory_item_id: ['external_content'] },
     });
     expect(JSON.stringify(facts[0]?.payload)).not.toContain('from a stranger');
+  });
+});
+
+describe('ADR 0137 IN5 - a derived location proposes, and the action path refuses it', () => {
+  it('carries a person-selected instance through to the rule input', () => {
+    const { facts, decided } = decide({
+      instance: selectPicoInstanceByPerson('ferienhaus'),
+      attachedInstances: ['ferienhaus'],
+    });
+    expect(facts.find((f) => f.type === 'pico_rules.decision_created')).toBeDefined();
+    expect(decided.decision).toBe('allow');
+  });
+
+  it('carries the sole covering instance, because there was nothing to infer', () => {
+    const { decided } = decide({
+      instance: selectPicoInstanceAsSoleCandidate(['zuhause']),
+      attachedInstances: ['zuhause'],
+    });
+    expect(decided.decision).toBe('allow');
+  });
+
+  it('refuses a derived location handed in as the target, before any fact', () => {
+    // The failure this exists for is physical: a light going on in a building
+    // the person is not in. A guess reaching here is refused under its own
+    // error rather than as a shape failure, and nothing is recorded - the
+    // request never became an action.
+    const { facts, emit } = recorder();
+    const guess = proposePicoInstance({ instance: 'ferienhaus', confidence: 'high' });
+    expect(() => decidePicoAction({
+      requested: {
+        effectName: 'calendar.raise-entry',
+        arguments: [{ name: 'memory_item_id', value: 'item_1' }],
+      },
+      argumentSources: { memory_item_id: ['own_pico'] },
+      declaredEffectNames: ['calendar.raise-entry'],
+      consentedEffects: consented as never,
+      privacyDomain: 'private',
+      personPresent: false,
+      instance: guess as never,
+      reachesOutside: false,
+      reachPermitted: false,
+      emit,
+    })).toThrow('pico_instance_proposal_is_not_a_selection');
+    expect(facts.some((f) => f.type === 'pico_rules.decision_created')).toBe(false);
+  });
+
+  it('refuses a bare identifier, which is what the path used to take', () => {
+    // Before IN5 closed, this parameter was a string and any caller could have
+    // inferred it. A string is now not a selection, in the type and at runtime.
+    const { emit } = recorder();
+    expect(() => decidePicoAction({
+      requested: { effectName: 'calendar.raise-entry', arguments: [] },
+      argumentSources: {},
+      declaredEffectNames: ['calendar.raise-entry'],
+      consentedEffects: consented as never,
+      privacyDomain: 'private',
+      personPresent: false,
+      instance: 'ferienhaus' as never,
+      reachesOutside: false,
+      reachPermitted: false,
+      emit,
+    })).toThrow('invalid_pico_instance_selection');
+  });
+
+  it('turns a confirmed proposal into something the path accepts', () => {
+    const guess = proposePicoInstance({ instance: 'ferienhaus', confidence: 'low' });
+    const confirmed = confirmPicoInstanceProposal({
+      proposal: guess,
+      confirmedInstance: 'ferienhaus',
+    });
+    const { decided } = decide({ instance: confirmed, attachedInstances: ['ferienhaus'] });
+    expect(decided.decision).toBe('allow');
+  });
+});
+
+describe('ADR 0137 IN5 with ADR 0140 RL3 - a named instance has to be attached', () => {
+  it('denies a named instance nothing is attached for', () => {
+    const { decided } = decide({
+      instance: selectPicoInstanceByPerson('ferienhaus'),
+      attachedInstances: ['zuhause'],
+    });
+    expect(decided.decision).toBe('deny');
+    expect(decided.reasons).toContain('instance_not_attached');
+  });
+
+  it('denies when the attachment list is absent, rather than assuming', () => {
+    // Fail-closed, and the same answer the placeholder gave before the
+    // attachment store existed - now for a reason instead of by construction.
+    const { decided } = decide({ instance: selectPicoInstanceByPerson('ferienhaus') });
+    expect(decided.decision).toBe('deny');
+    expect(decided.reasons).toContain('instance_not_attached');
   });
 });

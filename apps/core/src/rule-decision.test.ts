@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { EventStore } from './event-store.js';
+import { selectPicoInstanceByPerson } from '@pico/protocol/instance-selection';
 import { decidePicoAction } from './action-path.js';
 
 const dirs: string[] = [];
@@ -147,8 +148,13 @@ describe('ADR 0140 RL4 - a recorded rule refines, and never grants', () => {
   it('cannot grant what the floor refused', () => {
     // ADR 0140 RL3 refuses for want of an input. A rule that could overrule
     // that would be answering a question nobody could ask.
-    // An instance that is not attached is one of RL3's named unknowns.
-    const { decided } = decide({ recordedRule: 'allow', instance: 'ferienhaus' });
+    // An instance that is not attached is one of RL3's named unknowns. Named
+    // through a selection since ADR 0137 IN5: a bare string is refused here
+    // now, and so is a derived location.
+    const { decided } = decide({
+      recordedRule: 'allow',
+      instance: selectPicoInstanceByPerson('ferienhaus'),
+    });
     expect(decided.decision).toBe('deny');
     expect(decided.reasons).toEqual(['instance_not_attached']);
   });

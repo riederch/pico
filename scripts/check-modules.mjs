@@ -106,9 +106,27 @@ const worldReachingImports = new Set([
  * contract could construct a decision input, and a module that can construct
  * one is a module arguing about its own permission. Value imports only: a
  * type vanishes at emit and decides nothing.
+ *
+ * ADR 0137 IN5 adds the other half of that input for the same reason, and each
+ * specifier carries its own message: a check that named the wrong ADR would
+ * send the next reader to the wrong argument.
  */
-const decisionReachingImports = new Set([
-  '@pico/protocol/pico-rules',
+const decisionReachingImports = new Map([
+  ['@pico/protocol/pico-rules',
+    'ADR 0140 RL4: a module may ask for an action and may not decide about '
+    + 'one, so it does not link against the decision contract. Rules are '
+    + 'changed by a person over an authenticated surface, never by anything '
+    + 'the action path can reach.'],
+  // ADR 0137 IN5, the same argument one step earlier and about the other half
+  // of a decision input.
+  ['@pico/protocol/instance-selection',
+    'ADR 0137 IN5: `selectPicoInstanceByPerson` is a function whose whole '
+    + 'content is the claim "a person chose this", and '
+    + '`selectPicoInstanceAsSoleCandidate` the claim "there was nothing to '
+    + 'choose". Both are controller knowledge - the core knows what a person '
+    + 'answered and what is attached, and a module knows neither - so a module '
+    + 'that could construct a selection could name the building an effect acts '
+    + 'on while declaring the effect.'],
 ]);
 
 const worldReachingGlobals = [
@@ -335,11 +353,8 @@ for (const module_ of modules) {
 
       if (decisionReachingImports.has(specifier) && !isTypeOnly) {
         errors.push(
-          `${fileLabel}: imports ${specifier}. ADR 0140 RL4: a module may ask `
-          + 'for an action and may not decide about one, so it does not link '
-          + 'against the decision contract. Rules are changed by a person over '
-          + 'an authenticated surface, never by anything the action path can '
-          + 'reach.',
+          `${fileLabel}: imports ${specifier}. `
+          + decisionReachingImports.get(specifier),
         );
         continue;
       }

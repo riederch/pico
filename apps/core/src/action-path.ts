@@ -9,6 +9,10 @@ import {
   type PicoApprovalOutcome,
   type PicoPendingApproval,
 } from '@pico/protocol/approval';
+import {
+  picoInstanceToken,
+  type PicoInstanceSelection,
+} from '@pico/protocol/instance-selection';
 import type { PicoModuleEffect } from '@pico/protocol/module';
 import {
   picoRulesFloorOutcome,
@@ -134,7 +138,27 @@ export interface PicoActionDecisionInput {
   consentedEffects: readonly PicoModuleEffect[];
   privacyDomain: string;
   personPresent: boolean;
-  instance: string | null;
+  /**
+   * ADR 0137 IN5. The instance this effect targets, and **not a string**.
+   *
+   * A `PicoInstanceSelection` can only have come from a person or from there
+   * having been exactly one candidate. A derived location produces a
+   * `PicoInstanceProposal`, which has no route into this parameter - the
+   * refusal is the absence of a way to pass one, the construction ADR 0117 X1
+   * uses for the planner context. `null` where the effect's slot has no
+   * instance at all.
+   */
+  instance: PicoInstanceSelection | null;
+  /**
+   * ADR 0137 IN5 with ADR 0140 RL3. Which instances are attached, so
+   * `instance_not_attached` answers from the attachment record instead of
+   * being assumed.
+   *
+   * Absent means none, which denies any named instance. That is the
+   * fail-closed reading and the one this parameter replaced: before the
+   * attachment store existed, a named instance denied unconditionally.
+   */
+  attachedInstances?: readonly string[];
   reachesOutside: boolean;
   reachPermitted: boolean;
   /**
@@ -175,6 +199,12 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
     throw new Error('pico_action_effect_not_consented');
   }
 
+  // ADR 0137 IN5. Before anything is recorded: a derived location handed in as
+  // the target is refused here, so a guess never becomes a request. The order
+  // matters - a refusal after `action.requested` would leave a fact about an
+  // action that was never one.
+  const instanceToken = picoInstanceToken(input.instance);
+
   // ADR 0139 AC1-AC3. Throws on an undeclared effect, a requester-asserted
   // origin, an unclassified argument or an empty derivation.
   const request = buildPicoActionRequest({
@@ -200,7 +230,9 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
     )),
     privacyDomain: input.privacyDomain,
     personPresent: input.personPresent,
-    instance: input.instance,
+    // The token is all a rule reads (ADR 0140 RL1), and it is reachable only
+    // through a selection.
+    instance: instanceToken,
     reachesOutside: input.reachesOutside,
     reachPermitted: input.reachPermitted,
     recentDecisions: Object.freeze([]),
@@ -211,7 +243,8 @@ export function decidePicoAction(input: PicoActionDecisionInput): PicoActionDeci
     argumentNames: request.arguments.map((argument) => argument.name),
     // The consent record is the person's decision about this effect.
     hasRuleForEffect: true,
-    instanceAttached: input.instance === null ? true : false,
+    instanceAttached: instanceToken === null
+      || (input.attachedInstances ?? []).includes(instanceToken),
     domainResolved: true,
   });
   const floor = picoRulesFloorOutcome(missing);

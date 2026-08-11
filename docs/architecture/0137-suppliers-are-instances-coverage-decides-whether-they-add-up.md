@@ -3,10 +3,9 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist. **IN1-IN4 are implemented** and
-**IN5 in two of its three parts** (2026-08-10, attachment 2026-08-11).
-Open: the ADR 0119 Q5 ceiling named under IN1, and the structural refusal
-of an inferred instance under IN5.
+kind coexist. **IN1-IN5 are implemented** (2026-08-10 to 2026-08-11).
+One item stays open and it is named under IN1 rather than here: the
+ADR 0119 Q5 ceiling on attachments.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than
@@ -222,8 +221,13 @@ a guess.
   refusal - a test found that ordering. The manifest also carries exactly
   one ADR 0075 domain, which is IN5's first half.
 
-  Open: derived items carrying the identifier and pin, and the ADR 0119
-  Q5 ceiling on attachments. Both need a store.
+  Derived items carrying the identifier and pin landed with ADR 0136 BR6:
+  `PicoLibraryDerivation` holds both on the memory item itself, so
+  provenance survives a move, a re-clone and a detach.
+
+  Open: the ADR 0119 Q5 ceiling on attachments. The store exists now, so
+  this is no longer blocked - what is missing is the number, which is a
+  product decision rather than an implementation.
 - **IN2 - Coverage is declared (implemented):** a manifest without
   coverage is refused, because undeclared coverage makes an empty answer
   permanently ambiguous. `picoSupplierRelation` answers `alternatives`,
@@ -259,8 +263,8 @@ a guess.
   agreed value names every instance that gave it. Two answers from one
   instance are refused rather than unioned, because unioning them would
   invent a disagreement the instance never had.
-- **IN5 - An effect names its instance (half implemented):** two halves,
-  and they landed separately.
+- **IN5 - An effect names its instance (implemented):** three parts, and
+  they landed separately.
 
   **The attachment half is built (2026-08-11).** Migration
   `0004_pico_supplier_attachment` holds one row per instance with exactly
@@ -277,10 +281,54 @@ a guess.
   statement composes the instance from validated fields, so what a person
   approves says *Ferienhaus* rather than *light on*.
 
-  **Open: a derived location may propose an instance and may never select
-  it.** Today the instance is an input the caller supplies, and nothing
-  prevents that caller from having inferred it. Making the refusal
-  structural needs a location source to refuse, which needs a supplier.
+  **The refusal half landed on 2026-08-11, and did not need a supplier
+  after all.** The earlier note here said it did, on the grounds that
+  making it structural needs a location source to refuse. That was the
+  wrong end of the problem: what has to be refused is not a source but a
+  *kind of value*, and that can be built before anything produces one.
+
+  Suggesting and selecting are now two types.
+  `@pico/protocol/instance-selection` has a `PicoInstanceProposal` -
+  instance, ADR 0129 confidence, and `confirmedByPerson` typed as only ever
+  `false` - which nothing accepts. What an effect targets is a
+  `PicoInstanceSelection`, and there are exactly two selectors: a person
+  named it, or exactly one attached instance covered the subject and there
+  was nothing to choose. **A derived location is not on that list and
+  cannot be put on it by configuration**, because it is not a value this
+  module reads. The one route across is
+  `confirmPicoInstanceProposal`, and the confirmation **names the
+  instance**: a person confirms *Ferienhaus*, so a derivation that moved
+  between the question and the answer is caught by comparison rather than
+  trusted by ordering - ADR 0141 RN3's rule seen from the other end. What
+  comes out carries no memory of having been a guess, deliberately, because
+  keeping the confidence would invite a later caller to discount a person's
+  answer.
+
+  **Both halves are enforced, and the second is the one that matters.** A
+  type is erased before anything runs, so `instance: PicoInstanceSelection`
+  refuses a proposal at review time and refuses nothing in the built
+  product - a cast, a JavaScript caller or a value read back from storage
+  walks past it. `picoInstanceToken` therefore checks at runtime too, and a
+  proposal arriving there gets its own error rather than a shape failure,
+  because "a guess reached the decision path" is a different fact from
+  "this object is malformed" and only one of them ends with a light going
+  on in the wrong house. It runs **before** `action.requested` is recorded,
+  so a guess never becomes a request.
+
+  Building it turned `instanceAttached` from a placeholder into an answer.
+  `decidePicoAction` had been passing `input.instance === null`, which
+  denied every named instance unconditionally; it now reads the attachment
+  list, with absence meaning none attached - the same fail-closed answer,
+  now for a reason.
+
+  A module may not import this module, which is `module:check`'s nineteenth
+  probe and ADR 0140 RL4's argument one step earlier:
+  `selectPicoInstanceByPerson` is a function whose whole content is the
+  claim *a person chose this*, and `selectPicoInstanceAsSoleCandidate` the
+  claim *there was nothing to choose*. Both are controller knowledge - the
+  core knows what a person answered and what is attached, a module knows
+  neither - so a module able to construct a selection could name the
+  building an effect acts on while declaring the effect.
 
 ## Failure ledger
 
