@@ -86,6 +86,7 @@ import {
   picoRuleDecisionMigrationId,
   picoSchemaBaselineMigrationId,
   picoSupplierAttachmentMigrationId,
+  picoSupplierCredentialScopeMigrationId,
 } from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
 import {
@@ -373,6 +374,7 @@ describe('Pico Home Core app', () => {
           { id: picoModuleEffectConsentMigrationId, appliedAt: expect.any(String) },
           { id: picoRuleDecisionMigrationId, appliedAt: expect.any(String) },
           { id: picoSupplierAttachmentMigrationId, appliedAt: expect.any(String) },
+          { id: picoSupplierCredentialScopeMigrationId, appliedAt: expect.any(String) },
         ],
       },
       // ADR 0119 Q5. A development host has no free-space source and

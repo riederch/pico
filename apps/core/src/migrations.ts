@@ -66,6 +66,9 @@ export const picoRuleDecisionMigrationId = '0003_pico_rule_decision' as const;
 /** ADR 0137 IN5 / ADR 0138 CO3-CO4. Which suppliers are attached, and to what. */
 export const picoSupplierAttachmentMigrationId = '0004_pico_supplier_attachment' as const;
 
+/** ADR 0138 CO1. What a supplier's credential is allowed to do. */
+export const picoSupplierCredentialScopeMigrationId = '0005_pico_supplier_credential_scope' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -896,6 +899,38 @@ const migrations: readonly MigrationDefinition[] = [
           -- so rather than trusting every future writer to remember.
           CHECK (may_reach_unasked = 0 OR may_reach_outside = 1)
         );
+      `);
+    },
+  },
+{
+    /**
+     * ADR 0138 CO1, the part that is a decision rather than a cipher.
+     *
+     * **Scope, because a credential that only needs to read is issued as one.**
+     * A supplier that could write to its source could edit the material it is
+     * quoting, which is a quieter failure than losing the credential: the
+     * quotes would still be accurate about a source that had been changed to
+     * agree with them. A library therefore takes `read` and nothing else, and
+     * the CHECK below says so rather than leaving it to whoever attaches next.
+     *
+     * **Presence, not the secret.** This column records that a credential
+     * exists, so a surface can say `not configured` (ADR 0138 CO2) without
+     * anything holding the secret to check. Where the secret itself lives is
+     * deliberately still open - see the ADR - and putting a flag here does not
+     * pre-empt it.
+     */
+    id: picoSupplierCredentialScopeMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_supplier_attachment
+        ADD COLUMN credential_scope TEXT NULL
+          CHECK (credential_scope IS NULL OR credential_scope IN ('read', 'read_write'));
+      `);
+      db.exec(`
+        ALTER TABLE pico_supplier_attachment
+        ADD COLUMN credential_present INTEGER NOT NULL DEFAULT 0
+          CHECK (credential_present IN (0, 1));
       `);
     },
   },

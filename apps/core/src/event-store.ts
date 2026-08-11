@@ -689,6 +689,10 @@ export interface PicoSupplierAttachment {
   mayReachOutside: boolean;
   /** ADR 0138 CO4. Default off, and never implied by CO3. */
   mayReachUnasked: boolean;
+  /** ADR 0138 CO1. `read` for a library, always. Absent means none is needed. */
+  credentialScope?: 'read' | 'read_write';
+  /** ADR 0138 CO1/CO2. Whether one exists - never the secret itself. */
+  credentialPresent: boolean;
   attachedAt: string;
 }
 
@@ -6599,13 +6603,15 @@ export class EventStore {
       .prepare(`
         SELECT identifier, kind, slots_json AS slotsJson, coverage_json AS coverageJson,
                privacy_domain AS privacyDomain, may_reach_outside AS mayReachOutside,
-               may_reach_unasked AS mayReachUnasked, attached_at AS attachedAt
+               may_reach_unasked AS mayReachUnasked, attached_at AS attachedAt,
+               credential_scope AS credentialScope,
+               credential_present AS credentialPresent
         FROM pico_supplier_attachment WHERE identifier = ?
       `)
       .get(identifier) as {
         identifier: string; kind: string; slotsJson: string; coverageJson: string;
         privacyDomain: string; mayReachOutside: number; mayReachUnasked: number;
-        attachedAt: string;
+        attachedAt: string; credentialScope: string | null; credentialPresent: number;
       } | undefined;
     if (row === undefined) {
       return undefined;
@@ -6618,8 +6624,46 @@ export class EventStore {
       privacyDomain: row.privacyDomain,
       mayReachOutside: row.mayReachOutside === 1,
       mayReachUnasked: row.mayReachUnasked === 1,
+      ...(row.credentialScope === null
+        ? {}
+        : { credentialScope: row.credentialScope as 'read' | 'read_write' }),
+      credentialPresent: row.credentialPresent === 1,
       attachedAt: row.attachedAt,
     });
+  }
+
+  /**
+   * ADR 0138 CO1. Records what a supplier's credential may do, and that one
+   * exists - never the secret.
+   *
+   * **A library takes `read` and nothing else.** A supplier that could write
+   * to its source could edit the material it is quoting, and that failure is
+   * quieter than losing the credential: the quotes would stay accurate about a
+   * source changed to agree with them. Pico never pushes.
+   *
+   * The secret does not pass through here. Where it lives at rest is the open
+   * half of CO1, stated in the ADR rather than guessed at by this method.
+   */
+  public setPicoSupplierCredential(input: {
+    identifier: string;
+    scope: 'read' | 'read_write';
+    present: boolean;
+  }): void {
+    this.ensureOpen();
+    const attachment = this.picoSupplierAttachment(input.identifier);
+    if (attachment === undefined) {
+      throw new Error('pico_supplier_not_attached');
+    }
+    if (attachment.kind === 'library' && input.scope !== 'read') {
+      throw new Error('pico_library_credential_must_be_read_only');
+    }
+    this.db
+      .prepare(`
+        UPDATE pico_supplier_attachment
+        SET credential_scope = ?, credential_present = ?
+        WHERE identifier = ?
+      `)
+      .run(input.scope, input.present ? 1 : 0, input.identifier);
   }
 
   public picoSupplierAttachments(): readonly PicoSupplierAttachment[] {

@@ -3,8 +3,8 @@
 ## Status
 
 Accepted as a constraint on suppliers that reach a system Pico does not
-run. **CO2 is implemented** (2026-08-10)
-and **CO3 and CO4** (2026-08-11); CO1 and CO5 are open.
+run. **CO2 is implemented** (2026-08-10),
+**CO3 and CO4** (2026-08-11), and **CO1 in part**; CO5 is open.
 
 This was the third part of ADR 0136 until 2026-08-10, when the user asked
 for a second cut. ADR 0136 keeps what a supplier is and where its code
@@ -216,12 +216,29 @@ receives the credential; it does not keep it.
 
 ## Gates
 
-- **CO1 - The credential is Pico's (open):** credentials live under core
-  custody, are handed to the supplier process for use and are never
-  persisted by it; no supplier credential is readable from host
-  configuration or the environment, and a check refuses one that is. Read
-  scope where reading is all that is needed, and no push path for a git
-  library.
+- **CO1 - The credential is Pico's (part implemented 2026-08-11):** the
+  half that is a decision rather than a cipher.
+
+  **Scope is recorded and a library takes `read`, refused otherwise.** A
+  supplier that could write to its source could edit the material it is
+  quoting, and that failure is quieter than losing the credential: the
+  quotes would stay accurate about a source changed to agree with them.
+  Pico never pushes. A bridge may hold a wider scope, because it is not
+  quoting anything.
+
+  **Presence is recorded, the secret is not.** A surface can answer
+  ADR 0138 CO2's `not configured` without anything holding a secret to
+  check, and a test asserts nothing secret-shaped comes back from the
+  attachment read. Nothing is read from the environment, and a test sets
+  `PICO_SUPPLIER_*` to prove it (ADR 0104).
+
+  **What is deliberately not built, and why.** Where the secret lives at
+  rest. The obvious move was to reuse `MemoryContentCrypto`, which already
+  wraps a per-domain KEK - and it binds a `memoryItemId` into its
+  associated data. Handing it a fabricated one would make the AD a lie,
+  which is the single thing associated data exists to prevent. A
+  credential needs its own AD naming what it actually is, and that is
+  worth doing deliberately rather than as a side effect of this gate.
 - **CO2 - Condition is a typed value (implemented):**
   `picoSupplierConditions` is the closed list, with `out_of_scope` from
   ADR 0137 IN3 beside it, and `assertPicoSupplierCondition` refuses

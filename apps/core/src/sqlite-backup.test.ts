@@ -9,6 +9,7 @@ import {
   picoRuleDecisionMigrationId,
   picoSchemaBaselineMigrationId,
   picoSupplierAttachmentMigrationId,
+  picoSupplierCredentialScopeMigrationId,
   runMigrations,
 } from './migrations.js';
 import { createSqliteBackup, restoreSqliteBackup } from './sqlite-backup.js';
@@ -235,6 +236,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoSupplierAttachmentMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoSupplierCredentialScopeMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

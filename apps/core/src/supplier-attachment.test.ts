@@ -181,3 +181,80 @@ describe('ADR 0136 - detaching stops derivation and deletes nothing', () => {
     store.close();
   });
 });
+
+describe('ADR 0138 CO1 - a credential says what it may do, and never appears', () => {
+  it('attaches with no credential and says so', () => {
+    // CO2's `not_configured` is answerable without anything holding a secret.
+    const store = openStore();
+    const attached = store.attachPicoSupplier({
+      manifest: rchkb,
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+    expect(attached.credentialPresent).toBe(false);
+    expect(attached.credentialScope).toBeUndefined();
+    store.close();
+  });
+
+  it('gives a library read scope and refuses anything wider', () => {
+    // A supplier that could write to its source could edit the material it is
+    // quoting - a quieter failure than losing the credential, because the
+    // quotes would stay accurate about a source changed to agree with them.
+    const store = openStore();
+    store.attachPicoSupplier({ manifest: rchkb, attachedAt: '2026-08-11T09:00:00.000Z' });
+    store.setPicoSupplierCredential({ identifier: 'rchkb', scope: 'read', present: true });
+    expect(store.picoSupplierAttachment('rchkb')).toMatchObject({
+      credentialScope: 'read',
+      credentialPresent: true,
+    });
+
+    expect(() => store.setPicoSupplierCredential({
+      identifier: 'rchkb',
+      scope: 'read_write',
+      present: true,
+    })).toThrow('pico_library_credential_must_be_read_only');
+    store.close();
+  });
+
+  it('lets a bridge hold a wider scope, because it is not quoting a source', () => {
+    const store = openStore();
+    store.attachPicoSupplier({
+      manifest: { ...rchkb, identifier: 'ha-zuhause', kind: 'bridge', slots: ['effect'], coverage: ['zuhause'] },
+      attachedAt: '2026-08-11T09:00:00.000Z',
+    });
+    store.setPicoSupplierCredential({ identifier: 'ha-zuhause', scope: 'read_write', present: true });
+    expect(store.picoSupplierAttachment('ha-zuhause')?.credentialScope).toBe('read_write');
+    store.close();
+  });
+
+  it('never returns a secret, because none passes through this path', () => {
+    const store = openStore();
+    store.attachPicoSupplier({ manifest: rchkb, attachedAt: '2026-08-11T09:00:00.000Z' });
+    store.setPicoSupplierCredential({ identifier: 'rchkb', scope: 'read', present: true });
+    const attached = store.picoSupplierAttachment('rchkb')!;
+    expect(Object.keys(attached)).not.toContain('credential');
+    expect(JSON.stringify(attached)).not.toMatch(/secret|token|password/iu);
+    store.close();
+  });
+
+  it('reads nothing from host configuration', () => {
+    // ADR 0104 again: a credential a container rebuild could supply is not
+    // under Pico's custody.
+    const store = openStore();
+    store.attachPicoSupplier({ manifest: rchkb, attachedAt: '2026-08-11T09:00:00.000Z' });
+    process.env.PICO_SUPPLIER_RCHKB_TOKEN = 'hunter2';
+    try {
+      expect(store.picoSupplierAttachment('rchkb')?.credentialPresent).toBe(false);
+    } finally {
+      delete process.env.PICO_SUPPLIER_RCHKB_TOKEN;
+    }
+    store.close();
+  });
+
+  it('refuses to record a credential for a supplier nobody attached', () => {
+    const store = openStore();
+    expect(() => store.setPicoSupplierCredential({
+      identifier: 'ghost', scope: 'read', present: true,
+    })).toThrow('pico_supplier_not_attached');
+    store.close();
+  });
+});
