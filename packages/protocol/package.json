@@ -35,6 +35,10 @@
       "types": "./dist/depot.d.ts",
       "import": "./dist/depot.js"
     },
+    "./depot-manifest": {
+      "types": "./dist/depot-manifest.d.ts",
+      "import": "./dist/depot-manifest.js"
+    },
     "./instance-selection": {
       "types": "./dist/instance-selection.d.ts",
       "import": "./dist/instance-selection.js"

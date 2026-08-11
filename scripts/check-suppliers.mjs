@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parsePicoDepotManifest } from '../packages/protocol/dist/depot-manifest.js';
 import { picoSupplierSlots } from '../packages/protocol/dist/supplier.js';
 import {
   picoSupplierRequestFamilyForSlot,
@@ -230,9 +231,21 @@ export function scanSupplierClosure(entryFiles, io, options) {
 
     for (const specifier of importsOf(source)) {
       if (specifier.startsWith('.')) {
+        // Both extensions, because the two sides of this check are written in
+        // different ones. Core and module source is `.ts`; a depot vendors
+        // built code and its entry point is `.js` under ADR 0143 DP3, so a
+        // walker that only followed `.ts` would stop at a bridge's first
+        // relative import and report a clean hull for an unscanned tree.
         const base = resolve(dirname(file), specifier).replace(/\.js$/u, '');
         let resolved = null;
-        for (const candidate of [`${base}.ts`, join(base, 'index.ts')]) {
+        for (const candidate of [
+          `${base}.ts`,
+          join(base, 'index.ts'),
+          `${base}.js`,
+          `${base}.mjs`,
+          join(base, 'index.js'),
+          join(base, 'index.mjs'),
+        ]) {
           if (exists(candidate)) {
             resolved = candidate;
             break;
@@ -319,7 +332,10 @@ function sourceFiles(directory, exists = existsSync) {
         if (entry.name !== 'node_modules' && entry.name !== 'dist' && entry.name !== '.git') {
           walk(path);
         }
-      } else if (entry.name.endsWith('.ts') || entry.name.endsWith('.mjs')) {
+      } else if (/\.(?:ts|js|mjs|cjs)$/u.test(entry.name)) {
+        // `.js` and `.cjs` matter on the depot side: DP2 vendors what runs, so
+        // a bridge ships built JavaScript, and a scanner that only read source
+        // extensions would pass every real depot without looking at it.
         found.push(path);
       }
     }
@@ -405,6 +421,46 @@ if (familyPerSlot.size !== picoSupplierSlots.length) {
     + 'distinct, and a shared family would let a supplier answer one question '
     + 'with another question\'s shape.',
   );
+}
+
+// --- DP3: the shipped depot's manifest, through the product's own parser -----
+
+/**
+ * ADR 0143 DP3 and DP6. The `bridges/` depot is a depot like any other, so its
+ * manifest is held to the parser the product uses rather than to a second one
+ * written here - `check-modules.mjs`'s rule, for its reason: a check that
+ * accepted manifests the product refuses, or the reverse, would be enforcing a
+ * different contract than the one that ships.
+ *
+ * Absent is not an error today. Nothing attaches the shipped depot yet, and a
+ * manifest for a depot with no suppliers would have to declare none, which
+ * DP3 refuses on purpose.
+ */
+const depotManifestPath = join(bridgesRoot, 'pico-depot.json');
+let depotManifest = null;
+if (existsSync(depotManifestPath)) {
+  try {
+    depotManifest = parsePicoDepotManifest(JSON.parse(readFileSync(depotManifestPath, 'utf8')));
+  } catch (error) {
+    errors.push(
+      `bridges/pico-depot.json: refused by the protocol parser (${error.message}). `
+      + 'ADR 0143 DP6: the shipped depot is a depot like any other, so it meets '
+      + 'the same manifest contract an external one does.',
+    );
+  }
+}
+if (depotManifest !== null) {
+  for (const supplier of depotManifest.suppliers) {
+    const entry = join(bridgesRoot, supplier.entryPoint);
+    if (!existsSync(entry) || !statSync(entry).isFile()) {
+      errors.push(
+        `bridges/pico-depot.json: ${supplier.identifier} names the entry point `
+        + `${supplier.entryPoint}, which is not a file in this depot. ADR 0143 `
+        + 'DP3: Pico calls the named file with its own runtime, so a name that '
+        + 'points at nothing is a supplier that cannot start.',
+      );
+    }
+  }
 }
 
 // --- DP4: supplier code cannot reach the core -------------------------------
@@ -570,7 +626,8 @@ console.log(
   `Supplier boundary check passed: ${picoSupplierSlots.length} slots each reached `
   + `over one named family, bridges/ outside the workspace, ${suppliers.length} `
   + `supplier${suppliers.length === 1 ? '' : 's'} checked`
-  + `${suppliers.length === 0 ? '' : ` (${suppliers.join(', ')})`}.`,
+  + `${suppliers.length === 0 ? '' : ` (${suppliers.join(', ')})`}`
+  + `${depotManifest === null ? ', no depot manifest' : `, depot manifest declares ${depotManifest.suppliers.length}`}.`,
 );
 if (suppliers.length === 0) {
   // Printed on success on purpose, for the reason check-offline-floor.mjs

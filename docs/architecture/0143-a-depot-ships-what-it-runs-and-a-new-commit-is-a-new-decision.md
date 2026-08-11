@@ -4,10 +4,10 @@
 
 Accepted as the distribution contract for suppliers: where a Pico Bridge or
 a Pico Library comes from, how it arrives, what pins it and what runtime it
-is given. **DP1 and DP4 are implemented** (2026-08-11) - DP4 together with
-ADR 0136 BR2, because the two are one boundary stated from opposite sides.
-DP2, DP3 and DP5-DP8 are open, and nothing here has met a real depot: there
-is no fetch, no manifest and no supplier inside one.
+is given. **DP1, DP3 and DP4 are implemented** (2026-08-11) - DP4 together
+with ADR 0136 BR2, because the two are one boundary stated from opposite
+sides. DP2 and DP5-DP8 are open, and nothing here has met a real depot:
+there is no fetch and no supplier inside one.
 
 Decided in conversation on 2026-08-11, from an ask that was a product
 decision rather than an engineering one: **as few mandatory bridges as
@@ -436,14 +436,60 @@ compatibility a property of a commit a person accepted.
   manifest, no install script, no registry access at attachment. `git` is
   the one fetch path, which is the same one ADR 0136 BR6 already uses for a
   tracked library.
-- **DP3 - An entry point, not a command (open):** the manifest carries a
-  path to a file and no field in which an interpreter, an argument vector
-  or a shell string could be written - the absence-of-a-parameter
-  construction ADR 0117 X1 uses for `picoReaderCapabilities` and ADR 0136
-  BR3 uses for an origin class. Pico supplies the runtime. A manifest
-  carrying a command-shaped field is refused under its own error rather
-  than ignored, because a field that is ignored is a field an author
-  believes in.
+- **DP3 - An entry point, not a command (implemented 2026-08-11):**
+  `@pico/protocol/depot-manifest` carries a path to a file and no field in
+  which an interpreter, an argument vector or a shell string could be
+  written - the absence-of-a-parameter construction ADR 0117 X1 uses for
+  `picoReaderCapabilities` and ADR 0136 BR3 uses for an origin class. Pico
+  supplies the runtime.
+
+  **Thirteen command-shaped names are refused under one named error**, not
+  ignored, which is this gate's own rule applied to itself: a field that is
+  quietly dropped is a field an author believes in, and an author who
+  believes `interpreter` works ships a bridge that only runs by accident.
+
+  A process launch has three parts - the program, its arguments and its
+  environment - and all three are absent, because removing only the program
+  would leave two thirds of a spawn configurable by a third party. `env` is
+  the one that looks harmless and is not: it is how configuration, and
+  eventually a secret, would reach supplier code outside the single custody
+  path ADR 0138 CO1 allows and outside ADR 0104's refusal to put a per-Pico
+  decision in host configuration.
+
+  **The sharp case is an entry point that *is* a command line.** `node
+  ./run.js` has to fail as a path rather than succeed as an instruction, so
+  the pattern refuses whitespace, refuses traversal and an absolute root,
+  and accepts `.js` or `.mjs` only - DP2 vendors what runs, so a depot ships
+  built code, and compiling a third party's source would be a second runtime
+  under another name.
+
+  **A depot declares what it provides; a person decides where it lands.**
+  There is no `privacyDomain` in a declaration, and a manifest carrying one
+  is refused by name rather than as a shape failure, because ADR 0137 IN5
+  says plainly that there is no safe default for that mapping - it is a
+  person's judgement about their own life, and a depot choosing it would be
+  a third party setting a privacy boundary at attachment time for material
+  it has not seen. `picoDepotSupplierNeedsFromPerson` makes the gap a value
+  rather than a comment, and a test walks a declaration through
+  `parsePicoSupplierManifest` to show it is unattachable until the person's
+  decision is added and attachable the moment it is.
+
+  A depot that provides nothing is refused, as are two suppliers under one
+  name and two suppliers entering one file - the second because one
+  supplier wearing two names makes ADR 0137 IN2's coverage question
+  meaningless when the same code answers both.
+
+  `supplier:check` reads `bridges/pico-depot.json` when it exists, through
+  the product's own parser rather than a second one, and refuses an entry
+  point that points at no file. That is DP6 in practice: the shipped depot
+  meets the same contract an external one does.
+
+  **Building this exposed a hole DP4 had.** Requiring `.js` entry points
+  meant the reach scanner, which walked `.ts` only, would have passed every
+  real vendored depot without looking at it - and its relative-import
+  resolution would have stopped at a bridge's first `./helper.js`. Both are
+  fixed, and a two-file vendored probe now fails on a `node:child_process`
+  import two levels deep.
 - **DP4 - Supplier code has its own check (implemented 2026-08-11):**
   `pnpm supplier:check` walks `bridges/` with the inverse statement to
   `module:check` - outward reach permitted, three things refused - using
