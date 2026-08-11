@@ -637,9 +637,40 @@ compatibility a property of a commit a person accepted.
   temporary directory on an ordinary filesystem would be claiming a
   guarantee it cannot make.
 
-  Open: the fetch and the `startPicoTimeBoundScheduler` generalisation.
-  Both need a real depot to fetch into, and the `offline:check` line over a
-  preparation path needs a preparation path to walk.
+  **The fetch landed on 2026-08-11, and it is where the pin stops being
+  bookkeeping.** DP1 said a depot runs at a commit a person accepted; until
+  `fetchPicoDepot` existed that was a statement about a database row, and
+  nothing checked that the code on disk was the code in the record.
+
+  `git` is invoked as an external program, which is DP2's one fetch path
+  rather than a reimplementation. **No ref name appears anywhere in it** -
+  `git fetch <remote> <commit>` and a detached checkout - so DP1's missing
+  branch field is a missing *argument*, and a remote whose default branch
+  moved produces the same tree. Proved end to end: with the remote's branch
+  at a second commit, pinning the first produces the first.
+
+  **What arrived is verified against what was accepted.** A fetch that
+  succeeded is not evidence that the right thing arrived, because a remote
+  can serve whatever it likes, so `HEAD` is read back and a mismatch
+  removes the tree and throws. That one is not a condition: an unreachable
+  remote is the world failing, and a remote serving a different commit is
+  the remote disagreeing with a decision a person made - leaving the tree
+  would leave code nobody accepted on disk.
+
+  Everything else is an ADR 0138 CO2 condition rather than an exception, so
+  a person's remedy is a network rather than a bug report. The fetch is
+  idempotent: a working copy already at the pin costs one `rev-parse`,
+  because a scheduled fetch that always clones is a schedule people
+  lengthen.
+
+  `file://` joined the remote pattern with it. A local depot is a real case
+  - development, and an installation that never reaches a network - and it
+  is still an address, which a bare path is not: `../depots/bridges` is a
+  position relative to whoever is asking.
+
+  Open: the `startPicoTimeBoundScheduler` generalisation, and the
+  `offline:check` line over a preparation path, which needs a preparation
+  path to walk.
 
 **One state is deliberately unnamed.** A library that is attached, whose
 credential is present, and whose clone has not finished is neither

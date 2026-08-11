@@ -6,6 +6,14 @@ Accepted as a model-capability delegation concept before runtime, transport, pol
 
 Three questions this ADR left open were decided by the user on 2026-08-04 and are recorded under "What may leave the device": local inference first with remote only by consent, only the live turn leaving the device, and one standing revocable provider consent rather than a per-job approval. Registry, job-envelope schema, transport, provider authentication and runtime remain unbuilt.
 
+A fourth was decided by the user on 2026-08-11 and is recorded in the same
+place, under "A host the person controls is not a remote provider": the
+provider list gains a sixth entry, and retrieved memory may reach it. It
+answers the first of the two questions ADR 0142 left to the user. **The
+five-item list under "Decision" keeps its wording** under ADR 0128's record
+rule; the sixth entry lives with the reasoning that produced it, exactly as
+the 2026-08-04 answers do.
+
 ## Context
 
 Pico may run on devices with very different compute capacity. A phone, browser surface or small appliance may not be able to run a strong local model, while a Pico Home, desktop Pico Vault or another trusted node may have access to a larger local model or a model connector.
@@ -69,6 +77,9 @@ this ADR that blocked every consumer of ADR 0116 W1/W2/W3, and they are
 recorded here rather than in a new ADR because they refine this ADR's own
 boundary rather than replacing it.
 
+A fourth answer was added on 2026-08-11 for the same reason and carries its
+own date; the three above are unchanged by it.
+
 ### Local first; remote only with consent
 
 Inference runs on hardware the person owns by default. A remote provider
@@ -114,6 +125,74 @@ What standing consent must therefore carry: which provider, granted when,
 visible while active, and withdrawable without a ceremony. It is a
 setting in the ADR 0104 sense - it belongs to Pico, not to host
 configuration.
+
+### A host the person controls is not a remote provider
+
+Decided by the user on 2026-08-11, and it answers ADR 0142's first open
+question: **what class is a bare inference host on the home LAN?** The five
+above do not contain it, because every one of them is either the device
+itself or something running Pico, and the measured host runs no Pico. So
+there is a sixth:
+
+> an inference host the same person controls, running no Pico
+
+**Retrieved memory may reach it, and "only the live turn leaves" does not
+apply to this class.** The three 2026-08-04 answers are otherwise untouched.
+
+The reason is this ADR's own reasoning rather than a new one. The rule above
+is justified by blast radius, not by a sensitivity ranking: "A provider breach
+that sees one turn sees a turn. A provider breach that sees assembled context
+sees the memory." That argument is about a provider - a party whose breach is
+somebody else's incident, whose retention is somebody else's policy, and whose
+operator was never asked about any of it. A machine in the person's own home,
+on their own power and their own network, has none of those properties. An
+attacker who owns it is already inside the network the Vault sits on, and has
+shorter paths to the same material than a model prompt.
+
+**ADR 0088's sharpening survives and is the strongest objection.** Retrieved
+memory carries reader-custody content written by other people who were never
+asked. The answer is not that their content is less sensitive here; it is that
+the blast radius does not grow. Their words stay on hardware the same person
+already holds the Vault on. A cloud provider would be a second party learning
+them; this host is not a second party.
+
+**The qualifying property is a declaration, never a measurement.** Pico cannot
+tell from an address whether a machine stands in the person's home - RFC 1918
+proves nothing against a VPN, a forwarded port or a housemate's NAS. This is
+ADR 0137 IN5's shape one layer down: there is no safe default, because the
+fact is a person's judgement about their own premises. The declaration binds
+to one ADR 0142 registry entry, not to a network range, and it is withdrawable
+on the same standing-consent mechanism as everything else here.
+
+**It is a distinct class, and that is load-bearing rather than tidy.**
+ADR 0118 O2 forbids failover across provider classes precisely so that "an
+attacker degrades the local provider to force a cloud path" fails as
+unavailable instead of quietly finding a weaker posture. A sixth class that
+carries memory, beside a fifth that does not, is exactly the pair that rule
+has to be able to distinguish. Folding this host into the cloud class, or the
+cloud class into this one, would make O2 unevaluable at the one boundary where
+it matters most.
+
+**Two obligations get heavier rather than lighter, and neither is optional.**
+
+ADR 0142 PE6's model digest stops being prudence and becomes the condition of
+the class. That ADR measured the host answering unauthenticated `pull` and
+`create`: anyone who can reach the port can replace the model underneath Pico.
+With only a live turn at stake that is a quality problem. With retrieved
+memory in the job it is an exfiltration path, and the pin is what closes it.
+
+And PE5 is not relaxed by any of this. A host the person controls still has to
+prove who it is before a job is sent, with the credential under core custody
+per ADR 0104. Controlling a machine is a statement about who may reach it, not
+a substitute for Pico checking that it did.
+
+**One residual is named rather than solved.** The privacy boundary above says
+plaintext is visible at the execution site, and "prompts and results must not
+be persisted beyond policy without an explicit audit trail". Inference
+runtimes log. A host in this class is a second place where retrieved memory
+exists in the clear, however briefly, and it is outside ADR 0070's crypto
+shredding - a domain shred does not reach it. What that costs, and whether the
+class carries a no-logging obligation the person attests to, is open.
 
 ### What is still open
 

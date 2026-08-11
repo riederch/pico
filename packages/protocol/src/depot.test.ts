@@ -50,6 +50,13 @@ describe('ADR 0143 DP1 - a depot is a remote and a commit, and nothing else', ()
     // ssh and scp-style remotes are how a self-hosted Gitea is usually reached.
     expect(parsePicoDepotPin({ remote: 'git@git.example.invalid:rch/b.git', commit: running }).remote)
       .toBe('git@git.example.invalid:rch/b.git');
+    // `file://` is a real case - development, and an installation that never
+    // reaches a network - and it is still an address. A bare path is not: it
+    // is a position relative to whoever is asking.
+    expect(parsePicoDepotPin({ remote: 'file:///srv/depots/bridges', commit: running }).remote)
+      .toBe('file:///srv/depots/bridges');
+    expect(() => parsePicoDepotPin({ remote: '../depots/bridges', commit: running }))
+      .toThrow('invalid_pico_depot_remote');
   });
 
   it('keeps the depot identified by its address, unlike a supplier instance', () => {

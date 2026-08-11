@@ -32,7 +32,18 @@ import { picoGitCommitPattern } from './library-pin.js';
  * comes from. If the place changes, it is a different place, and pretending
  * otherwise would let a rename silently redirect what executes.
  */
-export const picoDepotRemotePattern = /^(?:https:\/\/|ssh:\/\/|git@)[^\s]+$/u;
+/**
+ * `file://` is on the list and a bare path is not, which is a smaller
+ * distinction than it looks. A local depot is a real case - development, and
+ * an installation that never reaches a network - and git treats a path as a
+ * remote perfectly well. What a bare path would cost is the sentence above: a
+ * remote is an **address**, and `../depots/bridges` is a position relative to
+ * whoever is asking. `file:///srv/depots/bridges` names one place from
+ * everywhere, so a depot identified by it is still identified by where its
+ * code comes from.
+ */
+export const picoDepotRemotePattern =
+  /^(?:https:\/\/|ssh:\/\/|file:\/\/|git@)[^\s]+$/u;
 
 export const maxPicoDepotRemoteChars = 512;
 

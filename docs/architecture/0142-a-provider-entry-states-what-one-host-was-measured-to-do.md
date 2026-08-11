@@ -61,12 +61,33 @@ custody on ADR 0138 CO1 and ADR 0104, and is still not an environment
 variable. PE3 is merely conservative there rather than wrong: a hosted API has
 many lanes, and declaring one costs latency, not correctness.
 
-Two things this note does not touch. ADR 0048's "local first, remote only by
-consent, never selected by availability pressure" holds without qualification:
-a hosted API can never be the default and can never stand in while the local
-host loads. And nothing here reopens the two questions below - the LAN host's
-provider class is still open, and a hosted API being class five does not
-answer it.
+One thing this note does not touch: ADR 0048's "local first, remote only by
+consent, never selected by availability pressure" holds without
+qualification. A hosted API can never be the default and can never stand in
+while the local host loads.
+
+Second status note, 2026-08-11, later the same day: **the first of the two
+questions below is answered and the section keeps its wording** under
+ADR 0128's record rule. The user decided that a bare inference host on the
+home LAN is a sixth provider class - "an inference host the same person
+controls, running no Pico" - and that retrieved memory may reach it. It is
+recorded in ADR 0048 under "A host the person controls is not a remote
+provider", beside the three 2026-08-04 answers, because it refines that ADR's
+own boundary. The second question, whether 23.6B is the right trade on 16 GiB,
+stays open and stays the user's.
+
+Two consequences land on this ADR rather than on ADR 0048. **PE6 stops being
+prudence and becomes the condition of that class**: the unauthenticated
+`pull` and `create` measured in "Context" turn from a quality problem into an
+exfiltration path once a job carries retrieved memory, and the digest pin is
+what closes it. **PE5 is not relaxed by control**: a host the person owns
+still proves who it is before a job is sent, because controlling a machine
+states who may reach it and not that Pico checked.
+
+It also narrows the egress gap named above rather than closing it. For the
+sixth class the question is moot - if retrieved memory may go, a quarantined
+excerpt may. For the fifth it stands exactly as written: a hosted API and
+ADR 0117's X4 read job still have no rule that covers them.
 
 ## Context
 
