@@ -2,6 +2,20 @@
 
 ## Status
 
+Status note, 2026-08-11: reading an attached ADR 0136 library belongs to
+`local_recall` rather than to a seventh family. The family already
+promises finding and reading what is already on the device, and a
+library's working copy is on the device; what it lacks is reach, since
+its module list names only the store read path. Recorded here because the
+consequence binds whoever builds that path: once its entry module joins
+the list, no model and no network may be reachable from its import hull,
+so summarising and embeddings are a layer beside it and never inside it.
+
+The distinction that keeps this a guarantee rather than an exception: the
+floor promises the **operation**, not the content. A Vault that has not
+finished cloning reads its library successfully and answers that there is
+nothing here yet - no network, no model, no failure.
+
 Accepted as a pre-implementation availability contract; the initiative
 and its scope were chosen by the user on 2026-08-01. **O1 is complete**:
 all five floor families exist and are mechanically enforced, and the

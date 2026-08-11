@@ -348,6 +348,36 @@ Three further things follow, and they are the practical argument:
   library-linked plugin contract would have ended for every format at
   once.
 
+### Reading a library is on the ADR 0118 floor, in a family that exists
+
+Decided 2026-08-11. The question asked was whether an attached library
+should be a *seventh* floor family, and the answer is no: `local_recall`
+already promises "finding and reading what is already on the device", and
+a working copy is on the device. What is missing is not a name but reach -
+that family's module list points at `memory-store.ts` and
+`event-store.ts`, and a library's read path is not in it.
+
+A second name would split one promise in two and force a surface to know
+*which kind* of "on the device" it was asking about. ADR 0118's list is of
+operations whose value is destroyed by deferral, not of implementations.
+
+**The floor promises the operation, not the content**, and that is what
+keeps this honest on a Vault that has not finished cloning. An empty store
+reads successfully and returns nothing; an unmaterialised library reads
+the same way - with no network and no model - and answers that there is
+nothing here yet. That is the floor holding rather than breaking, and it
+is why the attached-and-still-cloning state above needs a name of its
+own: without one it would look like a defect.
+
+So when the read path exists, the work is one line in
+`offline-floor.json`. After it, `offline:check` walks that path's import
+hull and refuses a model or a network reachable from it, statically and
+for good - which makes "as much as possible without a model" a gate
+failure rather than a rule somebody keeps. The consequence binds in both
+directions: summarising and embeddings are a layer **beside** that path,
+never inside it, because a model reachable from the hull fails the check
+whether or not it runs.
+
 ### A library is derived from, never ingested
 
 ADR 0133 already decides this: derive from the source until the medium is
