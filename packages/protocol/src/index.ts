@@ -2177,6 +2177,25 @@ export const picoMemoryContentSuite = 'pico.suite.mem.v1' as const;
 export const picoMemoryContentAdLabel = 'pico.mem.ad.content.v1' as const;
 export const picoMemoryDekWrapAdLabel = 'pico.mem.ad.dek-wrap.v1' as const;
 
+/**
+ * ADR 0138 CO1. A supplier credential's own suite and associated data.
+ *
+ * Its own, and that is the decision rather than a formality. The obvious move
+ * was to reuse the memory-content suite, which already wraps a per-domain KEK -
+ * and its AD binds a `memoryItemId`. Handing it a fabricated one would make the
+ * associated data a lie, which is the single thing associated data exists to
+ * prevent.
+ *
+ * **The scope is bound into the AD, not merely stored beside it.** A credential
+ * sealed for `read` cannot be opened as `read_write`: widening it takes
+ * re-encrypting, which means re-supplying the credential, which means asking
+ * the person again. That is ADR 0138's "read scope where reading is all that is
+ * needed" carried by the cipher rather than by a column somebody could update.
+ */
+export const picoSupplierCredentialSuite = 'pico.suite.supplier-credential.v1' as const;
+export const picoSupplierCredentialAdLabel = 'pico.supplier.ad.credential.v1' as const;
+export const picoSupplierCredentialDekWrapAdLabel = 'pico.supplier.ad.dek-wrap.v1' as const;
+
 // Reserved per-domain memory key custody classes (ADR 0078). `host_custody`
 // is the existing ADR 0071/0072 model: the Foundation host has the domain KEK
 // in its separated key store. `reader_custody` is future envelope-only hosting:
@@ -4183,6 +4202,52 @@ export function buildPicoMemoryContentAd(input: {
     asciiBytes(input.memoryItemId),
     asciiBytes(input.privacyDomain),
     asciiBytes(input.contentType),
+  ]);
+}
+
+export function buildPicoSupplierCredentialAd(input: {
+  suite: string;
+  supplierIdentifier: string;
+  privacyDomain: string;
+  scope: string;
+}): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'supplierIdentifier',
+    'privacyDomain',
+    'scope',
+  ]);
+
+  return concatCanonicalElements([
+    asciiBytes(picoSupplierCredentialAdLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.supplierIdentifier),
+    asciiBytes(input.privacyDomain),
+    // ADR 0138 CO1: the scope is part of what was sealed, so a credential
+    // cannot be re-read under a wider one.
+    asciiBytes(input.scope),
+  ]);
+}
+
+export function buildPicoSupplierCredentialDekWrapAd(input: {
+  suite: string;
+  keyEnvelopeId: string;
+  domainId: string;
+  supplierIdentifier: string;
+}): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'keyEnvelopeId',
+    'domainId',
+    'supplierIdentifier',
+  ]);
+
+  return concatCanonicalElements([
+    asciiBytes(picoSupplierCredentialDekWrapAdLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.keyEnvelopeId),
+    asciiBytes(input.domainId),
+    asciiBytes(input.supplierIdentifier),
   ]);
 }
 

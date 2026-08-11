@@ -3,8 +3,9 @@
 ## Status
 
 Accepted as a constraint on suppliers that reach a system Pico does not
-run. **CO2 is implemented** (2026-08-10),
-**CO3, CO4 and CO5** (2026-08-11), and **CO1 in part**.
+run. **CO1-CO5 are implemented**
+(2026-08-10 to 2026-08-11), and this ADR is complete apart from the
+budget mechanism it deliberately does not decide.
 
 This was the third part of ADR 0136 until 2026-08-10, when the user asked
 for a second cut. ADR 0136 keeps what a supplier is and where its code
@@ -232,13 +233,23 @@ receives the credential; it does not keep it.
   attachment read. Nothing is read from the environment, and a test sets
   `PICO_SUPPLIER_*` to prove it (ADR 0104).
 
-  **What is deliberately not built, and why.** Where the secret lives at
-  rest. The obvious move was to reuse `MemoryContentCrypto`, which already
-  wraps a per-domain KEK - and it binds a `memoryItemId` into its
-  associated data. Handing it a fabricated one would make the AD a lie,
-  which is the single thing associated data exists to prevent. A
-  credential needs its own AD naming what it actually is, and that is
-  worth doing deliberately rather than as a side effect of this gate.
+  **The cipher landed on 2026-08-11, with its own associated data.** The
+  custody is ADR 0072's and unchanged - a credential lives in the domain
+  its supplier attached into (ADR 0137 IN5), wrapped by that domain's KEK,
+  so a domain shred takes it with everything else that domain held, and
+  the shredded case is *reported* rather than thrown. Reusing the key
+  store was right; reusing the memory suite was not, because its AD binds
+  a `memoryItemId` a credential does not have, and a fabricated one would
+  make the associated data a lie.
+
+  **The payoff for its own AD is that the scope is sealed into it.** A
+  credential sealed for `read` cannot be opened as `read_write` - no
+  column update changes that, because widening takes re-encrypting, which
+  takes re-supplying the credential, which takes asking the person again.
+  "Read scope where reading is all that is needed" is carried by the
+  cipher rather than by a value somebody could edit. The identifier and
+  the domain are bound too, so a seal cannot be moved between instances or
+  between Private Spaces; three tests state the three refusals.
 - **CO2 - Condition is a typed value (implemented):**
   `picoSupplierConditions` is the closed list, with `out_of_scope` from
   ADR 0137 IN3 beside it, and `assertPicoSupplierCondition` refuses
