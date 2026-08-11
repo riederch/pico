@@ -12,6 +12,62 @@ hardware they were taken on. Two questions stay open under "Questions this ADR
 does not decide" and are deliberately left to the user, because both are
 boundary decisions rather than engineering ones.
 
+Status note, 2026-08-11: **a hosted model API - Anthropic, Mistral Cloud - as
+a provider needs no new ADR, and this text keeps its wording under ADR 0128's
+record rule.** ADR 0048's fifth class already covers it as "a cloud model
+connector mediated by a trusted Pico runtime", where Pico's core is that
+runtime, and PE1-PE6 is the entry contract it would have to satisfy. What
+follows is what this ADR does *not* say about that class, recorded because
+every number above was taken on one machine on a home LAN and four gates
+assume a machine.
+
+**ADR 0048's egress rule has no answer for the nearest delegable job, and this
+is the sharpest of the five.** This ADR names ADR 0117's quarantined read as
+the near-term job. ADR 0048 splits what may leave into two: the live turn,
+which may, and retrieved memory, which may not. A quarantined excerpt from a
+library or a bridge is **neither** - it is not what the person is saying now,
+and it is not assembled from what they told Pico. On the measured host the
+question never arises, because nothing leaves the device. On a hosted API it
+is the first question, and the answer decides whether this class has a job at
+all. **A boundary decision, and the user's**, alongside the two already
+recorded below.
+
+**PE2 has no satisfiable form for this class.** The gate exists because a
+nominal 32768 became a usable 8192 on a card whose weights left 1.95 GiB, and
+the fix was to measure the deployment. A hosted API has no deployment to
+measure: what an observation records is one tenant at one hour, and PE1's
+"no entry is portable between installations without re-measurement" has
+nothing to refer to. The note states the gap rather than loosening the gate or
+inventing a second one.
+
+**PE6's digest does not exist there, and it fails with PE2 rather than beside
+it.** A hosted API offers a model name, and a name is an alias a vendor may
+move - substitution behind a stable label is normal operation there, where on
+the measured host it was the attack PE6 was written against. The gate's second
+reason goes with it: the capacity numbers were honest because they were
+measured against one digest, and this class has neither.
+
+**PE4 describes warm-up, and a hosted API is throttled rather than loading.**
+It has no residency cost and no reload; it has rate limits and overload
+responses. ADR 0118 O2 knows slow-is-absent, and throttled is a third state
+this ADR did not have to name. What transfers unchanged is the harder half: a
+throttled provider is no more a reason to reach for another one than a loading
+one is.
+
+**PE5 is the one place this class is the easy case.** The measured host does
+not satisfy it today - its CORS list is not access control - while a hosted
+API authenticates by construction. The credential still belongs under core
+custody on ADR 0138 CO1 and ADR 0104, and is still not an environment
+variable. PE3 is merely conservative there rather than wrong: a hosted API has
+many lanes, and declaring one costs latency, not correctness.
+
+Two things this note does not touch. ADR 0048's "local first, remote only by
+consent, never selected by availability pressure" holds without qualification:
+a hosted API can never be the default and can never stand in while the local
+host loads. And nothing here reopens the two questions below - the LAN host's
+provider class is still open, and a hosted API being class five does not
+answer it.
+
 ## Context
 
 ADR 0048 decided what may leave the device and ADR 0049 decided that a
@@ -326,6 +382,7 @@ Negative and residual:
 - [ADR 0117](0117-planner-reader-split-and-origin-aware-data-flow-policy.md)
 - [ADR 0118](0118-offline-and-model-free-degradation-contract.md)
 - [ADR 0122](0122-update-and-release-integrity-threat-model-and-hardening-gates.md)
+- [ADR 0128](0128-home-assistant-is-a-host-not-a-frame-and-the-effect-bearing-module.md)
 - [ADR 0135](0135-a-specification-a-consumer-cannot-read-is-not-a-specification.md)
 - [ADR 0138](0138-reaching-outside-costs-something-and-is-off-until-someone-says-so.md)
 </content>

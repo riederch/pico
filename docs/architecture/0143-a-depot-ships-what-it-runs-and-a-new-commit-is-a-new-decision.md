@@ -616,10 +616,30 @@ compatibility a property of a commit a person accepted.
   escalated decision now names what escalated it, on the fact and on the
   record.
 
-  Open: the fetch, the scratch area and the `startPicoTimeBoundScheduler`
-  generalisation. All three need a real depot to fetch into, and the
-  `offline:check` line over a preparation path needs a preparation path to
-  walk.
+  **The scratch area landed on 2026-08-11** and is defined by what it is
+  not. It is absent from `picoDurableStores`, which means no ADR 0119 Q5
+  ceiling, no place in the shred cascade, no backup exclusion and no Q3
+  byte-identity obligation - ADR 0129 SR2's five questions are not answered
+  because there is nothing to answer them about, and a test asserts the
+  absence rather than trusting the reading. It is not the supplier's to
+  choose either: a path is handed over in a request the way `git-library`
+  is handed a working copy, and the identifier is validated against
+  ADR 0137 IN1's pattern, because a supplier whose identifier could contain
+  a slash would be a supplier picking a place on the disk.
+
+  **Removal is reconciled rather than trusted.** `detach` deletes the
+  directory and `removeOrphans` deletes every directory no attachment
+  stands behind - ADR 0070's tombstone posture applied to files, and for
+  the same reason: a detach interrupted between the row and the files would
+  leave a person's material on disk after they detached the thing that put
+  it there, and they would believe it was gone. It deletes rather than
+  shreds, deliberately, because claiming unrecoverable erasure for a
+  temporary directory on an ordinary filesystem would be claiming a
+  guarantee it cannot make.
+
+  Open: the fetch and the `startPicoTimeBoundScheduler` generalisation.
+  Both need a real depot to fetch into, and the `offline:check` line over a
+  preparation path needs a preparation path to walk.
 
 **One state is deliberately unnamed.** A library that is attached, whose
 credential is present, and whose clone has not finished is neither
