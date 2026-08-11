@@ -23,6 +23,18 @@ export const picoSupplierConditions = [
   'ok',
   /** ADR 0138 CO2. No credential; nothing was attempted, so nothing was disclosed. */
   'not_configured',
+  /**
+   * ADR 0136 BR6. Attached, credential present, everything decided - and the
+   * working copy is not there yet, because a corpus is still arriving.
+   *
+   * It needed a name of its own because without one it presents as a defect,
+   * and the honest test for whether a name earns a place in this list is
+   * whether its **predicate signature** is new. This one is: it resolves
+   * itself *and* spent nothing. `unreachable` and `rate_limited` resolve
+   * themselves and spent disclosure - the request left. `out_of_scope` spends
+   * nothing and never resolves. Nothing else waits for free.
+   */
+  'materializing',
   /** The attempt failed below the application. */
   'unreachable',
   /** Refused for now. Will work later without anyone deciding anything. */
@@ -77,7 +89,9 @@ export function picoSupplierConditionCarriesContent(
 export function picoSupplierConditionResolvesItself(
   condition: PicoSupplierCondition,
 ): boolean {
-  return condition === 'rate_limited' || condition === 'unreachable';
+  return condition === 'rate_limited'
+    || condition === 'unreachable'
+    || condition === 'materializing';
 }
 
 /**
@@ -102,7 +116,39 @@ export function picoSupplierConditionNeedsPerson(
 export function picoSupplierConditionSpentNothing(
   condition: PicoSupplierCondition,
 ): boolean {
-  return condition === 'not_configured' || condition === 'out_of_scope';
+  return condition === 'not_configured'
+    || condition === 'out_of_scope'
+    || condition === 'materializing';
+}
+
+/**
+ * ADR 0136 BR6. Reports `materializing` in place of `unreachable` while Pico
+ * knows a working copy is still arriving.
+ *
+ * **A supplier cannot answer this one, and that is not a gap in the supplier.**
+ * A half-cloned working copy, a freshly initialised repository and a damaged
+ * one are indistinguishable from the files: all three have `.git/HEAD` naming
+ * a ref that does not resolve. Only the side that *started* the fetch knows
+ * which it is looking at - so this is Pico's own bookkeeping, in the same sense
+ * ADR 0136 BR4 makes `askedAt` Pico's bookkeeping while the measurement belongs
+ * to the content.
+ *
+ * **It replaces `unreachable` and nothing else.** That restriction is the whole
+ * safety of the function: a not-yet-materialised working copy can only produce
+ * `unreachable`, so anything else the supplier reported is a real answer about
+ * something else - a budget that ran out, a subject not covered - and turning
+ * *that* into "please wait" would launder a failure into patience. The one
+ * direction is deliberate and the other is impossible: nothing here ever turns
+ * `materializing` back into a failure.
+ */
+export function picoSupplierConditionWhileMaterializing(
+  reported: PicoSupplierCondition,
+  materializing: boolean,
+): PicoSupplierCondition {
+  if (!materializing || reported !== 'unreachable') {
+    return reported;
+  }
+  return 'materializing';
 }
 
 /**

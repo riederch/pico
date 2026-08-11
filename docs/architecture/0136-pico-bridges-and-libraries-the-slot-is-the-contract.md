@@ -366,11 +366,19 @@ operations whose value is destroyed by deferral, not of implementations.
 
 **The floor promises the operation, not the content**, and that is what
 keeps this honest on a Vault that has not finished cloning. An empty store
-reads successfully and returns nothing; an unmaterialised library reads
+reads successfully and returns nothing; an unmaterialized library reads
 the same way - with no network and no model - and answers that there is
 nothing here yet. That is the floor holding rather than breaking, and it
-is why the attached-and-still-cloning state above needs a name of its
-own: without one it would look like a defect.
+is why the attached-and-still-cloning state above needed a name of its
+own: without one it would look like a defect. It has one since 2026-08-11 -
+`materializing` - and it is **Pico's own bookkeeping rather than a supplier's
+answer**, because a half-cloned working copy, a freshly initialised repository
+and a damaged one are indistinguishable from the files: all three have
+`.git/HEAD` naming a ref that does not resolve. Only the side that started the
+fetch knows which it is looking at, so
+`picoSupplierConditionWhileMaterializing` replaces `unreachable` and nothing
+else - a not-yet-materialized copy can produce no other condition, and turning
+any other one into "please wait" would launder a failure into patience.
 
 So when the read path exists, the work is one line in
 `offline-floor.json`. After it, `offline:check` walks that path's import

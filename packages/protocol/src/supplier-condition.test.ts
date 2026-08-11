@@ -6,6 +6,7 @@ import {
   picoSupplierConditionNeedsPerson,
   picoSupplierConditionResolvesItself,
   picoSupplierConditionSpentNothing,
+  picoSupplierConditionWhileMaterializing,
   picoSupplierConditions,
   evaluatePicoSupplierLimit,
   picoSupplierLimitCondition,
@@ -16,6 +17,7 @@ describe('ADR 0138 CO2 - condition is typed content, not a thrown string', () =>
     expect(picoSupplierConditions).toEqual([
       'ok',
       'not_configured',
+      'materializing',
       'unreachable',
       'rate_limited',
       'budget_exhausted',
@@ -128,5 +130,64 @@ describe('ADR 0138 CO5 - a limit is announced, not discovered', () => {
     for (const state of ['normal', 'approaching'] as const) {
       expect(picoSupplierLimitCondition({ kind: 'budget', state })).toBeNull();
     }
+  });
+});
+
+describe('ADR 0136 BR6 - a working copy that is still arriving', () => {
+  it('earns its place on the predicates rather than on the word', () => {
+    // The honest test for a new condition: is its predicate signature new?
+    // This one waits *for free* - it resolves itself and spent nothing, and
+    // nothing else in the list does both.
+    expect(picoSupplierConditionResolvesItself('materializing')).toBe(true);
+    expect(picoSupplierConditionSpentNothing('materializing')).toBe(true);
+    expect(picoSupplierConditionCarriesContent('materializing')).toBe(false);
+    expect(picoSupplierConditionNeedsPerson('materializing')).toBe(false);
+
+    const sameSignature = picoSupplierConditions.filter((condition) =>
+      condition !== 'materializing'
+      && picoSupplierConditionResolvesItself(condition)
+      && picoSupplierConditionSpentNothing(condition));
+    expect(sameSignature).toEqual([]);
+  });
+
+  it('is not a defect, which is the whole reason it exists', () => {
+    // ADR 0136: without a name of its own it presents as a fault. A person
+    // whose 1.4 GB knowledge base is still cloning is not looking at a broken
+    // Pico.
+    expect(picoSupplierConditionNeedsPerson('materializing')).toBe(false);
+    expect(picoSupplierConditionResolvesItself('materializing')).toBe(true);
+  });
+});
+
+describe('ADR 0136 BR6 - only Pico knows a copy is arriving', () => {
+  it('reports materializing in place of unreachable', () => {
+    expect(picoSupplierConditionWhileMaterializing('unreachable', true))
+      .toBe('materializing');
+  });
+
+  it('leaves unreachable alone when nothing is arriving', () => {
+    expect(picoSupplierConditionWhileMaterializing('unreachable', false))
+      .toBe('unreachable');
+  });
+
+  it('never launders another failure into patience', () => {
+    // The restriction is the safety. A not-yet-materialised working copy can
+    // only produce `unreachable`; anything else the supplier reported is a
+    // real answer about something else, and turning it into "please wait"
+    // would hide it.
+    for (const condition of picoSupplierConditions) {
+      if (condition === 'unreachable') {
+        continue;
+      }
+      expect(picoSupplierConditionWhileMaterializing(condition, true))
+        .toBe(condition);
+    }
+  });
+
+  it('never turns materializing back into a failure', () => {
+    expect(picoSupplierConditionWhileMaterializing('materializing', false))
+      .toBe('materializing');
+    expect(picoSupplierConditionWhileMaterializing('materializing', true))
+      .toBe('materializing');
   });
 });

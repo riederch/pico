@@ -672,13 +672,26 @@ compatibility a property of a commit a person accepted.
   `offline:check` line over a preparation path, which needs a preparation
   path to walk.
 
-**One state is deliberately unnamed.** A library that is attached, whose
-credential is present, and whose clone has not finished is neither
-`not_configured` nor `unreachable`, and ADR 0136 already says why it needs
-its own name: without one it presents as a defect. It is not invented here,
-because this design session invented vocabulary three times and withdrew it
-three times, and because the honest place to name it is the commit that
-first has a supplier in that state.
+**The last unnamed state got its name on 2026-08-11: `materializing`.** A
+library that is attached, whose credential is present, and whose clone has
+not finished is neither `not_configured` nor `unreachable`, and without a
+name it presents as a defect.
+
+It waited this long on purpose - this design session invented vocabulary
+three times and withdrew it three times - and the wait paid: the name earned
+its place on a test rather than on taste. ADR 0138 CO2's rule is that a
+caller distinguishes states through predicates rather than prose, so a new
+condition belongs in the list only if its **predicate signature** is new.
+This one resolves itself *and* spent nothing, and nothing else in the list
+does both.
+
+Building it moved it, too. The obvious home was the supplier, and the
+supplier cannot answer it: a half-cloned working copy, a freshly initialised
+repository and a damaged one all have `.git/HEAD` naming a ref that does not
+resolve. Only the side that started the fetch knows which it is looking at,
+so this is Pico's own bookkeeping - and it replaces `unreachable` and nothing
+else, because turning any other condition into "please wait" would launder a
+failure into patience.
 
 ## Failure ledger
 
