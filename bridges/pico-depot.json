@@ -1,0 +1,13 @@
+{
+  "schema": "pico.depot.manifest.v1",
+  "suppliers": [
+    {
+      "identifier": "git-library",
+      "kind": "library",
+      "slots": ["memory_item"],
+      "coverage": ["knowledge_base"],
+      "entryPoint": "suppliers/git-library/index.js",
+      "protocolVersion": 1
+    }
+  ]
+}

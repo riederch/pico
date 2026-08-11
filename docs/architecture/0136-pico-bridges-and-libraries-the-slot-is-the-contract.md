@@ -12,9 +12,10 @@ outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
 than kind. **BR1, BR2, BR3, BR4 and BR6 are implemented**
 (2026-08-10 to 2026-08-11) and BR5 moved with the cost decision, so **this ADR
-is complete**. What it does not have is a supplier actually offering content
-over the BR2 socket: every proof here stands in for one, and the first real
-attachment is where the contract meets something that can disagree with it.
+is complete**. Since 2026-08-11 it also has a subject: `git-library`, a Pico
+Library shipped in the `bridges/` depot, runs in its own process and answers
+about a real working copy. What it cannot do is hand over content - that
+waits on ADR 0117 X4.
 
 Split on 2026-08-10 at the user's request: everything about **several**
 suppliers - identity, coverage, unions, effect targeting and the privacy
@@ -639,9 +640,40 @@ nowhere to go, which is the state ADR 0127 was written to end.
   the socket would have made ingesting the cheaper path than deriving,
   which is what ADR 0133 exists to prevent.
 
-  Open: the daemon itself. What exists is the contract and the hull, not a
-  process on the far side of the socket - there is no supplier to run in
-  one yet.
+  **The process itself landed on 2026-08-11, with a supplier in it.**
+  `PicoSupplierHost` starts a supplier as a child and speaks the closed
+  families over length-prefixed frames; `supplier-runner.mjs` is the child
+  side and **Pico ships it, not the depot** - which is what ADR 0143 DP3's
+  "Pico supplies the runtime" means in practice: Pico starts the process,
+  Pico owns the loop, and the depot contributes a module exporting one
+  function.
+
+  That split is why a bridge imports nothing of Pico's. The contract is the
+  **wire form**, and a third party reproduces it from the specification
+  rather than by linking - which is the whole reason ADR 0134 calls the
+  supplier protocol the first identity this tree keeps. The shipped
+  `git-library` supplier demonstrates it by importing only `node:fs` and
+  `node:path`.
+
+  The core spawning a child is not what ADR 0143 DP4 forbids. That rule
+  keeps `node:child_process` out of *supplier* code, because a bridge that
+  spawns has walked around the manifest's missing command field. Pico
+  starting Pico's own runner with Pico's own executable is the opposite.
+
+  Four properties are proved rather than asserted. **A supplier gets no
+  environment** - the child is started with `PATH` and nothing else, so
+  DP3's absent `env` field is not a rule with a hole under it. **A thrown
+  supplier error becomes a refusal on the wire and the process stays up**,
+  because one bad answer must not be indistinguishable from a compromised
+  process. **An unknown protocol version closes the connection** rather
+  than starting a translation layer (DP7). And **a frame belonging to no
+  request is dropped**, which is where "the core is the client" stops being
+  a diagram: there is no inbound family, so an unasked answer is not one.
+
+  Open: nothing in BR2. What a library still cannot do is hand over
+  content, because reading one is lawful only through ADR 0117 X4's
+  quarantined read job and that needs a model delegation runtime nobody has
+  built.
 - **BR3 - Threshold labeling and the identity proof (implemented
   2026-08-11):** `intakePicoSupplierContent` assigns
   `external_content` and has no parameter through which a supplier could

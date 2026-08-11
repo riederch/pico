@@ -541,9 +541,20 @@ if (existsSync(bridgesRoot) && statSync(bridgesRoot).isDirectory()) {
 
 const suppliers = [];
 if (existsSync(bridgesRoot) && statSync(bridgesRoot).isDirectory()) {
-  const supplierRoots = readdirSync(bridgesRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
-    .map((entry) => join(bridgesRoot, entry.name));
+  // **The manifest decides what a supplier is, not the directory layout.**
+  // An earlier version read the top-level folders, which reported
+  // `bridges/suppliers` as one supplier for a depot that keeps its suppliers
+  // in a subdirectory - and then DP5's cross-supplier rule compared siblings
+  // that were not siblings. A depot declares its suppliers under DP3; using
+  // that declaration is the only way this check and the product agree on what
+  // they are looking at.
+  const supplierRoots = depotManifest === null
+    ? readdirSync(bridgesRoot, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
+      .map((entry) => join(bridgesRoot, entry.name))
+    : [...new Set(depotManifest.suppliers.map(
+      (supplier) => dirname(join(bridgesRoot, supplier.entryPoint)),
+    ))];
 
   for (const supplierRoot of supplierRoots) {
     const files = sourceFiles(supplierRoot);

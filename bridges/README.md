@@ -5,9 +5,32 @@ one or more suppliers - a Pico Bridge or a Pico Library under ADR 0136 - and
 this one is a depot like any other, pinned to the release rather than
 privileged by living here (ADR 0143 DP6).
 
-**It is empty on purpose.** ADR 0143's starting point is a product decision: as
-few mandatory bridges as possible, and today none. A supplier lands here when
-somebody needs one, not so that the folder has contents.
+It holds **one** supplier, and that is not a change of policy. ADR 0143's
+starting point stands: as few mandatory bridges as possible, and none that a
+person has to attach. `git-library` exists because ADR 0136 BR2's process
+boundary could not be proved without something to run inside it - it is the
+cheapest supplier that can be proved end to end today, since a bridge would
+need a credential and a paid account and a library needs neither.
+
+It reports what it is and does not hand over what it holds. Reading a library
+is lawful only through ADR 0117 X4's quarantined read job, which needs a model
+delegation runtime that does not exist, so there is no `offer` handler and no
+content crosses a slot.
+
+## What a supplier is, as a file
+
+A module that exports one function and touches no socket:
+
+```js
+export default async function handle(request) { return { ... }; }
+```
+
+Pico starts the process, Pico owns the loop (`supplier-runner.mjs`), and the
+depot contributes the answers. That is why nothing here imports anything of
+Pico's: the contract is the **wire form** - length-prefixed UTF-8 JSON with a
+versioned family label - and a third party reproduces it from the
+specification rather than by linking against a package. `git-library` imports
+`node:fs` and `node:path`, and nothing else.
 
 ## Why this is not `modules/`
 
