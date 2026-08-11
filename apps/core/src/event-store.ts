@@ -6539,6 +6539,26 @@ export class EventStore {
   }): PicoSupplierAttachment {
     this.ensureOpen();
     const manifest = parsePicoSupplierManifest(input.manifest);
+
+    // ADR 0119 Q5 with ADR 0137 IN1. The instance list is open by decision, so
+    // this ceiling stands in place of the closed enumeration modules have.
+    // Checked before the write and only for a new identifier: re-attaching one
+    // that is already there replaces a row rather than adding one, and
+    // refusing that would leave a person unable to correct an attachment at
+    // exactly the moment they are trying to make room.
+    if (this.picoSupplierAttachment(manifest.identifier) === undefined) {
+      const reached = this.storageCondition().reasons.some(
+        (reason) => reason.cause === 'store_ceiling'
+          && reason.store === 'supplier_attachment',
+      );
+      if (reached) {
+        // Named rather than generic, so a surface can say which store filled.
+        // `storageCondition` re-counts a reached ceiling before believing it,
+        // so someone who has just detached is not refused on a stale number.
+        throw new Error('pico_supplier_attachment_ceiling_reached');
+      }
+    }
+
     this.db
       .prepare(`
         INSERT INTO pico_supplier_attachment (
@@ -6560,6 +6580,10 @@ export class EventStore {
         manifest.privacyDomain,
         input.attachedAt,
       );
+    // After the write, so a failure never inflates the count. The upsert makes
+    // a re-attachment cost no row, and `recordInsert` is called for the new
+    // case only.
+    this.rowCounter.recordInsert('supplier_attachment');
     return this.picoSupplierAttachment(manifest.identifier)!;
   }
 

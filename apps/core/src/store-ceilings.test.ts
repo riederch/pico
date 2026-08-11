@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
+import { defaultPicoStoreCeilingRows } from '@pico/protocol';
 import { EventStore } from './event-store.js';
 
 const tempDirs: string[] = [];
@@ -153,4 +154,105 @@ describe('ADR 0119 Q5 durable ceilings', () => {
     }
   });
 
+});
+
+describe('ADR 0119 Q5 with ADR 0137 IN1 - the attachment ceiling', () => {
+  const manifest = (identifier: string) => ({
+    identifier,
+    kind: 'library' as const,
+    slots: ['memory_item' as const],
+    coverage: ['knowledge_base'],
+    privacyDomain: 'domain_private',
+  });
+
+  it('refuses a new attachment at the ceiling, naming the store', async () => {
+    // The open instance list is what makes this ceiling the guard rather than
+    // an enumeration: nothing states ahead of time how many suppliers exist.
+    const { store } = await openStore({ storeCeilingRows: { supplier_attachment: 2 } });
+    try {
+      store.attachPicoSupplier({ manifest: manifest('rchkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+      store.attachPicoSupplier({ manifest: manifest('wwgkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+
+      expect(() => store.attachPicoSupplier({
+        manifest: manifest('drittes'),
+        attachedAt: '2026-08-11T09:00:00.000Z',
+      })).toThrow('pico_supplier_attachment_ceiling_reached');
+
+      // Refused, not trimmed: the two that were there are untouched.
+      expect(store.picoSupplierAttachments().map((a) => a.identifier))
+        .toEqual(['rchkb', 'wwgkb']);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('still lets an existing attachment be corrected at the ceiling', async () => {
+    // Re-attaching replaces a row rather than adding one. Refusing it would
+    // block a person at exactly the moment they are trying to fix something.
+    const { store } = await openStore({ storeCeilingRows: { supplier_attachment: 2 } });
+    try {
+      store.attachPicoSupplier({ manifest: manifest('rchkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+      store.attachPicoSupplier({ manifest: manifest('wwgkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+
+      expect(() => store.attachPicoSupplier({
+        manifest: { ...manifest('rchkb'), coverage: ['knowledge_base', 'finanz'] },
+        attachedAt: '2026-08-11T10:00:00.000Z',
+      })).not.toThrow();
+      expect(store.picoSupplierAttachment('rchkb')?.coverage)
+        .toEqual(['knowledge_base', 'finanz']);
+    } finally {
+      store.close();
+    }
+  });
+
+  it('unblocks the next attempt after a detach, without waiting for a sweep', async () => {
+    // The insert count drifts upward by design, so a reached ceiling is
+    // re-counted before it is believed. Without that, detaching to make room
+    // would leave the person refused on a number that is no longer true.
+    const { store } = await openStore({ storeCeilingRows: { supplier_attachment: 2 } });
+    try {
+      store.attachPicoSupplier({ manifest: manifest('rchkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+      store.attachPicoSupplier({ manifest: manifest('wwgkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+      expect(() => store.attachPicoSupplier({
+        manifest: manifest('drittes'),
+        attachedAt: '2026-08-11T09:00:00.000Z',
+      })).toThrow('pico_supplier_attachment_ceiling_reached');
+
+      store.detachPicoSupplier('wwgkb');
+
+      expect(() => store.attachPicoSupplier({
+        manifest: manifest('drittes'),
+        attachedAt: '2026-08-11T11:00:00.000Z',
+      })).not.toThrow();
+    } finally {
+      store.close();
+    }
+  });
+
+  it('names the store, the count and the limit when it is reached', async () => {
+    // ADR 0119 Q5's posture: told with the numbers, so a surface can say which
+    // store filled rather than reporting an unexplained refusal.
+    const { store } = await openStore({ storeCeilingRows: { supplier_attachment: 1 } });
+    try {
+      store.attachPicoSupplier({ manifest: manifest('rchkb'), attachedAt: '2026-08-11T09:00:00.000Z' });
+      expect(store.storageCondition().reasons).toContainEqual({
+        cause: 'store_ceiling',
+        remedy: 'reduce_stored_data',
+        store: 'supplier_attachment',
+        rows: 1,
+        ceilingRows: 1,
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it('carries a default sized against a runaway rather than against use', async () => {
+    // A thousand is roughly twenty times the largest estate anyone would
+    // attach by hand, and four orders of magnitude below the record stores,
+    // because every row here is a person deciding something.
+    expect(defaultPicoStoreCeilingRows.supplier_attachment).toBe(1_000);
+    expect(defaultPicoStoreCeilingRows.supplier_attachment)
+      .toBeLessThan(defaultPicoStoreCeilingRows.observation);
+  });
 });

@@ -3,9 +3,10 @@
 ## Status
 
 Accepted as a structural constraint on how several suppliers of the same
-kind coexist. **IN1-IN5 are implemented** (2026-08-10 to 2026-08-11).
-One item stays open and it is named under IN1 rather than here: the
-ADR 0119 Q5 ceiling on attachments.
+kind coexist. **IN1-IN5 are implemented and this ADR is complete**
+(2026-08-10 to 2026-08-11). What it has not met is a second supplier: every
+rule here is proved against manifests and attachment records rather than
+against two instances that actually disagree.
 
 This was the second half of ADR 0136 until 2026-08-10, when the user asked
 for the split. The reason is ADR 0135's rule applied to an ADR rather than
@@ -225,9 +226,32 @@ a guess.
   `PicoLibraryDerivation` holds both on the memory item itself, so
   provenance survives a move, a re-clone and a detach.
 
-  Open: the ADR 0119 Q5 ceiling on attachments. The store exists now, so
-  this is no longer blocked - what is missing is the number, which is a
-  product decision rather than an implementation.
+  **The ADR 0119 Q5 ceiling landed on 2026-08-11**, and it is what stands
+  in place of the closed enumeration ADR 0127 gives modules: the instance
+  list is open by decision, so nothing can state ahead of time how many
+  suppliers exist, and a limit is the only guard left. `attachPicoSupplier`
+  refuses at the ceiling under `pico_supplier_attachment_ceiling_reached`,
+  named rather than generic so a surface can say which store filled, and
+  the reason carries the count and the limit beside it.
+
+  **The default is 1,000, and it is sized against a runaway rather than
+  against use.** Every row here is a person deciding something - choosing a
+  Private Space, and for a bridge supplying a credential - so nothing loops
+  it and no peer can add to it, which is the opposite of the pending inbox
+  and the reason this ceiling is tighter than any other. Three Home
+  Assistants and two knowledge bases is five; an estate attaching every
+  building, every corpus and every subscription might reach fifty. A
+  thousand leaves a person no reason to meet it and still stops something
+  attaching in a loop in seconds instead of filling a disk.
+
+  Two properties are worth stating because they are where a ceiling usually
+  goes wrong. **Re-attaching an identifier that is already there is not
+  refused**, because the write is an upsert and refusing it would block a
+  person at the moment they are correcting an attachment. And a reached
+  ceiling is **re-counted before it is believed**, so detaching to make
+  room unblocks the next attempt rather than some later sweep - the insert
+  count drifts upward by design, and without the recount a person would
+  stay refused on a number that was no longer true.
 - **IN2 - Coverage is declared (implemented):** a manifest without
   coverage is refused, because undeclared coverage makes an empty answer
   permanently ambiguous. `picoSupplierRelation` answers `alternatives`,

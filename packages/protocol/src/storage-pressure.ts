@@ -127,6 +127,13 @@ export const picoDurableStores = [
    * therefore a store that answers to this ceiling like the rest.
    */
   'observation',
+  /**
+   * ADR 0137 IN1/IN5. Attached suppliers. The instance list is deliberately
+   * **open** - what a supplier may produce is fixed, how many exist is a
+   * person's business - so this ceiling is what stands in place of the closed
+   * enumeration ADR 0127 gives modules.
+   */
+  'supplier_attachment',
 ] as const;
 
 export type PicoDurableStore = typeof picoDurableStores[number];
@@ -140,6 +147,10 @@ export type PicoDurableStore = typeof picoDurableStores[number];
  * The pending inbox is held far tighter than the rest. It is the only one of
  * these an outside sender can grow, so it is the only one where the ceiling is
  * sized against a peer rather than against the person.
+ *
+ * Supplier attachments are tighter again, and for the opposite reason: nothing
+ * but a person adds one, so the ceiling is sized against a runaway rather than
+ * against use.
  */
 export const defaultPicoStoreCeilingRows: Record<PicoDurableStore, number> = {
   event_log: 5_000_000,
@@ -152,6 +163,20 @@ export const defaultPicoStoreCeilingRows: Record<PicoDurableStore, number> = {
   // 48-hour window holds roughly twelve thousand rows, so this leaves ample
   // headroom while still stopping a producer that has come loose.
   observation: 200_000,
+  // ADR 0137 IN1. Four orders of magnitude below the record stores, and the
+  // reason is what grows the table: **every row is a person deciding
+  // something**. Attaching means choosing a Private Space, and for a bridge
+  // supplying a credential; nothing loops it and no peer can add to it.
+  //
+  // The realistic count is small. Three Home Assistants and two knowledge
+  // bases is five; an estate that attached every building, every corpus and
+  // every subscription it had might reach fifty. A thousand is twenty times
+  // that, which leaves a person no reason to meet it - and it is still low
+  // enough that something attaching in a loop stops in seconds instead of
+  // filling a disk. That is the case this ceiling exists for, because ADR 0119
+  // Q5's rule is that the one thing which cannot be enumerated must not be the
+  // one thing that is unprotected.
+  supplier_attachment: 1_000,
 };
 
 export interface PicoStoreCeiling {
