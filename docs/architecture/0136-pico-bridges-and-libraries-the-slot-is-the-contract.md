@@ -10,8 +10,8 @@ expansion bay, which decided more of this ADR than the issue did; the
 observation that a static lexicon and an attached knowledge base reach
 outside at no point at all; and three Home Assistants at three addresses,
 which showed that the axis along which suppliers add up is coverage rather
-than kind. **BR1 and BR4 are implemented**
-(2026-08-10) and **BR3 in its core half** (2026-08-11); BR2 and BR6 are
+than kind. **BR1, BR4 and BR2 are implemented**
+(2026-08-10 to 2026-08-11) and **BR3 in its core half**; BR6 is
 open, and BR5 moved with the cost decision.
 
 Split on 2026-08-10 at the user's request: everything about **several**
@@ -605,12 +605,41 @@ nowhere to go, which is the state ADR 0127 was written to end.
   Events stayed off the list and a test says why: origin is
   server-assigned at intake under ADR 0116 W1, so a supplier that could
   write an event directly could claim its own origin.
-- **BR2 - The processing boundary (open):** supplier code - a bridge's
-  client, a library's extractor - runs outside the core process behind a
-  private socket with named request families, and no supplier package is
-  reachable from the core's static import hull. The method already exists
-  twice, in ADR 0129 SR5's sensor hull and the companion tray hull, which
-  is what makes this checkable rather than reviewed.
+- **BR2 - The processing boundary (implemented 2026-08-11):** supplier
+  code - a bridge's client, a library's extractor - runs outside the core
+  process behind a private socket with named request families, and no
+  supplier package is reachable from the core's static import hull.
+  `@pico/protocol/supplier-transport` closes the families in ADR 0097's
+  shape, and `pnpm supplier:check` holds the hull with the method that
+  already exists twice, in ADR 0129 SR5's sensor hull and the companion
+  tray hull.
+
+  **The structural half is stronger than the scan and was the point of
+  putting suppliers in `bridges/`:** that root is deliberately outside the
+  pnpm workspace, so a supplier package has no name the core could resolve
+  even if somebody wrote the import. The scan catches the path form; the
+  workspace boundary makes the name form impossible, and the check fails
+  if `bridges/` is ever added to `pnpm-workspace.yaml`.
+
+  Two things the transport says that prose would only have implied. **No
+  family points inward** - there is no notify, push or subscribe, so a
+  supplier has no way to start anything and "a supplier carries; it never
+  decides" is carried by the absence of a message rather than by
+  discipline; anything that looks like a supplier acting on its own is the
+  core having asked on a schedule the core owns. And **the slot-to-family
+  binding is total by type**, so a fourth slot added to BR1's list without
+  a family fails to compile rather than resolving to `undefined` where a
+  request is framed.
+
+  The frame ceiling is 128 KiB, the Vault daemon's control-family cap
+  rather than its reader-access one, because a supplier hands over one
+  answer per request. A ceiling large enough to stream a corpus through
+  the socket would have made ingesting the cheaper path than deriving,
+  which is what ADR 0133 exists to prevent.
+
+  Open: the daemon itself. What exists is the contract and the hull, not a
+  process on the far side of the socket - there is no supplier to run in
+  one yet.
 - **BR3 - Threshold labeling and the identity proof (core half
   implemented 2026-08-11):** `intakePicoSupplierContent` assigns
   `external_content` and has no parameter through which a supplier could

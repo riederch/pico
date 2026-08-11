@@ -75,6 +75,10 @@
       "types": "./dist/supplier-condition.d.ts",
       "import": "./dist/supplier-condition.js"
     },
+    "./supplier-transport": {
+      "types": "./dist/supplier-transport.d.ts",
+      "import": "./dist/supplier-transport.js"
+    },
     "./supplier-union": {
       "types": "./dist/supplier-union.d.ts",
       "import": "./dist/supplier-union.js"

@@ -4,7 +4,9 @@
 
 Accepted as the distribution contract for suppliers: where a Pico Bridge or
 a Pico Library comes from, how it arrives, what pins it and what runtime it
-is given. **DP1-DP8 are open** and nothing is implemented.
+is given. **DP4 is implemented** (2026-08-11), built together with ADR 0136
+BR2 because the two are one boundary stated from opposite sides; DP1-DP3 and
+DP5-DP8 are open.
 
 Decided in conversation on 2026-08-11, from an ask that was a product
 decision rather than an engineering one: **as few mandatory bridges as
@@ -399,12 +401,44 @@ compatibility a property of a commit a person accepted.
   carrying a command-shaped field is refused under its own error rather
   than ignored, because a field that is ignored is a field an author
   believes in.
-- **DP4 - Supplier code has its own check (open):** a check over the depot
-  root with the inverse statement to `module:check` - outward reach
-  permitted, core internals and second runtimes refused, and no path from
-  one supplier into another supplier's scratch area, material or
-  credential. It uses the import-hull method that exists twice already, in
-  ADR 0129 SR5's sensor hull and the companion tray hull.
+- **DP4 - Supplier code has its own check (implemented 2026-08-11):**
+  `pnpm supplier:check` walks `bridges/` with the inverse statement to
+  `module:check` - outward reach permitted, three things refused - using
+  the import-hull method that exists twice already, in ADR 0129 SR5's
+  sensor hull and the companion tray hull. It carries ADR 0136 BR2 in the
+  same script, because a boundary checked from one side only is a boundary
+  half checked, and the two statements are opposites.
+
+  **Core internals are refused, and the protocol barrel with them.** A
+  supplier speaks ADR 0136 BR1's slot contract and the transport that
+  carries it - five subpaths - and nothing else. `@pico/protocol` itself is
+  refused *because* it is the polite-looking way to depend on the protocol:
+  it re-exports the whole surface, so allowing it would have made every
+  other rule here decorative. The runtime list is read from the tree rather
+  than enumerated, so a package added later is covered without anyone
+  remembering.
+
+  **The second-runtime ban is where DP3 gets teeth.** DP3 removes the
+  manifest field in which a command could be written; without this,
+  a bridge would take one anyway in four lines. `node:child_process`,
+  `node:worker_threads`, `node:vm`, `node:module`, `node:inspector`,
+  `eval` and `new Function` all end with code running that Pico did not
+  start, so all of them are refused.
+
+  **The permitted half is proved as carefully as the refused half.** A
+  positive probe asserts that `node:https`, `node:net`, `node:fs` and
+  `fetch` pass, because the way this check fails is not by being too weak
+  but by drifting into being `module:check` under another name - at which
+  point every bridge in the tree fails for being a bridge. A second probe
+  asserts that prose is not code, which is not hypothetical: the check's own
+  comments name every specifier it refuses.
+
+  Eight negative probes run the real scanner over a virtual tree on every
+  gate run, in `check-offline-floor.mjs`'s shape. They are what makes this
+  worth anything today: `bridges/` is empty, an assertion over nothing
+  proves nothing, and a scanner nobody has seen fail is a scanner nobody
+  knows works. The check says so on success rather than letting exit zero
+  imply more than it means.
 - **DP5 - Stacking is composition inside a depot and refused across depots
   (open):** a supplier may declare a dependency on another supplier in the
   **same** depot, inheriting space, credential and the ADR 0138 CO3/CO4
