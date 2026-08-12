@@ -5,8 +5,8 @@
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
 boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface,
 the client, the transport joining them and the device's reply correlation
-all landed the same day. What remains is the loop that drives them - a
-device sweep and a Home sweep on a schedule - and an operator to run
+all landed the same day. What remains is the loop that drives them,
+which is blocked on a shape mismatch named below, and an operator to run
 against.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
@@ -297,6 +297,35 @@ A reply nothing opens is the ordinary duplicate, since RS5 makes the relay
 at-least-once. The book refuses when full rather than evicting, because
 dropping an outstanding key loses an answer already on its way and the
 person who would notice is not the one asking now.
+
+### The sweep, and why it is not started
+
+The pieces the loop needs are in place - `link-relay-transport.ts` is named
+as outward-reaching so no ADR 0118 floor family can grow a path to it, the
+periodic scheduler now asks only for an identifier and an interval, and the
+interval is two minutes rather than the depot sweep's six hours because a
+depot sweep is a repair while a mailbox holds a person's traffic.
+
+**The sweep is not wired, and wiring it now would have been worse than
+leaving it.** Trying surfaced a shape mismatch that was not visible from
+either side alone: `collectPicoLinkRelayPackets` separates authentication
+from execution so the mailbox-versus-signature check can sit between them,
+while `PicoLinkDirectIntake.handle(body, execute)` - the machinery that
+actually opens an ADR 0107 envelope - bundles the two and yields the
+principal only inside `execute`. The sweep would additionally need the
+route's operation dispatch, which today is a switch inside the handler.
+
+What makes this a stop rather than a rough edge: the collector treats an
+authentication failure as **permanent** and acknowledges it, because rubbish
+that stayed would fill a mailbox forever. A sweep wired around the mismatch
+with a failing authenticator would therefore delete every legitimate packet
+as it arrived. A loop that destroys mail is not a smaller version of a loop.
+
+The resolution is a small one and should be made deliberately: let the
+collector own what an outcome *means* - acknowledge a refusal, defer a
+failure, one packet at a time, honoured mailboxes only - while the caller
+owns how authentication happens, and extract the route's dispatch so both
+paths run the same operations.
 
 ## Non-goals
 
