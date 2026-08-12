@@ -190,6 +190,16 @@ importers:
         specifier: ^0.8.4
         version: 0.8.4
 
+  packages/link-relay-client:
+    dependencies:
+      '@pico/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      '@pico/relay':
+        specifier: workspace:*
+        version: link:../../apps/relay
+
   packages/protocol:
     devDependencies:
       libsodium-wrappers-sumo:
