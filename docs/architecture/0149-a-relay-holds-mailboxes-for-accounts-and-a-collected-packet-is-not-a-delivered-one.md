@@ -4,9 +4,10 @@
 
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
 boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface,
-the client and the transport that joins them landed the same day. What
-remains is the companion's collecting side, which needs response
-correlation and is a design point of its own.
+the client, the transport joining them and the device's reply correlation
+all landed the same day. What remains is the loop that drives them - a
+device sweep and a Home sweep on a schedule - and an operator to run
+against.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -265,6 +266,37 @@ so its packet stays.
 Acknowledgement is last and per packet: acknowledging a batch before
 handling loses everything after the first failure, and acknowledging after
 holds everything hostage to one bad packet.
+
+### A device finds its reply by opening it, and keeps the key to do so
+
+The envelope decided this. ADR 0107's response carries nothing outside the
+seal but a schema - no request id, no correlator - so a device cannot look
+up which request a collected reply belongs to. It tries its outstanding
+reply keys, and the one that opens it is the match. That is not a
+shortcoming routed around: it is the same property the relay envelope has,
+and it means a carrier holding a reply learns nothing about which request
+it answers.
+
+**The reply key therefore has to be written down**, and the exposure is
+stated rather than argued away. ADR 0107 seals a response to a fresh key
+per request; over the direct channel that key lives for one call and dies
+with it, and over a relay it cannot, because the whole reason a relay
+exists is that the two ends are not online together. A key that died with
+the process would make every relayed reply permanently unreadable while the
+packet sat in the mailbox until expiry.
+
+What it decrypts is exactly one response, for at most that request's own
+lifetime, and it is deleted the moment the reply is opened or the request
+expires - whichever comes first. It is not a person-role key (ADR 0081),
+nothing signs with it, and losing every one of them costs a person a round
+of retries. **Expiry deletes the key**, not merely the bookkeeping: keeping
+it would be keeping a decryption capability for an answer nothing will
+accept.
+
+A reply nothing opens is the ordinary duplicate, since RS5 makes the relay
+at-least-once. The book refuses when full rather than evicting, because
+dropping an outstanding key loses an answer already on its way and the
+person who would notice is not the one asking now.
 
 ## Non-goals
 
