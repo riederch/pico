@@ -101,6 +101,15 @@ if (/https?:\/\//.test(rendererHtml) || /<script(?![^>]+\bsrc=)[^>]*>/i.test(ren
  * it had already landed. It exists so the next one is a named error in a
  * second rather than a number in CI.
  *
+ * The next one was `recovery-card-pdf`, and the list is what found it. The
+ * tray statically reached `pdf-lib` - 1.7 MB of bundle whose parsed form is
+ * private dirty memory - to issue a card during a ceremony nobody had asked
+ * for yet. `main.ts` now imports it dynamically at the ceremony, and the entry
+ * below keeps it that way. Worth naming how it surfaced: not from this check,
+ * which did not know about the module, but from walking the hull and asking
+ * what was in it. A list of forbidden modules only ever holds what someone
+ * thought to forbid.
+ *
  * `time-bound-entry` was on this list and came off it deliberately: the tray
  * now reads which entries are due and needs that vocabulary. The list is for
  * modules with no business starting with the tray, not a freeze on the graph -
@@ -113,6 +122,7 @@ const trayForbidden = [
   { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'daemon.ts'), why: 'the daemon server' },
   { file: join(repoRoot, 'packages', 'protocol', 'src', 'planner-reader.ts'), why: 'a subpath-published protocol surface' },
   { file: join(repoRoot, 'packages', 'protocol', 'src', 'offline-floor.ts'), why: 'a subpath-published protocol surface' },
+  { file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'recovery-card-pdf.ts'), why: 'the Recovery Card PDF generator, which reaches pdf-lib' },
 ];
 
 const workspaceRoots = new Map();

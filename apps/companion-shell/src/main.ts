@@ -16,9 +16,6 @@ import {
 } from 'electron';
 import sodium from 'libsodium-wrappers-sumo';
 import {
-  issuePicoCompanionRecoveryCard,
-} from '@pico/companion/recovery-card';
-import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
@@ -683,6 +680,17 @@ async function runRecoveryCardIssuance(
   if (window === null || window.isDestroyed()) {
     throw new Error('companion_window_unavailable');
   }
+  // Loaded here rather than at the top of the file, because issuing a card
+  // reaches `pdf-lib` - a 1.7 MB bundle whose parsed form is private dirty
+  // memory, the class ADR 0113 C3 budgets. A tray that has done nothing has no
+  // reason to have paid for it, and this ceremony runs when a person asks.
+  //
+  // Before the prompts, not beside the call that needs it: the load stalls for
+  // as long as it stalls, and the moment to spend that is while nothing is
+  // waiting on it - not between the last PIN keystroke and the printer. A
+  // packaged build missing the module also says so before anyone types a
+  // passphrase.
+  const { issuePicoCompanionRecoveryCard } = await import('@pico/companion/recovery-card');
   const profile = readPicoCompanionProfile(defaultPicoCompanionProfilePath());
   const passphrasePrompt = {
     title: 'Enter the Vault passphrase',
