@@ -51,6 +51,10 @@
       "types": "./dist/link-delivery.d.ts",
       "import": "./dist/link-delivery.js"
     },
+    "./link-mailbox-exchange": {
+      "types": "./dist/link-mailbox-exchange.d.ts",
+      "import": "./dist/link-mailbox-exchange.js"
+    },
     "./link-mailbox": {
       "types": "./dist/link-mailbox.d.ts",
       "import": "./dist/link-mailbox.js"
