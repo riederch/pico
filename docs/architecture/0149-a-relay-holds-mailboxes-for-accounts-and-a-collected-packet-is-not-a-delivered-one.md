@@ -3,10 +3,10 @@
 ## Status
 
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
-boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface
-and the client landed the same day. What remains is the companion's
-collecting side and the wiring that gives the Home's collector a real
-transport.
+boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface,
+the client and the transport that joins them landed the same day. What
+remains is the companion's collecting side, which needs response
+correlation and is a design point of its own.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -219,6 +219,24 @@ than flattening them: `deliver` returns an ADR 0147 outcome whether the
 relay accepted or not, because `mailbox_full` is a refusal to hold and
 still the answer the caller asked for, while the account-bearing routes
 refuse with a name.
+
+### Registration comes before the address is handed over
+
+ADR 0148 named registering a mailbox at an operator as the caller's
+precondition and left it there. It is closed here, in the exchange, and the
+ordering is the decision: **register, then hand over.**
+
+The other order looks harmless. It is not - a device given an address that
+does not exist at the operator writes into nothing, and both sides believe
+the exchange succeeded, which is the failure a relay exists to prevent
+arriving through the mechanism meant to prevent it. So a refused
+registration fails the exchange rather than being logged. The device
+retries, and retrying costs nothing because re-exchange is rotation
+(ADR 0148 EX5).
+
+A Home with no relay configured stays the ordinary case: the transport is
+absent, the exchange still records the pair, and the direct path is
+untouched.
 
 ### Collecting is the same request by a slower road, and it gains one refusal
 
