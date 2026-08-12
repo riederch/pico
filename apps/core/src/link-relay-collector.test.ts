@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  PicoLinkRelayUnauthenticatedError,
+  assertPicoLinkRelayPacketSender,
   collectPicoLinkRelayPackets,
   type PicoLinkRelayReader,
 } from './link-relay-collector.js';
@@ -65,8 +67,11 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [record],
-      senderOf: () => deviceOne,
-      handle: async ({ payload }) => {
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
+        assertPicoLinkRelayPacketSender({
+          expectedDeviceSigningKeyFingerprintHex,
+          signerDeviceSigningKeyFingerprintHex: deviceOne,
+        });
         // Still holding it at handling time: acknowledgement comes after.
         expect(store.held.get(box(record))).toHaveLength(1);
         handled.push(payload);
@@ -90,8 +95,13 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [record],
-      senderOf: () => deviceTwo,
-      handle: async ({ payload }) => {
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
+        // Authenticated as device two - the signature holds and the mailbox
+        // belongs to device one.
+        assertPicoLinkRelayPacketSender({
+          expectedDeviceSigningKeyFingerprintHex,
+          signerDeviceSigningKeyFingerprintHex: deviceTwo,
+        });
         handled.push(payload);
       },
       onRefused: ({ refusal }) => refusals.push(refusal),
@@ -114,10 +124,9 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [record],
-      senderOf: () => {
-        throw new Error('unauthenticated');
+      handle: async () => {
+        throw new PicoLinkRelayUnauthenticatedError('sealed_request_unreadable');
       },
-      handle: async () => {},
       onRefused: ({ refusal }) => refusals.push(refusal),
     });
 
@@ -135,7 +144,6 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [record],
-      senderOf: () => deviceOne,
       handle: async () => {
         throw new Error('store_busy');
       },
@@ -163,13 +171,14 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [record],
-      senderOf: (payload) => {
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
         if (payload === 'bad') {
-          throw new Error('unauthenticated');
+          throw new PicoLinkRelayUnauthenticatedError('malformed_request');
         }
-        return deviceOne;
-      },
-      handle: async ({ payload }) => {
+        assertPicoLinkRelayPacketSender({
+          expectedDeviceSigningKeyFingerprintHex,
+          signerDeviceSigningKeyFingerprintHex: deviceOne,
+        });
         if (payload === 'defer') {
           throw new Error('store_busy');
         }
@@ -199,8 +208,12 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [first, second],
-      senderOf: (payload) => (payload === 'one' ? deviceOne : deviceTwo),
-      handle: async () => {},
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
+        assertPicoLinkRelayPacketSender({
+          expectedDeviceSigningKeyFingerprintHex,
+          signerDeviceSigningKeyFingerprintHex: payload === 'one' ? deviceOne : deviceTwo,
+        });
+      },
     });
 
     expect(result.handled).toBe(2);
@@ -214,7 +227,6 @@ describe('ADR 0149 - collecting what is waiting', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: store,
       mailboxes: [],
-      senderOf: () => deviceOne,
       handle: async () => {},
     });
     expect(result).toEqual({ handled: 0, refused: 0, deferred: 0 });

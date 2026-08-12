@@ -9,12 +9,44 @@ import {
   parsePicoLinkPacket,
 } from '@pico/protocol/link-packet';
 import { afterEach, describe, expect, it } from 'vitest';
-import { collectPicoLinkRelayPackets } from './link-relay-collector.js';
+import {
+  assertPicoLinkRelayPacketSender,
+  collectPicoLinkRelayPackets,
+} from './link-relay-collector.js';
 import {
   createPicoLinkRelayTransport,
   picoLinkRelayMailboxOf,
 } from './link-relay-transport.js';
+import { Writable } from 'node:stream';
+import { buildApp } from './app.js';
+import { EventStore } from './event-store.js';
 import type { PicoLinkMailboxRecord } from './event-store.js';
+
+interface HomeWithSweep {
+  picoSweepLinkRelayMailboxes(): Promise<void>;
+  close(): Promise<void>;
+}
+
+async function boot(
+  databasePath: string,
+  relay?: { baseUrl: string; accountId: string },
+): Promise<HomeWithSweep> {
+  return await buildApp({
+    host: '127.0.0.1',
+    port: 0,
+    databasePath,
+    deviceId: 'pico-core',
+    ...(relay === undefined ? {} : {
+      linkRelayBaseUrl: relay.baseUrl,
+      linkRelayAccountId: relay.accountId,
+    }),
+    logDestination: new Writable({
+      write(_chunk, _encoding, callback) {
+        callback();
+      },
+    }),
+  }) as unknown as HomeWithSweep;
+}
 
 /**
  * ADR 0149 - the collector against a real relay rather than a fake reader.
@@ -95,8 +127,11 @@ describe('ADR 0149 - the collector over the real surface', () => {
     const result = await collectPicoLinkRelayPackets({
       reader: transport,
       mailboxes: [record],
-      senderOf: () => device,
-      handle: async ({ payload }) => {
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
+        assertPicoLinkRelayPacketSender({
+          expectedDeviceSigningKeyFingerprintHex,
+          signerDeviceSigningKeyFingerprintHex: device,
+        });
         handled.push(payload);
       },
     });
@@ -108,7 +143,6 @@ describe('ADR 0149 - the collector over the real surface', () => {
     const second = await collectPicoLinkRelayPackets({
       reader: transport,
       mailboxes: [record],
-      senderOf: () => device,
       handle: async () => {},
     });
     expect(second).toEqual({ handled: 0, refused: 0, deferred: 0 });
@@ -133,7 +167,6 @@ describe('ADR 0149 - the collector over the real surface', () => {
     const first = await collectPicoLinkRelayPackets({
       reader: transport,
       mailboxes: [record],
-      senderOf: () => device,
       handle: async () => {
         throw new Error('store_busy');
       },
@@ -144,8 +177,11 @@ describe('ADR 0149 - the collector over the real surface', () => {
     const second = await collectPicoLinkRelayPackets({
       reader: transport,
       mailboxes: [record],
-      senderOf: () => device,
-      handle: async ({ payload }) => {
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
+        assertPicoLinkRelayPacketSender({
+          expectedDeviceSigningKeyFingerprintHex,
+          signerDeviceSigningKeyFingerprintHex: device,
+        });
         handled.push(payload);
       },
     });
@@ -191,5 +227,40 @@ describe('ADR 0149 - the collector over the real surface', () => {
     // ADR 0147 RY3: a second splitter would get the two-`@` case wrong.
     expect(() => picoLinkRelayMailboxOf(`${'1'.repeat(32)}@evil@${operator}`))
       .toThrow('invalid_pico_link_address');
+  });
+});
+
+describe('ADR 0149 - the sweep, driven through a booted Home', () => {
+  it('does nothing at all when no relay is configured', async () => {
+    // The ordinary state of a Home whose owner has not chosen an operator.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-sweep-none-'));
+    tempDirs.push(dir);
+    const app = await boot(join(dir, 'pico.sqlite'));
+    try {
+      await expect(app.picoSweepLinkRelayMailboxes()).resolves.toBeUndefined();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('refuses and acknowledges a packet that is not an envelope', async () => {
+    // The full path except for a valid ADR 0107 envelope: collected over the
+    // wire, failed authentication, refused, and **removed** - because rubbish
+    // that stayed would fill the mailbox and deny that relationship until
+    // somebody reissued the address.
+    const { baseUrl, store: relay } = await startRelay();
+    const dir = mkdtempSync(join(tmpdir(), 'pico-sweep-'));
+    tempDirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+
+    const app = await boot(databasePath, { baseUrl, accountId: account });
+    try {
+      // Nothing is honoured yet - no delegation exists - so the sweep reads
+      // nothing and leaves the relay untouched.
+      await app.picoSweepLinkRelayMailboxes();
+      expect(relay.mailboxFor(picoLinkRelayMailboxOf(homeInbound))).toBeUndefined();
+    } finally {
+      await app.close();
+    }
   });
 });

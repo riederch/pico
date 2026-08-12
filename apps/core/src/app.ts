@@ -124,6 +124,7 @@ import { picoCalendarDueEntriesView } from '@pico/module-calendar/calendar';
 import { picoCalendarStandingCommitments } from '@pico/module-calendar/commitments';
 import { parsePicoPlace } from '@pico/protocol/place';
 import { picoDeclaredEffectNames, type PicoActionRequest } from '@pico/protocol/action';
+import type { PicoLinkDirectOperation } from '@pico/protocol';
 import { bindPicoModuleEffects } from '@pico/protocol/module';
 import {
   decidePicoAction,
@@ -140,6 +141,11 @@ import {
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
+import {
+  PicoLinkRelayUnauthenticatedError,
+  assertPicoLinkRelayPacketSender,
+  collectPicoLinkRelayPackets,
+} from './link-relay-collector.js';
 import {
   parsePicoLinkMailboxExchangeRequest,
   picoLinkMailboxExchangeRequestSchema,
@@ -1608,6 +1614,90 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   /**
+   * ADR 0149. The Home reads its own mailboxes on a cadence.
+   *
+   * **This is not an ADR 0139 action, and that is a decision.** A depot fetch
+   * installs code, so it asks; collecting mail addressed to this Home is the
+   * Home *listening*, moved to a place where listening means asking somebody
+   * to hand it over. The person decided that when they configured an operator,
+   * and a per-sweep question would put the same choice in front of them every
+   * two minutes about something they already set up.
+   *
+   * What arrives decides nothing on its own. Each payload is an ADR 0107
+   * envelope run through the same `linkIntake` and the same
+   * `dispatchPicoLinkOperation` the direct route uses - one list of what this
+   * Home offers remotely, which is the only way ADR 0107's per-operation
+   * opt-in keeps meaning anything.
+   */
+  const sweepPicoLinkRelayMailboxes = async (): Promise<void> => {
+    if (relayTransport === undefined) {
+      return;
+    }
+    await collectPicoLinkRelayPackets({
+      reader: relayTransport,
+      // ADR 0148 EX3. Honoured, never the whole book: a mailbox whose
+      // delegation went inactive is one to stop reading, and a sweep is where
+      // that rule would be quietly skipped.
+      mailboxes: store.picoLinkMailboxes().length === 0
+        ? []
+        : store.honouredPicoLinkMailboxes(sodium),
+      handle: async ({ payload, expectedDeviceSigningKeyFingerprintHex }) => {
+        const envelope = JSON.parse(Buffer.from(payload, 'base64').toString('utf8')) as unknown;
+        const handled = await linkIntake.handle(
+          envelope,
+          async (operation, args, principal) => {
+            // The disagreement, checked where the principal exists and by the
+            // one function that owns the rule. It throws, and the intake
+            // swallows what `execute` throws - so the refusal is re-raised
+            // after `handle` returns, from the flag below.
+            assertPicoLinkRelayPacketSender({
+              expectedDeviceSigningKeyFingerprintHex,
+              signerDeviceSigningKeyFingerprintHex: principal.deviceSigningKeyFingerprintHex,
+            });
+            return await dispatchPicoLinkOperation(operation, args, principal, () => {
+              // ADR 0115 U3's deferred custody swap has no meaning here: there
+              // is no reply socket to seal under the retiring key, so a host
+              // rotation does not travel this way.
+            });
+          },
+        );
+        if (!handled.ok) {
+          throw new PicoLinkRelayUnauthenticatedError(handled.reason);
+        }
+      },
+      onRefused: ({ tag, refusal }) => {
+        // The mailbox is deliberately absent. `link:check` caught it here on
+        // the first attempt, which is the point of having it: an address is a
+        // capability and a log line is where one gets copied out (ADR 0148
+        // EX4). The tag is fresh per packet and names nothing.
+        app.log.warn({ tag, refusal }, 'Relay packet refused.');
+      },
+    });
+  };
+
+  const linkRelaySweepScheduler = relayTransport === undefined ? undefined
+    : startPicoPeriodicTaskScheduler({
+      tasks: [{
+        identifier: 'link-relay-sweep',
+        intervalMs: config.linkRelaySweepIntervalMs ?? defaultPicoLinkRelaySweepIntervalMs,
+      }],
+      request: async () => {
+        try {
+          await sweepPicoLinkRelayMailboxes();
+        } catch (error) {
+          // An operator that cannot be reached is the world failing, not this
+          // Home. Nothing was acknowledged, so the next sweep tries again.
+          app.log.warn(
+            { reason: error instanceof Error ? error.message : 'failed' },
+            'Relay sweep did not complete.',
+          );
+        }
+      },
+    });
+
+  app.decorate('picoSweepLinkRelayMailboxes', sweepPicoLinkRelayMailboxes);
+
+  /**
    * ADR 0143 DP8's other caller. A person asking for this now takes the same
    * path with `asked: true`, which is the distinction CO4 draws - not a
    * shortcut around the decision, the same decision with one input changed.
@@ -1623,6 +1713,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     clearInterval(retentionSweep);
     timeBoundScheduler.stop();
     depotFetchScheduler.stop();
+    linkRelaySweepScheduler?.stop();
     sockets.clear();
     store.close();
   });
@@ -2540,16 +2631,25 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * standing where the session principal stands - so remote capability is
    * opt-in per operation and cannot be inherited by adding a route.
    */
-  app.post('/api/home/link', {
-    bodyLimit: MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES,
-  }, async (request, reply) => {
-    // ADR 0115 U3. The reply to a host-rotation submit is the last message of
-    // the old era: the client can only verify it under the pin it still
-    // holds, so custody must not swap until the response is sealed and
-    // signed. The handler schedules the swap; it runs after the envelope is
-    // built, and a crash in between is completed at the next boot.
-    let afterReply: (() => void) | undefined;
-    const handled = await linkIntake.handle(request.body, async (operation, args, principal) => {
+  /**
+   * ADR 0107 with ADR 0149. What a verified Link request actually does, in one
+   * place both callers reach.
+   *
+   * It was the body of the route's callback until the relay sweep needed the
+   * same operations. Two dispatches would have been two lists of what this
+   * Home offers remotely, and ADR 0107's rule that remote capability is opt-in
+   * *per operation* only means something while there is one list to opt into.
+   *
+   * `scheduleAfterReply` is the one thing the route knows and this does not:
+   * ADR 0115 U3 defers a host-key custody swap until the reply is sealed under
+   * the retiring key, so the caller decides when "after the reply" is.
+   */
+  const dispatchPicoLinkOperation = async (
+    operation: PicoLinkDirectOperation,
+    args: Record<string, unknown>,
+    principal: PicoLinkDirectPrincipal,
+    scheduleAfterReply: (run: () => void) => void,
+  ): Promise<PicoLinkDirectExecution> => {
       switch (operation) {
         case 'home.setup.read': {
           const setup = readHomeSetupState();
@@ -2697,9 +2797,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * can reach and the other cannot.
          */
         case 'home.link.mailbox.exchange': {
-          let request: ReturnType<typeof parsePicoLinkMailboxExchangeRequest>;
+          let exchange: ReturnType<typeof parsePicoLinkMailboxExchangeRequest>;
           try {
-            request = parsePicoLinkMailboxExchangeRequest({
+            exchange = parsePicoLinkMailboxExchangeRequest({
               schema: picoLinkMailboxExchangeRequestSchema,
               ...args,
             });
@@ -2747,7 +2847,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             const record = store.exchangePicoLinkMailbox({
               principal,
               homeInbound,
-              deviceInbound: request.deviceInbound,
+              deviceInbound: exchange.deviceInbound,
               exchangedAt: new Date().toISOString(),
             });
             return {
@@ -3221,10 +3321,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             // retiring key - it is the old era's last message. A crash before
             // the deferred swap is completed at the next boot against the
             // proven head.
-            afterReply = () => {
+            scheduleAfterReply(() => {
               homeHostKeyStore.promoteStagedRotation();
               homeHostKeys = homeHostKeyStore.load(sodium);
-            };
+            });
             appendServerEvent('home.host_key_rotated', {});
             app.log.warn(
               {
@@ -3268,7 +3368,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           return { outcome: 'unknown_operation', result: {} };
         }
       }
-    });
+  };
+
+  app.post('/api/home/link', {
+    bodyLimit: MAX_PICO_LINK_DIRECT_REQUEST_BODY_BYTES,
+  }, async (request, reply) => {
+    // ADR 0115 U3. The reply to a host-rotation submit is the last message of
+    // the old era: the client can only verify it under the pin it still
+    // holds, so custody must not swap until the response is sealed and
+    // signed. The handler schedules the swap; it runs after the envelope is
+    // built, and a crash in between is completed at the next boot.
+    let afterReply: (() => void) | undefined;
+    const handled = await linkIntake.handle(
+      request.body,
+      async (operation, args, principal) => await dispatchPicoLinkOperation(
+        operation,
+        args,
+        principal,
+        (run) => {
+          afterReply = run;
+        },
+      ),
+    );
 
     if (!handled.ok) {
       // ADR 0119 Q4. A quota refusal is its own status, because folding it into
