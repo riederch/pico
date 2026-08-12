@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted direction; RY1, RY2, RY3 and RY7 implemented 2026-08-12, RY4-RY6
-open. Decided 2026-08-12.
+Accepted direction; **RY1-RY7 all implemented 2026-08-12** at the contract
+level. Decided 2026-08-12. What remains is not a gate but the relay server
+itself, which this ADR names as a non-goal.
 This is the second runtime slice of ADR 0028 after ADR 0107's direct
 envelopes, and it decides exactly one thing: **what a carrier that must not
 read a payload is allowed to see on the outside of it.** The relay server,
@@ -280,27 +281,50 @@ that adapter, and not before there is one.
   exists because RY7 names collection correlation as a residual, and a
   mitigation nobody can measure is not one.
 
-- **RY4 - No scheduled rotation (open):** there is no expiry, no rotation
-  interval and no "valid until" on an address - again the absence, not a
-  rule. Revocation is an explicit act with a reason, and a revoked address
-  is refused by name rather than reported as unknown, so a peer that hits
-  one learns it was revoked rather than that it mistyped.
+  **RY4, RY5 and RY6 are one vocabulary and landed together** on
+  2026-08-12 as `@pico/protocol/link-delivery`:
+  `accepted | mailbox_unknown | mailbox_revoked | mailbox_full |
+  packet_expired`. The order in which they are answered says the thing that
+  explains the others - mailbox state before packet state, because a sender
+  whose address is dead needs a new address and not a note about expiry.
 
-- **RY5 - Acceptance only (open):** the relay client's answer type has one
-  success shape, "accepted", and no delivery shape to return. A caller
-  wanting confirmation of receipt has to wait for a sealed message from the
-  peer, because there is no other way to get one.
+- **RY4 - No scheduled rotation (implemented 2026-08-12):** there is no
+  expiry, no rotation interval and no "valid until" on an address or a
+  registration - the absence, not a rule.
 
-- **RY6 - Dedup without a correlator, expiry without a clock (open):** the
-  per-packet tag is fresh for every packet, so an operator cannot link two
-  packets to one sender by their tags; a sender-stable identifier here
-  would hand back the correlator the missing sender field just removed.
-  Expiry is a coarse bucket rather than an instant, because an absolute
-  timestamp leaks the sender's clock and how long the sender believes the
-  thing matters. A full mailbox **refuses** rather than evicting, in ADR
-  0119 Q5's posture that a ceiling refuses and never trims - silently
-  dropping a queued packet is the quiet failure, and a refusal the sender
-  can see is the loud one.
+  Building it surfaced what the gate's second half actually costs: **a
+  revoked mailbox has to stay in the register.** Refusing by name means
+  remembering, and forgetting would make a deliberate ending
+  indistinguishable from a typo - a peer holding a dead address would keep
+  retrying an answer that reads like its own mistake. That is ADR 0070's
+  tombstone posture, and the cost is named rather than solved: tombstones
+  accumulate, and how long an operator keeps one is retention policy
+  belonging to the relay server this ADR does not build.
+  `picoLinkDeliveryNeedsNewAddress` names the one outcome that will not
+  improve by waiting; every other is an ADR 0138 CO2 condition.
+
+- **RY5 - Acceptance only (implemented 2026-08-12):** the vocabulary has
+  one success and no delivery member. `picoLinkDeliveryHasNoOutcomeFor`
+  keeps the reasons for the three answers it cannot give - `delivered`,
+  `read`, `senderThrottled` - because an absent member cannot document
+  itself, and the third is a consequence of RY1 rather than a policy: there
+  is no sender on the envelope to throttle.
+
+- **RY6 - Dedup without a correlator, expiry without a clock (implemented
+  2026-08-12):** the tag and the bucket landed with RY1; what landed here
+  is the queue decision.
+
+  **The line is between expiry and eviction.** An expired packet is one the
+  sender instructed the relay to stop holding, so pruning it is following
+  an instruction. Dropping a live one would be a decision, and it is the
+  decision ADR 0119 Q5 forbids: the sender told `accepted` and the
+  recipient never shown the packet would both be right, and nobody would be
+  told. So a full mailbox refuses.
+
+  A duplicate tag is answered **before** fullness and answered `accepted`.
+  The tag is fresh per packet and reused only to retry that one, so a
+  repeated tag is a retry - and a sender that could not safely retry would
+  have to choose between losing packets and duplicating them.
 
 - **RY7 - An honest ledger, and the drafts it lets us measure (implemented
   2026-08-12):** the table below, kept in the shape of ADR 0107 D5 -
