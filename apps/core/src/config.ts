@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 // a second time here. The four paths above predate that rule and each state
 // their default twice; this one does not add a fifth.
 import { defaultPicoDepotFetchIntervalMs } from '@pico/protocol/depot';
-import { defaultPicoLinkRelayOperator } from '@pico/protocol/link-packet';
+import {
+  defaultPicoLinkRelayOperator,
+  defaultPicoLinkRelaySweepIntervalMs,
+} from '@pico/protocol/link-packet';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { PicoSupplierScratch } from './supplier-scratch.js';
 import type { DomainReadership } from './domain-readership.js';
@@ -87,6 +90,8 @@ export interface CoreConfig {
    */
   linkRelayBaseUrl?: string;
   linkRelayAccountId?: string;
+  /** ADR 0149. How often this Home reads its relay mailboxes. */
+  linkRelaySweepIntervalMs?: number;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -205,6 +210,11 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     ...(readOptionalNonEmptyString(env.PICO_LINK_RELAY_ACCOUNT_ID, 'PICO_LINK_RELAY_ACCOUNT_ID') === undefined
       ? {}
       : { linkRelayAccountId: readNonEmptyString(env, 'PICO_LINK_RELAY_ACCOUNT_ID', '') }),
+    linkRelaySweepIntervalMs: readPositiveInteger(
+      env.PICO_LINK_RELAY_SWEEP_INTERVAL_MS,
+      'PICO_LINK_RELAY_SWEEP_INTERVAL_MS',
+      defaultPicoLinkRelaySweepIntervalMs,
+    ),
     depotFetchIntervalMs: readPositiveInteger(
       env.PICO_DEPOT_FETCH_INTERVAL_MS,
       'PICO_DEPOT_FETCH_INTERVAL_MS',

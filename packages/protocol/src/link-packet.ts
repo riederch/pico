@@ -95,6 +95,21 @@ export const MAX_PICO_LINK_PACKET_PAYLOAD_BYTES = 64 * 1024;
 export const defaultPicoLinkMailboxCapacity = 32;
 
 /**
+ * ADR 0149. How often each end reads its own mailboxes.
+ *
+ * Two minutes, and the figure is chosen against the *opposite* consideration
+ * from ADR 0143's six-hour depot sweep. A depot sweep is a repair and being
+ * late costs nothing; a mailbox holds a person's traffic, and being late is
+ * the person waiting. Two minutes is the longest wait that still reads as a
+ * message arriving rather than as one that did not.
+ *
+ * It is a floor on latency and not a promise: a relay is what a person falls
+ * back to when the direct path is gone, so the honest claim is that a reply
+ * arrives, not that it arrives quickly.
+ */
+export const defaultPicoLinkRelaySweepIntervalMs = 2 * 60 * 1_000;
+
+/**
  * ADR 0148 EX1. The operator a Home issues its own mailboxes at when a
  * deployment has not chosen one.
  *

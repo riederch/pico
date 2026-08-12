@@ -148,6 +148,7 @@ import {
 import {
   defaultPicoLinkMailboxCapacity,
   defaultPicoLinkRelayOperator,
+  defaultPicoLinkRelaySweepIntervalMs,
   formatPicoLinkPacketAddress,
 } from '@pico/protocol/link-packet';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';

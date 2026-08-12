@@ -360,6 +360,12 @@ if (listMatch === null) {
  */
 const outwardReachingModules = [
   ['apps/core/src/depot-fetch.ts', 'invokes `git`, which reaches a remote'],
+  // ADR 0149. The relay transport is the second module in the tree that
+  // reaches a machine Pico does not run, and it arrived without being named
+  // here - which is exactly how the first one would have slipped through. A
+  // floor family that grew a path to it would be a family that phones an
+  // operator to answer a question the floor promises to answer alone.
+  ['apps/core/src/link-relay-transport.ts', 'calls a relay operator over the network'],
 ];
 for (const [path, why] of outwardReachingModules) {
   const absolute = join(repoRoot, path);

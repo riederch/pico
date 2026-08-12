@@ -1,4 +1,19 @@
-import type { PicoDepotTask } from '@pico/protocol/depot';
+/**
+ * ADR 0143 DP8 defines a task as an identifier, an interval and the request it
+ * makes. **This asks for the first two only**, and the narrowing is deliberate
+ * rather than convenient: the scheduler never reads the third, and a parameter
+ * that demands what it does not use is one that turns every later caller into
+ * a depot.
+ *
+ * `PicoDepotTask` satisfies this by having more, which is the direction that
+ * costs nothing. Widening *that* type instead - making its `requestsEffect`
+ * optional so a relay sweep could borrow it - would have weakened the one
+ * field DP8 calls load-bearing, to spare this file an interface.
+ */
+export interface PicoPeriodicTask {
+  identifier: string;
+  intervalMs: number;
+}
 
 /**
  * ADR 0143 DP8. The periodic scheduling a depot fetch runs on, and a separate
@@ -41,13 +56,13 @@ import type { PicoDepotTask } from '@pico/protocol/depot';
  * why it is not what `offline:check` has to keep out of a floor hull.
  */
 export interface PicoPeriodicTaskSchedulerOptions {
-  tasks: readonly PicoDepotTask[];
+  tasks: readonly PicoPeriodicTask[];
   /**
    * What the task asks for. It submits a request and returns; it does not
    * perform an effect, and its rejection is not an error to report - the next
    * run tries again.
    */
-  request: (task: PicoDepotTask) => void | Promise<void>;
+  request: (task: PicoPeriodicTask) => void | Promise<void>;
   now?: () => number;
   setTimer?: (handler: () => void, delayMs: number) => NodeJS.Timeout;
   clearTimer?: (timer: NodeJS.Timeout) => void;
