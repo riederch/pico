@@ -4,6 +4,20 @@
 
 Accepted as a draft-only packet-envelope preflight before Pico Link implementation.
 
+Status note, 2026-08-12: **superseded by ADR 0147 RY1.** This preflight was
+the placeholder for a decision nobody had made, and ADR 0147 made it
+differently. Its envelope constrains what may be written into
+`senderRouteId`, `priority`, `ttl`, `contentType` and `extensions`; ADR
+0147's core rule removes all five, because a field that fails "can the
+carrier deliver without it" is absent from the contract rather than
+governed by a rule about its contents. The instinct here was right and is
+kept in the successor - no emergency meaning through priority, no identity
+in routing, unknown top-level fields rejected by default, which
+`parsePicoLinkPacket` now does by name. What does not survive is the shape:
+five relay-visible fields, an open `extensions` object and a payload
+carried as a reference to a second object rather than inline. Do not use
+this as current direction.
+
 ## Context
 
 ADR 0028 defines Pico Link as a transport-neutral facade above relays, direct transports and future adapters.

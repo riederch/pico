@@ -4,6 +4,18 @@
 
 Accepted as a draft-only protected-payload placeholder boundary before Pico Link cryptography.
 
+Status note, 2026-08-12: **superseded by ADR 0107**, and it has been since
+2026-08-08 without anybody writing it down. This placeholder existed
+explicitly "until reviewed encryption, key wrapping, signature inputs,
+canonicalization and verification semantics exist". They exist: ADR 0107
+seals a signed payload to the Home's key-agreement key, signs canonical
+bytes with a delegated device key, pins the audience by host signing
+fingerprint and carries test vectors. Every placeholder field here has a
+real counterpart there - `protection.algorithmSuite: placeholder-only` is a
+suite, `claimedSender.proofStatus: unverified-placeholder` is a verified
+delegation, `claimedAudience` is the audience pin, and the opaque body ref
+is the sealed bytes themselves. Do not use this as current direction.
+
 ## Context
 
 ADR 0029 separates Pico identity, device, Home, transport and protected-domain key roles.

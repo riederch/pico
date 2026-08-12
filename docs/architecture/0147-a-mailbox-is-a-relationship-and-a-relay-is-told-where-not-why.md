@@ -270,14 +270,42 @@ that adapter, and not before there is one.
   dropping a queued packet is the quiet failure, and a refusal the sender
   can see is the loud one.
 
-- **RY7 - An honest ledger, and the drafts it lets us measure (open):** the
-  table below, kept in the shape of ADR 0107 D5 - achieved and missing
-  properties in one list. Completing RY1-RY6 does not complete relay
-  privacy, and the ledger is where that stays visible. The gate also
-  re-reads ADR 0042-0066 against RY1: `0043` (packet envelope preflight),
-  `0065` (packet envelope rejection) and `0044`/`0063` (protected payload)
-  describe this layer and have had no decision to be measured against;
-  after RY1 they either become fixtures or are retired as superseded.
+- **RY7 - An honest ledger, and the drafts it lets us measure (implemented
+  2026-08-12):** the table below, kept in the shape of ADR 0107 D5 -
+  achieved and missing properties in one list. Completing RY1-RY6 does not
+  complete relay privacy, and the ledger is where that stays visible.
+
+  The four drafts are read and **all four are retired**, none as fixtures.
+  `0043` and `0065` are superseded by RY1: they constrain what may be
+  written into `senderRouteId`, `priority`, `ttl`, `contentType` and
+  `extensions`, and RY1 removes all five, so a rejection rule for a field
+  that does not exist has nothing left to reject. Their instincts survive
+  in the successor and their shape does not.
+
+  `0044` and `0063` turned out to be superseded by **ADR 0107**, not by
+  this ADR, and to have been since 2026-08-08 with nobody writing it down.
+  The placeholder in `0044` existed explicitly "until reviewed encryption,
+  key wrapping, signature inputs, canonicalization and verification
+  semantics exist" - and ADR 0107 built all of them. `0063` is worse than
+  stale: its core rule requires a draft protected payload to **reject**
+  real-crypto claims and verified sender or audience claims, so a fixture
+  built to it would reject the envelope the product actually sends. That is
+  not a boundary that aged; it is one that points the wrong way.
+
+  Each carries a status note under ADR 0128's record rule rather than being
+  edited, and the status matrix uses its `superseded` category - which had
+  been defined in the legend since the matrix existed and used **zero
+  times** in 145 rows.
+
+  **Named for later, deliberately not done here:** the same reading applies
+  to more of the ADR 0042-0066 family. `0045` (membership credential),
+  `0051` (device credential), `0053` (revocation registry), `0054` (key
+  envelope rotation), `0055` (identity key) and `0056` (Home host key) all
+  have real implementations in the tree today, so their placeholders
+  describe a state the product left. They are superseded by ADR 0079, 0080,
+  0087, 0088, 0103 and 0109 rather than by this ADR, and retiring one
+  properly means reading it and stating what survives - which is the work
+  done above for four of them and is not RY7's to do for six more.
 
 ## ADR 0031 threat ledger for the relay envelope
 

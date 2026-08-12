@@ -4,6 +4,15 @@
 
 Accepted as a draft-only Pico Link protected payload rejection boundary that deepens ADR 0044, before encryption, signatures, key wrapping, canonicalization or verified sender/audience authority are implemented.
 
+Status note, 2026-08-12: **superseded by ADR 0107**, with the same delay as
+ADR 0044 and a sharper reason. Its core rule requires a draft protected
+payload to *reject* real-crypto claims and verified sender or audience
+claims - so a fixture built to this ADR would reject the envelope the
+product actually sends. That is not a boundary that has aged; it is one
+that now points the wrong way. What survives is the concern underneath it,
+`protected_plaintext_leak`, which ADR 0107 answers by sealing rather than
+by a fixture rule. Do not use this as current direction.
+
 ## Context
 
 ADR 0016 keeps cryptography a non-goal until a threat model, key lifecycle, reviewed primitives, canonicalization and test vectors exist.

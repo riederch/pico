@@ -4,6 +4,17 @@
 
 Accepted as a draft-only Pico Link packet envelope rejection boundary that deepens ADR 0043, before relay routing, transport encryption, metadata-privacy enforcement or compatibility are implemented.
 
+Status note, 2026-08-12: **superseded by ADR 0147 RY1.** This was the
+rejection counterpart to ADR 0043 and it goes with it. Its boundaries
+assume fields ADR 0147 removed - a routing ID that must not be a Pico
+identity, a payload block that must not carry crypto claims, relay-visible
+metadata that must not leak a relationship - and a rejection rule for a
+field that does not exist has nothing left to reject. Two of its four draft
+reasons survive as substance rather than as vocabulary:
+`packet_routing_pico_identity` is answered by a mailbox belonging to a
+relationship rather than to a Pico, and `packet_relay_metadata_leak` by the
+four absent fields. Do not use this as current direction.
+
 ## Context
 
 ADR 0028 defines Pico Link as a transport facade over relays: a relay forwards and queues packets but is not identity owner, action authorizer or plaintext reader.
