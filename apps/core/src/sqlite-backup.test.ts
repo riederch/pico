@@ -11,6 +11,7 @@ import {
   picoSupplierAttachmentMigrationId,
   picoDepotAttachmentMigrationId,
   picoDepotFetchOutcomeMigrationId,
+  picoLinkMailboxMigrationId,
   picoDepotReachMigrationId,
   picoLibraryDerivationMigrationId,
   picoSupplierCredentialScopeMigrationId,
@@ -260,6 +261,10 @@ describe('restoreSqliteBackup', () => {
       },
       {
         id: picoDepotFetchOutcomeMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoLinkMailboxMigrationId,
         appliedAt: expect.any(String),
       },
     ]);

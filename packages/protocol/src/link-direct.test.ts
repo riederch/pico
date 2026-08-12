@@ -148,6 +148,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.identity.rotation.veto',
       'home.host.rotation.prepare',
       'home.host.continuity.submit',
+      'home.link.mailbox.exchange',
     ]);
   });
 

@@ -21,6 +21,7 @@ import {
   type PicoDepotPin,
 } from '@pico/protocol/depot';
 import { picoGitCommitPattern } from '@pico/protocol/library-pin';
+import { parsePicoLinkPacketAddress } from '@pico/protocol/link-packet';
 import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
 import { parsePicoSupplierManifest } from '@pico/protocol/supplier';
 import {
@@ -716,6 +717,19 @@ export interface PicoDepotAttachment {
   lastFetchCondition?: PicoDepotFetchCondition;
   /** When that attempt was. "Could not reach it" reads differently at four minutes and four weeks. */
   lastFetchAt?: string;
+}
+
+/** ADR 0148 EX5. One device's exchanged mailbox addresses, with the delegation they were proved by. */
+export interface PicoLinkMailboxRecord {
+  deviceSigningKeyFingerprintHex: string;
+  picoIdentityFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+  /** Issued by this Home; the device sends here. */
+  homeInbound: string;
+  /** Issued by the device; this Home sends here. */
+  deviceInbound: string;
+  exchangedAt: string;
 }
 
 export interface PicoSupplierAttachment {
@@ -7002,6 +7016,166 @@ export class EventStore {
   }
 
   /** ADR 0143 DP1. Removes the depot record and nothing else. */
+  /**
+   * ADR 0148 EX2/EX5. Records one exchange of mailbox addresses with a device.
+   *
+   * **The device is not an argument.** It comes from the four fields of the
+   * delegation the ADR 0107 channel already authenticated, and a caller that
+   * could name a different one would be letting a device choose which mailbox
+   * it is - the same class of mistake as a supplier naming its own directory
+   * (ADR 0143 DP8). The signature below takes a `principal` rather than a
+   * fingerprint for exactly that reason: there is no shape in which the device
+   * half arrives separately from the delegation it was proved by.
+   *
+   * Re-running replaces (ADR 0148 EX4): one row per device, newest addresses,
+   * peer unchanged. That makes rotation, first run and the flooded-mailbox
+   * remedy one code path rather than three.
+   *
+   * The two uniqueness refusals are the table's, not this method's, so a
+   * second write path cannot get around them. They surface here by name
+   * because ADR 0147 RY2 gives each a distinct meaning: two devices behind one
+   * of *our* mailboxes stops the mailbox identifying the sender, and two
+   * behind one of *theirs* is a redirection somebody handed us.
+   */
+  public exchangePicoLinkMailbox(input: {
+    principal: {
+      picoIdentityFingerprintHex: string;
+      deviceSigningKeyFingerprintHex: string;
+      deviceKeyAgreementKeyFingerprintHex: string;
+      delegationId: string;
+    };
+    homeInbound: string;
+    deviceInbound: string;
+    exchangedAt: string;
+  }): PicoLinkMailboxRecord {
+    this.ensureOpen();
+    parsePicoLinkPacketAddress(input.homeInbound);
+    parsePicoLinkPacketAddress(input.deviceInbound);
+    if (input.homeInbound === input.deviceInbound) {
+      // We would write to the mailbox we told this device to write to, so our
+      // own traffic would come back as theirs (ADR 0147 RY2).
+      throw new Error('pico_link_mailbox_points_at_itself');
+    }
+
+    // ADR 0119 Q5. A new store answers the ceiling like every other, and only
+    // for a device that is not already here - re-exchanging replaces a row
+    // rather than adding one, and refusing that would leave a person unable to
+    // rotate a flooded mailbox at exactly the moment they need to.
+    const existing = this.picoLinkMailboxFor(input.principal.deviceSigningKeyFingerprintHex) !== undefined;
+    if (!existing) {
+      const reached = this.storageCondition().reasons.some(
+        (reason) => reason.cause === 'store_ceiling' && reason.store === 'link_mailbox',
+      );
+      if (reached) {
+        throw new Error('pico_link_mailbox_store_ceiling_reached');
+      }
+    }
+
+    try {
+      this.db
+        .prepare(`
+          INSERT INTO pico_link_mailbox (
+            device_signing_key_fingerprint_hex,
+            pico_identity_fingerprint_hex,
+            device_key_agreement_key_fingerprint_hex,
+            delegation_id,
+            home_inbound,
+            device_inbound,
+            exchanged_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(device_signing_key_fingerprint_hex) DO UPDATE SET
+            pico_identity_fingerprint_hex = excluded.pico_identity_fingerprint_hex,
+            device_key_agreement_key_fingerprint_hex = excluded.device_key_agreement_key_fingerprint_hex,
+            delegation_id = excluded.delegation_id,
+            home_inbound = excluded.home_inbound,
+            device_inbound = excluded.device_inbound,
+            exchanged_at = excluded.exchanged_at
+        `)
+        .run(
+          input.principal.deviceSigningKeyFingerprintHex,
+          input.principal.picoIdentityFingerprintHex,
+          input.principal.deviceKeyAgreementKeyFingerprintHex,
+          input.principal.delegationId,
+          input.homeInbound,
+          input.deviceInbound,
+          input.exchangedAt,
+        );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      if (message.includes('pico_link_mailbox.home_inbound')) {
+        throw new Error('pico_link_inbound_shared_between_peers');
+      }
+      if (message.includes('pico_link_mailbox.device_inbound')) {
+        throw new Error('pico_link_outbound_shared_between_peers');
+      }
+      throw error;
+    }
+
+    // After the write, so a failure never inflates the count, and only for a
+    // device that was not already here - re-exchanging upserts and costs no
+    // row (the same shape `attachPicoSupplier` uses).
+    if (!existing) {
+      this.rowCounter.recordInsert('link_mailbox');
+    }
+    return this.picoLinkMailboxFor(input.principal.deviceSigningKeyFingerprintHex)!;
+  }
+
+  public picoLinkMailboxFor(
+    deviceSigningKeyFingerprintHex: string,
+  ): PicoLinkMailboxRecord | undefined {
+    this.ensureOpen();
+    const row = this.db
+      .prepare(`
+        SELECT device_signing_key_fingerprint_hex AS deviceSigningKeyFingerprintHex,
+               pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+               device_key_agreement_key_fingerprint_hex AS deviceKeyAgreementKeyFingerprintHex,
+               delegation_id AS delegationId,
+               home_inbound AS homeInbound,
+               device_inbound AS deviceInbound,
+               exchanged_at AS exchangedAt
+        FROM pico_link_mailbox WHERE device_signing_key_fingerprint_hex = ?
+      `)
+      .get(deviceSigningKeyFingerprintHex) as PicoLinkMailboxRecord | undefined;
+    return row === undefined ? undefined : Object.freeze({ ...row });
+  }
+
+  public picoLinkMailboxes(): readonly PicoLinkMailboxRecord[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare('SELECT device_signing_key_fingerprint_hex AS id FROM pico_link_mailbox ORDER BY device_signing_key_fingerprint_hex')
+      .all() as Array<{ id: string }>;
+    return Object.freeze(rows.map((row) => this.picoLinkMailboxFor(row.id)!));
+  }
+
+  /**
+   * ADR 0148 EX3. The mailboxes this Home still honours, which is the only
+   * list anything should collect from.
+   *
+   * **A mailbox is not revoked when a device is.** It is honoured while the
+   * delegation it was issued to is active, asked here with the same check ADR
+   * 0107 runs on every request. The alternative - a status column updated by a
+   * lifecycle hook - is a second record to keep in step and a hook somebody
+   * can forget, and what it guards is a revoked device holding a mailbox the
+   * Home keeps collecting from.
+   *
+   * Nothing runs in between. A delegation that went inactive a millisecond ago
+   * drops out of this list on the next call, because the list is derived and
+   * not remembered.
+   */
+  public honouredPicoLinkMailboxes(
+    sodium: IdentityVerificationSodium,
+    at?: string,
+  ): readonly PicoLinkMailboxRecord[] {
+    return Object.freeze(this.picoLinkMailboxes().filter((record) => this.hasActivePicoIdentityDelegation({
+      picoIdentityFingerprintHex: record.picoIdentityFingerprintHex,
+      deviceSigningKeyFingerprintHex: record.deviceSigningKeyFingerprintHex,
+      deviceKeyAgreementKeyFingerprintHex: record.deviceKeyAgreementKeyFingerprintHex,
+      delegationId: record.delegationId,
+      sodium,
+      ...(at === undefined ? {} : { at }),
+    })));
+  }
+
   public detachPicoDepot(remote: string): void {
     this.ensureOpen();
     this.db.prepare('DELETE FROM pico_depot_attachment WHERE remote = ?').run(remote);

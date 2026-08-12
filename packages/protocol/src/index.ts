@@ -396,6 +396,15 @@ export const picoLinkDirectOperations = [
   'home.identity.rotation.veto',
   'home.host.rotation.prepare',
   'home.host.continuity.submit',
+  /**
+   * ADR 0148 EX1. Exchange relay mailbox addresses with this Home.
+   *
+   * Opted in per operation, like every other: adding one is a decision. This
+   * one rides the direct channel deliberately, because the direct channel
+   * works exactly when the relay is not needed - so the exchange happens while
+   * the two ends can reach each other and pays off when they cannot.
+   */
+  'home.link.mailbox.exchange',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];

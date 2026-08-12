@@ -139,6 +139,16 @@ export const picoDurableStores = [
    * supplier, and there are fewer of them, since one depot provides several.
    */
   'depot_attachment',
+  /**
+   * ADR 0148 EX5. One row per device that has exchanged mailbox addresses
+   * with this Home.
+   *
+   * Bounded by devices rather than by traffic: a row appears when a device
+   * first exchanges and is replaced when it exchanges again, so this counts
+   * devices a person has enrolled over the life of the Home rather than
+   * anything that grows with use.
+   */
+  'link_mailbox',
 ] as const;
 
 export type PicoDurableStore = typeof picoDurableStores[number];
@@ -187,6 +197,13 @@ export const defaultPicoStoreCeilingRows: Record<PicoDurableStore, number> = {
   // than suppliers. Attaching one is also the heavier decision of the two -
   // it is a decision about code that will execute, not about material to read.
   depot_attachment: 100,
+  /**
+   * ADR 0148 EX5. Two orders of magnitude above any plausible device count,
+   * in the posture the two attachment ceilings above already take: the number
+   * is not a prediction, it is the point past which something has come loose.
+   * A person enrolling a thousand devices is not a person.
+   */
+  link_mailbox: 1_000,
 };
 
 export interface PicoStoreCeiling {

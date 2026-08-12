@@ -80,6 +80,8 @@ export const picoDepotReachMigrationId = '0008_pico_depot_reach' as const;
 
 export const picoDepotFetchOutcomeMigrationId = '0009_pico_depot_fetch_outcome' as const;
 
+export const picoLinkMailboxMigrationId = '0010_pico_link_mailbox' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1117,6 +1119,50 @@ const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         ALTER TABLE pico_depot_attachment
         ADD COLUMN last_fetch_at TEXT;
+      `);
+    },
+  },
+  {
+    /**
+     * ADR 0148 EX5 - where a Home keeps the mailbox addresses it exchanged.
+     *
+     * Keyed by the **device** signing key, not by the person's identity (ADR
+     * 0148 EX2). A Home holds several of one person's devices, and keying by
+     * identity would put them behind one mailbox - which ADR 0147 RY2 refuses,
+     * because a shared mailbox stops identifying the sender and the envelope's
+     * absent sender field would turn from a removed fact into an unknown one.
+     *
+     * **The two RY2 invariants are table constraints here rather than code.**
+     * `home_inbound` is unique because two devices behind one of our mailboxes
+     * is that same loss of identification; `device_inbound` is unique because
+     * two devices behind one of *theirs* is a redirection - a device handing us
+     * the address another device gave us would silently send what we write to
+     * the first into the second's mailbox. A guard that lives in the schema
+     * cannot be skipped by a second write path.
+     *
+     * The delegation triple travels with the row because ADR 0148 EX3 derives
+     * a mailbox's life from `hasActivePicoIdentityDelegation`, and that check
+     * runs where no request principal exists - at collection. Storing it is not
+     * a second copy of authority: the delegation record still decides, and
+     * these are the arguments needed to ask it.
+     *
+     * No status column and no expiry, deliberately (ADR 0148 EX3, ADR 0147
+     * RY4). A row whose delegation went inactive is simply not honoured, so
+     * there is no second state to keep in step and no revocation event to miss.
+     */
+    id: picoLinkMailboxMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_link_mailbox (
+          device_signing_key_fingerprint_hex TEXT PRIMARY KEY,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          device_key_agreement_key_fingerprint_hex TEXT NOT NULL,
+          delegation_id TEXT NOT NULL,
+          home_inbound TEXT NOT NULL UNIQUE,
+          device_inbound TEXT NOT NULL UNIQUE,
+          exchanged_at TEXT NOT NULL
+        );
       `);
     },
   },

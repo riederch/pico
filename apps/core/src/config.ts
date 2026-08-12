@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 // a second time here. The four paths above predate that rule and each state
 // their default twice; this one does not add a fifth.
 import { defaultPicoDepotFetchIntervalMs } from '@pico/protocol/depot';
+import { defaultPicoLinkRelayOperator } from '@pico/protocol/link-packet';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { PicoSupplierScratch } from './supplier-scratch.js';
 import type { DomainReadership } from './domain-readership.js';
@@ -65,6 +66,16 @@ export interface CoreConfig {
    * placed to change it.
    */
   depotFetchIntervalMs?: number;
+  /**
+   * ADR 0148 EX1. The relay operator this Home issues its own mailboxes at.
+   *
+   * A deployment binding: which operator a person uses is theirs to choose,
+   * and ADR 0147 RY3 keeps several possible by naming the operator inside
+   * every address rather than configuring one globally. This is only the
+   * default for addresses *this Home issues*; an address a device hands over
+   * carries its own.
+   */
+  linkRelayOperator?: string;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -176,6 +187,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     recoveryAnchorPath: readNonEmptyString(env, 'PICO_RECOVERY_ANCHOR_PATH', join(dirname(databasePath), 'recovery-anchor', 'anchor.json')),
     depotRoot: readNonEmptyString(env, 'PICO_DEPOT_ROOT', PicoDepotWorkspace.defaultRoot(databasePath)),
     supplierScratchRoot: readNonEmptyString(env, 'PICO_SUPPLIER_SCRATCH_ROOT', PicoSupplierScratch.defaultRoot(databasePath)),
+    linkRelayOperator: readNonEmptyString(env, 'PICO_LINK_RELAY_OPERATOR', defaultPicoLinkRelayOperator),
     depotFetchIntervalMs: readPositiveInteger(
       env.PICO_DEPOT_FETCH_INTERVAL_MS,
       'PICO_DEPOT_FETCH_INTERVAL_MS',

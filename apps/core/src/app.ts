@@ -139,6 +139,15 @@ import {
   parsePicoDepotTask,
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
+import {
+  parsePicoLinkMailboxExchangeRequest,
+  picoLinkMailboxExchangeRequestSchema,
+  picoLinkMailboxExchangeResponseSchema,
+} from '@pico/protocol/link-mailbox-exchange';
+import {
+  defaultPicoLinkRelayOperator,
+  formatPicoLinkPacketAddress,
+} from '@pico/protocol/link-packet';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
 import {
@@ -2653,6 +2662,69 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               }),
             },
           };
+        }
+        /**
+         * ADR 0148 EX1/EX2. One round trip, both directions.
+         *
+         * **The device is never an argument.** It comes from `principal`,
+         * which ADR 0107 authenticated and whose delegation and membership
+         * were checked before this switch was reached. A device naming its own
+         * peer key would be a device choosing which mailbox it is, so the
+         * request payload has no field for one and this handler has nowhere to
+         * read one from.
+         *
+         * The Home issues its address before recording the device's, in one
+         * write, because a half-finished exchange is a relationship one side
+         * can reach and the other cannot.
+         */
+        case 'home.link.mailbox.exchange': {
+          let request: ReturnType<typeof parsePicoLinkMailboxExchangeRequest>;
+          try {
+            request = parsePicoLinkMailboxExchangeRequest({
+              schema: picoLinkMailboxExchangeRequestSchema,
+              ...args,
+            });
+          } catch {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+
+          // Issued by this Home, for this device. Fresh every exchange, which
+          // is what makes re-running it the rotation ADR 0148 EX4 describes
+          // rather than a no-op.
+          const homeInbound = formatPicoLinkPacketAddress({
+            mailbox: randomBytes(16).toString('hex'),
+            operator: config.linkRelayOperator ?? defaultPicoLinkRelayOperator,
+          });
+
+          try {
+            const record = store.exchangePicoLinkMailbox({
+              principal,
+              homeInbound,
+              deviceInbound: request.deviceInbound,
+              exchangedAt: new Date().toISOString(),
+            });
+            return {
+              outcome: 'ok',
+              result: {
+                schema: picoLinkMailboxExchangeResponseSchema,
+                homeInbound: record.homeInbound,
+                // Echoed from the principal so the device can check the Home
+                // answered the key it signed with (ADR 0148 EX2).
+                peerFingerprintHex: record.deviceSigningKeyFingerprintHex,
+              },
+            };
+          } catch (error) {
+            const reason = error instanceof Error ? error.message : 'failed';
+            if (reason === 'pico_link_outbound_shared_between_peers'
+              || reason === 'pico_link_mailbox_points_at_itself') {
+              // The device handed us an address another device already gave
+              // us, or our own. Both are the device's input and neither is a
+              // fault of this Home, so they answer as a refused argument
+              // rather than as a failure.
+              return { outcome: 'invalid_arguments', result: {} };
+            }
+            throw error;
+          }
         }
         case 'home.device.lifecycle.read': {
           if (Object.keys(args).length !== 0) {

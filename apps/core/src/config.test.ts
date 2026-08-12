@@ -16,6 +16,7 @@ describe('Core config', () => {
       recoveryAnchorPath: 'apps/core/data/recovery-anchor/anchor.json',
       depotRoot: 'apps/core/data/depots',
       supplierScratchRoot: 'apps/core/data/scratch',
+      linkRelayOperator: 'unconfigured.relay.invalid',
       depotFetchIntervalMs: 6 * 60 * 60 * 1_000,
       memoryEncryption: false,
       deviceId: 'pico-core',
@@ -39,6 +40,7 @@ describe('Core config', () => {
       PICO_RECOVERY_ANCHOR_PATH: '/tmp/pico-recovery-anchor/anchor.json',
       PICO_DEPOT_ROOT: '/tmp/pico-depots',
       PICO_SUPPLIER_SCRATCH_ROOT: '/tmp/pico-scratch',
+      PICO_LINK_RELAY_OPERATOR: 'relay.example.invalid',
       PICO_DEPOT_FETCH_INTERVAL_MS: '900000',
       PICO_MEMORY_ENCRYPTION: 'true',
       PICO_DEVICE_ID: 'test-core',
@@ -62,6 +64,7 @@ describe('Core config', () => {
       recoveryAnchorPath: '/tmp/pico-recovery-anchor/anchor.json',
       depotRoot: '/tmp/pico-depots',
       supplierScratchRoot: '/tmp/pico-scratch',
+      linkRelayOperator: 'relay.example.invalid',
       depotFetchIntervalMs: 900_000,
       memoryEncryption: true,
       deviceId: 'test-core',
@@ -195,7 +198,7 @@ describe('Core config', () => {
   });
 
   it('rejects blank string settings', () => {
-    for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_BACKUP_DIRECTORY', 'PICO_KEY_STORE_PATH', 'PICO_HOME_HOST_KEY_STORE_PATH', 'PICO_RECOVERY_ANCHOR_PATH', 'PICO_DEPOT_ROOT', 'PICO_SUPPLIER_SCRATCH_ROOT', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
+    for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_BACKUP_DIRECTORY', 'PICO_KEY_STORE_PATH', 'PICO_HOME_HOST_KEY_STORE_PATH', 'PICO_RECOVERY_ANCHOR_PATH', 'PICO_DEPOT_ROOT', 'PICO_SUPPLIER_SCRATCH_ROOT', 'PICO_LINK_RELAY_OPERATOR', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
       expect(() => loadConfig({ [name]: '   ' })).toThrow(`${name} must be a non-empty string.`);
     }
     expect(() => loadConfig({

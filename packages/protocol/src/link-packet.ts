@@ -79,6 +79,18 @@ export const maxPicoLinkPacketLifetimeMs = 7 * 24 * 60 * 60 * 1_000;
  */
 export const MAX_PICO_LINK_PACKET_PAYLOAD_BYTES = 64 * 1024;
 
+/**
+ * ADR 0148 EX1. The operator a Home issues its own mailboxes at when a
+ * deployment has not chosen one.
+ *
+ * `.invalid` is reserved by RFC 2606 and resolves nowhere, deliberately: a
+ * default that pointed at a real operator would enrol people with a stranger
+ * by omission. Issuing an address here produces a mailbox nobody can deliver
+ * to, which is the honest state for a Home whose owner has not chosen a
+ * relay - visible, and not quietly working through somebody else's machine.
+ */
+export const defaultPicoLinkRelayOperator = 'unconfigured.relay.invalid';
+
 export interface PicoLinkPacketAddress {
   mailbox: string;
   operator: string;
