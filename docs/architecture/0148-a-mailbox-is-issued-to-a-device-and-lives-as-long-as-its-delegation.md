@@ -2,9 +2,10 @@
 
 ## Status
 
-Accepted; **EX1-EX5 all implemented 2026-08-12**. Decided 2026-08-12. What
-remains is the device half - a companion that runs the exchange - and the
-relay server, which ADR 0147 names a non-goal.
+Accepted; **EX1-EX5 all implemented 2026-08-12, both halves**. Decided
+2026-08-12. What remains is the relay server, which ADR 0147 names a
+non-goal, and registering a mailbox at an operator, which this ADR names as
+the caller's precondition.
 
 ADR 0147 built the shape a delivery address has and said the ceremony that
 hands one to a peer belongs elsewhere. This is elsewhere.
@@ -168,6 +169,30 @@ path are one code path rather than two.
   enrol people with a stranger by omission; this issues a mailbox nobody
   can deliver to, which is the honest state for a Home whose owner has not
   chosen a relay.
+
+### The device half, and the order it does things in
+
+**Issue, exchange, check, write.** A device that recorded its inbound
+address before the Home answered would, on a failed exchange, hold an
+address it had told nobody about - and would then believe its Home could
+reach it. That is the state a relay exists to prevent, so nothing touches
+disk until the answer is in and checked.
+
+The address is issued on the device rather than asked of the Home. An
+address is ours to issue and theirs to write to, and a device that let its
+Home name its inbound mailbox would have handed over the one thing it can
+revoke on its own.
+
+The device holds **one relationship**, not a book. It has one Home, and a
+book keyed by peer would be a shape with one entry pretending to be
+general; the Home's side is the book because a Home holds many devices.
+Two refusals live only on this side: an answer issued to another device is
+an address for a relationship this device is not in, and an answer handing
+back the address we just issued would make the device write to its own
+mailbox. An unreadable record is **named**, never answered as absent -
+absent means "no exchange yet", and a corrupt file reading as absent would
+make the device silently re-exchange while the Home holds an address that
+will never be written to.
 
 ## Non-goals
 
