@@ -236,6 +236,22 @@ export function parsePicoDepotTask(value: unknown): PicoDepotTask {
 export const defaultPicoDepotApprovalThresholdBytes = 500 * 1024 * 1024;
 
 /**
+ * ADR 0143 DP8. How often a depot is asked about when nobody asked.
+ *
+ * Six hours, and the figure follows from what this sweep is *for*. It is not a
+ * poll for new commits - a newer commit is an offer a person answers, and
+ * nothing here goes looking for one. It is a repair: a working copy that was
+ * never materialised, or that something removed, is brought back to the pin
+ * that was already accepted. A fetch over an unchanged depot costs one
+ * `rev-parse`, so the interval is not paying for anything it does not use.
+ *
+ * Hourly would put entries in the ADR 0121 chain about nothing; daily would
+ * leave a depot broken for a day. Visible here rather than buried in the
+ * caller, the way the threshold above is.
+ */
+export const defaultPicoDepotFetchIntervalMs = 6 * 60 * 60 * 1_000;
+
+/**
  * ADR 0143 DP8. Whether a transfer crosses into approval territory.
  *
  * An unknown size answers **true**, in ADR 0119 Q5's posture: the one case that

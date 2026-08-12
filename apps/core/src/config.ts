@@ -1,5 +1,9 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The default lives with the workspace that uses it rather than being spelled
+// a second time here. The four paths above predate that rule and each state
+// their default twice; this one does not add a fifth.
+import { PicoDepotWorkspace } from './depot-workspace.js';
 import type { DomainReadership } from './domain-readership.js';
 import type { PicoRequestQuotaOptions } from './request-quota.js';
 import type {
@@ -28,6 +32,16 @@ export interface CoreConfig {
    * the data directory should point this there instead.
    */
   recoveryAnchorPath?: string;
+  /**
+   * ADR 0143 DP8. Where depot working copies are materialised. Defaults to
+   * `depots` beside the database, the idiom the four paths above already use.
+   *
+   * A deployment binding rather than a Pico setting: it holds third-party code
+   * at commits a person accepted, reconstructible from the pins that are
+   * already recorded, so an installation with a separate volume for code is
+   * free to point it there.
+   */
+  depotRoot?: string;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -137,6 +151,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     keyStorePath: readNonEmptyString(env, 'PICO_KEY_STORE_PATH', join(dirname(databasePath), 'keys')),
     homeHostKeyStorePath: readNonEmptyString(env, 'PICO_HOME_HOST_KEY_STORE_PATH', join(dirname(databasePath), 'home-host-keys')),
     recoveryAnchorPath: readNonEmptyString(env, 'PICO_RECOVERY_ANCHOR_PATH', join(dirname(databasePath), 'recovery-anchor', 'anchor.json')),
+    depotRoot: readNonEmptyString(env, 'PICO_DEPOT_ROOT', PicoDepotWorkspace.defaultRoot(databasePath)),
     memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION'),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),

@@ -171,6 +171,7 @@ import {
   type OperatorStore,
 } from './operator-store.js';
 import { SessionStore, type SessionPrincipal } from './session-store.js';
+import { PicoDepotWorkspace } from './depot-workspace.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { LoginThrottle } from './login-throttle.js';
 import { verifyPicoHomeMembershipAuthority } from './home-membership.js';
@@ -787,6 +788,33 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     app.log.warn(
       { removedHostKeyFiles: removed.removedFiles, operatorUnbound, revokedSessions },
       'Pico Home reset by local reset marker; host identity keys were removed and setup mode will mint a fresh Move-In Code.',
+    );
+  }
+
+  /**
+   * ADR 0143 DP8. The depot working copies are brought back to what the
+   * attachment rows say, before anything can be pointed at one.
+   *
+   * ADR 0070's tombstone posture: the durable record decides and the
+   * filesystem is brought to it. A detach interrupted between the row and the
+   * files would otherwise leave executable code on disk that no attachment
+   * stands behind - and unlike a leftover scratch directory, this is what a
+   * supplier process would be handed.
+   *
+   * At boot rather than on a timer, for the same reason the share-envelope
+   * reconciliation above is: the window that matters is the one between a
+   * crash and the next start.
+   */
+  const depotWorkspace = new PicoDepotWorkspace(
+    config.depotRoot ?? PicoDepotWorkspace.defaultRoot(config.databasePath),
+  );
+  const removedDepotDirectories = depotWorkspace.removeOrphans(
+    store.picoDepotAttachments().map((attachment) => attachment.pin.remote),
+  );
+  if (removedDepotDirectories.length > 0) {
+    app.log.warn(
+      { removedDepotDirectories },
+      'Depot working copies with no attachment behind them were removed.',
     );
   }
 
