@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted direction, not implemented (RY1-RY7 open). Decided 2026-08-12.
+Accepted direction; RY1 implemented 2026-08-12, RY2-RY7 open. Decided
+2026-08-12.
 This is the second runtime slice of ADR 0028 after ADR 0107's direct
 envelopes, and it decides exactly one thing: **what a carrier that must not
 read a payload is allowed to see on the outside of it.** The relay server,
@@ -203,12 +204,37 @@ that adapter, and not before there is one.
 ## Gates
 
 - **RY1 - The envelope carries four fields and the refusal is the absence
-  of the rest (open):** a `pico.link.packet.v1` contract in
-  `@pico/protocol` with canonical bytes and vectors, in the discipline ADR
-  0107 D1 already uses. Its parser refuses unknown keys outright, in the
-  `assertExactKeys` idiom the protocol package uses everywhere, so an
-  operator asking for a priority field is refused by the parser rather than
-  by a policy document. Proved by a negative vector per removed field.
+  of the rest (implemented 2026-08-12):** `pico.link.packet.v1` as a
+  `@pico/protocol` subpath - `to`, `tag`, `expiresAt`, `payload` - with a
+  negative vector per removed field.
+
+  **This gate asked for the wrong half of ADR 0107 D1's discipline and the
+  correction is worth keeping.** It said "canonical bytes and vectors", and
+  there are no canonical bytes here: nothing signs an envelope. ADR 0107
+  seals and signs end to end and those bytes pass through as an opaque
+  payload, so a carrier compares nothing - it delivers. Building signature
+  input for it would have been machinery carrying nothing. What D1 has that
+  this needed is the *refusal* discipline, and that is what was built.
+
+  An unknown key is refused **by name** -
+  `pico_link_packet_carries_no:from` - because a caller sending `priority`
+  has not made a typo. It is asking for the thing this ADR removed, and
+  being told which field rather than "unexpected_field" is the difference
+  between a message that explains a decision and one that reports a shape.
+  `picoLinkPacketRemovedFields` keeps the four reasons as data beside the
+  absence, since an absent field cannot document itself.
+
+  An off-grid expiry is refused rather than rounded on arrival: rounding
+  would accept the leak and then hide it, leaving a sender producing
+  precise expiries and believing they were private.
+  `picoLinkExpiryBucketFor` rounds **up**, because a packet that expired
+  earlier than its sender believed is the quiet failure. `nowMs` is a
+  parameter rather than a clock read, so a sender building a packet and a
+  relay accepting one each get the checks they can actually make.
+
+  Four planted defects were made to fail: ignoring unknown keys, rounding
+  an off-grid expiry, taking the first `@` of two, and dropping the payload
+  ceiling.
 
 - **RY2 - A mailbox belongs to a relationship (open):** the type of a
   delivery address, and the rule that a Pico holds a set of them keyed by
