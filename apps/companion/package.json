@@ -50,6 +50,10 @@
       "types": "./dist/recovery-card.d.ts",
       "import": "./dist/recovery-card.js"
     },
+    "./link-mailbox": {
+      "types": "./dist/link-mailbox.d.ts",
+      "import": "./dist/link-mailbox.js"
+    },
     "./recovery-state": {
       "types": "./dist/recovery-state.d.ts",
       "import": "./dist/recovery-state.js"
