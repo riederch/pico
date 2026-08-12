@@ -80,6 +80,21 @@ export const maxPicoLinkPacketLifetimeMs = 7 * 24 * 60 * 60 * 1_000;
 export const MAX_PICO_LINK_PACKET_PAYLOAD_BYTES = 64 * 1024;
 
 /**
+ * ADR 0147 RY6. How many live packets one mailbox holds before it refuses.
+ *
+ * Thirty-two, and the figure follows from what a mailbox is *for*: one
+ * relationship's traffic between two collections. A Home that has been
+ * unreachable for a day and a peer that writes hourly is well inside it, and a
+ * peer that has written thirty-two times without the other side ever
+ * collecting is one whose next packet is not the problem.
+ *
+ * Visible here rather than chosen by a relay, because a full mailbox refuses
+ * (never evicts) and a person deserves the same ceiling wherever they hold
+ * one.
+ */
+export const defaultPicoLinkMailboxCapacity = 32;
+
+/**
  * ADR 0148 EX1. The operator a Home issues its own mailboxes at when a
  * deployment has not chosen one.
  *

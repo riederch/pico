@@ -17,6 +17,7 @@
   "dependencies": {
     "@fastify/websocket": "^11.0.0",
     "@pico/identity": "workspace:*",
+    "@pico/link-relay-client": "workspace:*",
     "@pico/module-calendar": "workspace:*",
     "@pico/module-depot": "workspace:*",
     "@pico/module-home-assistant": "workspace:*",
@@ -28,6 +29,7 @@
     "libsodium-wrappers-sumo": "^0.8.4"
   },
   "devDependencies": {
+    "@pico/relay": "workspace:*",
     "@types/better-sqlite3": "^7.6.0"
   }
 }

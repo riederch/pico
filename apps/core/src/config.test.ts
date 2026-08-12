@@ -152,6 +152,27 @@ describe('Core config', () => {
     });
   });
 
+  it('leaves the relay unset when no operator endpoint is configured', () => {
+    // ADR 0149. A Home with no relay is the ordinary state until somebody
+    // chooses one, and absent has to stay absent rather than becoming a
+    // default that points somewhere.
+    const config = loadConfig({});
+    expect(config.linkRelayBaseUrl).toBeUndefined();
+    expect(config.linkRelayAccountId).toBeUndefined();
+    expect(config.linkRelayOperator).toBe('unconfigured.relay.invalid');
+  });
+
+  it('reads the relay endpoint and account when both are configured', () => {
+    const config = loadConfig({
+      PICO_LINK_RELAY_OPERATOR: 'relay.example.invalid',
+      PICO_LINK_RELAY_BASE_URL: 'https://relay.example.invalid',
+      PICO_LINK_RELAY_ACCOUNT_ID: 'a'.repeat(32),
+    });
+    expect(config.linkRelayOperator).toBe('relay.example.invalid');
+    expect(config.linkRelayBaseUrl).toBe('https://relay.example.invalid');
+    expect(config.linkRelayAccountId).toBe('a'.repeat(32));
+  });
+
   it('rejects a depot sweep interval that is not a positive integer', () => {
     // ADR 0143 DP8 gives a task interval a floor for a reason; a setting that
     // accepted '0' or 'soon' would put the refusal somewhere further in.

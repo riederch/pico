@@ -139,12 +139,14 @@ import {
   parsePicoDepotTask,
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
+import { createPicoLinkRelayTransport } from './link-relay-transport.js';
 import {
   parsePicoLinkMailboxExchangeRequest,
   picoLinkMailboxExchangeRequestSchema,
   picoLinkMailboxExchangeResponseSchema,
 } from '@pico/protocol/link-mailbox-exchange';
 import {
+  defaultPicoLinkMailboxCapacity,
   defaultPicoLinkRelayOperator,
   formatPicoLinkPacketAddress,
 } from '@pico/protocol/link-packet';
@@ -1479,6 +1481,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    */
   const depotFetchPrivacyDomain = 'private';
 
+  /**
+   * ADR 0149. The relay this Home uses, or nothing.
+   *
+   * Absent is the ordinary state: a Home whose owner has not chosen an
+   * operator has no relay, and the direct path is unaffected. Built once
+   * rather than per request, because it holds a bounded client and no secret
+   * beyond the account credential the config already carries.
+   */
+  const relayTransport = (config.linkRelayBaseUrl !== undefined
+    && config.linkRelayAccountId !== undefined)
+    ? createPicoLinkRelayTransport({
+      baseUrl: config.linkRelayBaseUrl,
+      accountId: config.linkRelayAccountId,
+    })
+    : undefined;
+
   const sweepPicoDepotFetches = (
     asked: boolean,
     /**
@@ -2691,10 +2709,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           // Issued by this Home, for this device. Fresh every exchange, which
           // is what makes re-running it the rotation ADR 0148 EX4 describes
           // rather than a no-op.
+          const mailbox = randomBytes(16).toString('hex');
           const homeInbound = formatPicoLinkPacketAddress({
-            mailbox: randomBytes(16).toString('hex'),
+            mailbox,
             operator: config.linkRelayOperator ?? defaultPicoLinkRelayOperator,
           });
+
+          // **Registered before it is handed over**, which closes ADR 0148's
+          // named precondition. The other order looks harmless and is not: a
+          // device given an address that does not exist at the operator writes
+          // into nothing, and both sides believe the exchange succeeded. A
+          // refused registration therefore fails the exchange rather than
+          // being logged - the device retries, and retrying is free because
+          // re-exchange is rotation.
+          //
+          // Absent transport is a deployment without a relay, which is the
+          // ordinary state of a Home whose owner has not chosen an operator
+          // (the default resolves nowhere on purpose). The exchange still
+          // records the pair, so the direct path is unaffected.
+          if (relayTransport !== undefined) {
+            try {
+              await relayTransport.register({
+                mailbox,
+                capacity: defaultPicoLinkMailboxCapacity,
+              });
+            } catch (error) {
+              app.log.warn(
+                { reason: error instanceof Error ? error.message : 'failed' },
+                'Relay mailbox registration failed; the exchange was refused.',
+              );
+              return { outcome: 'unavailable', result: {} };
+            }
+          }
 
           try {
             const record = store.exchangePicoLinkMailbox({

@@ -76,6 +76,17 @@ export interface CoreConfig {
    * carries its own.
    */
   linkRelayOperator?: string;
+  /**
+   * ADR 0149. Where the operator named above actually answers, and the account
+   * credential this Home holds there.
+   *
+   * Separate from the operator on purpose: ADR 0147 RY3's operator is a
+   * hostname people hand each other inside an address, while scheme, port and
+   * path are a deployment's. Both absent is a Home with no relay, which is the
+   * ordinary state until somebody chooses one.
+   */
+  linkRelayBaseUrl?: string;
+  linkRelayAccountId?: string;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -188,6 +199,12 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     depotRoot: readNonEmptyString(env, 'PICO_DEPOT_ROOT', PicoDepotWorkspace.defaultRoot(databasePath)),
     supplierScratchRoot: readNonEmptyString(env, 'PICO_SUPPLIER_SCRATCH_ROOT', PicoSupplierScratch.defaultRoot(databasePath)),
     linkRelayOperator: readNonEmptyString(env, 'PICO_LINK_RELAY_OPERATOR', defaultPicoLinkRelayOperator),
+    ...(readOptionalNonEmptyString(env.PICO_LINK_RELAY_BASE_URL, 'PICO_LINK_RELAY_BASE_URL') === undefined
+      ? {}
+      : { linkRelayBaseUrl: readNonEmptyString(env, 'PICO_LINK_RELAY_BASE_URL', '') }),
+    ...(readOptionalNonEmptyString(env.PICO_LINK_RELAY_ACCOUNT_ID, 'PICO_LINK_RELAY_ACCOUNT_ID') === undefined
+      ? {}
+      : { linkRelayAccountId: readNonEmptyString(env, 'PICO_LINK_RELAY_ACCOUNT_ID', '') }),
     depotFetchIntervalMs: readPositiveInteger(
       env.PICO_DEPOT_FETCH_INTERVAL_MS,
       'PICO_DEPOT_FETCH_INTERVAL_MS',
