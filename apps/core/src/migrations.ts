@@ -78,6 +78,8 @@ export const picoDepotAttachmentMigrationId = '0007_pico_depot_attachment' as co
 /** ADR 0138 CO3/CO4. Whether Pico may fetch a depot, and whether unasked. */
 export const picoDepotReachMigrationId = '0008_pico_depot_reach' as const;
 
+export const picoDepotFetchOutcomeMigrationId = '0009_pico_depot_fetch_outcome' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1071,6 +1073,50 @@ const migrations: readonly MigrationDefinition[] = [
         ALTER TABLE pico_depot_attachment
         ADD COLUMN may_fetch_unasked INTEGER NOT NULL DEFAULT 0
           CHECK (may_fetch_unasked IN (0, 1));
+      `);
+    },
+  },
+  {
+    /**
+     * ADR 0143 DP1/DP8 - the half of a depot row that says what a *fetch*
+     * learned, next to the half that says what a *person* decided.
+     *
+     * Until now the row carried only the decision: the pin, when it was
+     * accepted, and the two ADR 0138 CO3/CO4 switches. That left two states
+     * with nowhere to come from. `offered` was declared, read by
+     * `picoDepotState` and **unreachable in the running product** - a fetch
+     * that saw a newer commit had no place to put it, so the observation was
+     * gone before anyone looked, and DP1's promise that a newer commit waits
+     * for a person was true of a type and not of a Pico. The other was the ADR
+     * 0138 CO2 condition: a fetch that could not reach its remote had nowhere
+     * to be the state CO2 says it is.
+     *
+     * Three columns rather than two, because when the last attempt failed is
+     * part of what a person is deciding about - "could not reach it" reads
+     * differently at four minutes and at four weeks.
+     *
+     * **This is a projection, not a second record.** The ADR 0121 chain keeps
+     * the immutable history of every attempt; these hold only what is
+     * currently true, the way `running_commit` already holds what acceptance
+     * events decided. One write site keeps them honest: a fetch outcome, which
+     * sets them on failure and clears them on success. A `NULL` condition
+     * means the last attempt did not fail, which is why success must clear it
+     * rather than only failure setting it.
+     */
+    id: picoDepotFetchOutcomeMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_depot_attachment
+        ADD COLUMN offered_commit TEXT;
+      `);
+      db.exec(`
+        ALTER TABLE pico_depot_attachment
+        ADD COLUMN last_fetch_condition TEXT;
+      `);
+      db.exec(`
+        ALTER TABLE pico_depot_attachment
+        ADD COLUMN last_fetch_at TEXT;
       `);
     },
   },

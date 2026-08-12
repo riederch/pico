@@ -133,6 +133,12 @@ import {
 } from './action-path.js';
 import { picoCalendarModuleManifest } from '@pico/module-calendar/manifest';
 import { picoDepotModuleManifest } from '@pico/module-depot/manifest';
+import { picoDepotFetchIntent, type PicoDepotView } from '@pico/module-depot/depot';
+import {
+  defaultPicoDepotFetchIntervalMs,
+  parsePicoDepotTask,
+} from '@pico/protocol/depot';
+import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { picoHomeAssistantModuleManifest } from '@pico/module-home-assistant/manifest';
 import { picoSpatialRecallModuleManifest } from '@pico/module-spatial-recall/manifest';
 import {
@@ -149,6 +155,7 @@ import { startPicoTimeBoundScheduler } from './time-bound-scheduler.js';
 import {
   EventStore,
   type EventCursor,
+  type PicoDepotAttachment,
   type PicoHomeClaimState,
   type PicoIdentityRotationSuccessorFirstDevice,
   type PicoShareEnvelopeStoredRecord,
@@ -171,6 +178,8 @@ import {
   type OperatorStore,
 } from './operator-store.js';
 import { SessionStore, type SessionPrincipal } from './session-store.js';
+import { existsSync } from 'node:fs';
+import { fetchPicoDepot } from './depot-fetch.js';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { PicoSupplierScratch } from './supplier-scratch.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
@@ -1244,10 +1253,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * because an action was requested, decided and started, rather than because
    * a timer fired.
    */
-  const moduleEffects: Record<string, (
+  type PicoBoundEffect = (
     request: PicoActionRequest,
     capabilities: PicoEffectCapabilities,
-  ) => void> = {
+  ) => void;
+
+  const calendarEffects: Record<string, PicoBoundEffect> = {
     'calendar.raise-entry': (request, capabilities) => {
       const argument = (name: string) => request.arguments
         .find((entry) => entry.name === name)?.value as string;
@@ -1269,10 +1280,65 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       });
     },
   };
+  /**
+   * ADR 0143 DP8. Fetching a depot to the commit a person accepted.
+   *
+   * The module declares this effect and cannot perform it - `module:check`
+   * refuses `node:child_process` in a module and the fetch is `git`. That is
+   * ADR 0128 H3 working as written, and this is the other side of it: the core
+   * decides whether to cause what a module said it could cause.
+   *
+   * **A condition is recorded and then thrown.** ADR 0138 CO2 makes an
+   * unreachable remote a state rather than a fault, and it is recorded as one
+   * on the row above. But the *action* did not do what it was asked to, and
+   * `executePicoAction` would otherwise write `success: true` into the ADR
+   * 0121 chain about a fetch that brought nothing. The two records say
+   * different things on purpose: the row says what is true now, the chain says
+   * what happened.
+   */
+  const depotEffects: Record<string, PicoBoundEffect> = {
+    'depot.fetch': (request, capabilities) => {
+      const depotRemote = request.arguments
+        .find((entry) => entry.name === 'remote')?.value as string;
+      const attachment = store.picoDepotAttachment(depotRemote);
+      if (attachment === undefined) {
+        // Detached between the decision and the run. Refusing is the only
+        // honest answer: the pin that was decided about no longer exists.
+        throw new Error('pico_depot_not_attached');
+      }
+      const outcome = fetchPicoDepot({
+        pin: attachment.pin,
+        into: depotWorkspace.ensure(depotRemote),
+      });
+      capabilities.write(() => {
+        store.recordPicoDepotFetchOutcome({
+          remote: depotRemote,
+          at: new Date().toISOString(),
+          ...(outcome.status === 'condition' ? { condition: outcome.condition } : {}),
+        });
+      });
+      if (outcome.status === 'condition') {
+        throw new Error(`pico_depot_fetch_condition:${outcome.condition}`);
+      }
+    },
+  };
+
+  // Bound per manifest, because `bindPicoModuleEffects` asserts an exact match
+  // in both directions: everything declared is supplied and everything
+  // supplied is declared. One merged map checked against one manifest would
+  // report every other module's effects as undeclared.
   bindPicoModuleEffects({
     manifest: picoCalendarModuleManifest,
-    supplied: moduleEffects,
+    supplied: calendarEffects,
   });
+  bindPicoModuleEffects({
+    manifest: picoDepotModuleManifest,
+    supplied: depotEffects,
+  });
+  const moduleEffects: Record<string, PicoBoundEffect> = {
+    ...calendarEffects,
+    ...depotEffects,
+  };
   const emitActionFact = (type: PicoActionFactType, payload: Record<string, unknown>): string => {
     const fact = factory.create({ deviceId: config.deviceId, type, payload });
     store.append(fact);
@@ -1363,10 +1429,172 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     },
   });
 
+  /**
+   * ADR 0143 DP1 with ADR 0127. What a depot looks like to the module.
+   *
+   * `materialised` is read here and handed over, because a module reaches
+   * nothing - a fact about the filesystem is the one kind it must be told.
+   */
+  const picoDepotViewFor = (attachment: PicoDepotAttachment): PicoDepotView => ({
+    pin: attachment.pin,
+    acceptedAt: attachment.acceptedAt,
+    mayFetch: attachment.mayFetch,
+    mayFetchUnasked: attachment.mayFetchUnasked,
+    materialised: existsSync(depotWorkspace.pathFor(attachment.pin.remote)),
+    ...(attachment.offeredCommit === undefined ? {} : { offeredCommit: attachment.offeredCommit }),
+    ...(attachment.lastFetchCondition === undefined
+      ? {}
+      : { lastFetchCondition: attachment.lastFetchCondition }),
+  });
+
+  /**
+   * ADR 0143 DP8. The sweep that keeps depot working copies at their pins.
+   *
+   * One task rather than one per depot, because a task list fixed at boot
+   * would go stale the moment somebody attached or detached one. What the task
+   * does is read the attachments as they are now and ask about each.
+   *
+   * It **asks**: `picoDepotFetchIntent` decides whether a request is worth
+   * making, `decidePicoAction` decides whether to allow it, and only then does
+   * anything reach `git`. The scheduler never touches an effect, which is what
+   * keeps this from being the second privileged path ADR 0138 CO4 separates
+   * from answering a question.
+   */
+  /**
+   * ADR 0143 DP6 says a depot lives in no space, and ADR 0140 RL6 requires
+   * every decision to name the domain it spoke for. Both cannot be satisfied,
+   * so a depot fetch speaks for the narrowest domain rather than inventing one
+   * for a delivery vehicle - and it is named once here, because a rule a
+   * person records has to be found under the same name the decision was made
+   * under.
+   */
+  const depotFetchPrivacyDomain = 'private';
+
+  const sweepPicoDepotFetches = (
+    asked: boolean,
+    /**
+     * ADR 0141 RN4. The presence session a `require_approval` would be parked
+     * against. A person's "fetch now" carries one; a scheduled sweep has none.
+     */
+    approvalWindow?: {
+      presenceSessionId: string;
+      endsAtMs: number;
+      startedAtMs: number;
+      durationMs: number;
+    },
+  ): number => {
+      let requested = 0;
+      // ADR 0139 AC4 read once, ahead of the loop, because it is a fact about
+      // the module rather than about any one depot.
+      //
+      // Read at all because an unconsented effect makes `decidePicoAction`
+      // *throw* rather than return a refusal - correctly, since a request for
+      // an effect nobody agreed to exists is not a question with an answer.
+      // But a sweep that hit it would take the whole sweep down, and every
+      // depot after it, over something no depot could have fixed. Same
+      // rationale as `picoDepotFetchIntent`: a standing precondition is read,
+      // not discovered by failing.
+      const consentedEffects = store.picoModuleEffectConsent('depot');
+      if (!consentedEffects.some((effect) => effect.name === 'depot.fetch')) {
+        return 0;
+      }
+      for (const attachment of store.picoDepotAttachments()) {
+        const intent = picoDepotFetchIntent({
+          depot: picoDepotViewFor(attachment),
+          asked,
+        });
+        if (intent.intent !== 'request') {
+          continue;
+        }
+        const recordedRule = store.picoRuleDecision({
+          effectName: 'depot.fetch',
+          privacyDomain: depotFetchPrivacyDomain,
+        });
+        if (recordedRule !== 'allow' && approvalWindow === undefined) {
+          // **Act where a rule allows it, ask where someone is there to be
+          // asked, and otherwise do neither.**
+          //
+          // `depot.fetch` is `external_write`, which under ADR 0140's RL3
+          // floor never resolves to `allow` from the risk class alone - the
+          // correct default for the only effect in the tree that installs
+          // code. Without a recorded rule the decision is `require_approval`,
+          // and ADR 0141 RN4 requires that to carry the presence session the
+          // question will be answered in.
+          //
+          // A scheduled sweep has none. Inventing one would undo the whole
+          // point of RN4: a question nobody was present for, parked against a
+          // session that never existed. So it does not ask, and the fetch
+          // waits for either a person or a rule.
+          continue;
+        }
+        const decided = decidePicoAction({
+          requested: {
+            effectName: 'depot.fetch',
+            arguments: [
+              { name: 'remote', value: attachment.pin.remote },
+              { name: 'commit', value: attachment.pin.commit },
+            ],
+          },
+          // Both come off the attachment row, which is Pico's own record of a
+          // decision a person made. Neither was said by a model or a stranger.
+          argumentSources: {
+            remote: ['own_pico'],
+            commit: ['own_pico'],
+          },
+          declaredEffectNames: declaredModuleEffectNames,
+          consentedEffects,
+          privacyDomain: depotFetchPrivacyDomain,
+          personPresent: false,
+          instance: null,
+          reachesOutside: true,
+          // ADR 0138 CO3 as a precondition rather than an input: an `allow`
+          // never creates reach, and this is the same switch the intent above
+          // already read.
+          reachPermitted: attachment.mayFetch,
+          // ADR 0140 RL4. Absent is not `deny`: the AC4 consent record already
+          // says this effect may exist, and a rule refines that rather than
+          // being its precondition.
+          ...(recordedRule === undefined ? {} : { recordedRule }),
+          ...(approvalWindow === undefined ? {} : { approvalWindow }),
+          emit: emitActionFact,
+        });
+        requested += 1;
+        if (decided.decision === 'allow') {
+          executePicoAction({ decided, effects: moduleEffects, emit: emitActionFact });
+        }
+      }
+      return requested;
+  };
+
+  const depotFetchScheduler = startPicoPeriodicTaskScheduler({
+    tasks: [parsePicoDepotTask({
+      identifier: 'depot-fetch',
+      intervalMs: config.depotFetchIntervalMs ?? defaultPicoDepotFetchIntervalMs,
+      requestsEffect: 'depot.fetch',
+    })],
+    // ADR 0138 CO4: a sweep is the case nobody asked for, and the switch that
+    // decides whether it may proceed is a different one from CO3.
+    request: () => {
+      sweepPicoDepotFetches(false);
+    },
+  });
+
+  /**
+   * ADR 0143 DP8's other caller. A person asking for this now takes the same
+   * path with `asked: true`, which is the distinction CO4 draws - not a
+   * shortcut around the decision, the same decision with one input changed.
+   *
+   * Exposed rather than internal because it is the function a "fetch now"
+   * surface calls. That it also lets a test drive the sweep without waiting
+   * six hours is a consequence, not the reason.
+   */
+  app.decorate('picoSweepDepotFetches', sweepPicoDepotFetches);
+
   app.addHook('onClose', async () => {
     clearInterval(websocketKeepalive);
     clearInterval(retentionSweep);
     timeBoundScheduler.stop();
+    depotFetchScheduler.stop();
     sockets.clear();
     store.close();
   });

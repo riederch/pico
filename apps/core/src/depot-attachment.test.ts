@@ -87,9 +87,12 @@ describe('ADR 0143 DP1 - a depot is attached at a commit', () => {
       .map((row) => (row as { name: string }).name);
     raw.close();
     // ADR 0143 DP6 unchanged: still no privacy domain. The two reach columns
-    // are ADR 0138 CO3/CO4 and say nothing about where a depot lives.
+    // are ADR 0138 CO3/CO4 and say nothing about where a depot lives, and the
+    // three fetch-outcome columns are what a fetch *learned* rather than
+    // anywhere it lives.
     expect(columns).toEqual([
       'remote', 'running_commit', 'accepted_at', 'may_fetch', 'may_fetch_unasked',
+      'offered_commit', 'last_fetch_condition', 'last_fetch_at',
     ]);
   });
 });
@@ -424,6 +427,131 @@ describe('ADR 0138 CO3/CO4 - the store answers whether a fetch may happen', () =
     const { store } = openStore('permission-unattached');
     expect(store.picoDepotFetchPermission({ remote, asked: true }))
       .toEqual({ status: 'refused', reason: 'fetch_not_permitted' });
+    store.close();
+  });
+});
+
+describe('ADR 0143 DP1/DP8 - what a fetch learned, on the row', () => {
+  function attached(label: string) {
+    const { store } = openStore(label);
+    store.attachPicoDepot({ pin: { remote, commit: accepted }, acceptedAt: '2026-08-11T09:00:00.000Z' });
+    return store;
+  }
+
+  it('records a condition with when it happened', () => {
+    // ADR 0138 CO2 wants a condition to be a state a surface renders. Until
+    // this column existed it had nowhere to be one.
+    const store = attached('condition');
+    const after = store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T10:00:00.000Z',
+      condition: 'unreachable',
+    });
+    expect(after.lastFetchCondition).toBe('unreachable');
+    expect(after.lastFetchAt).toBe('2026-08-12T10:00:00.000Z');
+    store.close();
+  });
+
+  it('clears the condition when an attempt succeeds', () => {
+    // The whole reason this is safe to read as a state of the present. Left
+    // set, it would mean "something failed once" and a person would be told to
+    // check a network that came back days ago.
+    const store = attached('cleared');
+    store.recordPicoDepotFetchOutcome({ remote, at: '2026-08-12T10:00:00.000Z', condition: 'unreachable' });
+    const after = store.recordPicoDepotFetchOutcome({ remote, at: '2026-08-12T10:05:00.000Z' });
+    expect(after.lastFetchCondition).toBeUndefined();
+    expect(after.lastFetchAt).toBe('2026-08-12T10:05:00.000Z');
+    store.close();
+  });
+
+  it('makes the offer reachable, which it was not before', () => {
+    // `offered` was declared, read by `picoDepotState` and produced by
+    // nothing: a fetch that saw a newer commit had no place to put it.
+    const store = attached('offer');
+    const after = store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T10:00:00.000Z',
+      offeredCommit: newer,
+    });
+    expect(after.offeredCommit).toBe(newer);
+    // And the pin is untouched: an offer changes nothing about what runs.
+    expect(after.pin.commit).toBe(accepted);
+    store.close();
+  });
+
+  it('keeps a standing offer through a failed attempt', () => {
+    // A newer commit seen last week is still there, and a fetch that could not
+    // reach the remote learned nothing about it either way. Dropping it would
+    // turn a network outage into a decision quietly disappearing.
+    const store = attached('offer-survives');
+    store.recordPicoDepotFetchOutcome({ remote, at: '2026-08-12T10:00:00.000Z', offeredCommit: newer });
+    const after = store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T11:00:00.000Z',
+      condition: 'unreachable',
+    });
+    expect(after.offeredCommit).toBe(newer);
+    expect(after.lastFetchCondition).toBe('unreachable');
+    store.close();
+  });
+
+  it('withdraws an offer only when a fetch says so', () => {
+    // Absent and null are different sentences: "this fetch says nothing about
+    // the offer" and "there is no longer one".
+    const store = attached('withdraw');
+    store.recordPicoDepotFetchOutcome({ remote, at: '2026-08-12T10:00:00.000Z', offeredCommit: newer });
+    const after = store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T11:00:00.000Z',
+      offeredCommit: null,
+    });
+    expect(after.offeredCommit).toBeUndefined();
+    store.close();
+  });
+
+  it('refuses an offer that is not a commit, because it came off a remote', () => {
+    const store = attached('bad-offer');
+    expect(() => store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T10:00:00.000Z',
+      offeredCommit: 'refs/heads/main',
+    })).toThrow('invalid_pico_depot_offered_commit');
+    store.close();
+  });
+
+  it('refuses an offer that matches the pin', () => {
+    // The remote agreeing with the pin is the ordinary case. Recording it as
+    // something waiting would put a decision with no other side in front of a
+    // person.
+    const store = attached('offer-is-pin');
+    expect(() => store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T10:00:00.000Z',
+      offeredCommit: accepted,
+    })).toThrow('pico_depot_offer_matches_pin');
+    store.close();
+  });
+
+  it('refuses a condition a depot fetch cannot produce', () => {
+    // The narrower list is asserted rather than assumed. A hosted remote
+    // answering 429 makes `rate_limited` real, and this refuses instead of
+    // labelling it `unreachable` - which would tell a person to check a
+    // network about a limit that lifts on its own.
+    const store = attached('bad-condition');
+    expect(() => store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T10:00:00.000Z',
+      condition: 'rate_limited',
+    })).toThrow('unknown_pico_depot_fetch_condition');
+    store.close();
+  });
+
+  it('refuses to record against a depot nobody attached', () => {
+    const { store } = openStore('unattached');
+    expect(() => store.recordPicoDepotFetchOutcome({
+      remote,
+      at: '2026-08-12T10:00:00.000Z',
+    })).toThrow('pico_depot_not_attached');
     store.close();
   });
 });

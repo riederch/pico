@@ -17,6 +17,9 @@ function depot(over: Partial<PicoDepotView> = {}): PicoDepotView {
     acceptedAt: '2026-08-11T09:00:00.000Z',
     mayFetch: false,
     mayFetchUnasked: false,
+    // The ordinary case for a depot that has run: the files are there. Tests
+    // about the other case say so, rather than every unrelated test having to.
+    materialised: true,
     ...over,
   };
 }
@@ -95,8 +98,9 @@ describe('ADR 0143 DP8 - whether a fetch is worth requesting', () => {
 });
 
 describe('ADR 0143 DP1 - what a surface says about a depot', () => {
-  it('holds three states and no sentence', () => {
-    expect([...picoDepotStates]).toEqual(['running', 'offered', 'never_fetched']);
+  it('holds five states and no sentence', () => {
+    expect([...picoDepotStates])
+      .toEqual(['running', 'offered', 'unreachable', 'not_materialised', 'never_fetched']);
   });
 
   it('separates a waiting offer from a depot that changed', () => {
@@ -113,5 +117,48 @@ describe('ADR 0143 DP1 - what a surface says about a depot', () => {
     // A depot nobody permitted to fetch cannot have seen an offer, and if a
     // caller hands over both the missing permission is the more useful thing.
     expect(picoDepotState(depot({ offeredCommit: 'b'.repeat(40) }))).toBe('never_fetched');
+  });
+
+  it('says nothing is on this device rather than that it is running', () => {
+    // The state this list was missing. `running` claims the depot is running
+    // what it was told to run, and a depot with no working copy is running
+    // nothing - which is the surface saying the opposite of the truth.
+    expect(picoDepotState(depot({ mayFetch: true, materialised: false })))
+      .toBe('not_materialised');
+  });
+
+  it('reports an unreachable remote ahead of a waiting offer', () => {
+    // Accepting an offer while the remote is unreachable schedules a fetch
+    // that cannot succeed, so showing the offer would invite exactly the
+    // action that is going to fail.
+    expect(picoDepotState(depot({
+      mayFetch: true,
+      lastFetchCondition: 'unreachable',
+      offeredCommit: 'b'.repeat(40),
+    }))).toBe('unreachable');
+  });
+
+  it('reports the reason ahead of the consequence', () => {
+    // Both mean the depot provides nothing. Only one tells the person what to
+    // do about it.
+    expect(picoDepotState(depot({
+      mayFetch: true,
+      materialised: false,
+      lastFetchCondition: 'unreachable',
+    }))).toBe('unreachable');
+  });
+
+  it('keeps the missing permission ahead of both new states', () => {
+    expect(picoDepotState(depot({
+      mayFetch: false,
+      materialised: false,
+      lastFetchCondition: 'unreachable',
+    }))).toBe('never_fetched');
+  });
+
+  it('returns to running once a fetch succeeds and clears the condition', () => {
+    // The condition is cleared by a successful fetch, which is what makes it
+    // safe to read as a state of the present rather than of the past.
+    expect(picoDepotState(depot({ mayFetch: true }))).toBe('running');
   });
 });

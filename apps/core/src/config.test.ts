@@ -16,6 +16,7 @@ describe('Core config', () => {
       recoveryAnchorPath: 'apps/core/data/recovery-anchor/anchor.json',
       depotRoot: 'apps/core/data/depots',
       supplierScratchRoot: 'apps/core/data/scratch',
+      depotFetchIntervalMs: 6 * 60 * 60 * 1_000,
       memoryEncryption: false,
       deviceId: 'pico-core',
       webRootPath: expect.stringContaining('/apps/web'),
@@ -38,6 +39,7 @@ describe('Core config', () => {
       PICO_RECOVERY_ANCHOR_PATH: '/tmp/pico-recovery-anchor/anchor.json',
       PICO_DEPOT_ROOT: '/tmp/pico-depots',
       PICO_SUPPLIER_SCRATCH_ROOT: '/tmp/pico-scratch',
+      PICO_DEPOT_FETCH_INTERVAL_MS: '900000',
       PICO_MEMORY_ENCRYPTION: 'true',
       PICO_DEVICE_ID: 'test-core',
       PICO_WEB_ROOT: '/tmp/pico-web',
@@ -60,6 +62,7 @@ describe('Core config', () => {
       recoveryAnchorPath: '/tmp/pico-recovery-anchor/anchor.json',
       depotRoot: '/tmp/pico-depots',
       supplierScratchRoot: '/tmp/pico-scratch',
+      depotFetchIntervalMs: 900_000,
       memoryEncryption: true,
       deviceId: 'test-core',
       webRootPath: '/tmp/pico-web',
@@ -144,6 +147,15 @@ describe('Core config', () => {
         PICO_FOUNDATION_ACCESS_MODE: 'ha-ingress',
       }).linkIntake).toEqual({ host: '0.0.0.0', port: 3101 });
     });
+  });
+
+  it('rejects a depot sweep interval that is not a positive integer', () => {
+    // ADR 0143 DP8 gives a task interval a floor for a reason; a setting that
+    // accepted '0' or 'soon' would put the refusal somewhere further in.
+    for (const value of ['0', '-1', '1.5', 'soon', '   ']) {
+      expect(() => loadConfig({ PICO_DEPOT_FETCH_INTERVAL_MS: value }))
+        .toThrow('PICO_DEPOT_FETCH_INTERVAL_MS must be a positive integer.');
+    }
   });
 
   it('rejects invalid ports', () => {

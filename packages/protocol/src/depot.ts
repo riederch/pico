@@ -252,6 +252,32 @@ export const defaultPicoDepotApprovalThresholdBytes = 500 * 1024 * 1024;
 export const defaultPicoDepotFetchIntervalMs = 6 * 60 * 60 * 1_000;
 
 /**
+ * ADR 0138 CO2. The conditions a *depot fetch* can produce, which is not the
+ * whole condition list.
+ *
+ * `picoSupplierConditions` has nine entries and a depot fetch reaches one of
+ * them: `git` either brought the commit or it did not. The narrower set exists
+ * so the depot state list does not have to re-enumerate the wider one - a
+ * closed list copied into a second closed list is two lists that can disagree,
+ * and that is the failure this tree has already had twice.
+ *
+ * It is asserted rather than assumed. A hosted remote answering 429 would make
+ * `rate_limited` real, and the moment that happens this refuses instead of
+ * quietly labelling it `unreachable` - which would be a surface telling a
+ * person to check their network about a limit that will lift on its own.
+ */
+export const picoDepotFetchConditions = ['unreachable'] as const;
+
+export type PicoDepotFetchCondition = typeof picoDepotFetchConditions[number];
+
+export function assertPicoDepotFetchCondition(value: unknown): PicoDepotFetchCondition {
+  if (!(picoDepotFetchConditions as readonly unknown[]).includes(value)) {
+    throw new Error('unknown_pico_depot_fetch_condition');
+  }
+  return value as PicoDepotFetchCondition;
+}
+
+/**
  * ADR 0143 DP8. Whether a transfer crosses into approval territory.
  *
  * An unknown size answers **true**, in ADR 0119 Q5's posture: the one case that

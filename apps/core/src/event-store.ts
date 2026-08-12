@@ -11,13 +11,16 @@ import {
 } from '@pico/protocol/module';
 import {
   acceptPicoDepotOffer,
+  assertPicoDepotFetchCondition,
   parsePicoDepotPin,
   picoDepotFetchPermission,
   picoDepotOffer,
+  type PicoDepotFetchCondition,
   type PicoDepotFetchPermission,
   type PicoDepotOffer,
   type PicoDepotPin,
 } from '@pico/protocol/depot';
+import { picoGitCommitPattern } from '@pico/protocol/library-pin';
 import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
 import { parsePicoSupplierManifest } from '@pico/protocol/supplier';
 import {
@@ -701,6 +704,18 @@ export interface PicoDepotAttachment {
   mayFetch: boolean;
   /** ADR 0138 CO4. May Pico fetch it without being asked? Default off. */
   mayFetchUnasked: boolean;
+  /**
+   * ADR 0143 DP1. A newer commit a fetch saw and nobody has answered.
+   *
+   * Absent means there is nothing waiting. It is what a *fetch learned*, not
+   * what a person decided - the pin above is the decision, and this changes
+   * nothing about what runs until someone accepts it.
+   */
+  offeredCommit?: string;
+  /** ADR 0138 CO2. Set when the last attempt did not succeed; cleared when one does. */
+  lastFetchCondition?: PicoDepotFetchCondition;
+  /** When that attempt was. "Could not reach it" reads differently at four minutes and four weeks. */
+  lastFetchAt?: string;
 }
 
 export interface PicoSupplierAttachment {
@@ -6772,12 +6787,18 @@ export class EventStore {
     const row = this.db
       .prepare(`
         SELECT remote, running_commit AS runningCommit, accepted_at AS acceptedAt,
-               may_fetch AS mayFetch, may_fetch_unasked AS mayFetchUnasked
+               may_fetch AS mayFetch, may_fetch_unasked AS mayFetchUnasked,
+               offered_commit AS offeredCommit,
+               last_fetch_condition AS lastFetchCondition,
+               last_fetch_at AS lastFetchAt
         FROM pico_depot_attachment WHERE remote = ?
       `)
       .get(remote) as {
         remote: string; runningCommit: string; acceptedAt: string;
         mayFetch: number; mayFetchUnasked: number;
+        offeredCommit: string | null;
+        lastFetchCondition: string | null;
+        lastFetchAt: string | null;
       } | undefined;
     if (row === undefined) {
       return undefined;
@@ -6787,6 +6808,13 @@ export class EventStore {
       acceptedAt: row.acceptedAt,
       mayFetch: row.mayFetch === 1,
       mayFetchUnasked: row.mayFetchUnasked === 1,
+      // Absent rather than null: the view these feed is a set of optional
+      // facts, and `undefined` is the shape a caller can spread and omit.
+      ...(row.offeredCommit === null ? {} : { offeredCommit: row.offeredCommit }),
+      ...(row.lastFetchCondition === null ? {} : {
+        lastFetchCondition: assertPicoDepotFetchCondition(row.lastFetchCondition),
+      }),
+      ...(row.lastFetchAt === null ? {} : { lastFetchAt: row.lastFetchAt }),
     });
   }
 
@@ -6818,6 +6846,78 @@ export class EventStore {
     if (changed.changes === 0) {
       throw new Error('pico_depot_not_attached');
     }
+  }
+
+  /**
+   * ADR 0143 DP1/DP8. The single write site for what a fetch learned.
+   *
+   * Everything a fetch can teach the row goes through here, in one statement,
+   * and that is what keeps a projection from drifting off the ADR 0121 chain
+   * it projects. Two methods - one for the offer, one for the condition -
+   * would be two chances to update half of it.
+   *
+   * **A success clears the condition.** Setting it on failure and leaving it
+   * on success would make `lastFetchCondition` mean "something failed once",
+   * which is a fact about the past that would be rendered as a state of the
+   * present: a person would be told to check their network long after it came
+   * back. It holds what is currently true or nothing.
+   *
+   * The offer survives a failed attempt on purpose. A newer commit that was
+   * seen last week is still there, and a fetch that could not reach the remote
+   * has learned nothing about it either way - dropping it would turn a network
+   * outage into a decision quietly disappearing from in front of a person.
+   */
+  public recordPicoDepotFetchOutcome(input: {
+    remote: string;
+    at: string;
+    condition?: unknown;
+    /** A newer commit seen on the remote. `null` withdraws a standing offer. */
+    offeredCommit?: string | null;
+  }): PicoDepotAttachment {
+    this.ensureOpen();
+    const attachment = this.picoDepotAttachment(input.remote);
+    if (attachment === undefined) {
+      throw new Error('pico_depot_not_attached');
+    }
+    const condition = input.condition === undefined
+      ? null
+      : assertPicoDepotFetchCondition(input.condition);
+    if (input.offeredCommit !== undefined && input.offeredCommit !== null) {
+      // Validated rather than stored as given: this value came off a remote,
+      // and the one thing a remote must not be able to do is put something
+      // that is not a commit where a commit is read.
+      if (!picoGitCommitPattern.test(input.offeredCommit)) {
+        throw new Error('invalid_pico_depot_offered_commit');
+      }
+      if (input.offeredCommit === attachment.pin.commit) {
+        // Not an offer. The remote agreeing with the pin is the ordinary case,
+        // and recording it as something waiting for a person would put a
+        // decision in front of them that has no other side.
+        throw new Error('pico_depot_offer_matches_pin');
+      }
+    }
+    // Two statements rather than one with a conditional column, because
+    // `offeredCommit` absent and `offeredCommit: null` mean different things -
+    // "this fetch says nothing about the offer" and "withdraw it" - and an
+    // expression that encodes that inside SQL is one nobody can read.
+    if (input.offeredCommit === undefined) {
+      this.db
+        .prepare(`
+          UPDATE pico_depot_attachment
+          SET last_fetch_condition = ?, last_fetch_at = ?
+          WHERE remote = ?
+        `)
+        .run(condition, input.at, input.remote);
+    } else {
+      this.db
+        .prepare(`
+          UPDATE pico_depot_attachment
+          SET last_fetch_condition = ?, last_fetch_at = ?, offered_commit = ?
+          WHERE remote = ?
+        `)
+        .run(condition, input.at, input.offeredCommit, input.remote);
+    }
+    return this.picoDepotAttachment(input.remote)!;
   }
 
   public picoDepotAttachments(): readonly PicoDepotAttachment[] {

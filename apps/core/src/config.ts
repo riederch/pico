@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 // The default lives with the workspace that uses it rather than being spelled
 // a second time here. The four paths above predate that rule and each state
 // their default twice; this one does not add a fifth.
+import { defaultPicoDepotFetchIntervalMs } from '@pico/protocol/depot';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { PicoSupplierScratch } from './supplier-scratch.js';
 import type { DomainReadership } from './domain-readership.js';
@@ -53,6 +54,17 @@ export interface CoreConfig {
    * point this at the volume with room on it.
    */
   supplierScratchRoot?: string;
+  /**
+   * ADR 0143 DP8. How often the depot sweep runs. Defaults to
+   * `defaultPicoDepotFetchIntervalMs`, and floors at
+   * `minPicoDepotTaskIntervalMs` - below that a task is a poller and CO4's
+   * distinction between answering and sweeping stops meaning anything.
+   *
+   * The sweep is a repair rather than a poll for commits, so an installation
+   * with a depot that matters more, or a link that costs money, is the one
+   * placed to change it.
+   */
+  depotFetchIntervalMs?: number;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -164,6 +176,11 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     recoveryAnchorPath: readNonEmptyString(env, 'PICO_RECOVERY_ANCHOR_PATH', join(dirname(databasePath), 'recovery-anchor', 'anchor.json')),
     depotRoot: readNonEmptyString(env, 'PICO_DEPOT_ROOT', PicoDepotWorkspace.defaultRoot(databasePath)),
     supplierScratchRoot: readNonEmptyString(env, 'PICO_SUPPLIER_SCRATCH_ROOT', PicoSupplierScratch.defaultRoot(databasePath)),
+    depotFetchIntervalMs: readPositiveInteger(
+      env.PICO_DEPOT_FETCH_INTERVAL_MS,
+      'PICO_DEPOT_FETCH_INTERVAL_MS',
+      defaultPicoDepotFetchIntervalMs,
+    ),
     memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION'),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
@@ -345,4 +362,19 @@ function normalizeHttpOrigin(rawOrigin: string): string {
   }
 
   return url.origin;
+}
+
+function readPositiveInteger(
+  rawValue: string | undefined,
+  name: string,
+  defaultValue: number,
+): number {
+  if (rawValue === undefined) {
+    return defaultValue;
+  }
+  const parsed = Number(rawValue.trim());
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return parsed;
 }

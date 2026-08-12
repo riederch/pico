@@ -1,6 +1,7 @@
 import {
   picoDepotFetchPermission,
   type PicoDepotFetchPermission,
+  type PicoDepotFetchCondition,
   type PicoDepotPin,
 } from '@pico/protocol/depot';
 
@@ -29,6 +30,16 @@ export interface PicoDepotView {
   mayFetchUnasked: boolean;
   /** Set when a fetch has seen a newer commit that nobody has accepted. */
   offeredCommit?: string;
+  /**
+   * Whether a working copy is on this device.
+   *
+   * Supplied by the core, not read here. A module reaches nothing (ADR 0127),
+   * and this is a fact about the filesystem - the one kind of fact a module
+   * must be *told* rather than allowed to go and look at.
+   */
+  materialised: boolean;
+  /** ADR 0138 CO2. Set when the last fetch did not get through, cleared when one does. */
+  lastFetchCondition?: PicoDepotFetchCondition;
 }
 
 export type PicoDepotFetchIntent =
@@ -81,18 +92,50 @@ export const picoDepotStates = [
   'running',
   /** A newer commit exists and is waiting for a person, changing nothing. */
   'offered',
+  /** ADR 0138 CO2. The last attempt did not get through. */
+  'unreachable',
+  /** Permitted and attempted or not, but nothing is on this device to run. */
+  'not_materialised',
   /** ADR 0138 CO3 was never granted, so nothing has been fetched. */
   'never_fetched',
 ] as const;
 
 export type PicoDepotState = typeof picoDepotStates[number];
 
+/**
+ * ADR 0143 DP1 with ADR 0138 CO2. What a surface says about a depot.
+ *
+ * **The order is the design here, and it follows the rule the first version of
+ * this function already stated**: say the thing that explains the others.
+ * Every branch below is placed by asking what a person would do next if the
+ * surface said the *later* thing instead.
+ *
+ * 1. `never_fetched` first, unchanged: a depot nobody permitted to fetch
+ *    cannot have seen an offer, and the missing permission explains the rest.
+ * 2. `unreachable` before `offered`, because accepting an offer while the
+ *    remote is unreachable schedules a fetch that cannot succeed. Showing the
+ *    offer would invite exactly the action that is going to fail, which is the
+ *    same mistake as (1) in a different place.
+ * 3. `not_materialised` before `offered` for the same reason and a stronger
+ *    one: a depot with nothing on disk is providing nothing *now*, and an
+ *    offer is a question about its future.
+ * 4. `offered` before `running`, because `running` is the strongest claim in
+ *    the list and anything that undermines it is said first.
+ *
+ * `unreachable` before `not_materialised` is the one place a reason outranks a
+ * consequence, and deliberately: both mean the depot provides nothing, but
+ * only one of them tells the person what to do about it. The condition is
+ * cleared by a successful fetch, so this can only be read when it is current.
+ */
 export function picoDepotState(depot: PicoDepotView): PicoDepotState {
   if (!depot.mayFetch) {
-    // Said before the offer, because a depot nobody permitted to fetch cannot
-    // have seen an offer - and if a caller hands over both, the missing
-    // permission is the more useful thing to report.
     return 'never_fetched';
+  }
+  if (depot.lastFetchCondition !== undefined) {
+    return 'unreachable';
+  }
+  if (!depot.materialised) {
+    return 'not_materialised';
   }
   return depot.offeredCommit === undefined ? 'running' : 'offered';
 }
