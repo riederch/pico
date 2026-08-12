@@ -3,9 +3,9 @@
 ## Status
 
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
-boundary check. Decided 2026-08-12. What remains is the surface a caller
-reaches it over - an HTTP listener and its bounds - and the collecting side
-in the Home and the companion.
+boundary check. Decided 2026-08-12. The Home's collecting side landed the same
+day. What remains is the surface a caller reaches it over - an HTTP
+listener and its bounds - and the companion's collecting side.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -171,6 +171,34 @@ operator, and it says so rather than picking one.
 - **RS6 - Bounded, and its own ceilings (implemented 2026-08-12):** mailboxes per account,
   packets per mailbox, packet lifetime, and a refusal by name for each.
   Nothing here trims to make room, in ADR 0119 Q5's posture.
+
+### Collecting is the same request by a slower road, and it gains one refusal
+
+A relayed packet's payload is an ADR 0107 envelope unchanged, which that ADR
+promised in its own words: the carrier transports and the signatures decide,
+so the same bytes travel a relay when one exists. Collecting adds no
+protocol.
+
+**What it adds is a second statement about the sender.** The mailbox a
+packet arrived at *is* the sender's identity seen from the recipient's side
+(ADR 0147 RY2), because exactly one device was ever told it. The signature
+chain says it again with authority, and the signature always wins - but a
+*disagreement* is refused rather than resolved. A packet signed by device Y
+arriving in device X's mailbox means X handed its address to Y or something
+misrouted, and processing it on the signature alone would quietly accept
+that an address had leaked. It is refused, acknowledged so one misrouted
+packet cannot hold the mailbox, and reported; the sender has its own
+mailbox and is answered there.
+
+**A refusal is acknowledged, a failure is not.** A packet that cannot be
+authenticated will never become authenticatable, so leaving it would let
+one piece of rubbish fill a mailbox and deny that relationship until
+somebody reissues the address. A handler that failed may succeed next time,
+so its packet stays.
+
+Acknowledgement is last and per packet: acknowledging a batch before
+handling loses everything after the first failure, and acknowledging after
+holds everything hostage to one bad packet.
 
 ## Non-goals
 
