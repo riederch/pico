@@ -3,9 +3,9 @@
 ## Status
 
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
-boundary check. Decided 2026-08-12. The Home's collecting side landed the same
-day. What remains is the surface a caller reaches it over - an HTTP
-listener and its bounds - and the companion's collecting side.
+boundary check. Decided 2026-08-12. The Home's collecting side and the HTTP
+surface landed the same day. What remains is the companion's collecting
+side and a client for the surface on both.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -171,6 +171,33 @@ operator, and it says so rather than picking one.
 - **RS6 - Bounded, and its own ceilings (implemented 2026-08-12):** mailboxes per account,
   packets per mailbox, packet lifetime, and a refusal by name for each.
   Nothing here trims to make room, in ADR 0119 Q5's posture.
+
+### The surface, and why the obvious route shape is out
+
+Five exact routes, all POST, the mailbox always in the body. **That is not a
+REST preference.** ADR 0148 EX4 says a mailbox address must not become part
+of a URL, because a URL lands in proxy logs, browser history and referer
+headers, none of which anybody chose - and `GET /mailbox/:mailbox` would
+put a capability in all three.
+
+`deliver` takes no account and the rest do, which is the two decisions
+above written as a route table. An unknown route and a wrong method answer
+identically, because telling them apart is a map of the relay's own
+surface.
+
+**The account credential is the account identifier**, which is only safe
+because the shape forces 128 bits of it. An operator issuing `customer-7`
+would be issuing a password of `customer-7`; requiring the entropy in the
+shape is the same move ADR 0147 RY2 makes for a mailbox, and for the same
+reason - a value handed around as a name must not be one somebody can
+arrive at by counting.
+
+An oversize body and a malformed one are **told apart**. They were not at
+first, and the cost was concrete: the cap's refusal was swallowed into the
+parse error, so a caller could not tell "too large" from "your JSON is
+wrong" and would retry the same body forever. The stream is paused rather
+than destroyed, or the caller gets a connection error in place of the
+reason.
 
 ### Collecting is the same request by a slower road, and it gains one refusal
 
