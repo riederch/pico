@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted direction, not implemented (RS1-RS6 open). Decided 2026-08-12.
+Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
+boundary check. Decided 2026-08-12. What remains is the surface a caller
+reaches it over - an HTTP listener and its bounds - and the collecting side
+in the Home and the companion.
+
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
 those addresses point at.
@@ -133,34 +137,38 @@ operator, and it says so rather than picking one.
 
 ## Gates
 
-- **RS1 - The machine is separate (open):** `apps/relay` as its own
+- **RS1 - The machine is separate (implemented 2026-08-12):** `apps/relay` as its own
   process, its own store and its own package, depending on
-  `@pico/protocol` and on nothing of the core's. A check asserts it reaches
-  no Pico store, vault or identity module, in the idiom
-  `check-companion-boundary.mjs` uses.
+  `@pico/protocol` and on nothing of the core's. `scripts/check-relay-boundary.mjs`
+  asserts it reaches no Pico store, vault, identity or companion module, in
+  the idiom `check-companion-boundary.mjs` uses, and runs in
+  `release:verify` as `relay:check`.
 
-- **RS2 - An account, never a Pico (open):** registration and collection
+- **RS2 - An account, never a Pico (implemented 2026-08-12):** registration and collection
   authenticate a bearer account credential. Nothing in the relay parses,
-  verifies or stores a Pico identity, delegation or signature, and a check
-  proves the absence rather than a comment claiming it.
+  verifies or stores a Pico identity, delegation, membership or signature,
+  and the same check proves that absence against *code* - comments and
+  string contents are stripped before matching, so the paragraph explaining
+  the rule cannot trip the check enforcing it.
 
-- **RS3 - Delivery takes no credential (open):** the deliver path accepts a
+- **RS3 - Delivery takes no credential (implemented 2026-08-12):** the deliver path accepts a
   packet parsed by `parsePicoLinkPacket` and answers a
   `picoLinkDeliveryOutcomes` member, using `resolvePicoLinkDelivery`
   unchanged - the decision was made in ADR 0147 RY4/RY5/RY6 and this gate
   wires it rather than reimplementing it.
 
-- **RS4 - Collection needs the account that registered (open):** collecting
+- **RS4 - Collection needs the account that registered (implemented 2026-08-12):** collecting
   from or deregistering a mailbox requires the account it was registered
   under. A different valid account is refused as though the mailbox were
   not there, because telling one customer that another holds a given
   mailbox is a fact the relay has no reason to disclose.
 
-- **RS5 - Collect then acknowledge (open):** collection returns packets and
+- **RS5 - Collect then acknowledge (implemented 2026-08-12):** collection returns packets and
   removes nothing; acknowledgement by tag removes. Proved by collecting,
-  not acknowledging, and collecting again to find the same packets.
+  not acknowledging, and collecting again to find the same packets - and by
+  a restart, because store-and-forward that forgets is neither.
 
-- **RS6 - Bounded, and its own ceilings (open):** mailboxes per account,
+- **RS6 - Bounded, and its own ceilings (implemented 2026-08-12):** mailboxes per account,
   packets per mailbox, packet lifetime, and a refusal by name for each.
   Nothing here trims to make room, in ADR 0119 Q5's posture.
 
