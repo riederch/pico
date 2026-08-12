@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted direction, not implemented (EX1-EX5 open). Decided 2026-08-12.
+Accepted; **EX1-EX5 all implemented 2026-08-12**. Decided 2026-08-12. What
+remains is the device half - a companion that runs the exchange - and the
+relay server, which ADR 0147 names a non-goal.
+
 ADR 0147 built the shape a delivery address has and said the ceremony that
 hands one to a peer belongs elsewhere. This is elsewhere.
 
@@ -114,34 +117,57 @@ path are one code path rather than two.
 
 ## Gates
 
-- **EX1 - One operation, on the channel that already exists (open):**
+- **EX1 - One operation, on the channel that already exists (implemented 2026-08-12):**
   `home.link.mailbox.exchange` in ADR 0107's closed list, with its request
   and response payload contracts and canonical arguments. No new transport,
   no new cryptography, no handshake.
 
-- **EX2 - The peer is the device (open):** the Home keys its book by the
+- **EX2 - The peer is the device (implemented 2026-08-12):** the Home keys its book by the
   requesting device's signing key fingerprint, taken from the authenticated
   principal and never from an argument. A device naming its own peer key
   would be a device choosing which mailbox it is, which is the same class
   of mistake as a supplier naming its own directory (ADR 0143 DP8).
 
-- **EX3 - Life is the delegation's life (open):** a mailbox is honoured
+- **EX3 - Life is the delegation's life (implemented 2026-08-12):** a mailbox is honoured
   only while `hasActivePicoIdentityDelegation` says its delegation is
   active. Derived at use rather than mirrored into a status column, so
   there is no second record and no revocation hook to forget. Proved by
-  revoking a delegation and finding the mailbox no longer honoured, with
-  nothing having run in between.
+  two calls against one untouched row at two instants, with nothing having
+  run in between, giving different answers.
 
-- **EX4 - Sealed, never beside (open):** an address appears only inside the
-  ADR 0107 sealed payload. A check walks the Link surface for an address
-  reaching a log line, an envelope field or a route, in the idiom
-  `check-companion-boundary.mjs` already uses for the tray import hull.
+  **Not honoured is not deleted.** The row stays, because ADR 0147 RY4's
+  explicit revocation is a different act from a device going inactive - one
+  ends an address, the other ends a device, and a device that returns
+  through the lifecycle finds its book entry where it left it.
 
-- **EX5 - Re-exchange is rotation (open):** running the exchange twice
+- **EX4 - Sealed, never beside (implemented 2026-08-12):** an address appears only inside the
+  ADR 0107 sealed payload. `scripts/check-link-seal.mjs` walks the Link
+  surface for an address reaching a log, an error, stdout or a URL, in the
+  idiom `check-companion-boundary.mjs` uses for the tray import hull, and
+  runs in `release:verify` as `link:check`.
+
+  **Written naively it was wrong in the way that teaches people to skip a
+  check.** It fired on
+  `throw new Error('pico_link_inbound_shared_between_peers')` - an error
+  *code* containing the word, carrying no address at all. String contents
+  are stripped before matching now, while template interpolations survive,
+  because `${inbound}` is exactly the leak. It is a floor and not a proof:
+  a value renamed twice escapes any such reading.
+
+- **EX5 - Re-exchange is rotation (implemented 2026-08-12):** running the exchange twice
   leaves one entry per device, with the newest addresses and the peer
-  unchanged. The durable half - where a Home keeps its book - lands here,
-  and it answers ADR 0119 Q5's ceiling like every other store the core
-  owns.
+  unchanged. The durable half is migration `0010_pico_link_mailbox`, which
+  answers ADR 0119 Q5's ceiling like every other store the core owns at
+  `link_mailbox: 1_000`. **A device already in the book rotates at the
+  ceiling**, because refusing there would leave a person unable to replace
+  a flooded mailbox at exactly the moment they need to - the same exception
+  the supplier and depot attachments already make for re-attachment.
+
+  The default operator is `unconfigured.relay.invalid`, reserved by RFC
+  2606 and resolving nowhere. A default pointing at a real operator would
+  enrol people with a stranger by omission; this issues a mailbox nobody
+  can deliver to, which is the honest state for a Home whose owner has not
+  chosen a relay.
 
 ## Non-goals
 
