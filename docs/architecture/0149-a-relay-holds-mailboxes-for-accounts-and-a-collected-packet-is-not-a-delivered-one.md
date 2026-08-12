@@ -3,9 +3,10 @@
 ## Status
 
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
-boundary check. Decided 2026-08-12. The Home's collecting side and the HTTP
-surface landed the same day. What remains is the companion's collecting
-side and a client for the surface on both.
+boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface
+and the client landed the same day. What remains is the companion's
+collecting side and the wiring that gives the Home's collector a real
+transport.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -198,6 +199,26 @@ parse error, so a caller could not tell "too large" from "your JSON is
 wrong" and would retry the same body forever. The stream is paused rather
 than destroyed, or the caller gets a connection error in place of the
 reason.
+
+### The client is its own package, because a Home must not ship a relay
+
+`@pico/link-relay-client`, and the placement follows from this ADR's first
+sentence rather than from tidiness. A Home that imported `apps/relay` to
+get a client would be shipping a stranger's server, and the boundary check
+would be guarding a line the other side had already walked through. Both
+the Home and the companion are callers; neither carries a queue.
+
+**A refusal is an answer, never an exception.** Every refusal is something
+the caller did and can do differently, so it is returned; only a relay that
+spoke outside its own vocabulary throws. `delivered` is exactly that case -
+the one answer ADR 0147 RY5 says nobody can give - so a relay offering it
+is refused rather than believed.
+
+The two route families answer differently and the client says so rather
+than flattening them: `deliver` returns an ADR 0147 outcome whether the
+relay accepted or not, because `mailbox_full` is a refusal to hold and
+still the answer the caller asked for, while the account-bearing routes
+refuse with a name.
 
 ### Collecting is the same request by a slower road, and it gains one refusal
 
