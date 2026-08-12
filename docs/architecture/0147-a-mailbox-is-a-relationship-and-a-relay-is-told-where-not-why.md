@@ -2,8 +2,8 @@
 
 ## Status
 
-Accepted direction; RY1 implemented 2026-08-12, RY2-RY7 open. Decided
-2026-08-12.
+Accepted direction; RY1, RY2, RY3 and RY7 implemented 2026-08-12, RY4-RY6
+open. Decided 2026-08-12.
 This is the second runtime slice of ADR 0028 after ADR 0107's direct
 envelopes, and it decides exactly one thing: **what a carrier that must not
 read a payload is allowed to see on the outside of it.** The relay server,
@@ -236,17 +236,49 @@ that adapter, and not before there is one.
   an off-grid expiry, taking the first `@` of two, and dropping the payload
   ceiling.
 
-- **RY2 - A mailbox belongs to a relationship (open):** the type of a
-  delivery address, and the rule that a Pico holds a set of them keyed by
-  the peer they were issued to. No API accepts "the address of a Pico",
-  because there is no such thing. What this gate does **not** build is the
-  handover; it builds the shape a handover has to produce.
+- **RY2 - A mailbox belongs to a relationship (implemented 2026-08-12):**
+  `@pico/protocol/link-mailbox` holds one entry per party a credential
+  exists with, and every lookup takes a peer. There is no
+  `picoLinkAddressOf(pico)`.
 
-- **RY3 - The address names its operator (open):** the address parser and
-  its canonical form. A relay client is given an address and derives the
-  operator from it rather than being configured with one, which is what
-  makes several operators a deployment fact rather than a feature.
-  Negative vectors for an address with no operator and for one naming two.
+  A relationship holds **two** addresses issued by opposite sides, which
+  the ADR text above had left implicit. `inbound` is ours to revoke;
+  `outbound` is the peer's and is absent until they hand it over - an
+  ordinary state, answered with `undefined` rather than a throw, because a
+  relationship can exist before the exchange finishes.
+
+  **Two refusals carry the security of this design, and the second was not
+  in this ADR before it was built.** No two peers may share an *inbound*
+  mailbox: if they did, the mailbox would stop identifying the sender and
+  the envelope's absent sender field would turn from a removed fact into an
+  unknown one. And no two peers may share an *outbound* mailbox - that one
+  is an attack rather than an accident, because a peer that hands us the
+  address another peer gave us would silently redirect everything we write
+  to the first into the second's mailbox. We cannot stop a peer naming any
+  address it likes; we can refuse to hold two peers behind one, and the
+  moment to notice is when it is written down rather than after the first
+  message.
+
+  Revocation removes the whole entry rather than clearing a field: an entry
+  with the inbound gone and the outbound left is a relationship this Pico
+  can still write to and can no longer be answered on, which reads as
+  working and is not.
+
+  The handover is still not built, as this gate said. This is the shape one
+  has to produce.
+
+- **RY3 - The address names its operator (implemented 2026-08-12):** the
+  parser and formatter landed with RY1, including the negative vectors for
+  an address with no operator and one naming two. What RY2's book adds is
+  the part that matters: **there is no operator field on a relationship
+  entry**, so an operator cannot be held beside an address and disagree
+  with it - a disagreement would send a packet to a relay that never heard
+  of the mailbox. `picoLinkInboundOperators` shows one book naming several
+  operators, which is ADR 0031's "no central provider" holding by
+  construction rather than by policy, and `picoLinkInboundMailboxesAt` says
+  how many mailboxes one operator can group into one device. That last one
+  exists because RY7 names collection correlation as a residual, and a
+  mitigation nobody can measure is not one.
 
 - **RY4 - No scheduled rotation (open):** there is no expiry, no rotation
   interval and no "valid until" on an address - again the absence, not a
