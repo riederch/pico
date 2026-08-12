@@ -1228,14 +1228,49 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     broadcast(fact);
     return fact.eventId;
   };
-  // Named here rather than reaching for the later registry: the declared list
-  // is ADR 0139 AC1's authority, and it is collected from manifests rather
-  // than from anything the core keeps.
-  const declaredModuleEffectNames = picoDeclaredEffectNames([
+  /**
+   * ADR 0127 M3. The shipped modules, listed rather than discovered.
+   *
+   * A runtime imports a module; a module never imports a runtime. This is that
+   * edge, and it is the only place the manifests are named - adding a module is
+   * a decision spoken here and in the protocol's closed list, not a side effect
+   * of a directory existing.
+   */
+  const shippedModuleManifests = [
     picoCalendarModuleManifest,
+    picoDepotModuleManifest,
     picoHomeAssistantModuleManifest,
     picoSpatialRecallModuleManifest,
-  ]);
+  ];
+
+  // The closed list and this one are two places, so they can disagree - and
+  // they did: the Home Assistant module shipped, was listed in the protocol,
+  // and was never registered here, so it was absent from the activation view
+  // without anything saying so. Asserted at boot, in the idiom
+  // `assertClassified` already uses for routes: a module the runtime forgot
+  // fails to start rather than quietly not existing.
+  for (const identifier of picoModuleIdentifiers) {
+    if (!shippedModuleManifests.some((manifest) => manifest.identifier === identifier)) {
+      throw new Error(`unregistered_pico_module:${identifier}`);
+    }
+  }
+
+  /**
+   * ADR 0139 AC1's authority, derived from the shipped manifests rather than
+   * listed beside them.
+   *
+   * It used to be its own literal, and it drifted the way a second list does:
+   * `depot` shipped, was registered above, declared `depot.fetch` - and was
+   * missing here, so the one effect in the tree that installs code was absent
+   * from the list AC1 decides against. Nothing had requested it yet, which is
+   * the only reason this was latent rather than a bug. The assertion above
+   * catches a module the runtime forgot; nothing caught a module whose effects
+   * the runtime forgot, and now there is nothing to catch.
+   *
+   * Still collected from manifests rather than from anything the core keeps at
+   * runtime, which was the point of naming it here in the first place.
+   */
+  const declaredModuleEffectNames = picoDeclaredEffectNames(shippedModuleManifests);
 
   const timeBoundScheduler = startPicoTimeBoundScheduler({
     store: {
@@ -1743,33 +1778,6 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
     return sendNoStore(reply, response);
   });
-
-  /**
-   * ADR 0127 M3. The shipped modules, listed rather than discovered.
-   *
-   * A runtime imports a module; a module never imports a runtime. This is that
-   * edge, and it is the only place the two manifests are named - adding a
-   * module is a decision spoken here and in the protocol's closed list, not a
-   * side effect of a directory existing.
-   */
-  const shippedModuleManifests = [
-    picoCalendarModuleManifest,
-    picoDepotModuleManifest,
-    picoHomeAssistantModuleManifest,
-    picoSpatialRecallModuleManifest,
-  ];
-
-  // The closed list and this one are two places, so they can disagree - and
-  // they did: the Home Assistant module shipped, was listed in the protocol,
-  // and was never registered here, so it was absent from the activation view
-  // without anything saying so. Asserted at boot, in the idiom
-  // `assertClassified` already uses for routes: a module the runtime forgot
-  // fails to start rather than quietly not existing.
-  for (const identifier of picoModuleIdentifiers) {
-    if (!shippedModuleManifests.some((manifest) => manifest.identifier === identifier)) {
-      throw new Error(`unregistered_pico_module:${identifier}`);
-    }
-  }
 
   /**
    * ADR 0127 M4. Where a module's outstanding promises come from.
