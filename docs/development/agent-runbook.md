@@ -135,7 +135,15 @@ Ein lokaler Standardlauf misst im `user_namespace`-Modus rund 17,5 MB hoeher als
 der root-eigene Paket-Probe und reisst das PSS-Budget deshalb auch an
 unveraendertem HEAD. Das ist **kein** Befund am Code. Wer eine Budgetabweichung
 sieht, prueft zuerst das `probe`-Feld im Messbericht, bevor er den Importgraphen
-verdaechtigt. Der Modus, gegen den das Budget definiert wurde, ist ein
+verdaechtigt.
+
+**Und danach `privateBytes`, nicht nur `privateDirtyAndHugetlbBytes`.** Am
+2026-08-12 fiel die gegatete Dirty-Summe zwischen zwei Laeufen auf demselben
+Host von 105.680.896 auf 65.032.192 Byte, waehrend `privateCleanBytes` um
+denselben Betrag stieg und die private Gesamtsumme sich um 4.096 Byte bewegte.
+Vierzig Megabyte wechselten die Spalte, ohne dass sich etwas an der Groesse
+aenderte. Eine Bewegung in der Dirty-Summe bei flacher Gesamtsumme ist eine
+Klassifizierung des Wirts; erst eine Bewegung in beiden ist die Anwendung. Der Modus, gegen den das Budget definiert wurde, ist ein
 ausdrueckliches Opt-in - dieselbe Variable, die `.github/workflows/ci.yml`
 setzt - und verlangt passwortloses `sudo`, also ein Terminal mit TTY:
 

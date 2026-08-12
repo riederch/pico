@@ -371,14 +371,55 @@ Foundation HTTP surface is diagnosis, not product (ADR 0112).
   ~17.5 MB mode difference - which is the artefact described above and not
   a property of the new version.
 
+  **Currency step on 2026-08-12: 43.3.0 to 43.4.0.** 43.4.0 shipped
+  2026-08-11 and the evidence still named 43.3.0, which is the same way the
+  file went stale a week earlier and worth stating plainly: the check
+  compares the pin against the *recorded* latest stable, not against
+  upstream, so it cannot notice a release. What it can do is expire, and
+  between expiries the file is only as current as the last person to look.
+  Looking early is therefore not diligence, it is the mechanism.
+
+  **The gate's own class turns out to move for reasons that are not the
+  build, and that is the more useful half of this run.** Between the
+  2026-08-10 reading and the 43.4.0 reading in the same probe mode on the
+  same host, `Private_Dirty + Private_Hugetlb` fell from 105,680,896 to
+  65,032,192 bytes while `Private_Clean` rose from 11,501,568 to
+  52,154,368 - and total private memory moved from 117,182,464 to
+  117,186,560, four kilobytes. Forty megabytes changed column and nothing
+  changed size. The patch refresh cost nothing, as the one before it did.
+  But the class the v2 gate is defined on swung 40 MB between two runs of
+  near-identical builds, which means a future run can sit anywhere in a
+  wide band without the application having moved. Whoever reads a C3
+  number on the next major should compare *total* private memory before
+  concluding anything from the dirty column alone.
+
+  **`pdf-lib` left the tray's static import hull, and that part is
+  measured cleanly.** The tray statically reached
+  `@pico/companion/recovery-card` and through it `pdf-lib`, so every start
+  parsed a 1.7 MB PDF bundle for a ceremony that runs when a person asks to
+  issue a card. `main.ts` now imports it inside the ceremony. Held against
+  the same Electron 43.4.0 on the same host and the same day, the only
+  variable being the import: PSS 240,218,112 to 231,277,568 and
+  `Private_Dirty + Private_Hugetlb` 65,032,192 to 55,947,264, both about
+  9 MB, with `Private_Clean` flat at +282,624 bytes. Flat clean is what
+  makes this reading a saving rather than another column change. The static
+  hull went from 41 modules to 36 and
+  `scripts/check-companion-boundary.mjs` now names `recovery-card-pdf`, so
+  the edge cannot return unnoticed. How it surfaced is worth keeping: not
+  from that forbidden list, which did not know the module existed, but from
+  walking the hull and asking what was in it. Such a list only holds what
+  someone thought to forbid.
+
   **Electron 44 could not be taken and the reason is not a judgement
-  call.** On 2026-08-10 the npm registry carries `latest` 43.3.0 and
-  `beta` 44.0.0-beta.2; there is no stable 44 to pin, and pinning a beta
+  call.** On 2026-08-12 the npm registry carries `latest` 43.4.0 and
+  `beta` 44.0.0-beta.3; there is no stable 44 to pin, and pinning a beta
   would break the stated policy. The 2026-08-25 date is confirmed rather
   than assumed: 41.0.0 shipped 2026-03-11, 42.0.0 on 2026-05-06 and 43.0.0
   on 2026-06-30, an eight-week cadence that lands 44.0.0 exactly there. The
   work that reopens C3 for real is still ahead, and it is now a one-major
-  jump from a current pin rather than from a stale one.
+  jump from a current pin rather than from a stale one - into a private
+  budget with about 54 MB of headroom instead of the 4 MB the 2026-08-10
+  reading appeared to leave.
 - **C4 - Further desktop platforms (open):** Windows and macOS from the
   same codebase and discipline.
 
