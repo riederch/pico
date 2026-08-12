@@ -815,18 +815,69 @@ compatibility a property of a commit a person accepted.
   commits - a newer commit is an offer a person answers - so it costs one
   `rev-parse` over an unchanged depot.
 
-  Open, and the question has sharpened rather than shrunk: **`buildApp`
-  does not perform the fetch, because there is nowhere for it to fail.**
-  `picoDepotStates` is `running | offered | never_fetched`, no column
-  records a fetch outcome, and a depot whose working copy is missing reads
-  as `running` - which is the state saying the depot is running what it was
-  told to run, about a depot that is running nothing. A scheduled fetch
-  meeting an unreachable remote therefore has nowhere to be the ADR 0138
-  CO2 condition it is, and CO2's rule is that a state earns its place by a
-  predicate. Two predicates are missing, and they are not the same one:
-  *this depot has no working copy* and *the last attempt could not reach
-  the remote*. Also open: the `offline:check` line over a preparation path,
-  which needs a preparation path to walk.
+  **The row got its second half on 2026-08-12 (user decision), and the
+  fetch is wired.** The question that blocked it was posed here as a
+  missing state and turned out to be a missing *half of the record*: the
+  row carried only what a person decided - the pin, when it was accepted,
+  the two CO3/CO4 switches - and nothing about what a fetch learned. Two
+  states depended on that half. One of them, `offered`, was already
+  declared, already read by `picoDepotState`, and **produced by nothing** -
+  a fetch that saw a newer commit had no place to put it, so DP1's promise
+  that a newer commit waits for a person was true of a type and not of a
+  Pico.
+
+  Migration 0009 adds `offered_commit`, `last_fetch_condition` and
+  `last_fetch_at`, and `recordPicoDepotFetchOutcome` is the only door into
+  them. **This is a projection, not a second record**: the ADR 0121 chain
+  keeps every attempt, these hold what is currently true, the way
+  `running_commit` already holds what acceptance decided. A success
+  *clears* the condition - left set it would mean "something failed once"
+  rendered as a state of the present, telling a person to check a network
+  that came back days ago. A standing offer survives a failed attempt,
+  because a commit seen last week is still there and an unreachable remote
+  learned nothing about it either way.
+
+  `picoDepotStates` gains `unreachable` and `not_materialised`, and the
+  order is where the design is. `unreachable` before `offered`, because
+  accepting an offer while the remote is unreachable schedules a fetch that
+  cannot succeed - the same mistake the original `never_fetched` branch
+  already avoided, in a new place. `unreachable` before `not_materialised`
+  is the one place a reason outranks a consequence: both mean the depot
+  provides nothing, only one says what to do about it.
+
+  **The state list does not re-enumerate the condition list.**
+  `picoDepotFetchConditions` is the narrow set a depot fetch can produce,
+  one entry today, asserted rather than assumed - a hosted remote answering
+  429 makes `rate_limited` real, and that refuses rather than being
+  labelled `unreachable`, which would tell a person to check their network
+  about a limit that lifts on its own. Two closed lists copied into each
+  other are two lists that can disagree.
+
+  What the wiring turned up is that **three standing preconditions have to
+  be read rather than discovered by failing.** ADR 0139 AC4 consent,
+  because an unconsented effect makes `decidePicoAction` throw rather than
+  refuse - correctly, since a request for an effect nobody agreed to exists
+  is not a question with an answer - and a sweep that hit it would take
+  every depot after it down over something no depot could have fixed. ADR
+  0140 RL3's floor, because `external_write` never resolves to `allow` from
+  the risk class alone: without a recorded rule the decision is
+  `require_approval`, and ADR 0141 RN4 requires the presence session it
+  would be parked against. **A scheduled sweep has none.** So it acts where
+  a rule allows it, asks where someone is there to be asked, and otherwise
+  does neither - inventing a window would undo the whole point of RN4, a
+  question nobody was present for parked against a session that never
+  existed. CO3/CO4 are the third, already read by `picoDepotFetchIntent`.
+
+  One sweep with two callers - the scheduler at `asked: false` and
+  `picoSweepDepotFetches` for a person's "fetch now" - which is this gate's
+  own distinction rather than a seam cut for tests. Proved end to end
+  against a real `git` and a real `file://` remote, including that a second
+  sweep over an unchanged depot costs no clone. Falsification found a real
+  gap on the way: removing the rule/window guard passed every test, because
+  every test had recorded a rule.
+
+  Still open: the `offline:check` line over a preparation path, which needs
+  a preparation path to walk.
 
 **The last unnamed state got its name on 2026-08-11: `materializing`.** A
 library that is attached, whose credential is present, and whose clone has
