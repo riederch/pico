@@ -775,13 +775,44 @@ compatibility a property of a commit a person accepted.
   the eight tests were made to fail against planted defects - due at start,
   a grid-based re-arm, the overlap guard removed, the cap removed.
 
-  Open: `buildApp` does not start it yet, and finishing that is **two
-  decisions this ADR has not made**. A fetched depot's working copy needs a
-  place, and unlike DP8's scratch area it is durable - vendored code that
-  has to survive a restart - so it is ADR 0129 SR2's five questions rather
-  than a path. The default interval is the second. Also open: the
-  `offline:check` line over a preparation path, which needs a preparation
-  path to walk.
+  **The working copy got its place on 2026-08-12, and it was a convention
+  rather than a decision.** This was first written down here as ADR 0129
+  SR2's five questions, and that was wrong: those questions are about a
+  store the core keeps records in, and a working copy keeps none. It
+  materialises a pin that is already recorded, is reconstructible from it,
+  and holds only third-party code at a commit a person accepted. The
+  recovery anchor is the precedent - a durable core-owned *file* artefact
+  that never went through the five questions - and with it comes the
+  concern that does apply, satisfied: ADR 0110's backup copies the database
+  file into its own directory rather than sweeping the one beside it.
+
+  So `depots` sits beside the database with `PICO_DEPOT_ROOT` over it, the
+  fifth in the idiom `keys`, `home-host-keys`, `backups` and
+  `recovery-anchor` already use. **A remote never picks the directory**: it
+  is a URL, so it contains slashes by definition and cannot be sanitised
+  into a name without an escaping scheme whose bugs are directories in the
+  wrong place. It is hashed - a function of the remote, structurally
+  incapable of being a path - which is DP8's supplier-identifier rule met
+  by other means, since the thing being named here cannot be constrained to
+  a pattern. A start reconciles the root against the attachment rows, and
+  the reason it is a start rather than a timer is the window between a
+  crash and the next open. The default interval is six hours, named beside
+  the transfer threshold: this sweep is a **repair**, not a poll for
+  commits - a newer commit is an offer a person answers - so it costs one
+  `rev-parse` over an unchanged depot.
+
+  Open, and the question has sharpened rather than shrunk: **`buildApp`
+  does not perform the fetch, because there is nowhere for it to fail.**
+  `picoDepotStates` is `running | offered | never_fetched`, no column
+  records a fetch outcome, and a depot whose working copy is missing reads
+  as `running` - which is the state saying the depot is running what it was
+  told to run, about a depot that is running nothing. A scheduled fetch
+  meeting an unreachable remote therefore has nowhere to be the ADR 0138
+  CO2 condition it is, and CO2's rule is that a state earns its place by a
+  predicate. Two predicates are missing, and they are not the same one:
+  *this depot has no working copy* and *the last attempt could not reach
+  the remote*. Also open: the `offline:check` line over a preparation path,
+  which needs a preparation path to walk.
 
 **The last unnamed state got its name on 2026-08-11: `materializing`.** A
 library that is attached, whose credential is present, and whose clone has
