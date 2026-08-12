@@ -47,6 +47,10 @@
       "types": "./dist/library-pin.d.ts",
       "import": "./dist/library-pin.js"
     },
+    "./link-mailbox": {
+      "types": "./dist/link-mailbox.d.ts",
+      "import": "./dist/link-mailbox.js"
+    },
     "./link-packet": {
       "types": "./dist/link-packet.d.ts",
       "import": "./dist/link-packet.js"
