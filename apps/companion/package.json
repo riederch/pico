@@ -38,6 +38,10 @@
       "types": "./dist/notify.d.ts",
       "import": "./dist/notify.js"
     },
+    "./pending-reply": {
+      "types": "./dist/pending-reply.d.ts",
+      "import": "./dist/pending-reply.js"
+    },
     "./profile": {
       "types": "./dist/profile.d.ts",
       "import": "./dist/profile.js"
