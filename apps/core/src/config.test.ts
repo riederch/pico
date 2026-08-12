@@ -15,6 +15,7 @@ describe('Core config', () => {
       homeHostKeyStorePath: 'apps/core/data/home-host-keys',
       recoveryAnchorPath: 'apps/core/data/recovery-anchor/anchor.json',
       depotRoot: 'apps/core/data/depots',
+      supplierScratchRoot: 'apps/core/data/scratch',
       memoryEncryption: false,
       deviceId: 'pico-core',
       webRootPath: expect.stringContaining('/apps/web'),
@@ -36,6 +37,7 @@ describe('Core config', () => {
       PICO_HOME_HOST_KEY_STORE_PATH: '/tmp/pico-home-host-keys',
       PICO_RECOVERY_ANCHOR_PATH: '/tmp/pico-recovery-anchor/anchor.json',
       PICO_DEPOT_ROOT: '/tmp/pico-depots',
+      PICO_SUPPLIER_SCRATCH_ROOT: '/tmp/pico-scratch',
       PICO_MEMORY_ENCRYPTION: 'true',
       PICO_DEVICE_ID: 'test-core',
       PICO_WEB_ROOT: '/tmp/pico-web',
@@ -57,6 +59,7 @@ describe('Core config', () => {
       homeHostKeyStorePath: '/tmp/pico-home-host-keys',
       recoveryAnchorPath: '/tmp/pico-recovery-anchor/anchor.json',
       depotRoot: '/tmp/pico-depots',
+      supplierScratchRoot: '/tmp/pico-scratch',
       memoryEncryption: true,
       deviceId: 'test-core',
       webRootPath: '/tmp/pico-web',
@@ -180,7 +183,7 @@ describe('Core config', () => {
   });
 
   it('rejects blank string settings', () => {
-    for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_BACKUP_DIRECTORY', 'PICO_KEY_STORE_PATH', 'PICO_HOME_HOST_KEY_STORE_PATH', 'PICO_RECOVERY_ANCHOR_PATH', 'PICO_DEPOT_ROOT', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
+    for (const name of ['PICO_HOST', 'PICO_DATABASE_PATH', 'PICO_BACKUP_DIRECTORY', 'PICO_KEY_STORE_PATH', 'PICO_HOME_HOST_KEY_STORE_PATH', 'PICO_RECOVERY_ANCHOR_PATH', 'PICO_DEPOT_ROOT', 'PICO_SUPPLIER_SCRATCH_ROOT', 'PICO_DEVICE_ID', 'PICO_WEB_ROOT']) {
       expect(() => loadConfig({ [name]: '   ' })).toThrow(`${name} must be a non-empty string.`);
     }
     expect(() => loadConfig({

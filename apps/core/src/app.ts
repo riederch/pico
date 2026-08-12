@@ -172,6 +172,7 @@ import {
 } from './operator-store.js';
 import { SessionStore, type SessionPrincipal } from './session-store.js';
 import { PicoDepotWorkspace } from './depot-workspace.js';
+import { PicoSupplierScratch } from './supplier-scratch.js';
 import { consumeOperatorResetMarker, OperatorBootstrapCode } from './operator-bootstrap.js';
 import { LoginThrottle } from './login-throttle.js';
 import { verifyPicoHomeMembershipAuthority } from './home-membership.js';
@@ -815,6 +816,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     app.log.warn(
       { removedDepotDirectories },
       'Depot working copies with no attachment behind them were removed.',
+    );
+  }
+
+  /**
+   * ADR 0143 DP8, the same reconciliation for the supplier scratch areas.
+   *
+   * Orphans only, not an empty sweep. The ADR says a scratch area is removed
+   * *when the attachment is removed*, which is a different sentence from
+   * "discarded at every start" - a supplier that unpacked a 1.4 GB corpus and
+   * indexed it would pay for that again on every restart, and nothing here
+   * asked for that.
+   */
+  const supplierScratch = new PicoSupplierScratch(
+    config.supplierScratchRoot ?? PicoSupplierScratch.defaultRoot(config.databasePath),
+  );
+  const removedScratchDirectories = supplierScratch.removeOrphans(
+    store.picoSupplierAttachments().map((attachment) => attachment.identifier),
+  );
+  if (removedScratchDirectories.length > 0) {
+    app.log.warn(
+      { removedScratchDirectories },
+      'Supplier scratch areas with no attachment behind them were removed.',
     );
   }
 

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { picoSupplierIdentifierPattern } from '@pico/protocol/supplier';
 
 /**
@@ -42,6 +42,18 @@ export class PicoSupplierScratch {
     if (typeof root !== 'string' || root.trim() === '') {
       throw new Error('invalid_pico_supplier_scratch_root');
     }
+  }
+
+  /**
+   * The default beside the database, in the idiom `keys`, `home-host-keys`,
+   * `backups`, `recovery-anchor` and `depots` already use.
+   *
+   * Being transient does not make it homeless: something has to pick a place,
+   * and picking a different *shape* than the five beside it would be the only
+   * decision here worth calling one.
+   */
+  public static defaultRoot(databasePath: string): string {
+    return join(dirname(databasePath), 'scratch');
   }
 
   /**

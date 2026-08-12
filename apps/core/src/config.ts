@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 // a second time here. The four paths above predate that rule and each state
 // their default twice; this one does not add a fifth.
 import { PicoDepotWorkspace } from './depot-workspace.js';
+import { PicoSupplierScratch } from './supplier-scratch.js';
 import type { DomainReadership } from './domain-readership.js';
 import type { PicoRequestQuotaOptions } from './request-quota.js';
 import type {
@@ -42,6 +43,16 @@ export interface CoreConfig {
    * free to point it there.
    */
   depotRoot?: string;
+  /**
+   * ADR 0143 DP8. Where per-attachment supplier scratch areas are created.
+   * Defaults to `scratch` beside the database.
+   *
+   * A workspace rather than a store: absent from `picoDurableStores`, so no
+   * ADR 0119 Q5 ceiling, no place in the shred cascade and no backup to
+   * exclude. An installation whose suppliers unpack large corpora is free to
+   * point this at the volume with room on it.
+   */
+  supplierScratchRoot?: string;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;
@@ -152,6 +163,7 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
     homeHostKeyStorePath: readNonEmptyString(env, 'PICO_HOME_HOST_KEY_STORE_PATH', join(dirname(databasePath), 'home-host-keys')),
     recoveryAnchorPath: readNonEmptyString(env, 'PICO_RECOVERY_ANCHOR_PATH', join(dirname(databasePath), 'recovery-anchor', 'anchor.json')),
     depotRoot: readNonEmptyString(env, 'PICO_DEPOT_ROOT', PicoDepotWorkspace.defaultRoot(databasePath)),
+    supplierScratchRoot: readNonEmptyString(env, 'PICO_SUPPLIER_SCRATCH_ROOT', PicoSupplierScratch.defaultRoot(databasePath)),
     memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION'),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
