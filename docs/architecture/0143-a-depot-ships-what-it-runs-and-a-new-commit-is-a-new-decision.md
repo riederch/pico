@@ -652,6 +652,20 @@ compatibility a property of a commit a person accepted.
   ADR 0137 IN1's pattern, because a supplier whose identifier could contain
   a slash would be a supplier picking a place on the disk.
 
+  **It got its place and a caller on 2026-08-12**, in the same convention
+  the working copy takes: `scratch` beside the database, with
+  `PICO_SUPPLIER_SCRATCH_ROOT` over it. Being transient does not make it
+  homeless - something has to pick a place, and picking a different *shape*
+  than the five paths beside it would have been the only real decision.
+  Until then the class existed and nothing constructed it, so everything
+  below was a property of a class rather than of a running Pico.
+
+  A start reconciles orphans and deliberately does not empty the root. The
+  sentence above is that a scratch area goes *when the attachment goes*,
+  which is not the same as discarding it at every start: a supplier that
+  unpacked and indexed a large corpus would pay for that again on every
+  restart, and nothing here asked for that.
+
   **Removal is reconciled rather than trusted.** `detach` deletes the
   directory and `removeOrphans` deletes every directory no attachment
   stands behind - ADR 0070's tombstone posture applied to files, and for
