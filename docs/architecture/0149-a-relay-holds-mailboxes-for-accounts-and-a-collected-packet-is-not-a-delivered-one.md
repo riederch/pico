@@ -5,9 +5,10 @@
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
 boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface,
 the client, the transport joining them and the device's reply correlation
-all landed the same day. What remains is the loop that drives them,
-which is blocked on a shape mismatch named below, and an operator to run
-against.
+all landed the same day. The loop runs on the Home. What remains is
+the device's own sweep - the companion has an existing start/wake/network
+rhythm to hang it on rather than a scheduler of its own - and a real
+operator to run against.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -298,34 +299,50 @@ at-least-once. The book refuses when full rather than evicting, because
 dropping an outstanding key loses an answer already on its way and the
 person who would notice is not the one asking now.
 
-### The sweep, and why it is not started
+### The sweep, and the shape mismatch it opened
 
-The pieces the loop needs are in place - `link-relay-transport.ts` is named
-as outward-reaching so no ADR 0118 floor family can grow a path to it, the
-periodic scheduler now asks only for an identifier and an interval, and the
-interval is two minutes rather than the depot sweep's six hours because a
-depot sweep is a repair while a mailbox holds a person's traffic.
+Wiring the loop surfaced a mismatch that was not visible from either side
+alone, and resolving it moved one thing and kept two.
 
-**The sweep is not wired, and wiring it now would have been worse than
-leaving it.** Trying surfaced a shape mismatch that was not visible from
-either side alone: `collectPicoLinkRelayPackets` separates authentication
-from execution so the mailbox-versus-signature check can sit between them,
-while `PicoLinkDirectIntake.handle(body, execute)` - the machinery that
-actually opens an ADR 0107 envelope - bundles the two and yields the
-principal only inside `execute`. The sweep would additionally need the
-route's operation dispatch, which today is a switch inside the handler.
+`collectPicoLinkRelayPackets` asked its caller for authentication and
+execution separately, so the mailbox-versus-signature check could sit
+between them. That shape does not exist:
+`PicoLinkDirectIntake.handle(body, execute)` authenticates and executes in
+one call and yields the principal only inside its own callback. **So the
+caller owns how a packet is authenticated** - and the collector keeps the
+two things that are its own.
 
-What makes this a stop rather than a rough edge: the collector treats an
-authentication failure as **permanent** and acknowledges it, because rubbish
-that stayed would fill a mailbox forever. A sweep wired around the mismatch
-with a failing authenticator would therefore delete every legitimate packet
-as it arrived. A loop that destroys mail is not a smaller version of a loop.
+The rule is one of them. `assertPicoLinkRelayPacketSender` is the
+disagreement in a single named place, called where the principal exists; a
+caller deciding for itself what a mismatch means would be a second place
+the rule is written, and the second place is the one that drifts. The
+consequences are the other: two named error types are a **refusal**, and
+anything else **defers**. That asymmetry is deliberate - a socket, a full
+disk or a bug must not be mistaken for rubbish, because rubbish is
+acknowledged and one of those is somebody's mail.
 
-The resolution is a small one and should be made deliberately: let the
-collector own what an outcome *means* - acknowledge a refusal, defer a
-failure, one packet at a time, honoured mailboxes only - while the caller
-owns how authentication happens, and extract the route's dispatch so both
-paths run the same operations.
+**`dispatchPicoLinkOperation` is extracted from the route**, moved rather
+than rewritten. Two dispatches would be two lists of what this Home offers
+remotely, and ADR 0107's rule that remote capability is opt-in *per
+operation* only means something while there is one list to opt into. The
+route keeps the one thing it alone knows: ADR 0115 U3 defers a host-key
+custody swap until the reply is sealed under the retiring key, and over a
+relay there is no reply socket, so a host rotation does not travel that
+way.
+
+The sweep runs every two minutes, against the depot sweep's six hours and
+for the opposite reason: a depot sweep is a repair and being late costs
+nothing, while a mailbox holds a person's traffic and being late is the
+person waiting. It is **not** an ADR 0139 action - collecting mail
+addressed to this Home is the Home listening, and the person decided that
+when they configured an operator; a per-sweep question would put the same
+choice in front of them every two minutes.
+
+One thing worth recording because it happened rather than because it was
+foreseen: the refusal log first read `{ mailbox, refusal }`, and
+`link:check` refused it. An address is a capability, and a log line is
+exactly where one gets copied out (ADR 0148 EX4). It logs the packet tag
+now, which is fresh per packet and names nothing.
 
 ## Non-goals
 
