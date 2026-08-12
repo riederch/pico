@@ -5,10 +5,8 @@
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
 boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface,
 the client, the transport joining them and the device's reply correlation
-all landed the same day. The loop runs on the Home. What remains is
-the device's own sweep - the companion has an existing start/wake/network
-rhythm to hang it on rather than a scheduler of its own - and a real
-operator to run against.
+all landed the same day. Both loops run. What remains is a real
+operator to run against, and two named test gaps that share one fixture.
 
 ADR 0147 decided what a relay is told and named the server a non-goal; ADR
 0148 gave both ends addresses to hand each other. This builds the machine
@@ -343,6 +341,34 @@ foreseen: the refusal log first read `{ mailbox, refusal }`, and
 `link:check` refused it. An address is a capability, and a log line is
 exactly where one gets copied out (ADR 0148 EX4). It logs the packet tag
 now, which is fresh per packet and names nothing.
+
+### The device sweep collects answers, and an answer opens or does not
+
+The same three phases as the Home's, with one difference that decides the
+rest: what a device collects are **replies**, readable only with the key
+that asked. There is no principal to authenticate here and nothing to
+authorise.
+
+**A packet nothing opens is permanent, and provably so.** The pending set
+only shrinks for a given packet - a response can match no key but its own
+request's, and that key was written before the request left - so a reply
+that does not open now will not open later. Leaving it would let one
+stranger's packet fill a device's single mailbox until the address was
+reissued.
+
+**Open, hand over, settle, acknowledge**, and each gap was chosen by asking
+what a crash in it costs. Settling before handing over loses the answer
+outright: key gone, packet still at the relay, nothing able to read it. In
+this order the first gap costs a duplicate, which the ADR 0147 RY6 tag lets
+a caller absorb, and the second costs nothing, because the returning packet
+no longer opens and is acknowledged as unmatched.
+
+The cadence hangs on the shell's existing rhythm rather than a scheduler of
+its own. `checkNow` is the shape ADR 0113's alarm carrier already exposes,
+for the same reason: the shell knows when a device woke, when a network
+returned and when a person opened the window, and those are the moments a
+waiting answer should stop waiting. Two sweeps never run at once, because a
+wake and a timer landing together would hand the same packets over twice.
 
 ## Non-goals
 
