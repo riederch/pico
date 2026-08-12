@@ -754,8 +754,34 @@ compatibility a property of a commit a person accepted.
   an instant that comes from data and being late is the failure; a fetch
   runs every so often and being late costs nothing.
 
-  Open: that scheduler, and the `offline:check` line over a preparation
-  path, which needs a preparation path to walk.
+  **That scheduler landed on 2026-08-12**, and every behaviour in it is
+  that same sentence spent rather than a preference. Nothing fires at
+  start, because firing on start makes every restart a fetch and a person
+  who restarts more often than the interval would fetch on each launch -
+  wanting it now is the `asked` path this gate already separates from a
+  sweep. A long gap produces one run rather than the backlog: three days
+  asleep at a six-hour interval owes twelve, and firing them would put
+  twelve requests, twelve decisions and twelve ADR 0121 chain entries in
+  the record for one fetch. The next instant is measured from when the last
+  run *finished*, which is also why a task cannot run beside itself - a
+  fetch that outruns its own interval has no second one start, at the price
+  of a period that drifts by the run's duration, which is exactly the thing
+  that costs nothing here. A request that threw re-arms like any other,
+  because an unreachable remote is already a CO2 condition. The sleep is
+  capped because this gate gives an interval a floor and no ceiling while
+  `setTimeout` fires at once past about 24.8 days.
+
+  It asks and never acts: `request` is handed a task, not a fetch. Four of
+  the eight tests were made to fail against planted defects - due at start,
+  a grid-based re-arm, the overlap guard removed, the cap removed.
+
+  Open: `buildApp` does not start it yet, and finishing that is **two
+  decisions this ADR has not made**. A fetched depot's working copy needs a
+  place, and unlike DP8's scratch area it is durable - vendored code that
+  has to survive a restart - so it is ADR 0129 SR2's five questions rather
+  than a path. The default interval is the second. Also open: the
+  `offline:check` line over a preparation path, which needs a preparation
+  path to walk.
 
 **The last unnamed state got its name on 2026-08-11: `materializing`.** A
 library that is attached, whose credential is present, and whose clone has
