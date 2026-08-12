@@ -38,6 +38,10 @@
       "types": "./dist/notify.d.ts",
       "import": "./dist/notify.js"
     },
+    "./link-relay-sweep": {
+      "types": "./dist/link-relay-sweep.d.ts",
+      "import": "./dist/link-relay-sweep.js"
+    },
     "./pending-reply": {
       "types": "./dist/pending-reply.d.ts",
       "import": "./dist/pending-reply.js"
