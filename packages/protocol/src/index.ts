@@ -448,6 +448,51 @@ export interface PicoLinkDirectResponseSignatureInput {
   createdAt: string;
 }
 
+/**
+ * ADR 0150. The one envelope a Home may send a device that did not ask.
+ *
+ * Everything in the ADR 0107 family is a *response*, sealed to a key that
+ * exists only because a device asked first. This is the other direction, and
+ * what makes it safe is what it cannot carry: no operation, no arguments, no
+ * result, no kind. **It says "ask me" and never "here is."**
+ *
+ * That absence is the decision (ADR 0117 X1's construction). An operation
+ * would make the Home a requester to the device and point ADR 0139 backwards;
+ * content would arrive outside the read path and so outside ADR 0077's
+ * readership; a kind would be a second closed list beside the operations, over
+ * the same subject, free to drift.
+ */
+export const picoLinkPushSignatureInputLabel = 'pico.link.push.v1' as const;
+export const picoLinkPushEnvelopeSchema = 'pico.link.push-envelope.v1' as const;
+
+export interface PicoLinkPushSignatureInput {
+  suite: string;
+  /** Fresh per push. ADR 0150 PU3's bound is over these. */
+  pushId: string;
+  /** Who it is from, as the device pins it. */
+  hostSigningKeyFingerprintHex: string;
+  /**
+   * ADR 0150 PU2. Which device this is for, checked by the device against the
+   * key it holds. A push naming another device reached this mailbox by leak or
+   * by misroute, and acting on it would quietly accept either - the same
+   * refusal ADR 0149's collector makes from the other side.
+   */
+  deviceSigningKeyFingerprintHex: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface PicoLinkPushEnvelope {
+  schema: typeof picoLinkPushEnvelopeSchema;
+  sealedPushHex: string;
+}
+
+export interface PicoLinkSealedPush {
+  schema: typeof picoLinkPushEnvelopeSchema;
+  push: PicoLinkPushSignatureInput;
+  hostSignatureHex: string;
+}
+
 export interface PicoLinkDirectRequestEnvelope {
   schema: typeof picoLinkDirectRequestEnvelopeSchema;
   sealedRequestHex: string;
@@ -3183,6 +3228,136 @@ export function buildPicoLinkDirectResponseSignatureInput(
     asciiBytes(input.createdAt),
   ]);
 }
+
+/**
+ * ADR 0150 PU1/PU2. The bytes a Home signs to reach a device that did not ask.
+ *
+ * Six fields, and the four that are missing are the contract:
+ * `operation`, `arguments`, `result` and `kind` have no place to be written,
+ * so a Home cannot say anything but "there is something to ask about" and a
+ * device cannot act on anything but that.
+ *
+ * `expiresAt` is signed rather than carried beside, so a carrier cannot extend
+ * the window a replay is worth anything in.
+ */
+export function buildPicoLinkPushSignatureInput(
+  input: PicoLinkPushSignatureInput,
+): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'pushId',
+    'hostSigningKeyFingerprintHex',
+    'deviceSigningKeyFingerprintHex',
+    'createdAt',
+    'expiresAt',
+  ]);
+  assertAsciiToken(input.suite);
+  assertAsciiToken(input.pushId);
+  assertInstant(input.createdAt);
+  assertInstant(input.expiresAt);
+  assertValidBounds(input.createdAt, input.expiresAt);
+
+  return concatCanonicalElements([
+    asciiBytes(picoLinkPushSignatureInputLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.pushId),
+    fixedHexBytes(input.hostSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    fixedHexBytes(input.deviceSigningKeyFingerprintHex, 32, 'invalid_fingerprint_length'),
+    asciiBytes(input.createdAt),
+    asciiBytes(input.expiresAt),
+  ]);
+}
+
+/**
+ * ADR 0150 PU1. Reads what was inside the seal, refusing anything that tried
+ * to say more than "ask me".
+ *
+ * An unknown key is named rather than reported as a shape failure: a Home
+ * sending `operation` has not made a typo, it is asking for the thing this ADR
+ * removed, and being told which field is the difference between a message that
+ * explains a decision and one that reports a parse.
+ */
+export function parsePicoLinkSealedPush(value: unknown): PicoLinkSealedPush {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_pico_link_push');
+  }
+  const record = value as Record<string, unknown>;
+  const known = ['schema', 'push', 'hostSignatureHex'];
+  const unexpected = Object.keys(record).find((key) => !known.includes(key));
+  if (unexpected !== undefined) {
+    throw new Error(`pico_link_push_carries_no:${unexpected}`);
+  }
+  const missing = known.find((key) => !(key in record));
+  if (missing !== undefined) {
+    throw new Error(`missing_pico_link_push_field:${missing}`);
+  }
+  if (record.schema !== picoLinkPushEnvelopeSchema) {
+    throw new Error('unknown_pico_link_push_schema');
+  }
+  if (typeof record.push !== 'object' || record.push === null || Array.isArray(record.push)) {
+    throw new Error('invalid_pico_link_push');
+  }
+  const push = record.push as Record<string, unknown>;
+  const pushKnown = [
+    'suite',
+    'pushId',
+    'hostSigningKeyFingerprintHex',
+    'deviceSigningKeyFingerprintHex',
+    'createdAt',
+    'expiresAt',
+  ];
+  const said = Object.keys(push).find((key) => !pushKnown.includes(key));
+  if (said !== undefined) {
+    throw new Error(`pico_link_push_carries_no:${said}`);
+  }
+  if (typeof record.hostSignatureHex !== 'string' || record.hostSignatureHex.length !== 128) {
+    throw new Error('invalid_pico_link_push_signature');
+  }
+  // Built rather than merely shape-checked: the same function that produces
+  // the signed bytes decides whether these fields could have produced any, so
+  // a payload this accepts is one a verifier can check.
+  buildPicoLinkPushSignatureInput(push as unknown as PicoLinkPushSignatureInput);
+
+  return Object.freeze({
+    schema: picoLinkPushEnvelopeSchema,
+    push: Object.freeze({ ...(push as unknown as PicoLinkPushSignatureInput) }),
+    hostSignatureHex: record.hostSignatureHex,
+  });
+}
+
+/**
+ * ADR 0150 PU2. Whether this push was addressed to this device.
+ *
+ * Separate from the parser because it needs a fact the payload cannot carry -
+ * which key this device actually holds - and a parser that took it as an
+ * argument would invite a caller to pass the value it had just read.
+ */
+export function assertPicoLinkPushAddressedHere(input: {
+  push: PicoLinkPushSignatureInput;
+  deviceSigningKeyFingerprintHex: string;
+  hostSigningKeyFingerprintHex: string;
+}): void {
+  if (input.push.deviceSigningKeyFingerprintHex !== input.deviceSigningKeyFingerprintHex) {
+    throw new Error('pico_link_push_addressed_another_device');
+  }
+  if (input.push.hostSigningKeyFingerprintHex !== input.hostSigningKeyFingerprintHex) {
+    // The pin, checked before the signature is spent. A URL is reachability
+    // and a relay is a carrier; only the pinned fingerprint says this is the
+    // Home this device belongs to (ADR 0031).
+    throw new Error('pico_link_push_from_another_home');
+  }
+}
+
+/**
+ * ADR 0150 PU1. The four things a push has nowhere to say, kept as data
+ * because an absent field cannot document itself.
+ */
+export const picoLinkPushSaysNothingAbout = Object.freeze({
+  operation: 'it would make the Home a requester to the device and point ADR 0139 backwards',
+  arguments: 'a push causes a read, and a read takes its arguments from the device that makes it',
+  result: 'content arriving outside the read path is content that met no ADR 0077 readership decision',
+  kind: 'a second closed list beside the operations, over the same subject, free to drift',
+} as const);
 
 export function buildPicoIdentityReaderKeyFreshnessSignatureInput(
   input: PicoIdentityReaderKeyFreshnessSignatureInput,
