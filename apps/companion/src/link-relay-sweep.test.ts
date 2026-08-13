@@ -94,7 +94,7 @@ describe('ADR 0149 - the device sweep', () => {
       },
     });
 
-    expect(result).toEqual({ handled: 1, refused: 0, deferred: 0 });
+    expect(result).toEqual({ handled: 1, pushed: 0, refused: 0, deferred: 0 });
     expect(seen).toEqual(['req-1:the answer']);
     expect(readPicoCompanionPendingReplyBook(path).pending).toEqual([]);
     expect(store.held).toEqual([]);
@@ -119,7 +119,7 @@ describe('ADR 0149 - the device sweep', () => {
       onRefused: ({ refusal }) => refusals.push(refusal),
     });
 
-    expect(result).toEqual({ handled: 0, refused: 1, deferred: 0 });
+    expect(result).toEqual({ handled: 0, pushed: 0, refused: 1, deferred: 0 });
     expect(refusals).toEqual(['unmatched']);
     expect(store.held).toEqual([]);
   });
@@ -144,7 +144,7 @@ describe('ADR 0149 - the device sweep', () => {
       onRefused: ({ refusal }) => refusals.push(refusal),
     });
 
-    expect(result).toEqual({ handled: 0, refused: 1, deferred: 0 });
+    expect(result).toEqual({ handled: 0, pushed: 0, refused: 1, deferred: 0 });
     expect(refusals).toEqual(['unverified']);
     // Settled too: it will never verify, so the key has nothing left to open.
     expect(readPicoCompanionPendingReplyBook(path).pending).toEqual([]);
@@ -173,7 +173,7 @@ describe('ADR 0149 - the device sweep', () => {
       },
     });
 
-    expect(result).toEqual({ handled: 0, refused: 0, deferred: 1 });
+    expect(result).toEqual({ handled: 0, pushed: 0, refused: 0, deferred: 1 });
     expect(readPicoCompanionPendingReplyBook(path).pending.map((entry) => entry.requestId))
       .toEqual(['req-1']);
     expect(store.held).toHaveLength(1);
@@ -227,7 +227,7 @@ describe('ADR 0149 - the device sweep', () => {
       },
     });
 
-    expect(result).toEqual({ handled: 2, refused: 1, deferred: 0 });
+    expect(result).toEqual({ handled: 2, pushed: 0, refused: 1, deferred: 0 });
     expect(seen).toEqual(['one', 'two']);
     expect(store.held).toEqual([]);
   });
@@ -244,12 +244,12 @@ describe('ADR 0149 - the device cadence', () => {
     const runner = startPicoCompanionLinkRelaySweep({
       sweep: async () => {
         sweeps += 1;
-        return { handled: 1, refused: 0, deferred: 0 };
+        return { handled: 1, pushed: 0, refused: 0, deferred: 0 };
       },
       intervalMs: 120_000,
       ...inert,
     });
-    expect(await runner.checkNow()).toEqual({ handled: 1, refused: 0, deferred: 0 });
+    expect(await runner.checkNow()).toEqual({ handled: 1, pushed: 0, refused: 0, deferred: 0 });
     expect(sweeps).toBe(1);
     runner.stop();
   });
@@ -268,14 +268,14 @@ describe('ADR 0149 - the device cadence', () => {
           held.release = resolve;
         });
         inFlight -= 1;
-        return { handled: 0, refused: 0, deferred: 0 };
+        return { handled: 0, pushed: 0, refused: 0, deferred: 0 };
       },
       intervalMs: 120_000,
       ...inert,
     });
 
     const first = runner.checkNow();
-    expect(await runner.checkNow()).toEqual({ handled: 0, refused: 0, deferred: 0 });
+    expect(await runner.checkNow()).toEqual({ handled: 0, pushed: 0, refused: 0, deferred: 0 });
     expect(maxInFlight).toBe(1);
     held.release?.();
     await first;
@@ -306,7 +306,7 @@ describe('ADR 0149 - the device cadence', () => {
     const runner = startPicoCompanionLinkRelaySweep({
       sweep: async () => {
         sweeps += 1;
-        return { handled: 0, refused: 0, deferred: 0 };
+        return { handled: 0, pushed: 0, refused: 0, deferred: 0 };
       },
       intervalMs: 120_000,
       ...inert,
@@ -314,5 +314,96 @@ describe('ADR 0149 - the device cadence', () => {
     runner.stop();
     await runner.checkNow();
     expect(sweeps).toBe(0);
+  });
+});
+
+describe('ADR 0150 - a push is not rubbish', () => {
+  it('tries a packet as a push before calling it unmatched', async () => {
+    // **The quiet bug this exists to prevent.** A push is sealed to the
+    // device key-agreement key, so no pending reply key opens it. Declaring
+    // unmatched first would delete every push on arrival, and a Home would
+    // push, a relay would accept, a device would collect and delete, and
+    // every side would look correct.
+    const path = bookPath();
+    const store = reader([{ tag: 't1', payload: 'bm90LWEtcmVwbHk=' }]);
+    const tried: number[] = [];
+
+    const result = await sweepPicoCompanionLinkRelay({
+      reader: store,
+      sodium,
+      pendingReplyPath: path,
+      mailbox,
+      now: () => new Date(at),
+      handle: async () => ({ verified: true }),
+      handlePush: async (sealed) => {
+        tried.push(sealed.byteLength);
+        return 'handled';
+      },
+    });
+
+    expect(result).toEqual({ handled: 0, pushed: 1, refused: 0, deferred: 0 });
+    expect(tried).toHaveLength(1);
+    expect(store.held).toEqual([]);
+  });
+
+  it('still calls it unmatched when it is not a push either', async () => {
+    const path = bookPath();
+    const store = reader([{ tag: 't1', payload: 'bm90LWEtcmVwbHk=' }]);
+    const refusals: string[] = [];
+
+    const result = await sweepPicoCompanionLinkRelay({
+      reader: store,
+      sodium,
+      pendingReplyPath: path,
+      mailbox,
+      now: () => new Date(at),
+      handle: async () => ({ verified: true }),
+      handlePush: async () => 'not_a_push',
+      onRefused: ({ refusal }) => refusals.push(refusal),
+    });
+
+    expect(result).toEqual({ handled: 0, pushed: 0, refused: 1, deferred: 0 });
+    expect(refusals).toEqual(['unmatched']);
+    expect(store.held).toEqual([]);
+  });
+
+  it('defers a push it could not handle now rather than deleting it', async () => {
+    // A locked vault is exactly when a push matters, and deleting one because
+    // the device happened to be locked is what this branch prevents.
+    const path = bookPath();
+    const store = reader([{ tag: 't1', payload: 'bm90LWEtcmVwbHk=' }]);
+
+    const result = await sweepPicoCompanionLinkRelay({
+      reader: store,
+      sodium,
+      pendingReplyPath: path,
+      mailbox,
+      now: () => new Date(at),
+      handle: async () => ({ verified: true }),
+      handlePush: async () => {
+        throw new Error('vault_locked');
+      },
+    });
+
+    expect(result).toEqual({ handled: 0, pushed: 0, refused: 0, deferred: 1 });
+    expect(store.held).toHaveLength(1);
+  });
+
+  it('reads every push as rubbish when no push handling is wired', async () => {
+    // The honest state before this is wired, asserted so nobody mistakes it
+    // for a working default.
+    const path = bookPath();
+    const store = reader([{ tag: 't1', payload: 'bm90LWEtcmVwbHk=' }]);
+
+    const result = await sweepPicoCompanionLinkRelay({
+      reader: store,
+      sodium,
+      pendingReplyPath: path,
+      mailbox,
+      now: () => new Date(at),
+      handle: async () => ({ verified: true }),
+    });
+
+    expect(result).toEqual({ handled: 0, pushed: 0, refused: 1, deferred: 0 });
   });
 });

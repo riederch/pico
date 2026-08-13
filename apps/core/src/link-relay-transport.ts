@@ -1,5 +1,9 @@
 import { PicoLinkRelayClient } from '@pico/link-relay-client';
-import { parsePicoLinkPacketAddress } from '@pico/protocol/link-packet';
+import {
+  parsePicoLinkPacketAddress,
+  type PicoLinkPacket,
+} from '@pico/protocol/link-packet';
+import type { PicoLinkDeliveryOutcome } from '@pico/protocol/link-delivery';
 import type { PicoLinkRelayReader } from './link-relay-collector.js';
 
 /**
@@ -31,6 +35,19 @@ export interface PicoLinkRelayTransport extends PicoLinkRelayReader {
   register(input: { mailbox: string; capacity: number }): Promise<void>;
   /** ADR 0147 RY4. Ends a mailbox at the operator that holds it. */
   deregister(mailbox: string): Promise<void>;
+  /**
+   * ADR 0149 RS3. Puts a packet in somebody else's mailbox.
+   *
+   * No account travels with it and none is asked for: ADR 0147 RY1 left
+   * nothing on a packet to authenticate, and attaching one anyway would tell
+   * the operator which of its customers is writing to which mailbox - the
+   * graph the envelope was shaped to avoid.
+   *
+   * Answers the ADR 0147 outcome rather than throwing, because every member of
+   * that list is something the caller can act on: a full mailbox drains, an
+   * unknown one needs a new address, a revoked one needs a new relationship.
+   */
+  deliver(packet: PicoLinkPacket): Promise<PicoLinkDeliveryOutcome>;
 }
 
 export function createPicoLinkRelayTransport(
@@ -48,6 +65,7 @@ export function createPicoLinkRelayTransport(
         throw new Error(`pico_link_relay_registration_refused:${answer.refusal}`);
       }
     },
+    deliver: async (packet) => await client.deliver(packet),
     deregister: async (mailbox) => {
       const answer = await client.deregister(mailbox);
       if (!answer.ok && answer.refusal !== 'mailbox_not_yours') {

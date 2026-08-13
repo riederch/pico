@@ -35,7 +35,7 @@ export interface PicoCompanionRelayReader {
 }
 
 export type PicoCompanionRelayRefusal =
-  /** No outstanding request's key opens it: a duplicate, or not ours. */
+  /** No outstanding request's key opens it, and it is not a push either. */
   | 'unmatched'
   /** It opened and the answer did not hold - a signature, a pin, a shape. */
   | 'unverified';
@@ -58,12 +58,33 @@ export interface PicoCompanionLinkRelaySweepOptions {
     requestId: string;
     opened: Uint8Array;
   }) => Promise<{ verified: boolean }>;
+  /**
+   * ADR 0150. Tries the packet as a push, and says whether it was one.
+   *
+   * **Without this every push is silently discarded.** A push is sealed to the
+   * device's key-agreement key, not to a per-request reply key, so no pending
+   * key opens it - it would fall through to `unmatched` and be acknowledged as
+   * rubbish. The bug is quiet in exactly the way that matters: a Home would
+   * push, a relay would accept, a device would collect and delete, and every
+   * side would look correct.
+   *
+   * Absent means a device with no push handling, which reads every push as
+   * rubbish. That is the honest state before this is wired and not a default
+   * anybody should keep.
+   *
+   * Opening one needs the device key-agreement key from the vault - which adds
+   * no requirement that was not already there, since the read a push asks for
+   * needs an unlocked device signing session anyway.
+   */
+  handlePush?: (sealed: Uint8Array) => Promise<'handled' | 'not_a_push'>;
   now?: () => Date;
   onRefused?: (input: { tag: string; refusal: PicoCompanionRelayRefusal }) => void;
 }
 
 export interface PicoCompanionLinkRelaySweep {
   handled: number;
+  /** ADR 0150. Packets that were a push rather than an answer. */
+  pushed: number;
   refused: number;
   deferred: number;
 }
@@ -78,6 +99,7 @@ export async function sweepPicoCompanionLinkRelay(
   );
 
   let handled = 0;
+  let pushed = 0;
   let refused = 0;
   let deferred = 0;
 
@@ -89,8 +111,26 @@ export async function sweepPicoCompanionLinkRelay(
       nowMs,
     });
     if (opened === undefined) {
-      refused += 1;
-      options.onRefused?.({ tag: packet.tag, refusal: 'unmatched' });
+      // Tried as a push **before** being called rubbish. The other order is
+      // the quiet bug: a push opens with no pending key, so declaring
+      // unmatched first would delete every one of them on arrival.
+      let asPush: 'handled' | 'not_a_push' = 'not_a_push';
+      try {
+        asPush = await options.handlePush?.(Buffer.from(packet.payload, 'base64')) ?? 'not_a_push';
+      } catch {
+        // A push that could not be handled *now* - a locked vault, a busy
+        // surface - is deferred like any other failure. Deleting it because
+        // the device happened to be locked is what this branch exists to
+        // prevent.
+        deferred += 1;
+        continue;
+      }
+      if (asPush === 'handled') {
+        pushed += 1;
+      } else {
+        refused += 1;
+        options.onRefused?.({ tag: packet.tag, refusal: 'unmatched' });
+      }
       await options.reader.acknowledge({ mailbox: options.mailbox, tags: [packet.tag] });
       continue;
     }
@@ -120,7 +160,7 @@ export async function sweepPicoCompanionLinkRelay(
   }
 
   writePicoCompanionPendingReplyBook(options.pendingReplyPath, book);
-  return Object.freeze({ handled, refused, deferred });
+  return Object.freeze({ handled, pushed, refused, deferred });
 }
 
 /**
@@ -175,14 +215,14 @@ export function startPicoCompanionLinkRelaySweep(input: {
       // A wake and a timer landing together must not run two sweeps: the
       // second would collect the same packets and hand them over twice for no
       // reason the first had not already covered.
-      return { handled: 0, refused: 0, deferred: 0 };
+      return { handled: 0, pushed: 0, refused: 0, deferred: 0 };
     }
     running = true;
     try {
       return await input.sweep();
     } catch {
       failures += 1;
-      return { handled: 0, refused: 0, deferred: 0 };
+      return { handled: 0, pushed: 0, refused: 0, deferred: 0 };
     } finally {
       running = false;
       arm();
