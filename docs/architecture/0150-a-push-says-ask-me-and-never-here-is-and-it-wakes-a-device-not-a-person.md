@@ -2,8 +2,9 @@
 
 ## Status
 
-Accepted; **PU1 and PU2 implemented 2026-08-13**, PU3-PU5 open. Decided
-2026-08-13.
+Accepted; **PU1-PU5 all implemented 2026-08-13** at the contract level.
+Decided 2026-08-13. What remains is the wiring - a Home that decides to
+push, and a device that receives one over its relay mailbox.
 ADR 0149 built a relay that carries a device's questions when the direct
 path is gone. This adds the one thing that relay cannot carry: a Home
 reaching a device that did not ask.
@@ -162,19 +163,48 @@ relationship ADR 0118 O1 draws between announcing and acknowledging.
   bytes because nothing signs it, and this one does because something
   does.
 
-- **PU3 - Bounded replay (open):** a fresh push id, a short expiry and a
-  bounded seen-set on the device. Proved by replaying a valid push and
-  finding it accepted once.
+- **PU3 - Bounded replay (implemented 2026-08-13):** ADR 0107's three
+  properties, mirrored because the problem is the same one and differs only
+  in what a replay costs.
 
-- **PU4 - It wakes a device, never a person (open):** receiving a push
-  causes a read and nothing else. No notification surface is reachable from
-  the push path, and a check proves the absence rather than a comment
-  claiming it - the same idiom `check-link-seal.mjs` uses.
+  A **lifetime ceiling**, without which the seen-set is defeated by
+  construction - no bounded memory covers a push minted valid for a year,
+  which is the trap ADR 0107 hit first. Freshness against the device's own
+  clock at *both* ends, since a push from too far ahead would let a wrong
+  clock widen what has to be remembered. And a bounded insertion-ordered
+  set consulted **after** the window, so every entry is short-lived by
+  construction; eviction admits one replay of the oldest, which is ADR
+  0107's named residual and costs exactly one read.
 
-- **PU5 - A floor between pushes (open):** one push per event, a minimum
-  interval per device, and no retry. Proved by a Home with two events
-  inside the floor sending one push, and by a push that is never resent
-  when nothing is heard back.
+  Pins are checked before freshness and **throw** rather than returning a
+  verdict: a push for another device or from another Home is not a stale
+  push, and answering `expired` would answer the wrong question.
+
+- **PU4 - It wakes a device, never a person (implemented 2026-08-13):**
+  `receivePicoCompanionPush` takes a `read` and nothing else - no
+  notification parameter, no presentation port, nowhere to put a surface -
+  and `scripts/check-push-boundary.mjs` asserts the push path names no
+  notification, tray, window, sound or badge and imports no `electron`. It
+  matches code with comments and strings stripped, so the paragraph
+  explaining the rule cannot trip the rule.
+
+  A floor rather than a proof, and written as one: a surface reached
+  through three indirections escapes any such reading. What it buys is that
+  the next one is a named error in a second rather than a person woken at
+  four in the morning by a design nobody meant.
+
+- **PU5 - A floor between pushes (implemented 2026-08-13):** two refusals,
+  named apart because they answer time differently.
+  `already_pushed_for_this_event` holds however long ago the first was,
+  since ADR 0149 RS5 reports no delivery and a Home resending until
+  something happened would resend against silence, forever. `too_soon`
+  holds however different the events are, because the person's device is
+  what is spent either way. A caller told the second would reasonably try
+  later; there is nothing to try later for after the first.
+
+  The occasion list is closed and short - a push is for what the six-hour
+  poll would reach too late, not for what changed - and adding one is a
+  decision that some event is worth a person's device waking.
 
 ## Non-goals
 
