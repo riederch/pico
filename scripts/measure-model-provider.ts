@@ -62,13 +62,16 @@ for (const step of report.contextSteps) {
     `  at ${String(step.requestedContextTokens).padStart(6)} ctx    `
     + `${step.generationTokensPerSecond.toFixed(1)} tok/s generation, `
     + `${step.promptTokensPerSecond.toFixed(0)} tok/s prompt `
-    + `(${step.promptTokens} prompt tokens)`,
+    + `(${step.promptTokens} prompt tokens)`
+    + (step.fullyOnAccelerator === false ? '  <- partly off the accelerator' : ''),
   );
 }
 console.error(`  cold load         ${report.coldLoadMs === null ? 'not measured' : `${Math.round(report.coldLoadMs)} ms`}`);
 console.error(`  reload            ${report.reloadMs === null ? 'not measured' : `${Math.round(report.reloadMs)} ms`}`);
 console.error(`  lanes             ${report.concurrentJobs ?? 'not measured'}`);
 console.error(`  resident          ${report.residentBytes === null ? 'not reported' : `${(report.residentBytes / 1024 ** 3).toFixed(2)} GiB`}`);
+console.error(`  KV per token      ${report.kvBytesPerToken === null ? 'unknown' : `${(report.kvBytesPerToken / 1024).toFixed(0)} KiB (q8_0)`}`);
+console.error(`  spills from       ${report.spilledFromTokens === null ? 'no measured width' : `${report.spilledFromTokens} tokens`}`);
 console.error(`  credential        ${report.answeredWithoutCredential ? 'none sent, and the host answered' : 'required'}`);
 for (const note of report.notes) {
   console.error(`  note              ${note}`);

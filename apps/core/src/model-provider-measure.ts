@@ -50,6 +50,17 @@ export interface PicoModelProviderContextObservation {
   promptTokens: number;
   generationTokensPerSecond: number;
   promptTokensPerSecond: number;
+  /**
+   * Whether the host kept the whole deployment on the accelerator during this
+   * step, as `/api/ps` reports it.
+   *
+   * **Kept because it is cheap and honest, not because it detects anything.**
+   * It was added to catch the moment the KV cache stops fitting beside the
+   * weights; on the measured host it never moves, because `size_vram` tracks
+   * the weights and not the cache. The thing it was meant to find is found by
+   * `windowCost` instead, with a stopwatch.
+   */
+  fullyOnAccelerator: boolean | null;
 }
 
 export interface PicoModelProviderMeasurementReport {
@@ -66,6 +77,34 @@ export interface PicoModelProviderMeasurementReport {
   concurrentJobs: number | null;
   /** Bytes resident on the accelerator while loaded, if the host says. */
   residentBytes: number | null;
+  /**
+   * The narrowest measured context at which part of the deployment was pushed
+   * off the accelerator. Null when every step stayed resident - which is not
+   * proof that no such width exists, only that none was measured.
+   */
+  spilledFromTokens: number | null;
+  /**
+   * ADR 0142's slope, measured the way it actually behaves.
+   *
+   * **The declared window costs throughput even when nothing uses it.** With
+   * the prompt held constant, the measured host generates 18.0 tok/s at a
+   * declared 8192 and 9.5 at 32768 - the same work, the same prompt, a
+   * different `num_ctx`. So the width in an entry is not only a ceiling on
+   * what fits; it is a price every job pays, including the short ones.
+   *
+   * That reframes ADR 0142's reasoning without contradicting its number: it
+   * reads the fall as a function of *actual* context, and it is a function of
+   * the *declared* one. Null when the model declares no wider window to
+   * compare against.
+   */
+  windowCost: {
+    atServedTokens: number;
+    servedTokensPerSecond: number;
+    atNominalTokens: number;
+    nominalTokensPerSecond: number;
+  } | null;
+  /** What the model's own metadata implies one token of KV cache costs. */
+  kvBytesPerToken: number | null;
   /** ADR 0142 PE5. True when a request carrying no credential was answered. */
   answeredWithoutCredential: boolean;
   notes: readonly string[];
@@ -216,6 +255,24 @@ export class PicoModelProviderMeasurer {
       model_info?: Record<string, unknown>;
       details?: { parameter_size?: string; quantization_level?: string };
     };
+    const info = shown.model_info ?? {};
+    const architectureValue = (suffix: string): number | null => {
+      const key = Object.keys(info).find((name) => name.endsWith(suffix));
+      const value = key === undefined ? undefined : info[key];
+      return typeof value === 'number' ? value : null;
+    };
+    // Two entries per token, one key and one value, over every block, and
+    // `q8_0` is a byte an element. The arithmetic is here because it explains
+    // the probe below rather than replacing it: a number that agrees with a
+    // measurement is worth more than either alone.
+    const blocks = architectureValue('.block_count');
+    const kvHeads = architectureValue('.attention.head_count_kv');
+    const keyLength = architectureValue('.attention.key_length');
+    const valueLength = architectureValue('.attention.value_length');
+    const kvBytesPerToken = blocks === null || kvHeads === null
+      || keyLength === null || valueLength === null
+      ? null
+      : blocks * kvHeads * (keyLength + valueLength);
     const contextKey = Object.keys(shown.model_info ?? {})
       .find((key) => key.endsWith('.context_length'));
     const nominalContextTokens = contextKey === undefined
@@ -281,6 +338,7 @@ export class PicoModelProviderMeasurer {
     }
 
     const contextSteps: PicoModelProviderContextObservation[] = [];
+    let spilledFromTokens: number | null = null;
     for (const step of steps) {
       this.log(`measuring generation at ${step} tokens of context`);
       const timings = await this.generate({
@@ -302,16 +360,80 @@ export class PicoModelProviderMeasurer {
         );
         continue;
       }
+      // Read straight after the step, while this width's cache is the one
+      // resident. Asking later would ask about whatever ran last.
+      const loaded = await this.get('/api/ps') as {
+        models?: Array<{ name?: string; size?: number; size_vram?: number }>;
+      };
+      const entryNow = (loaded.models ?? []).find((model) => model.name === this.options.model);
+      const fullyOnAccelerator = typeof entryNow?.size === 'number'
+        && typeof entryNow.size_vram === 'number'
+        ? entryNow.size_vram >= entryNow.size
+        : null;
+      if (fullyOnAccelerator === false && spilledFromTokens === null) {
+        spilledFromTokens = step;
+        notes.push(
+          `at ${step} tokens the host kept part of the deployment off the `
+          + 'accelerator.',
+        );
+      }
+
       contextSteps.push(Object.freeze({
         requestedContextTokens: step,
         promptTokens: timings.prompt_eval_count ?? 0,
         generationTokensPerSecond: generationRate,
         promptTokensPerSecond: promptRate,
+        fullyOnAccelerator,
       }));
       this.log(
         `  ${generationRate.toFixed(1)} tok/s generation, `
         + `${promptRate.toFixed(0)} tok/s prompt, over ${timings.prompt_eval_count ?? 0} prompt tokens`,
       );
+    }
+
+    // **What the declared window costs, at a constant prompt.** Two runs of
+    // identical work, one at the width this entry will state and one at the
+    // width the model advertises. The difference is what a Pico would pay for
+    // declaring a window it rarely fills - and on the measured host it is
+    // roughly half the throughput, which is not a rounding error.
+    let windowCost: PicoModelProviderMeasurementReport['windowCost'] = null;
+    const servedTokens = contextSteps.reduce(
+      (widest, step) => Math.max(widest, step.requestedContextTokens),
+      0,
+    );
+    if (nominalContextTokens !== null && servedTokens > 0 && nominalContextTokens > servedTokens) {
+      const prompt = paddingPrompt(2_048);
+      const at = async (window: number): Promise<number | null> => {
+        // Warmed first, because changing the window reloads the model and the
+        // reload would land inside the figure.
+        await this.generate({ prompt, contextTokens: window, keepAlive: keepAliveSeconds, predict: 128 });
+        const timings = await this.generate({
+          prompt, contextTokens: window, keepAlive: keepAliveSeconds, predict: 128,
+        });
+        return (timings.eval_count ?? 0) < minGenerationTokens
+          ? null
+          : rate(timings.eval_count, timings.eval_duration);
+      };
+      this.log(`pricing the declared window: ${servedTokens} against ${nominalContextTokens}`);
+      const served = await at(servedTokens);
+      const nominal = await at(nominalContextTokens);
+      if (served !== null && nominal !== null) {
+        windowCost = Object.freeze({
+          atServedTokens: servedTokens,
+          servedTokensPerSecond: served,
+          atNominalTokens: nominalContextTokens,
+          nominalTokensPerSecond: nominal,
+        });
+        this.log(
+          `  ${served.toFixed(1)} tok/s at ${servedTokens}, `
+          + `${nominal.toFixed(1)} tok/s at ${nominalContextTokens} - same prompt`,
+        );
+        notes.push(
+          `declaring ${nominalContextTokens} tokens instead of ${servedTokens} costs `
+          + `${(100 - (nominal / served) * 100).toFixed(0)}% of generation throughput on an `
+          + 'identical prompt. The width is a price every job pays, not only a ceiling.',
+        );
+      }
     }
 
     let concurrentJobs: number | null = null;
@@ -388,6 +510,9 @@ export class PicoModelProviderMeasurer {
       keepAliveMs: keepAliveSeconds * 1_000,
       concurrentJobs,
       residentBytes,
+      spilledFromTokens,
+      kvBytesPerToken,
+      windowCost,
       answeredWithoutCredential,
       notes: Object.freeze(notes),
     });
@@ -416,13 +541,21 @@ export function picoModelProviderEntryFromMeasurement(
   if (report.coldLoadMs === null || report.reloadMs === null) {
     throw new Error('pico_model_provider_measured_no_residency');
   }
-  const served = report.contextSteps.reduce(
+  // **A width that spilled is not a width this host serves.** The step is a
+  // true observation and belongs in the report; what it observed is the
+  // deployment failing to fit, and an entry stating it would promise a context
+  // ADR 0118 O2 would then find slow rather than absent.
+  const resident = report.contextSteps.filter((step) => step.fullyOnAccelerator !== false);
+  if (resident.length === 0) {
+    throw new Error('pico_model_provider_measured_no_resident_context_step');
+  }
+  const served = resident.reduce(
     (widest, step) => (step.requestedContextTokens > widest.requestedContextTokens ? step : widest),
   );
-  const slowest = report.contextSteps.reduce(
+  const slowest = resident.reduce(
     (worst, step) => (step.generationTokensPerSecond < worst.generationTokensPerSecond ? step : worst),
   );
-  const slowestPrompt = report.contextSteps.reduce(
+  const slowestPrompt = resident.reduce(
     (worst, step) => (step.promptTokensPerSecond < worst.promptTokensPerSecond ? step : worst),
   );
 

@@ -2,6 +2,29 @@
 
 ## Status
 
+Status note, 2026-08-13, second run: **the fall in throughput is a function
+of the *declared* window, not only of the context actually used.** With the
+prompt held constant at 3738 tokens, the same host generates 18.0 tok/s at a
+declared 8192, 15.2 at 16384, 11.7 at 24576 and 9.5 at 32768. Identical work,
+identical prompt, and 47% of the throughput gone. This ADR reads the slope as
+"at 27k of actual context generation collapses", which is true and is not the
+whole mechanism: **the width an entry states is a price every job pays,
+including the short ones.** It strengthens the decision to serve 8192 rather
+than 32768, for a reason the ADR did not have.
+
+**A cliff was predicted from arithmetic and is not there.** The model's own
+metadata gives 40 blocks, 8 KV heads and 128+128, so one token of `q8_0` KV
+costs 80 KiB and the 1.95 GiB left beside the weights runs out at about 25,500
+tokens - which sits neatly beside the 27k where this ADR measured 5.1 tok/s.
+Measured across 8k, 16k, 24k and 32k the decline is gradual, with no break
+between the width that fits and the width that does not. The arithmetic
+explains a budget; it does not explain the slope, and it was not allowed to.
+
+`size_vram` on `/api/ps` does not move either: it tracks the weights and not
+the cache, so a probe reading it detects nothing. This ADR's
+"no runtime-detectable cliff" holds for anything a caller can query. A
+stopwatch finds it.
+
 Status note, 2026-08-13: **the host was measured again, by code this time, and
 the numbers hold.** Generation came in at 18.2 and 17.7 tok/s against the 18.4
 and 17.8 recorded here, prompt evaluation at 1145 tok/s against 1152, one

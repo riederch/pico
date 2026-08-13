@@ -19,8 +19,11 @@ function ollama(options: {
   perStep?: Record<number, { evalRate: number; promptRate: number }>;
   /** A model that finishes early, which is what a real one does. */
   stopAfterTokens?: number;
+  /** The width from which the host stops keeping it all on the card. */
+  spillsFromTokens?: number;
 } = {}): { fetch: typeof globalThis.fetch; calls: string[] } {
   const calls: string[] = [];
+  let lastContextTokens = 0;
   const perStep = options.perStep ?? {
     4096: { evalRate: 18.4, promptRate: 1152 },
     8192: { evalRate: 17.8, promptRate: 980 },
@@ -47,12 +50,29 @@ function ollama(options: {
       });
     }
     if (path === '/api/ps') {
-      return json({ models: [{ name: 'mistral-small:latest', size_vram: 14_334_000_000 }] });
+      // `size` is the whole deployment and `size_vram` the part on the card.
+      // Below the spill width they are equal; above it the host keeps some
+      // off, and says so.
+      const spilled = options.spillsFromTokens !== undefined
+        && lastContextTokens >= options.spillsFromTokens;
+      return json({
+        models: [{
+          name: 'mistral-small:latest',
+          size: 14_334_000_000,
+          size_vram: spilled ? 9_000_000_000 : 14_334_000_000,
+        }],
+      });
     }
     if (path === '/api/show') {
       return json({
         capabilities: ['completion', 'tools'],
-        model_info: { 'llama.context_length': 32768 },
+        model_info: {
+          'llama.context_length': 32768,
+          'llama.block_count': 40,
+          'llama.attention.head_count_kv': 8,
+          'llama.attention.key_length': 128,
+          'llama.attention.value_length': 128,
+        },
       });
     }
     if (path === '/api/generate') {
@@ -61,6 +81,9 @@ function ollama(options: {
         keep_alive?: number | string;
       };
       const step = body.options?.num_ctx;
+      if (step !== undefined) {
+        lastContextTokens = step;
+      }
       if (step === undefined) {
         // The load probes: one-token answers whose only interesting field is
         // how long the model took to become resident.
@@ -155,6 +178,25 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     expect(report.concurrentJobs).toBe(2);
   });
 
+  it('prices the declared window against the one it serves', async () => {
+    // The finding this replaced a broken probe with: at a constant prompt, a
+    // wider declared window costs throughput. `size_vram` never moved on the
+    // real host, so the spill check found nothing; a stopwatch does.
+    const report = await measurer({}, ollama({
+      perStep: {
+        4096: { evalRate: 18.4, promptRate: 1152 },
+        8192: { evalRate: 18.0, promptRate: 980 },
+        32768: { evalRate: 9.5, promptRate: 700 },
+      },
+    })).measure();
+    expect(report.kvBytesPerToken).toBe(81_920);
+    expect(report.windowCost?.atServedTokens).toBe(8192);
+    expect(report.windowCost?.atNominalTokens).toBe(32768);
+    expect(report.windowCost!.nominalTokensPerSecond)
+      .toBeLessThan(report.windowCost!.servedTokensPerSecond * 0.7);
+    expect(report.notes.join(' ')).toContain('a price every job pays');
+  });
+
   it('drops a step the model answered in a handful of tokens', async () => {
     // `num_predict` is a ceiling, never a target. A rate over two tokens is
     // startup cost, and the first version of this measurer reported it as
@@ -178,14 +220,17 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
     nominalContextTokens: 32768,
     capabilities: ['completion', 'tools'],
     contextSteps: [
-      { requestedContextTokens: 4096, promptTokens: 3840, generationTokensPerSecond: 18.4, promptTokensPerSecond: 1152 },
-      { requestedContextTokens: 8192, promptTokens: 7936, generationTokensPerSecond: 17.8, promptTokensPerSecond: 980 },
+      { requestedContextTokens: 4096, promptTokens: 3840, generationTokensPerSecond: 18.4, promptTokensPerSecond: 1152, fullyOnAccelerator: true },
+      { requestedContextTokens: 8192, promptTokens: 7936, generationTokensPerSecond: 17.8, promptTokensPerSecond: 980, fullyOnAccelerator: true },
     ],
     coldLoadMs: 31_000,
     reloadMs: 8_000,
     keepAliveMs: 300_000,
     concurrentJobs: 1,
     residentBytes: 14_334_000_000,
+    spilledFromTokens: null,
+    kvBytesPerToken: 81_920,
+    windowCost: null,
     answeredWithoutCredential: true,
     notes: [],
   });
@@ -202,6 +247,25 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
     expect(entry.measurement.capacity.promptTokensPerSecond).toBe(980);
     expect(entry.measurement.capacity.contextTokens).toBe(8192);
     expect(entry.carries).toBe('live_turn');
+  });
+
+  it('never states a width the deployment did not fit into', () => {
+    const spilled = {
+      ...base,
+      contextSteps: [
+        { ...base.contextSteps[0]!, fullyOnAccelerator: true },
+        { ...base.contextSteps[1]!, fullyOnAccelerator: false },
+      ],
+      spilledFromTokens: 8192,
+    };
+    const entry = picoModelProviderEntryFromMeasurement(spilled, {
+      entryId: 'lan-mistral-small',
+      providerClass: 'declared_own_host',
+      measuredAt: '2026-08-13T12:00:00.000Z',
+    });
+    // 8192 was observed and is not what this host serves.
+    expect(entry.measurement.capacity.contextTokens).toBe(4096);
+    expect(entry.measurement.capacity.generationTokensPerSecond).toBe(18.4);
   });
 
   it('refuses to write an entry from a run that measured nothing', () => {
