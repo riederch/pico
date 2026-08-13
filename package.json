@@ -28,7 +28,7 @@
     "companion:check": "node scripts/check-companion-boundary.mjs && node scripts/check-electron-support.mjs",
     "link:check": "node scripts/check-link-seal.mjs",
     "relay:check": "node scripts/check-relay-boundary.mjs",
-    "push:check": "node scripts/check-push-boundary.mjs",
+    "push:check": "node scripts/check-push-boundary.mjs && node scripts/check-push-lifetime.mjs",
     "companion:release-check": "pnpm --filter @pico/companion-shell verify:linux",
     "time:check": "node scripts/check-time-authority.mjs",
     "offline:check": "node scripts/check-offline-floor.mjs",
