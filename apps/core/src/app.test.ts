@@ -92,7 +92,6 @@ import {
   picoLinkPushLedgerMigrationId,
   picoModelProviderConsentMigrationId,
   picoModelProviderEntryMigrationId,
-  picoModelProviderConsentMigrationId,
   picoDepotReachMigrationId,
   picoLibraryDerivationMigrationId,
   picoSupplierCredentialScopeMigrationId,

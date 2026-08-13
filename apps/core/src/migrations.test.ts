@@ -13,7 +13,6 @@ import {
   picoLinkPushLedgerMigrationId,
   picoModelProviderConsentMigrationId,
   picoModelProviderEntryMigrationId,
-  picoModelProviderConsentMigrationId,
   picoDepotReachMigrationId,
   picoLibraryDerivationMigrationId,
   picoModuleEffectConsentMigrationId,
