@@ -72,6 +72,7 @@ console.error(`  lanes             ${report.concurrentJobs ?? 'not measured'}`);
 console.error(`  resident          ${report.residentBytes === null ? 'not reported' : `${(report.residentBytes / 1024 ** 3).toFixed(2)} GiB`}`);
 console.error(`  KV per token      ${report.kvBytesPerToken === null ? 'unknown' : `${(report.kvBytesPerToken / 1024).toFixed(0)} KiB (q8_0)`}`);
 console.error(`  spills from       ${report.spilledFromTokens === null ? 'no measured width' : `${report.spilledFromTokens} tokens`}`);
+console.error(`  free window       ${report.widestFreeWindowTokens === null ? 'not walked' : `${report.widestFreeWindowTokens} tokens at ${report.widestFreeWindowTokensPerSecond?.toFixed(1)} tok/s`}`);
 console.error(`  credential        ${report.answeredWithoutCredential ? 'none sent, and the host answered' : 'required'}`);
 for (const note of report.notes) {
   console.error(`  note              ${note}`);

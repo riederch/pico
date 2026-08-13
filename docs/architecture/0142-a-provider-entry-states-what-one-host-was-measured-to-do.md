@@ -2,28 +2,59 @@
 
 ## Status
 
-Status note, 2026-08-13, second run: **the fall in throughput is a function
-of the *declared* window, not only of the context actually used.** With the
-prompt held constant at 3738 tokens, the same host generates 18.0 tok/s at a
-declared 8192, 15.2 at 16384, 11.7 at 24576 and 9.5 at 32768. Identical work,
-identical prompt, and 47% of the throughput gone. This ADR reads the slope as
-"at 27k of actual context generation collapses", which is true and is not the
-whole mechanism: **the width an entry states is a price every job pays,
-including the short ones.** It strengthens the decision to serve 8192 rather
-than 32768, for a reason the ADR did not have.
+Status note, 2026-08-13, second run, **superseding the paragraph it
+replaces**: the declared window costs throughput **only once the weights plus
+its preallocated KV cache stop fitting on the accelerator**, and costs
+nothing at all below that. An earlier version of this note said it was "a
+price every job pays", which was drawn from one model on a card it barely
+fits on. Two more models on the same host pay nothing for five times the
+window.
 
-**A cliff was predicted from arithmetic and is not there.** The model's own
-metadata gives 40 blocks, 8 KV heads and 128+128, so one token of `q8_0` KV
-costs 80 KiB and the 1.95 GiB left beside the weights runs out at about 25,500
-tokens - which sits neatly beside the 27k where this ADR measured 5.1 tok/s.
-Measured across 8k, 16k, 24k and 32k the decline is gradual, with no break
-between the width that fits and the width that does not. The arithmetic
-explains a budget; it does not explain the slope, and it was not allowed to.
+With the prompt held constant and each model alone on the card:
+
+| Declared window | KV preallocated | Weights + KV | Generation |
+|---|---|---|---|
+| 4096 | 0.31 GiB | 13.66 GiB | 18.2 tok/s |
+| 8192 | 0.62 GiB | 13.97 GiB | 18.2 tok/s |
+| 12288 | 0.94 GiB | 14.29 GiB | 18.2 tok/s |
+| 16384 | 1.25 GiB | 14.60 GiB | 15.5 tok/s |
+| 24576 | 1.88 GiB | 15.22 GiB | 12.1 tok/s |
+| 32768 | 2.50 GiB | 15.85 GiB | 9.9 tok/s |
+
+**So this ADR's 8192 leaves half a window unused.** 12288 costs exactly the
+same and was found by walking rather than reasoning. The usable budget is
+about 14.3 GiB where the card is 15.3: roughly a gigabyte goes to compute
+buffers and the driver's own context, which is in no spec sheet and is why
+the figure has to be walked. The measurer walks it now, and an entry states
+the widest window that costs nothing rather than the widest step somebody
+thought to try.
+
+The rule predicts the other two deployments measured the same day. A 14.8B
+model at 8.64 GiB has room for 74,000 tokens of KV and pays nothing for its
+declared 40960; an 8.2B model at 4.87 GiB has room for 137,000 and pays
+nothing either. Both measured at 0%.
+
+**A cliff was predicted from arithmetic and is not where it was predicted.**
+One token of `q8_0` KV costs 80 KiB here, so the 1.95 GiB nominally left
+beside the weights would run out near 25,500 tokens - close enough to the 27k
+in the table above to look like a confirmation. It is not: the fall starts at
+16384. The arithmetic is right about the shape and wrong about the budget,
+which is exactly the difference between a number reasoned and a number
+measured, and is this ADR's own PE2 turned on the ADR.
 
 `size_vram` on `/api/ps` does not move either: it tracks the weights and not
 the cache, so a probe reading it detects nothing. This ADR's
 "no runtime-detectable cliff" holds for anything a caller can query. A
 stopwatch finds it.
+
+**One more finding, about method rather than about this host.** Measuring
+three models in a row with a five-minute keep-alive left the first resident
+while the second loaded, and 15.3 GiB does not hold 13.35 plus 8.64. The
+second model reported 3.4 tok/s at a narrow window and 28.2 at a wide one -
+faster with more work, which is impossible and was the tell. **A deployment
+sharing its accelerator is a different deployment**, which is PE1 said in
+hardware; the measurer now takes the card before it measures and says so when
+a foreign model appears mid-run.
 
 Status note, 2026-08-13: **the host was measured again, by code this time, and
 the numbers hold.** Generation came in at 18.2 and 17.7 tok/s against the 18.4

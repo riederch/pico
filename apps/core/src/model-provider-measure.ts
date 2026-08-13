@@ -103,6 +103,19 @@ export interface PicoModelProviderMeasurementReport {
     atNominalTokens: number;
     nominalTokensPerSecond: number;
   } | null;
+  /**
+   * The widest declared window that costs nothing, found by walking upward
+   * until throughput drops.
+   *
+   * **This is the number an entry should state, and it is not the number
+   * anybody guesses.** On the measured host it is 12288 where ADR 0142 states
+   * 8192 - half again the window, for free, left on the table because the
+   * figure was reasoned from the card's nominal size rather than walked. The
+   * usable budget turned out to be about a gigabyte smaller than the card:
+   * compute buffers and the driver's own context are not in any spec sheet.
+   */
+  widestFreeWindowTokens: number | null;
+  widestFreeWindowTokensPerSecond: number | null;
   /** What the model's own metadata implies one token of KV cache costs. */
   kvBytesPerToken: number | null;
   /** ADR 0142 PE5. True when a request carrying no credential was answered. */
@@ -231,6 +244,51 @@ export class PicoModelProviderMeasurer {
     }) as PicoOllamaGenerateTimings;
   }
 
+  /** Every model the host currently holds on the accelerator. */
+  private async resident(): Promise<Array<{ name: string; sizeVram: number }>> {
+    const loaded = await this.get('/api/ps') as {
+      models?: Array<{ name?: string; size_vram?: number }>;
+    };
+    return (loaded.models ?? [])
+      .filter((model): model is { name: string; size_vram?: number } => typeof model.name === 'string')
+      .map((model) => ({ name: model.name, sizeVram: model.size_vram ?? 0 }));
+  }
+
+  /**
+   * ADR 0142 PE1. **A deployment sharing its accelerator with another model is
+   * a different deployment**, and measuring it produces numbers about the pair.
+   *
+   * This is not hypothetical and it is not subtle. Measuring three models in a
+   * row with a five-minute keep-alive left the first still resident while the
+   * second loaded, and a 14B model reported 3.4 tok/s at a narrow window and
+   * 28.2 at a wide one - faster with more work, which is impossible and was
+   * the tell. The card had been shared for the first figure and not for the
+   * second.
+   *
+   * So the run takes the card before it measures, and looks again afterwards:
+   * a model that appeared in between belongs to somebody else using the host,
+   * and the numbers are theirs as much as ours.
+   */
+  private async takeTheAccelerator(notes: string[]): Promise<void> {
+    const others = (await this.resident()).filter((model) => model.name !== this.options.model);
+    for (const model of others) {
+      this.log(`evicting ${model.name}, which is holding the accelerator`);
+      // No prompt: this is an unload, not a generation.
+      await this.post('/api/generate', { model: model.name, keep_alive: 0 });
+      notes.push(
+        `${model.name} was resident when this run started and was evicted, because `
+        + 'a deployment sharing its accelerator is a different deployment.',
+      );
+    }
+    const left = (await this.resident()).filter((model) => model.name !== this.options.model);
+    if (left.length > 0) {
+      notes.push(
+        `${left.map((model) => model.name).join(', ')} would not release the accelerator; `
+        + 'every figure below is about the pair rather than about this deployment.',
+      );
+    }
+  }
+
   public async measure(): Promise<PicoModelProviderMeasurementReport> {
     const notes: string[] = [];
     const keepAliveSeconds = this.options.keepAliveSeconds ?? 300;
@@ -241,6 +299,8 @@ export class PicoModelProviderMeasurer {
     // That is the finding, and it is the whole of what PE5 can observe.
     const answeredWithoutCredential = true;
     this.log(`reachable, server version ${version.version ?? 'unknown'}`);
+
+    await this.takeTheAccelerator(notes);
 
     const tags = await this.get('/api/tags') as { models?: PicoOllamaModelSummary[] };
     const summary = (tags.models ?? []).find((entry) => entry.name === this.options.model);
@@ -397,6 +457,8 @@ export class PicoModelProviderMeasurer {
     // declaring a window it rarely fills - and on the measured host it is
     // roughly half the throughput, which is not a rounding error.
     let windowCost: PicoModelProviderMeasurementReport['windowCost'] = null;
+    let widestFreeWindowTokens: number | null = null;
+    let widestFreeWindowTokensPerSecond: number | null = null;
     const servedTokens = contextSteps.reduce(
       (widest, step) => Math.max(widest, step.requestedContextTokens),
       0,
@@ -417,6 +479,53 @@ export class PicoModelProviderMeasurer {
       this.log(`pricing the declared window: ${servedTokens} against ${nominalContextTokens}`);
       const served = await at(servedTokens);
       const nominal = await at(nominalContextTokens);
+
+      // **Walk up until it costs something.** A ladder rather than a search,
+      // because each rung is two generations and a reload, and six rungs of a
+      // known shape beat a bisection that spends its budget proving the same
+      // knee to another decimal.
+      if (served !== null) {
+        widestFreeWindowTokens = servedTokens;
+        widestFreeWindowTokensPerSecond = served;
+        const rungs: number[] = [];
+        for (let width = servedTokens * 2; width <= nominalContextTokens; width *= 2) {
+          rungs.push(width);
+        }
+        if (nominal !== null && nominal >= served * 0.95) {
+          // Free all the way up; nothing between can cost anything.
+          widestFreeWindowTokens = nominalContextTokens;
+          widestFreeWindowTokensPerSecond = nominal;
+        } else {
+          for (const width of rungs.slice(0, 5)) {
+            const here = await at(width);
+            if (here === null || here < served * 0.95) {
+              // Halfway back, once, because the rungs double and the knee is
+              // usually nearer the last free rung than the first costly one.
+              const between = Math.round((widestFreeWindowTokens + width) / 2 / 1024) * 1024;
+              if (between > widestFreeWindowTokens) {
+                const mid = await at(between);
+                if (mid !== null && mid >= served * 0.95) {
+                  widestFreeWindowTokens = between;
+                  widestFreeWindowTokensPerSecond = mid;
+                }
+              }
+              break;
+            }
+            widestFreeWindowTokens = width;
+            widestFreeWindowTokensPerSecond = here;
+          }
+        }
+        this.log(
+          `widest window that costs nothing: ${widestFreeWindowTokens} tokens at `
+          + `${widestFreeWindowTokensPerSecond?.toFixed(1)} tok/s`,
+        );
+        if (widestFreeWindowTokens > servedTokens) {
+          notes.push(
+            `${widestFreeWindowTokens} tokens of declared window cost the same as `
+            + `${servedTokens}. A narrower entry would leave that free.`,
+          );
+        }
+      }
       if (served !== null && nominal !== null) {
         windowCost = Object.freeze({
           atServedTokens: servedTokens,
@@ -489,9 +598,15 @@ export class PicoModelProviderMeasurer {
       }
     }
 
-    const running = await this.get('/api/ps') as { models?: Array<{ name?: string; size_vram?: number }> };
-    const residentBytes = (running.models ?? [])
-      .find((entry) => entry.name === this.options.model)?.size_vram ?? null;
+    const running = await this.resident();
+    const residentBytes = running.find((entry) => entry.name === this.options.model)?.sizeVram ?? null;
+    const intruders = running.filter((entry) => entry.name !== this.options.model);
+    if (intruders.length > 0) {
+      notes.push(
+        `${intruders.map((entry) => entry.name).join(', ')} became resident during this run. `
+        + 'Somebody else is using the host, and these figures are about a shared card.',
+      );
+    }
 
     return Object.freeze({
       reach: this.reach,
@@ -513,6 +628,8 @@ export class PicoModelProviderMeasurer {
       spilledFromTokens,
       kvBytesPerToken,
       windowCost,
+      widestFreeWindowTokens,
+      widestFreeWindowTokensPerSecond,
       answeredWithoutCredential,
       notes: Object.freeze(notes),
     });
@@ -559,6 +676,14 @@ export function picoModelProviderEntryFromMeasurement(
     (worst, step) => (step.promptTokensPerSecond < worst.promptTokensPerSecond ? step : worst),
   );
 
+  // **The widest window that costs nothing, when one was found.** Otherwise
+  // the widest step that stayed resident. ADR 0142 reasoned 8192 from the
+  // card's nominal size; walking it found 12288 at the same speed, and the
+  // entry that states 8192 is leaving half a window unused for no reason a
+  // measurement supports.
+  const contextTokens = report.widestFreeWindowTokens ?? served.requestedContextTokens;
+  const atThatWidth = report.widestFreeWindowTokensPerSecond;
+
   return parsePicoModelProviderEntry({
     schema: picoModelProviderEntrySchema,
     entryId: input.entryId,
@@ -568,8 +693,10 @@ export function picoModelProviderEntryFromMeasurement(
     measurement: {
       measuredAt: input.measuredAt,
       capacity: {
-        contextTokens: served.requestedContextTokens,
-        generationTokensPerSecond: Number(slowest.generationTokensPerSecond.toFixed(2)),
+        contextTokens,
+        generationTokensPerSecond: Number(
+          Math.min(slowest.generationTokensPerSecond, atThatWidth ?? Infinity).toFixed(2),
+        ),
         promptTokensPerSecond: Number(slowestPrompt.promptTokensPerSecond.toFixed(2)),
         concurrentJobs: report.concurrentJobs ?? 1,
       },

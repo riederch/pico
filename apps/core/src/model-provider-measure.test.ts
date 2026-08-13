@@ -21,8 +21,11 @@ function ollama(options: {
   stopAfterTokens?: number;
   /** The width from which the host stops keeping it all on the card. */
   spillsFromTokens?: number;
+  /** Another model holding the accelerator when the run starts. */
+  foreignResident?: string;
 } = {}): { fetch: typeof globalThis.fetch; calls: string[] } {
   const calls: string[] = [];
+  const evicted = new Set<string>();
   let lastContextTokens = 0;
   const perStep = options.perStep ?? {
     4096: { evalRate: 18.4, promptRate: 1152 },
@@ -50,6 +53,15 @@ function ollama(options: {
       });
     }
     if (path === '/api/ps') {
+      if (options.foreignResident !== undefined && !evicted.has(options.foreignResident)) {
+        return json({
+          models: [{
+            name: options.foreignResident,
+            size: 9_000_000_000,
+            size_vram: 9_000_000_000,
+          }],
+        });
+      }
       // `size` is the whole deployment and `size_vram` the part on the card.
       // Below the spill width they are equal; above it the host keeps some
       // off, and says so.
@@ -77,9 +89,15 @@ function ollama(options: {
     }
     if (path === '/api/generate') {
       const body = JSON.parse(String(init?.body)) as {
+        model?: string;
+        prompt?: string;
         options?: { num_ctx?: number };
         keep_alive?: number | string;
       };
+      if (body.prompt === undefined && body.keep_alive === 0 && body.model !== undefined) {
+        evicted.add(body.model);
+        return json({ done: true });
+      }
       const step = body.options?.num_ctx;
       if (step !== undefined) {
         lastContextTokens = step;
@@ -178,6 +196,19 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     expect(report.concurrentJobs).toBe(2);
   });
 
+  it('takes the accelerator before it measures anything', async () => {
+    // A 14B model once reported 3.4 tok/s at a narrow window and 28.2 at a
+    // wide one - impossible, and the tell that another model had been holding
+    // the card for the first figure.
+    const fake = ollama({ foreignResident: 'someone-else:70b' });
+    const report = await measurer({}, fake).measure();
+    expect(report.notes.join(' ')).toContain('someone-else:70b was resident');
+    expect(report.notes.join(' ')).toContain('sharing its accelerator is a different deployment');
+    // Evicted before the model was even looked up, so nothing was measured
+    // against a shared card.
+    expect(fake.calls.indexOf('/api/generate')).toBeLessThan(fake.calls.indexOf('/api/tags'));
+  });
+
   it('prices the declared window against the one it serves', async () => {
     // The finding this replaced a broken probe with: at a constant prompt, a
     // wider declared window costs throughput. `size_vram` never moved on the
@@ -195,6 +226,22 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     expect(report.windowCost!.nominalTokensPerSecond)
       .toBeLessThan(report.windowCost!.servedTokensPerSecond * 0.7);
     expect(report.notes.join(' ')).toContain('a price every job pays');
+  });
+
+  it('walks up to the widest window that costs nothing', async () => {
+    // Free to 16384 and priced above it. ADR 0142 stated 8192 on this host and
+    // a walk found 12288 at the same speed - half a window left unused because
+    // the figure was reasoned rather than measured.
+    const report = await measurer({}, ollama({
+      perStep: {
+        4096: { evalRate: 18.2, promptRate: 1152 },
+        8192: { evalRate: 18.2, promptRate: 980 },
+        16384: { evalRate: 18.2, promptRate: 900 },
+        32768: { evalRate: 9.9, promptRate: 700 },
+      },
+    })).measure();
+    expect(report.widestFreeWindowTokens).toBe(16384);
+    expect(report.notes.join(' ')).toContain('would leave that free');
   });
 
   it('drops a step the model answered in a handful of tokens', async () => {
@@ -231,6 +278,8 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
     spilledFromTokens: null,
     kvBytesPerToken: 81_920,
     windowCost: null,
+    widestFreeWindowTokens: null,
+    widestFreeWindowTokensPerSecond: null,
     answeredWithoutCredential: true,
     notes: [],
   });
