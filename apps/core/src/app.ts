@@ -141,6 +141,10 @@ import {
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
+import {
+  PicoModelProviderNarrowingError,
+  picoModelProviderEffectiveEntry,
+} from './model-provider-registry.js';
 import { picoLinkPushCandidates } from './link-push-occasion.js';
 import { sendPicoLinkPush } from './link-push-send.js';
 import {
@@ -2195,6 +2199,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Retention policies decide when memory is deleted, so administering them is
   // a host-admin power (ADR 0074 behind ADR 0075 Gate A). They are policy
   // objects, never content: an operator session grants no readership.
+  // ADR 0152 SE6 with ADR 0104. Which machine computes for this Home is Home
+  // infrastructure the operator configures, like a retention policy - the
+  // per-person half of ADR 0152 (consent, allowance) is a different surface
+  // and is not this route.
+  accessClasses.register('GET', '/api/model/providers', 'host-admin');
+  accessClasses.register('POST', '/api/model/providers/:entryId/narrowing', 'host-admin');
   accessClasses.register('GET', '/api/memory/retention-policies', 'host-admin');
   accessClasses.register('POST', '/api/memory/retention-policies', 'host-admin');
   accessClasses.register('GET', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
@@ -4353,6 +4363,79 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     }
 
     return sendNoStore(reply, { revokedSessions });
+  });
+
+  /**
+   * ADR 0152 SE1/SE3/SE5. What a person decides with, beside what was measured.
+   *
+   * The consequence comes first and the measurement stands behind it, so the
+   * simple layer is a sentence rather than a table. What this route does *not*
+   * do is decide anything: SE4's rule lives in the store, so a narrowing
+   * refused here is refused identically by anything else that writes one.
+   */
+  app.get('/api/model/providers', async (_request, reply) => {
+    const registry = store.picoModelProviderRegistry();
+    return sendNoStore(reply, {
+      providers: registry.list().map((record) => {
+        const effective = picoModelProviderEffectiveEntry(record);
+        return {
+          entryId: record.entry.entryId,
+          model: record.entry.model.identifier,
+          providerClass: record.entry.providerClass,
+          // ADR 0152 SE1. The consequence, in words, before any number.
+          sees: record.entry.carries === 'live_turn'
+            ? 'this conversation only'
+            : 'this conversation and what Pico remembers',
+          needsCredentialToSeeMore: record.entry.credentialRef === undefined,
+          measured: {
+            at: record.entry.measurement.measuredAt,
+            contextTokens: record.entry.measurement.capacity.contextTokens,
+            generationTokensPerSecond:
+              record.entry.measurement.capacity.generationTokensPerSecond,
+            promptTokensPerSecond: record.entry.measurement.capacity.promptTokensPerSecond,
+            concurrentJobs: record.entry.measurement.capacity.concurrentJobs,
+            coldLoadMs: record.entry.measurement.residency.coldLoadMs,
+            modelDigestHex: record.entry.model.digestHex,
+          },
+          narrowing: record.narrowing,
+          effective: {
+            contextTokens: effective.measurement.capacity.contextTokens,
+            concurrentJobs: effective.measurement.capacity.concurrentJobs,
+          },
+        };
+      }),
+    });
+  });
+
+  app.post('/api/model/providers/:entryId/narrowing', async (request, reply) => {
+    const { entryId } = request.params as { entryId: string };
+    const body = request.body as { contextTokens?: unknown; concurrentJobs?: unknown } | undefined;
+    const narrowing: { contextTokens?: number; concurrentJobs?: number } = {};
+    for (const field of ['contextTokens', 'concurrentJobs'] as const) {
+      const value = body?.[field];
+      if (value === undefined || value === null) {
+        continue;
+      }
+      if (typeof value !== 'number' || !Number.isInteger(value)) {
+        return sendNoStore(reply.code(400), { error: `invalid_${field}` });
+      }
+      narrowing[field] = value;
+    }
+    try {
+      store.picoModelProviderRegistry().narrow(entryId, narrowing, new Date().toISOString());
+    } catch (error) {
+      if (error instanceof PicoModelProviderNarrowingError) {
+        // ADR 0152 SE4 with ADR 0119 Q5. The refusal names the measurement it
+        // was measured against, because "too large" without the number is a
+        // person guessing at what would fit.
+        return sendNoStore(reply.code(409), {
+          error: error.refusal,
+          measured: error.measured,
+        });
+      }
+      return sendNoStore(reply.code(404), { error: 'pico_model_provider_entry_not_found' });
+    }
+    return sendNoStore(reply.code(200), { narrowing });
   });
 
   app.get('/api/memory/retention-policies', async (_request, reply) => {

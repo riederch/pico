@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
+import { PicoModelProviderRegistry } from './model-provider-registry.js';
 import {
   picoModuleConsentDrift,
   picoModuleConsentIsCurrent,
@@ -7257,6 +7258,20 @@ export class EventStore {
       sodium,
       ...(at === undefined ? {} : { at }),
     })));
+  }
+
+  /**
+   * ADR 0152 SE6. The provider registry, over this store's connection.
+   *
+   * Handed out rather than re-opened: two connections to one SQLite file are
+   * two write locks and one of them eventually loses. The registry is a table
+   * like any other here; it lives in its own file because the rule it enforces
+   * - narrow, never widen - is worth reading beside itself rather than in the
+   * middle of eight thousand lines.
+   */
+  public picoModelProviderRegistry(): PicoModelProviderRegistry {
+    this.ensureOpen();
+    return new PicoModelProviderRegistry(this.db);
   }
 
   public detachPicoDepot(remote: string): void {
