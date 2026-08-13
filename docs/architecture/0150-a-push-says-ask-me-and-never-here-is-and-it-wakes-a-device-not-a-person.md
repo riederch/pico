@@ -3,9 +3,9 @@
 ## Status
 
 Accepted; **PU1-PU5 all implemented 2026-08-13** at the contract level.
-Decided 2026-08-13. The path, the bounds and the occasion are built. What
-remains is the send itself: a Home that seals a push and hands it to its
-relay.
+Decided 2026-08-13. Envelope, bounds, occasion and send are built. What
+remains is the loop that joins them - a Home sweep that reads its own
+candidates - and a real operator to run against.
 ADR 0149 built a relay that carries a device's questions when the direct
 path is gone. This adds the one thing that relay cannot carry: a Home
 reaching a device that did not ask.
@@ -234,6 +234,34 @@ crash-looping - would push again for the same recovery, which is PU5's
 battery attack performed by the Home on its own person. Its primary key is
 the two things that make a push the same push, so the schema refuses a
 retry rather than a comparison somewhere doing so.
+
+### Deliver first, record after
+
+The send left one ordering decision, and it is decided by what a crash in
+each gap costs.
+
+Recording first and failing to deliver leaves a Home believing it pushed
+when nothing left, and the person is **not woken** about a recovery - the
+failure ADR 0112 exists to prevent. Delivering first and failing to record
+costs one extra push on the next sweep, bounded by PU5's floor. One of
+those is a battery; the other is somebody's device being taken over while
+they slept. Only an accepted delivery is recorded, since anything else did
+not land and treating it as sent would be the same loss more quietly.
+
+**The occasion and the event do not travel.** They are the Home's own names
+for why it pushed, and a push says "ask me" - so the sealed payload carries
+neither, and a test asserts their absence rather than trusting the parser,
+which would not catch them being folded into a field that already exists.
+
+The packet's expiry is rounded up **past** the push's own. The two bound
+different things - the packet says how long the relay holds it, the push
+how long the device honours it - and a packet that died first would drop a
+push nobody ever saw.
+
+`maxPicoLinkPushLifetimeMs` is declared at both ends on purpose, since
+neither may import the other, and `check-push-lifetime.mjs` keeps the two
+honest: a Home minting pushes longer than a device will honour sends ones
+that are dead on arrival while every side looks correct.
 
 ### What wiring it found
 
