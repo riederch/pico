@@ -82,6 +82,8 @@ export const picoDepotFetchOutcomeMigrationId = '0009_pico_depot_fetch_outcome' 
 
 export const picoLinkMailboxMigrationId = '0010_pico_link_mailbox' as const;
 
+export const picoLinkPushLedgerMigrationId = '0011_pico_link_push_ledger' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1162,6 +1164,38 @@ const migrations: readonly MigrationDefinition[] = [
           home_inbound TEXT NOT NULL UNIQUE,
           device_inbound TEXT NOT NULL UNIQUE,
           exchanged_at TEXT NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    /**
+     * ADR 0150 PU5 - what this Home has already pushed about.
+     *
+     * **Durable because the rule it serves is.** "One push per event" holds
+     * however long ago the first was, and a ledger that lived in memory would
+     * hold it only as long as the process: a Home restarting - or crash-looping
+     * - would push again for the same recovery, which is exactly the battery
+     * attack PU5 exists to prevent, performed by the Home on its own person.
+     *
+     * The primary key is the two things that make a push the same push: which
+     * device it went to, and which event it was about. A second row for the
+     * same pair is the retry that must not happen, so the schema refuses it
+     * rather than a comparison somewhere doing so.
+     *
+     * `event_id` is a recovery id or a window id - the Home's own name for
+     * something, never content. It does not leave this table.
+     */
+    id: picoLinkPushLedgerMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_link_push_ledger (
+          device_signing_key_fingerprint_hex TEXT NOT NULL,
+          occasion TEXT NOT NULL,
+          event_id TEXT NOT NULL,
+          pushed_at TEXT NOT NULL,
+          PRIMARY KEY (device_signing_key_fingerprint_hex, occasion, event_id)
         );
       `);
     },

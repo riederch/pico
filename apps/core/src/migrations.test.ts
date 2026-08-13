@@ -10,6 +10,7 @@ import {
   picoDepotAttachmentMigrationId,
   picoDepotFetchOutcomeMigrationId,
   picoLinkMailboxMigrationId,
+  picoLinkPushLedgerMigrationId,
   picoDepotReachMigrationId,
   picoLibraryDerivationMigrationId,
   picoModuleEffectConsentMigrationId,
@@ -79,6 +80,10 @@ describe('database migrations', () => {
         },
         {
           id: picoLinkMailboxMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: picoLinkPushLedgerMigrationId,
           requiresBackup: false,
         },
       ],
@@ -161,6 +166,10 @@ describe('database migrations', () => {
       },
       {
         id: picoLinkMailboxMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoLinkPushLedgerMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -277,12 +286,13 @@ describe('database migrations', () => {
         picoDepotReachMigrationId,
         picoDepotFetchOutcomeMigrationId,
         picoLinkMailboxMigrationId,
+        picoLinkPushLedgerMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(10);
+    expect(listAppliedMigrations(db)).toHaveLength(11);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -356,7 +366,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(10);
+    expect(listAppliedMigrations(db)).toHaveLength(11);
 
     db.close();
   });
@@ -377,6 +387,7 @@ describe('database migrations', () => {
       picoDepotReachMigrationId,
       picoDepotFetchOutcomeMigrationId,
       picoLinkMailboxMigrationId,
+      picoLinkPushLedgerMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -395,6 +406,7 @@ describe('database migrations', () => {
           picoDepotReachMigrationId,
           picoDepotFetchOutcomeMigrationId,
           picoLinkMailboxMigrationId,
+          picoLinkPushLedgerMigrationId,
         ],
       },
     ]);
@@ -465,6 +477,7 @@ describe('database migrations', () => {
           picoDepotReachMigrationId,
           picoDepotFetchOutcomeMigrationId,
           picoLinkMailboxMigrationId,
+          picoLinkPushLedgerMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

@@ -21,6 +21,11 @@ import {
   type PicoDepotPin,
 } from '@pico/protocol/depot';
 import { picoGitCommitPattern } from '@pico/protocol/library-pin';
+import {
+  picoLinkPushOccasions,
+  type PicoLinkPushLedgerEntry,
+  type PicoLinkPushOccasion,
+} from './link-push-floor.js';
 import { parsePicoLinkPacketAddress } from '@pico/protocol/link-packet';
 import { assertPicoPlace, type PicoPlace } from '@pico/protocol/place';
 import { parsePicoSupplierManifest } from '@pico/protocol/supplier';
@@ -7118,6 +7123,84 @@ export class EventStore {
       this.rowCounter.recordInsert('link_mailbox');
     }
     return this.picoLinkMailboxFor(input.principal.deviceSigningKeyFingerprintHex)!;
+  }
+
+  /**
+   * ADR 0150 PU5. What this Home has already pushed about, for the decision
+   * that refuses a second one.
+   *
+   * Read whole rather than queried per decision: the table is bounded by
+   * devices times live events, and a caller that asked per candidate would
+   * make the floor's own cost scale with what it is protecting.
+   */
+  public picoLinkPushLedger(): readonly PicoLinkPushLedgerEntry[] {
+    this.ensureOpen();
+    const rows = this.db
+      .prepare(`
+        SELECT device_signing_key_fingerprint_hex AS deviceSigningKeyFingerprintHex,
+               occasion, event_id AS eventId, pushed_at AS pushedAt
+        FROM pico_link_push_ledger
+        ORDER BY pushed_at
+      `)
+      .all() as Array<{
+        deviceSigningKeyFingerprintHex: string;
+        occasion: string;
+        eventId: string;
+        pushedAt: string;
+      }>;
+    return Object.freeze(rows.map((row) => Object.freeze({
+      deviceSigningKeyFingerprintHex: row.deviceSigningKeyFingerprintHex,
+      occasion: row.occasion as PicoLinkPushOccasion,
+      eventId: row.eventId,
+      atMs: Date.parse(row.pushedAt),
+    })));
+  }
+
+  /**
+   * ADR 0150 PU5. Records a push that was sent.
+   *
+   * Refuses a second row for the same device and event rather than replacing
+   * one: the schema holds the no-retry rule, so a caller that lost track
+   * cannot push twice by writing twice.
+   */
+  public recordPicoLinkPush(input: {
+    deviceSigningKeyFingerprintHex: string;
+    occasion: PicoLinkPushOccasion;
+    eventId: string;
+    pushedAt: string;
+  }): void {
+    this.ensureOpen();
+    if (!(picoLinkPushOccasions as readonly string[]).includes(input.occasion)) {
+      throw new Error('unknown_pico_link_push_occasion');
+    }
+    try {
+      this.db
+        .prepare(`
+          INSERT INTO pico_link_push_ledger (
+            device_signing_key_fingerprint_hex, occasion, event_id, pushed_at
+          ) VALUES (?, ?, ?, ?)
+        `)
+        .run(input.deviceSigningKeyFingerprintHex, input.occasion, input.eventId, input.pushedAt);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE')) {
+        throw new Error('pico_link_push_already_recorded');
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * ADR 0150 PU5. Forgets pushes about events nobody can still be pushed for.
+   *
+   * The horizon is the caller's, because how long an event stays the same
+   * event is the caller's question - a recovery window is days, and a floor is
+   * five minutes.
+   */
+  public prunePicoLinkPushLedger(before: string): number {
+    this.ensureOpen();
+    return this.db
+      .prepare('DELETE FROM pico_link_push_ledger WHERE pushed_at < ?')
+      .run(before).changes;
   }
 
   public picoLinkMailboxFor(
