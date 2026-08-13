@@ -3,8 +3,13 @@
 ## Status
 
 Accepted as the placement and narrowing decision for Model Context Protocol
-clients. **MC1-MC5 are open and nothing here is built**; there is no MCP
-code in the tree, and `.ai/mcp/mcp.json` contains `{}`.
+clients. **MC1 and MC5 are implemented 2026-08-13**; MC2, MC3 and MC4 stay
+open, because the first two are obligations on a bridge that does not exist
+yet and the third is a ceremony nobody has built. There is still no MCP code
+in the tree, and `.ai/mcp/mcp.json` contains `{}` - which is the point: the
+two gates that landed are the two that hold *before* anybody writes a client,
+one by predicting the refusal an author will meet and one by checking a claim
+the author makes about themselves.
 
 Decided in conversation on 2026-08-11, from a question about where an MCP
 client belongs - core function, mandatory bridge or optional bridge. The
@@ -356,7 +361,8 @@ transport does.
 
 ## Gates
 
-- **MC1 - Network transport only, and the refusal is predicted (open):**
+- **MC1 - Network transport only, and the refusal is predicted (implemented
+  2026-08-13):**
   supplier code cannot spawn, so a stdio MCP client is already unbuildable
   under ADR 0143 DP4. What is missing is that an author meets that wall as
   `second_runtime: node:child_process spawns a process`, which names the
@@ -366,7 +372,15 @@ transport does.
   is to run the server themselves and attach to its address.
 
   `bridges/README.md` states the same thing where a depot author reads it
-  before writing code rather than after.
+  before writing code rather than after, together with the four other
+  obligations an MCP bridge carries.
+
+  The note hangs on the specifier rather than on the reason, because the
+  other four second-runtime imports have nothing to do with MCP, and a check
+  asserts the note survives: a scanner that refuses `node:child_process`
+  without naming the MCP case fails `supplier:check`. Removing the note is
+  the mutation that proves it - the refusal still happens, and the gate is
+  about *which* refusal arrives.
 - **MC2 - The manifest is the tool set (open):** the core enforcement
   already exists and is ADR 0139 AC1 - a request naming an undeclared
   effect is refused at the request contract - so no core change is needed
@@ -399,7 +413,8 @@ transport does.
   Open in full, including the ceremony, which nobody has built. The first
   MCP bridge will therefore be one against a server holding a static
   credential.
-- **MC5 - A declared kind is checked, not believed (open):**
+- **MC5 - A declared kind is checked, not believed (implemented
+  2026-08-13):**
   `supplier:check` gains an inverse statement per declared kind, read from
   the depot manifest it already parses. A supplier declared `bridge` keeps
   today's permission to open sockets and call `fetch`. A supplier declared
@@ -419,6 +434,20 @@ transport does.
   defeats a static scan, here as everywhere else in this tree. The check
   catches the honest mislabel, which is the case ADR 0136's own
   library-or-bridge paragraph shows is one edit away.
+
+  Built as a narrowing of the existing closure walk: seven `node:` network
+  modules and three globals become violations **only** under a declared
+  `library`, and the declared kind is read from the depot manifest the check
+  already parses. Where one directory holds both kinds the library rule wins,
+  which is a finding rather than caution - two entry points sharing a closure
+  share its files, so the library's own code path really does contain what
+  the bridge reached for.
+
+  Proved in both directions, because the way this fails is by drifting into
+  `module:check` under another name: the same `node:net` import fails as a
+  library and passes as a bridge, `git-library` passes unchanged reading
+  `node:fs` and `node:path`, and a comment saying "never calls fetch()" trips
+  nothing.
 
 ## Failure ledger
 

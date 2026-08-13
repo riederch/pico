@@ -50,6 +50,43 @@ are not.
 | Core internals, including the `@pico/protocol` barrel | A supplier speaks the ADR 0136 BR1 slot contract and nothing else. The barrel re-exports the whole surface, so allowing it would make every other rule decorative. |
 | A second runtime - `node:child_process`, `node:worker_threads`, `node:vm`, `eval` | ADR 0143 DP3: a bridge runs in the runtime Pico brings, and the manifest has no field for another. These are how one would be taken anyway. |
 | Another supplier's files | ADR 0143 DP5: suppliers compose by declaration inside one depot, not by reaching into each other by path. |
+| The network, **if the supplier declares itself a `library`** | ADR 0144 MC5: ADR 0136 splits the two kinds on one question - does answering need the network - and BR6 grants offline-floor eligibility from the declared kind alone. A library that answers from the network is not one. |
+
+## If you are writing an MCP client
+
+Read this before the code, because it decides which servers you can reach.
+
+**Only network transports.** Streamable HTTP works. **stdio does not, and
+cannot**: a stdio client launches the server as a child process, and
+`node:child_process` is refused above. That refusal is the decision rather than
+an obstacle to route around - Pico does not launch a program a depot names,
+whatever protocol it speaks (ADR 0144 MC1, ADR 0143 DP4). Most published MCP
+servers are stdio, so this is the largest practical cost of the decision: run
+the server yourself, as a service or a container, and attach the bridge to its
+address.
+
+**Your manifest is the tool set.** You may call `tools/list`, and what comes
+back never widens what your bridge may do - an effect no manifest declared is
+refused at the request contract before any decision is asked for (ADR 0139
+AC1). A server offering *less* than you declared is an ADR 0138 CO2 condition,
+because your declared coverage stopped being true. A server offering *more* is
+nothing. `notifications/tools/list_changed` is dropped: the supplier transport
+has no inbound family, so there is nowhere for it to arrive.
+
+**Decline what a server initiates.** Advertise neither `sampling` nor
+`elicitation` nor `roots` at `initialize`, and drop them if they arrive
+anyway. Sampling would hand Pico's model to a server with its own prompt;
+elicitation would make your bridge the party asking a person a question. A
+supplier carries; it never decides.
+
+**You are handed a credential; you never obtain one.** A supplier has no
+surface, so there is no browser to open and no OAuth flow to run. That ceremony
+is the core's and does not exist yet, so the first MCP bridge here will be one
+against a server holding a static credential.
+
+**Name it after the system, not the protocol.** `mcp-bridge` would name the
+transport where ADR 0136 names the outside system, and would suggest one
+supplier can reach any server. One bridge per outside system.
 
 ## Not a workspace member
 

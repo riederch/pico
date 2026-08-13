@@ -151,6 +151,64 @@ const secondRuntimeImports = new Map([
   ['node:inspector', 'opens the inspector'],
 ]);
 
+/**
+ * ADR 0144 MC1. The refusal an author is most likely to meet, answered in the
+ * terms they were thinking in.
+ *
+ * A stdio MCP client is already unbuildable here - it launches the server as a
+ * child process - but an author who wrote one meets `node:child_process spawns
+ * a process`, which names the right rule and the wrong problem. It reads like
+ * a lint rule with an exception somewhere. It is not: it is exactly the
+ * request the gate exists to refuse, and there is a remedy the message can
+ * name, which is ADR 0143 DP1's posture for a rejected ref.
+ *
+ * Attached to the specifier rather than to the reason, because the other four
+ * second-runtime imports have nothing to do with MCP and a note about it under
+ * `node:vm` would be noise.
+ */
+const secondRuntimeNotes = new Map([
+  ['node:child_process',
+    'ADR 0144 MC1: if this is an MCP client speaking stdio, the refusal is the '
+    + 'decision rather than an obstacle - Pico does not launch a program a depot '
+    + 'names, whatever protocol it speaks. Run the server yourself, as a service '
+    + 'or a container, and attach the bridge to its address over streamable '
+    + 'HTTP.'],
+]);
+
+/**
+ * ADR 0144 MC5. What a *library* may not touch, which is the inverse statement
+ * to everything else in this file.
+ *
+ * ADR 0136 splits bridge from library on one question - does answering need
+ * the network - and ADR 0136 BR6 enforces the consequence at the offline
+ * floor. The kind itself has never been checked: it is a field in a manifest
+ * the depot's author writes, so a supplier that reaches an MCP server and
+ * declares itself a library claims floor eligibility it does not have, and
+ * nothing in the tree notices.
+ *
+ * A library that answers from the network is not one. The floor test asks
+ * about *answering*, and an operation needing a network on the query after
+ * next does not become a floor operation by having succeeded once.
+ *
+ * This costs a real library nothing: under ADR 0143 the fetch is `git`, an
+ * external program the core runs, and a supplier cannot spawn anyway.
+ */
+const networkImports = new Map([
+  ['node:net', 'opens a socket'],
+  ['node:tls', 'opens a TLS socket'],
+  ['node:http', 'speaks HTTP'],
+  ['node:https', 'speaks HTTPS'],
+  ['node:http2', 'speaks HTTP/2'],
+  ['node:dgram', 'sends datagrams'],
+  ['node:dns', 'resolves names over the network'],
+]);
+
+const networkGlobals = [
+  { pattern: /(?:^|[^\w$.])fetch\s*\(/u, what: 'calls fetch' },
+  { pattern: /new\s+WebSocket\s*\(/u, what: 'opens a WebSocket' },
+  { pattern: /new\s+XMLHttpRequest\s*\(/u, what: 'opens an XMLHttpRequest' },
+];
+
 const secondRuntimeGlobals = [
   { pattern: /(?:^|[^\w$.])eval\s*\(/u, what: 'evaluates a string as code' },
   { pattern: /new\s+Function\s*\(/u, what: 'builds a function from a string' },
@@ -202,6 +260,11 @@ export function scanSupplierClosure(entryFiles, io, options) {
   const { readFile, exists } = io;
   const supplierRoot = options?.supplierRoot;
   const siblingRoots = options?.siblingRoots ?? [];
+  // ADR 0144 MC5. Absent means bridge, which is the permissive answer, and that
+  // is deliberate: this option exists to *narrow* a declared library, and a
+  // caller that forgot to pass it gets today's behaviour rather than a check
+  // that quietly started refusing sockets everywhere.
+  const declaredKind = options?.declaredKind ?? 'bridge';
   if (typeof supplierRoot !== 'string' || supplierRoot === '') {
     // Required rather than defaulted. Without it the cross-supplier rule would
     // silently pass for everything, which is the quiet failure this check
@@ -226,6 +289,14 @@ export function scanSupplierClosure(entryFiles, io, options) {
     for (const global of secondRuntimeGlobals) {
       if (global.pattern.test(stripped)) {
         violations.push({ file, kind: 'second_runtime', detail: global.what });
+      }
+    }
+
+    if (declaredKind === 'library') {
+      for (const global of networkGlobals) {
+        if (global.pattern.test(stripped)) {
+          violations.push({ file, kind: 'library_reaches_network', detail: global.what });
+        }
       }
     }
 
@@ -275,6 +346,15 @@ export function scanSupplierClosure(entryFiles, io, options) {
           file,
           kind: 'second_runtime',
           detail: `${specifier} ${secondRuntimeImports.get(specifier)}`,
+          ...(secondRuntimeNotes.has(specifier) ? { note: secondRuntimeNotes.get(specifier) } : {}),
+        });
+        continue;
+      }
+      if (declaredKind === 'library' && networkImports.has(specifier)) {
+        violations.push({
+          file,
+          kind: 'library_reaches_network',
+          detail: `${specifier} ${networkImports.get(specifier)}`,
         });
         continue;
       }
@@ -321,6 +401,12 @@ const violationReasons = {
   leaves_supplier:
     'ADR 0143 DP4: a relative import leaving the supplier reaches material '
     + 'nobody declared. A supplier reaches other packages by name.',
+  library_reaches_network:
+    'ADR 0144 MC5: this supplier declares itself a library, and a library that '
+    + 'answers from the network is not one - ADR 0136\'s floor test asks whether '
+    + 'answering needs a network, and ADR 0136 BR6 grants offline-floor '
+    + 'eligibility from the declared kind alone. Declare it a bridge, which may '
+    + 'open sockets, or stop reaching.',
 };
 
 function sourceFiles(directory, exists = existsSync) {
@@ -548,33 +634,52 @@ if (existsSync(bridgesRoot) && statSync(bridgesRoot).isDirectory()) {
   // that were not siblings. A depot declares its suppliers under DP3; using
   // that declaration is the only way this check and the product agree on what
   // they are looking at.
+  /**
+   * ADR 0144 MC5. The declared kind travels with the root, because the rule it
+   * decides is about the closure rather than about the entry point.
+   *
+   * Where one directory holds both kinds, `library` wins - and that is a
+   * finding rather than caution. Two entry points sharing a closure share its
+   * files, so the library's own code path really does contain whatever the
+   * bridge reached for.
+   */
+  const declaredKindByRoot = new Map();
   const supplierRoots = depotManifest === null
     ? readdirSync(bridgesRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && entry.name !== 'node_modules')
       .map((entry) => join(bridgesRoot, entry.name))
-    : [...new Set(depotManifest.suppliers.map(
-      (supplier) => dirname(join(bridgesRoot, supplier.entryPoint)),
-    ))];
+    : [...new Set(depotManifest.suppliers.map((supplier) => {
+      const root = dirname(join(bridgesRoot, supplier.entryPoint));
+      if (supplier.kind === 'library' || !declaredKindByRoot.has(root)) {
+        declaredKindByRoot.set(root, supplier.kind);
+      }
+      return root;
+    }))];
 
   for (const supplierRoot of supplierRoots) {
     const files = sourceFiles(supplierRoot);
     if (files.length === 0) {
       continue;
     }
+    const declaredKind = declaredKindByRoot.get(supplierRoot) ?? 'bridge';
     const { violations } = scanSupplierClosure(files, {
       readFile: (file) => readFileSync(file, 'utf8'),
       exists: (file) => existsSync(file) && statSync(file).isFile(),
     }, {
       supplierRoot,
+      declaredKind,
       siblingRoots: supplierRoots.filter((other) => other !== supplierRoot),
     });
     for (const violation of violations) {
       errors.push(
         `${relative(repoRoot, violation.file)}: ${violation.detail}. `
-        + violationReasons[violation.kind],
+        + violationReasons[violation.kind]
+        + (violation.note === undefined ? '' : ` ${violation.note}`),
       );
     }
-    suppliers.push(relative(repoRoot, supplierRoot).split(sep).join('/'));
+    suppliers.push(
+      `${relative(repoRoot, supplierRoot).split(sep).join('/')} (${declaredKind})`,
+    );
   }
 }
 
@@ -624,6 +729,28 @@ const probes = [
       '/probe/elsewhere/thing.ts': 'export const thing = 1;\n',
     },
   },
+  // ADR 0144 MC5. The mislabel this gate exists for: the same corpus is a
+  // library one way and a bridge the other, and the wrong word is one edit
+  // away. Three probes because the reach has three shapes.
+  {
+    name: 'a library opening a socket',
+    declaredKind: 'library',
+    files: { '/probe/s/entry.ts': "import { connect } from 'node:net';\nexport const x = connect;\n" },
+  },
+  {
+    name: 'a library calling fetch',
+    declaredKind: 'library',
+    files: { '/probe/s/entry.ts': 'export async function go() { return await fetch("https://example.invalid"); }\n' },
+  },
+  {
+    name: 'a library reaching the network three files deep',
+    declaredKind: 'library',
+    files: {
+      '/probe/s/entry.ts': "import { b } from './b.js';\nexport const x = b;\n",
+      '/probe/s/b.ts': "import { c } from './c.js';\nexport const b = c;\n",
+      '/probe/s/c.ts': "import { request } from 'node:https';\nexport const c = request;\n",
+    },
+  },
 ];
 
 for (const probe of probes) {
@@ -639,10 +766,36 @@ for (const probe of probes) {
   const { violations } = scanSupplierClosure(['/probe/s/entry.ts'], io, {
     supplierRoot: '/probe/s',
     siblingRoots: probe.siblingRoots ?? [],
+    ...(probe.declaredKind === undefined ? {} : { declaredKind: probe.declaredKind }),
   });
   if (violations.length === 0) {
     errors.push(`Supplier scanner failed its negative probe: ${probe.name} was not caught.`);
   }
+}
+
+/**
+ * ADR 0144 MC1, and the only half of it a check can hold. The refusal already
+ * happens; what the gate asks for is that it arrives naming the case the
+ * author was actually in.
+ *
+ * Asserted over the scanner rather than over the message text in this file,
+ * because the note has to survive being read by whoever wrote the stdio client
+ * - and a message assembled somewhere else would drift from the rule it cites.
+ */
+const stdioProbe = {
+  '/probe/s/entry.ts': "import { spawn } from 'node:child_process';\nexport const x = spawn;\n",
+};
+const stdioViolations = scanSupplierClosure(['/probe/s/entry.ts'], {
+  readFile: (file) => stdioProbe[file],
+  exists: (file) => file in stdioProbe,
+}, { supplierRoot: '/probe/s' }).violations;
+if (!stdioViolations.some((violation) => /MCP/u.test(violation.note ?? ''))) {
+  errors.push(
+    'A supplier spawning a process is refused without naming the MCP case. '
+    + 'ADR 0144 MC1: most of the ecosystem ships stdio servers, so this is the '
+    + 'wall an author meets first, and the message has to say that the refusal '
+    + 'is the decision and that the remedy is to run the server themselves.',
+  );
 }
 
 /**
@@ -668,7 +821,7 @@ const outwardProbe = {
 const outwardResult = scanSupplierClosure(['/probe/s/entry.ts'], {
   readFile: (file) => outwardProbe[file],
   exists: (file) => file in outwardProbe,
-}, { supplierRoot: '/probe/s' });
+}, { supplierRoot: '/probe/s', declaredKind: 'bridge' });
 if (outwardResult.violations.length > 0) {
   errors.push(
     'Supplier scanner refused permitted outward reach: '
@@ -679,24 +832,64 @@ if (outwardResult.violations.length > 0) {
 }
 
 /**
+ * ADR 0144 MC5's permitted half, proved as carefully as the refused half, in
+ * ADR 0143 DP4's posture. A library reads what is already on disk - that is
+ * the whole of what makes it a library - and the shipped `git-library`
+ * supplier is exactly this: `node:fs`, `node:path`, nothing else.
+ *
+ * If this probe ever fails, MC5 has drifted into refusing libraries for being
+ * libraries, which is the same drift `module:check` would be if it ran here.
+ */
+const libraryProbe = {
+  '/probe/s/entry.ts':
+    "import { readFileSync } from 'node:fs';\n"
+    + "import { join } from 'node:path';\n"
+    + "import { parsePicoSupplierManifest } from '@pico/protocol/supplier';\n"
+    + "import { helper } from './helper.js';\n"
+    + 'export function go() {\n'
+    + '  return [readFileSync, join, parsePicoSupplierManifest, helper];\n'
+    + '}\n',
+  '/probe/s/helper.ts': 'export const helper = 1;\n',
+};
+const libraryResult = scanSupplierClosure(['/probe/s/entry.ts'], {
+  readFile: (file) => libraryProbe[file],
+  exists: (file) => file in libraryProbe,
+}, { supplierRoot: '/probe/s', declaredKind: 'library' });
+if (libraryResult.violations.length > 0) {
+  errors.push(
+    'Supplier scanner refused a library that only reads the disk: '
+    + libraryResult.violations.map((violation) => `${violation.kind}:${violation.detail}`).join(', ')
+    + '. ADR 0144 MC5 narrows a declared library to the network, not to the '
+    + 'filesystem it exists to read.',
+  );
+}
+
+/**
  * The doc-comment case, which is not hypothetical: this script's own comments
  * name every specifier it refuses, and so will a bridge's.
+ *
+ * The library line is here for the same reason and is easier to trip: a
+ * library's README-in-code will say "never calls fetch()" long before any
+ * library calls one.
  */
 const proseProbe = {
   '/probe/s/entry.ts':
     '// A bridge must not import node:child_process or @pico/core.\n'
     + "/* Nor may it reach '@pico/protocol/pico-rules'. */\n"
+    + '// A library never calls fetch( and never imports node:net.\n'
     + "export const note = 'node:child_process';\n",
 };
-const proseResult = scanSupplierClosure(['/probe/s/entry.ts'], {
-  readFile: (file) => proseProbe[file],
-  exists: (file) => file in proseProbe,
-}, { supplierRoot: '/probe/s' });
-if (proseResult.violations.length > 0) {
-  errors.push(
-    'Supplier scanner flagged prose rather than code: '
-    + proseResult.violations.map((violation) => `${violation.kind}:${violation.detail}`).join(', '),
-  );
+for (const declaredKind of ['bridge', 'library']) {
+  const proseResult = scanSupplierClosure(['/probe/s/entry.ts'], {
+    readFile: (file) => proseProbe[file],
+    exists: (file) => file in proseProbe,
+  }, { supplierRoot: '/probe/s', declaredKind });
+  if (proseResult.violations.length > 0) {
+    errors.push(
+      `Supplier scanner flagged prose rather than code (as ${declaredKind}): `
+      + proseResult.violations.map((violation) => `${violation.kind}:${violation.detail}`).join(', '),
+    );
+  }
 }
 
 if (errors.length > 0) {
