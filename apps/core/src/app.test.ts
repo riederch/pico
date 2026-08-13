@@ -96,6 +96,13 @@ import {
 } from './migrations.js';
 import { operatorResetMarkerPath } from './operator-bootstrap.js';
 import {
+  claimPicoHomeThroughSealedFlow,
+  createPicoHomeFoundingAcceptance,
+  createPicoIdentitySessionDevice,
+  createSealedPicoHomeClaim,
+  type PicoTestSealedHomeClaim,
+} from './test-claimed-home.js';
+import {
   HomeHostKeyStore,
   homeResetMarkerPath,
   recoveryAnchorReseedMarkerPath,
@@ -140,7 +147,7 @@ describe('ADR 0110 R6 recovery anchor re-seed marker', () => {
     // A real founded Home: the anchor cross-check only runs for one, and a
     // fabricated claim state would prove nothing about the startup path.
     const founding = await buildAppWithCapturedLog({ databasePath });
-    await claimHomeThroughSealedFlow(founding);
+    await claimPicoHomeThroughSealedFlow(founding, readMoveInCode(founding));
     await founding.close();
     // The anchor is seeded by the first boot that finds a claimed Home; the
     // boot that founded it started out unclaimed.
@@ -499,7 +506,7 @@ describe('Pico Home Core app', () => {
     expect(wrong.statusCode).toBe(401);
     expect(wrong.json()).toEqual({ error: 'Move-In Code is invalid.' });
 
-    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const { sealedClaim, claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
     expect(claimResponse.claimState).toEqual({
       state: 'claimed',
       setupMode: {
@@ -655,7 +662,7 @@ describe('Pico Home Core app', () => {
     });
     const preClaimSession = bootstrapped.json().session as string;
 
-    const { claimResponse } = await claimHomeThroughSealedFlow(app);
+    const { claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
 
     expect((await probeSession(app, preClaimSession)).statusCode).toBe(401);
     const postClaimSession = await login(app);
@@ -682,7 +689,7 @@ describe('Pico Home Core app', () => {
   it('fails closed when a restored operator credential is bound to another founding', async () => {
     const databasePath = createDatabasePath();
     const first = await buildAppWithCapturedLog({ databasePath });
-    await claimHomeThroughSealedFlow(first);
+    await claimPicoHomeThroughSealedFlow(first, readMoveInCode(first));
     await bootstrap(first);
     await first.close();
 
@@ -828,7 +835,7 @@ describe('Pico Home Core app', () => {
   it('does not reopen setup mode when a stale restore resurrects an unclaimed claim state', async () => {
     const databasePath = createDatabasePath();
     const first = await buildAppWithCapturedLog({ databasePath });
-    const { claimResponse } = await claimHomeThroughSealedFlow(first);
+    const { claimResponse } = await claimPicoHomeThroughSealedFlow(first, readMoveInCode(first));
     await first.close();
 
     const stale = new Database(databasePath);
@@ -866,7 +873,7 @@ describe('Pico Home Core app', () => {
   it('keeps setup mode closed when restored founding evidence has no matching host key custody', async () => {
     const databasePath = createDatabasePath();
     const first = await buildAppWithCapturedLog({ databasePath, foundationToken: 'dev-token' });
-    const { claimResponse } = await claimHomeThroughSealedFlow(first);
+    const { claimResponse } = await claimPicoHomeThroughSealedFlow(first, readMoveInCode(first));
     await bootstrap(first);
     await first.close();
 
@@ -1200,7 +1207,7 @@ describe('Pico Home Core app', () => {
     const first = await buildAppWithCapturedLog({ databasePath });
     const firstSetup = (await first.inject({ method: 'GET', url: '/api/home/setup' })).json();
 
-    await claimHomeThroughSealedFlow(first);
+    await claimPicoHomeThroughSealedFlow(first, readMoveInCode(first));
     await bootstrap(first);
     await first.close();
 
@@ -2161,7 +2168,7 @@ describe('Pico Home Core app', () => {
   it('rotates the host keys over Pico Link and answers to the new head at once', async () => {
     const databasePath = createDatabasePath();
     const app = await buildAppWithCapturedLog({ databasePath });
-    const { setup, sealedClaim } = await claimHomeThroughSealedFlow(app);
+    const { setup, sealedClaim } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
     const operatorAuth = {
       authorization: `Bearer ${(await app.inject({
         method: 'POST',
@@ -2436,7 +2443,7 @@ describe('Pico Home Core app', () => {
 
   it('carries a Pico identity root rotation and its veto over Pico Link Direct', async () => {
     const app = await buildAppWithCapturedLog();
-    const { setup, sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const { setup, sealedClaim, claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
     const homeId = (claimResponse.claimState as { homeId: string }).homeId;
     const operatorAuth = {
       authorization: `Bearer ${(await app.inject({
@@ -2887,7 +2894,7 @@ describe('Pico Home Core app', () => {
 
   it('activates an issuer-signed membership credential and audits it content-free', async () => {
     const app = await buildAppWithCapturedLog();
-    const { sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const { sealedClaim, claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
     const homeId = (claimResponse.claimState as { homeId: string }).homeId;
     const bootstrapCode = readBootstrapCode(app);
     const session = (await app.inject({
@@ -3007,7 +3014,7 @@ describe('Pico Home Core app', () => {
 
   it('binds an identity session by possession and requires a signed domain grant on a claimed Home', async () => {
     const app = await buildAppWithCapturedLog();
-    const { setup, sealedClaim, claimResponse } = await claimHomeThroughSealedFlow(app);
+    const { setup, sealedClaim, claimResponse } = await claimPicoHomeThroughSealedFlow(app, readMoveInCode(app));
     const homeId = (claimResponse.claimState as { homeId: string }).homeId;
     const bootstrapResponse = await app.inject({
       method: 'POST',
@@ -3618,12 +3625,11 @@ describe('Pico Home Core app', () => {
       },
     });
     expect(memberAccepted.statusCode).toBe(201);
-    const memberSession = await createIdentitySession(
-      app,
-      memberIdentityKeyRecord,
-      memberIdentity.privateKey,
-      'confused_deputy_20260727',
-    );
+    const memberSession = (await createPicoIdentitySessionDevice(app, {
+      identityKeyRecord: memberIdentityKeyRecord,
+      identityPrivateKey: memberIdentity.privateKey,
+      idSuffix: 'confused_deputy_20260727',
+    })).session;
     expect((await app.inject({
       method: 'GET',
       url: '/api/home/domain-read-grants',
@@ -4892,216 +4898,6 @@ function logLines(app: Awaited<ReturnType<typeof buildApp>>): string[] {
   return capturedLogLines.get(app) ?? [];
 }
 
-async function claimHomeThroughSealedFlow(app: Awaited<ReturnType<typeof buildApp>>): Promise<{
-  setup: PicoHomeSetupResponse;
-  sealedClaim: ReturnType<typeof createSealedPicoHomeClaim>;
-  claimResponse: PicoHomeClaimResponse;
-}> {
-  const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as PicoHomeSetupResponse;
-  const sealedClaim = createSealedPicoHomeClaim(setup, readMoveInCode(app));
-  const pending = await app.inject({
-    method: 'POST',
-    url: '/api/home/claim',
-    payload: { claimEnvelope: sealedClaim.claimEnvelope },
-  });
-  expect(pending.statusCode).toBe(202);
-
-  const acceptance = createPicoHomeFoundingAcceptance(
-    sealedClaim,
-    (pending.json() as PicoHomePendingClaimResponse).pendingClaim.founding,
-  );
-  const claimed = await app.inject({
-    method: 'POST',
-    url: '/api/home/claim',
-    payload: { foundingAcceptance: acceptance },
-  });
-  expect(claimed.statusCode).toBe(201);
-
-  return {
-    setup,
-    sealedClaim,
-    claimResponse: claimed.json() as PicoHomeClaimResponse,
-  };
-}
-
-function createSealedPicoHomeClaim(
-  setup: PicoHomeSetupResponse,
-  moveInCode: string,
-  overrides: {
-    claimantSignatureHex?: string;
-    hostSetupNonceHex?: string;
-    firstDeviceSignatureHex?: string;
-    omitFirstDeviceSignature?: boolean;
-    delegationScopes?: PicoIdentityDelegationScope[];
-    delegationValidFrom?: string;
-    delegationValidUntil?: string;
-    delegationSubjectSigningKeyFingerprintHex?: string;
-    claimFirstDeviceSigningKeyFingerprintHex?: string;
-    legacyV1?: boolean;
-  } = {},
-): {
-  claimEnvelope: { schema: typeof picoHomeClaimEnvelopeSchema; sealedClaimPayloadHex: string };
-  expectedHomeHostPicoId: string;
-  moveInCode: string;
-  claim: PicoHomeClaimSignatureInput;
-  claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput;
-  firstDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput;
-  firstDeviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput;
-  firstDeviceDelegation: {
-    record: PicoIdentityDelegationSignatureInput;
-    signatureHex: string;
-  };
-  firstDeviceSigningPrivateKey: Uint8Array;
-  claimantPrivateKey: Uint8Array;
-  claimantSignatureHex: string;
-} {
-  const claimant = sodium.crypto_sign_keypair();
-  const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'pico_identity',
-    publicKeyHex: bytesToHex(claimant.publicKey),
-  };
-  const claimantIdentityKeyFingerprintHex = bytesToHex(sodium.crypto_generichash(
-    32,
-    buildPicoIdentityKeyRecordSignatureInput(claimantIdentityKeyRecord),
-    null,
-  ));
-  const firstDeviceSigning = sodium.crypto_sign_keypair();
-  const firstDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'device_signing',
-    publicKeyHex: bytesToHex(firstDeviceSigning.publicKey),
-  };
-  const firstDeviceSigningKeyFingerprintHex = bytesToHex(sodium.crypto_generichash(
-    32,
-    buildPicoIdentityKeyRecordSignatureInput(firstDeviceSigningKeyRecord),
-    null,
-  ));
-  const firstDeviceAgreement = sodium.crypto_box_keypair();
-  const firstDeviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'device_key_agreement',
-    publicKeyHex: bytesToHex(firstDeviceAgreement.publicKey),
-  };
-  const firstDeviceKeyAgreementKeyFingerprintHex = bytesToHex(sodium.crypto_generichash(
-    32,
-    buildPicoIdentityKeyRecordSignatureInput(firstDeviceKeyAgreementKeyRecord),
-    null,
-  ));
-  const firstDeviceDelegation: PicoIdentityDelegationSignatureInput = {
-    suite: picoIdentitySuite,
-    delegationId: `delegation_${randomHex(16)}`,
-    issuerIdentityKeyFingerprintHex: claimantIdentityKeyFingerprintHex,
-    subjectSigningKeyFingerprintHex:
-      overrides.delegationSubjectSigningKeyFingerprintHex
-      ?? firstDeviceSigningKeyFingerprintHex,
-    subjectKeyAgreementKeyFingerprintHex: firstDeviceKeyAgreementKeyFingerprintHex,
-    scopes: overrides.delegationScopes ?? ['surface_session'],
-    validFrom: overrides.delegationValidFrom ?? '2026-01-01T00:00:00.000Z',
-    validUntil: overrides.delegationValidUntil ?? '2030-01-01T00:00:00.000Z',
-    lifecycleOrder: 'seq:0000000000000001',
-  };
-  const signedFirstDeviceDelegation = {
-    record: firstDeviceDelegation,
-    signatureHex: bytesToHex(sodium.crypto_sign_detached(
-      buildPicoIdentityDelegationSignatureInput(firstDeviceDelegation),
-      claimant.privateKey,
-    )),
-  };
-  const claim: PicoHomeClaimSignatureInput = {
-    suite: picoIdentitySuite,
-    claimId: `claim_${randomHex(16)}`,
-    hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
-    hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
-    moveInCode,
-    claimantIdentityKeyFingerprintHex,
-    claimantNonceHex: randomHex(32),
-    hostSetupNonceHex: overrides.hostSetupNonceHex ?? setup.setupMode.hostSetupNonceHex,
-    firstDeviceDelegationId: firstDeviceDelegation.delegationId,
-    firstDeviceSigningKeyFingerprintHex:
-      overrides.claimFirstDeviceSigningKeyFingerprintHex
-      ?? firstDeviceSigningKeyFingerprintHex,
-    firstDeviceKeyAgreementKeyFingerprintHex,
-  };
-  const signatureHex = overrides.claimantSignatureHex ?? bytesToHex(sodium.crypto_sign_detached(
-    buildPicoHomeClaimSignatureInput(claim),
-    claimant.privateKey,
-  ));
-  const sealedPayload: Record<string, unknown> = {
-    schema: picoHomeSealedClaimPayloadV2Schema,
-    claim,
-    claimantIdentityKeyRecord,
-    firstDeviceSigningKeyRecord,
-    firstDeviceKeyAgreementKeyRecord,
-    firstDeviceDelegation: signedFirstDeviceDelegation,
-    firstDeviceRevocations: [],
-    claimantSignatureHex: signatureHex,
-    firstDeviceSignatureHex: overrides.firstDeviceSignatureHex
-      ?? bytesToHex(sodium.crypto_sign_detached(
-        buildPicoHomeClaimSignatureInput(claim),
-        firstDeviceSigning.privateKey,
-      )),
-  };
-  if (overrides.omitFirstDeviceSignature) {
-    delete sealedPayload.firstDeviceSignatureHex;
-  }
-  if (overrides.legacyV1) {
-    const {
-      firstDeviceDelegationId: _firstDeviceDelegationId,
-      firstDeviceSigningKeyFingerprintHex: _firstDeviceSigningKeyFingerprintHex,
-      firstDeviceKeyAgreementKeyFingerprintHex: _firstDeviceKeyAgreementKeyFingerprintHex,
-      ...v1Claim
-    } = claim;
-    sealedPayload.schema = picoHomeSealedClaimPayloadSchema;
-    sealedPayload.claim = v1Claim;
-    sealedPayload.claimantSignatureHex = bytesToHex(sodium.crypto_sign_detached(
-      buildPicoHomeClaimSignatureInput(v1Claim),
-      claimant.privateKey,
-    ));
-    delete sealedPayload.firstDeviceSigningKeyRecord;
-    delete sealedPayload.firstDeviceKeyAgreementKeyRecord;
-    delete sealedPayload.firstDeviceDelegation;
-    delete sealedPayload.firstDeviceRevocations;
-    delete sealedPayload.firstDeviceSignatureHex;
-  }
-  const sealed = sodium.crypto_box_seal(
-    Buffer.from(JSON.stringify(sealedPayload), 'utf8'),
-    hexToBytes(setup.host.keyAgreementPublicKeyHex),
-  );
-
-  return {
-    claimEnvelope: {
-      schema: picoHomeClaimEnvelopeSchema,
-      sealedClaimPayloadHex: bytesToHex(sealed),
-    },
-    expectedHomeHostPicoId: `pico:identity:${claimantIdentityKeyFingerprintHex}`,
-    moveInCode,
-    claim,
-    claimantIdentityKeyRecord,
-    firstDeviceSigningKeyRecord,
-    firstDeviceKeyAgreementKeyRecord,
-    firstDeviceDelegation: signedFirstDeviceDelegation,
-    firstDeviceSigningPrivateKey: firstDeviceSigning.privateKey,
-    claimantPrivateKey: claimant.privateKey,
-    claimantSignatureHex: signatureHex,
-  };
-}
-
-function createPicoHomeFoundingAcceptance(
-  sealedClaim: ReturnType<typeof createSealedPicoHomeClaim>,
-  founding: PicoHomeFoundingSignatureInput,
-): PicoHomeFoundingAcceptance {
-  return {
-    schema: picoHomeFoundingAcceptanceSchema,
-    claimId: sealedClaim.claim.claimId,
-    foundingId: founding.foundingId,
-    claimantFoundingSignatureHex: bytesToHex(sodium.crypto_sign_detached(
-      buildPicoHomeFoundingSignatureInput(founding),
-      sealedClaim.claimantPrivateKey,
-    )),
-  };
-}
-
 function randomHex(bytes: number): string {
   return bytesToHex(sodium.randombytes_buf(bytes));
 }
@@ -5210,79 +5006,6 @@ async function login(app: Awaited<ReturnType<typeof buildApp>>): Promise<string>
 
 async function probeSession(app: Awaited<ReturnType<typeof buildApp>>, session: string) {
   return app.inject({ method: 'GET', url: '/api/auth/session', headers: { authorization: `Bearer ${session}` } });
-}
-
-async function createIdentitySession(
-  app: Awaited<ReturnType<typeof buildApp>>,
-  identityKeyRecord: PicoIdentityKeyRecordSignatureInput,
-  identityPrivateKey: Uint8Array,
-  idSuffix: string,
-): Promise<string> {
-  const identityFingerprintHex = keyRecordFingerprintHex(identityKeyRecord);
-  const deviceSigning = sodium.crypto_sign_keypair();
-  const deviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'device_signing',
-    publicKeyHex: bytesToHex(deviceSigning.publicKey),
-  };
-  const deviceAgreement = sodium.crypto_box_keypair();
-  const deviceAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'device_key_agreement',
-    publicKeyHex: bytesToHex(deviceAgreement.publicKey),
-  };
-  const delegation: PicoIdentityDelegationSignatureInput = {
-    suite: picoIdentitySuite,
-    delegationId: `delegation_${idSuffix}`,
-    issuerIdentityKeyFingerprintHex: identityFingerprintHex,
-    subjectSigningKeyFingerprintHex: keyRecordFingerprintHex(deviceSigningKeyRecord),
-    subjectKeyAgreementKeyFingerprintHex: keyRecordFingerprintHex(deviceAgreementKeyRecord),
-    scopes: ['surface_session'],
-    validFrom: '2026-01-01T00:00:00.000Z',
-    validUntil: '2027-01-01T00:00:00.000Z',
-    lifecycleOrder: 'seq:0000000000000001',
-  };
-  const challenge = (await app.inject({
-    method: 'POST',
-    url: '/api/auth/identity-challenges',
-  })).json() as {
-    challengeId: string;
-    verifierNonceHex: string;
-    verifierContext: string;
-  };
-  const response = await app.inject({
-    method: 'POST',
-    url: '/api/auth/identity-session',
-    payload: {
-      challengeId: challenge.challengeId,
-      identityKeyRecord,
-      deviceSigningKeyRecord,
-      deviceKeyAgreementKeyRecord: deviceAgreementKeyRecord,
-      delegation: {
-        record: delegation,
-        signatureHex: bytesToHex(sodium.crypto_sign_detached(
-          buildPicoIdentityDelegationSignatureInput(delegation),
-          identityPrivateKey,
-        )),
-      },
-      revocations: [],
-      possessionSignatureHex: bytesToHex(sodium.crypto_sign_detached(
-        buildPicoIdentityPossessionSignatureInput({
-          suite: picoIdentitySuite,
-          subjectKeyFingerprintHex: keyRecordFingerprintHex(deviceSigningKeyRecord),
-          verifierNonceHex: challenge.verifierNonceHex,
-          verifierContext: challenge.verifierContext,
-        }),
-        deviceSigning.privateKey,
-      )),
-    },
-  });
-
-  if (response.statusCode !== 201) {
-    throw new Error(`Identity session creation failed: ${response.body}`);
-  }
-
-  return response.json().session as string;
 }
 
 function socketMessageToString(data: unknown): string {

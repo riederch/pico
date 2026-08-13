@@ -141,6 +141,8 @@ import {
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
+import { picoLinkPushCandidates } from './link-push-occasion.js';
+import { sendPicoLinkPush } from './link-push-send.js';
 import {
   PicoLinkRelayUnauthenticatedError,
   assertPicoLinkRelayPacketSender,
@@ -1675,6 +1677,96 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     });
   };
 
+  /**
+   * ADR 0150. The Home looking for something worth waking a device about.
+   *
+   * Reads its own candidates and sends; every judgement it could have made is
+   * somewhere else on purpose. **Who** is `picoLinkPushCandidates` - the
+   * device being recovered onto is not the one to tell. **Whether** is
+   * `decidePicoLinkPush` inside it - one per event, a floor per device, no
+   * retry. **What** is the envelope, which cannot say more than "ask me".
+   * What is left here is fetching a key and calling three functions, and that
+   * is the shape this was aiming for.
+   *
+   * A device whose reader key has gone answers nothing rather than throwing:
+   * `picoIdentityReaderKeyCandidate` refuses without a claimed Home and an
+   * active membership, so a member who left simply stops being pushable - the
+   * same derived-not-remembered posture ADR 0148 EX3 takes for mailboxes.
+   */
+  const sweepPicoLinkPushes = async (): Promise<number> => {
+    const homeId = store.picoHomeClaimState().homeId;
+    if (relayTransport === undefined
+      || homeHostKeys === undefined
+      || homeId === null
+      || homeId === undefined) {
+      return 0;
+    }
+
+    const nowMs = Date.now();
+    const candidates = picoLinkPushCandidates({
+      mailboxes: store.honouredPicoLinkMailboxes(sodium),
+      pendingRecoveryFor: (picoIdentityFingerprintHex) =>
+        store.picoHomeDeviceRecoveryPendingView(picoIdentityFingerprintHex),
+      ledger: store.picoLinkPushLedger(),
+      nowMs,
+    });
+
+    let sent = 0;
+    for (const candidate of candidates) {
+      const readerKey = store.picoIdentityReaderKeyCandidate({
+        homeId,
+        picoIdentityFingerprintHex: candidate.mailbox.picoIdentityFingerprintHex,
+        delegationId: candidate.mailbox.delegationId,
+        deviceKeyAgreementKeyFingerprintHex:
+          candidate.mailbox.deviceKeyAgreementKeyFingerprintHex,
+        sodium,
+      });
+      if (readerKey === undefined) {
+        // Not the same refusal the mailbox layer already made. That one drops
+        // devices with no reader key at all; this one drops devices that have
+        // one and were never delegated the scopes an envelope needs. A Home
+        // that pushed anyway would be deciding for itself what a delegation
+        // said.
+        continue;
+      }
+
+      const outcome = await sendPicoLinkPush({
+        candidate,
+        deviceKeyAgreementPublicKeyHex: readerKey.deviceKeyAgreementKeyRecord.publicKeyHex,
+        hostSigningKeyFingerprintHex: homeHostKeys.publicBundle.signingKeyFingerprintHex,
+        suite: picoIdentitySuite,
+        pushId: `push_${randomBytes(16).toString('hex')}`,
+        packetTag: randomBytes(16).toString('hex'),
+        nowMs,
+        seal: (plaintext, recipientPublicKeyHex) => sodium.crypto_box_seal(
+          plaintext,
+          Buffer.from(recipientPublicKeyHex, 'hex'),
+        ),
+        sign: (bytes) => homeHostKeyStore.signWithHostSigningKey(sodium, bytes),
+        deliver: async (packet) => await relayTransport.deliver(packet),
+        recordSent: ({ candidate: pushed, at }) => {
+          store.recordPicoLinkPush({
+            deviceSigningKeyFingerprintHex: pushed.mailbox.deviceSigningKeyFingerprintHex,
+            occasion: pushed.occasion,
+            eventId: pushed.eventId,
+            pushedAt: at,
+          });
+        },
+      });
+      if (outcome === 'accepted') {
+        sent += 1;
+      } else {
+        // Not recorded, so the next sweep tries again under the floor. Named
+        // rather than silent: `mailbox_revoked` means that relationship needs
+        // a new address, which no amount of retrying produces.
+        app.log.warn({ outcome }, 'Relay push was not accepted.');
+      }
+    }
+    return sent;
+  };
+
+  app.decorate('picoSweepLinkPushes', sweepPicoLinkPushes);
+
   const linkRelaySweepScheduler = relayTransport === undefined ? undefined
     : startPicoPeriodicTaskScheduler({
       tasks: [{
@@ -1683,7 +1775,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       }],
       request: async () => {
         try {
+          // Both halves of talking to a relay, on one timer: read what is
+          // waiting, then say what is worth waking somebody for. Collecting
+          // first because an answer already at the operator is older than
+          // anything this Home is about to notice.
           await sweepPicoLinkRelayMailboxes();
+          await sweepPicoLinkPushes();
         } catch (error) {
           // An operator that cannot be reached is the world failing, not this
           // Home. Nothing was acknowledged, so the next sweep tries again.

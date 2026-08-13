@@ -24,6 +24,7 @@ import type { PicoLinkMailboxRecord } from './event-store.js';
 
 interface HomeWithSweep {
   picoSweepLinkRelayMailboxes(): Promise<void>;
+  picoSweepLinkPushes(): Promise<number>;
   close(): Promise<void>;
 }
 
@@ -262,5 +263,49 @@ describe('ADR 0149 - the sweep, driven through a booted Home', () => {
     } finally {
       await app.close();
     }
+  });
+});
+
+describe('ADR 0150 - the push sweep, driven through a booted Home', () => {
+  it('sends nothing when no relay is configured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-push-none-'));
+    tempDirs.push(dir);
+    const app = await boot(join(dir, 'pico.sqlite'));
+    try {
+      await expect(app.picoSweepLinkPushes()).resolves.toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('sends nothing from an unclaimed Home, however configured', async () => {
+    // A Home with no claim state has no home id, and a push sealed to a
+    // reader key needs one - so the sweep is a no-op rather than a throw.
+    const { baseUrl } = await startRelay();
+    const dir = mkdtempSync(join(tmpdir(), 'pico-push-unclaimed-'));
+    tempDirs.push(dir);
+    const app = await boot(join(dir, 'pico.sqlite'), { baseUrl, accountId: account });
+    try {
+      await expect(app.picoSweepLinkPushes()).resolves.toBe(0);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('sends nothing when nothing is pending, and touches the relay not at all', async () => {
+    const { baseUrl, store: relay } = await startRelay();
+    const dir = mkdtempSync(join(tmpdir(), 'pico-push-quiet-'));
+    tempDirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+
+    const app = await boot(databasePath, { baseUrl, accountId: account });
+    try {
+      expect(await app.picoSweepLinkPushes()).toBe(0);
+    } finally {
+      await app.close();
+    }
+    // Nothing registered, nothing delivered: a quiet Home is quiet at the
+    // operator too, which is the property ADR 0147 RY7 counts on.
+    expect(relay.mailboxFor(picoLinkRelayMailboxOf(homeInbound))).toBeUndefined();
   });
 });
