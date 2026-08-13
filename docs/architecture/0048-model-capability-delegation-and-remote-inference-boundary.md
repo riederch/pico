@@ -2,6 +2,14 @@
 
 ## Status
 
+Status note, 2026-08-13: **the sixth class's grant is made conditional by
+ADR 0151.** Retrieved memory reaches a host in that class only where the
+provider proves who it is; without the proof the entry stays in the sixth
+class and carries the live turn alone. The class boundary is untouched on
+purpose - ADR 0118 O2 needs it to stay distinguishable - and what varies is
+a property of the entry. The five-item list under "Decision" keeps its
+wording under ADR 0128's record rule.
+
 Accepted as a model-capability delegation concept before runtime, transport, policy or provider implementation.
 
 Three questions this ADR left open were decided by the user on 2026-08-04 and are recorded under "What may leave the device": local inference first with remote only by consent, only the live turn leaving the device, and one standing revocable provider consent rather than a per-job approval. Registry, job-envelope schema, transport, provider authentication and runtime remain unbuilt.

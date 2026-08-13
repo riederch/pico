@@ -2,6 +2,14 @@
 
 ## Status
 
+Status note, 2026-08-13: **PE5 is amended by ADR 0151.** Unauthenticated
+reach no longer disqualifies an entry outright; it disqualifies the entry
+from carrying retrieved memory, and a credential its transport does not
+protect disqualifies the entry entirely. PE6 is unchanged and now binds
+both allowances. The rest of this ADR stands as written, including the
+measurements PE5 was drawn from - they are the reason the narrower
+allowance is narrow.
+
 Accepted as the provider entry contract for delegated model execution, filling
 what ADR 0049 named and ADR 0061 reserved a placeholder shape for. **PE1-PE6
 are open** and nothing is implemented.
