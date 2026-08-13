@@ -71,6 +71,10 @@
       "types": "./dist/home-assistant.d.ts",
       "import": "./dist/home-assistant.js"
     },
+    "./model-context": {
+      "types": "./dist/model-context.d.ts",
+      "import": "./dist/model-context.js"
+    },
     "./model-context-ref": {
       "types": "./dist/model-context-ref.d.ts",
       "import": "./dist/model-context-ref.js"
