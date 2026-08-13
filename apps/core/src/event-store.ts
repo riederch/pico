@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
-import { PicoModelProviderRegistry } from './model-provider-registry.js';
+import { PicoModelProviderConsent, PicoModelProviderRegistry } from './model-provider-registry.js';
 import {
   picoModuleConsentDrift,
   picoModuleConsentIsCurrent,
@@ -7272,6 +7272,12 @@ export class EventStore {
   public picoModelProviderRegistry(): PicoModelProviderRegistry {
     this.ensureOpen();
     return new PicoModelProviderRegistry(this.db);
+  }
+
+  /** ADR 0152. The per-person half, over the same connection. */
+  public picoModelProviderConsent(): PicoModelProviderConsent {
+    this.ensureOpen();
+    return new PicoModelProviderConsent(this.db, new PicoModelProviderRegistry(this.db));
   }
 
   public detachPicoDepot(remote: string): void {

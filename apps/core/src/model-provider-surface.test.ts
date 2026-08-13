@@ -6,6 +6,7 @@ import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
+import { openPicoHomeWithDevice } from './test-claimed-home.js';
 
 /**
  * ADR 0152 SE1/SE3/SE4/SE5, at the surface that serves them.
@@ -176,5 +177,169 @@ describe('ADR 0152 - the surface says the consequence and shows the measurement'
       headers: { authorization: operator },
       payload: { contextTokens: 'lots' },
     })).statusCode).toBe(400);
+  });
+});
+
+describe('ADR 0152 - the personal half is a person\'s, and the operator is not one', () => {
+  async function bootWithPerson(): Promise<{
+    app: AppWithInject;
+    operator: string;
+    person: string;
+  }> {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-provider-person-'));
+    dirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+
+    const store = await EventStore.open(databasePath, {});
+    store.picoModelProviderRegistry().put(
+      parsePicoModelProviderEntry(measured),
+      '2026-08-13T18:00:00.000Z',
+    );
+    store.close();
+
+    const logLines: string[] = [];
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath,
+      deviceId: 'pico-core',
+      logDestination: new Writable({
+        write(chunk: Buffer, _encoding, callback) {
+          logLines.push(chunk.toString('utf8'));
+          callback();
+        },
+      }),
+    }) as unknown as AppWithInject;
+    apps.push(app);
+
+    const logged = (key: string): string => {
+      for (const line of logLines) {
+        const parsed = JSON.parse(line) as Record<string, unknown>;
+        if (typeof parsed[key] === 'string') {
+          return parsed[key];
+        }
+      }
+      throw new Error(`pico_host_log_missing:${key}`);
+    };
+
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode: logged('operatorBootstrapCode'), passphrase: 'person surface pass' },
+    });
+    const { device } = await openPicoHomeWithDevice(app, {
+      moveInCode: logged('picoHomeMoveInCode'),
+      idSuffix: 'provider_decision_20260813',
+    });
+    const operator = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      payload: { passphrase: 'person surface pass' },
+    })).json() as { session: string };
+
+    return {
+      app,
+      operator: `Bearer ${operator.session}`,
+      person: `Bearer ${device.session}`,
+    };
+  }
+
+  it('lets a person decide and then see their own provider', async () => {
+    const { app, person } = await bootWithPerson();
+    // Before deciding, this person has no provider - not the Home's.
+    expect(((await app.inject({
+      method: 'GET',
+      url: '/api/model/providers/mine',
+      headers: { authorization: person },
+    })).json() as { providers: unknown[] }).providers).toHaveLength(0);
+
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/model/providers/qwen3-14b/decision',
+      headers: { authorization: person },
+      payload: { providerClass: 'declared_own_host', carries: 'live_turn' },
+    })).statusCode).toBe(201);
+
+    const mine = ((await app.inject({
+      method: 'GET',
+      url: '/api/model/providers/mine',
+      headers: { authorization: person },
+    })).json() as { providers: Array<Record<string, unknown>> }).providers;
+    expect(mine).toHaveLength(1);
+    expect(mine[0]!.sees).toBe('this conversation only');
+  });
+
+  it('refuses the operator, by name, on a decision that is not theirs', async () => {
+    // ADR 0087. Host administration installs and backs up; it does not answer
+    // for a resident about whether their memory may leave the house.
+    const { app, operator } = await bootWithPerson();
+    for (const [method, url] of [
+      ['GET', '/api/model/providers/mine'],
+      ['POST', '/api/model/providers/qwen3-14b/decision'],
+      ['DELETE', '/api/model/providers/qwen3-14b/decision'],
+    ] as const) {
+      const response = await app.inject({
+        method,
+        url,
+        headers: { authorization: operator },
+        payload: { providerClass: 'declared_own_host', carries: 'live_turn' },
+      });
+      expect(response.statusCode).toBe(403);
+      expect(response.json()).toEqual({ error: 'pico_model_provider_decision_is_personal' });
+    }
+  });
+
+  it('passes the parser\'s refusal out rather than flattening it', async () => {
+    // ADR 0151 PV4: the wider allowance without a credential is a sentence
+    // about what the decision needed, not a generic bad request.
+    const { app, person } = await bootWithPerson();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/model/providers/qwen3-14b/decision',
+      headers: { authorization: person },
+      payload: { providerClass: 'declared_own_host', carries: 'live_turn_and_retrieved_memory' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: 'pico_model_provider_allowance_without_credential' });
+  });
+
+  it('revokes, and the provider is gone for that person only', async () => {
+    const { app, person } = await bootWithPerson();
+    await app.inject({
+      method: 'POST',
+      url: '/api/model/providers/qwen3-14b/decision',
+      headers: { authorization: person },
+      payload: { providerClass: 'declared_own_host', carries: 'live_turn' },
+    });
+    expect((await app.inject({
+      method: 'DELETE',
+      url: '/api/model/providers/qwen3-14b/decision',
+      headers: { authorization: person },
+    })).statusCode).toBe(200);
+
+    expect(((await app.inject({
+      method: 'GET',
+      url: '/api/model/providers/mine',
+      headers: { authorization: person },
+    })).json() as { providers: unknown[] }).providers).toHaveLength(0);
+  });
+
+  it('leaves the shared finding untouched by a personal decision', async () => {
+    const { app, operator, person } = await bootWithPerson();
+    await app.inject({
+      method: 'POST',
+      url: '/api/model/providers/qwen3-14b/decision',
+      headers: { authorization: person },
+      payload: { providerClass: 'pico_endpoint', carries: 'live_turn' },
+    });
+    // The Home-level route still reports the measurement, unchanged by what
+    // one resident decided about it.
+    const shared = ((await app.inject({
+      method: 'GET',
+      url: '/api/model/providers',
+      headers: { authorization: operator },
+    })).json() as { providers: Array<Record<string, unknown>> }).providers[0]!;
+    expect(shared.providerClass).toBe('declared_own_host');
+    expect((shared.measured as Record<string, unknown>).contextTokens).toBe(40960);
   });
 });

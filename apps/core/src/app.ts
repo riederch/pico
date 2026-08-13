@@ -145,6 +145,10 @@ import {
   PicoModelProviderNarrowingError,
   picoModelProviderEffectiveEntry,
 } from './model-provider-registry.js';
+import type {
+  PicoModelProviderAllowance,
+  PicoModelProviderClass,
+} from '@pico/protocol/model-provider';
 import { picoLinkPushCandidates } from './link-push-occasion.js';
 import { sendPicoLinkPush } from './link-push-send.js';
 import {
@@ -2204,6 +2208,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // per-person half of ADR 0152 (consent, allowance) is a different surface
   // and is not this route.
   accessClasses.register('GET', '/api/model/providers', 'host-admin');
+  // ADR 0152, and ADR 0087's line held at a route. These are a *person's*
+  // decisions about their own words, so the class admits any authenticated
+  // principal and the handler then refuses the operator by name. Host
+  // administration installs and backs up; it does not decide on somebody's
+  // behalf whether their memory may leave the house.
+  accessClasses.register('GET', '/api/model/providers/mine', 'authenticated');
+  accessClasses.register('POST', '/api/model/providers/:entryId/decision', 'authenticated');
+  accessClasses.register('DELETE', '/api/model/providers/:entryId/decision', 'authenticated');
   accessClasses.register('POST', '/api/model/providers/:entryId/narrowing', 'host-admin');
   accessClasses.register('GET', '/api/memory/retention-policies', 'host-admin');
   accessClasses.register('POST', '/api/memory/retention-policies', 'host-admin');
@@ -4373,6 +4385,88 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * do is decide anything: SE4's rule lives in the store, so a narrowing
    * refused here is refused identically by anything else that writes one.
    */
+  /**
+   * ADR 0152. What this person, specifically, may reach - and nothing about
+   * anybody else's answer to the same finding.
+   */
+  function decidingPerson(request: FastifyRequest): string | undefined {
+    const authority = resolveAuthority(request.headers.authorization);
+    return authority.kind === 'pico-identity'
+      ? authority.principal.picoIdentityFingerprintHex
+      : undefined;
+  }
+
+  app.get('/api/model/providers/mine', async (request, reply) => {
+    const person = decidingPerson(request);
+    if (person === undefined) {
+      return sendNoStore(reply.code(403), { error: 'pico_model_provider_decision_is_personal' });
+    }
+    return sendNoStore(reply, {
+      providers: store.picoModelProviderConsent().listFor(person).map((entry) => ({
+        entryId: entry.entryId,
+        model: entry.model.identifier,
+        providerClass: entry.providerClass,
+        sees: entry.carries === 'live_turn'
+          ? 'this conversation only'
+          : 'this conversation and what Pico remembers',
+        contextTokens: entry.measurement.capacity.contextTokens,
+      })),
+    });
+  });
+
+  app.post('/api/model/providers/:entryId/decision', async (request, reply) => {
+    const person = decidingPerson(request);
+    if (person === undefined) {
+      // ADR 0087. An operator session reaches this route's class and stops
+      // here: administration is not a voice that may answer for a resident.
+      return sendNoStore(reply.code(403), { error: 'pico_model_provider_decision_is_personal' });
+    }
+    const body = request.body as {
+      providerClass?: unknown;
+      carries?: unknown;
+      credentialRef?: unknown;
+    } | undefined;
+    if (typeof body?.providerClass !== 'string' || typeof body.carries !== 'string') {
+      return sendNoStore(reply.code(400), { error: 'invalid_pico_model_provider_decision' });
+    }
+    try {
+      store.picoModelProviderConsent().decide({
+        entryId: (request.params as { entryId: string }).entryId,
+        picoIdentityFingerprintHex: person,
+        providerClass: body.providerClass as PicoModelProviderClass,
+        carries: body.carries as PicoModelProviderAllowance,
+        ...(typeof body.credentialRef === 'string' ? { credentialRef: body.credentialRef } : {}),
+        at: new Date().toISOString(),
+      });
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'invalid';
+      // The parser's refusals travel out as they are: ADR 0151 PV4's missing
+      // credential is a sentence about what the decision needed, and turning
+      // it into a generic 400 would make the surface guess at the reason.
+      return sendNoStore(
+        reply.code(reason === 'pico_model_provider_entry_not_found' ? 404 : 400),
+        { error: reason },
+      );
+    }
+    return sendNoStore(reply.code(201), { decided: true });
+  });
+
+  app.delete('/api/model/providers/:entryId/decision', async (request, reply) => {
+    const person = decidingPerson(request);
+    if (person === undefined) {
+      return sendNoStore(reply.code(403), { error: 'pico_model_provider_decision_is_personal' });
+    }
+    // ADR 0048's standing consent is revocable, and revoking is not deleting:
+    // the row keeps its date so "withdrew" stays distinguishable from "never
+    // asked".
+    store.picoModelProviderConsent().revoke(
+      (request.params as { entryId: string }).entryId,
+      person,
+      new Date().toISOString(),
+    );
+    return sendNoStore(reply.code(200), { revoked: true });
+  });
+
   app.get('/api/model/providers', async (_request, reply) => {
     const registry = store.picoModelProviderRegistry();
     return sendNoStore(reply, {
