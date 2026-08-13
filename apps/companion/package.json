@@ -38,6 +38,10 @@
       "types": "./dist/notify.d.ts",
       "import": "./dist/notify.js"
     },
+    "./link-push-gate": {
+      "types": "./dist/link-push-gate.d.ts",
+      "import": "./dist/link-push-gate.js"
+    },
     "./link-relay-sweep": {
       "types": "./dist/link-relay-sweep.d.ts",
       "import": "./dist/link-relay-sweep.js"
