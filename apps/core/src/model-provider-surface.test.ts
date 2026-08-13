@@ -6,7 +6,7 @@ import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
-import { openPicoHomeWithDevice } from './test-claimed-home.js';
+import { openPicoHomeWithDevice, sendPicoLinkDirectRequest } from './test-claimed-home.js';
 
 /**
  * ADR 0152 SE1/SE3/SE4/SE5, at the surface that serves them.
@@ -341,5 +341,102 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
     })).json() as { providers: Array<Record<string, unknown>> }).providers[0]!;
     expect(shared.providerClass).toBe('declared_own_host');
     expect((shared.measured as Record<string, unknown>).contextTokens).toBe(40960);
+  });
+});
+
+describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () => {
+  it('reads, decides and revokes over a sealed Link request', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-provider-link-'));
+    dirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+
+    const store = await EventStore.open(databasePath, {});
+    store.picoModelProviderRegistry().put(
+      parsePicoModelProviderEntry(measured),
+      '2026-08-13T18:00:00.000Z',
+    );
+    store.close();
+
+    const logLines: string[] = [];
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath,
+      deviceId: 'pico-core',
+      logDestination: new Writable({
+        write(chunk: Buffer, _encoding, callback) {
+          logLines.push(chunk.toString('utf8'));
+          callback();
+        },
+      }),
+    }) as unknown as AppWithInject;
+    apps.push(app);
+
+    const moveInCode = logLines
+      .map((line) => JSON.parse(line) as { picoHomeMoveInCode?: string })
+      .find((line) => typeof line.picoHomeMoveInCode === 'string')!.picoHomeMoveInCode!;
+    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as {
+      host: { signingKeyFingerprintHex: string; keyAgreementPublicKeyHex: string };
+    };
+    const { device, sealedClaim } = await openPicoHomeWithDevice(app, {
+      moveInCode,
+      idSuffix: 'provider_link_20260813',
+    });
+
+    const send = async (
+      operation: 'home.model.providers.read'
+        | 'home.model.provider.decision.submit'
+        | 'home.model.provider.decision.revoke',
+      args: Record<string, unknown>,
+    ) => await sendPicoLinkDirectRequest(app, {
+      operation,
+      args,
+      sender: device,
+      identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
+      hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
+      hostKeyAgreementPublicKeyHex: setup.host.keyAgreementPublicKeyHex,
+    });
+
+    // Before deciding: the finding is visible, and the absence of a decision
+    // is said as an absence rather than as a default.
+    const before = await send('home.model.providers.read', {});
+    expect(before.response.outcome).toBe('ok');
+    const listedBefore = (before.result as { providers: Array<Record<string, unknown>> })
+      .providers[0]!;
+    expect(listedBefore.decided).toBe(false);
+    expect(listedBefore.sees).toBe('nothing yet - you have not decided about this one');
+    expect(listedBefore.contextTokens).toBe(40960);
+    // ADR 0107 carries canonical JSON with no floating point, and ADR 0152 SE1
+    // wants the simple layer here anyway: no throughput figure travels.
+    expect(listedBefore.generationTokensPerSecond).toBeUndefined();
+
+    // ADR 0151 PV4's refusal reaches the device as itself, not as a shrug.
+    const refused = await send('home.model.provider.decision.submit', {
+      entryId: 'qwen3-14b',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn_and_retrieved_memory',
+    });
+    expect(refused.response.outcome).toBe('invalid_arguments');
+    expect(refused.result.refusal).toBe('pico_model_provider_allowance_without_credential');
+
+    const decided = await send('home.model.provider.decision.submit', {
+      entryId: 'qwen3-14b',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn',
+    });
+    expect(decided.response.outcome).toBe('ok');
+
+    const after = await send('home.model.providers.read', {});
+    const listedAfter = (after.result as { providers: Array<Record<string, unknown>> })
+      .providers[0]!;
+    expect(listedAfter.decided).toBe(true);
+    expect(listedAfter.sees).toBe('this conversation only');
+    expect(listedAfter.needsCredentialToSeeMore).toBe(true);
+
+    const revoked = await send('home.model.provider.decision.revoke', { entryId: 'qwen3-14b' });
+    expect(revoked.response.outcome).toBe('ok');
+    expect(((await send('home.model.providers.read', {}))
+      .result as { providers: Array<Record<string, unknown>> }).providers[0]!.decided)
+      .toBe(false);
   });
 });

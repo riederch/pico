@@ -149,6 +149,11 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.host.rotation.prepare',
       'home.host.continuity.submit',
       'home.link.mailbox.exchange',
+      // ADR 0152: a person's decision about their own words has to be made
+      // where the person is, and ADR 0087 says nobody may answer for them.
+      'home.model.providers.read',
+      'home.model.provider.decision.submit',
+      'home.model.provider.decision.revoke',
     ]);
   });
 

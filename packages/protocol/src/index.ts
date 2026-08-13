@@ -405,6 +405,30 @@ export const picoLinkDirectOperations = [
    * the two ends can reach each other and pays off when they cannot.
    */
   'home.link.mailbox.exchange',
+  /**
+   * ADR 0152, and the reason is ADR 0104's rather than convenience.
+   *
+   * A person's decision about whether their remembered words may reach a model
+   * provider is a setting, so it belongs in Pico and has to be reachable from
+   * a Pico surface. **The Foundation UI is not where they are** - the same
+   * sentence that opted in `home.storage.condition.read` - and ADR 0087 says
+   * host administration may not answer for a resident, so the person's own
+   * device is the only place this decision can come from.
+   *
+   * The read returns the shared finding and *this sender's* decision about it.
+   * Never anybody else's: two residents' answers to the same box are two
+   * private facts, and a device asking about its own person has no business
+   * learning the other's.
+   */
+  'home.model.providers.read',
+  /**
+   * ADR 0152 with ADR 0048's standing, revocable consent. The submit records
+   * one person's declaration, allowance and credential reference; the revoke
+   * withdraws it and keeps the date, because "withdrew" and "never asked" are
+   * different facts.
+   */
+  'home.model.provider.decision.submit',
+  'home.model.provider.decision.revoke',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];

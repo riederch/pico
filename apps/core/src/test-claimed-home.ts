@@ -4,6 +4,9 @@ import {
   buildPicoIdentityDelegationSignatureInput,
   buildPicoIdentityKeyRecordSignatureInput,
   buildPicoIdentityPossessionSignatureInput,
+  buildPicoLinkDirectRequestSignatureInput,
+  picoLinkDirectPayloadDigestHex,
+  picoLinkDirectRequestEnvelopeSchema,
   picoHomeClaimEnvelopeSchema,
   picoHomeFoundingAcceptanceSchema,
   picoHomeSealedClaimPayloadSchema,
@@ -18,6 +21,8 @@ import {
   type PicoIdentityDelegationScope,
   type PicoIdentityDelegationSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
+  type PicoLinkDirectOperation,
+  type PicoLinkDirectResponseSignatureInput,
 } from '@pico/protocol';
 import { randomBytes } from 'node:crypto';
 import sodium from 'libsodium-wrappers-sumo';
@@ -454,4 +459,76 @@ export async function openPicoHomeWithDevice(
   });
 
   return { sealedClaim, device, homeId };
+}
+
+/**
+ * ADR 0107 D1. One sealed, signed Link request, built the way a device builds
+ * one.
+ *
+ * **This was a named gap three times before it was written.** Every suite that
+ * wanted to prove a Link operation had to construct a sealed envelope, a
+ * detached signature over canonical bytes, an argument digest and a reply
+ * keypair - about forty lines - so the operations that were easy to reach kept
+ * getting proved and the rest did not. The envelope is the fixture, and having
+ * one is the difference between testing a dispatch and testing a route.
+ */
+export async function sendPicoLinkDirectRequest(
+  app: PicoClaimableApp,
+  input: {
+    operation: PicoLinkDirectOperation;
+    args: Record<string, unknown>;
+    sender: PicoTestSessionDevice;
+    identityKeyRecord: PicoIdentityKeyRecordSignatureInput;
+    hostSigningKeyFingerprintHex: string;
+    hostKeyAgreementPublicKeyHex: string;
+  },
+): Promise<{
+  response: PicoLinkDirectResponseSignatureInput;
+  result: Record<string, unknown>;
+}> {
+  const replyKey = sodium.crypto_box_keypair();
+  const createdAtMs = Date.now();
+  const request = {
+    suite: picoIdentitySuite,
+    requestId: `linkreq_${randomHex(16)}`,
+    operation: input.operation,
+    hostSigningKeyFingerprintHex: input.hostSigningKeyFingerprintHex,
+    senderIdentityKeyFingerprintHex: keyRecordFingerprintHex(input.identityKeyRecord),
+    senderDeviceSigningKeyFingerprintHex: input.sender.deviceSigningKeyFingerprintHex,
+    senderDeviceKeyAgreementKeyFingerprintHex: input.sender.deviceKeyAgreementKeyFingerprintHex,
+    senderDelegationId: input.sender.delegationId,
+    replyPublicKeyHex: bytesToHex(replyKey.publicKey),
+    argumentsDigestHex: picoLinkDirectPayloadDigestHex(sodium, input.args),
+    createdAt: new Date(createdAtMs).toISOString(),
+    expiresAt: new Date(createdAtMs + 30_000).toISOString(),
+  };
+  const linked = await app.inject({
+    method: 'POST',
+    url: '/api/home/link',
+    payload: {
+      schema: picoLinkDirectRequestEnvelopeSchema,
+      sealedRequestHex: bytesToHex(sodium.crypto_box_seal(
+        Buffer.from(JSON.stringify({
+          schema: picoLinkDirectRequestEnvelopeSchema,
+          request,
+          senderIdentityKeyRecord: input.identityKeyRecord,
+          senderDeviceSigningKeyRecord: input.sender.deviceSigningKeyRecord,
+          arguments: input.args,
+          senderSignatureHex: bytesToHex(sodium.crypto_sign_detached(
+            buildPicoLinkDirectRequestSignatureInput(request),
+            input.sender.deviceSigningPrivateKey,
+          )),
+        }), 'utf8'),
+        hexToBytes(input.hostKeyAgreementPublicKeyHex),
+      )),
+    },
+  });
+  if (linked.statusCode !== 200) {
+    throw new Error(`pico_link_direct_refused:${linked.statusCode}:${JSON.stringify(linked.json())}`);
+  }
+  return JSON.parse(new TextDecoder().decode(sodium.crypto_box_seal_open(
+    hexToBytes((linked.json() as { sealedResponseHex: string }).sealedResponseHex),
+    replyKey.publicKey,
+    replyKey.privateKey,
+  ))) as { response: PicoLinkDirectResponseSignatureInput; result: Record<string, unknown> };
 }

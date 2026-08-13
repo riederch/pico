@@ -2818,6 +2818,96 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         // and free bytes would let a peer infer how much the Home holds and
         // how fast it grows, and no decision the person makes changes with
         // them.
+        /**
+         * ADR 0152. What this device's person may reach, and their own answer
+         * to it - never another resident's.
+         *
+         * Two people's decisions about the same box are two private facts. A
+         * device asking on behalf of its own person has no business learning
+         * what the other decided, so the read is scoped by the sender's
+         * identity rather than filtered afterwards.
+         *
+         * **No throughput figure travels, and the canonical encoder is why it
+         * was noticed rather than why it is absent.** ADR 0107's response is
+         * canonical JSON with no floating point, so `26.31 tok/s` refused at
+         * the boundary - and the refusal was right for a second reason: this
+         * view is ADR 0152 SE1's simple layer on the person's own device, and
+         * a rate is the layer behind it. The numbers stay where the
+         * measurement is.
+         */
+        case 'home.model.providers.read': {
+          if (Object.keys(args).length !== 0 || principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const consent = store.picoModelProviderConsent();
+          const mine = new Map(consent
+            .listFor(principal.picoIdentityFingerprintHex)
+            .map((entry) => [entry.entryId, entry]));
+          return {
+            outcome: 'ok',
+            result: {
+              providers: store.picoModelProviderRegistry().list().map((record) => {
+                const decided = mine.get(record.entry.entryId);
+                const finding = picoModelProviderEffectiveEntry(record);
+                return {
+                  entryId: record.entry.entryId,
+                  model: record.entry.model.identifier,
+                  contextTokens: finding.measurement.capacity.contextTokens,
+                  measuredAt: record.entry.measurement.measuredAt,
+                  // ADR 0152 SE1. The consequence in words, and the absence of
+                  // a decision said as an absence rather than as a default.
+                  decided: decided !== undefined,
+                  sees: decided === undefined
+                    ? 'nothing yet - you have not decided about this one'
+                    : decided.carries === 'live_turn'
+                      ? 'this conversation only'
+                      : 'this conversation and what Pico remembers',
+                  needsCredentialToSeeMore: decided?.credentialRef === undefined,
+                };
+              }),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        case 'home.model.provider.decision.submit': {
+          if (principal === undefined
+            || typeof args.entryId !== 'string'
+            || typeof args.providerClass !== 'string'
+            || typeof args.carries !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          try {
+            store.picoModelProviderConsent().decide({
+              entryId: args.entryId,
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+              providerClass: args.providerClass as PicoModelProviderClass,
+              carries: args.carries as PicoModelProviderAllowance,
+              ...(typeof args.credentialRef === 'string'
+                ? { credentialRef: args.credentialRef }
+                : {}),
+              at: new Date().toISOString(),
+            });
+          } catch (error) {
+            // The refusal travels as itself. ADR 0151 PV4's missing credential
+            // is a sentence about what the decision needed, and a device that
+            // received `invalid_arguments` would have to guess it.
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'invalid' },
+            };
+          }
+          return { outcome: 'ok', result: { decided: true } };
+        }
+        case 'home.model.provider.decision.revoke': {
+          if (principal === undefined || typeof args.entryId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          store.picoModelProviderConsent().revoke(
+            args.entryId,
+            principal.picoIdentityFingerprintHex,
+            new Date().toISOString(),
+          );
+          return { outcome: 'ok', result: { revoked: true } };
+        }
         case 'home.storage.condition.read': {
           if (Object.keys(args).length !== 0) {
             return { outcome: 'invalid_arguments', result: {} };
