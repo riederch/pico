@@ -15,6 +15,11 @@ import type {
   PicoModelProviderAllowance,
   PicoModelProviderClass,
 } from './model-provider.js';
+import {
+  parsePicoModelContextRef,
+  picoModelContextRefBelongsTo,
+  type PicoModelContextRef,
+} from './model-context-ref.js';
 
 /**
  * ADR 0117 X4 - the job a quarantined reader is given, and the two things it
@@ -100,8 +105,12 @@ export function picoModelRoleMayRunOn(
  */
 export function picoModelJobAllowanceFor(
   units: readonly PicoModelContextUnit[],
+  references: readonly PicoModelContextRef[] = [],
 ): PicoModelProviderAllowance {
-  const lowest = lowestPicoOriginClass(units.map((unit) => unit.originClass));
+  const lowest = lowestPicoOriginClass([
+    ...units.map((unit) => unit.originClass),
+    ...references.map((reference) => reference.originClass),
+  ]);
   return lowest === picoInstructionThresholdOriginClass
     ? 'live_turn'
     : 'live_turn_and_retrieved_memory';
@@ -113,6 +122,12 @@ export interface PicoModelJob {
   role: PicoModelRole;
   /** The origin-labelled units this job reads, in ADR 0116 W3's shape. */
   units: readonly PicoModelContextUnit[];
+  /**
+   * ADR 0060. Bounded packets of memory prepared for this job, so a provider
+   * is handed what it needs and never reads a source. Empty is ordinary: a
+   * read over freshly arrived content needs none.
+   */
+  references: readonly PicoModelContextRef[];
   /** ADR 0117 X2. The names and shapes the answer must arrive in. */
   expects: readonly PicoModelJobExpectation[];
   /**
@@ -168,7 +183,7 @@ export const picoModelJobSaysNothingAbout = Object.freeze({
  * ADR 0117 X4. Refuses rather than repairing, for X2's reason: a job that
  * half-parsed is one nobody asked for.
  */
-export function parsePicoModelJob(value: unknown): PicoModelJob {
+export function parsePicoModelJob(value: unknown, nowMs: number): PicoModelJob {
   if (!isRecord(value)) {
     throw new Error('invalid_pico_model_job');
   }
@@ -179,7 +194,7 @@ export function parsePicoModelJob(value: unknown): PicoModelJob {
   }
 
   const keys = Object.keys(value).sort();
-  const expected = ['carries', 'expects', 'jobId', 'role', 'schema', 'units'];
+  const expected = ['carries', 'expects', 'jobId', 'references', 'role', 'schema', 'units'];
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
     throw new Error('invalid_pico_model_job');
   }
@@ -216,6 +231,21 @@ export function parsePicoModelJob(value: unknown): PicoModelJob {
     }) as PicoModelContextUnit);
   }
 
+  if (!Array.isArray(value.references)) {
+    throw new Error('invalid_pico_model_job_references');
+  }
+  const references: PicoModelContextRef[] = [];
+  for (const reference of value.references as unknown[]) {
+    const parsed = parsePicoModelContextRef(reference, nowMs);
+    if (!picoModelContextRefBelongsTo(parsed, value.jobId)) {
+      // Well-formed and misdelivered, which is a different fault from
+      // malformed and deserves its own word. A packet prepared for another job
+      // is another job's disclosure decision.
+      throw new Error('pico_model_job_reference_belongs_to_another_job');
+    }
+    references.push(parsed);
+  }
+
   if (!Array.isArray(value.expects) || value.expects.length === 0) {
     // ADR 0117 X2. A reader that was told nothing about the shape of its
     // answer is a reader answering in prose, which is the channel the split
@@ -239,11 +269,27 @@ export function parsePicoModelJob(value: unknown): PicoModelJob {
     throw new Error('duplicate_pico_model_job_expectation');
   }
 
+  if (role === 'planner'
+    && [...units.map((unit) => unit.originClass),
+      ...references.map((reference) => reference.originClass)]
+      .some((originClass) => originClass !== picoInstructionThresholdOriginClass)) {
+    // ADR 0117 X1's admission rule, at the job boundary. A planner job holding
+    // below-threshold text is the split undone: the acting model would be
+    // reading the bytes again, whatever the delimiters said.
+    //
+    // **Checked before the allowance, and the order is the message.** Both
+    // faults are real, but one is fixable by editing a field and the other
+    // says this job must not exist. Reporting the field first would send an
+    // author off to correct `carries` and meet this wall afterwards, having
+    // been told the problem was bookkeeping.
+    throw new Error('pico_planner_job_carries_foreign_content');
+  }
+
   // **Computed, then compared.** A job that declared a narrower allowance than
   // its units carry would be a job understating whose words it holds, and the
   // check has to be here rather than at the provider: by the time an entry
   // sees a job, the units are already inside it.
-  const required = picoModelJobAllowanceFor(units);
+  const required = picoModelJobAllowanceFor(units, references);
   if (value.carries !== required) {
     throw new Error(
       value.carries === 'live_turn'
@@ -252,19 +298,12 @@ export function parsePicoModelJob(value: unknown): PicoModelJob {
     );
   }
 
-  if (role === 'planner'
-    && units.some((unit) => unit.originClass !== picoInstructionThresholdOriginClass)) {
-    // ADR 0117 X1's admission rule, at the job boundary. A planner job holding
-    // below-threshold text is the split undone: the acting model would be
-    // reading the bytes again, whatever the delimiters said.
-    throw new Error('pico_planner_job_carries_foreign_content');
-  }
-
   return Object.freeze({
     schema: picoModelJobSchema,
     jobId: value.jobId,
     role,
     units: Object.freeze(units),
+    references: Object.freeze(references),
     expects: Object.freeze(expects),
     carries: required,
   });

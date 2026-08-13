@@ -71,9 +71,17 @@
       "types": "./dist/home-assistant.d.ts",
       "import": "./dist/home-assistant.js"
     },
+    "./model-context-ref": {
+      "types": "./dist/model-context-ref.d.ts",
+      "import": "./dist/model-context-ref.js"
+    },
     "./model-job": {
       "types": "./dist/model-job.d.ts",
       "import": "./dist/model-job.js"
+    },
+    "./model-result": {
+      "types": "./dist/model-result.d.ts",
+      "import": "./dist/model-result.js"
     },
     "./model-provider": {
       "types": "./dist/model-provider.d.ts",

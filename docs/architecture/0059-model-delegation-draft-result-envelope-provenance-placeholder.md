@@ -2,6 +2,10 @@
 
 ## Status
 
+Status note, 2026-08-13: **superseded by `pico.model.result.v1`**, built in `@pico/protocol`. The draft's placeholder shape is not carried over, and the reason is one shape it used repeatedly: six fields whose documentation was a list of what they do not mean - `actionExecuted`, `toolExecuted`, `qualityClaims` with two sub-claims, `providerAuditRef` which "is not a signature, attestation or verified audit record", and `retentionApplied` which "is metadata, not enforcement". A field that may only hold one value is a promise stored where an edit can find it, so none of them exists. What replaces them is provenance a caller can check: the result names which job, which entry and which model digest answered, compared against what the caller dispatched rather than against a second copy in the same envelope.
+
+The core rules stand unchanged and are now enforced by a parser rather than by a fixture convention.
+
 Accepted as a draft-only Model Delegation result-envelope provenance placeholder boundary before model provider authentication, result validation, provenance verification, model-quality evaluation or job-queue runtime are implemented.
 
 ## Context

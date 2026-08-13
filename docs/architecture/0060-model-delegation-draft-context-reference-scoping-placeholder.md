@@ -2,6 +2,10 @@
 
 ## Status
 
+Status note, 2026-08-13: **superseded by `pico.model.context.ref.v1`**, built in `@pico/protocol`. The draft's placeholder shape is not carried over, and the reason is one shape it used repeatedly: seven fields that could hold only one value - `sourceAccessMode` fixed at `materialized_excerpt`, `providerExpansionAllowed` false, `expansionScope` none, `reusableAcrossJobs` false, `redactionApplied` true, `allowedForProvider` true. None of them exists. The two that mattered became structure instead: the reference carries the bytes and no address, so reading through to a source is unsayable; and it names its job, so reuse across jobs is unsayable. The two claims about the writer's own completed homework are dropped rather than moved, because a claim about one's own homework verifies nothing.
+
+The core rules stand unchanged and are now enforced by a parser rather than by a fixture convention.
+
 Accepted as a draft-only Model Delegation context-reference scoping placeholder boundary before context reference resolution, privacy-domain grant enforcement, redaction verification or job-queue runtime are implemented.
 
 ## Context
