@@ -2,6 +2,37 @@
 
 ## Status
 
+Status note, 2026-08-13: **the host was measured again, by code this time, and
+the numbers hold.** Generation came in at 18.2 and 17.7 tok/s against the 18.4
+and 17.8 recorded here, prompt evaluation at 1145 tok/s against 1152, one
+lane with two jobs taking 1.97x one job, 13.35 GiB resident, `completion` and
+`tools`, and a model still declaring 32768 while serving 8192. Three days
+and a different method, and the table stands.
+
+**The residency row does not, and the reason is worth more than the row.** The
+run observed 5.97 s where this ADR records 31 s. A model is in one of three
+states, not two: resident, evicted with its weights in the host page cache, or
+evicted with a cold disk. Only the first two are reachable from the network
+side - dropping a page cache needs root on the host - so a measurer states
+the *floor* of a load and never its worst case. The 31 s here was a disk-cold
+read; 5.97 s is the same operation with the file cached, and the 8 s "reload"
+recorded here is that same case measured on a slower day. A request while the
+model is still resident reports 0.3 s, which is not a load at all and was
+briefly recorded as one before the third state was noticed.
+
+This matters beyond bookkeeping: **ADR 0118 O2's absence threshold has to
+clear the worst case, and that is the one nobody can measure remotely.**
+Whether PE4's field means the floor a measurer can prove or the ceiling a
+person states is not decided here.
+
+Two more findings from writing the measurer, both about method rather than
+about this host. Changing `num_ctx` makes the host reload, so an unwarmed
+baseline carries a load the run after it does not - which read as two lanes on
+a host that has one. And `num_predict` is a ceiling rather than a target: a
+prompt ending "answer with the single word: ok" produced two tokens and a
+32 tok/s figure that was startup cost wearing the shape of a throughput. Both
+are now refused by the code that found them.
+
 Status note, 2026-08-13: **PE5 is amended by ADR 0151.** Unauthenticated
 reach no longer disqualifies an entry outright; it disqualifies the entry
 from carrying retrieved memory, and a credential its transport does not

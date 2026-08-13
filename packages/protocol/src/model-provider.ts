@@ -91,13 +91,13 @@ export function picoModelProviderClassMayCarryRetrievedMemory(
 /**
  * ADR 0142 PE2/PE3. What was observed, in the units it was observed in.
  *
- * `contextChars` is what the deployment *served*, not what the model declares.
+ * `contextTokens` is what the deployment *served*, not what the model declares.
  * `concurrentJobs` is ADR 0142 PE3's lane count, measured rather than
  * defaulted here: the default of one lane belongs where an entry is created,
  * because a parser that defaulted it would be inventing a measurement.
  */
 export interface PicoModelProviderCapacity {
-  contextChars: number;
+  contextTokens: number;
   generationTokensPerSecond: number;
   promptTokensPerSecond: number;
   concurrentJobs: number;
@@ -265,12 +265,12 @@ function parseCapacity(value: unknown): PicoModelProviderCapacity {
   }
   assertExactKeys(
     value,
-    ['contextChars', 'generationTokensPerSecond', 'promptTokensPerSecond', 'concurrentJobs'],
+    ['contextTokens', 'generationTokensPerSecond', 'promptTokensPerSecond', 'concurrentJobs'],
     'invalid_pico_model_provider_capacity',
   );
   return Object.freeze({
-    contextChars: assertPositiveInteger(
-      value.contextChars,
+    contextTokens: assertPositiveInteger(
+      value.contextTokens,
       'invalid_pico_model_provider_capacity',
     ),
     generationTokensPerSecond: assertPositiveRate(

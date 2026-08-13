@@ -13,7 +13,7 @@ import {
  * ADR 0142 and ADR 0151. The entry, and the four things it cannot say.
  *
  * The positive case is the host ADR 0142 was written against, with its own
- * numbers: a 32768-declaring model served at 8192 characters, one lane, 31 s
+ * numbers: a 32768-declaring model served at 8192 tokens, one lane, 31 s
  * cold and 8 s warm. Using the real measurements rather than round ones is the
  * point - a fixture of 1000s would pass a parser that had quietly dropped the
  * relationship between two of them.
@@ -27,7 +27,7 @@ const measuredHost = {
   measurement: {
     measuredAt: '2026-08-10T18:00:00.000Z',
     capacity: {
-      contextChars: 8192,
+      contextTokens: 8192,
       generationTokensPerSecond: 17.8,
       promptTokensPerSecond: 1152,
       concurrentJobs: 1,
@@ -44,7 +44,7 @@ function entry(overrides: Record<string, unknown> = {}): Record<string, unknown>
 describe('ADR 0142 - an entry describes one measured deployment', () => {
   it('accepts the host it was written against', () => {
     const parsed = parsePicoModelProviderEntry(entry());
-    expect(parsed.measurement.capacity.contextChars).toBe(8192);
+    expect(parsed.measurement.capacity.contextTokens).toBe(8192);
     expect(parsed.measurement.capacity.concurrentJobs).toBe(1);
     expect(parsed.credentialRef).toBeUndefined();
     expect(Object.isFrozen(parsed)).toBe(true);
