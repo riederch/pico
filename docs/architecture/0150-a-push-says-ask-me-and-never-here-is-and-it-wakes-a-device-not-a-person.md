@@ -3,8 +3,9 @@
 ## Status
 
 Accepted; **PU1-PU5 all implemented 2026-08-13** at the contract level.
-Decided 2026-08-13. What remains is the wiring - a Home that decides to
-push, and a device that receives one over its relay mailbox.
+Decided 2026-08-13. The path a push travels is wired on both ends. What
+remains is the occasion - a Home that notices a pending recovery and
+decides to push about it.
 ADR 0149 built a relay that carries a device's questions when the direct
 path is gone. This adds the one thing that relay cannot carry: a Home
 reaching a device that did not ask.
@@ -205,6 +206,33 @@ relationship ADR 0118 O1 draws between announcing and acknowledging.
   The occasion list is closed and short - a push is for what the six-hour
   poll would reach too late, not for what changed - and adding one is a
   decision that some event is worth a person's device waking.
+
+### What wiring it found
+
+Two things, and the first was a bug this ADR would have shipped quietly.
+
+**A push would have been deleted as rubbish on arrival.** It is sealed to
+the device's key-agreement key rather than to a per-request reply key, so
+no pending key opens it - and ADR 0149's device sweep acknowledged anything
+that did not open. A Home would push, a relay would accept, a device would
+collect and delete, and every side would look correct. The sweep now tries
+a packet as a push **before** calling it rubbish.
+
+A push that cannot be handled *now* - a locked vault, a busy surface - is
+deferred rather than deleted. A locked device is exactly when a push
+matters.
+
+**The Home had no way to send at all.** ADR 0149's transport could
+register, collect, acknowledge and deregister; nothing could reach a
+device. That gap was invisible from either ADR alone, because ADR 0149 was
+written for a Home that only *answers*.
+
+And one thing checked rather than assumed: opening a push needs the device
+key-agreement key from the vault, which adds **no** requirement that was
+not already there. `createPicoLinkDirectClient` already refuses without an
+unlocked device signing session, so a device that can make the read a push
+asks for can open the push - and a device that cannot would have had
+nothing to do with one.
 
 ## Non-goals
 
