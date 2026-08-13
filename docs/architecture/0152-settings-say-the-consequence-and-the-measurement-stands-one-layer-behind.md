@@ -2,6 +2,22 @@
 
 ## Status
 
+Status note, 2026-08-13: **SE3 and SE4 are implemented, in the store rather
+than in a surface.** A settings screen enforcing "an override may narrow,
+never widen" would be one screen enforcing it, and the next surface would
+have to remember. Written where the value is stored, every surface inherits
+it without knowing it exists - and the schema says it too, since a
+measurement and a narrowing are separate columns and widening has nowhere to
+be written. SE1, SE2, SE5 and SE6 stay open and are surface work.
+
+**The question this ADR left open about which surface hosts it is already
+answered elsewhere**, which is worth recording rather than re-deciding: ADR
+0113 rejected a browser surface as the product form, and ADR 0112 calls the
+Foundation HTTP surface diagnosis rather than product. So the settings
+surface is the companion's, not the web dashboard's. The second open
+question - whether a Home with several residents renders one shared entry
+with per-person decisions attached or the reverse - is untouched.
+
 Accepted 2026-08-13; concept-only. No settings surface exists, and nothing
 it would configure exists either - the provider registry, job queue and
 runtime are all unbuilt.

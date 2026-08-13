@@ -84,6 +84,16 @@ export const picoLinkMailboxMigrationId = '0010_pico_link_mailbox' as const;
 
 export const picoLinkPushLedgerMigrationId = '0011_pico_link_push_ledger' as const;
 
+/**
+ * ADR 0152 SE6 and ADR 0142 PE1. Where a measured deployment is kept.
+ *
+ * One row per entry, and the row holds a **measurement** beside an optional
+ * **narrowing**. Keeping them in separate columns is SE4 said in schema: a
+ * person's preference cannot overwrite an observation, because there is
+ * nowhere for it to be written.
+ */
+export const picoModelProviderEntryMigrationId = '0012_pico_model_provider_entry' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1196,6 +1206,25 @@ const migrations: readonly MigrationDefinition[] = [
           event_id TEXT NOT NULL,
           pushed_at TEXT NOT NULL,
           PRIMARY KEY (device_signing_key_fingerprint_hex, occasion, event_id)
+        );
+      `);
+    },
+  },
+  {
+    id: picoModelProviderEntryMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_model_provider_entry (
+          entry_id TEXT PRIMARY KEY,
+          entry_json TEXT NOT NULL,
+          -- ADR 0152 SE4. A narrowing lives beside the measurement and never
+          -- inside it. Widening has nowhere to be written, so an entry that
+          -- was measured at one width cannot be edited into claiming another.
+          narrowed_context_tokens INTEGER NULL,
+          narrowed_concurrent_jobs INTEGER NULL,
+          added_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
         );
       `);
     },
