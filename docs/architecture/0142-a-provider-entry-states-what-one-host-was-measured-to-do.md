@@ -2,6 +2,53 @@
 
 ## Status
 
+Status note, 2026-08-13, decided by the user: **the entry this ADR describes
+is now `qwen3:14b`, not `mistral-small`.** The measurement tables under
+"Context" keep their wording under ADR 0128's record rule - they are what was
+observed on 2026-08-10 and stay observed - but the deployment this ADR is
+written against has changed, and PE1 means that is a different entry rather
+than an edited one.
+
+| | mistral-small 23.6B | qwen3:14b |
+|---|---|---|
+| Weights | 13.35 GiB | 8.64 GiB |
+| Window that costs nothing | 12288 | **40960**, its whole declared window |
+| Generation at 8192 | 17.6 tok/s | **26.3** |
+| Prompt evaluation at 8192 | 1121 tok/s | **1576** |
+| Load after eviction | 6.1 s | 4.9 s |
+| Lanes | one | one |
+
+Three and a third times the usable context at one and a half times the speed,
+because the smaller weights leave room the larger ones took. **ADR 0116 W3's
+assembly budget moves with it**: what an assembly may spend here is 40960
+tokens rather than 8192, and it is the first time that number has come from a
+walk rather than from a guess.
+
+Unchanged by the switch: the reach is still unauthenticated, so ADR 0151 PV1
+still gives this entry `live_turn` and nothing wider. PE6's digest is
+re-pinned to the new model, and the old pin does not carry over - a digest
+identifies weights, not a slot in a registry.
+
+**Claims nothing about quality.** ADR 0050 forbids it and nothing here
+measured it. This is a decision about capacity and speed on one card, taken
+knowing that; whether the smaller model is good enough at ADR 0117 X4's
+schema-constrained read is answerable only once that job exists.
+
+**One thing this ADR did not have to say before, and now does.** Both models
+stay installed on the host, which makes them two deployments and therefore two
+entries - and 15.3 GiB does not hold 13.35 plus 8.64, so **selecting the
+second evicts the first**. Two entries on one accelerator are not two
+providers: they are one provider with a five-second cost to change its mind.
+ADR 0118 O2 permits failover between them, since they share a class; what O2
+does not know is that using one makes the other absent for as long as it takes
+to load. Whatever schedules jobs will have to.
+
+**Open, and not decided here.** `qwen3:14b` declares `thinking` among its
+capabilities and emits reasoning tokens before answering. For throughput that
+is neutral - a token is a token - and for a schema-constrained read it is
+window and latency spent before the answer starts. Ollama can turn it off per
+request. Whether Pico should is a question for the job, not for the entry.
+
 Status note, 2026-08-13, second run, **superseding the paragraph it
 replaces**: the declared window costs throughput **only once the weights plus
 its preallocated KV cache stop fitting on the accelerator**, and costs
