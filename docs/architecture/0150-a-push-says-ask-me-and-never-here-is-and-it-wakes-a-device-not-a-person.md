@@ -3,9 +3,9 @@
 ## Status
 
 Accepted; **PU1-PU5 all implemented 2026-08-13** at the contract level.
-Decided 2026-08-13. The path a push travels is wired on both ends. What
-remains is the occasion - a Home that notices a pending recovery and
-decides to push about it.
+Decided 2026-08-13. The path, the bounds and the occasion are built. What
+remains is the send itself: a Home that seals a push and hands it to its
+relay.
 ADR 0149 built a relay that carries a device's questions when the direct
 path is gone. This adds the one thing that relay cannot carry: a Home
 reaching a device that did not ask.
@@ -206,6 +206,34 @@ relationship ADR 0118 O1 draws between announcing and acknowledging.
   The occasion list is closed and short - a push is for what the six-hour
   poll would reach too late, not for what changed - and adding one is a
   decision that some event is worth a person's device waking.
+
+### The occasion, and the device it must not tell
+
+The judgement that matters here is **who**. A recovery is about one device,
+and that device is not the one to tell: ADR 0110's objection is raised by a
+device the person still holds, while the target is the one being enrolled -
+usually because the person no longer has the old one. Pushing to the target
+would tell the wrong side about its own arrival while the side that could
+object heard nothing.
+
+The target is excluded **by name**, not by happening to have no mailbox. It
+usually will not have one, since a device being recovered onto has
+exchanged nothing, and "usually" is not a rule.
+
+Two more fall out of the same reading. A **closed window produces no push**:
+waking a device about something it can no longer act on is noise wearing
+the shape of an alarm. And the occasion becomes `objection_window_closing`
+two hours out, against the six-hour poll - a person whose next scheduled
+look is further away than the window has left would find out afterwards,
+which is the failure ADR 0112 exists to prevent.
+
+The ledger is **durable because the rule it serves is**. "One push per
+event" holds however long ago the first was, and a ledger living in memory
+would hold it only as long as the process: a Home restarting - or
+crash-looping - would push again for the same recovery, which is PU5's
+battery attack performed by the Home on its own person. Its primary key is
+the two things that make a push the same push, so the schema refuses a
+retry rather than a comparison somewhere doing so.
 
 ### What wiring it found
 
