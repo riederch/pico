@@ -4,10 +4,27 @@
 
 Accepted as a pre-implementation security constraint refining ADR 0116
 W3; the split and its scope were chosen explicitly by the user on
-2026-08-01 within the ADR 0116 security initiative. X1 and X2 are
-implemented in the protocol. X3, X4 and X5 stay open and bind the same
-future milestones W3-W5 already bind - a tool executor, a model
-delegation runtime and a companion surface, none of which exist yet.
+2026-08-01 within the ADR 0116 security initiative. X1, X2 and **X4 as a
+contract (2026-08-13)** are implemented in the protocol. X3 and X5 stay
+open and bind the same future milestones W3-W5 already bind - a tool
+executor and a companion surface, neither of which exists yet. X4's job
+shape exists; the runtime that would send one does not.
+
+**X4 closed the question ADR 0151 left open, by asking a different one.**
+That ADR recorded that a quarantined read "is neither the live turn nor
+retrieved memory", which left the nearest delegable job unable to say
+which allowance it needs. The allowance is not a property of the job
+type. It is a property of whose words the job carries, and ADR 0116 W2
+already labels every unit with exactly that: a read over the person's own
+words needs the live turn, a read over anybody else's needs the wider
+allowance, because those are words their author never offered to a
+provider. Computed from the units and then compared against the declared
+field, so a job cannot understate what it holds.
+
+The conservative reading is taken, in one function, visibly. The
+alternative - that freshly arrived foreign content is not "retrieved
+memory" - is arguable from ADR 0048's wording and not from its reasoning,
+which is about second parties learning what people wrote.
 Where they overlap, this ADR is the stronger rule.
 The claim strengthens from ADR 0116's "injected content is contained"
 to "injected content never reaches the acting model" - and stays as
@@ -228,10 +245,32 @@ what the approval cryptographically binds.
   executor, with W4):** controller-computed derivation labels on every
   argument in the canonical action request; Pico Rules consumes them;
   ADR 0106 statements name them.
-- **X4 - Quarantined read job type (binds model delegation):** the ADR
-  0048/0049 job variant with `tool_access_allowed` false and typed,
-  origin-carrying result values; planner delegation confined to the
-  Pico trust boundary.
+- **X4 - Quarantined read job type (contract implemented 2026-08-13):**
+  the ADR 0048/0049 job variant with typed, origin-carrying result values
+  and planner delegation confined to the Pico trust boundary.
+
+  **There is no `tool_access_allowed` field.** This gate asked for one set
+  to false; a field that is always false is not a field, it is a promise
+  stored where a future edit can find it. `toolAccessAllowed`, `tools`,
+  `systemPrompt` and `providerHint` are each refused **by name**, in ADR
+  0150's construction, because writing one is not a typo - it is asking
+  for the thing the split removed.
+
+  Two rules that look like one and are not, so a caller can say which
+  refused: **a planner runs only on the four ADR 0048 classes that are
+  Picos**, since a stranger's machine is no place to decide this person's
+  next step, and no credential changes that; and **the words a job carries
+  decide which entries may see them**, which is ADR 0151 PV3 and is about
+  disclosure rather than authority. A reader may leave the boundary; what
+  limits it is the second rule.
+
+  A planner job holding anything below ADR 0116's instruction threshold is
+  refused outright - that is X1's admission rule at the job boundary,
+  where the split would otherwise be undone by delimiters.
+
+  The result shape is X2's `pico.reader.output.v1`, unchanged and already
+  built. What does not exist is anything that sends a job: no queue, no
+  runtime, no result path.
 - **X5 - Display separation (binds companion UX):** person-facing
   renderings of untrusted content stay labeled content; approval
   statements never include reader prose.
