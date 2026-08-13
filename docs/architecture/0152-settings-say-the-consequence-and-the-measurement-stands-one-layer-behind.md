@@ -10,6 +10,25 @@ it without knowing it exists - and the schema says it too, since a
 measurement and a narrowing are separate columns and widening has nowhere to
 be written. SE1, SE2, SE5 and SE6 stay open and are surface work.
 
+Status note, 2026-08-13, decided by the user: **a shared finding with
+per-person decisions attached.** The measurement is one row, because a
+deployment is one deployment. What hangs off it is what can differ between
+two residents, and it turns out to be exactly three things - the declaration
+that this machine is theirs (ADR 0048, a judgement about premises nobody can
+measure), the standing consent, and what they let it carry (ADR 0151 PV1),
+plus the credential that earns the wider allowance.
+
+**Those are exactly the fields an entry carries beside its measurement**,
+which is not a coincidence: an entry *is* what one person's decisions make of
+one shared finding. So an entry is composed on read rather than stored, and
+**a person with no decision has no entry** - not the Home's. ADR 0138's title
+is the rule: reaching outside is off until somebody says so, and an absent
+row is an absent decision rather than a quiet yes.
+
+Revoking keeps the row with a date on it. "Withdrew on the 14th" and "was
+never asked" are different facts, and a surface that showed them alike would
+be inventing one of them.
+
 **The question this ADR left open about which surface hosts it is already
 answered elsewhere**, which is worth recording rather than re-deciding: ADR
 0113 rejected a browser surface as the product form, and ADR 0112 calls the

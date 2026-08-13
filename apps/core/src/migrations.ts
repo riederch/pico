@@ -94,6 +94,21 @@ export const picoLinkPushLedgerMigrationId = '0011_pico_link_push_ledger' as con
  */
 export const picoModelProviderEntryMigrationId = '0012_pico_model_provider_entry' as const;
 
+/**
+ * ADR 0152, second open question, decided by the user on 2026-08-13: **a
+ * shared finding with per-person decisions attached.**
+ *
+ * The measurement is one row because a deployment is one deployment. What can
+ * differ between two residents hangs off it: whether this machine is *theirs*
+ * (ADR 0048's declaration, a judgement about premises nobody can measure),
+ * their standing consent (ADR 0048, 2026-08-04), and what they let it carry.
+ *
+ * **No row here means no provider for that person.** ADR 0138's title says it:
+ * reaching outside is off until somebody says so. An absent decision is not a
+ * default to the Home's - it is the absence of a decision.
+ */
+export const picoModelProviderConsentMigrationId = '0013_pico_model_provider_consent' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1228,7 +1243,28 @@ const migrations: readonly MigrationDefinition[] = [
         );
       `);
     },
+  },  {
+    id: picoModelProviderConsentMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_model_provider_consent (
+          entry_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          -- ADR 0048. The declaration is a person's judgement about their own
+          -- premises, so it hangs here rather than on the finding: two
+          -- residents can disagree about whose hardware the box in the hall is.
+          provider_class TEXT NOT NULL,
+          carries TEXT NOT NULL,
+          credential_ref TEXT NULL,
+          decided_at TEXT NOT NULL,
+          revoked_at TEXT NULL,
+          PRIMARY KEY (entry_id, pico_identity_fingerprint_hex)
+        );
+      `);
+    },
   },
+
 ];
 
 export function runMigrations(db: Database.Database, options: MigrationOptions = {}): MigrationRunResult {

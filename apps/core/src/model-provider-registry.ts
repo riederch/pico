@@ -1,5 +1,8 @@
 import {
   parsePicoModelProviderEntry,
+  picoModelProviderClasses,
+  type PicoModelProviderAllowance,
+  type PicoModelProviderClass,
   type PicoModelProviderEntry,
 } from '@pico/protocol/model-provider';
 import type Database from 'better-sqlite3';
@@ -225,6 +228,153 @@ export class PicoModelProviderRegistry {
       }),
       addedAt: row.addedAt,
       updatedAt: row.updatedAt,
+    });
+  }
+}
+
+/**
+ * ADR 0152's second question, decided by the user on 2026-08-13: **a shared
+ * finding with per-person decisions attached.**
+ *
+ * The measurement is one row because a deployment is one deployment. What
+ * hangs off it is what can differ between two residents, and there are exactly
+ * three such things:
+ *
+ * - **the declaration** that this machine is theirs (ADR 0048). A judgement
+ *   about premises, which Pico cannot measure and two people can answer
+ *   differently about the same box in the same hall;
+ * - **the allowance** - this turn, or this turn and retrieved memory (ADR 0151
+ *   PV1), which is a disclosure decision about their own remembered words;
+ * - **the credential** they hold for it (ADR 0138 CO1 custody).
+ *
+ * They are exactly the fields a `PicoModelProviderEntry` carries beside the
+ * measurement, which is not a coincidence: **an entry is what one person's
+ * decisions make of one shared finding.** So an entry is composed on read
+ * rather than stored, and a person with no decision has no entry - not the
+ * Home's. ADR 0138's title is the rule: reaching outside is off until somebody
+ * says so, and an absent row is an absent decision rather than a quiet yes.
+ */
+export interface PicoModelProviderDecision {
+  providerClass: PicoModelProviderClass;
+  carries: PicoModelProviderAllowance;
+  credentialRef?: string;
+  decidedAt: string;
+}
+
+interface DecisionRow {
+  providerClass: string;
+  carries: string;
+  credentialRef: string | null;
+  decidedAt: string;
+}
+
+export class PicoModelProviderConsent {
+  public constructor(
+    private readonly db: Database.Database,
+    private readonly registry: PicoModelProviderRegistry,
+  ) {}
+
+  public decide(input: {
+    entryId: string;
+    picoIdentityFingerprintHex: string;
+    providerClass: PicoModelProviderClass;
+    carries: PicoModelProviderAllowance;
+    credentialRef?: string;
+    at: string;
+  }): void {
+    if (this.registry.get(input.entryId) === undefined) {
+      throw new Error('pico_model_provider_entry_not_found');
+    }
+    if (!(picoModelProviderClasses as readonly string[]).includes(input.providerClass)) {
+      throw new Error('invalid_pico_model_provider_class');
+    }
+    // Composed before it is stored, so a decision that could not produce an
+    // entry is refused where it is made rather than discovered on read. The
+    // parser is the one that knows the wider allowance needs a credential.
+    this.compose(this.registry.get(input.entryId)!.entry, {
+      providerClass: input.providerClass,
+      carries: input.carries,
+      ...(input.credentialRef === undefined ? {} : { credentialRef: input.credentialRef }),
+      decidedAt: input.at,
+    });
+
+    this.db.prepare(`
+      INSERT INTO pico_model_provider_consent (
+        entry_id, pico_identity_fingerprint_hex, provider_class, carries,
+        credential_ref, decided_at, revoked_at
+      ) VALUES (?, ?, ?, ?, ?, ?, NULL)
+      ON CONFLICT(entry_id, pico_identity_fingerprint_hex) DO UPDATE SET
+        provider_class = excluded.provider_class,
+        carries = excluded.carries,
+        credential_ref = excluded.credential_ref,
+        decided_at = excluded.decided_at,
+        revoked_at = NULL
+    `).run(
+      input.entryId,
+      input.picoIdentityFingerprintHex,
+      input.providerClass,
+      input.carries,
+      input.credentialRef ?? null,
+      input.at,
+    );
+  }
+
+  /**
+   * ADR 0048's standing consent is revocable, and revoking is not deleting.
+   *
+   * The row stays with a date on it, because "this person withdrew on the
+   * 14th" and "this person was never asked" are different facts and a surface
+   * that showed them alike would be inventing one of them.
+   */
+  public revoke(entryId: string, picoIdentityFingerprintHex: string, at: string): void {
+    this.db.prepare(`
+      UPDATE pico_model_provider_consent SET revoked_at = ?
+      WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
+    `).run(at, entryId, picoIdentityFingerprintHex);
+  }
+
+  /** The entry this person's decisions make of this finding, or nothing. */
+  public entryFor(
+    entryId: string,
+    picoIdentityFingerprintHex: string,
+  ): PicoModelProviderEntry | undefined {
+    const record = this.registry.get(entryId);
+    if (record === undefined) {
+      return undefined;
+    }
+    const row = this.db.prepare(`
+      SELECT provider_class AS providerClass, carries, credential_ref AS credentialRef,
+             decided_at AS decidedAt
+      FROM pico_model_provider_consent
+      WHERE entry_id = ? AND pico_identity_fingerprint_hex = ? AND revoked_at IS NULL
+    `).get(entryId, picoIdentityFingerprintHex) as DecisionRow | undefined;
+    if (row === undefined) {
+      return undefined;
+    }
+    return this.compose(picoModelProviderEffectiveEntry(record), {
+      providerClass: row.providerClass as PicoModelProviderClass,
+      carries: row.carries as PicoModelProviderAllowance,
+      ...(row.credentialRef === null ? {} : { credentialRef: row.credentialRef }),
+      decidedAt: row.decidedAt,
+    });
+  }
+
+  public listFor(picoIdentityFingerprintHex: string): readonly PicoModelProviderEntry[] {
+    return Object.freeze(this.registry.list()
+      .map((record) => this.entryFor(record.entry.entryId, picoIdentityFingerprintHex))
+      .filter((entry): entry is PicoModelProviderEntry => entry !== undefined));
+  }
+
+  private compose(
+    finding: PicoModelProviderEntry,
+    decision: PicoModelProviderDecision,
+  ): PicoModelProviderEntry {
+    const { credentialRef: _findingCredential, ...rest } = finding;
+    return parsePicoModelProviderEntry({
+      ...rest,
+      providerClass: decision.providerClass,
+      carries: decision.carries,
+      ...(decision.credentialRef === undefined ? {} : { credentialRef: decision.credentialRef }),
     });
   }
 }

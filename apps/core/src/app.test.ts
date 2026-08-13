@@ -90,7 +90,9 @@ import {
   picoDepotFetchOutcomeMigrationId,
   picoLinkMailboxMigrationId,
   picoLinkPushLedgerMigrationId,
+  picoModelProviderConsentMigrationId,
   picoModelProviderEntryMigrationId,
+  picoModelProviderConsentMigrationId,
   picoDepotReachMigrationId,
   picoLibraryDerivationMigrationId,
   picoSupplierCredentialScopeMigrationId,
@@ -396,6 +398,7 @@ describe('Pico Home Core app', () => {
           { id: picoLinkMailboxMigrationId, appliedAt: expect.any(String) },
           { id: picoLinkPushLedgerMigrationId, appliedAt: expect.any(String) },
           { id: picoModelProviderEntryMigrationId, appliedAt: expect.any(String) },
+          { id: picoModelProviderConsentMigrationId, appliedAt: expect.any(String) },
         ],
       },
       // ADR 0119 Q5. A development host has no free-space source and
