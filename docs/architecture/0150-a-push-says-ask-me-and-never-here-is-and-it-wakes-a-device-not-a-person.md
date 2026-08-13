@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted direction, not implemented (PU1-PU5 open). Decided 2026-08-13.
+Accepted; **PU1 and PU2 implemented 2026-08-13**, PU3-PU5 open. Decided
+2026-08-13.
 ADR 0149 built a relay that carries a device's questions when the direct
 path is gone. This adds the one thing that relay cannot carry: a Home
 reaching a device that did not ask.
@@ -135,17 +136,31 @@ relationship ADR 0118 O1 draws between announcing and acknowledging.
 
 ## Gates
 
-- **PU1 - "Ask me", never "here is" (open):** a `pico.link.push.v1` inner
-  payload with no operation, no arguments, no result and no kind. The
-  refusal is the absence of the fields, in ADR 0117 X1's construction, with
-  a negative vector for each one somebody would reach for.
+- **PU1 - "Ask me", never "here is" (implemented 2026-08-13):**
+  `pico.link.push.v1` carries six signed fields, and the four that are
+  missing are the contract. `operation`, `arguments`, `result` and `kind`
+  have nowhere to be written, and each is refused **by name** rather than
+  ignored - a Home sending `operation` has not made a typo, it is asking
+  for the thing this ADR removed. `picoLinkPushSaysNothingAbout` keeps the
+  four reasons as data, because an absent field cannot document itself.
 
-- **PU2 - Sealed to the device, signed by the Home (open):** canonical
-  signature input and vectors in the ADR 0107 D1 discipline, sealed to the
-  key-agreement key the Home holds from ADR 0083 and verified against the
-  host signing key the device holds pinned. The payload names the device it
-  is for; a device refuses one that names another, in the same shape ADR
-  0149's collector refuses a mismatched sender.
+- **PU2 - Sealed to the device, signed by the Home (implemented
+  2026-08-13):** canonical signature input and vectors in the ADR 0107 D1
+  discipline. **`expiresAt` is inside the signature**, not beside it, so a
+  carrier cannot widen the window a replay is worth anything in, and
+  `parsePicoLinkSealedPush` runs the same builder that produces the signed
+  bytes rather than shape-checking separately - a payload it accepts is one
+  a verifier can actually check.
+
+  Pinned both ways: the payload names the device it is for and a device
+  refuses one naming another, which is the refusal ADR 0149's collector
+  makes from the other side; and it refuses one whose host fingerprint is
+  not the pinned Home, because a URL is reachability and a relay is a
+  carrier, and only the pin says whose Home this is.
+
+  Worth keeping beside ADR 0147 RY1: **that** envelope has no canonical
+  bytes because nothing signs it, and this one does because something
+  does.
 
 - **PU3 - Bounded replay (open):** a fresh push id, a short expiry and a
   bounded seen-set on the device. Proved by replaying a valid push and
