@@ -126,6 +126,20 @@ describe('ADR 0151 - the proof buys the memory, not the provider', () => {
     expect(parsed.credentialRef).toBe('lan-inference-token');
   });
 
+  it('refuses an allowance nobody declared', () => {
+    expect(() => parsePicoModelProviderEntry(entry({ carries: 'everything' })))
+      .toThrow('invalid_pico_model_provider_allowance');
+  });
+
+  it('refuses a credential reference that is not a name', () => {
+    // ADR 0138 CO1 holds the credential; this field holds a name for it, and
+    // something that is not a name is not a reference to anything.
+    expect(() => parsePicoModelProviderEntry(entry({
+      reach: 'https://provider.invalid:11434',
+      credentialRef: 'not a name',
+    }))).toThrow('invalid_pico_model_provider_credential_ref');
+  });
+
   it('refuses a credential its transport does not protect', () => {
     // PV5. Refused outright rather than narrowed - a token over plain HTTP
     // distinguishes the provider from nobody and only looks as though it does.

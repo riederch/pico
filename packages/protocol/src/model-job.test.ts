@@ -56,6 +56,24 @@ describe('ADR 0117 X4 - a reader holds no tools', () => {
       .toThrow('invalid_pico_model_job_expects');
   });
 
+  it('refuses two expectations under one name', () => {
+    // A reader told to answer `amount` twice has been told two things about
+    // one field, and whichever arrives second would silently win.
+    expect(() => parsePicoModelJob(job({
+      expects: [{ name: 'amount', type: 'number' }, { name: 'amount', type: 'text' }],
+    }), nowMs)).toThrow('duplicate_pico_model_job_expectation');
+  });
+
+  it('names an overstated allowance apart from an understated one', () => {
+    // Understating is a job trying to reach a narrower provider. Overstating
+    // is a job that got its own contents wrong, and the two deserve different
+    // words even though both refuse.
+    expect(() => parsePicoModelJob(job({
+      units: [{ originClass: 'person_present', text: 'Book the train.' }],
+      carries: 'live_turn_and_retrieved_memory',
+    }), nowMs)).toThrow('invalid_pico_model_job_allowance');
+  });
+
   it('refuses a job with nothing to read', () => {
     expect(() => parsePicoModelJob(job({ units: [] }), nowMs))
       .toThrow('invalid_pico_model_job_units');

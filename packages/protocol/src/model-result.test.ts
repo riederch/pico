@@ -89,6 +89,17 @@ describe('ADR 0060 - a context reference carries bytes, not an address', () => {
     }), nowMs)).toThrow('pico_model_context_ref_expired');
   });
 
+  it('refuses a window that is not a window', () => {
+    // A packet that expires before it was made is not a short window; it is a
+    // record nobody produced by materialising anything.
+    expect(() => parsePicoModelContextRef(reference({
+      expiresAt: '2026-08-13T11:59:00.000Z',
+    }), nowMs)).toThrow('invalid_pico_model_context_ref_window');
+    expect(() => parsePicoModelContextRef(reference({
+      materializedAt: 'whenever',
+    }), nowMs)).toThrow('invalid_pico_model_context_ref_window');
+  });
+
   it('refuses an oversized excerpt rather than trimming it', () => {
     // ADR 0119 Q5's posture: a silently shortened excerpt is a different
     // excerpt, and the job would be answered about it.
