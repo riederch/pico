@@ -32,6 +32,16 @@
       Closing this window does not veto anything. Choose Veto recovery to send
       the authenticated decision from this living device.
     </p>
+    <!--
+      ADR 0152 SE1. The consequence in a sentence, the measurement one line
+      behind it, and never more than one thing to do per provider. Every string
+      here is written by `picoCompanionModelProviderLines` and printed with
+      textContent: a rule about wording only holds if one place decides it.
+    -->
+    <section id="model-providers" class="providers" hidden>
+      <h2>What computes for you</h2>
+      <ul id="provider-list" class="provider-list"></ul>
+    </section>
     <section id="recovery-card-form" class="form-card" hidden>
       <label for="pico-name">Pico name</label>
       <input id="pico-name" maxlength="256" autocomplete="off">

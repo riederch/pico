@@ -1,6 +1,8 @@
 import {
   parsePicoCompanionPresentation,
   picoCompanionFloorAssurance,
+  picoCompanionModelProviderLines,
+  parsePicoCompanionModelProviders,
   type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
@@ -205,4 +207,47 @@ function requireSelect(id: string): HTMLSelectElement {
     throw new Error(`invalid_renderer_select:${id}`);
   }
   return element;
+}
+
+/**
+ * ADR 0152 SE1/SE5 on the device.
+ *
+ * The renderer chooses no words. It prints what
+ * `picoCompanionModelProviderLines` decided, with `textContent` throughout -
+ * a model identifier arrives from a Home over a Link reply, which makes it
+ * exactly the sort of string that must never become markup.
+ */
+export function renderPicoCompanionModelProviders(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+): void {
+  const providers = parsePicoCompanionModelProviders(value);
+  root.section.hidden = providers.length === 0;
+  root.list.replaceChildren();
+  const lines = picoCompanionModelProviderLines(providers);
+  for (const [index, line] of lines.entries()) {
+    const item = root.document.createElement('li');
+    item.className = 'provider-line';
+    item.dataset.entryId = line.entryId;
+    item.dataset.action = line.action;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    // SE3. The measurement is visible and not editable here, with the moment
+    // it was taken - an entry measured months ago is a claim rather than a
+    // finding, and only the date says which.
+    const measured = root.document.createElement('p');
+    measured.className = 'measured';
+    measured.textContent = `${providers[index]!.contextTokens} tokens of context, `
+      + `measured ${providers[index]!.measuredAt.slice(0, 10)}`;
+
+    item.append(headline, detail, measured);
+    root.list.append(item);
+  }
 }

@@ -13,6 +13,9 @@ export const picoCompanionIpcChannels = Object.freeze({
   decideApproval: 'pico:approval:decide',
   beginFirstRun: 'pico:first-run:begin',
   closeWindow: 'pico:window:close',
+  getModelProviders: 'pico:model-providers:get',
+  decideModelProvider: 'pico:model-provider:decide',
+  revokeModelProvider: 'pico:model-provider:revoke',
 });
 
 export type PicoCompanionPresentationKind =
@@ -381,4 +384,109 @@ function assertDisplayText(value: unknown, maximum: number): void {
   if (typeof value !== 'string' || value.length === 0 || value.length > maximum) {
     throw new Error('invalid_companion_presentation_text');
   }
+}
+
+/**
+ * ADR 0152 on the person's own device.
+ *
+ * The shape is the ADR 0107 `home.model.providers.read` reply, which carries
+ * no throughput figure and no digest: those are the layer behind, and the
+ * layer behind lives where the measurement does. What arrives here is what a
+ * person decides with.
+ */
+export interface PicoCompanionModelProvider {
+  entryId: string;
+  model: string;
+  contextTokens: number;
+  measuredAt: string;
+  decided: boolean;
+  sees: string;
+  needsCredentialToSeeMore: boolean;
+}
+
+/**
+ * ADR 0152 SE1, as the one place the words are chosen.
+ *
+ * **The sentences are computed here rather than in the DOM**, for the reason
+ * SE1 exists: a summary that reads well and hides a condition is the failure
+ * mode, and a rule about wording only holds if something can be held to it.
+ * The renderer prints these strings with `textContent` and decides nothing.
+ *
+ * Three states and never two. A provider nobody decided about is not "off" -
+ * off is a decision somebody made. Saying so is ADR 0138's posture in a
+ * sentence: reaching outside is off until somebody says so, and the person
+ * should be able to tell the difference between not yet asked and answered no.
+ */
+export interface PicoCompanionModelProviderLine {
+  entryId: string;
+  headline: string;
+  detail: string;
+  /** What the person can do next, which is never more than one thing. */
+  action: 'decide' | 'widen' | 'revoke';
+}
+
+export function picoCompanionModelProviderLines(
+  providers: readonly PicoCompanionModelProvider[],
+): readonly PicoCompanionModelProviderLine[] {
+  return Object.freeze(providers.map((provider) => {
+    if (!provider.decided) {
+      return Object.freeze({
+        entryId: provider.entryId,
+        headline: `${provider.model} is available and you have not decided about it`,
+        // Not "it is off". Off is an answer, and nobody gave one.
+        detail: 'Pico will not send anything here until you say so.',
+        action: 'decide' as const,
+      });
+    }
+    if (provider.needsCredentialToSeeMore) {
+      return Object.freeze({
+        entryId: provider.entryId,
+        headline: `${provider.model} sees this conversation`,
+        // ADR 0151's quiet outcome, said where the choice is rather than in a
+        // help page: a person who never adds a credential gets a Pico whose
+        // model never sees their memory, and nothing else will tell them.
+        detail: 'It does not see what Pico remembers. That needs a way for this '
+          + 'machine to prove who it is.',
+        action: 'widen' as const,
+      });
+    }
+    return Object.freeze({
+      entryId: provider.entryId,
+      headline: `${provider.model} sees this conversation and what Pico remembers`,
+      detail: 'You can withdraw this at any time.',
+      action: 'revoke' as const,
+    });
+  }));
+}
+
+export function parsePicoCompanionModelProviders(
+  value: unknown,
+): readonly PicoCompanionModelProvider[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_model_providers');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_model_provider');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.entryId !== 'string'
+      || typeof record.model !== 'string'
+      || typeof record.contextTokens !== 'number'
+      || typeof record.measuredAt !== 'string'
+      || typeof record.decided !== 'boolean'
+      || typeof record.sees !== 'string'
+      || typeof record.needsCredentialToSeeMore !== 'boolean') {
+      throw new Error('invalid_pico_companion_model_provider');
+    }
+    return Object.freeze({
+      entryId: record.entryId,
+      model: record.model,
+      contextTokens: record.contextTokens,
+      measuredAt: record.measuredAt,
+      decided: record.decided,
+      sees: record.sees,
+      needsCredentialToSeeMore: record.needsCredentialToSeeMore,
+    });
+  }));
 }
