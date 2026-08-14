@@ -17,9 +17,12 @@ refuses it. The measurer does that now and records
 unchanged; what changed is that an entry can be wrong in a way PV5 was never
 able to see, and the measurement says so out loud instead.
 
-Accepted 2026-08-13; concept-only, like everything else about providers.
-No registry, job queue or provider runtime exists, so nothing consumes an
-entry yet and none of PV1-PV5 has a consumer to bind.
+Accepted 2026-08-13. **That day's "concept-only, no registry, job queue or
+provider runtime exists" stopped being true within it**, and the sentence is
+corrected rather than removed: PV1, PV2, PV4 and PV5 are enforced by the
+entry parser, PV3 by the job it travels with, and all five now refuse real
+requests against a real host. What is still absent is a scheduler - nothing
+decides on its own that a job should run.
 
 Decided because Ollama is a model provider in this project, with
 authentication **optional**, and it currently runs on the home LAN. That
@@ -70,7 +73,8 @@ Does not cover:
 
 - what an entry contains and where its numbers come from, which is ADR 0142;
 - which classes exist and what may leave the device, which is ADR 0048;
-- the registry, job envelope, transport and runtime, none of which exist;
+- the registry, job envelope, transport and runtime, which were absent when
+  this was written and are not this ADR's to specify;
 - model quality, safety or injection resistance, per ADR 0050;
 - the credential's own custody, which is ADR 0104's and unchanged.
 
