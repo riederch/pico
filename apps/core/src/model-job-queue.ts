@@ -109,7 +109,17 @@ export class PicoModelJobQueue {
    * settled rather than skipped - a queue that silently stepped over it would
    * hold a job forever that nothing will ever run.
    */
-  public next(nowMs: number, at: string): PicoModelJobQueueRow | undefined {
+  public next(nowMs: number, at: string, within?: {
+    /**
+     * ADR 0142 PE3. Restricts the pick to one entry, so a sweep filling that
+     * entry's lanes cannot be stopped by the oldest waiting job belonging to a
+     * different provider.
+     */
+    entryId: string;
+    /** Jobs this sweep already holds. They are pending and must not be picked twice. */
+    excluding: readonly string[];
+  }): PicoModelJobQueueRow | undefined {
+    const placeholders = (within?.excluding ?? []).map(() => '?').join(', ');
     const row = this.db.prepare(`
       SELECT job_id AS jobId,
              pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
@@ -117,9 +127,11 @@ export class PicoModelJobQueue {
              enqueued_at AS enqueuedAt, attempts
       FROM pico_model_job_queue
       WHERE settled_at IS NULL
+        ${within === undefined ? '' : 'AND entry_id = ?'}
+        ${placeholders === '' ? '' : `AND job_id NOT IN (${placeholders})`}
       ORDER BY enqueued_at, job_id
       LIMIT 1
-    `).get() as Row | undefined;
+    `).get(...(within === undefined ? [] : [within.entryId, ...within.excluding])) as Row | undefined;
     if (row === undefined) {
       return undefined;
     }

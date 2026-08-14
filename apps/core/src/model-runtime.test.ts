@@ -206,7 +206,74 @@ describe('ADR 0118 O2 - slow is unavailable', () => {
   });
 });
 
-describe('ADR 0142 PE3 - one lane', () => {
+describe('ADR 0151 PV1 with ADR 0138 CO1 - a declared credential that nobody can produce', () => {
+  const withCredential = () => entry({
+    reach: 'https://provider.invalid',
+    carries: 'live_turn_and_retrieved_memory',
+    credentialRef: 'a_credential_reference',
+  });
+
+  it('says so rather than dispatching silently, and keeps dispatching', async () => {
+    // Refusing would stop a provider that answers today from being used at
+    // all, on a Home whose owner postponed that question. Silence is what must
+    // not happen: the gap belongs in the operational record.
+    const said: string[] = [];
+    const runtime = new PicoModelRuntime({
+      fetch: modelHost().fetch,
+      now: () => nowMs,
+      log: (line) => { said.push(line); },
+    });
+
+    await expect(runtime.dispatch({ job: job(), entry: withCredential() }))
+      .resolves.toBeDefined();
+    expect(said.some((line) => line.includes('cannot produce'))).toBe(true);
+  });
+
+  it('names a provider that answered and refused us, rather than calling it down', async () => {
+    // The two send a person to different places: one to a machine that is
+    // down, the other to a credential that is missing or wrong. Reported as
+    // absence, somebody restarts a provider that is refusing them on purpose.
+    const runtime = new PicoModelRuntime({
+      fetch: (async (url: string | URL | Request) => {
+        if (new URL(String(url)).pathname === '/api/tags') {
+          return await modelHost().fetch(url);
+        }
+        return new Response('no', { status: 401 });
+      }) as unknown as typeof globalThis.fetch,
+      now: () => nowMs,
+      credential: () => 'a-secret-the-host-does-not-accept',
+    });
+
+    await expect(runtime.dispatch({ job: job(), entry: withCredential() }))
+      .rejects.toThrow(/credential_refused/u);
+  });
+
+  it('carries the credential when the Home can produce one', async () => {
+    const seen: Array<string | undefined> = [];
+    const fake = modelHost({});
+    const runtime = new PicoModelRuntime({
+      fetch: (async (url: string | URL | Request, init?: RequestInit) => {
+        if (new URL(String(url)).pathname === '/api/generate') {
+          seen.push((init?.headers as Record<string, string> | undefined)?.authorization);
+        }
+        return await fake.fetch(url, init);
+      }) as typeof globalThis.fetch,
+      now: () => nowMs,
+      credential: () => 'a-secret-this-test-made-up',
+    });
+
+    await runtime.dispatch({ job: job(), entry: withCredential() });
+    expect(seen).toEqual(['Bearer a-secret-this-test-made-up']);
+  });
+
+  it('says nothing about credentials for an entry that declares none', async () => {
+    // The ordinary case, and the absence of the field is what says so.
+    const runtime = new PicoModelRuntime({ fetch: modelHost().fetch, now: () => nowMs });
+    await expect(runtime.dispatch({ job: job(), entry: entry() })).resolves.toBeDefined();
+  });
+});
+
+describe('ADR 0142 PE3 - as many lanes as were measured', () => {
   it('makes the second job wait for the first', async () => {
     const order: string[] = [];
     let release: (() => void) | undefined;
@@ -240,7 +307,54 @@ describe('ADR 0142 PE3 - one lane', () => {
     expect(order).toEqual(['first-started', 'second-started']);
   });
 
-  it('lets the lane continue after a job fails', async () => {
+  it('runs two at once when the entry measured two, and makes the third wait', async () => {
+    // The number used to be dead: a two-lane entry drained exactly like a
+    // one-lane entry, so measuring it bought nothing and nobody could tell
+    // from the code which of the two a provider was.
+    const started: string[] = [];
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const fake = modelHost({});
+    const gated = (async (url: string | URL | Request, init?: RequestInit) => {
+      const response = await fake.fetch(url, init);
+      if (new URL(String(url)).pathname === '/api/generate') {
+        started.push(String(init?.body ?? '').slice(0, 0) + `job-${started.length + 1}`);
+        if (started.length <= 2) {
+          await gate;
+        }
+      }
+      return response;
+    }) as typeof globalThis.fetch;
+
+    const twoLanes = entry({
+      measurement: {
+        measuredAt: '2026-08-13T12:00:00.000Z',
+        capacity: {
+          contextTokens: 40960,
+          generationTokensPerSecond: 26.31,
+          promptTokensPerSecond: 1575.94,
+          concurrentJobs: 2,
+        },
+        residency: { coldLoadMs: 4871, reloadMs: 3988, keepAliveMs: 300_000 },
+      },
+    });
+    const runtime = new PicoModelRuntime({ fetch: gated, now: () => nowMs });
+    const running = [
+      runtime.dispatch({ job: job({ jobId: 'job_a' }), entry: twoLanes }),
+      runtime.dispatch({ job: job({ jobId: 'job_b' }), entry: twoLanes }),
+      runtime.dispatch({ job: job({ jobId: 'job_c' }), entry: twoLanes }),
+    ];
+
+    await new Promise((resolve) => { setTimeout(resolve, 10); });
+    // Two in flight, and the third waiting: the ceiling is the measurement,
+    // not a constant, and it is still a ceiling.
+    expect(started).toHaveLength(2);
+    release?.();
+    await Promise.all(running);
+    expect(started).toHaveLength(3);
+  });
+
+  it('frees a lane whichever way the job went', async () => {
     const runtime = new PicoModelRuntime({
       fetch: modelHost({ answer: 'not json' }).fetch,
       now: () => nowMs,
@@ -251,6 +365,13 @@ describe('ADR 0142 PE3 - one lane', () => {
     // after one bad answer.
     const runtimeAgain = new PicoModelRuntime({ fetch: modelHost().fetch, now: () => nowMs });
     await expect(runtimeAgain.dispatch({ job: job(), entry: entry() })).resolves.toBeDefined();
+
+    // And on the same runtime, where the freed lane is the one that failed.
+    const same = new PicoModelRuntime({ fetch: modelHost().fetch, now: () => nowMs });
+    await expect(same.dispatch({ job: job({ jobId: 'job_x' }), entry: entry() }))
+      .resolves.toBeDefined();
+    await expect(same.dispatch({ job: job({ jobId: 'job_y' }), entry: entry() }))
+      .resolves.toBeDefined();
   });
 });
 

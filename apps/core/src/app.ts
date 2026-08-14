@@ -147,7 +147,10 @@ import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
 import { PicoSupplierHost } from './supplier-host.js';
 import { PicoModelDispatchError, PicoModelRuntime } from './model-runtime.js';
-import { picoModelJobRefusalIsFinal } from './model-job-queue.js';
+import {
+  picoModelJobRefusalIsFinal,
+  type PicoModelJobQueueRow,
+} from './model-job-queue.js';
 import { buildPicoLibraryDerivation } from '@pico/protocol/library-pin';
 import {
   enqueuePicoDepotLibraryReads,
@@ -163,6 +166,7 @@ import type {
   PicoModelProviderClass,
 } from '@pico/protocol/model-provider';
 import { picoModelProviderState } from '@pico/protocol/model-provider-state';
+import type { PicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { picoLinkPushCandidates } from './link-push-occasion.js';
 import { sendPicoLinkPush } from './link-push-send.js';
 import {
@@ -2099,46 +2103,110 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    */
   const sweepPicoModelJobs = async (): Promise<number> => {
     const queue = store.picoModelJobQueue();
+    const consent = store.picoModelProviderConsent();
     const nowMs = Date.now();
     const at = new Date(nowMs).toISOString();
-    const next = queue.next(nowMs, at);
-    if (next === undefined) {
-      return 0;
-    }
-    const entry = store.picoModelProviderConsent()
-      .entryFor(next.entryId, next.picoIdentityFingerprintHex);
-    if (entry === undefined) {
-      // No decision, or a withdrawn one. Not a failure and not retried: ADR
-      // 0138's posture is that reaching outside is off until somebody says so,
-      // and a queue that waited for a person to change their mind would be a
-      // queue holding a job against a decision already made.
-      queue.settle({ jobId: next.job.jobId, outcome: 'no_decision_for_this_entry', at });
-      return 0;
+
+    /**
+     * One job, start to finish. Never throws: a tick that failed on one job
+     * would abandon the others it started in the same breath.
+     */
+    const runOne = async (
+      row: PicoModelJobQueueRow,
+      entry: PicoModelProviderEntry,
+    ): Promise<number> => {
+      queue.recordAttempt(row.job.jobId, at);
+      try {
+        const result = await modelRuntime.dispatch({ job: row.job, entry });
+        queue.settle({ jobId: row.job.jobId, outcome: 'answered', result: result.output, at });
+        return 1;
+      } catch (error) {
+        const refusal = error instanceof PicoModelDispatchError
+          ? error.refusal
+          : 'dispatch_failed';
+        if (picoModelJobRefusalIsFinal(refusal)) {
+          queue.settle({ jobId: row.job.jobId, outcome: refusal, at });
+        } else {
+          // Left pending. The world may be different in six minutes; whose words
+          // these are will not be.
+          app.log.warn({ jobId: row.job.jobId, refusal }, 'Model job did not run.');
+        }
+        return 0;
+      }
+    };
+
+    /**
+     * The entry this job may run on, or a settled row saying nobody said so.
+     *
+     * ADR 0138's posture: reaching outside is off until somebody says so, and
+     * a queue that waited for a person to change their mind would be holding a
+     * job against a decision already made. Asked per job rather than per
+     * entry, because two jobs on one entry can belong to two people and only
+     * one of them may have decided.
+     */
+    const entryFor = (row: PicoModelJobQueueRow): PicoModelProviderEntry | undefined => {
+      const entry = consent.entryFor(row.entryId, row.picoIdentityFingerprintHex);
+      if (entry === undefined) {
+        queue.settle({ jobId: row.job.jobId, outcome: 'no_decision_for_this_entry', at });
+      }
+      return entry;
+    };
+
+    /**
+     * The oldest job somebody decided for.
+     *
+     * Undecided rows are settled on the way past rather than ending the tick:
+     * a person who queued two hundred reads and then withdrew would otherwise
+     * cost the *other* residents one tick per row, and a queue that drained at
+     * one settled refusal a minute is a queue that looks stuck.
+     *
+     * It terminates because every turn of this loop either settles a row - so
+     * the next pick cannot return it again - or finds an entry and stops.
+     */
+    let first: PicoModelJobQueueRow | undefined;
+    let firstEntry: PicoModelProviderEntry | undefined;
+    while (firstEntry === undefined) {
+      first = queue.next(nowMs, at);
+      if (first === undefined) {
+        return 0;
+      }
+      firstEntry = entryFor(first);
     }
 
-    queue.recordAttempt(next.job.jobId, at);
-    try {
-      const result = await modelRuntime.dispatch({ job: next.job, entry });
-      queue.settle({
-        jobId: next.job.jobId,
-        outcome: 'answered',
-        result: result.output,
-        at,
+    /**
+     * ADR 0142 PE3. As many as the entry measured, from that entry's queue.
+     *
+     * The lanes in the runtime enforce the ceiling; this is what lets the
+     * measured number mean anything at all. Before it, a two-lane provider
+     * drained at exactly the rate of a one-lane one, because the sweep took a
+     * single job per tick - the number was measured, stored, shown, and used
+     * by nothing.
+     *
+     * Only this entry's jobs join the batch. Another provider's oldest job is
+     * not this tick's business, and letting it stop the batch would make the
+     * lane count depend on what else happens to be waiting.
+     */
+    const batch: Array<{ row: PicoModelJobQueueRow; entry: PicoModelProviderEntry }> = [
+      { row: first!, entry: firstEntry },
+    ];
+    while (batch.length < firstEntry.measurement.capacity.concurrentJobs) {
+      const more = queue.next(nowMs, at, {
+        entryId: first!.entryId,
+        excluding: batch.map((held) => held.row.job.jobId),
       });
-      return 1;
-    } catch (error) {
-      const refusal = error instanceof PicoModelDispatchError
-        ? error.refusal
-        : 'dispatch_failed';
-      if (picoModelJobRefusalIsFinal(refusal)) {
-        queue.settle({ jobId: next.job.jobId, outcome: refusal, at });
-      } else {
-        // Left pending. The world may be different in six minutes; whose words
-        // these are will not be.
-        app.log.warn({ jobId: next.job.jobId, refusal }, 'Model job did not run.');
+      if (more === undefined) {
+        break;
       }
-      return 0;
+      const entry = entryFor(more);
+      if (entry !== undefined) {
+        batch.push({ row: more, entry });
+      }
+      // An undecided one was settled just now, so it is no longer pending and
+      // the next pick moves past it rather than round it.
     }
+
+    const answered = await Promise.all(batch.map(async (held) => await runOne(held.row, held.entry)));
+    return answered.reduce((total, one) => total + one, 0);
   };
 
   app.decorate('picoSweepModelJobs', sweepPicoModelJobs);

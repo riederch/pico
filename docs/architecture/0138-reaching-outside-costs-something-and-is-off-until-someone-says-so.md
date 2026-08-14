@@ -250,6 +250,26 @@ receives the credential; it does not keep it.
   cipher rather than by a value somebody could edit. The identifier and
   the domain are bound too, so a seal cannot be moved between instances or
   between Private Spaces; three tests state the three refusals.
+  **The cipher has no caller, found on 2026-08-14.** `SupplierCredentialCrypto`
+  is exported, tested against its three refusals, and reached from nowhere in
+  the tree: nothing seals a credential and nothing opens one. So "presence is
+  recorded, the secret is not" is true in the strongest possible sense - there
+  is no secret anywhere, because no path puts one there.
+
+  It surfaced at a second site rather than here: an ADR 0152 model provider
+  entry may declare a `credentialRef`, ADR 0151 PV1 makes that reference what
+  buys the wider allowance, and the runtime resolves it through a port **no
+  Home wires**. An entry can therefore say it proves who it is while nothing
+  proves anything. The dispatch says so in the log rather than refusing, and a
+  provider that answers `401` is now reported as `credential_refused` instead
+  of as an unreachable machine - but neither is the missing half.
+
+  What is missing is the path from a person to a sealed credential: a surface
+  that takes one, a place to keep the seal for something that is not a supplier
+  attachment, and a resolver at dispatch. That is a decision about where a
+  provider credential lives, not a wiring job, which is why it is written down
+  here rather than guessed at.
+
 - **CO2 - Condition is a typed value (implemented):**
   `picoSupplierConditions` is the closed list, with `out_of_scope` from
   ADR 0137 IN3 beside it, and `assertPicoSupplierCondition` refuses

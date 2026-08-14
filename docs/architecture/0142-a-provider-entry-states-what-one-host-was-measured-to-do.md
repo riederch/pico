@@ -438,13 +438,18 @@ same harm as one that claims something that is not.
   assembly is bounded by the entry rather than by the protocol ceiling. The
   surfaces show the date beside the numbers (ADR 0152 SE7), because a figure
   without one is an advertisement again.
-- **PE3 - Concurrency is declared and defaults to one (implemented, narrower
-  than the text):** the entry states `concurrentJobs` and
-  `PicoModelProviderLanes` serialises **one** job per entry regardless of what
-  it states. That satisfies the gate's rule - a runtime scheduling more than
-  the entry declares is a defect, and this never does - and does not use the
-  number. Recorded as it is rather than as the text suggests: a declared two
-  buys nothing today.
+- **PE3 - Concurrency is declared and defaults to one (implemented 2026-08-14;
+  the audit found it half-built):** the entry stated `concurrentJobs` and
+  nothing read it. `PicoModelProviderLanes` serialised one job per entry
+  whatever the entry said, and the sweep took one job per tick - so a two-lane
+  provider drained exactly like a one-lane one, and the measured number was
+  stored, shown and used by nothing.
+
+  Both halves now use it. The lanes are counted permits with the entry's number
+  as the ceiling, releasing waiters in arrival order and freeing a lane
+  whichever way its job went; the sweep fills that entry's lanes from that
+  entry's queue. Another provider's waiting job cannot join, or the lane count
+  would depend on what else happens to be queued.
 - **PE4 - Warm-up is part of the availability contract (implemented
   2026-08-13):** `picoModelJobDeadlineMs` is built from the entry's declared
   residency plus its measured throughput, so a first job after an idle spell is

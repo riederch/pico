@@ -186,6 +186,25 @@ rather than a rule somebody applies.
 - The refusal reaches the person as words on their own device, where the
   decision is made (ADR 0152 SE1).
 
+**One thing PV1 does not yet have, found by an audit on 2026-08-14.** The
+entry declares the reference; nothing resolves it. `SupplierCredentialCrypto`
+exists and is called from nowhere, so no Home can produce the secret its entry
+names, and every job on such an entry is dispatched unauthenticated. That the
+measured deployment accepted it says nothing - it accepts anything, which is
+the finding this ADR already records.
+
+The runtime now says so where it happens: a dispatch on an entry whose
+credential cannot be produced is logged, and a provider answering `401` or
+`403` is `credential_refused` rather than `provider_unreachable` - the machine
+answered, it does not know us, and the two send a person to different places.
+Refusing to dispatch at all was the other option and was rejected: it would
+stop a provider that answers today from being used, on a Home whose owner
+decided that question is postponed.
+
+**So PV1 is enforced as far as the entry goes and unenforced beyond it.** A job
+carrying retrieved memory reaches only an entry that declares a credential -
+and what arrives at the provider is not yet a proof. See ADR 0138 CO1.
+
 Original gate text follows.
 
 - **PV1 - The proof buys the memory, not the provider (concept-only):** an

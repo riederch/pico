@@ -78,6 +78,13 @@ const providerOutcomes: Record<string, PicoModelProviderState> = {
   provider_unreachable: 'did_not_answer',
   provider_did_not_answer_in_time: 'did_not_answer',
   model_is_not_the_measured_one: 'different_model',
+  /**
+   * ADR 0151 PV1. The machine answered and refused us, which is not the
+   * machine being down - but from where the person stands it is the same
+   * consequence: nothing runs there until somebody acts. Filed as absence and
+   * told apart by the refusal the job carries.
+   */
+  credential_refused: 'did_not_answer',
 };
 
 export function picoModelProviderState(

@@ -62,6 +62,7 @@ export interface PicoModelRuntimePorts {
 export type PicoModelDispatchRefusal =
   | 'role_outside_trust_boundary'
   | 'entry_may_not_carry_these_words'
+  | 'credential_refused'
   | 'model_is_not_the_measured_one'
   | 'provider_unreachable'
   | 'provider_did_not_answer_in_time'
@@ -161,22 +162,46 @@ export function picoModelAnswerOriginClass(job: PicoModelJob): PicoEventOriginCl
 }
 
 /**
- * One lane per entry, in the shape ADR 0142 PE3 measured.
+ * ADR 0142 PE3. As many lanes as the entry says it measured, and never more.
  *
- * A promise chain rather than a worker pool: the second job waits for the
- * first and nothing is dropped. A lane is per *entry* rather than per host,
- * which is deliberately optimistic - two entries on one accelerator evict each
- * other, and the scheduler that knows about accelerators does not exist yet.
- * Named here so the next person does not discover it by measuring.
+ * **It used to be one lane whatever the entry declared.** That satisfied the
+ * rule - a runtime scheduling more than the entry declares is a defect, and it
+ * never did - while making the measured number dead: an entry that measured
+ * two lanes ran like an entry that measured one, and nobody could tell from
+ * the code which of the two it was. A gate audit on 2026-08-14 recorded that
+ * as "implemented, narrower than the text"; this is the other way to close it.
+ *
+ * A counted permit rather than a promise chain, because a chain can only
+ * express one. Waiters are released in arrival order, so a queued job cannot
+ * be overtaken by one enqueued later, and a lane is freed whichever way its
+ * job went - a failure that held its lane would turn one broken job into a
+ * provider that looks busy forever.
+ *
+ * A lane is per *entry* rather than per host, which is deliberately optimistic
+ * - two entries on one accelerator evict each other, and the scheduler that
+ * knows about accelerators does not exist yet. Named here so the next person
+ * does not discover it by measuring.
  */
 export class PicoModelProviderLanes {
-  private readonly tails = new Map<string, Promise<unknown>>();
+  private readonly running = new Map<string, number>();
 
-  public run<T>(entryId: string, work: () => Promise<T>): Promise<T> {
-    const previous = this.tails.get(entryId) ?? Promise.resolve();
-    const next = previous.then(work, work);
-    this.tails.set(entryId, next.then(() => undefined, () => undefined));
-    return next;
+  private readonly waiting = new Map<string, Array<() => void>>();
+
+  public async run<T>(entryId: string, lanes: number, work: () => Promise<T>): Promise<T> {
+    if ((this.running.get(entryId) ?? 0) >= lanes) {
+      await new Promise<void>((resolve) => {
+        const queue = this.waiting.get(entryId) ?? [];
+        queue.push(resolve);
+        this.waiting.set(entryId, queue);
+      });
+    }
+    this.running.set(entryId, (this.running.get(entryId) ?? 0) + 1);
+    try {
+      return await work();
+    } finally {
+      this.running.set(entryId, (this.running.get(entryId) ?? 1) - 1);
+      this.waiting.get(entryId)?.shift()?.();
+    }
   }
 }
 
@@ -248,9 +273,40 @@ export class PicoModelRuntime {
     if (refusal !== null) {
       throw new PicoModelDispatchError(refusal);
     }
+
+    /**
+     * ADR 0151 PV1 with ADR 0138 CO1's open half, at the site where it bites.
+     *
+     * An entry that declares a credential is an entry whose allowance was
+     * bought by proving who it is - and where that secret lives at rest is
+     * still open in ADR 0138, so this runtime takes it from a port that a Home
+     * may not have wired. Such an entry says it proves itself and has nothing
+     * to prove it with.
+     *
+     * **Said once per dispatch rather than refused**, and the choice is
+     * deliberate: refusing would stop a provider that is answering today from
+     * being used at all, on a Home whose owner decided that question is
+     * postponed. What must not happen is silence - an unauthenticated request
+     * that a checking provider rejects comes back as a status, and a status is
+     * how "it does not know us" gets reported as "it is down". The 401/403
+     * case is named below for exactly that reason.
+     */
+    if (entry.credentialRef !== undefined && this.ports.credential?.(entry) === undefined) {
+      this.log('provider entry declares a credential this Home cannot produce', {
+        entryId: entry.entryId,
+        credentialRef: entry.credentialRef,
+      });
+    }
+
     await this.assertMeasuredModel(entry);
 
-    return await this.lanes.run(entry.entryId, async () => await this.send(input));
+    return await this.lanes.run(
+      entry.entryId,
+      // The measured number, not a constant: PE3's lane count is a property of
+      // the deployment, and using it is what makes measuring it worth anything.
+      entry.measurement.capacity.concurrentJobs,
+      async () => await this.send(input),
+    );
   }
 
   private async send(input: {
@@ -298,6 +354,24 @@ export class PicoModelRuntime {
         }),
         signal: controller.signal,
       });
+      if (response.status === 401 || response.status === 403) {
+        /**
+         * ADR 0151 PV1. The machine answered; it does not know us.
+         *
+         * Its own refusal rather than `provider_unreachable`, because the two
+         * send a person to different places: one to a machine that is down,
+         * the other to a credential that is missing, wrong or was never
+         * resolvable at all (ADR 0138 CO1's open half). Reported as absence,
+         * this would have somebody restarting a provider that is working
+         * perfectly and refusing them on purpose.
+         */
+        throw new PicoModelDispatchError(
+          'credential_refused',
+          entry.credentialRef === undefined
+            ? `${response.status} and this entry declares no credential`
+            : `${response.status} for ${entry.credentialRef}`,
+        );
+      }
       if (!response.ok) {
         throw new PicoModelDispatchError('provider_unreachable', String(response.status));
       }
@@ -326,19 +400,39 @@ export class PicoModelRuntime {
       values: values.length,
     });
 
-    const result = parsePicoModelResult({
-      schema: picoModelResultSchema,
-      jobId: job.jobId,
-      entryId: entry.entryId,
-      modelDigestHex: entry.model.digestHex,
-      startedAt: new Date(startedAtMs).toISOString(),
-      completedAt: new Date(completedAtMs).toISOString(),
-      output: {
-        schema: picoReaderOutputSchema,
-        values,
-        references: [],
-      },
-    });
+    /**
+     * ADR 0117 X2. A value the protocol refuses is a wrong answer, not a bad
+     * afternoon.
+     *
+     * `readValues` checks the shape of the reply; the parser checks the values
+     * themselves - a `token` with a space in it is well-shaped JSON and not a
+     * token. That refusal used to escape as a plain error, which the queue
+     * reads as the world failing and retries: the same provider answering the
+     * same question the same way, forever, on a job that could never settle.
+     *
+     * Named as what it is instead, which the queue already knows is final.
+     */
+    let result: PicoModelResult;
+    try {
+      result = parsePicoModelResult({
+        schema: picoModelResultSchema,
+        jobId: job.jobId,
+        entryId: entry.entryId,
+        modelDigestHex: entry.model.digestHex,
+        startedAt: new Date(startedAtMs).toISOString(),
+        completedAt: new Date(completedAtMs).toISOString(),
+        output: {
+          schema: picoReaderOutputSchema,
+          values,
+          references: [],
+        },
+      });
+    } catch (error) {
+      throw new PicoModelDispatchError(
+        'answer_was_not_the_declared_shape',
+        error instanceof Error ? error.message : 'refused',
+      );
+    }
 
     const mismatch = picoModelResultMismatch(result, {
       jobId: job.jobId,
