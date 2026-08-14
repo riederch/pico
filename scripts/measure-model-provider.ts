@@ -74,6 +74,7 @@ console.error(`  KV per token      ${report.kvBytesPerToken === null ? 'unknown'
 console.error(`  spills from       ${report.spilledFromTokens === null ? 'no measured width' : `${report.spilledFromTokens} tokens`}`);
 console.error(`  free window       ${report.widestFreeWindowTokens === null ? 'not walked' : `${report.widestFreeWindowTokens} tokens at ${report.widestFreeWindowTokensPerSecond?.toFixed(1)} tok/s`}`);
 console.error(`  credential        ${report.answeredWithoutCredential ? 'none sent, and the host answered' : 'required'}`);
+console.error(`  checks one?       ${report.refusesAWrongCredential === null ? 'could not tell' : report.refusesAWrongCredential ? 'yes - a wrong credential was refused' : 'NO - a wrong credential was answered'}`);
 for (const note of report.notes) {
   console.error(`  note              ${note}`);
 }

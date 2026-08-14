@@ -120,6 +120,19 @@ export interface PicoModelProviderMeasurementReport {
   kvBytesPerToken: number | null;
   /** ADR 0142 PE5. True when a request carrying no credential was answered. */
   answeredWithoutCredential: boolean;
+  /**
+   * ADR 0151 PV5, and the hole PV5 alone does not close.
+   *
+   * **The parser can check that a transport protects a credential. It cannot
+   * check that the far side reads one.** An entry pointed at a proxy that
+   * answers any bearer - or none - passes every rule in the tree and still
+   * says "this provider proved who it is" when nothing was proved.
+   *
+   * A measurement can tell, and it costs one request: send a credential that
+   * cannot be right and see whether the host refuses it. `false` here means a
+   * credential on this entry would be decoration.
+   */
+  refusesAWrongCredential: boolean | null;
   notes: readonly string[];
 }
 
@@ -598,6 +611,27 @@ export class PicoModelProviderMeasurer {
       }
     }
 
+    // Deliberately wrong, deliberately harmless: a value no operator would
+    // have issued, sent to the cheapest endpoint on the host.
+    let refusesAWrongCredential: boolean | null = null;
+    try {
+      const probed = await this.call(`${this.reach}/api/version`, {
+        method: 'GET',
+        headers: { authorization: 'Bearer pico-measurement-probe-not-a-credential' },
+      });
+      refusesAWrongCredential = probed.status === 401 || probed.status === 403;
+      if (refusesAWrongCredential === false) {
+        notes.push(
+          'this host answered a credential that cannot be right, so it checks '
+          + 'none. A `credentialRef` on this entry would say a provider proved '
+          + 'who it is when nothing was proved - ADR 0151 PV5 checks the '
+          + 'transport, and only a measurement can check the far side.',
+        );
+      }
+    } catch {
+      refusesAWrongCredential = null;
+    }
+
     const running = await this.resident();
     const residentBytes = running.find((entry) => entry.name === this.options.model)?.sizeVram ?? null;
     const intruders = running.filter((entry) => entry.name !== this.options.model);
@@ -631,6 +665,7 @@ export class PicoModelProviderMeasurer {
       widestFreeWindowTokens,
       widestFreeWindowTokensPerSecond,
       answeredWithoutCredential,
+      refusesAWrongCredential,
       notes: Object.freeze(notes),
     });
   }

@@ -2,6 +2,21 @@
 
 ## Status
 
+Status note, 2026-08-14: **PV5 checks the transport and cannot check the far
+side, which a real proxy made visible on the first try.** A TLS endpoint was
+put in front of the measured host, with a valid chain, and it answered a
+randomly generated bearer token exactly as it answered no token at all. An
+entry pointed at it would pass every rule here and still say a provider
+proved who it is when nothing was proved.
+
+Nothing in a parser can close that: whether the far side reads a credential
+is not a property of the entry. **A measurement can, and it costs one
+request** - send a credential that cannot be right and see whether the host
+refuses it. The measurer does that now and records
+`refusesAWrongCredential`, with a note when the answer is no. PV5 is
+unchanged; what changed is that an entry can be wrong in a way PV5 was never
+able to see, and the measurement says so out loud instead.
+
 Accepted 2026-08-13; concept-only, like everything else about providers.
 No registry, job queue or provider runtime exists, so nothing consumes an
 entry yet and none of PV1-PV5 has a consumer to bind.

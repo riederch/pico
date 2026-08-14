@@ -209,6 +209,16 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     expect(fake.calls.indexOf('/api/generate')).toBeLessThan(fake.calls.indexOf('/api/tags'));
   });
 
+  it('notices a host that answers a credential that cannot be right', async () => {
+    // ADR 0151 PV5 checks that a transport protects a credential. Nothing in
+    // the tree can check that the far side reads one - an entry pointed at a
+    // proxy that answers any bearer passes every rule and still claims a proof
+    // nobody gave. One request tells.
+    const report = await measurer().measure();
+    expect(report.refusesAWrongCredential).toBe(false);
+    expect(report.notes.join(' ')).toContain('would say a provider proved');
+  });
+
   it('prices the declared window against the one it serves', async () => {
     // The finding this replaced a broken probe with: at a constant prompt, a
     // wider declared window costs throughput. `size_vram` never moved on the
@@ -281,6 +291,7 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
     widestFreeWindowTokens: null,
     widestFreeWindowTokensPerSecond: null,
     answeredWithoutCredential: true,
+    refusesAWrongCredential: false,
     notes: [],
   });
 
