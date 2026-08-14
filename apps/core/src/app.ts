@@ -139,6 +139,10 @@ import {
   defaultPicoDepotFetchIntervalMs,
   parsePicoDepotTask,
 } from '@pico/protocol/depot';
+import {
+  parsePicoDepotManifest,
+  type PicoDepotManifest,
+} from '@pico/protocol/depot-manifest';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
 import { PicoSupplierHost } from './supplier-host.js';
@@ -214,7 +218,7 @@ import {
   type OperatorStore,
 } from './operator-store.js';
 import { SessionStore, type SessionPrincipal } from './session-store.js';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { fetchPicoDepot } from './depot-fetch.js';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { PicoSupplierScratch } from './supplier-scratch.js';
@@ -1353,8 +1357,6 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     Object.freeze({ name: 'topic', type: 'token' }),
     Object.freeze({ name: 'summary', type: 'text' }),
   ]);
-  /** See the comment at its only use. This is not a decision, it is a gap. */
-  const picoDepotLibraryPlaceholderPrivacyDomain = 'household';
   const picoDepotLibraryReadQuestion =
     'What is this document about? Answer only from the quoted data.';
 
@@ -1425,6 +1427,46 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * one call from whatever ran the action, with the person named. Until a
    * caller passes one, no reads are queued and nothing pretends otherwise.
    */
+  /**
+   * ADR 0137 IN5. Which library suppliers this depot declares, and the space
+   * each of them lands material in.
+   *
+   * **Both were constants until 2026-08-14 and both were wrong.** The
+   * identifier came from the shipped depot being the only one, and the domain
+   * from nowhere at all - which is the shape ADR 0143 DP6 argues against, one
+   * layer up from the column it forbids.
+   *
+   * The depot declares its suppliers and the *attachment* declares the domain,
+   * exactly one and never a Pico. A supplier the person has not attached has
+   * no domain, so it queues nothing: an unattached supplier is one nobody has
+   * said where the material of belongs.
+   */
+  function depotLibrarySuppliers(remote: string): ReadonlyArray<{
+    identifier: string;
+    privacyDomain: string;
+  }> {
+    const manifestPath = join(depotWorkspace.pathFor(remote), 'pico-depot.json');
+    if (!existsSync(manifestPath)) {
+      return [];
+    }
+    let declared: PicoDepotManifest;
+    try {
+      declared = parsePicoDepotManifest(JSON.parse(readFileSync(manifestPath, 'utf8')));
+    } catch {
+      // A depot whose manifest does not parse is a depot Pico will not act on.
+      // ADR 0143 DP3 holds the shipped one to the same parser as any other.
+      return [];
+    }
+    return Object.freeze(declared.suppliers
+      .filter((supplier) => supplier.kind === 'library')
+      .flatMap((supplier) => {
+        const attached = store.picoSupplierAttachment(supplier.identifier);
+        return attached === undefined
+          ? []
+          : [{ identifier: supplier.identifier, privacyDomain: attached.privacyDomain }];
+      }));
+  }
+
   const queuePicoDepotLibraryReads = async (input: {
     remote: string;
     picoIdentityFingerprintHex: string;
@@ -1439,6 +1481,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // so, and choosing among several is ADR 0152's surface's question.
       return { queued: 0, refusal: chosen.refusal };
     }
+    const suppliers = depotLibrarySuppliers(input.remote);
+    if (suppliers.length === 0) {
+      return { queued: 0, refusal: 'no_attached_library_supplier' };
+    }
+
+    let queued = 0;
+    for (const supplier of suppliers) {
     const report = await enqueuePicoDepotLibraryReads({
       readExcerpt: async (path) => await depotLibraryExcerpt(input.remote, path),
       queue: store.picoModelJobQueue(),
@@ -1447,33 +1496,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       nowMs: () => Date.now(),
       at: () => new Date().toISOString(),
     }, {
-      supplierIdentifier: 'git-library',
-      /**
-       * **A placeholder, and it is wrong on purpose rather than by accident.**
-       *
-       * ADR 0143 DP6 keeps a privacy domain off a depot deliberately: a column
-       * there "would have made two instances from one depot in two different
-       * spaces impossible to express, and would have put a delivery vehicle
-       * inside a person's privacy boundary". A constant here does both, one
-       * layer up, and this line is the shape that ADR arguing against.
-       *
-       * The domain belongs to the *supplier instance* - ADR 0137's IN1 says
-       * suppliers are instances and a person's decision about their own
-       * material - and `PicoSupplierManifest` has the field. What is missing
-       * is where an attached instance's declaration is recorded, which is a
-       * decision rather than a lookup. Until it is made, this queues into one
-       * named space and says so here rather than reading as though somebody
-       * chose it.
-       */
-      privacyDomain: picoDepotLibraryPlaceholderPrivacyDomain,
+      supplierIdentifier: supplier.identifier,
+      privacyDomain: supplier.privacyDomain,
       picoIdentityFingerprintHex: input.picoIdentityFingerprintHex,
       entryId: chosen.entryId,
       plan: picoDepotLibraryReadPlan({ paths: depotLibraryPaths(input.remote) }),
       expects: picoDepotLibraryReadExpectations,
       question: picoDepotLibraryReadQuestion,
     });
-    app.log.info({ remote: input.remote, ...report }, 'Queued library reads after fetch.');
-    return { queued: report.queued };
+    app.log.info(
+      { remote: input.remote, supplier: supplier.identifier, ...report },
+      'Queued library reads after fetch.',
+    );
+    queued += report.queued;
+    }
+    return { queued };
   };
 
   app.decorate('picoQueueDepotLibraryReads', queuePicoDepotLibraryReads);
