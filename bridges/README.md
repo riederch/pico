@@ -12,10 +12,17 @@ boundary could not be proved without something to run inside it - it is the
 cheapest supplier that can be proved end to end today, since a bridge would
 need a credential and a paid account and a library needs neither.
 
-It reports what it is and does not hand over what it holds. Reading a library
-is lawful only through ADR 0117 X4's quarantined read job, which needs a model
-delegation runtime that does not exist, so there is no `offer` handler and no
-content crosses a slot.
+It reports what it is, and since 2026-08-13 it also hands over **one bounded
+excerpt at a time**. Reading a library is lawful only through ADR 0117 X4's
+quarantined read job, and that job now exists - so the `offer` handler answers
+with the text and the revision it was read at, and the core turns it into an
+ADR 0060 packet that only a reader ever sees. An excerpt over the ceiling is
+refused rather than trimmed, and a path leaving the working copy is refused
+outright.
+
+Whether that packet may then reach a given provider is not this supplier’s
+question. It is ADR 0151’s allowance, and on an unauthenticated host the
+answer today is no.
 
 ## What a supplier is, as a file
 

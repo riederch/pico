@@ -309,3 +309,51 @@ describe('ADR 0136 BR6 - materializing is Pico knowledge, not a supplier answer'
       .toBe('budget_exhausted');
   });
 });
+
+describe('ADR 0136 BR1 - the memory_item slot, over a real process', () => {
+  it('hands back one bounded excerpt with the revision it was read at', async () => {
+    // The sentence `bridges/README.md` carried for weeks - "reading a library
+    // is lawful only through ADR 0117 X4's quarantined read job, which needs a
+    // model delegation runtime that does not exist" - stops being true here.
+    const host = openHost();
+    await host.hello();
+    const root = makeWorkingCopy();
+    const offered = await host.offer({ workingCopy: root, path: 'note.md' });
+    expect(offered.condition).toBe('ok');
+    const items = offered.items as Array<Record<string, unknown>>;
+    expect(items).toHaveLength(1);
+    expect(items[0]!.text).toBe('# a note\n');
+    expect((items[0]!.pin as { kind: string }).kind).toBe('commit');
+  });
+
+  it('refuses an excerpt over the ceiling rather than trimming it', async () => {
+    // ADR 0119 Q5's posture at the supplier: a silently shortened excerpt is a
+    // different excerpt, and whatever read it would be answering about
+    // something nobody chose.
+    const host = openHost();
+    await host.hello();
+    const root = makeWorkingCopy();
+    const offered = await host.offer({ workingCopy: root, path: 'note.md', maxBytes: 2 });
+    expect(offered.condition).toBe('out_of_scope');
+    expect((offered.detail as { reason: string }).reason).toBe('excerpt_too_large');
+  });
+
+  it('refuses a path that leaves the working copy', async () => {
+    const host = openHost();
+    await host.hello();
+    const root = makeWorkingCopy();
+    await expect(host.offer({ workingCopy: root, path: '../../etc/passwd' }))
+      .rejects.toThrow();
+  });
+
+  it('says covered-and-absent rather than nothing', async () => {
+    // ADR 0137 IN2: an empty answer that meant both "not here" and "not
+    // covered" would be permanently ambiguous.
+    const host = openHost();
+    await host.hello();
+    const root = makeWorkingCopy();
+    const offered = await host.offer({ workingCopy: root, path: 'missing.md' });
+    expect(offered.condition).toBe('ok');
+    expect(offered.items).toEqual([]);
+  });
+});

@@ -170,6 +170,28 @@ export class PicoSupplierHost {
       ...(result?.detail === undefined ? {} : { detail: result.detail }),
     });
   }
+  /**
+   * ADR 0136 BR1's `memory_item` slot. One bounded excerpt, never a corpus.
+   *
+   * The core asks for a path and a ceiling; what comes back is text the
+   * supplier read from disk, with the revision it was read at. Whether that
+   * text may then reach a model is not asked here - it is ADR 0117 X4's job
+   * and ADR 0151's allowance, both of which happen after this returns.
+   */
+  public async offer(payload: {
+    workingCopy: string;
+    path: string;
+    maxBytes?: number;
+  }): Promise<Record<string, unknown>> {
+    const answer = await this.#request(picoSupplierRequestFamilies.offer, payload);
+    if (answer.status !== 'ok') {
+      // A refused frame is not an empty answer. ADR 0137 IN2 again: the caller
+      // has to be able to tell "the supplier would not" from "there is none".
+      throw new Error(answer.reason);
+    }
+    return answer.result as Record<string, unknown>;
+  }
+
 
   /** Whether `hello` has been answered acceptably. */
   public get ready(): boolean {

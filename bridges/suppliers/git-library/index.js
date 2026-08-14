@@ -28,6 +28,7 @@ import { join } from 'node:path';
 
 const HELLO = 'pico.supplier.hello.v1';
 const CONDITION = 'pico.supplier.condition.v1';
+const OFFER = 'pico.supplier.offer.v1';
 
 /** The commit a working copy is on, read without running `git`. */
 function headCommit(root) {
@@ -72,6 +73,39 @@ function gitAttributes(root) {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
+/**
+ * ADR 0136 BR1's `memory_item` slot, and the reason it was empty until now.
+ *
+ * This supplier reports what it is and, until ADR 0117 X4's quarantined read
+ * job existed, handed over nothing: reading a corpus is lawful only through a
+ * reader that holds no tools, and there was nothing to send one to. There is
+ * now, so the slot answers - **with a bounded excerpt and never a corpus.**
+ *
+ * The excerpt is capped here as well as at the frame. A supplier that answered
+ * with a file and left the ceiling to the transport would be a supplier whose
+ * behaviour depends on a limit it cannot see, and ADR 0133's rule is that a
+ * corpus is read where it lies.
+ */
+function excerpt(root, relativePath, maxBytes) {
+  // The path is joined and then checked to still be inside the working copy.
+  // `../` in a request is not a caller being clever; it is the one thing this
+  // function exists to refuse.
+  const resolved = join(root, relativePath);
+  if (!resolved.startsWith(join(root, ''))) {
+    throw new Error('pico_supplier_path_leaves_working_copy');
+  }
+  if (!existsSync(resolved) || !statSync(resolved).isFile()) {
+    return null;
+  }
+  const text = readFileSync(resolved, 'utf8');
+  return Buffer.byteLength(text, 'utf8') > maxBytes
+    // ADR 0119 Q5's posture, one layer out: refuse rather than trim, because a
+    // silently shortened excerpt is a different excerpt and whatever reads it
+    // would be answering about something nobody chose.
+    ? { refused: 'excerpt_too_large' }
+    : { text };
+}
+
 export default async function handle(request) {
   if (request?.family === HELLO) {
     return { protocolVersion: 1, slots: ['memory_item'] };
@@ -97,6 +131,38 @@ export default async function handle(request) {
     return {
       condition: 'ok',
       detail: { pin: { kind: 'commit', value: commit }, gitAttributes: gitAttributes(root) },
+    };
+  }
+
+  if (request?.family === OFFER) {
+    const root = typeof request.workingCopy === 'string' ? request.workingCopy : '';
+    const relativePath = typeof request.path === 'string' ? request.path : '';
+    const maxBytes = typeof request.maxBytes === 'number' ? request.maxBytes : 128 * 1024;
+    if (root === '' || relativePath === '') {
+      return { condition: 'not_configured' };
+    }
+    const commit = headCommit(root);
+    if (commit === null) {
+      return { condition: 'unreachable' };
+    }
+    const found = excerpt(root, relativePath, maxBytes);
+    if (found === null) {
+      // ADR 0137 IN2: covered and absent is not the same as not covered, and
+      // an empty answer that meant both would be permanently ambiguous.
+      return { condition: 'ok', items: [] };
+    }
+    if (found.refused !== undefined) {
+      return { condition: 'out_of_scope', detail: { reason: found.refused } };
+    }
+    return {
+      condition: 'ok',
+      items: [{
+        // What the core needs to make an ADR 0060 packet of it, and nothing
+        // that would let it skip doing so.
+        path: relativePath,
+        text: found.text,
+        pin: { kind: 'commit', value: commit },
+      }],
     };
   }
 
