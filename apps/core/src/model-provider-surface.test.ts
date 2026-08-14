@@ -8,6 +8,7 @@ import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { openPicoHomeWithDevice, sendPicoLinkDirectRequest } from './test-claimed-home.js';
 import { parsePicoModelJob } from '@pico/protocol/model-job';
+import { picoLibraryReadJob } from './library-read.js';
 
 /**
  * ADR 0152 SE1/SE3/SE4/SE5, at the surface that serves them.
@@ -351,58 +352,83 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
   });
 });
 
-describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () => {
-  it('reads, decides and revokes over a sealed Link request', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-provider-link-'));
-    dirs.push(dir);
-    const databasePath = join(dir, 'pico.sqlite');
+type PicoLinkSend = (
+  operation: 'home.model.providers.read'
+    | 'home.model.provider.decision.submit'
+    | 'home.model.provider.decision.revoke',
+  args: Record<string, unknown>,
+) => Promise<{
+  response: { outcome: string };
+  result: Record<string, unknown>;
+}>;
 
-    const store = await EventStore.open(databasePath, {});
-    store.picoModelProviderRegistry().put(
-      parsePicoModelProviderEntry(measured),
-      '2026-08-13T18:00:00.000Z',
-    );
-    store.close();
+/**
+ * A claimed Home with one measured entry and a device that can send over the
+ * ADR 0107 channel.
+ *
+ * Extracted the second time it was needed rather than copied: a second setup
+ * is a second thing to keep in step, and the half that drifts is always the
+ * one nobody is looking at.
+ */
+async function bootWithLinkDevice(): Promise<{
+  app: AppWithInject;
+  databasePath: string;
+  send: PicoLinkSend;
+}> {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-provider-link-'));
+  dirs.push(dir);
+  const databasePath = join(dir, 'pico.sqlite');
 
-    const logLines: string[] = [];
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath,
-      deviceId: 'pico-core',
-      logDestination: new Writable({
-        write(chunk: Buffer, _encoding, callback) {
-          logLines.push(chunk.toString('utf8'));
-          callback();
-        },
-      }),
-    }) as unknown as AppWithInject;
-    apps.push(app);
+  const store = await EventStore.open(databasePath, {});
+  store.picoModelProviderRegistry().put(
+    parsePicoModelProviderEntry(measured),
+    '2026-08-13T18:00:00.000Z',
+  );
+  store.close();
 
-    const moveInCode = logLines
-      .map((line) => JSON.parse(line) as { picoHomeMoveInCode?: string })
-      .find((line) => typeof line.picoHomeMoveInCode === 'string')!.picoHomeMoveInCode!;
-    const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as {
-      host: { signingKeyFingerprintHex: string; keyAgreementPublicKeyHex: string };
-    };
-    const { device, sealedClaim } = await openPicoHomeWithDevice(app, {
-      moveInCode,
-      idSuffix: 'provider_link_20260813',
-    });
+  const logLines: string[] = [];
+  const app = await buildApp({
+    host: '127.0.0.1',
+    port: 0,
+    databasePath,
+    deviceId: 'pico-core',
+    logDestination: new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        logLines.push(chunk.toString('utf8'));
+        callback();
+      },
+    }),
+  }) as unknown as AppWithInject;
+  apps.push(app);
 
-    const send = async (
-      operation: 'home.model.providers.read'
-        | 'home.model.provider.decision.submit'
-        | 'home.model.provider.decision.revoke',
-      args: Record<string, unknown>,
-    ) => await sendPicoLinkDirectRequest(app, {
+  const moveInCode = logLines
+    .map((line) => JSON.parse(line) as { picoHomeMoveInCode?: string })
+    .find((line) => typeof line.picoHomeMoveInCode === 'string')!.picoHomeMoveInCode!;
+  const setup = (await app.inject({ method: 'GET', url: '/api/home/setup' })).json() as {
+    host: { signingKeyFingerprintHex: string; keyAgreementPublicKeyHex: string };
+  };
+  const { device, sealedClaim } = await openPicoHomeWithDevice(app, {
+    moveInCode,
+    idSuffix: 'provider_link_20260813',
+  });
+
+  return {
+    app,
+    databasePath,
+    send: async (operation, args) => await sendPicoLinkDirectRequest(app, {
       operation,
       args,
       sender: device,
       identityKeyRecord: sealedClaim.claimantIdentityKeyRecord,
       hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
       hostKeyAgreementPublicKeyHex: setup.host.keyAgreementPublicKeyHex,
-    });
+    }),
+  };
+}
+
+describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () => {
+  it('reads, decides and revokes over a sealed Link request', async () => {
+    const { send } = await bootWithLinkDevice();
 
     // Before deciding: the finding is visible, and the absence of a decision
     // is said as an absence rather than as a default.
@@ -769,5 +795,80 @@ describe('ADR 0104 S3 - the encryption decision moves into Pico', () => {
       headers: { authorization: operator },
       payload: { enabled: 'yes please' },
     })).statusCode).toBe(400);
+  });
+});
+
+describe('ADR 0152 SE5 - the state travels with the finding', () => {
+  /** Settles one job on the entry, the way a sweep would. */
+  async function settle(databasePath: string, outcome: string, at: string): Promise<void> {
+    const store = await EventStore.open(databasePath, {});
+    const queue = store.picoModelJobQueue();
+    queue.enqueue({
+      job: picoLibraryReadJob({
+        jobId: `job_${outcome}`,
+        contextRefId: `ref_${outcome}`,
+        privacyDomain: 'household',
+        excerpt: { path: 'a.md', text: 'contents', commit: 'a'.repeat(40) },
+        expects: [{ name: 'topic', type: 'token' }],
+        question: 'What is this document about?',
+        nowMs: Date.parse(at),
+      }),
+      picoIdentityFingerprintHex: 'a'.repeat(64),
+      entryId: 'a-measured-host',
+      at,
+      derivedFrom: {
+        supplierIdentifier: 'a-library',
+        commit: 'a'.repeat(40),
+        pinCoversContent: true,
+      },
+    });
+    queue.settle({ jobId: `job_${outcome}`, outcome, at });
+    store.close();
+  }
+
+  it('says nothing has been asked before anything has', async () => {
+    // Not a fault: ADR 0138's posture is that nothing runs until somebody
+    // decides, and a fresh Home has asked its provider nothing.
+    const { app, operator } = await bootWithEntry();
+    const body = (await app.inject({
+      method: 'GET',
+      url: '/api/model/providers',
+      headers: { authorization: operator },
+    })).json() as { providers: Array<Record<string, unknown>> };
+    expect(body.providers[0]?.state).toBe('not_used_yet');
+  });
+
+  it('carries what the last settled job did, to the host surface', async () => {
+    const { app, operator, databasePath } = await bootWithPerson();
+    await settle(databasePath, 'provider_unreachable', '2026-08-14T12:00:00.000Z');
+
+    const body = (await app.inject({
+      method: 'GET',
+      url: '/api/model/providers',
+      headers: { authorization: operator },
+    })).json() as { providers: Array<Record<string, unknown>> };
+    expect(body.providers[0]?.state).toBe('did_not_answer');
+  });
+
+  it('carries it to the person\'s own device too, with when it was seen', async () => {
+    // ADR 0087 keeps the two surfaces apart; SE5 applies to both, because the
+    // person deciding whether to keep using a provider is the one on the
+    // device.
+    const setup = await bootWithLinkDevice();
+    await settle(setup.databasePath, 'model_is_not_the_measured_one', '2026-08-14T12:00:00.000Z');
+
+    const read = await setup.send('home.model.providers.read', {});
+    const providers = (read.result as { providers: Array<Record<string, unknown>> }).providers;
+    expect(providers[0]?.state).toBe('different_model');
+    expect(providers[0]?.stateSince).toBe('2026-08-14T12:00:00.000Z');
+  });
+
+  it('leaves the field absent when nothing has settled, rather than sending a null', async () => {
+    // ADR 0117 X1's construction: an absent observation is an absent field.
+    const setup = await bootWithLinkDevice();
+    const read = await setup.send('home.model.providers.read', {});
+    const providers = (read.result as { providers: Array<Record<string, unknown>> }).providers;
+    expect(providers[0]?.state).toBe('not_used_yet');
+    expect('stateSince' in (providers[0] ?? {})).toBe(false);
   });
 });
