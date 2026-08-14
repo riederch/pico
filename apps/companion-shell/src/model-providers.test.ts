@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   parsePicoCompanionAnsweredReads,
   picoCompanionAnsweredReadLines,
@@ -130,5 +132,31 @@ describe('ADR 0116 W5 - a waiting read says that it waits, not what it found', (
       expect(() => parsePicoCompanionAnsweredReads([{ ...read, [field]: undefined }]))
         .toThrow('invalid_pico_companion_answered_read');
     }
+  });
+});
+
+describe('the window asks for both lists when it opens', () => {
+  // A view that exists and is never called is a view nobody sees, which is
+  // how the provider list spent a day: markup, renderer, IPC and no caller.
+  const renderer = readFileSync(
+    join(import.meta.dirname, 'renderer.ts'),
+    'utf8',
+  );
+
+  it('calls both renderers from one refresh', () => {
+    expect(renderer).toContain('renderPicoCompanionModelProviders(');
+    expect(renderer).toContain('renderPicoCompanionAnsweredReads(');
+    expect(renderer).toContain('refreshModelViews();');
+  });
+
+  it('asks again after a keep rather than editing the list in place', () => {
+    // What is waiting is the Home's answer, not this window's guess about it.
+    expect(renderer).toMatch(/keepAnsweredRead\(jobId\)\.then\(refreshModelViews\)/u);
+  });
+
+  it('hides a section it could not load instead of reporting a fault', () => {
+    // ADR 0118 O4: no absence renders a working thing as broken.
+    expect(renderer).toContain('providerSection.hidden = true;');
+    expect(renderer).toContain('readSection.hidden = true;');
   });
 });

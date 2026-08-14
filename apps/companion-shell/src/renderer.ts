@@ -188,6 +188,50 @@ const unsubscribe = window.picoCompanion.onPresentationChanged(render);
 window.addEventListener('beforeunload', unsubscribe, { once: true });
 void window.picoCompanion.getPresentation().then(render);
 
+/**
+ * ADR 0152 and ADR 0116 W5. The two lists this window can show, asked for
+ * when it opens and after anything a person did that changes them.
+ *
+ * **Both fail quietly and that is ADR 0118 O4.** Not knowing what computes for
+ * you, or what is waiting, is an absence - and no absence renders a working
+ * thing as broken. The section stays hidden and the person can ask again by
+ * reopening the window. What is *not* quiet is a keep that fails: the main
+ * process throws there, because somebody pressed a button and asked.
+ */
+const providerSection = requireElement('model-providers');
+const providerList = requireElement('provider-list');
+const readSection = requireElement('answered-reads');
+const readList = requireElement('read-list');
+
+function refreshModelViews(): void {
+  void window.picoCompanion.getModelProviders()
+    .then((providers) => {
+      renderPicoCompanionModelProviders(
+        { list: providerList, section: providerSection, document },
+        providers,
+      );
+    }, () => {
+      providerSection.hidden = true;
+    });
+  void window.picoCompanion.getAnsweredReads()
+    .then((reads) => {
+      renderPicoCompanionAnsweredReads(
+        { list: readList, section: readSection, document },
+        reads,
+        (jobId) => {
+          // The keep is the write ADR 0116 W5 requires, and the list is asked
+          // for again afterwards rather than edited in place: what is waiting
+          // is the Home's answer, not this window's guess about it.
+          void window.picoCompanion.keepAnsweredRead(jobId).then(refreshModelViews);
+        },
+      );
+    }, () => {
+      readSection.hidden = true;
+    });
+}
+
+refreshModelViews();
+
 function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);
   if (element === null) {
