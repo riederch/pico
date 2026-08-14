@@ -120,19 +120,40 @@ when it was added.
   nothing, decides nothing, and it is what an instance reads on its first boot
   under the 0017 schema.
 
-  **It may not ship in the same release as 0017, and that ordering is the
-  whole safety of it.** Home Assistant validates options against the schema
-  and drops what the schema no longer declares. An instance upgrading straight
-  onto a release that has both would boot with the option already stripped and
-  no decision row yet - inheriting `false`, and reading its own encrypted
-  content back as `crypto_unavailable` for no reason anybody chose. One
-  release with 0017 and the option guarantees every instance records a row on
-  its first boot; the next release may remove the option, because by then
-  there is nothing left to inherit from.
+  **The ordering this gate first rested on was not enforceable, so the boot no
+  longer depends on it.** The argument was: ship 0017 with the option, remove
+  the option in the release after, and every instance records a row on its
+  first boot under the new schema. Home Assistant validates options against
+  the schema and drops what it no longer declares, so an instance that arrived
+  on a release without the option would inherit `false` and read its own
+  encrypted content back as `crypto_unavailable`.
 
-  So: 0017 ships first, the option goes in the release after it. What is
-  written down here is the condition, not a date, because the condition is
-  what makes it safe and a date is only when somebody expects it.
+  **An instance that upgrades late passes through no release.** It jumps from
+  wherever it is to whatever is current, which is exactly the case the
+  ordering cannot cover - and the damage was not a wrong setting, it was a
+  Home told it has none of the machinery to read its own memories.
+
+  So the absence is answered where it happens, and in this ADR's own posture:
+  **an absent variable is not a value.** The config parser omits the field
+  rather than reading a missing entry as `false` (ADR 0117 X1's construction),
+  and the boot asks the store what it holds. A row stored `domain_encrypted`
+  is not an opinion about a setting - it is content that needs a key store to
+  be readable at all, so what an instance *has* decides what it inherits.
+  A variable that is present still decides, in both directions, because a
+  deployment that answered has answered.
+
+  **The honest limit, and it is what keeps the ordering worth one release.**
+  An instance that had encryption on and never wrote an encrypted item leaves
+  no trace to read and inherits `off`. Nothing becomes unreadable - there is
+  nothing - but its next memory would be recorded plaintext under a posture
+  its owner had chosen against. One release carrying both 0017 and the option
+  gives every instance that boots in that window a recorded row, which closes
+  even that case for everyone except a Home that skips the window entirely and
+  has never encrypted anything.
+
+  So: 0017 ships first, the option goes in the release after it. The condition
+  is unchanged and its standing is not - it is now a courtesy for one narrow
+  case rather than the whole safety of the retirement.
 - **S4 - `pico_foundation_token` retires: Open.** Bound to the ADR 0038/0041
   replacement of temporary Foundation hardening with real authentication, not
   to this ADR.

@@ -19,7 +19,9 @@ describe('Core config', () => {
       linkRelayOperator: 'unconfigured.relay.invalid',
       linkRelaySweepIntervalMs: 2 * 60 * 1_000,
       depotFetchIntervalMs: 6 * 60 * 60 * 1_000,
-      memoryEncryption: false,
+      // ADR 0104 S3. No variable, no field: absent is not false, because an
+      // instance whose add-on option is already gone must not have this
+      // parser answer for it.
       deviceId: 'pico-core',
       webRootPath: expect.stringContaining('/apps/web'),
       wsAllowedOrigins: [],

@@ -510,7 +510,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       if (decided !== undefined && !decided.inheritedFromHost) {
         return decided.enabled;
       }
-      const inherited = config.memoryEncryption === true;
+      // **Absent is not off.** The host option is retiring (ADR 0104 S3), so
+      // an instance upgrading late arrives with the variable already stripped
+      // - and reading that as `false` would tell a Home with encrypted
+      // memories that it has none of the machinery to read them. With nothing
+      // passed, its own content answers.
+      const inherited = config.memoryEncryption ?? bootstrapStore.holdsEncryptedMemoryContent();
       bootstrapStore.decidePicoMemoryEncryption({
         enabled: inherited,
         at: new Date().toISOString(),

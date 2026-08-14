@@ -7345,6 +7345,34 @@ export class EventStore {
   }
 
   /**
+   * ADR 0104 S3. Whether this store already holds content only a key can read.
+   *
+   * **What an instance has is a better witness than what it was started
+   * with.** The add-on option is retiring, so the day comes when an instance
+   * upgrades onto a release that no longer declares it: the Supervisor strips
+   * the value, the variable arrives absent, and an inheritance that read
+   * absent as `false` would answer "off" for a Home whose memories are
+   * encrypted - which reads back as `crypto_unavailable` for no reason
+   * anybody chose.
+   *
+   * So when nothing was passed, this is asked instead. A row stored
+   * `domain_encrypted` is not an opinion about a setting; it is content that
+   * needs a key store to be readable at all.
+   *
+   * **The honest limit:** an instance that had encryption on and never wrote
+   * an encrypted item leaves no trace here and inherits `off`. Nothing becomes
+   * unreadable - there is nothing - and the first person to look can answer
+   * the question in Pico, which is where it now lives.
+   */
+  public holdsEncryptedMemoryContent(): boolean {
+    this.ensureOpen();
+    const row = this.db
+      .prepare("SELECT 1 AS present FROM memory_item WHERE content_posture = 'domain_encrypted' LIMIT 1")
+      .get() as { present: number } | undefined;
+    return row !== undefined;
+  }
+
+  /**
    * ADR 0104 S3. Records the decision, and says whether a person made it.
    *
    * **An inherited value never overwrites a decided one.** Reading a host

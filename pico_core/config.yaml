@@ -24,11 +24,13 @@ panel_admin: true
 # null or blank token as "no token" and stays in ingress mode).
 # `memory_encryption` is retiring (ADR 0104 S3, decided 2026-08-14). The
 # decision now lives in Pico, in `pico_memory_encryption_decision`, and is set
-# through the Foundation surface rather than here. This option remains for one
-# release so that an instance upgrading onto the 0017 schema has something to
-# inherit on its first boot; the release after that removes it, and
-# `PICO_MEMORY_ENCRYPTION` stays as the silent inheritance source for anything
-# that upgrades late.
+# through the Foundation surface rather than here.
+#
+# Removing it does not strand anybody: with no variable passed, the boot asks
+# the store what it holds, and a Home with `domain_encrypted` content inherits
+# encryption rather than reading absence as "off". This option stays for one
+# release for the one case that leaves no trace - encryption on and nothing
+# encrypted yet - and the release after that removes it.
 #
 # Do not add a person-facing option here. ADR 0104 S2 makes that a defect.
 options:

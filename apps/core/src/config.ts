@@ -94,7 +94,16 @@ export interface CoreConfig {
   linkRelaySweepIntervalMs?: number;
   /** ADR 0049. How often the model job queue is drained, one job a tick. */
   modelJobSweepIntervalMs?: number;
-  /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
+  /**
+   * When true, recorded memory content is stored domain_encrypted (ADR 0071).
+   *
+   * **Absent is not false.** ADR 0104 S3 made this an inheritance source and
+   * nothing else, and an inheritance source that cannot say "I have no value"
+   * is one that answers for an instance whose option was already removed. The
+   * field is therefore present only when the variable is (ADR 0117 X1's
+   * construction): what a missing entry means is the boot's question, not the
+   * parser's.
+   */
   memoryEncryption?: boolean;
   deviceId: string;
   webRootPath?: string;
@@ -222,7 +231,9 @@ export function loadConfig(env: Environment = process.env): CoreConfig {
       'PICO_DEPOT_FETCH_INTERVAL_MS',
       defaultPicoDepotFetchIntervalMs,
     ),
-    memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION'),
+    ...(env.PICO_MEMORY_ENCRYPTION === undefined || env.PICO_MEMORY_ENCRYPTION.trim() === ''
+      ? {}
+      : { memoryEncryption: readBooleanFlag(env.PICO_MEMORY_ENCRYPTION, 'PICO_MEMORY_ENCRYPTION') }),
     deviceId: readNonEmptyString(env, 'PICO_DEVICE_ID', 'pico-core'),
     webRootPath: readNonEmptyString(env, 'PICO_WEB_ROOT', defaultWebRootPath()),
     wsAllowedOrigins: readAllowedOrigins(env.PICO_WS_ALLOWED_ORIGINS),
