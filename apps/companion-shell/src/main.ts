@@ -404,6 +404,66 @@ function registerIpc(): void {
       return presentation;
     },
   );
+  /**
+   * ADR 0152. The three the window needs, and nothing it does not.
+   *
+   * A read that fails does not become a blocked presentation: not knowing what
+   * computes for you is not an alarm, and ADR 0118 O4's rule is that no
+   * absence renders a working thing as broken. The window shows nothing and
+   * the person can ask again.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getModelProviders,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readModelProviders();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.decideModelProvider,
+    async (event: IpcMainInvokeEvent, decision: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = decision as Record<string, unknown> | undefined;
+      if (typeof record?.entryId !== 'string'
+        || typeof record.providerClass !== 'string'
+        || typeof record.carries !== 'string') {
+        // The renderer is the least interesting attacker here and still the
+        // one closest to the wire, so the shape is checked rather than passed.
+        throw new Error('invalid_model_provider_decision');
+      }
+      await runtime.decideModelProvider({
+        entryId: record.entryId,
+        providerClass: record.providerClass,
+        carries: record.carries,
+        ...(typeof record.credentialRef === 'string'
+          ? { credentialRef: record.credentialRef }
+          : {}),
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.revokeModelProvider,
+    async (event: IpcMainInvokeEvent, entryId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof entryId !== 'string') {
+        throw new Error('invalid_model_provider_entry');
+      }
+      await runtime.revokeModelProvider(entryId);
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.vetoRecovery,
     async (event: IpcMainInvokeEvent) => {

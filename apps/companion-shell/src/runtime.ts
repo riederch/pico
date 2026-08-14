@@ -27,10 +27,25 @@ import type { VaultSodium } from '@pico/vault';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { PicoCompanionShellNotifications } from './presentation-adapter.js';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
+import {
+  decidePicoCompanionModelProvider,
+  readPicoCompanionModelProviders,
+  revokePicoCompanionModelProvider,
+  type PicoCompanionModelProviderView,
+} from '@pico/companion/model-providers';
 
 export interface PicoCompanionShellRuntime {
   checkNow(): Promise<PicoCompanionAlarmCheck>;
   vetoPendingRecovery(): Promise<void>;
+  /** ADR 0152. What computes for this person, and their answer to it. */
+  readModelProviders(): Promise<readonly PicoCompanionModelProviderView[]>;
+  decideModelProvider(input: {
+    entryId: string;
+    providerClass: string;
+    carries: string;
+    credentialRef?: string;
+  }): Promise<void>;
+  revokeModelProvider(entryId: string): Promise<void>;
   lockVault(): Promise<void>;
   status(): PicoCompanionAlarmCarrierStatus;
   stop(): Promise<void>;
@@ -172,6 +187,47 @@ export async function startPicoCompanionShellRuntime(input: {
         });
         await carrier.checkNow();
       },
+      /**
+       * ADR 0152 with ADR 0107. Each call builds its own Link client from the
+       * profile as it stands, exactly like the veto above: a client cached
+       * across a host-key rotation would be a device signing to an audience
+       * its Home no longer answers as.
+       */
+      readModelProviders: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionModelProviders({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      decideModelProvider: async (decision) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await decidePicoCompanionModelProvider({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...decision,
+        });
+      }),
+      revokeModelProvider: async (entryId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await revokePicoCompanionModelProvider({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          entryId,
+        });
+      }),
       lockVault: async () => {
         await input.automaticVaultUnlock?.lock();
       },

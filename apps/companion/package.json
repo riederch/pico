@@ -85,6 +85,10 @@
     "./first-run": {
       "types": "./dist/first-run.d.ts",
       "import": "./dist/first-run.js"
+    },
+    "./model-providers": {
+      "types": "./dist/model-providers.d.ts",
+      "import": "./dist/model-providers.js"
     }
   },
   "scripts": {

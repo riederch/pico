@@ -10,6 +10,13 @@ import {
 declare global {
   interface Window {
     picoCompanion: Readonly<{
+      getModelProviders(): Promise<unknown>;
+      decideModelProvider(decision: {
+        entryId: string;
+        providerClass: string;
+        carries: string;
+      }): Promise<void>;
+      revokeModelProvider(entryId: string): Promise<void>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
       requestCheck(): Promise<void>;

@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionPresentation,
   parsePicoCompanionRecoveryCardSetupInput,
   picoCompanionIdlePresentation,
+  picoCompanionIpcChannels,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -88,5 +91,25 @@ describe('companion renderer presentation contract', () => {
       form: 'paper',
       pin: 'must-not-cross-the-renderer',
     })).toThrow('invalid_recovery_card_setup_shape');
+  });
+});
+
+describe('the bridge and the contract are one list', () => {
+  it('declares the same channels in the preload as in the contract', () => {
+    // **Two closed lists over one subject drift**, which this tree has now
+    // learned four times. The preload cannot import the contract - it is a
+    // CommonJS bridge loaded before any module graph exists - so the literal
+    // is duplicated by necessity and held to the original by this test rather
+    // than by whoever remembers.
+    const preload = readFileSync(
+      join(import.meta.dirname, 'preload.cts'),
+      'utf8',
+    );
+    for (const [name, channel] of Object.entries(picoCompanionIpcChannels)) {
+      expect(preload).toContain(`${name}: '${channel}'`);
+    }
+    const declared = [...preload.matchAll(/^  (\w+): '(pico:[a-z:-]+)',$/gmu)]
+      .map(([, name]) => name);
+    expect(declared.sort()).toEqual(Object.keys(picoCompanionIpcChannels).sort());
   });
 });
