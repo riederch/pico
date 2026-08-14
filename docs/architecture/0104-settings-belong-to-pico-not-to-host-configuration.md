@@ -153,26 +153,41 @@ when it was added.
   | `PICO_DEVICE_ID` | Which process this is, among several on one host. |
   | `PICO_FOUNDATION_ACCESS_MODE`, `PICO_WS_ALLOWED_ORIGINS` | ADR 0041/0038: how far this instance's API reaches on this network. |
   | `PICO_DEPOT_FETCH_INTERVAL_MS`, `PICO_LINK_RELAY_SWEEP_INTERVAL_MS` | Operational cadence. A person has no answer to these; an operator tuning a small host does. |
+  | `PICO_LINK_RELAY_BASE_URL` | Where the operator this Home holds an account with answers today. See the split below: the account is Pico's, the URL is the host's. |
 
   **Transitional, and named as such:**
 
   | Entry | Status |
   |---|---|
   | `PICO_MEMORY_ENCRYPTION` | S3 moved the decision into Pico on 2026-08-14. This now supplies only what an instance *inherits* on its first boot under the new schema, and decides nothing afterwards. |
+  | `PICO_LINK_RELAY_OPERATOR`, `PICO_LINK_RELAY_ACCOUNT_ID` | Settings since 2026-08-14, held in `pico_link_relay_identity`. These supply what an instance inherits on its first boot under the 0018 schema, and decide nothing afterwards. |
   | `PICO_FOUNDATION_TOKEN` | S4, bound to the ADR 0038/0041 replacement rather than to this ADR. |
 
-  **Three that this gate cannot classify, and that is the finding:**
-  `PICO_LINK_RELAY_BASE_URL`, `PICO_LINK_RELAY_ACCOUNT_ID` and
-  `PICO_LINK_RELAY_OPERATOR` fail the test in both directions. Two residents
+  **The three relay entries, sorted 2026-08-14 by splitting them.** This gate
+  first recorded them as unclassifiable, and that was right: they failed the
+  test in both directions because they are not one thing. Two residents
   plausibly share one relay account, which reads like infrastructure - and the
-  choice survives moving the Home to another host, which is this ADR's own
-  mark of a setting. ADR 0031 sharpens rather than settles it: a relay account
-  is an identity a Home holds at an operator, and *which operator carries your
-  Picos' messages* is not obviously a deployment detail.
+  choice survives moving the Home to another host, which is this ADR's own mark
+  of a setting.
 
-  They are recorded here rather than sorted, because S2 makes a wrong answer
-  expensive: classify them as deployment and a person's choice of operator
-  stays in the environment for good.
+  What separates them is ADR 0031's own distinction, the same one the model
+  provider entry makes between what a thing *is* and where it *answers*:
+
+  | Entry | Class | Why |
+  |---|---|---|
+  | `PICO_LINK_RELAY_OPERATOR`, `PICO_LINK_RELAY_ACCOUNT_ID` | Setting, inherited on first boot | **Identity.** Which operator carries this Home's messages, and as whom. One answer per Home rather than per person, and it survives moving the Home - which is what makes it Pico's. |
+  | `PICO_LINK_RELAY_BASE_URL` | Deployment parameter | **Reachability.** Where that operator answers today. It can change without anybody deciding anything - a hostname move, a proxy in front - and nobody should have to re-decide their identity because a URL changed. |
+
+  The identity is stored and inherited exactly as S3's decision is: an
+  inherited value never overwrites a decided one.
+
+  **Changing it is refused while mailboxes exist, and the refusal carries the
+  count.** ADR 0148 gives every relationship its own address pair at this
+  operator under this account, so a Home that changed account would be holding
+  addresses nobody answers at, and every device would need a fresh exchange.
+  That is a move somebody decides to make, not a consequence of an edit - so
+  what it costs is said in the refusal, as the number of relationships that
+  would have to be re-established, before the change rather than after it.
 
 ## Non-goals
 

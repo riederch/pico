@@ -7373,6 +7373,75 @@ export class EventStore {
     `).run(input.enabled ? 1 : 0, input.at, input.inheritedFromHost ? 1 : 0);
   }
 
+  /** ADR 0104 S5 with ADR 0031. The relay account this Home holds. */
+  public picoLinkRelayIdentity(): {
+    operator: string;
+    accountId: string;
+    decidedAt: string;
+    inheritedFromHost: boolean;
+  } | undefined {
+    this.ensureOpen();
+    const row = this.db.prepare(`
+      SELECT operator, account_id AS accountId, decided_at AS decidedAt,
+             inherited_from_host AS inheritedFromHost
+      FROM pico_link_relay_identity WHERE id = 1
+    `).get() as {
+      operator: string; accountId: string; decidedAt: string; inheritedFromHost: number;
+    } | undefined;
+    return row === undefined ? undefined : Object.freeze({
+      operator: row.operator,
+      accountId: row.accountId,
+      decidedAt: row.decidedAt,
+      inheritedFromHost: row.inheritedFromHost === 1,
+    });
+  }
+
+  /**
+   * ADR 0148. Changing this is a move, not an edit.
+   *
+   * **Every mailbox is an address at *this* operator under *this* account.**
+   * ADR 0148 gives each relationship its own pair, so a Home that changed
+   * account would be holding addresses nobody answers at and every device
+   * would need a fresh exchange - which is a thing a person decides to do,
+   * not a consequence of a field they edited.
+   *
+   * So a change with mailboxes in place is refused, and the refusal carries
+   * the count: what it costs is the number of relationships that would have
+   * to be re-established, and a person deciding to move should see it before
+   * they do rather than discover it afterwards.
+   */
+  public decidePicoLinkRelayIdentity(input: {
+    operator: string;
+    accountId: string;
+    at: string;
+    inheritedFromHost: boolean;
+  }): { ok: true } | { ok: false; reason: 'mailboxes_exist'; mailboxes: number } {
+    this.ensureOpen();
+    const existing = this.picoLinkRelayIdentity();
+    if (input.inheritedFromHost && existing !== undefined && !existing.inheritedFromHost) {
+      return { ok: true };
+    }
+    const changes = existing !== undefined
+      && (existing.operator !== input.operator || existing.accountId !== input.accountId);
+    if (changes) {
+      const mailboxes = this.picoLinkMailboxes().length;
+      if (mailboxes > 0) {
+        return Object.freeze({ ok: false as const, reason: 'mailboxes_exist' as const, mailboxes });
+      }
+    }
+    this.db.prepare(`
+      INSERT INTO pico_link_relay_identity (
+        id, operator, account_id, decided_at, inherited_from_host
+      ) VALUES (1, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        operator = excluded.operator,
+        account_id = excluded.account_id,
+        decided_at = excluded.decided_at,
+        inherited_from_host = excluded.inherited_from_host
+    `).run(input.operator, input.accountId, input.at, input.inheritedFromHost ? 1 : 0);
+    return { ok: true };
+  }
+
   public detachPicoDepot(remote: string): void {
     this.ensureOpen();
     this.db.prepare('DELETE FROM pico_depot_attachment WHERE remote = ?').run(remote);

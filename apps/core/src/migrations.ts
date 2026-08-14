@@ -163,6 +163,20 @@ export const picoModelJobProvenanceMigrationId = '0016_pico_model_job_provenance
 export const picoMemoryEncryptionDecisionMigrationId =
   '0017_pico_memory_encryption_decision' as const;
 
+/**
+ * ADR 0104 S5 with ADR 0031. Which relay account this Home holds, in Pico.
+ *
+ * **Identity, not reachability.** ADR 0031 keeps a relay account separate from
+ * a Pico identity, and the entry that names it survives moving the Home to
+ * another host - which is this ADR's own mark of a setting. The base URL
+ * stays in the environment, because where an operator answers can change
+ * without anybody deciding anything.
+ *
+ * The same inheritance shape as 0017, for the same reason: an instance with no
+ * decision reads what it was booted with and records that it inherited.
+ */
+export const picoLinkRelayIdentityMigrationId = '0018_pico_link_relay_identity' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1380,6 +1394,21 @@ const migrations: readonly MigrationDefinition[] = [
           decided_at TEXT NOT NULL,
           -- ADR 0104. True when nobody decided and Pico read the host option
           -- it is trying to stop depending on.
+          inherited_from_host INTEGER NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    id: picoLinkRelayIdentityMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_link_relay_identity (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          operator TEXT NOT NULL,
+          account_id TEXT NOT NULL,
+          decided_at TEXT NOT NULL,
           inherited_from_host INTEGER NOT NULL
         );
       `);

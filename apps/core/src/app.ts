@@ -1739,11 +1739,54 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * rather than per request, because it holds a bounded client and no secret
    * beyond the account credential the config already carries.
    */
+  /**
+   * ADR 0104 S5 with ADR 0031. The account is Pico's; the URL is the host's.
+   *
+   * The identity is read from the store and inherited from the environment
+   * only when nobody has decided - the same shape as the encryption decision,
+   * and unlike it this one can be read after the store opens, because a relay
+   * transport is built long after.
+   *
+   * The base URL stays configuration. Where an operator answers can change
+   * without anybody deciding anything, which is exactly what separates
+   * reachability from identity in ADR 0031 and in the provider entry.
+   */
+  const relayIdentity = (() => {
+    const decided = store.picoLinkRelayIdentity();
+    if (decided !== undefined && !decided.inheritedFromHost) {
+      return { operator: decided.operator, accountId: decided.accountId };
+    }
+    if (config.linkRelayAccountId === undefined) {
+      return undefined;
+    }
+    store.decidePicoLinkRelayIdentity({
+      operator: config.linkRelayOperator ?? defaultPicoLinkRelayOperator,
+      accountId: config.linkRelayAccountId,
+      at: new Date().toISOString(),
+      inheritedFromHost: true,
+    });
+    return {
+      operator: config.linkRelayOperator ?? defaultPicoLinkRelayOperator,
+      accountId: config.linkRelayAccountId,
+    };
+  })();
+
+  /**
+   * The operator the addresses this Home hands out name.
+   *
+   * Resolved once at start, like the transport, because the two have to agree:
+   * an address naming one operator while the transport talks to another is a
+   * device writing into nothing. That is also why the route answers
+   * `appliesAtNextStart`.
+   */
+  const relayOperator = relayIdentity?.operator
+    ?? config.linkRelayOperator ?? defaultPicoLinkRelayOperator;
+
   const relayTransport = (config.linkRelayBaseUrl !== undefined
-    && config.linkRelayAccountId !== undefined)
+    && relayIdentity !== undefined)
     ? createPicoLinkRelayTransport({
       baseUrl: config.linkRelayBaseUrl,
-      accountId: config.linkRelayAccountId,
+      accountId: relayIdentity.accountId,
     })
     : undefined;
 
@@ -2583,6 +2626,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // where a retention policy does. What ADR 0104 objected to was the decision
   // living in *host configuration*, not who sets it: this one is Pico's, moves
   // with the Home, and is reachable from a Pico surface.
+  // ADR 0104 S5 with ADR 0031. One account per Home, so one answer for the
+  // instance - and it survives moving the Home, which is what makes it Pico's
+  // rather than the environment's.
+  accessClasses.register('GET', '/api/link/relay-identity', 'host-admin');
+  accessClasses.register('POST', '/api/link/relay-identity', 'host-admin');
   accessClasses.register('GET', '/api/memory/encryption', 'host-admin');
   accessClasses.register('POST', '/api/memory/encryption', 'host-admin');
   accessClasses.register('GET', '/api/memory/retention-policies', 'host-admin');
@@ -3449,7 +3497,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           const mailbox = randomBytes(16).toString('hex');
           const homeInbound = formatPicoLinkPacketAddress({
             mailbox,
-            operator: config.linkRelayOperator ?? defaultPicoLinkRelayOperator,
+            operator: relayOperator,
           });
 
           // **Registered before it is handed over**, which closes ADR 0148's
@@ -5166,6 +5214,49 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * ADR 0104 S3. The decision this Pico is running under, and where it came
    * from.
    */
+  app.get('/api/link/relay-identity', async (_request, reply) => {
+    const identity = store.picoLinkRelayIdentity();
+    return sendNoStore(reply, {
+      ...(identity === undefined ? {} : {
+        operator: identity.operator,
+        accountId: identity.accountId,
+        decided: !identity.inheritedFromHost,
+        decidedAt: identity.decidedAt,
+      }),
+      // ADR 0148. What a change would cost, said before anybody asks for one.
+      mailboxes: store.picoLinkMailboxes().length,
+    });
+  });
+
+  app.post('/api/link/relay-identity', async (request, reply) => {
+    const body = request.body as { operator?: unknown; accountId?: unknown } | undefined;
+    if (typeof body?.operator !== 'string' || typeof body.accountId !== 'string'
+      || body.operator === '' || body.accountId === '') {
+      return sendNoStore(reply.code(400), { error: 'invalid_pico_link_relay_identity' });
+    }
+    const decided = store.decidePicoLinkRelayIdentity({
+      operator: body.operator,
+      accountId: body.accountId,
+      at: new Date().toISOString(),
+      inheritedFromHost: false,
+    });
+    if (!decided.ok) {
+      // ADR 0148. Not a validation failure - a move. Every mailbox is an
+      // address at this operator under this account, so changing it strands
+      // all of them and each relationship needs a fresh exchange.
+      return sendNoStore(reply.code(409), {
+        error: decided.reason,
+        mailboxes: decided.mailboxes,
+      });
+    }
+    return sendNoStore(reply.code(200), {
+      operator: body.operator,
+      accountId: body.accountId,
+      decided: true,
+      appliesAtNextStart: true,
+    });
+  });
+
   app.get('/api/memory/encryption', async (_request, reply) => {
     const decided = store.picoMemoryEncryptionDecision();
     return sendNoStore(reply, {
