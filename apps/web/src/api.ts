@@ -208,6 +208,100 @@ export async function shredPrivacyDomain(
 }
 
 /**
+ * ADR 0127 M3 with ADR 0129 SR6. The two switches a module has.
+ *
+ * They are separate calls because they are separate decisions: activation says
+ * whether a feature exists, capture says whether Pico may write down what the
+ * module observes. Somebody who turns recording off for an afternoon still
+ * wants yesterday's answers.
+ */
+export interface PicoModuleView {
+  identifier: string;
+  kind: string;
+  active: boolean;
+  capturing: boolean;
+  effectBearing: boolean;
+  dependencies: readonly string[];
+}
+
+/** ADR 0127 M4. What a deactivation means will not happen. */
+export interface PicoModuleDroppedStatement {
+  module: string;
+  total: number;
+  shown: ReadonlyArray<{ kind: string; dueAt: string; reference: string }>;
+}
+
+/**
+ * ADR 0127 M3. Refused rather than merely failed, and it names who.
+ *
+ * A person who turned one thing off should not have to guess which of several
+ * others is holding it on.
+ */
+export class PicoModuleHasDependentsError extends Error {
+  public constructor(public readonly dependents: readonly string[]) {
+    super(`pico_module_has_active_dependents:${dependents.join(',')}`);
+    this.name = 'PicoModuleHasDependentsError';
+  }
+}
+
+export async function setModuleActivation(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: { identifier: string; active: boolean },
+): Promise<{ modules: readonly PicoModuleView[]; dropped: readonly PicoModuleDroppedStatement[] }> {
+  const url = buildEndpointUrl(baseUrl, '/api/home/modules');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (response.status === 409) {
+    const data = (await response.json()) as unknown;
+    if (isRecord(data) && Array.isArray(data.dependents)) {
+      throw new PicoModuleHasDependentsError(data.dependents as string[]);
+    }
+  }
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Switching the module'));
+  }
+
+  const data = (await response.json()) as unknown;
+  if (!isRecord(data) || !isRecord(data.modules) || !Array.isArray(data.modules.modules)) {
+    throw new Error('The module endpoint returned an unexpected shape.');
+  }
+  return {
+    modules: data.modules.modules as PicoModuleView[],
+    // ADR 0127 M4. Absent means nothing was outstanding, which is a fact and
+    // not a missing field.
+    dropped: Array.isArray(data.dropped) ? data.dropped as PicoModuleDroppedStatement[] : [],
+  };
+}
+
+export async function setModuleCapture(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: { identifier: string; capturing: boolean },
+): Promise<readonly PicoModuleView[]> {
+  const url = buildEndpointUrl(baseUrl, '/api/home/modules/capture');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Switching recording'));
+  }
+
+  const data = (await response.json()) as unknown;
+  if (!isRecord(data) || !isRecord(data.modules) || !Array.isArray(data.modules.modules)) {
+    throw new Error('The module endpoint returned an unexpected shape.');
+  }
+  return data.modules.modules as PicoModuleView[];
+}
+
+/**
  * ADR 0152 SE1 with ADR 0142. What machines compute for this Home.
  *
  * The reply is parsed rather than believed, `sees` included: the sentence is

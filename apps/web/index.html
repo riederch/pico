@@ -163,6 +163,30 @@
         </article>
 
         <!--
+          ADR 0127 M3 with ADR 0129 SR6. Two switches per module, and they are
+          different questions: whether a feature exists, and whether Pico may
+          write down what it observes. Activation defaults to on because a Home
+          whose calendar was off would look broken; recording defaults to off
+          because a Home that began writing down where its person goes would
+          not be broken, it would be wrong.
+        -->
+        <article class="card full">
+          <div class="card-header">
+            <h2>Modules</h2>
+            <div class="card-actions"><span id="module-count" class="card-count">0 modules</span></div>
+          </div>
+          <p class="form-hint admin-note">Switching a module off keeps its data: turning it on again restores what was there. Switching recording off stops new observations and removes nothing. A module other active modules depend on cannot be switched off until they are.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Module</th><th>Kind</th><th>State</th><th>Recording</th><th>Depends on</th><th>Actions</th></tr></thead>
+              <tbody id="modules-body"></tbody>
+            </table>
+            <p id="modules-empty" class="empty-state">No modules registered.</p>
+          </div>
+          <p id="module-status" class="form-hint" role="status" aria-live="polite"></p>
+        </article>
+
+        <!--
           ADR 0152 SE1 with ADR 0142. What computes for this Home, shown as
           what was measured rather than what a machine advertises - with the
           date, because a measurement ages. Narrowing lowers a ceiling and can

@@ -6,6 +6,8 @@ import {
   eventTableColumnLabels,
   picoMemoryContentLabel,
   picoMemoryEncryptionLines,
+  picoModuleDroppedLine,
+  picoModuleLines,
   picoModelProviderLines,
   picoRelayIdentityLines,
   storageSummary,
@@ -274,6 +276,75 @@ describe('ADR 0104 S5 - the relay account in words', () => {
     expect(lines.identity).toBe('No relay account.');
     expect(lines.origin).toBe('This Home reaches other Picos over the direct channel.');
     expect(lines.cost).toContain('strands nothing');
+  });
+});
+
+describe('ADR 0127 M3 with ADR 0129 SR6 - two switches, never one', () => {
+  const module = {
+    identifier: 'spatial-recall',
+    kind: 'product',
+    active: true,
+    capturing: false,
+    effectBearing: false,
+    dependencies: [] as readonly string[],
+  };
+
+  it('says recording is off without saying the module is', () => {
+    // Collapsing the two would make "stop recording" and "remove the feature"
+    // the same act. Somebody who turns recording off for an afternoon still
+    // wants to be told where they parked this morning.
+    const lines = picoModuleLines(module);
+    expect(lines.state).toBe('On.');
+    expect(lines.recording).toContain('Not recording');
+    expect(lines.recording).toContain('kept');
+  });
+
+  it('says an off module keeps its data, because it does', () => {
+    // ADR 0127 M3: deactivation drops nothing. A person hesitating over the
+    // switch should be able to read that, or the hesitation keeps a module on
+    // for no reason.
+    expect(picoModuleLines({ ...module, active: false }).state)
+      .toBe('Off. Its data is kept, and turning it on restores what was there.');
+  });
+
+  it('says when switching it off stops the world changing', () => {
+    // ADR 0128. An effect-bearing module is the one where "off" is sometimes
+    // exactly the point.
+    expect(picoModuleLines({ ...module, effectBearing: true }).state)
+      .toContain('change things outside this Home');
+  });
+
+  it('names what a module depends on rather than showing an empty cell', () => {
+    expect(picoModuleLines(module).depends).toBe('Nothing.');
+    expect(picoModuleLines({ ...module, dependencies: ['depot'] }).depends).toBe('depot');
+  });
+});
+
+describe('ADR 0127 M4 - what will not happen, with the full count', () => {
+  it('says nothing when nothing was outstanding', () => {
+    expect(picoModuleDroppedLine([])).toBeNull();
+  });
+
+  it('names the total and admits the list is shorter', () => {
+    // A truncated list that did not say it was truncated would be a lie, and
+    // "and 9,987 more" is information.
+    expect(picoModuleDroppedLine([{
+      module: 'calendar',
+      total: 30,
+      shown: Array.from({ length: 20 }, (_, index) => ({
+        kind: 'calendar.reminder',
+        dueAt: '2026-08-15T09:00:00.000Z',
+        reference: `ref_${index}`,
+      })),
+    }])).toBe('calendar: 30 things it promised will not happen (20 listed, 10 more)');
+  });
+
+  it('counts one promise as one', () => {
+    expect(picoModuleDroppedLine([{
+      module: 'calendar',
+      total: 1,
+      shown: [{ kind: 'calendar.reminder', dueAt: '2026-08-15T09:00:00.000Z', reference: 'r' }],
+    }])).toBe('calendar: 1 thing it promised will not happen');
   });
 });
 

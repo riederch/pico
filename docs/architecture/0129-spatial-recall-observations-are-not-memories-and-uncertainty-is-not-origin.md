@@ -313,6 +313,14 @@ Two things follow, and both are why this ADR can be more than a plan:
   would be wrong. This is the mechanism for the sentence M3 could only
   state: *activating a module is not consent to record.*
 
+  **Reachable since 2026-08-14, and not before.** The route existed, the
+  event existed, the projection existed, and the only way to switch
+  recording on or off was `curl` - so the off-by-default was the one state
+  a person could actually be in. The dashboard now carries both switches
+  per module, and the sentence beside the recording one says what
+  stopping does *not* do: what was recorded is kept, because that is the
+  difference between this decision and switching the module off.
+
   **Erasing goes through the paths that already exist**, and nothing was
   added for it: one domain shred reaches both halves of the history - the
   readings through the cascade's own port (SR2), the derived places

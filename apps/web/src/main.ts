@@ -1,12 +1,15 @@
 import { realtimeMessageType } from './protocol-values.js';
 import {
   PicoModelProviderNarrowingRefusedError,
+  PicoModuleHasDependentsError,
   PicoRelayIdentityInUseError,
   createRetentionPolicy,
   decideMemoryEncryption,
   decideRelayIdentity,
   listModelProviders,
   narrowModelProvider,
+  setModuleActivation,
+  setModuleCapture,
   readMemoryEncryption,
   readRelayIdentity,
   defaultPicoHomeUrl,
@@ -21,7 +24,7 @@ import {
   shredPrivacyDomain,
   updateRetentionPolicy,
 } from './api.js';
-import { createDashboardView } from './render.js';
+import { createDashboardView, picoModuleDroppedLine } from './render.js';
 import type { DashboardState, EventFilters, MemoryContentListResponse, PicoEvent, RealtimeMessage, RetentionPolicy } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
 
@@ -87,6 +90,14 @@ export function startDashboard(document: Document): void {
 
   view.onRetentionPolicySubmitted(() => {
     void saveRetentionPolicy();
+  });
+
+  view.onModuleActivationRequested((input) => {
+    void switchModule(input);
+  });
+
+  view.onModuleCaptureRequested((input) => {
+    void switchModuleCapture(input);
   });
 
   view.onModelNarrowingSubmitted(() => {
@@ -240,6 +251,69 @@ export function startDashboard(document: Document): void {
     await refreshHomeSettings();
     await refreshModelProviders();
     void connect(view.getBaseUrl());
+  }
+
+  /**
+   * ADR 0127 M3 with ADR 0129 SR6. The two switches, and the two refusals.
+   *
+   * The module list arrives with the system status that is already polled, so
+   * switching re-renders from what the route answered rather than asking
+   * again: the response is the newest truth there is.
+   */
+  async function switchModule(input: { identifier: string; active: boolean }): Promise<void> {
+    view.setModuleStatus(`${input.active ? 'Switching on' : 'Switching off'} ${input.identifier}...`);
+
+    let answered: Awaited<ReturnType<typeof setModuleActivation>>;
+    try {
+      answered = await setModuleActivation(state.baseUrl, foundationAccess(), input);
+    } catch (error) {
+      // ADR 0127 M3. Named, not merely refused: a person who turned one thing
+      // off should not have to guess which of several others is holding it on.
+      view.setModuleStatus(
+        error instanceof PicoModuleHasDependentsError
+          ? `${input.identifier} stays on: ${error.dependents.join(', ')} `
+            + `${error.dependents.length === 1 ? 'depends' : 'depend'} on it. `
+            + 'Switch those off first.'
+          : formatUnknownError(error),
+        'error',
+      );
+      return;
+    }
+
+    view.renderModules(answered.modules);
+    // ADR 0127 M4. What will not happen, said while there is still room to
+    // act - never as a confirmation step standing in the way of the stop.
+    const dropped = picoModuleDroppedLine(answered.dropped);
+    view.setModuleStatus(
+      dropped === null
+        ? `${input.identifier} is ${input.active ? 'on' : 'off'}.`
+        : `${input.identifier} is off. ${dropped}`,
+      dropped === null ? 'active' : 'error',
+    );
+  }
+
+  async function switchModuleCapture(
+    input: { identifier: string; capturing: boolean },
+  ): Promise<void> {
+    view.setModuleStatus(
+      `${input.capturing ? 'Starting' : 'Stopping'} recording for ${input.identifier}...`,
+    );
+
+    try {
+      view.renderModules(await setModuleCapture(state.baseUrl, foundationAccess(), input));
+    } catch (error) {
+      view.setModuleStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    // ADR 0129 SR6. Stopping recording removes nothing, and saying so is what
+    // keeps it a different act from switching the module off.
+    view.setModuleStatus(
+      input.capturing
+        ? `${input.identifier} is recording.`
+        : `${input.identifier} has stopped recording. What it recorded is kept.`,
+      'active',
+    );
   }
 
   /**

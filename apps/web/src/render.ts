@@ -1,5 +1,7 @@
 import type {
   PicoMemoryEncryptionState,
+  PicoModuleDroppedStatement,
+  PicoModuleView,
   PicoModelProviderEntryView,
   PicoRelayIdentityState,
 } from './api.js';
@@ -46,6 +48,11 @@ export interface DashboardView {
    * ADR 0104. The two decisions that belong to Pico, shown as what is running
    * and what was decided - never as one line.
    */
+  /** ADR 0127 M3 with ADR 0129 SR6. The two switches each module has. */
+  renderModules(modules: readonly PicoModuleView[]): void;
+  setModuleStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onModuleActivationRequested(handler: (input: { identifier: string; active: boolean }) => void): void;
+  onModuleCaptureRequested(handler: (input: { identifier: string; capturing: boolean }) => void): void;
   /** ADR 0152. What computes here, with the measurement behind it. */
   renderModelProviders(entries: PicoModelProviderEntryView[]): void;
   readModelNarrowingForm(): { entryId: string; contextTokens: number | null; concurrentJobs: number | null };
@@ -124,6 +131,10 @@ interface DashboardElements {
   entryStatus: HTMLElement;
   entriesBody: HTMLTableSectionElement;
   entriesEmpty: HTMLElement;
+  moduleCount: HTMLElement;
+  modulesBody: HTMLTableSectionElement;
+  modulesEmpty: HTMLElement;
+  moduleStatus: HTMLElement;
   modelProviderCount: HTMLElement;
   modelProvidersBody: HTMLTableSectionElement;
   modelProvidersEmpty: HTMLElement;
@@ -205,6 +216,8 @@ export function createDashboardView(document: Document): DashboardView {
   let retentionPolicyEditRequested: ((retentionPolicyId: string) => void) | null = null;
   let retentionPolicyRevokeRequested: ((retentionPolicyId: string) => void) | null = null;
   let contentLoadMoreRequested: (() => void) | null = null;
+  let moduleActivationRequested: ((input: { identifier: string; active: boolean }) => void) | null = null;
+  let moduleCaptureRequested: ((input: { identifier: string; capturing: boolean }) => void) | null = null;
 
   const elements: DashboardElements = {
     form: requireElement(document, 'connection-form', HTMLFormElement),
@@ -259,6 +272,10 @@ export function createDashboardView(document: Document): DashboardView {
     entryStatus: requireElement(document, 'entry-status', HTMLElement),
     entriesBody: requireElement(document, 'entries-body', HTMLTableSectionElement),
     entriesEmpty: requireElement(document, 'entries-empty', HTMLElement),
+    moduleCount: requireElement(document, 'module-count', HTMLElement),
+    modulesBody: requireElement(document, 'modules-body', HTMLTableSectionElement),
+    modulesEmpty: requireElement(document, 'modules-empty', HTMLElement),
+    moduleStatus: requireElement(document, 'module-status', HTMLElement),
     modelProviderCount: requireElement(document, 'model-provider-count', HTMLElement),
     modelProvidersBody: requireElement(document, 'model-providers-body', HTMLTableSectionElement),
     modelProvidersEmpty: requireElement(document, 'model-providers-empty', HTMLElement),
@@ -311,6 +328,23 @@ export function createDashboardView(document: Document): DashboardView {
   elements.contentLoadMoreButton.addEventListener('click', () => {
     contentLoadMoreRequested?.();
   });
+
+  /**
+   * Shared by the status render and by a switch's own answer, because both are
+   * the same table: a second painter would let the two disagree about what is
+   * on, and the one a person is looking at would be whichever ran last.
+   */
+  const renderModuleTable = (modules: readonly PicoModuleView[]): void => {
+    elements.moduleCount.textContent =
+      `${modules.length} ${modules.length === 1 ? 'module' : 'modules'}`;
+    elements.modulesEmpty.hidden = modules.length > 0;
+    elements.modulesBody.replaceChildren(...modules.map((module) => createModuleRow(
+      document,
+      module,
+      (input) => { moduleActivationRequested?.(input); },
+      (input) => { moduleCaptureRequested?.(input); },
+    )));
+  };
 
   const notifyFilterChange = (): void => {
     eventFiltersChanged?.({
@@ -476,6 +510,19 @@ export function createDashboardView(document: Document): DashboardView {
         handler();
       });
     },
+    renderModules(modules: readonly PicoModuleView[]): void {
+      renderModuleTable(modules);
+    },
+    setModuleStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.moduleStatus.textContent = message;
+      elements.moduleStatus.dataset.state = state;
+    },
+    onModuleActivationRequested(handler): void {
+      moduleActivationRequested = handler;
+    },
+    onModuleCaptureRequested(handler): void {
+      moduleCaptureRequested = handler;
+    },
     renderModelProviders(entries: PicoModelProviderEntryView[]): void {
       elements.modelProviderCount.textContent =
         `${entries.length} ${entries.length === 1 ? 'provider' : 'providers'}`;
@@ -616,6 +663,10 @@ export function createDashboardView(document: Document): DashboardView {
       elements.errorBanner.textContent = state.errorMessage ?? '';
 
       renderTimeBoundEntries(elements, state.events);
+      // ADR 0127 M3. The module list rides the status that is already polled,
+      // read per call for the reason the status is: a state cached at boot
+      // would keep reporting a module the person switched off ten minutes ago.
+      renderModuleTable(state.systemStatus?.modules?.modules ?? []);
       renderCoreSummary(elements.coreSummary, state.systemStatus);
       renderDatabaseSummary(elements.databaseSummary, state.systemStatus);
       renderEventControls(elements, state);
@@ -874,6 +925,53 @@ function createRetentionPolicyRow(
 }
 
 
+function createModuleRow(
+  document: Document,
+  module: PicoModuleView,
+  onActivation: (input: { identifier: string; active: boolean }) => void,
+  onCapture: (input: { identifier: string; capturing: boolean }) => void,
+): HTMLTableRowElement {
+  const lines = picoModuleLines(module);
+  const row = document.createElement('tr');
+
+  for (const [text, monospace] of [
+    [module.identifier, true],
+    [module.kind, false],
+    [lines.state, false],
+    [lines.recording, false],
+    [lines.depends, false],
+  ] as Array<[string, boolean]>) {
+    const cell = document.createElement('td');
+    cell.textContent = text;
+    if (monospace) {
+      cell.className = 'monospace';
+    }
+    row.append(cell);
+  }
+
+  const actions = document.createElement('td');
+  const activation = document.createElement('button');
+  activation.type = 'button';
+  activation.className = 'secondary-button row-button';
+  activation.textContent = module.active ? 'Switch off' : 'Switch on';
+  activation.addEventListener('click', () => {
+    onActivation({ identifier: module.identifier, active: !module.active });
+  });
+
+  const capture = document.createElement('button');
+  capture.type = 'button';
+  capture.className = 'secondary-button row-button';
+  capture.textContent = module.capturing ? 'Stop recording' : 'Start recording';
+  capture.addEventListener('click', () => {
+    onCapture({ identifier: module.identifier, capturing: !module.capturing });
+  });
+
+  actions.append(activation, capture);
+  row.append(actions);
+
+  return row;
+}
+
 function createModelProviderRow(
   document: Document,
   entry: PicoModelProviderEntryView,
@@ -910,6 +1008,68 @@ function createModelProviderRow(
   row.append(actions);
 
   return row;
+}
+
+/**
+ * ADR 0127 M3 with ADR 0129 SR6 and ADR 0128. A module, in words.
+ *
+ * **Two switches, never one.** Activation says whether a feature exists;
+ * recording says whether Pico may write down what the module observes.
+ * Collapsing them would make "stop recording" and "remove the feature" the
+ * same act, and somebody who turns recording off for an afternoon still wants
+ * to be told where they parked this morning.
+ *
+ * **Off is reversible and says so.** ADR 0127 M3 keeps a deactivated module's
+ * data, so a person hesitating over a switch should be able to read that
+ * turning it back on restores what was there - the hesitation this sentence
+ * removes is the one that keeps a module on for no reason.
+ */
+export function picoModuleLines(module: PicoModuleView): {
+  state: string;
+  recording: string;
+  depends: string;
+} {
+  return {
+    state: module.active
+      ? `On${module.effectBearing ? '. It can change things outside this Home.' : '.'}`
+      // ADR 0127 M3: deactivation dropped no data, so this is not a loss.
+      : 'Off. Its data is kept, and turning it on restores what was there.',
+    // ADR 0129 SR6's default is the opposite of activation's, for the opposite
+    // reason: a Home that began writing down its person's movements because
+    // they installed something would not be broken, it would be wrong.
+    recording: module.capturing
+      ? 'Recording.'
+      : 'Not recording. What was recorded before is kept.',
+    depends: module.dependencies.length === 0
+      ? 'Nothing.'
+      : [...module.dependencies].join(', '),
+  };
+}
+
+/**
+ * ADR 0127 M4. What will not happen if this module goes off.
+ *
+ * **The count is the full one and the list is not.** A truncated list that did
+ * not say it was truncated would be a lie, and "and 9,987 more" is
+ * information. Said while there is still room to act rather than as a
+ * confirmation step in the way: ADR 0128 keeps deactivation immediate,
+ * because stopping the world changing is sometimes the point.
+ */
+export function picoModuleDroppedLine(
+  statements: readonly PicoModuleDroppedStatement[],
+): string | null {
+  if (statements.length === 0) {
+    return null;
+  }
+  return statements
+    .map((statement) => {
+      const shown = statement.shown.length;
+      const more = statement.total - shown;
+      return `${statement.module}: ${statement.total} `
+        + `${statement.total === 1 ? 'thing' : 'things'} it promised will not happen`
+        + (more > 0 ? ` (${shown} listed, ${more} more)` : '');
+    })
+    .join('; ');
 }
 
 /**

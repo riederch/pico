@@ -366,7 +366,22 @@ with it.
   `home.` prefix puts it in the audit family without a second decision.
   ADR 0104 rules out a host configuration option, so the surface is an
   authenticated `host-admin` route and an unauthenticated change is
-  refused - asserted rather than assumed. The payload is content-free:
+  refused - asserted rather than assumed.
+
+  **The route got a surface on 2026-08-14, and until then only `curl`
+  reached it.** Both switches are in the Foundation dashboard now, in the
+  administration section, with the module list read from the status that
+  is already polled - so a module somebody switched off ten minutes ago is
+  not still shown as on.
+
+  What the rendering had to keep apart is what this gate and ADR 0129 SR6
+  are about: **off says its data is kept and that switching it on restores
+  what was there** (a person hesitating over that switch would otherwise
+  leave a module on for no reason), **an effect-bearing module says that
+  off stops the world changing** (ADR 0128, where off is sometimes the
+  point), and the M4 statement carries **the full count with the shown
+  list admitting it is shorter** - a truncated list that did not say so
+  would be a lie, and "and 9,987 more" is information. The payload is content-free:
   identifiers and a direction. A request that changes nothing appends
   nothing, because a log full of no-ops would bury the changes that
   mattered.

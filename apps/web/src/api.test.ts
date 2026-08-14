@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_PICO_HOME_URL,
+  PicoModuleHasDependentsError,
+  setModuleActivation,
+  setModuleCapture,
   PicoRelayIdentityInUseError,
   decideRelayIdentity,
   readRelayIdentity,
@@ -246,6 +249,53 @@ describe('memory content read', () => {
 
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toContain('/api/memory/domains/domain%20a%2Fb/items');
+  });
+});
+
+describe('ADR 0127 M3 - switching a module', () => {
+  it('carries a refusal that names who is holding it on', async () => {
+    // "Refused" alone would leave a person guessing which of several others
+    // depends on the one they tried to switch off.
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(409, {
+        error: 'pico_module_has_active_dependents',
+        dependents: ['calendar', 'spatial-recall'],
+      })));
+
+    await expect(setModuleActivation('http://localhost:3100', {}, {
+      identifier: 'depot',
+      active: false,
+    })).rejects.toThrow(PicoModuleHasDependentsError);
+  });
+
+  it('reads an absent dropped list as nothing outstanding', async () => {
+    // ADR 0127 M4. Absent is a fact - nothing was promised - and turning it
+    // into a failure would make an ordinary switch-off look like one.
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(200, { modules: { modules: [] } })));
+
+    expect(await setModuleActivation('http://localhost:3100', {}, {
+      identifier: 'depot',
+      active: true,
+    })).toEqual({ modules: [], dropped: [] });
+  });
+
+  it('sends the capture decision to its own endpoint', async () => {
+    // ADR 0129 SR6: a second decision, not the same one, so a second call.
+    const fetchMock = vi.fn(async () => jsonResponse(200, { modules: { modules: [] } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await setModuleCapture('http://localhost:3100', {}, {
+      identifier: 'spatial-recall',
+      capturing: false,
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.toString()).toBe('http://localhost:3100/api/home/modules/capture');
+    expect(JSON.parse(String(init.body))).toEqual({
+      identifier: 'spatial-recall',
+      capturing: false,
+    });
   });
 });
 
