@@ -1,3 +1,4 @@
+import type { PicoMemoryEncryptionState, PicoRelayIdentityState } from './api.js';
 import { memoryRetentionModes } from './protocol-values.js';
 import type { ConnectionStatus, DashboardState, EventFilters, MemoryContentItem, PicoEvent, RetentionMode, RetentionPolicy, SystemStatus } from './types.js';
 
@@ -37,6 +38,18 @@ export interface DashboardView {
   clearTimeBoundEntryForm(): void;
   setTimeBoundEntryStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
   onTimeBoundEntryRequested(handler: () => void): void;
+  /**
+   * ADR 0104. The two decisions that belong to Pico, shown as what is running
+   * and what was decided - never as one line.
+   */
+  renderMemoryEncryption(state: PicoMemoryEncryptionState): void;
+  readMemoryEncryptionForm(): boolean;
+  setMemoryEncryptionStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onMemoryEncryptionSubmitted(handler: () => void): void;
+  renderRelayIdentity(state: PicoRelayIdentityState): void;
+  readRelayIdentityForm(): { operator: string; accountId: string };
+  setRelayIdentityStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onRelayIdentitySubmitted(handler: () => void): void;
   readShredForm(): ShredFormValue;
   clearShredForm(): void;
   setShredStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
@@ -101,6 +114,18 @@ interface DashboardElements {
   entryStatus: HTMLElement;
   entriesBody: HTMLTableSectionElement;
   entriesEmpty: HTMLElement;
+  encryptionState: HTMLElement;
+  encryptionOrigin: HTMLElement;
+  encryptionForm: HTMLFormElement;
+  encryptionEnabledSelect: HTMLSelectElement;
+  encryptionStatus: HTMLElement;
+  relayIdentityState: HTMLElement;
+  relayIdentityOrigin: HTMLElement;
+  relayIdentityCost: HTMLElement;
+  relayIdentityForm: HTMLFormElement;
+  relayOperatorInput: HTMLInputElement;
+  relayAccountInput: HTMLInputElement;
+  relayIdentityStatus: HTMLElement;
   shredForm: HTMLFormElement;
   shredDomainInput: HTMLInputElement;
   shredConfirmInput: HTMLInputElement;
@@ -216,6 +241,18 @@ export function createDashboardView(document: Document): DashboardView {
     entryStatus: requireElement(document, 'entry-status', HTMLElement),
     entriesBody: requireElement(document, 'entries-body', HTMLTableSectionElement),
     entriesEmpty: requireElement(document, 'entries-empty', HTMLElement),
+    encryptionState: requireElement(document, 'encryption-state', HTMLElement),
+    encryptionOrigin: requireElement(document, 'encryption-origin', HTMLElement),
+    encryptionForm: requireElement(document, 'encryption-form', HTMLFormElement),
+    encryptionEnabledSelect: requireElement(document, 'encryption-enabled', HTMLSelectElement),
+    encryptionStatus: requireElement(document, 'encryption-status', HTMLElement),
+    relayIdentityState: requireElement(document, 'relay-identity-state', HTMLElement),
+    relayIdentityOrigin: requireElement(document, 'relay-identity-origin', HTMLElement),
+    relayIdentityCost: requireElement(document, 'relay-identity-cost', HTMLElement),
+    relayIdentityForm: requireElement(document, 'relay-identity-form', HTMLFormElement),
+    relayOperatorInput: requireElement(document, 'relay-operator', HTMLInputElement),
+    relayAccountInput: requireElement(document, 'relay-account', HTMLInputElement),
+    relayIdentityStatus: requireElement(document, 'relay-identity-status', HTMLElement),
     shredForm: requireElement(document, 'shred-form', HTMLFormElement),
     shredDomainInput: requireElement(document, 'shred-domain', HTMLInputElement),
     shredConfirmInput: requireElement(document, 'shred-confirm', HTMLInputElement),
@@ -409,6 +446,51 @@ export function createDashboardView(document: Document): DashboardView {
     },
     onTimeBoundEntryRequested(handler: () => void): void {
       elements.entryForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
+    renderMemoryEncryption(state: PicoMemoryEncryptionState): void {
+      const lines = picoMemoryEncryptionLines(state);
+      elements.encryptionState.textContent = lines.running;
+      elements.encryptionOrigin.textContent = lines.origin;
+      // The form shows what is running, so the field a person changes starts
+      // from the truth rather than from the last thing they typed.
+      elements.encryptionEnabledSelect.value = state.enabled ? 'true' : 'false';
+    },
+    readMemoryEncryptionForm(): boolean {
+      return elements.encryptionEnabledSelect.value === 'true';
+    },
+    setMemoryEncryptionStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.encryptionStatus.textContent = message;
+      elements.encryptionStatus.dataset.state = state;
+    },
+    onMemoryEncryptionSubmitted(handler: () => void): void {
+      elements.encryptionForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
+    renderRelayIdentity(state: PicoRelayIdentityState): void {
+      const lines = picoRelayIdentityLines(state);
+      elements.relayIdentityState.textContent = lines.identity;
+      elements.relayIdentityOrigin.textContent = lines.origin;
+      elements.relayIdentityCost.textContent = lines.cost;
+      elements.relayOperatorInput.value = state.operator ?? '';
+      elements.relayAccountInput.value = state.accountId ?? '';
+    },
+    readRelayIdentityForm(): { operator: string; accountId: string } {
+      return {
+        operator: elements.relayOperatorInput.value.trim(),
+        accountId: elements.relayAccountInput.value.trim(),
+      };
+    },
+    setRelayIdentityStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.relayIdentityStatus.textContent = message;
+      elements.relayIdentityStatus.dataset.state = state;
+    },
+    onRelayIdentitySubmitted(handler: () => void): void {
+      elements.relayIdentityForm.addEventListener('submit', (event) => {
         event.preventDefault();
         handler();
       });
@@ -721,6 +803,67 @@ function createRetentionPolicyRow(
   row.append(actions);
 
   return row;
+}
+
+/**
+ * ADR 0104 S3, in words. What this Home runs under, and who decided it.
+ *
+ * **Two sentences, because they are two facts.** The key store is built before
+ * the database opens, so a decision taken now is one the next start reads: a
+ * surface that showed one line would either hide the answer somebody just gave
+ * or claim a change that has not happened. Neither is a rendering detail - one
+ * of them tells a person their content changed posture while it sat as it was.
+ */
+export function picoMemoryEncryptionLines(state: PicoMemoryEncryptionState): {
+  running: string;
+  origin: string;
+} {
+  return {
+    running: state.enabled
+      ? 'Memory content is encrypted at rest.'
+      : 'Memory content is stored as plaintext foundation data.',
+    origin: state.decided
+      ? `A person decided this${
+        state.decidedAt === undefined ? '' : ` on ${formatDateTime(state.decidedAt)}`
+      }.`
+      : 'Nobody has decided this. Pico inherited it and will keep the answer once somebody gives one.',
+  };
+}
+
+/**
+ * ADR 0104 S5 with ADR 0031 and ADR 0148. Which operator carries this Home's
+ * messages, and what changing that would cost.
+ *
+ * **The cost is said before anybody asks for a change.** Every mailbox is an
+ * address at this operator under this account, so a change strands all of them
+ * and each relationship needs a fresh exchange. A person deciding to move
+ * should read the number while they are deciding, not in the refusal
+ * afterwards.
+ *
+ * **No account is an absence, not a fault.** A Home that has never chosen an
+ * operator reaches other Picos over the direct channel, which works; ADR 0118
+ * O4 forbids rendering that as broken.
+ */
+export function picoRelayIdentityLines(state: PicoRelayIdentityState): {
+  identity: string;
+  origin: string;
+  cost: string;
+} {
+  const named = state.operator !== undefined && state.accountId !== undefined;
+  return {
+    identity: named
+      ? `${state.accountId} at ${state.operator}`
+      : 'No relay account.',
+    origin: !named
+      ? 'This Home reaches other Picos over the direct channel.'
+      : state.decided === true
+        ? 'A person decided this.'
+        : 'Inherited from this host\'s configuration.',
+    cost: state.mailboxes === 0
+      ? 'No mailboxes yet, so changing the account strands nothing.'
+      : `${state.mailboxes} ${state.mailboxes === 1 ? 'mailbox' : 'mailboxes'} at this account. `
+        + 'Changing it means every one of them needs a fresh exchange.',
+  };
 }
 
 /**

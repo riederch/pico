@@ -154,6 +154,19 @@ when it was added.
   So: 0017 ships first, the option goes in the release after it. The condition
   is unchanged and its standing is not - it is now a courtesy for one narrow
   case rather than the whole safety of the retirement.
+- **S4a - Both settings reachable: done 2026-08-14.** A decision route with no
+  surface is a decision nobody can make, which is the objection this ADR raises
+  about host configuration wearing a different hat. Both now sit in the
+  Foundation dashboard's administration section, beside the retention policies
+  they share an access class with.
+
+  The rendering carries the ADR's own distinction: **what this Home is running
+  under and what somebody decided are two sentences**, because a key store is
+  built before the database opens and a surface that showed one line would
+  either hide the answer just given or claim a change that has not happened.
+  The relay card says what a change costs - the number of mailboxes - while a
+  person is deciding, rather than in the refusal afterwards, and a Home with no
+  relay account reads as an absence rather than as a fault (ADR 0118 O4).
 - **S4 - `pico_foundation_token` retires: Open.** Bound to the ADR 0038/0041
   replacement of temporary Foundation hardening with real authentication, not
   to this ADR.

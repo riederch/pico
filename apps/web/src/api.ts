@@ -208,6 +208,115 @@ export async function shredPrivacyDomain(
 }
 
 /**
+ * ADR 0104 S3. What this Home is running under, and who decided it.
+ *
+ * Two facts, kept apart on purpose. `enabled` is the posture this *process*
+ * booted with; `decided` says whether a person answered or Pico inherited the
+ * host option. Collapsing them would make a recorded decision look like a
+ * change that already happened - and the key store is built before the
+ * database opens, so it has not.
+ */
+export interface PicoMemoryEncryptionState {
+  enabled: boolean;
+  decided: boolean;
+  decidedAt?: string;
+}
+
+export async function readMemoryEncryption(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+): Promise<PicoMemoryEncryptionState> {
+  return await fetchJson(
+    buildEndpointUrl(baseUrl, '/api/memory/encryption'),
+    isMemoryEncryptionState,
+    'memory encryption',
+    options,
+  );
+}
+
+/** Records the answer. The reply says it applies at the next start, and it does. */
+export async function decideMemoryEncryption(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  enabled: boolean,
+): Promise<void> {
+  const url = buildEndpointUrl(baseUrl, '/api/memory/encryption');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Recording the encryption decision'));
+  }
+}
+
+/**
+ * ADR 0104 S5 with ADR 0031. The relay account this Home holds.
+ *
+ * `mailboxes` travels with the read rather than with the refusal, because what
+ * a change costs is worth knowing before somebody wants one. An absent
+ * identity is an absence: a Home with no relay account reaches other Picos
+ * directly and is not broken (ADR 0118 O4).
+ */
+export interface PicoRelayIdentityState {
+  operator?: string;
+  accountId?: string;
+  decided?: boolean;
+  decidedAt?: string;
+  mailboxes: number;
+}
+
+export async function readRelayIdentity(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+): Promise<PicoRelayIdentityState> {
+  return await fetchJson(
+    buildEndpointUrl(baseUrl, '/api/link/relay-identity'),
+    isRelayIdentityState,
+    'relay identity',
+    options,
+  );
+}
+
+/**
+ * ADR 0148. A refusal here is a `409` carrying the count, and it is carried out
+ * as itself: "something went wrong" would leave a person to discover that the
+ * change would have stranded every relationship they have.
+ */
+export class PicoRelayIdentityInUseError extends Error {
+  public constructor(public readonly mailboxes: number) {
+    super(`relay_identity_in_use:${mailboxes}`);
+    this.name = 'PicoRelayIdentityInUseError';
+  }
+}
+
+export async function decideRelayIdentity(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: { operator: string; accountId: string },
+): Promise<void> {
+  const url = buildEndpointUrl(baseUrl, '/api/link/relay-identity');
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (response.status === 409) {
+    const data = (await response.json()) as unknown;
+    if (isRecord(data) && data.error === 'mailboxes_exist' && typeof data.mailboxes === 'number') {
+      throw new PicoRelayIdentityInUseError(data.mailboxes);
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Recording the relay account'));
+  }
+}
+
+/**
  * ADR 0118 O1. Records an appointment or reminder: a memory item that carries
  * the instant the person meant.
  *
@@ -373,6 +482,21 @@ async function fetchEventTail(baseUrl: string, options: FoundationAccessOptions)
   url.searchParams.set('limit', String(EVENT_TAIL_LIMIT));
 
   return fetchJson(url, isEventListResponse, 'events', options);
+}
+
+function isMemoryEncryptionState(value: unknown): value is PicoMemoryEncryptionState {
+  return isRecord(value)
+    && typeof value.enabled === 'boolean'
+    && typeof value.decided === 'boolean'
+    && (value.decidedAt === undefined || typeof value.decidedAt === 'string');
+}
+
+function isRelayIdentityState(value: unknown): value is PicoRelayIdentityState {
+  return isRecord(value)
+    && typeof value.mailboxes === 'number'
+    && (value.operator === undefined || typeof value.operator === 'string')
+    && (value.accountId === undefined || typeof value.accountId === 'string')
+    && (value.decided === undefined || typeof value.decided === 'boolean');
 }
 
 async function fetchJson<T>(

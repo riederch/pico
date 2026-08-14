@@ -1,6 +1,11 @@
 import { realtimeMessageType } from './protocol-values.js';
 import {
+  PicoRelayIdentityInUseError,
   createRetentionPolicy,
+  decideMemoryEncryption,
+  decideRelayIdentity,
+  readMemoryEncryption,
+  readRelayIdentity,
   defaultPicoHomeUrl,
   deleteRetentionPolicy,
   listDomainContent,
@@ -79,6 +84,14 @@ export function startDashboard(document: Document): void {
 
   view.onRetentionPolicySubmitted(() => {
     void saveRetentionPolicy();
+  });
+
+  view.onMemoryEncryptionSubmitted(() => {
+    void saveMemoryEncryption();
+  });
+
+  view.onRelayIdentitySubmitted(() => {
+    void saveRelayIdentity();
   });
 
   view.onRetentionPolicyEditRequested((retentionPolicyId) => {
@@ -217,7 +230,85 @@ export function startDashboard(document: Document): void {
     view.setContentReadVisible(true);
     view.fillRetentionPolicyForm(null);
     await refreshRetentionPolicies();
+    await refreshHomeSettings();
     void connect(view.getBaseUrl());
+  }
+
+  /**
+   * ADR 0104. Both settings are read together because both are read the same
+   * way: an operator session, one GET each, and a failure that is said in its
+   * own place rather than banner-wide. One being unavailable must not blank the
+   * other (ADR 0118 O4).
+   */
+  async function refreshHomeSettings(): Promise<void> {
+    if (operatorSession === undefined) {
+      return;
+    }
+
+    try {
+      view.renderMemoryEncryption(await readMemoryEncryption(state.baseUrl, foundationAccess()));
+    } catch (error) {
+      view.setMemoryEncryptionStatus(formatUnknownError(error), 'error');
+    }
+
+    try {
+      view.renderRelayIdentity(await readRelayIdentity(state.baseUrl, foundationAccess()));
+    } catch (error) {
+      view.setRelayIdentityStatus(formatUnknownError(error), 'error');
+    }
+  }
+
+  async function saveMemoryEncryption(): Promise<void> {
+    const enabled = view.readMemoryEncryptionForm();
+    view.setMemoryEncryptionStatus('Recording...');
+
+    try {
+      await decideMemoryEncryption(state.baseUrl, foundationAccess(), enabled);
+    } catch (error) {
+      view.setMemoryEncryptionStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    // **Not "encryption is now on".** The key store is built before the
+    // database opens, so this process keeps running under what it booted with,
+    // and the re-read below shows exactly that.
+    view.setMemoryEncryptionStatus(
+      `Recorded: ${enabled ? 'encrypt' : 'do not encrypt'}. It takes effect at the next start.`,
+      'active',
+    );
+    await refreshHomeSettings();
+  }
+
+  async function saveRelayIdentity(): Promise<void> {
+    const form = view.readRelayIdentityForm();
+
+    if (form.operator === '' || form.accountId === '') {
+      view.setRelayIdentityStatus('A relay account needs an operator and an account.', 'error');
+      return;
+    }
+
+    view.setRelayIdentityStatus('Recording...');
+
+    try {
+      await decideRelayIdentity(state.baseUrl, foundationAccess(), form);
+    } catch (error) {
+      // ADR 0148. Carried out as itself: the count is what the change costs,
+      // and "something went wrong" would leave somebody to find that out by
+      // losing every mailbox they have.
+      view.setRelayIdentityStatus(
+        error instanceof PicoRelayIdentityInUseError
+          ? `Refused. ${error.mailboxes} ${error.mailboxes === 1 ? 'mailbox belongs' : 'mailboxes belong'} `
+            + 'to the account this Home holds, and each one would need a fresh exchange. '
+            + 'Remove them first if you mean to move.'
+          : formatUnknownError(error),
+        'error',
+      );
+      await refreshHomeSettings();
+      return;
+    }
+
+    view.setRelayIdentityStatus('Recorded. It takes effect at the next start.', 'active');
+    await refreshHomeSettings();
   }
 
   async function readDomainContent(): Promise<void> {

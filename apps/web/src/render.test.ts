@@ -5,6 +5,8 @@ import {
   eventHistoryNoticeLabel,
   eventTableColumnLabels,
   picoMemoryContentLabel,
+  picoMemoryEncryptionLines,
+  picoRelayIdentityLines,
   storageSummary,
 } from './render.js';
 
@@ -200,5 +202,101 @@ describe('ADR 0117 X5 - content is labeled or it is your own', () => {
         pinCoversContent: false,
       },
     })).toBe('read from a-library at dddddddddddd, which the pin does not cover');
+  });
+});
+
+/**
+ * ADR 0104 at the surface where the person who administers this instance
+ * answers. Both settings say what is *running* separately from what was
+ * *decided*, because a decision here is read at the next start.
+ */
+describe('ADR 0104 S3 - memory encryption in words', () => {
+  it('keeps a recorded decision apart from the posture it is running under', () => {
+    // The failure this prevents: somebody records "encrypt", the surface says
+    // "encrypted", and they believe their content changed while it sat as it
+    // was. The key store is built before the database opens.
+    const lines = picoMemoryEncryptionLines({
+      enabled: false,
+      decided: true,
+      decidedAt: '2026-08-14T10:00:00.000Z',
+    });
+
+    expect(lines.running).toBe('Memory content is stored as plaintext foundation data.');
+    expect(lines.origin).toMatch(/^A person decided this on /u);
+  });
+
+  it('says nobody decided rather than showing a default as an answer', () => {
+    expect(picoMemoryEncryptionLines({ enabled: false, decided: false }).origin)
+      .toContain('Nobody has decided this');
+  });
+});
+
+describe('ADR 0104 S5 - the relay account in words', () => {
+  it('says what a change costs before anybody asks for one', () => {
+    // ADR 0148 gives every relationship its own address pair at this operator
+    // under this account. The number is what a move costs, and reading it in
+    // the refusal afterwards is too late to be a decision.
+    const lines = picoRelayIdentityLines({
+      operator: 'relay.example.org',
+      accountId: 'acct_home',
+      decided: true,
+      mailboxes: 3,
+    });
+
+    expect(lines.identity).toBe('acct_home at relay.example.org');
+    expect(lines.origin).toBe('A person decided this.');
+    expect(lines.cost).toContain('3 mailboxes at this account');
+  });
+
+  it('counts one mailbox as one', () => {
+    expect(picoRelayIdentityLines({
+      operator: 'relay.example.org',
+      accountId: 'acct_home',
+      mailboxes: 1,
+    }).cost).toContain('1 mailbox at this account');
+  });
+
+  it('reads an inherited account as inherited rather than as somebody\'s answer', () => {
+    expect(picoRelayIdentityLines({
+      operator: 'relay.example.org',
+      accountId: 'acct_home',
+      decided: false,
+      mailboxes: 0,
+    }).origin).toBe('Inherited from this host\'s configuration.');
+  });
+
+  it('renders no account as an absence rather than as a fault', () => {
+    // ADR 0118 O4. A Home with no relay reaches other Picos directly, which
+    // works - and no absence may render a working thing as broken.
+    const lines = picoRelayIdentityLines({ mailboxes: 0 });
+
+    expect(lines.identity).toBe('No relay account.');
+    expect(lines.origin).toBe('This Home reaches other Picos over the direct channel.');
+    expect(lines.cost).toContain('strands nothing');
+  });
+});
+
+describe('the dashboard shell carries what the view requires', () => {
+  it('has an element for every id the view demands', () => {
+    // `requireElement` throws at load, so a missing id is a blank dashboard
+    // rather than a missing field. Checking every id rather than the ones
+    // somebody remembered is the difference between a test and a habit.
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+    const source = readFileSync(resolve(import.meta.dirname, 'render.ts'), 'utf8');
+    const ids = [...source.matchAll(/requireElement\(document, '([^']+)'/gu)]
+      .map(([, id]) => id);
+
+    expect(ids.length).toBeGreaterThan(30);
+    for (const id of ids) {
+      expect(html, `index.html is missing id="${id}"`).toContain(`id="${id}"`);
+    }
+  });
+
+  it('offers both Home settings before the danger card', () => {
+    const html = readFileSync(resolve(import.meta.dirname, '../index.html'), 'utf8');
+
+    expect(html).toContain('id="encryption-form"');
+    expect(html).toContain('id="relay-identity-form"');
+    expect(html.indexOf('id="relay-identity-form"')).toBeLessThan(html.indexOf('danger-card'));
   });
 });

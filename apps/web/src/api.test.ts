@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_PICO_HOME_URL,
+  PicoRelayIdentityInUseError,
+  decideRelayIdentity,
+  readRelayIdentity,
   buildEndpointUrl,
   createRetentionPolicy,
   defaultPicoHomeUrl,
@@ -243,6 +246,38 @@ describe('memory content read', () => {
 
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toContain('/api/memory/domains/domain%20a%2Fb/items');
+  });
+});
+
+describe('ADR 0148 - a refused relay account change', () => {
+  it('carries the count out as itself rather than as a failure', async () => {
+    // "Something went wrong" would leave somebody to discover that the change
+    // would have stranded every relationship they have.
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(409, { error: 'mailboxes_exist', mailboxes: 4 })));
+
+    await expect(decideRelayIdentity('http://localhost:3100', {}, {
+      operator: 'other.example.org',
+      accountId: 'acct_second',
+    })).rejects.toThrow(PicoRelayIdentityInUseError);
+
+    try {
+      await decideRelayIdentity('http://localhost:3100', {}, {
+        operator: 'other.example.org',
+        accountId: 'acct_second',
+      });
+    } catch (error) {
+      expect((error as PicoRelayIdentityInUseError).mailboxes).toBe(4);
+    }
+  });
+
+  it('reads an absent account as an absence rather than an unexpected shape', async () => {
+    // A Home with no relay answers the count and nothing else, and the reader
+    // must not treat that as a broken endpoint.
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, { mailboxes: 0 })));
+
+    await expect(readRelayIdentity('http://localhost:3100', {}))
+      .resolves.toEqual({ mailboxes: 0 });
   });
 });
 

@@ -118,6 +118,7 @@ button:disabled { cursor: wait; opacity: 0.64; }
 .status-pill[data-status="error"] .status-dot::before { content: "!"; }
 .admin-grid { margin-top: 16px; }
 .admin-note { margin-bottom: 14px; line-height: 1.4; }
+.settings-heading { margin: 18px 0 8px; font-size: 15px; color: var(--pico-text-primary); }
 .admin-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; margin-bottom: 12px; }
 .admin-form-actions { display: flex; gap: 8px; align-items: end; }
 .danger-card { border-color: var(--pico-status-blocked); }

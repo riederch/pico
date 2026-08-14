@@ -162,6 +162,39 @@
           <p id="entries-empty" class="empty-state">No appointments or reminders recorded.</p>
         </article>
 
+        <!--
+          ADR 0104. Two settings that belong to Pico rather than to host
+          configuration, and the surface where the person who administers this
+          instance answers them. Both say what they are running under
+          separately from what was decided, because a decision here takes
+          effect at the next start and a surface that implied otherwise would
+          be lying about the posture of somebody's content.
+        -->
+        <article class="card full">
+          <div class="card-header"><h2>Home settings</h2></div>
+          <p class="form-hint admin-note">These belong to this Home and survive moving it to another host. A change is recorded now and read at the next start.</p>
+
+          <h3 class="settings-heading">Memory encryption</h3>
+          <p id="encryption-state" class="form-hint"></p>
+          <p id="encryption-origin" class="form-hint"></p>
+          <form id="encryption-form" class="admin-form">
+            <div class="filter-field"><label for="encryption-enabled">Encrypt memory content at rest</label><select id="encryption-enabled"><option value="true">Yes</option><option value="false">No</option></select></div>
+            <div class="filter-field admin-form-actions"><button id="encryption-button" type="submit">Record decision</button></div>
+          </form>
+          <p id="encryption-status" class="form-hint" role="status" aria-live="polite"></p>
+
+          <h3 class="settings-heading">Relay account</h3>
+          <p id="relay-identity-state" class="form-hint"></p>
+          <p id="relay-identity-origin" class="form-hint"></p>
+          <p id="relay-identity-cost" class="form-hint"></p>
+          <form id="relay-identity-form" class="admin-form">
+            <div class="filter-field"><label for="relay-operator">Operator</label><input id="relay-operator" type="text" spellcheck="false" autocomplete="off" placeholder="relay.example.org" /></div>
+            <div class="filter-field"><label for="relay-account">Account</label><input id="relay-account" type="text" spellcheck="false" autocomplete="off" /></div>
+            <div class="filter-field admin-form-actions"><button id="relay-identity-button" type="submit">Record account</button></div>
+          </form>
+          <p id="relay-identity-status" class="form-hint" role="status" aria-live="polite"></p>
+        </article>
+
         <article class="card full danger-card">
           <div class="card-header"><h2>Crypto-shred a privacy domain</h2></div>
           <p class="danger-note">Destroying a domain's keys is irreversible. Every memory item in that domain becomes unreadable, including copies in existing backups. There is no undo and no recovery. Requires memory encryption to be enabled; without it the content is plaintext at rest and shredding would protect nothing.</p>
