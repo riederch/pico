@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { openPicoHomeWithDevice, sendPicoLinkDirectRequest } from './test-claimed-home.js';
+import { parsePicoModelJob } from '@pico/protocol/model-job';
 
 /**
  * ADR 0152 SE1/SE3/SE4/SE5, at the surface that serves them.
@@ -103,6 +104,8 @@ async function bootWithEntry(): Promise<{ app: AppWithInject; operator: string }
 
 async function bootWithPerson(): Promise<{
   app: AppWithInject;
+  databasePath: string;
+  personFingerprint: string;
   operator: string;
   person: string;
 }> {
@@ -159,6 +162,8 @@ async function bootWithPerson(): Promise<{
 
   return {
     app,
+    databasePath,
+    personFingerprint: device.picoIdentityFingerprintHex,
     operator: `Bearer ${operator.session}`,
     person: `Bearer ${device.session}`,
   };
@@ -503,5 +508,135 @@ describe('ADR 0143 DP1 - a person attaches a corpus and is named for it', () => 
       url: '/api/depot/attachments',
       payload: pin,
     })).statusCode).toBe(401);
+  });
+});
+
+describe('ADR 0116 W5 - the last inch is a person', () => {
+  const jobId = 'job_kept_0001';
+  const nowMs = Date.now();
+
+  function answeredJob(picoIdentityFingerprintHex: string) {
+    return {
+      job: parsePicoModelJob({
+        schema: 'pico.model.job.v1',
+        jobId,
+        role: 'reader',
+        units: [{ originClass: 'person_present', text: 'What is due?' }],
+        references: [{
+          schema: 'pico.model.context.ref.v1',
+          contextRefId: 'ref_kept_0001',
+          jobId,
+          originClass: 'own_pico',
+          privacyDomain: 'household',
+          excerpt: 'The boiler service is due in March.',
+          materializedAt: new Date(nowMs - 60_000).toISOString(),
+          expiresAt: new Date(nowMs + 5 * 60_000).toISOString(),
+        }],
+        expects: [{ name: 'month', type: 'token' }],
+        carries: 'live_turn_and_retrieved_memory',
+      }, nowMs),
+      picoIdentityFingerprintHex,
+      entryId: 'a-measured-host',
+      derivedFrom: {
+        supplierIdentifier: 'a-library',
+        commit: 'c'.repeat(40),
+        pinCoversContent: false,
+      },
+      at: new Date(nowMs).toISOString(),
+    };
+  }
+
+  async function bootWithAnsweredJob(owner: 'person' | 'somebody_else') {
+    const booted = await bootWithPerson();
+    const identity = ((await booted.app.inject({
+      method: 'GET',
+      url: '/api/model/providers/mine',
+      headers: { authorization: booted.person },
+    })).json() as { providers: unknown[] });
+    expect(identity.providers).toBeDefined();
+
+    // The queue is written directly: what is under test is the keep, not how
+    // a job got there.
+    const store = await EventStore.open(booted.databasePath, {});
+    const person = owner === 'person' ? booted.personFingerprint : 'f'.repeat(64);
+    const queue = store.picoModelJobQueue();
+    queue.enqueue(answeredJob(person));
+    queue.settle({
+      jobId,
+      outcome: 'answered',
+      result: {
+        values: [{ name: 'month', type: 'token', value: 'march', originClass: 'own_pico' }],
+      },
+      at: new Date(nowMs).toISOString(),
+    });
+    store.close();
+    return booted;
+  }
+
+  it('writes a memory item with the derivation the read was taken under', async () => {
+    const { app, person } = await bootWithAnsweredJob('person');
+    const kept = await app.inject({
+      method: 'POST',
+      url: `/api/model/jobs/${jobId}/keep`,
+      headers: { authorization: person },
+    });
+    expect(kept.statusCode).toBe(201);
+    expect((kept.json() as { memoryItemId: string }).memoryItemId).toMatch(/^memory_[0-9a-f]{32}$/u);
+  });
+
+  it('answers somebody else\'s job as not found, not as forbidden', async () => {
+    // Whose jobs exist is not this caller's business either.
+    const { app, person } = await bootWithAnsweredJob('somebody_else');
+    const kept = await app.inject({
+      method: 'POST',
+      url: `/api/model/jobs/${jobId}/keep`,
+      headers: { authorization: person },
+    });
+    expect(kept.statusCode).toBe(404);
+    expect(kept.json()).toEqual({ error: 'pico_model_job_not_found' });
+  });
+
+  it('refuses the operator, because keeping is a person\'s write', async () => {
+    const { app, operator } = await bootWithAnsweredJob('person');
+    expect((await app.inject({
+      method: 'POST',
+      url: `/api/model/jobs/${jobId}/keep`,
+      headers: { authorization: operator },
+    })).statusCode).toBe(403);
+  });
+
+  it('refuses a job that was settled without an answer', async () => {
+    // A refusal is as settled as an answer, and there is nothing in it to
+    // keep - which is a different fact from the job not existing.
+    const booted = await bootWithPerson();
+    const store = await EventStore.open(booted.databasePath, {});
+    const queue = store.picoModelJobQueue();
+    queue.enqueue(answeredJob(booted.personFingerprint));
+    queue.settle({
+      jobId,
+      outcome: 'entry_may_not_carry_these_words',
+      at: new Date(nowMs).toISOString(),
+    });
+    store.close();
+
+    const response = await booted.app.inject({
+      method: 'POST',
+      url: `/api/model/jobs/${jobId}/keep`,
+      headers: { authorization: booted.person },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: 'pico_model_job_has_no_answer',
+      outcome: 'entry_may_not_carry_these_words',
+    });
+  });
+
+  it('answers a job that does not exist as not found', async () => {
+    const { app, person } = await bootWithPerson();
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/model/jobs/job_never_existed/keep',
+      headers: { authorization: person },
+    })).statusCode).toBe(404);
   });
 });
