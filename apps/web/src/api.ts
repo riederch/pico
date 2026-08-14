@@ -208,6 +208,89 @@ export async function shredPrivacyDomain(
 }
 
 /**
+ * ADR 0152 SE1 with ADR 0142. What machines compute for this Home.
+ *
+ * The reply is parsed rather than believed, `sees` included: the sentence is
+ * the Home's, because what an entry carries is decided where the entry is
+ * held. A dashboard that composed its own would be a second place deciding
+ * what a person is told about where their words go.
+ */
+export interface PicoModelProviderEntryView {
+  entryId: string;
+  model: string;
+  providerClass: string;
+  sees: string;
+  needsCredentialToSeeMore: boolean;
+  measured: {
+    at: string;
+    contextTokens: number;
+    generationTokensPerSecond: number;
+    concurrentJobs: number;
+  };
+  narrowing?: { contextTokens?: number; concurrentJobs?: number };
+  effective: { contextTokens: number; concurrentJobs: number };
+}
+
+export async function listModelProviders(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+): Promise<PicoModelProviderEntryView[]> {
+  const response = await fetchJson(
+    buildEndpointUrl(baseUrl, '/api/model/providers'),
+    isModelProviderListResponse,
+    'model providers',
+    options,
+  );
+  return response.providers;
+}
+
+/**
+ * ADR 0152 SE4. A narrowing that would widen is refused with the measurement
+ * it was measured against - "too large" without the number is a person
+ * guessing at what would fit.
+ */
+export class PicoModelProviderNarrowingRefusedError extends Error {
+  public constructor(
+    public readonly refusal: string,
+    public readonly measured: Record<string, number> | undefined,
+  ) {
+    super(refusal);
+    this.name = 'PicoModelProviderNarrowingRefusedError';
+  }
+}
+
+export async function narrowModelProvider(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  entryId: string,
+  narrowing: { contextTokens?: number; concurrentJobs?: number },
+): Promise<void> {
+  const url = buildEndpointUrl(
+    baseUrl,
+    `/api/model/providers/${encodeURIComponent(entryId)}/narrowing`,
+  );
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(narrowing),
+  });
+
+  if (response.status === 409) {
+    const data = (await response.json()) as unknown;
+    if (isRecord(data) && typeof data.error === 'string') {
+      throw new PicoModelProviderNarrowingRefusedError(
+        data.error,
+        isRecord(data.measured) ? (data.measured as Record<string, number>) : undefined,
+      );
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Narrowing the provider'));
+  }
+}
+
+/**
  * ADR 0104 S3. What this Home is running under, and who decided it.
  *
  * Two facts, kept apart on purpose. `enabled` is the posture this *process*
@@ -482,6 +565,22 @@ async function fetchEventTail(baseUrl: string, options: FoundationAccessOptions)
   url.searchParams.set('limit', String(EVENT_TAIL_LIMIT));
 
   return fetchJson(url, isEventListResponse, 'events', options);
+}
+
+function isModelProviderListResponse(
+  value: unknown,
+): value is { providers: PicoModelProviderEntryView[] } {
+  return isRecord(value)
+    && Array.isArray(value.providers)
+    && value.providers.every((entry) => isRecord(entry)
+      && typeof entry.entryId === 'string'
+      && typeof entry.model === 'string'
+      && typeof entry.providerClass === 'string'
+      && typeof entry.sees === 'string'
+      && typeof entry.needsCredentialToSeeMore === 'boolean'
+      && isRecord(entry.measured)
+      && typeof (entry.measured as Record<string, unknown>).at === 'string'
+      && isRecord(entry.effective));
 }
 
 function isMemoryEncryptionState(value: unknown): value is PicoMemoryEncryptionState {

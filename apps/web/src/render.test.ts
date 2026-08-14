@@ -6,6 +6,7 @@ import {
   eventTableColumnLabels,
   picoMemoryContentLabel,
   picoMemoryEncryptionLines,
+  picoModelProviderLines,
   picoRelayIdentityLines,
   storageSummary,
 } from './render.js';
@@ -273,6 +274,60 @@ describe('ADR 0104 S5 - the relay account in words', () => {
     expect(lines.identity).toBe('No relay account.');
     expect(lines.origin).toBe('This Home reaches other Picos over the direct channel.');
     expect(lines.cost).toContain('strands nothing');
+  });
+});
+
+describe('ADR 0152 SE1 - a measured provider in words', () => {
+  const measured = {
+    entryId: 'a-measured-host',
+    model: 'a-model:measured',
+    providerClass: 'declared_own_host',
+    sees: 'this conversation only',
+    needsCredentialToSeeMore: true,
+    measured: {
+      at: '2026-08-13T17:43:04.923Z',
+      contextTokens: 40_960,
+      generationTokensPerSecond: 26.31,
+      concurrentJobs: 1,
+    },
+    effective: { contextTokens: 40_960, concurrentJobs: 1 },
+  };
+
+  it('shows the measurement with the date it was taken', () => {
+    // ADR 0142 is measured rather than advertised, and a measurement with no
+    // date is an advertisement again: a figure taken while the machine was
+    // idle says nothing about the machine that has been busy since.
+    const lines = picoModelProviderLines(measured);
+
+    expect(lines.measured).toContain('40,960 tokens');
+    expect(lines.measured).toContain('26.3 tokens/s');
+    expect(lines.measured).toMatch(/measured .+2026/u);
+  });
+
+  it('tells a narrow machine from a narrowed one', () => {
+    // SE4 lets this host lower a ceiling and never raise it. One number would
+    // hide which of the two a person is looking at, and only the second is a
+    // decision somebody here made.
+    expect(picoModelProviderLines(measured).ceiling)
+      .toBe('Not narrowed: this Home uses what was measured.');
+    expect(picoModelProviderLines({
+      ...measured,
+      narrowing: { contextTokens: 8_192 },
+      effective: { contextTokens: 8_192, concurrentJobs: 1 },
+    }).ceiling).toContain('Narrowed here to 8,192 tokens');
+  });
+
+  it('carries the Home\'s sentence about what it sees rather than composing one', () => {
+    // What an entry carries is decided where the entry is held. A dashboard
+    // that composed its own would be a second place deciding what a person is
+    // told about where their words go.
+    expect(picoModelProviderLines(measured).sees)
+      .toBe('Sees this conversation only. Reading more needs a credential.');
+    expect(picoModelProviderLines({
+      ...measured,
+      sees: 'this conversation and what Pico remembers',
+      needsCredentialToSeeMore: false,
+    }).sees).toBe('Sees this conversation and what Pico remembers.');
   });
 });
 

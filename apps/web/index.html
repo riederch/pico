@@ -163,6 +163,35 @@
         </article>
 
         <!--
+          ADR 0152 SE1 with ADR 0142. What computes for this Home, shown as
+          what was measured rather than what a machine advertises - with the
+          date, because a measurement ages. Narrowing lowers a ceiling and can
+          never raise one (SE4), which is why the measured figures stay visible
+          beside the effective ones.
+        -->
+        <article class="card full">
+          <div class="card-header">
+            <h2>Model providers</h2>
+            <div class="card-actions"><span id="model-provider-count" class="card-count">0 providers</span></div>
+          </div>
+          <p class="form-hint admin-note">Entries are written by measuring a machine, not by describing one. This host may narrow what an entry is used at; it can never widen it beyond the measurement.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Entry</th><th>Model</th><th>Sees</th><th>Measured</th><th>Ceiling</th><th>Actions</th></tr></thead>
+              <tbody id="model-providers-body"></tbody>
+            </table>
+            <p id="model-providers-empty" class="empty-state">No measured providers. Nothing computes for this Home yet.</p>
+          </div>
+          <form id="model-narrowing-form" class="admin-form">
+            <div class="filter-field"><label for="narrowing-entry">Entry</label><input id="narrowing-entry" type="text" spellcheck="false" autocomplete="off" /></div>
+            <div class="filter-field"><label for="narrowing-context">Context tokens</label><input id="narrowing-context" type="number" min="1" step="1" autocomplete="off" /></div>
+            <div class="filter-field"><label for="narrowing-jobs">Jobs at a time</label><input id="narrowing-jobs" type="number" min="1" step="1" autocomplete="off" /></div>
+            <div class="filter-field admin-form-actions"><button id="narrowing-button" type="submit">Narrow</button></div>
+          </form>
+          <p id="model-narrowing-status" class="form-hint" role="status" aria-live="polite"></p>
+        </article>
+
+        <!--
           ADR 0104. Two settings that belong to Pico rather than to host
           configuration, and the surface where the person who administers this
           instance answers them. Both say what they are running under

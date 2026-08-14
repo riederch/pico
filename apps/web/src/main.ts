@@ -1,9 +1,12 @@
 import { realtimeMessageType } from './protocol-values.js';
 import {
+  PicoModelProviderNarrowingRefusedError,
   PicoRelayIdentityInUseError,
   createRetentionPolicy,
   decideMemoryEncryption,
   decideRelayIdentity,
+  listModelProviders,
+  narrowModelProvider,
   readMemoryEncryption,
   readRelayIdentity,
   defaultPicoHomeUrl,
@@ -84,6 +87,10 @@ export function startDashboard(document: Document): void {
 
   view.onRetentionPolicySubmitted(() => {
     void saveRetentionPolicy();
+  });
+
+  view.onModelNarrowingSubmitted(() => {
+    void narrowProvider();
   });
 
   view.onMemoryEncryptionSubmitted(() => {
@@ -231,7 +238,71 @@ export function startDashboard(document: Document): void {
     view.fillRetentionPolicyForm(null);
     await refreshRetentionPolicies();
     await refreshHomeSettings();
+    await refreshModelProviders();
     void connect(view.getBaseUrl());
+  }
+
+  /**
+   * ADR 0152. What computes for this Home, listed as measured.
+   *
+   * An empty registry is not a failure: nothing measured means nothing
+   * computes here yet, which is the ordinary state of a Home whose owner has
+   * not run the measurement (ADR 0118 O4).
+   */
+  async function refreshModelProviders(): Promise<void> {
+    if (operatorSession === undefined) {
+      return;
+    }
+
+    try {
+      view.renderModelProviders(await listModelProviders(state.baseUrl, foundationAccess()));
+    } catch (error) {
+      view.setModelNarrowingStatus(formatUnknownError(error), 'error');
+    }
+  }
+
+  async function narrowProvider(): Promise<void> {
+    const form = view.readModelNarrowingForm();
+
+    if (form.entryId === '') {
+      view.setModelNarrowingStatus('Name the entry to narrow.', 'error');
+      return;
+    }
+    if (form.contextTokens === null && form.concurrentJobs === null) {
+      // A narrowing with no number is not a narrowing, and sending it would
+      // record a decision that says nothing.
+      view.setModelNarrowingStatus('Give at least one ceiling to narrow to.', 'error');
+      return;
+    }
+
+    view.setModelNarrowingStatus('Narrowing...');
+
+    try {
+      await narrowModelProvider(state.baseUrl, foundationAccess(), form.entryId, {
+        ...(form.contextTokens === null ? {} : { contextTokens: form.contextTokens }),
+        ...(form.concurrentJobs === null ? {} : { concurrentJobs: form.concurrentJobs }),
+      });
+    } catch (error) {
+      // ADR 0152 SE4. The refusal names the measurement it was measured
+      // against: "too large" without the number leaves a person guessing at
+      // what would fit.
+      view.setModelNarrowingStatus(
+        error instanceof PicoModelProviderNarrowingRefusedError
+          ? `Refused: ${error.refusal.replace(/_/gu, ' ')}.${
+            error.measured === undefined
+              ? ''
+              : ` Measured: ${Object.entries(error.measured)
+                .map(([field, value]) => `${field.replace(/_/gu, ' ')} ${value}`)
+                .join(', ')}.`
+          }`
+          : formatUnknownError(error),
+        'error',
+      );
+      return;
+    }
+
+    view.setModelNarrowingStatus('Narrowed. Jobs dispatched from now on use the lower ceiling.', 'active');
+    await refreshModelProviders();
   }
 
   /**

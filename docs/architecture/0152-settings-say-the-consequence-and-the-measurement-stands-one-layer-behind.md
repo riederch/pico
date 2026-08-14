@@ -222,6 +222,25 @@ place.
   deployment parameters from settings. No second place for a person's own
   decisions.
 
+- **SE7 - The host half has a surface: done 2026-08-14.** The two halves are
+  in the two places their access classes name. A person's decision about their
+  own words is on their own device, because ADR 0087 says host administration
+  may not answer for a resident; **what computes here** is host administration
+  and sits in the Foundation dashboard, beside the retention policies it shares
+  a class with.
+
+  What the list shows is what SE1 and SE3 ask for, and one addition that the
+  rendering made obvious: **the measurement carries its date.** ADR 0142's
+  posture is measured rather than advertised, and a figure with no date is an
+  advertisement again - one taken while the machine was idle says nothing about
+  the machine that has been busy since.
+
+  **Measured and effective are shown as two numbers.** Collapsing them would
+  hide which of the two a person is looking at, and only one of them is a
+  decision somebody here made and can revisit. The SE4 refusal reaches the
+  surface with the measurement it names, for the same reason it carries it at
+  all.
+
 ### What "friendly" costs here, and where it is paid
 
 A person who supplies no credential gets a Pico whose model sees the

@@ -1,4 +1,8 @@
-import type { PicoMemoryEncryptionState, PicoRelayIdentityState } from './api.js';
+import type {
+  PicoMemoryEncryptionState,
+  PicoModelProviderEntryView,
+  PicoRelayIdentityState,
+} from './api.js';
 import { memoryRetentionModes } from './protocol-values.js';
 import type { ConnectionStatus, DashboardState, EventFilters, MemoryContentItem, PicoEvent, RetentionMode, RetentionPolicy, SystemStatus } from './types.js';
 
@@ -42,6 +46,12 @@ export interface DashboardView {
    * ADR 0104. The two decisions that belong to Pico, shown as what is running
    * and what was decided - never as one line.
    */
+  /** ADR 0152. What computes here, with the measurement behind it. */
+  renderModelProviders(entries: PicoModelProviderEntryView[]): void;
+  readModelNarrowingForm(): { entryId: string; contextTokens: number | null; concurrentJobs: number | null };
+  fillModelNarrowingEntry(entryId: string): void;
+  setModelNarrowingStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onModelNarrowingSubmitted(handler: () => void): void;
   renderMemoryEncryption(state: PicoMemoryEncryptionState): void;
   readMemoryEncryptionForm(): boolean;
   setMemoryEncryptionStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
@@ -114,6 +124,14 @@ interface DashboardElements {
   entryStatus: HTMLElement;
   entriesBody: HTMLTableSectionElement;
   entriesEmpty: HTMLElement;
+  modelProviderCount: HTMLElement;
+  modelProvidersBody: HTMLTableSectionElement;
+  modelProvidersEmpty: HTMLElement;
+  modelNarrowingForm: HTMLFormElement;
+  narrowingEntryInput: HTMLInputElement;
+  narrowingContextInput: HTMLInputElement;
+  narrowingJobsInput: HTMLInputElement;
+  modelNarrowingStatus: HTMLElement;
   encryptionState: HTMLElement;
   encryptionOrigin: HTMLElement;
   encryptionForm: HTMLFormElement;
@@ -241,6 +259,14 @@ export function createDashboardView(document: Document): DashboardView {
     entryStatus: requireElement(document, 'entry-status', HTMLElement),
     entriesBody: requireElement(document, 'entries-body', HTMLTableSectionElement),
     entriesEmpty: requireElement(document, 'entries-empty', HTMLElement),
+    modelProviderCount: requireElement(document, 'model-provider-count', HTMLElement),
+    modelProvidersBody: requireElement(document, 'model-providers-body', HTMLTableSectionElement),
+    modelProvidersEmpty: requireElement(document, 'model-providers-empty', HTMLElement),
+    modelNarrowingForm: requireElement(document, 'model-narrowing-form', HTMLFormElement),
+    narrowingEntryInput: requireElement(document, 'narrowing-entry', HTMLInputElement),
+    narrowingContextInput: requireElement(document, 'narrowing-context', HTMLInputElement),
+    narrowingJobsInput: requireElement(document, 'narrowing-jobs', HTMLInputElement),
+    modelNarrowingStatus: requireElement(document, 'model-narrowing-status', HTMLElement),
     encryptionState: requireElement(document, 'encryption-state', HTMLElement),
     encryptionOrigin: requireElement(document, 'encryption-origin', HTMLElement),
     encryptionForm: requireElement(document, 'encryption-form', HTMLFormElement),
@@ -446,6 +472,48 @@ export function createDashboardView(document: Document): DashboardView {
     },
     onTimeBoundEntryRequested(handler: () => void): void {
       elements.entryForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
+    renderModelProviders(entries: PicoModelProviderEntryView[]): void {
+      elements.modelProviderCount.textContent =
+        `${entries.length} ${entries.length === 1 ? 'provider' : 'providers'}`;
+      elements.modelProvidersEmpty.hidden = entries.length > 0;
+      elements.modelProvidersBody.replaceChildren(
+        // The button fills the form rather than announcing an intent: which
+        // entry a person is about to narrow is this view's business, and a
+        // round trip through the caller would add a handler that decides
+        // nothing.
+        ...entries.map((entry) => createModelProviderRow(document, entry, (entryId) => {
+          elements.narrowingEntryInput.value = entryId;
+        })),
+      );
+    },
+    readModelNarrowingForm(): {
+      entryId: string;
+      contextTokens: number | null;
+      concurrentJobs: number | null;
+    } {
+      const read = (input: HTMLInputElement): number | null => {
+        const value = Number.parseInt(input.value, 10);
+        return Number.isFinite(value) ? value : null;
+      };
+      return {
+        entryId: elements.narrowingEntryInput.value.trim(),
+        contextTokens: read(elements.narrowingContextInput),
+        concurrentJobs: read(elements.narrowingJobsInput),
+      };
+    },
+    fillModelNarrowingEntry(entryId: string): void {
+      elements.narrowingEntryInput.value = entryId;
+    },
+    setModelNarrowingStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.modelNarrowingStatus.textContent = message;
+      elements.modelNarrowingStatus.dataset.state = state;
+    },
+    onModelNarrowingSubmitted(handler: () => void): void {
+      elements.modelNarrowingForm.addEventListener('submit', (event) => {
         event.preventDefault();
         handler();
       });
@@ -803,6 +871,83 @@ function createRetentionPolicyRow(
   row.append(actions);
 
   return row;
+}
+
+
+function createModelProviderRow(
+  document: Document,
+  entry: PicoModelProviderEntryView,
+  onNarrow: (entryId: string) => void,
+): HTMLTableRowElement {
+  const lines = picoModelProviderLines(entry);
+  const row = document.createElement('tr');
+
+  for (const [text, monospace] of [
+    [entry.entryId, true],
+    [lines.identity, false],
+    [lines.sees, false],
+    [lines.measured, false],
+    [lines.ceiling, false],
+  ] as Array<[string, boolean]>) {
+    const cell = document.createElement('td');
+    cell.textContent = text;
+    if (monospace) {
+      cell.className = 'monospace';
+    }
+    row.append(cell);
+  }
+
+  const actions = document.createElement('td');
+  const narrowButton = document.createElement('button');
+  narrowButton.type = 'button';
+  narrowButton.className = 'secondary-button row-button';
+  narrowButton.textContent = 'Narrow';
+  narrowButton.addEventListener('click', () => {
+    onNarrow(entry.entryId);
+  });
+  actions.append(narrowButton);
+  row.append(actions);
+
+  return row;
+}
+
+/**
+ * ADR 0152 SE1 with ADR 0142 PE. What a measured provider is, in words.
+ *
+ * **The measurement carries its date, always.** ADR 0142's posture is measured
+ * rather than advertised, and a measurement with no date is an advertisement
+ * again: a figure taken while the machine was idle says nothing about the
+ * machine that has been busy since. What ages is worth showing.
+ *
+ * **Narrowed and measured are two numbers, not one.** SE4 lets this host lower
+ * a ceiling and never raise it, so both belong on the surface - otherwise a
+ * person cannot tell a narrow machine from a narrowed one, and the second is a
+ * decision somebody here made and can revisit.
+ */
+export function picoModelProviderLines(entry: PicoModelProviderEntryView): {
+  identity: string;
+  sees: string;
+  measured: string;
+  ceiling: string;
+} {
+  const narrowed = entry.effective.contextTokens !== entry.measured.contextTokens
+    || entry.effective.concurrentJobs !== entry.measured.concurrentJobs;
+  return {
+    identity: `${entry.model} (${entry.providerClass.replace(/_/gu, ' ')})`,
+    // The Home's own sentence, carried rather than recomposed: what an entry
+    // carries is decided where the entry is held.
+    sees: entry.needsCredentialToSeeMore
+      ? `Sees ${entry.sees}. Reading more needs a credential.`
+      : `Sees ${entry.sees}.`,
+    measured: `${formatCount(entry.measured.contextTokens)} tokens, `
+      + `${entry.measured.generationTokensPerSecond.toFixed(1)} tokens/s, `
+      + `${entry.measured.concurrentJobs} at a time, measured `
+      + `${formatDateTime(entry.measured.at)}`,
+    ceiling: narrowed
+      ? `Narrowed here to ${formatCount(entry.effective.contextTokens)} tokens, `
+        + `${entry.effective.concurrentJobs} at a time.`
+      : 'Not narrowed: this Home uses what was measured.',
+  };
 }
 
 /**
