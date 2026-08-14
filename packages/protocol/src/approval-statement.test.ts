@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { buildPicoActionRequest } from './action.js';
 import {
-  picoApprovalSentenceForeignFields,
   buildPicoApprovalStatement,
   picoApprovalSentenceForeignFields,
   picoApprovalStatementSchema,
