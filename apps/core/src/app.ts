@@ -4054,6 +4054,19 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           };
         }
         default: {
+          /**
+           * ADR 0107. Unreachable twice over, and the second one is the point.
+           *
+           * The intake refuses anything not on the closed list before a
+           * principal exists, so nothing arrives here. What this line adds is
+           * the *other* direction: an operation added to the list with no case
+           * written for it would compile, and a device would get
+           * `unknown_operation` for something the protocol advertises. The
+           * `never` makes that a build failure instead of a refusal somebody
+           * has to reproduce.
+           */
+          const unhandled: never = operation;
+          void unhandled;
           return { outcome: 'unknown_operation', result: {} };
         }
       }

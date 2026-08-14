@@ -99,6 +99,14 @@ surfaces. Each maps onto the same authorization the local route enforces
 today, with the verified link principal - identity, device key, delegation,
 membership - standing where the session principal stands.
 
+**The list is closed at both ends since 2026-08-14.** The intake refuses an
+operation that is not on it, which is what keeps the set closed against a
+caller; the dispatcher's fall-through is now typed `never`, which keeps it
+closed against us. An operation added to the list with no case written for it
+used to compile, and a device would have been told `unknown_operation` for
+something the protocol advertises - a hole that reads as a client bug and is
+ours. It is a build failure now, at the line that names the operation.
+
 The rejected alternative was proxying the Foundation HTTP API through the
 envelope. That would make the link surface exactly as wide as the diagnostic
 surface ADR 0030 keeps local, would inherit every future route by default,
