@@ -118,9 +118,43 @@ when it was added.
 - **S4 - `pico_foundation_token` retires: Open.** Bound to the ADR 0038/0041
   replacement of temporary Foundation hardening with real authentication, not
   to this ADR.
-- **S5 - Deployment parameters documented as such: Open.** The twelve `PICO_*`
-  environment variables are not separated anywhere into deployment parameters
-  and settings; that list should say which is which.
+- **S5 - Deployment parameters documented as such: listed 2026-08-14.** There
+  are twenty-two, not twelve; the count in this gate was written when there
+  were fewer and nobody updated it, which is its own small argument for
+  keeping the list somewhere a reader can check.
+
+  The test is the one above: could the answer differ between two people
+  sharing one Home, and does it survive moving the Home to another host?
+
+  | Deployment parameter | Why |
+  |---|---|
+  | `PICO_DATABASE_PATH`, `PICO_BACKUP_DIRECTORY` | Where this process keeps its files. |
+  | `PICO_KEY_STORE_PATH`, `PICO_HOME_HOST_KEY_STORE_PATH`, `PICO_RECOVERY_ANCHOR_PATH` | Custody locations on this disk. What they hold is Pico's; where they sit is the installation's. |
+  | `PICO_WEB_ROOT`, `PICO_DEPOT_ROOT`, `PICO_SUPPLIER_SCRATCH_ROOT` | Directories this machine offers. |
+  | `PICO_HOST`, `PICO_PORT`, `PICO_LINK_INTAKE_HOST`, `PICO_LINK_INTAKE_PORT` | Which sockets this process binds. |
+  | `PICO_DEVICE_ID` | Which process this is, among several on one host. |
+  | `PICO_FOUNDATION_ACCESS_MODE`, `PICO_WS_ALLOWED_ORIGINS` | ADR 0041/0038: how far this instance's API reaches on this network. |
+  | `PICO_DEPOT_FETCH_INTERVAL_MS`, `PICO_LINK_RELAY_SWEEP_INTERVAL_MS` | Operational cadence. A person has no answer to these; an operator tuning a small host does. |
+
+  **Transitional, and named as such:**
+
+  | Entry | Status |
+  |---|---|
+  | `PICO_MEMORY_ENCRYPTION` | S3 moved the decision into Pico on 2026-08-14. This now supplies only what an instance *inherits* on its first boot under the new schema, and decides nothing afterwards. |
+  | `PICO_FOUNDATION_TOKEN` | S4, bound to the ADR 0038/0041 replacement rather than to this ADR. |
+
+  **Three that this gate cannot classify, and that is the finding:**
+  `PICO_LINK_RELAY_BASE_URL`, `PICO_LINK_RELAY_ACCOUNT_ID` and
+  `PICO_LINK_RELAY_OPERATOR` fail the test in both directions. Two residents
+  plausibly share one relay account, which reads like infrastructure - and the
+  choice survives moving the Home to another host, which is this ADR's own
+  mark of a setting. ADR 0031 sharpens rather than settles it: a relay account
+  is an identity a Home holds at an operator, and *which operator carries your
+  Picos' messages* is not obviously a deployment detail.
+
+  They are recorded here rather than sorted, because S2 makes a wrong answer
+  expensive: classify them as deployment and a person's choice of operator
+  stays in the environment for good.
 
 ## Non-goals
 
