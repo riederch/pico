@@ -723,6 +723,39 @@ function createRetentionPolicyRow(
   return row;
 }
 
+/**
+ * ADR 0117 X5. What a person is told about a piece of content before they read
+ * it.
+ *
+ * **Content is never rendered without this.** X5's rule is that person-facing
+ * renderings of untrusted content stay labeled content, and the only way that
+ * holds is if the label is produced by the same call that produces the row -
+ * a labelling step somebody must remember is a labelling step somebody will
+ * forget.
+ *
+ * `person_present` gets no label, and that is the point rather than an
+ * omission: everything else is below ADR 0116's instruction threshold, so the
+ * absence of a label means "your own words" and its presence means "somebody
+ * else's". A label on everything would say nothing.
+ */
+export function picoMemoryContentLabel(item: MemoryContentItem): string | null {
+  const parts: string[] = [];
+  if (item.origin !== undefined && item.origin !== 'person_present') {
+    parts.push(`from ${item.origin.replace(/_/gu, ' ')}`);
+  }
+  if (item.derivedFrom !== undefined) {
+    // ADR 0136 BR6 with ADR 0133. The revision is the correction point, and
+    // whether the pin covers the bytes is the difference between "this is what
+    // the document said" and "this is what a document said".
+    parts.push(
+      `read from ${item.derivedFrom.supplierIdentifier} at `
+      + `${item.derivedFrom.pin.value.slice(0, 12)}`
+      + (item.derivedFrom.pinCoversContent ? '' : ', which the pin does not cover'),
+    );
+  }
+  return parts.length === 0 ? null : parts.join('; ');
+}
+
 function createContentItemRow(document: Document, item: MemoryContentItem): HTMLTableRowElement {
   const row = document.createElement('tr');
 
@@ -735,9 +768,20 @@ function createContentItemRow(document: Document, item: MemoryContentItem): HTML
 
   const contentCell = document.createElement('td');
   if (item.content !== undefined) {
+    // ADR 0117 X5. The label goes in first, so content never appears above
+    // its own provenance - a reader who scrolls away has already been told.
+    const label = picoMemoryContentLabel(item);
+    if (label !== null) {
+      const labelLine = document.createElement('p');
+      labelLine.className = 'muted';
+      labelLine.textContent = label;
+      contentCell.append(labelLine);
+    }
+    const text = document.createElement('p');
     // Always textContent, never innerHTML: memory content is arbitrary text and
     // must not be interpreted as markup.
-    contentCell.textContent = item.content;
+    text.textContent = item.content;
+    contentCell.append(text);
   } else {
     // A crypto-shredded or provider-absent item reports why, rather than showing
     // an empty cell that would read as "no content" (ADR 0077 C5).

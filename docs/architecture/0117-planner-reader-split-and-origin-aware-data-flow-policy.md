@@ -271,9 +271,35 @@ what the approval cryptographically binds.
   The result shape is X2's `pico.reader.output.v1`, unchanged and already
   built. What does not exist is anything that sends a job: no queue, no
   runtime, no result path.
-- **X5 - Display separation (binds companion UX):** person-facing
-  renderings of untrusted content stay labeled content; approval
-  statements never include reader prose.
+- **X5 - Display separation (partially implemented 2026-08-14):** the
+  second half was already true and had been since ADR 0141 RN3:
+  `buildPicoApprovalStatement` has no parameter for a prompt, a summary or
+  a rationale, so a caller holding reader prose has nowhere to put it, and
+  `picoApprovalSentenceForeignFields` proves the sentence carries nothing a
+  requester or a reader can author.
+
+  The first half had a subject nobody had noticed. **The one surface that
+  renders untrusted content is the dashboard's memory reader**, and it
+  showed content with no origin and no derivation - so a kept read looked
+  exactly like something Pico knew. `picoMemoryContentLabel` now produces
+  the label and the same call produces the row: a labelling step somebody
+  must remember is a labelling step somebody will forget.
+
+  **`person_present` gets no label, and that is the rule rather than an
+  omission.** Everything else is below ADR 0116's instruction threshold, so
+  an absent label means "your own words" and a present one means "somebody
+  else's". A label on everything would say nothing.
+
+  The label goes above the content rather than beside it, so a reader who
+  scrolls away has already been told, and it names the library and the
+  revision an answer was read at - ADR 0133's correction point - including
+  when the pin does not cover the bytes, because "this is what the document
+  said at that revision" and "this is what a document said" are different
+  claims.
+
+  Still open: the companion renders no untrusted content today, so X5 has
+  nothing to hold there yet. Its answered-reads view satisfies the rule by
+  carrying no content at all rather than by labelling any.
 
 ## Threat ledger
 

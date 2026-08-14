@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { eventHistoryNoticeLabel, eventTableColumnLabels, storageSummary } from './render.js';
+import {
+  eventHistoryNoticeLabel,
+  eventTableColumnLabels,
+  picoMemoryContentLabel,
+  storageSummary,
+} from './render.js';
 
 describe('dashboard event table', () => {
   it('shows the foundation security warning in the static dashboard shell', () => {
@@ -143,5 +148,57 @@ describe('ADR 0119 Q5 storage condition in the Foundation summary', () => {
       'exhausted: low disk - free disk space; '
       + 'memory_item at ceiling (12/10 rows) - export, migrate or shred to reduce stored data',
     );
+  });
+});
+
+describe('ADR 0117 X5 - content is labeled or it is your own', () => {
+  const base = {
+    memoryItemId: 'memory_x5',
+    privacyDomain: 'household',
+    contentType: 'text/plain',
+    contentPosture: 'plaintext_foundation' as const,
+    deletionState: 'active' as const,
+    content: 'The boiler is due in March.',
+    createdAt: '2026-08-14T12:00:00.000Z',
+    updatedAt: '2026-08-14T12:00:00.000Z',
+  };
+
+  it('says nothing about the person\'s own words, which is what makes a label mean something', () => {
+    // A label on everything would say nothing. Absence means "yours".
+    expect(picoMemoryContentLabel({ ...base, origin: 'person_present' })).toBeNull();
+    expect(picoMemoryContentLabel(base)).toBeNull();
+  });
+
+  it('names the origin of anything below the instruction threshold', () => {
+    expect(picoMemoryContentLabel({ ...base, origin: 'external_content' }))
+      .toBe('from external content');
+    expect(picoMemoryContentLabel({ ...base, origin: 'home_member' }))
+      .toBe('from home member');
+  });
+
+  it('names the library and the revision an answer was read at', () => {
+    // ADR 0136 BR6 with ADR 0133: the revision is the correction point.
+    expect(picoMemoryContentLabel({
+      ...base,
+      origin: 'own_pico',
+      derivedFrom: {
+        supplierIdentifier: 'a-library',
+        pin: { kind: 'commit', value: 'd'.repeat(40) },
+        pinCoversContent: true,
+      },
+    })).toBe('from own pico; read from a-library at dddddddddddd');
+  });
+
+  it('says when the pin does not cover the bytes, rather than implying it does', () => {
+    // "This is what the document said at that revision" and "this is what a
+    // document said" are different claims.
+    expect(picoMemoryContentLabel({
+      ...base,
+      derivedFrom: {
+        supplierIdentifier: 'a-library',
+        pin: { kind: 'commit', value: 'd'.repeat(40) },
+        pinCoversContent: false,
+      },
+    })).toBe('read from a-library at dddddddddddd, which the pin does not cover');
   });
 });
