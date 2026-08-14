@@ -27,15 +27,23 @@ import {
  * words rather than by an absent field.
  */
 
-/** Ollama's native API, which is what the measured host speaks. */
-export interface PicoOllamaModelSummary {
+/**
+ * The dialect this adapter speaks, which is one implementation's HTTP API.
+ *
+ * **The name stays out of the type**, for ADR 0036's reason one layer over:
+ * Pico must not become architecturally dependent on a protocol, and the
+ * fastest way to acquire that dependency is to let a vendor's name into the
+ * shapes the core passes around. A second implementation gets a second
+ * adapter; nothing above this file learns which one answered.
+ */
+export interface PicoModelProviderCatalogEntry {
   name: string;
   digest: string;
   size?: number;
   details?: { parameter_size?: string; quantization_level?: string };
 }
 
-export interface PicoOllamaGenerateTimings {
+export interface PicoModelProviderGenerationTimings {
   load_duration?: number;
   prompt_eval_count?: number;
   prompt_eval_duration?: number;
@@ -243,7 +251,7 @@ export class PicoModelProviderMeasurer {
     contextTokens?: number;
     keepAlive: string | number;
     predict?: number;
-  }): Promise<PicoOllamaGenerateTimings> {
+  }): Promise<PicoModelProviderGenerationTimings> {
     return await this.post('/api/generate', {
       model: this.options.model,
       prompt: input.prompt,
@@ -254,7 +262,7 @@ export class PicoModelProviderMeasurer {
         num_predict: input.predict ?? 64,
         temperature: 0,
       },
-    }) as PicoOllamaGenerateTimings;
+    }) as PicoModelProviderGenerationTimings;
   }
 
   /** Every model the host currently holds on the accelerator. */
@@ -315,7 +323,7 @@ export class PicoModelProviderMeasurer {
 
     await this.takeTheAccelerator(notes);
 
-    const tags = await this.get('/api/tags') as { models?: PicoOllamaModelSummary[] };
+    const tags = await this.get('/api/tags') as { models?: PicoModelProviderCatalogEntry[] };
     const summary = (tags.models ?? []).find((entry) => entry.name === this.options.model);
     if (summary === undefined) {
       throw new Error(`pico_model_provider_model_not_served:${this.options.model}`);

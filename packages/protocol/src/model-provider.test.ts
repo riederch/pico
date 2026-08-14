@@ -20,10 +20,10 @@ import {
  */
 const measuredHost = {
   schema: picoModelProviderEntrySchema,
-  entryId: 'lan-mistral-small',
+  entryId: 'a-measured-host',
   providerClass: 'declared_own_host',
-  reach: 'http://inference.lan.invalid:11434',
-  model: { identifier: 'mistral-small:latest', digestHex: 'a'.repeat(64) },
+  reach: 'http://provider.invalid:11434',
+  model: { identifier: 'a-model:measured', digestHex: 'a'.repeat(64) },
   measurement: {
     measuredAt: '2026-08-10T18:00:00.000Z',
     capacity: {
@@ -81,7 +81,7 @@ describe('ADR 0142 - an entry describes one measured deployment', () => {
     // PE6. The same port answers unauthenticated pull, so a tag is a name
     // somebody else can move.
     expect(() => parsePicoModelProviderEntry(entry({
-      model: { identifier: 'mistral-small:latest', digestHex: 'not-a-digest' },
+      model: { identifier: 'a-model:measured', digestHex: 'not-a-digest' },
     }))).toThrow('invalid_pico_model_provider_model_digest');
   });
 
@@ -96,7 +96,7 @@ describe('ADR 0142 - an entry describes one measured deployment', () => {
     expect(() => parsePicoModelProviderEntry(entry({ reach: 'stdio:///usr/bin/server' })))
       .toThrow('pico_model_provider_reach_is_not_a_network_transport');
     expect(() => parsePicoModelProviderEntry(entry({
-      reach: 'https://user:secret@inference.lan.invalid:11434',
+      reach: 'https://user:secret@provider.invalid:11434',
     }))).toThrow('pico_model_provider_reach_carries_a_credential');
   });
 });
@@ -118,7 +118,7 @@ describe('ADR 0151 - the proof buys the memory, not the provider', () => {
 
   it('accepts the wider allowance once a credential stands behind it', () => {
     const parsed = parsePicoModelProviderEntry(entry({
-      reach: 'https://inference.lan.invalid:11434',
+      reach: 'https://provider.invalid:11434',
       carries: 'live_turn_and_retrieved_memory',
       credentialRef: 'lan-inference-token',
     }));
@@ -160,7 +160,7 @@ describe('ADR 0151 - the proof buys the memory, not the provider', () => {
     // by the provider it lands on.
     const narrow = parsePicoModelProviderEntry(entry());
     const wide = parsePicoModelProviderEntry(entry({
-      reach: 'https://inference.lan.invalid:11434',
+      reach: 'https://provider.invalid:11434',
       carries: 'live_turn_and_retrieved_memory',
       credentialRef: 'lan-inference-token',
     }));

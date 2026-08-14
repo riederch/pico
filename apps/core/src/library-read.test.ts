@@ -34,12 +34,12 @@ function job(overrides: Record<string, unknown> = {}) {
 function entry(carries: 'live_turn' | 'live_turn_and_retrieved_memory') {
   return parsePicoModelProviderEntry({
     schema: 'pico.model.provider.entry.v1',
-    entryId: 'qwen3-14b',
+    entryId: 'a-measured-host',
     providerClass: 'declared_own_host',
     reach: carries === 'live_turn'
-      ? 'http://inference.lan.invalid:11434'
-      : 'https://inference.lan.invalid:11434',
-    model: { identifier: 'qwen3:14b', digestHex: 'b'.repeat(64) },
+      ? 'http://provider.invalid:11434'
+      : 'https://provider.invalid:11434',
+    model: { identifier: 'a-model:measured', digestHex: 'b'.repeat(64) },
     measurement: {
       measuredAt: '2026-08-13T11:00:00.000Z',
       capacity: {

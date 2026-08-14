@@ -6,7 +6,13 @@ import {
 } from './model-provider-measure.js';
 
 /**
- * ADR 0142 PE2. The measurer against a host that answers like the real one.
+ * ADR 0142 PE2. The measurer against a host that answers like a provider.
+ *
+ * **No vendor appears here on purpose.** ADR 0036's first paragraph asks that
+ * Pico not become architecturally dependent on one protocol, and a test suite
+ * written against one product's endpoints is how that dependency arrives
+ * without anybody deciding it. The fake answers the shape the adapter speaks;
+ * which implementation speaks it is not this suite's subject.
  *
  * A fake rather than a recording, because what is being tested is the two
  * judgements the measurer makes on its own - which step's numbers reach the
@@ -15,7 +21,7 @@ import {
  */
 const ns = 1_000_000;
 
-function ollama(options: {
+function modelHost(options: {
   perStep?: Record<number, { evalRate: number; promptRate: number }>;
   /** A model that finishes early, which is what a real one does. */
   stopAfterTokens?: number;
@@ -46,7 +52,7 @@ function ollama(options: {
     if (path === '/api/tags') {
       return json({
         models: [{
-          name: 'mistral-small:latest',
+          name: 'a-model:measured',
           digest: `sha256:${'c'.repeat(64)}`,
           details: { parameter_size: '23.6B', quantization_level: 'Q4_K_M' },
         }],
@@ -69,7 +75,7 @@ function ollama(options: {
         && lastContextTokens >= options.spillsFromTokens;
       return json({
         models: [{
-          name: 'mistral-small:latest',
+          name: 'a-model:measured',
           size: 14_334_000_000,
           size_vram: spilled ? 9_000_000_000 : 14_334_000_000,
         }],
@@ -138,16 +144,16 @@ function ollama(options: {
  */
 function measurer(
   overrides: Record<string, unknown> = {},
-  fake = ollama(),
+  fake = modelHost(),
   timeline: readonly number[] = [0, 4_000, 4_000, 12_000],
 ) {
   const readings = [...timeline];
   let last = 0;
   return new PicoModelProviderMeasurer({
-    reach: 'http://inference.lan.invalid:11434',
-    model: 'mistral-small:latest',
+    reach: 'http://provider.invalid:11434',
+    model: 'a-model:measured',
     providerClass: 'declared_own_host',
-    entryId: 'lan-mistral-small',
+    entryId: 'a-measured-host',
     fetch: fake.fetch,
     now: () => {
       last = readings.shift() ?? last;
@@ -178,7 +184,7 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
   });
 
   it('observes a cold load only when told to evict', async () => {
-    const fake = ollama();
+    const fake = modelHost();
     const report = await measurer({ measureColdLoad: true }, fake).measure();
     expect(report.coldLoadMs).toBe(8_000);
     // Two generate calls before any context step: the eviction and the load.
@@ -192,7 +198,7 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
   });
 
   it('reads two lanes when the pair costs about what one does', async () => {
-    const report = await measurer({}, ollama(), [0, 4_000, 4_000, 8_500]).measure();
+    const report = await measurer({}, modelHost(), [0, 4_000, 4_000, 8_500]).measure();
     expect(report.concurrentJobs).toBe(2);
   });
 
@@ -200,9 +206,9 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     // A 14B model once reported 3.4 tok/s at a narrow window and 28.2 at a
     // wide one - impossible, and the tell that another model had been holding
     // the card for the first figure.
-    const fake = ollama({ foreignResident: 'someone-else:70b' });
+    const fake = modelHost({ foreignResident: 'another-model:resident' });
     const report = await measurer({}, fake).measure();
-    expect(report.notes.join(' ')).toContain('someone-else:70b was resident');
+    expect(report.notes.join(' ')).toContain('another-model:resident was resident');
     expect(report.notes.join(' ')).toContain('sharing its accelerator is a different deployment');
     // Evicted before the model was even looked up, so nothing was measured
     // against a shared card.
@@ -223,7 +229,7 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     // The finding this replaced a broken probe with: at a constant prompt, a
     // wider declared window costs throughput. `size_vram` never moved on the
     // real host, so the spill check found nothing; a stopwatch does.
-    const report = await measurer({}, ollama({
+    const report = await measurer({}, modelHost({
       perStep: {
         4096: { evalRate: 18.4, promptRate: 1152 },
         8192: { evalRate: 18.0, promptRate: 980 },
@@ -242,7 +248,7 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     // Free to 16384 and priced above it. ADR 0142 stated 8192 on this host and
     // a walk found 12288 at the same speed - half a window left unused because
     // the figure was reasoned rather than measured.
-    const report = await measurer({}, ollama({
+    const report = await measurer({}, modelHost({
       perStep: {
         4096: { evalRate: 18.2, promptRate: 1152 },
         8192: { evalRate: 18.2, promptRate: 980 },
@@ -258,7 +264,7 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
     // `num_predict` is a ceiling, never a target. A rate over two tokens is
     // startup cost, and the first version of this measurer reported it as
     // 32 tok/s against ADR 0142's 17.8 on the same host.
-    const report = await measurer({}, ollama({ stopAfterTokens: 2 })).measure();
+    const report = await measurer({}, modelHost({ stopAfterTokens: 2 })).measure();
     expect(report.contextSteps).toHaveLength(0);
     expect(report.notes.join(' ')).toContain('below the 32-token floor');
   });
@@ -266,10 +272,10 @@ describe('ADR 0142 PE2 - measuring one deployment', () => {
 
 describe('ADR 0142 PE2 - what reaches the entry', () => {
   const base: PicoModelProviderMeasurementReport = Object.freeze({
-    reach: 'http://inference.lan.invalid:11434',
+    reach: 'http://provider.invalid:11434',
     serverVersion: '0.32.7',
     model: {
-      identifier: 'mistral-small:latest',
+      identifier: 'a-model:measured',
       digestHex: 'c'.repeat(64),
       parameterSize: '23.6B',
       quantization: 'Q4_K_M',
@@ -297,7 +303,7 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
 
   it('states the slowest step it measured, not the fastest', () => {
     const entry = picoModelProviderEntryFromMeasurement(base, {
-      entryId: 'lan-mistral-small',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       measuredAt: '2026-08-13T12:00:00.000Z',
     });
@@ -319,7 +325,7 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
       spilledFromTokens: 8192,
     };
     const entry = picoModelProviderEntryFromMeasurement(spilled, {
-      entryId: 'lan-mistral-small',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       measuredAt: '2026-08-13T12:00:00.000Z',
     });
@@ -330,13 +336,13 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
 
   it('refuses to write an entry from a run that measured nothing', () => {
     expect(() => picoModelProviderEntryFromMeasurement({ ...base, contextSteps: [] }, {
-      entryId: 'lan-mistral-small',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       measuredAt: '2026-08-13T12:00:00.000Z',
     })).toThrow('pico_model_provider_measured_no_context_step');
 
     expect(() => picoModelProviderEntryFromMeasurement({ ...base, coldLoadMs: null }, {
-      entryId: 'lan-mistral-small',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       measuredAt: '2026-08-13T12:00:00.000Z',
     })).toThrow('pico_model_provider_measured_no_residency');
@@ -346,7 +352,7 @@ describe('ADR 0142 PE2 - what reaches the entry', () => {
     // ADR 0151 PV1. Nothing observable grants it; a credential does, and no
     // credential was sent.
     const entry = picoModelProviderEntryFromMeasurement(base, {
-      entryId: 'lan-mistral-small',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       measuredAt: '2026-08-13T12:00:00.000Z',
     });

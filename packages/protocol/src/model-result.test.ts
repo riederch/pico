@@ -39,7 +39,7 @@ function result(overrides: Record<string, unknown> = {}): Record<string, unknown
   return {
     schema: picoModelResultSchema,
     jobId: 'job_summarise_0001',
-    entryId: 'qwen3:14b',
+    entryId: 'a-model:measured',
     modelDigestHex: 'b'.repeat(64),
     startedAt: '2026-08-13T12:00:00.000Z',
     completedAt: '2026-08-13T12:00:03.000Z',
@@ -129,13 +129,13 @@ describe('ADR 0059 - a result claims nothing about itself', () => {
     const parsed = parsePicoModelResult(result());
     const dispatched = {
       jobId: 'job_summarise_0001',
-      entryId: 'qwen3:14b',
+      entryId: 'a-model:measured',
       modelDigestHex: 'b'.repeat(64),
     };
     expect(picoModelResultMismatch(parsed, dispatched)).toBeNull();
     expect(picoModelResultMismatch(parsed, { ...dispatched, jobId: 'job_other' }))
       .toBe('answers_another_job');
-    expect(picoModelResultMismatch(parsed, { ...dispatched, entryId: 'qwen3:8b' }))
+    expect(picoModelResultMismatch(parsed, { ...dispatched, entryId: 'a-smaller-model:measured' }))
       .toBe('from_another_entry');
     // ADR 0142 PE6's pin, doing the work it was pinned for: the same tag can
     // be made to serve different weights by anyone who reaches the port.

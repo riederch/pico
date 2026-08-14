@@ -13,8 +13,8 @@ import {
  */
 function provider(overrides: Partial<PicoCompanionModelProvider> = {}): PicoCompanionModelProvider {
   return {
-    entryId: 'qwen3-14b',
-    model: 'qwen3:14b',
+    entryId: 'a-measured-host',
+    model: 'a-model:measured',
     contextTokens: 40960,
     measuredAt: '2026-08-13T17:43:04.923Z',
     decided: false,
@@ -30,7 +30,7 @@ describe('ADR 0152 SE1 - three states, and never two', () => {
     // answer somebody gave, and nobody gave one - a person should be able to
     // tell "not yet asked" from "answered no".
     const [line] = picoCompanionModelProviderLines([provider()]);
-    expect(line?.headline).toBe('qwen3:14b is available and you have not decided about it');
+    expect(line?.headline).toBe('a-model:measured is available and you have not decided about it');
     expect(line?.detail).toBe('Pico will not send anything here until you say so.');
     expect(line?.action).toBe('decide');
   });
@@ -42,7 +42,7 @@ describe('ADR 0152 SE1 - three states, and never two', () => {
     const [line] = picoCompanionModelProviderLines([
       provider({ decided: true, needsCredentialToSeeMore: true }),
     ]);
-    expect(line?.headline).toBe('qwen3:14b sees this conversation');
+    expect(line?.headline).toBe('a-model:measured sees this conversation');
     expect(line?.detail).toContain('does not see what Pico remembers');
     expect(line?.detail).toContain('prove who it is');
     expect(line?.action).toBe('widen');
@@ -61,7 +61,7 @@ describe('ADR 0152 SE1 - three states, and never two', () => {
     const [line] = picoCompanionModelProviderLines([
       provider({ decided: true, needsCredentialToSeeMore: false }),
     ]);
-    expect(line?.headline).toBe('qwen3:14b sees this conversation and what Pico remembers');
+    expect(line?.headline).toBe('a-model:measured sees this conversation and what Pico remembers');
     expect(line?.detail).toBe('You can withdraw this at any time.');
   });
 });

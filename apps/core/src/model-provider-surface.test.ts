@@ -30,10 +30,10 @@ afterEach(async () => {
 
 const measured = {
   schema: 'pico.model.provider.entry.v1',
-  entryId: 'qwen3-14b',
+  entryId: 'a-measured-host',
   providerClass: 'declared_own_host',
-  reach: 'http://inference.lan.invalid:11434',
-  model: { identifier: 'qwen3:14b', digestHex: 'b'.repeat(64) },
+  reach: 'http://provider.invalid:11434',
+  model: { identifier: 'a-model:measured', digestHex: 'b'.repeat(64) },
   measurement: {
     measuredAt: '2026-08-13T17:43:04.923Z',
     capacity: {
@@ -127,7 +127,7 @@ describe('ADR 0152 - the surface says the consequence and shows the measurement'
     const { app, operator } = await bootWithEntry();
     const response = await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/narrowing',
+      url: '/api/model/providers/a-measured-host/narrowing',
       headers: { authorization: operator },
       payload: { contextTokens: 65536 },
     });
@@ -139,7 +139,7 @@ describe('ADR 0152 - the surface says the consequence and shows the measurement'
     const { app, operator } = await bootWithEntry();
     expect((await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/narrowing',
+      url: '/api/model/providers/a-measured-host/narrowing',
       headers: { authorization: operator },
       payload: { contextTokens: 12288 },
     })).statusCode).toBe(200);
@@ -164,7 +164,7 @@ describe('ADR 0152 - the surface says the consequence and shows the measurement'
       .toBe(401);
     expect((await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/narrowing',
+      url: '/api/model/providers/a-measured-host/narrowing',
       payload: { contextTokens: 8192 },
     })).statusCode).toBe(401);
   });
@@ -173,7 +173,7 @@ describe('ADR 0152 - the surface says the consequence and shows the measurement'
     const { app, operator } = await bootWithEntry();
     expect((await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/narrowing',
+      url: '/api/model/providers/a-measured-host/narrowing',
       headers: { authorization: operator },
       payload: { contextTokens: 'lots' },
     })).statusCode).toBe(400);
@@ -255,7 +255,7 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
 
     expect((await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/decision',
+      url: '/api/model/providers/a-measured-host/decision',
       headers: { authorization: person },
       payload: { providerClass: 'declared_own_host', carries: 'live_turn' },
     })).statusCode).toBe(201);
@@ -275,8 +275,8 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
     const { app, operator } = await bootWithPerson();
     for (const [method, url] of [
       ['GET', '/api/model/providers/mine'],
-      ['POST', '/api/model/providers/qwen3-14b/decision'],
-      ['DELETE', '/api/model/providers/qwen3-14b/decision'],
+      ['POST', '/api/model/providers/a-measured-host/decision'],
+      ['DELETE', '/api/model/providers/a-measured-host/decision'],
     ] as const) {
       const response = await app.inject({
         method,
@@ -295,7 +295,7 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
     const { app, person } = await bootWithPerson();
     const response = await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/decision',
+      url: '/api/model/providers/a-measured-host/decision',
       headers: { authorization: person },
       payload: { providerClass: 'declared_own_host', carries: 'live_turn_and_retrieved_memory' },
     });
@@ -307,13 +307,13 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
     const { app, person } = await bootWithPerson();
     await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/decision',
+      url: '/api/model/providers/a-measured-host/decision',
       headers: { authorization: person },
       payload: { providerClass: 'declared_own_host', carries: 'live_turn' },
     });
     expect((await app.inject({
       method: 'DELETE',
-      url: '/api/model/providers/qwen3-14b/decision',
+      url: '/api/model/providers/a-measured-host/decision',
       headers: { authorization: person },
     })).statusCode).toBe(200);
 
@@ -328,7 +328,7 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
     const { app, operator, person } = await bootWithPerson();
     await app.inject({
       method: 'POST',
-      url: '/api/model/providers/qwen3-14b/decision',
+      url: '/api/model/providers/a-measured-host/decision',
       headers: { authorization: person },
       payload: { providerClass: 'pico_endpoint', carries: 'live_turn' },
     });
@@ -412,7 +412,7 @@ describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () =
 
     // ADR 0151 PV4's refusal reaches the device as itself, not as a shrug.
     const refused = await send('home.model.provider.decision.submit', {
-      entryId: 'qwen3-14b',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       carries: 'live_turn_and_retrieved_memory',
     });
@@ -420,7 +420,7 @@ describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () =
     expect(refused.result.refusal).toBe('pico_model_provider_allowance_without_credential');
 
     const decided = await send('home.model.provider.decision.submit', {
-      entryId: 'qwen3-14b',
+      entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
       carries: 'live_turn',
     });
@@ -433,7 +433,7 @@ describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () =
     expect(listedAfter.sees).toBe('this conversation only');
     expect(listedAfter.needsCredentialToSeeMore).toBe(true);
 
-    const revoked = await send('home.model.provider.decision.revoke', { entryId: 'qwen3-14b' });
+    const revoked = await send('home.model.provider.decision.revoke', { entryId: 'a-measured-host' });
     expect(revoked.response.outcome).toBe('ok');
     expect(((await send('home.model.providers.read', {}))
       .result as { providers: Array<Record<string, unknown>> }).providers[0]!.decided)

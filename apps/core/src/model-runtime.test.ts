@@ -13,6 +13,10 @@ import {
  * ADR 0049 with ADR 0142 and ADR 0117. The runtime, against a host that can
  * disagree with the contracts above it.
  *
+ * **No vendor appears here on purpose** - see ADR 0036's first paragraph. The
+ * fake answers the shape the adapter speaks, and which implementation speaks
+ * it is not this suite's subject.
+ *
  * The entry is the one measured on 2026-08-13, so the deadline arithmetic is
  * exercised against numbers a real card produced rather than round ones.
  */
@@ -22,10 +26,10 @@ const digest = 'b'.repeat(64);
 function entry(overrides: Record<string, unknown> = {}) {
   return parsePicoModelProviderEntry({
     schema: 'pico.model.provider.entry.v1',
-    entryId: 'qwen3-14b',
+    entryId: 'a-measured-host',
     providerClass: 'declared_own_host',
-    reach: 'http://inference.lan.invalid:11434',
-    model: { identifier: 'qwen3:14b', digestHex: digest },
+    reach: 'http://provider.invalid:11434',
+    model: { identifier: 'a-model:measured', digestHex: digest },
     measurement: {
       measuredAt: '2026-08-13T12:00:00.000Z',
       capacity: {
@@ -54,7 +58,7 @@ function job(overrides: Record<string, unknown> = {}) {
   }, nowMs);
 }
 
-function ollama(options: {
+function modelHost(options: {
   answer?: string;
   digest?: string;
   status?: number;
@@ -66,7 +70,7 @@ function ollama(options: {
     const path = new URL(String(url)).pathname;
     if (path === '/api/tags') {
       return new Response(JSON.stringify({
-        models: [{ name: 'qwen3:14b', digest: `sha256:${options.digest ?? digest}` }],
+        models: [{ name: 'a-model:measured', digest: `sha256:${options.digest ?? digest}` }],
       }), { status: 200 });
     }
     state.generates += 1;
@@ -88,7 +92,7 @@ function ollama(options: {
 
 describe('ADR 0049 - one job, one entry, one answer', () => {
   it('returns declared values with a derived origin', async () => {
-    const runtime = new PicoModelRuntime({ fetch: ollama().fetch, now: () => nowMs });
+    const runtime = new PicoModelRuntime({ fetch: modelHost().fetch, now: () => nowMs });
     const result = await runtime.dispatch({ job: job(), entry: entry() });
     expect(result.output.values.map((value) => value.value)).toEqual(['march', true]);
     // ADR 0116 W2: a value is derived from what the reader read, so it can
@@ -99,7 +103,7 @@ describe('ADR 0049 - one job, one entry, one answer', () => {
   });
 
   it('refuses the two job-level rules before anything leaves', async () => {
-    const fake = ollama();
+    const fake = modelHost();
     const runtime = new PicoModelRuntime({ fetch: fake.fetch, now: () => nowMs });
 
     // A read over somebody else's words, on an entry that carries only the
@@ -124,7 +128,7 @@ describe('ADR 0049 - one job, one entry, one answer', () => {
   it('checks the pinned digest before the words go', async () => {
     // ADR 0142 PE6. That host's port accepts unauthenticated pull, so a tag
     // can be made to serve different weights by anyone who reaches it.
-    const fake = ollama({ digest: 'c'.repeat(64) });
+    const fake = modelHost({ digest: 'c'.repeat(64) });
     const runtime = new PicoModelRuntime({ fetch: fake.fetch, now: () => nowMs });
     await expect(runtime.dispatch({ job: job(), entry: entry() }))
       .rejects.toThrow('model_is_not_the_measured_one');
@@ -142,7 +146,7 @@ describe('ADR 0049 - one job, one entry, one answer', () => {
       ['{"month":{"a":1},"certain":true}', 'month is not a scalar'],
     ] as const;
     for (const [answer, detail] of cases) {
-      const runtime = new PicoModelRuntime({ fetch: ollama({ answer }).fetch, now: () => nowMs });
+      const runtime = new PicoModelRuntime({ fetch: modelHost({ answer }).fetch, now: () => nowMs });
       await expect(runtime.dispatch({ job: job(), entry: entry() }))
         .rejects.toThrow(`answer_was_not_the_declared_shape: ${detail}`);
     }
@@ -169,7 +173,7 @@ describe('ADR 0118 O2 - slow is unavailable', () => {
   });
 
   it('reports a provider that did not answer as absent, not as slow', async () => {
-    const runtime = new PicoModelRuntime({ fetch: ollama({ hangs: true }).fetch, now: () => nowMs });
+    const runtime = new PicoModelRuntime({ fetch: modelHost({ hangs: true }).fetch, now: () => nowMs });
     const pending = runtime.dispatch({
       job: job(),
       entry: entry({
@@ -197,7 +201,7 @@ describe('ADR 0142 PE3 - one lane', () => {
       release = resolve;
     });
     let first = true;
-    const fake = ollama({
+    const fake = modelHost({
       onGenerate: () => {
         order.push(first ? 'first-started' : 'second-started');
         first = false;
@@ -225,14 +229,14 @@ describe('ADR 0142 PE3 - one lane', () => {
 
   it('lets the lane continue after a job fails', async () => {
     const runtime = new PicoModelRuntime({
-      fetch: ollama({ answer: 'not json' }).fetch,
+      fetch: modelHost({ answer: 'not json' }).fetch,
       now: () => nowMs,
     });
     await expect(runtime.dispatch({ job: job(), entry: entry() })).rejects
       .toBeInstanceOf(PicoModelDispatchError);
     // A lane blocked by its own failure would be a provider that goes quiet
     // after one bad answer.
-    const runtimeAgain = new PicoModelRuntime({ fetch: ollama().fetch, now: () => nowMs });
+    const runtimeAgain = new PicoModelRuntime({ fetch: modelHost().fetch, now: () => nowMs });
     await expect(runtimeAgain.dispatch({ job: job(), entry: entry() })).resolves.toBeDefined();
   });
 });

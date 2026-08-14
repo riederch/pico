@@ -180,7 +180,7 @@ export class PicoModelProviderLanes {
   }
 }
 
-interface OllamaGenerateResponse {
+interface PicoModelProviderGenerationResponse {
   response?: string;
   done?: boolean;
 }
@@ -275,7 +275,7 @@ export class PicoModelRuntime {
       controller.abort();
     }, deadlineMs);
 
-    let answered: OllamaGenerateResponse;
+    let answered: PicoModelProviderGenerationResponse;
     try {
       const credential = this.ports.credential?.(entry);
       const response = await this.call(`${entry.reach}/api/generate`, {
@@ -301,7 +301,7 @@ export class PicoModelRuntime {
       if (!response.ok) {
         throw new PicoModelDispatchError('provider_unreachable', String(response.status));
       }
-      answered = await response.json() as OllamaGenerateResponse;
+      answered = await response.json() as PicoModelProviderGenerationResponse;
     } catch (error) {
       if (error instanceof PicoModelDispatchError) {
         throw error;

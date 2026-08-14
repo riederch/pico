@@ -29,10 +29,10 @@ afterEach(() => {
 function entry(overrides: Record<string, unknown> = {}) {
   return parsePicoModelProviderEntry({
     schema: 'pico.model.provider.entry.v1',
-    entryId: 'qwen3-14b',
+    entryId: 'a-measured-host',
     providerClass: 'declared_own_host',
-    reach: 'http://inference.lan.invalid:11434',
-    model: { identifier: 'qwen3:14b', digestHex: 'b'.repeat(64) },
+    reach: 'http://provider.invalid:11434',
+    model: { identifier: 'a-model:measured', digestHex: 'b'.repeat(64) },
     measurement: {
       measuredAt: '2026-08-13T17:43:04.923Z',
       capacity: {
@@ -109,9 +109,9 @@ describe('ADR 0152 SE3 - the store keeps the finding and the preference apart', 
     const { registry: store, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
-      store.narrow('qwen3-14b', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
+      store.narrow('a-measured-host', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
 
-      const record = store.get('qwen3-14b');
+      const record = store.get('a-measured-host');
       expect(record?.entry.measurement.capacity.contextTokens).toBe(40960);
       expect(record?.narrowing.contextTokens).toBe(12288);
       expect(picoModelProviderEffectiveEntry(record!).measurement.capacity.contextTokens)
@@ -126,10 +126,10 @@ describe('ADR 0152 SE3 - the store keeps the finding and the preference apart', 
     const { registry: store, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
-      expect(() => store.narrow('qwen3-14b', { contextTokens: 65536 }, '2026-08-13T18:01:00.000Z'))
+      expect(() => store.narrow('a-measured-host', { contextTokens: 65536 }, '2026-08-13T18:01:00.000Z'))
         .toThrow('context_wider_than_measured');
       // Nothing was written.
-      expect(store.get('qwen3-14b')?.narrowing.contextTokens).toBeUndefined();
+      expect(store.get('a-measured-host')?.narrowing.contextTokens).toBeUndefined();
     } finally {
       close();
     }
@@ -141,7 +141,7 @@ describe('ADR 0152 SE3 - the store keeps the finding and the preference apart', 
     const { registry: store, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
-      store.narrow('qwen3-14b', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
+      store.narrow('a-measured-host', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
       store.put(entry({
         measurement: {
           measuredAt: '2026-09-01T09:00:00.000Z',
@@ -155,7 +155,7 @@ describe('ADR 0152 SE3 - the store keeps the finding and the preference apart', 
         },
       }), '2026-09-01T09:05:00.000Z');
 
-      const record = store.get('qwen3-14b');
+      const record = store.get('a-measured-host');
       expect(record?.entry.measurement.capacity.contextTokens).toBe(8192);
       expect(record?.narrowing.contextTokens).toBeUndefined();
     } finally {
@@ -167,9 +167,9 @@ describe('ADR 0152 SE3 - the store keeps the finding and the preference apart', 
     const { registry: store, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
-      store.narrow('qwen3-14b', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
+      store.narrow('a-measured-host', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
       store.put(entry(), '2026-08-13T18:02:00.000Z');
-      expect(store.get('qwen3-14b')?.narrowing.contextTokens).toBe(12288);
+      expect(store.get('a-measured-host')?.narrowing.contextTokens).toBe(12288);
     } finally {
       close();
     }
@@ -186,7 +186,7 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     const { registry: store, consent, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
-      expect(consent.entryFor('qwen3-14b', alice)).toBeUndefined();
+      expect(consent.entryFor('a-measured-host', alice)).toBeUndefined();
       expect(consent.listFor(alice)).toHaveLength(0);
     } finally {
       close();
@@ -200,25 +200,25 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
       consent.decide({
-        entryId: 'qwen3-14b',
+        entryId: 'a-measured-host',
         picoIdentityFingerprintHex: alice,
         providerClass: 'declared_own_host',
         carries: 'live_turn',
         at: '2026-08-13T18:01:00.000Z',
       });
       consent.decide({
-        entryId: 'qwen3-14b',
+        entryId: 'a-measured-host',
         picoIdentityFingerprintHex: bob,
         providerClass: 'pico_endpoint',
         carries: 'live_turn',
         at: '2026-08-13T18:02:00.000Z',
       });
 
-      expect(consent.entryFor('qwen3-14b', alice)?.providerClass).toBe('declared_own_host');
-      expect(consent.entryFor('qwen3-14b', bob)?.providerClass).toBe('pico_endpoint');
+      expect(consent.entryFor('a-measured-host', alice)?.providerClass).toBe('declared_own_host');
+      expect(consent.entryFor('a-measured-host', bob)?.providerClass).toBe('pico_endpoint');
       // One finding underneath both.
-      expect(consent.entryFor('qwen3-14b', alice)?.model.digestHex)
-        .toBe(consent.entryFor('qwen3-14b', bob)?.model.digestHex);
+      expect(consent.entryFor('a-measured-host', alice)?.model.digestHex)
+        .toBe(consent.entryFor('a-measured-host', bob)?.model.digestHex);
     } finally {
       close();
     }
@@ -231,13 +231,13 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
       expect(() => consent.decide({
-        entryId: 'qwen3-14b',
+        entryId: 'a-measured-host',
         picoIdentityFingerprintHex: alice,
         providerClass: 'declared_own_host',
         carries: 'live_turn_and_retrieved_memory',
         at: '2026-08-13T18:01:00.000Z',
       })).toThrow('pico_model_provider_allowance_without_credential');
-      expect(consent.entryFor('qwen3-14b', alice)).toBeUndefined();
+      expect(consent.entryFor('a-measured-host', alice)).toBeUndefined();
     } finally {
       close();
     }
@@ -248,15 +248,15 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     const { registry: store, consent, close } = await registry();
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
-      store.narrow('qwen3-14b', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
+      store.narrow('a-measured-host', { contextTokens: 12288 }, '2026-08-13T18:01:00.000Z');
       consent.decide({
-        entryId: 'qwen3-14b',
+        entryId: 'a-measured-host',
         picoIdentityFingerprintHex: alice,
         providerClass: 'declared_own_host',
         carries: 'live_turn',
         at: '2026-08-13T18:02:00.000Z',
       });
-      expect(consent.entryFor('qwen3-14b', alice)?.measurement.capacity.contextTokens)
+      expect(consent.entryFor('a-measured-host', alice)?.measurement.capacity.contextTokens)
         .toBe(12288);
     } finally {
       close();
@@ -270,26 +270,26 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     try {
       store.put(entry(), '2026-08-13T18:00:00.000Z');
       consent.decide({
-        entryId: 'qwen3-14b',
+        entryId: 'a-measured-host',
         picoIdentityFingerprintHex: alice,
         providerClass: 'declared_own_host',
         carries: 'live_turn',
         at: '2026-08-13T18:01:00.000Z',
       });
-      expect(consent.entryFor('qwen3-14b', alice)).toBeDefined();
+      expect(consent.entryFor('a-measured-host', alice)).toBeDefined();
 
-      consent.revoke('qwen3-14b', alice, '2026-08-14T09:00:00.000Z');
-      expect(consent.entryFor('qwen3-14b', alice)).toBeUndefined();
+      consent.revoke('a-measured-host', alice, '2026-08-14T09:00:00.000Z');
+      expect(consent.entryFor('a-measured-host', alice)).toBeUndefined();
 
       // And deciding again brings it back rather than being blocked by the row.
       consent.decide({
-        entryId: 'qwen3-14b',
+        entryId: 'a-measured-host',
         picoIdentityFingerprintHex: alice,
         providerClass: 'declared_own_host',
         carries: 'live_turn',
         at: '2026-08-14T10:00:00.000Z',
       });
-      expect(consent.entryFor('qwen3-14b', alice)).toBeDefined();
+      expect(consent.entryFor('a-measured-host', alice)).toBeDefined();
     } finally {
       close();
     }
