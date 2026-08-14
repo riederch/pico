@@ -2599,6 +2599,25 @@ export interface PicoMemoryContentItem {
    * Absent means the item predates labeling, and absent is never "trusted".
    */
   origin?: PicoEventOriginClass;
+  /**
+   * ADR 0136 BR6 with ADR 0117 X5. Where this item came from, when it came
+   * from a library rather than from Pico or a person.
+   *
+   * **It was stored and unreadable until 2026-08-14**, which made it a fact
+   * nobody could act on: a person could not tell a kept read from something
+   * Pico knew, and ADR 0133's correction point - the revision an answer was
+   * wrong about - existed only in a column. Content that travels without this
+   * is content presented as Pico's own.
+   *
+   * `pinCoversContent` false is not a defect to hide. It says the commit does
+   * not pin what the bytes were, which is the difference between "this is what
+   * the document said at that revision" and "this is what a document said".
+   */
+  derivedFrom?: {
+    supplierIdentifier: string;
+    pin: { kind: 'commit' | 'content_hash'; value: string };
+    pinCoversContent: boolean;
+  };
   createdAt: string;
   updatedAt: string;
 }

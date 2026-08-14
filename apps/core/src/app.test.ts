@@ -77,6 +77,7 @@ import {
   type PicoLinkDirectOperation,
   type PicoLinkDirectResponseSignatureInput,
 } from '@pico/protocol';
+import { buildPicoLibraryDerivation } from '@pico/protocol/library-pin';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
 import { KeyStore } from './key-store.js';
@@ -4610,6 +4611,53 @@ describe('memory content read API (Gate C)', () => {
     const single = await app.inject({ method: 'GET', url: `/api/memory/domains/domain-private/items/${id}`, headers: auth });
     expect(single.statusCode).toBe(200);
     expect(single.json().content).toBe('A private secret.');
+    // ADR 0136 BR6. An item Pico wrote itself carries no derivation, and the
+    // field is absent rather than empty: "not derived from a library" and
+    // "derived from one nobody recorded" are different facts.
+    expect(single.json().derivedFrom).toBeUndefined();
+
+    await app.close();
+  });
+
+  it('says on the read surface that an item came from a library', async () => {
+    // ADR 0136 BR6 with ADR 0117 X5. Provenance travels with the content, for
+    // the reason the origin class does: content that arrives without it is
+    // content presented as Pico's own, and ADR 0133's correction point - which
+    // revision an answer was wrong about - is only a column until somebody can
+    // read it.
+    const databasePath = createDatabasePath();
+    const seeded = new EventStore(databasePath);
+    seeded.memory().create({
+      memoryItemId: 'memory_derived_read_surface',
+      privacyDomain: 'domain-private',
+      owner: 'pico:identity:test',
+      controller: 'pico:identity:test',
+      contentType: 'text/plain',
+      content: 'From a library.',
+      derivedFrom: buildPicoLibraryDerivation({
+        supplierIdentifier: 'a-library',
+        pin: { kind: 'commit', value: 'd'.repeat(40) },
+        // False is not a defect to hide: it says the commit does not pin what
+        // the bytes were.
+        pinCoversContent: false,
+      }),
+    });
+    seeded.close();
+
+    const app = await buildAppWithCapturedLog({ databasePath });
+    await bootstrap(app);
+    const session = await login(app);
+    const read = await app.inject({
+      method: 'GET',
+      url: '/api/memory/domains/domain-private/items/memory_derived_read_surface',
+      headers: { authorization: `Bearer ${session}` },
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().derivedFrom).toEqual({
+      supplierIdentifier: 'a-library',
+      pin: { kind: 'commit', value: 'd'.repeat(40) },
+      pinCoversContent: false,
+    });
 
     await app.close();
   });

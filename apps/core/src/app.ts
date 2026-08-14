@@ -6446,6 +6446,10 @@ function toMemoryContentItem(item: MemoryItem): PicoMemoryContentItem {
     // ADR 0116 W2: content and its class leave together, or the receiver has
     // no way to tell whether what it just read may instruct.
     ...(item.origin === undefined ? {} : { origin: item.origin }),
+    // ADR 0136 BR6 with ADR 0117 X5. Provenance leaves with the content for
+    // the same reason the origin class does: a receiver that gets the text and
+    // not where it came from has no way to present it as anything but Pico's.
+    ...(item.derivedFrom === undefined ? {} : { derivedFrom: item.derivedFrom }),
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
   };

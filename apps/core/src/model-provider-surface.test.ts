@@ -574,14 +574,41 @@ describe('ADR 0116 W5 - the last inch is a person', () => {
   }
 
   it('writes a memory item with the derivation the read was taken under', async () => {
-    const { app, person } = await bootWithAnsweredJob('person');
+    const { app, person, databasePath } = await bootWithAnsweredJob('person');
     const kept = await app.inject({
       method: 'POST',
       url: `/api/model/jobs/${jobId}/keep`,
       headers: { authorization: person },
     });
     expect(kept.statusCode).toBe(201);
-    expect((kept.json() as { memoryItemId: string }).memoryItemId).toMatch(/^memory_[0-9a-f]{32}$/u);
+    const memoryItemId = (kept.json() as { memoryItemId: string }).memoryItemId;
+    expect(memoryItemId).toMatch(/^memory_[0-9a-f]{32}$/u);
+
+    // **Keeping is not reading.** The person who kept this cannot fetch it
+    // back without a domain read grant, and the route answers 404 rather than
+    // 403 (ADR 0077 C4's non-enumerating denial). That is the custody rule
+    // holding rather than a gap in the keep, and it is asserted here so the
+    // next person meets it as a decision rather than as a surprise.
+    expect((await app.inject({
+      method: 'GET',
+      url: `/api/memory/domains/household/items/${memoryItemId}`,
+      headers: { authorization: person },
+    })).statusCode).toBe(404);
+
+    // ADR 0136 BR6 with ADR 0117 X5. The provenance is stored with the
+    // content, and travels with it wherever readership does allow a read.
+    const store = await EventStore.open(databasePath, {});
+    try {
+      expect(store.memory().getInDomain(memoryItemId, 'household')?.derivedFrom).toEqual({
+        supplierIdentifier: 'a-library',
+        pin: { kind: 'commit', value: 'c'.repeat(40) },
+        // False is not a defect to hide: it says the commit does not pin what
+        // the bytes were.
+        pinCoversContent: false,
+      });
+    } finally {
+      store.close();
+    }
   });
 
   it('answers somebody else\'s job as not found, not as forbidden', async () => {
