@@ -144,3 +144,114 @@ describe('ADR 0118 O1 due entries ride the same cadence', () => {
     }
   });
 });
+
+/**
+ * ADR 0118 O1's other half. An entry nobody acknowledges keeps being offered,
+ * and until now nothing ever acknowledged one: the Home cannot see a
+ * notification appear, so the device has to say it showed one.
+ */
+describe('ADR 0118 O1 - the device says it told the person', () => {
+  const due = {
+    entries: [
+      { memoryItemId: 'item_older', dueAt: '2026-08-14T09:00:00.000Z', kind: 'reminder' },
+      { memoryItemId: 'item_newer', dueAt: '2026-08-14T11:00:00.000Z', kind: 'reminder' },
+    ],
+    total: 2,
+  };
+
+  it('acknowledges exactly what the surface says it showed', async () => {
+    // Not the list. Fifty entries arrive and one is named; acknowledging the
+    // rest would retire entries whose identity nobody ever saw.
+    const acknowledgeDueEntry = vi.fn(async (_memoryItemId: string) => {});
+    const started = await carrier({
+      readDueEntries: async () => due,
+      acknowledgeDueEntry,
+      notifications: {
+        notifyPendingRecovery: () => {},
+        reportDueEntries: async () => ({ told: ['item_older'] }),
+      },
+    });
+
+    try {
+      await started.checkNow();
+      // Once per check, and never the entry that was only counted: this stub
+      // keeps answering the same list, which is what a Home does until the
+      // acknowledgement lands.
+      expect(new Set(acknowledgeDueEntry.mock.calls.map(([id]) => id)))
+        .toEqual(new Set(['item_older']));
+      expect(acknowledgeDueEntry).toHaveBeenCalledTimes(started.status().checks);
+      expect(started.status().dueEntryAcknowledgeFailures).toBe(0);
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('acknowledges nothing when the surface could not take the presentation', async () => {
+    // The trap this family already fell into once: an earlier scheduler marked
+    // an entry raised and then called a surface, so a surface that refused left
+    // the entry marked and nobody told.
+    const acknowledgeDueEntry = vi.fn(async (_memoryItemId: string) => {});
+    const started = await carrier({
+      readDueEntries: async () => due,
+      acknowledgeDueEntry,
+      notifications: {
+        notifyPendingRecovery: () => {},
+        reportDueEntries: async () => {
+          throw new Error('screen_unavailable');
+        },
+      },
+    });
+
+    try {
+      await started.checkNow();
+      expect(acknowledgeDueEntry).not.toHaveBeenCalled();
+      expect(started.status().notifyFailures).toBeGreaterThan(0);
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('counts a refused acknowledgement and leaves the alarm alone', async () => {
+    // The entry stays outstanding and comes back on the next check, which is a
+    // retry that costs nothing and cannot lose it if this device never runs
+    // again.
+    const started = await carrier({
+      readDueEntries: async () => due,
+      acknowledgeDueEntry: async () => {
+        throw new Error('due_entry_acknowledge_rejected:unknown_operation');
+      },
+      notifications: {
+        notifyPendingRecovery: () => {},
+        reportDueEntries: async () => ({ told: ['item_older'] }),
+      },
+    });
+
+    try {
+      const check = await started.checkNow();
+      expect(started.status().dueEntryAcknowledgeFailures)
+        .toBe(started.status().checks);
+      expect(check.status).toBe('clear');
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('works against a Home that does not answer the operation', async () => {
+    // Optional like the reads: a companion that cannot acknowledge still shows
+    // what is due, and pays for it in repetition.
+    const started = await carrier({
+      readDueEntries: async () => due,
+      notifications: {
+        notifyPendingRecovery: () => {},
+        reportDueEntries: async () => ({ told: ['item_older'] }),
+      },
+    });
+
+    try {
+      await started.checkNow();
+      expect(started.status().dueEntryAcknowledgeFailures).toBe(0);
+    } finally {
+      started.stop();
+    }
+  });
+});

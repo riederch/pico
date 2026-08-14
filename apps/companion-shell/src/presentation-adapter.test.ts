@@ -115,3 +115,49 @@ describe('Electron presentation adapter', () => {
     });
   });
 });
+
+describe('ADR 0118 O1 - what the surface says it showed', () => {
+  const entries = [
+    { memoryItemId: 'item_newer', dueAt: '2026-08-14T11:00:00.000Z', kind: 'reminder' as const },
+    { memoryItemId: 'item_older', dueAt: '2026-08-14T09:00:00.000Z', kind: 'reminder' as const },
+  ];
+
+  it('names one entry and reports that one as told', async () => {
+    // The notification shows the oldest and counts the rest. Reporting the
+    // whole list as told would retire entries whose identity the person never
+    // saw, and they would never be offered again - the silent failure this
+    // family calls worse than never recording anything.
+    const presented: PicoCompanionPresentation[] = [];
+    const adapter = createPicoCompanionPresentationAdapter({
+      present: (state) => { presented.push(state); },
+      notify: () => {},
+    }, () => new Date('2026-08-14T12:00:00Z'));
+
+    const told = await adapter.reportDueEntries({ entries, total: 2 });
+
+    expect(told).toEqual({ told: ['item_older'] });
+    expect(presented.at(-1)?.kind).toBe('time_bound_entry_due');
+  });
+
+  it('reports nothing told when nothing is due', async () => {
+    const adapter = createPicoCompanionPresentationAdapter({
+      present: () => {},
+      notify: () => {},
+    }, () => new Date('2026-08-14T12:00:00Z'));
+
+    expect(await adapter.reportDueEntries({ entries: [], total: 0 })).toEqual({ told: [] });
+  });
+
+  it('says nothing was told when the surface could not take it', async () => {
+    // A presentation that threw is a person who was not told, and the
+    // acknowledgement sits downstream of this so it cannot run.
+    const adapter = createPicoCompanionPresentationAdapter({
+      present: () => {
+        throw new Error('screen_unavailable');
+      },
+      notify: () => {},
+    }, () => new Date('2026-08-14T12:00:00Z'));
+
+    await expect(adapter.reportDueEntries({ entries, total: 2 })).rejects.toThrow('screen_unavailable');
+  });
+});

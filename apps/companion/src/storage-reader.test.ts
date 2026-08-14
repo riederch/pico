@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createPicoCompanionDueEntriesReader,
+  createPicoCompanionDueEntryAcknowledger,
   createPicoCompanionStorageReader,
 } from './storage-reader.js';
 
@@ -104,5 +105,35 @@ describe('ADR 0118 O1 companion due-entries read', () => {
       await expect(read(), JSON.stringify(entry))
         .rejects.toThrow(/invalid_pico_home_due_entries/u);
     }
+  });
+});
+
+describe('ADR 0118 O1 - acknowledging one entry', () => {
+  it('names the entry it was given and nothing else', async () => {
+    // The Home takes the id from the argument and the device from the
+    // authenticated principal, so this call discloses nothing the device was
+    // not already told by the read.
+    const client = { request: vi.fn(async () => ({
+      outcome: 'ok',
+      result: { memoryItemId: 'item_older', acknowledged: true },
+    })) };
+    const acknowledge = createPicoCompanionDueEntryAcknowledger({ linkClient: client as never });
+
+    await acknowledge('item_older');
+
+    expect(client.request).toHaveBeenCalledWith('home.time_bound_entry.acknowledge', {
+      memoryItemId: 'item_older',
+    });
+  });
+
+  it('names a refusal rather than swallowing it', async () => {
+    // A silently failed acknowledgement looks exactly like one that worked,
+    // and the entry comes back with nobody able to say why.
+    const acknowledge = createPicoCompanionDueEntryAcknowledger({
+      linkClient: linkClient({ outcome: 'unknown_operation', result: {} }),
+    });
+
+    await expect(acknowledge('item_older'))
+      .rejects.toThrow(/due_entry_acknowledge_rejected:unknown_operation/u);
   });
 });

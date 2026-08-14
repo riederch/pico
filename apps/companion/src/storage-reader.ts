@@ -49,6 +49,39 @@ export function createPicoCompanionDueEntriesReader(input: {
   };
 }
 
+/**
+ * ADR 0118 O1's other half. The device says it told the person.
+ *
+ * **Only a device can say this**, which is why the Home does not: it cannot
+ * observe that a notification appeared on somebody's screen, and an earlier
+ * version that marked an entry raised before calling a surface left entries
+ * marked with nobody told - a promise silently dropped, which this family
+ * exists to prevent.
+ *
+ * So the acknowledgement travels the other way, per entry, after the person
+ * was actually shown it. An entry nobody acknowledges stays outstanding and
+ * keeps being offered: repetition is the loud failure and silence the quiet
+ * one, and this is the direction to be wrong in.
+ */
+export type PicoCompanionDueEntryAcknowledger = (memoryItemId: string) => Promise<void>;
+
+export function createPicoCompanionDueEntryAcknowledger(input: {
+  linkClient: PicoLinkDirectClient;
+}): PicoCompanionDueEntryAcknowledger {
+  return async (memoryItemId: string) => {
+    const response = await input.linkClient.request('home.time_bound_entry.acknowledge', {
+      memoryItemId,
+    });
+    if (response.outcome !== 'ok') {
+      // Named rather than swallowed, and the caller counts it: an
+      // acknowledgement that quietly failed would look identical to one that
+      // worked, and the entry would be raised again with nobody able to say
+      // why.
+      throw new Error(`due_entry_acknowledge_rejected:${response.outcome}`);
+    }
+  };
+}
+
 export function createPicoCompanionStorageReader(input: {
   linkClient: PicoLinkDirectClient;
 }): PicoCompanionStorageReader {

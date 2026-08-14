@@ -8,6 +8,7 @@ import {
 import { createPicoCompanionLifecycleReader } from '@pico/companion/lifecycle-reader';
 import {
   createPicoCompanionDueEntriesReader,
+  createPicoCompanionDueEntryAcknowledger,
   createPicoCompanionStorageReader,
 } from '@pico/companion/storage-reader';
 import {
@@ -160,10 +161,30 @@ export async function startPicoCompanionShellRuntime(input: {
       return await createPicoCompanionDueEntriesReader({ linkClient })();
     });
 
+    /**
+     * ADR 0118 O1. Says an entry reached the person, over the same channel the
+     * read came from.
+     *
+     * Serialized with the reads for the same reason they are with each other:
+     * one Link client at a time, built from the profile as it is now.
+     */
+    const acknowledgeDueEntry = async (memoryItemId: string) => await serialized(async () => {
+      await input.automaticVaultUnlock?.ensureUnlocked();
+      const currentProfile = readPicoCompanionProfile(profilePath);
+      const linkClient = await createPicoCompanionLinkClient({
+        profile: currentProfile,
+        daemonClient,
+        sodium: input.sodium,
+        ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      });
+      await createPicoCompanionDueEntryAcknowledger({ linkClient })(memoryItemId);
+    });
+
     const carrier = await startPicoCompanionAlarmCarrier({
       readLifecycle,
       readStorageCondition,
       readDueEntries,
+      acknowledgeDueEntry,
       notifications: input.notifications,
       ...(input.checkIntervalMs === undefined
         ? {}

@@ -1,5 +1,6 @@
 import {
   type PicoCompanionClockDivergenceAlarm,
+  type PicoCompanionDueEntriesTold,
   type PicoCompanionNotificationAdapter,
   type PicoCompanionPendingRecoveryAlarm,
 } from '@pico/companion/alarm-carrier';
@@ -36,8 +37,13 @@ export type PicoCompanionShellNotifications = PicoCompanionNotificationAdapter
   & PicoCompanionHostContinuityNotifications
   & PicoCompanionRecoveryNotifications
   & {
-    /** ADR 0118 O1. Something is due; see the adapter for what it can say. */
-    reportDueEntries(view: PicoHomeDueEntriesView): Promise<void>;
+    /**
+     * ADR 0118 O1. Something is due; see the adapter for what it can say.
+     *
+     * Answers which entries the person was *shown*, which only a surface
+     * knows: the list carries up to fifty and a notification names one.
+     */
+    reportDueEntries(view: PicoHomeDueEntriesView): Promise<PicoCompanionDueEntriesTold>;
     /**
      * ADR 0118 O4. Network reachability is a local device fact the shell
      * observes, not something the carrier reads from the Home - so it enters
@@ -131,7 +137,7 @@ export function createPicoCompanionPresentationAdapter(
         if (currentKind === 'time_bound_entry_due') {
           await publish(picoCompanionIdlePresentation(now()), false);
         }
-        return;
+        return { told: [] };
       }
       const oldest = view.entries.reduce((left, right) =>
         (Date.parse(left.dueAt) <= Date.parse(right.dueAt) ? left : right));
@@ -160,6 +166,18 @@ export function createPicoCompanionPresentationAdapter(
           : `Due at ${oldest.dueAt}.${count === 1 ? '' : ` ${count - 1} more waiting.`}`,
         observedAt: now().toISOString(),
       }, true);
+      /**
+       * **One entry, and it is the one that was named.** The others were
+       * counted, not shown: marking them told would retire entries whose
+       * identity the person never saw, and they would never be offered again.
+       * Each gets its turn on a later check, which is the loud failure rather
+       * than the quiet one.
+       *
+       * This is after the publish, so a surface that could not take the
+       * presentation acknowledges nothing - the exact trap the scheduler fell
+       * into when it marked an entry raised and then called a surface.
+       */
+      return { told: [oldest.memoryItemId] };
     },
     notifyPendingRecovery: async (alarm: PicoCompanionPendingRecoveryAlarm) => {
       const rendered = renderPicoCompanionPendingRecoveryAlarm(alarm);

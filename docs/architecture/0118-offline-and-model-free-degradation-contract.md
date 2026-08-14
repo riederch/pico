@@ -342,6 +342,32 @@ companion's list without anybody being told.
   words, rather than inventing a placeholder that would read like a
   title.
 
+  **The acknowledgement was designed and never wired, until 2026-08-14.**
+  The Home announces and a device raises: an earlier scheduler marked
+  `raised_at` and then called a surface, so a surface that could not take
+  it left the entry marked with nobody told, and the fix was to split the
+  two. The Home half shipped; the device half did not, so nothing ever
+  said "I told them" and every due entry was offered again on every check
+  for as long as it existed. The loud failure, permanently.
+
+  The companion now acknowledges over `home.time_bound_entry.acknowledge`,
+  and three things about *when* are the whole content of it:
+
+  - **After the presentation, never before.** The acknowledgement sits
+    downstream of the publish, so a surface that refuses acknowledges
+    nothing - the same trap one layer up, closed by ordering rather than
+    by care.
+  - **Exactly what was shown.** The list carries up to fifty and the
+    notification names one, so only that one is acknowledged. Marking the
+    rest would retire entries whose existence was summarised and whose
+    identity was never shown, and those would never be offered again -
+    the silent failure this family calls worse than never recording
+    anything. Each gets its turn on a later check.
+  - **A refused acknowledgement is counted, not retried here.** The entry
+    stays outstanding and comes back on the next check, which is a retry
+    that costs nothing and cannot lose the entry if this device never
+    runs again.
+
   The other limit is the cadence. The companion learns of a due entry at
   its next check or on the wake and network-regain hook, not at the
   instant itself - punctual raising on the device would need either a

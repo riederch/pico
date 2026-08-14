@@ -6,6 +6,7 @@ import type {
 import type { PicoHomeDueEntriesView } from '@pico/protocol/time-bound-entry';
 import type {
   PicoCompanionDueEntriesReader,
+  PicoCompanionDueEntryAcknowledger,
   PicoCompanionStorageReader,
 } from './storage-reader.js';
 
@@ -87,7 +88,24 @@ export interface PicoCompanionNotificationAdapter {
    * Reported only after a successful read - an empty list from a broken
    * channel would say nothing is waiting when nobody looked.
    */
-  reportDueEntries?(view: PicoHomeDueEntriesView): void | Promise<void>;
+  reportDueEntries?(
+    view: PicoHomeDueEntriesView,
+  ): Promise<PicoCompanionDueEntriesTold | void> | void;
+}
+
+/**
+ * ADR 0118 O1. Which entries the person was actually shown.
+ *
+ * **The surface says this, and nothing else can.** It is the only party that
+ * knows what it put in front of somebody: the list carries fifty entries and a
+ * notification names one, so acknowledging the list would mark forty-nine
+ * entries told whose existence was summarised and whose identity was never
+ * shown. Those would never be offered again - the silent failure this family
+ * calls worse than never recording anything.
+ */
+export interface PicoCompanionDueEntriesTold {
+  /** Memory item ids the person was actually shown, empty when nothing was. */
+  told: readonly string[];
 }
 
 export interface StartPicoCompanionAlarmCarrierInput {
@@ -100,6 +118,14 @@ export interface StartPicoCompanionAlarmCarrierInput {
   readStorageCondition?: PicoCompanionStorageReader;
   /** ADR 0118 O1. Optional, like the storage read. */
   readDueEntries?: PicoCompanionDueEntriesReader;
+  /**
+   * ADR 0118 O1. Tells the Home that an entry reached the person.
+   *
+   * Optional for the same reason the reads are: a Home built before the
+   * operation existed refuses it, and a companion that could not acknowledge
+   * still shows what is due. The cost of not having it is repetition.
+   */
+  acknowledgeDueEntry?: PicoCompanionDueEntryAcknowledger;
   notifications: PicoCompanionNotificationAdapter;
   /** Defaults to the pinned six hours; anything longer violates ADR 0112. */
   checkIntervalMs?: number;
@@ -123,6 +149,14 @@ export interface PicoCompanionAlarmCarrierStatus {
   storageReadFailures: number;
   /** ADR 0118 O1. Counted separately for the same reason. */
   dueEntriesReadFailures: number;
+  /**
+   * ADR 0118 O1. Acknowledgements the Home refused or that never arrived.
+   *
+   * Counted rather than retried here: the entry stays outstanding and comes
+   * back on the next check, which is a retry that costs nothing and cannot
+   * lose the entry if this device never runs again.
+   */
+  dueEntryAcknowledgeFailures: number;
 }
 
 export interface PicoCompanionAlarmCarrier {
@@ -159,6 +193,7 @@ export async function startPicoCompanionAlarmCarrier(
     notifyFailures: 0,
     storageReadFailures: 0,
     dueEntriesReadFailures: 0,
+    dueEntryAcknowledgeFailures: 0,
   };
 
   /**
@@ -199,10 +234,25 @@ export async function startPicoCompanionAlarmCarrier(
       status.dueEntriesReadFailures += 1;
       return;
     }
+    let told: PicoCompanionDueEntriesTold | void;
     try {
-      await input.notifications.reportDueEntries?.(view);
+      told = await input.notifications.reportDueEntries?.(view);
     } catch {
       status.notifyFailures += 1;
+      // **Nothing is acknowledged here, and that is the point.** A report that
+      // threw is a person who was not told, and the earlier version of this
+      // family marked an entry raised before the surface had taken it.
+      return;
+    }
+    if (told === undefined || told === null || input.acknowledgeDueEntry === undefined) {
+      return;
+    }
+    for (const memoryItemId of told.told) {
+      try {
+        await input.acknowledgeDueEntry(memoryItemId);
+      } catch {
+        status.dueEntryAcknowledgeFailures += 1;
+      }
     }
   };
 
