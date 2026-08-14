@@ -22,6 +22,15 @@ panel_admin: true
 # An optional option with no default is declared in `schema` alone, which is
 # what `applyPicoHomeAssistantAppOptions` already expects (it treats a missing,
 # null or blank token as "no token" and stays in ingress mode).
+# `memory_encryption` is retiring (ADR 0104 S3, decided 2026-08-14). The
+# decision now lives in Pico, in `pico_memory_encryption_decision`, and is set
+# through the Foundation surface rather than here. This option remains for one
+# release so that an instance upgrading onto the 0017 schema has something to
+# inherit on its first boot; the release after that removes it, and
+# `PICO_MEMORY_ENCRYPTION` stays as the silent inheritance source for anything
+# that upgrades late.
+#
+# Do not add a person-facing option here. ADR 0104 S2 makes that a defect.
 options:
   memory_encryption: false
 schema:

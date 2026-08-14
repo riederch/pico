@@ -112,9 +112,27 @@ when it was added.
   value never overwrites a decided one, or the add-on option would be back in
   charge through the door this table exists to close.
 
-  The add-on option stays for now and stays transitional. What it still does is
-  supply the value an instance inherits on its first boot under this schema;
-  what it no longer does is decide. Retiring it is the remaining half of S3.
+  **Retirement decided 2026-08-14, and it is a removal from the add-on
+  configuration rather than from the code.** The option disappears from
+  `pico_core/config.yaml`, so nobody sets a privacy decision in host
+  configuration any more, which is what this ADR objected to.
+  `PICO_MEMORY_ENCRYPTION` stays as a silent inheritance source: it costs
+  nothing, decides nothing, and it is what an instance reads on its first boot
+  under the 0017 schema.
+
+  **It may not ship in the same release as 0017, and that ordering is the
+  whole safety of it.** Home Assistant validates options against the schema
+  and drops what the schema no longer declares. An instance upgrading straight
+  onto a release that has both would boot with the option already stripped and
+  no decision row yet - inheriting `false`, and reading its own encrypted
+  content back as `crypto_unavailable` for no reason anybody chose. One
+  release with 0017 and the option guarantees every instance records a row on
+  its first boot; the next release may remove the option, because by then
+  there is nothing left to inherit from.
+
+  So: 0017 ships first, the option goes in the release after it. What is
+  written down here is the condition, not a date, because the condition is
+  what makes it safe and a date is only when somebody expects it.
 - **S4 - `pico_foundation_token` retires: Open.** Bound to the ADR 0038/0041
   replacement of temporary Foundation hardening with real authentication, not
   to this ADR.

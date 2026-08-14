@@ -168,7 +168,7 @@ The current foundation app exposes these user-configurable options:
 | Option | Purpose |
 | --- | --- |
 | `pico_foundation_token` | Optional temporary token mapped to `PICO_FOUNDATION_TOKEN` for direct Foundation access. |
-| `memory_encryption` | Off by default. When `true`, maps to `PICO_MEMORY_ENCRYPTION` so recorded memory content is encrypted at rest under per-domain keys (ADR 0071). |
+| `memory_encryption` | **Retiring (ADR 0104 S3).** The decision now lives in Pico and is set through the Foundation surface; this option remains for one release so an upgrading instance has something to inherit on its first boot, and is removed in the release after. Setting it here still maps to `PICO_MEMORY_ENCRYPTION`, which stays afterwards as a silent inheritance source rather than as a way to decide. |
 
 The app entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. If `memory_encryption` is `true`, it sets `PICO_MEMORY_ENCRYPTION` unless that variable was already configured.
 
