@@ -3162,6 +3162,65 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * a rate is the layer behind it. The numbers stay where the
          * measurement is.
          */
+        /**
+         * ADR 0116 W5. What is waiting for this person, without the answers.
+         */
+        case 'home.model.reads.read': {
+          if (Object.keys(args).length !== 0 || principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              reads: store.picoModelJobQueue()
+                .answeredFor(principal.picoIdentityFingerprintHex)
+                .map((read) => ({
+                  jobId: read.jobId,
+                  supplier: read.supplierIdentifier,
+                  // Short, because a device shows it and a person recognises a
+                  // revision by its first characters or not at all.
+                  revision: read.commit.slice(0, 12),
+                  answeredAt: read.settledAt,
+                })),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        case 'home.model.read.keep': {
+          if (principal === undefined || typeof args.jobId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const kept = store.picoModelJobQueue().keptView(args.jobId);
+          if (kept === undefined
+            || kept.picoIdentityFingerprintHex !== principal.picoIdentityFingerprintHex) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_found' } };
+          }
+          if (kept.outcome !== 'answered' || kept.values === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_answer' } };
+          }
+          const memoryItemId = `memory_${createHash('sha256')
+            .update(`kept\u0000${args.jobId}`).digest('hex').slice(0, 32)}`;
+          try {
+            store.memory().create({
+              memoryItemId,
+              privacyDomain: kept.privacyDomain,
+              owner: `pico:identity:${principal.picoIdentityFingerprintHex}`,
+              controller: `pico:identity:${principal.picoIdentityFingerprintHex}`,
+              contentType: 'application/json',
+              content: JSON.stringify(kept.values),
+              derivedFrom: buildPicoLibraryDerivation({
+                supplierIdentifier: kept.supplierIdentifier,
+                pin: { kind: 'commit', value: kept.commit },
+                pinCoversContent: kept.pinCoversContent,
+              }),
+            });
+          } catch (error) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'refused' },
+            };
+          }
+          return { outcome: 'ok', result: { memoryItemId } };
+        }
         case 'home.model.providers.read': {
           if (Object.keys(args).length !== 0 || principal === undefined) {
             return { outcome: 'invalid_arguments', result: {} };

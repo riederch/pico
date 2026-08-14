@@ -16,6 +16,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   getModelProviders: 'pico:model-providers:get',
   decideModelProvider: 'pico:model-provider:decide',
   revokeModelProvider: 'pico:model-provider:revoke',
+  getAnsweredReads: 'pico:model-reads:get',
+  keepAnsweredRead: 'pico:model-read:keep',
 });
 
 export type PicoCompanionPresentationKind =
@@ -487,6 +489,71 @@ export function parsePicoCompanionModelProviders(
       decided: record.decided,
       sees: record.sees,
       needsCredentialToSeeMore: record.needsCredentialToSeeMore,
+    });
+  }));
+}
+
+/**
+ * ADR 0116 W5 on the device. What a read produced, and nobody has kept.
+ *
+ * **No values travel to this window.** A list that carried the derived output
+ * would be the auto-persist W5 forbids, moved out of a database and into a
+ * screen - the answer arrives when the person keeps it, and not before. What
+ * a device shows is that something is waiting, from which library, and at
+ * which revision.
+ */
+export interface PicoCompanionAnsweredRead {
+  jobId: string;
+  supplier: string;
+  revision: string;
+  answeredAt: string;
+}
+
+/**
+ * ADR 0152 SE1's rule applied to a second surface: the words are chosen here
+ * so something can be held to them.
+ *
+ * **Nothing here says what was found.** A headline that summarised the answer
+ * would be the answer, shown - and the whole point of the keep is that the
+ * person decides before the derived output goes anywhere it stays.
+ */
+export function picoCompanionAnsweredReadLines(
+  reads: readonly PicoCompanionAnsweredRead[],
+): readonly { jobId: string; headline: string; detail: string }[] {
+  return Object.freeze(reads.map((read) => Object.freeze({
+    jobId: read.jobId,
+    headline: `Pico read something from ${read.supplier}`,
+    // The revision is the correction point (ADR 0133): if the answer turns out
+    // wrong, this is what says which version of the material it was wrong
+    // about.
+    detail: `Read at ${read.revision}. Keep it to put it in your memory, `
+      + 'or leave it and nothing is stored.',
+  })));
+}
+
+export function parsePicoCompanionAnsweredReads(
+  value: unknown,
+): readonly PicoCompanionAnsweredRead[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_answered_reads');
+  }
+  return Object.freeze(value.map((entry) => {
+    const record = entry as Record<string, unknown> | null;
+    if (record === null
+      || typeof record.jobId !== 'string'
+      || typeof record.supplier !== 'string'
+      || typeof record.revision !== 'string'
+      || typeof record.answeredAt !== 'string') {
+      throw new Error('invalid_pico_companion_answered_read');
+    }
+    // A value that arrived anyway is dropped rather than rendered: this window
+    // has no place for one, and a field nobody declared is a field nobody
+    // checked.
+    return Object.freeze({
+      jobId: record.jobId,
+      supplier: record.supplier,
+      revision: record.revision,
+      answeredAt: record.answeredAt,
     });
   }));
 }

@@ -229,6 +229,48 @@ export class PicoModelJobQueue {
     };
   }
 
+  /**
+   * ADR 0116 W5. What is waiting for a person to decide about, and nothing
+   * else.
+   *
+   * Only answered jobs, only this person's, and **never the values** - a list
+   * that carried them would be the derived output arriving somewhere it was
+   * not kept, which is the auto-persist W5 forbids wearing a different hat.
+   * The person sees that something is waiting and what it was read from; the
+   * values arrive when they keep it.
+   */
+  public answeredFor(picoIdentityFingerprintHex: string): ReadonlyArray<{
+    jobId: string;
+    supplierIdentifier: string;
+    commit: string;
+    settledAt: string;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT job_id AS jobId, derived_from_supplier AS supplierIdentifier,
+             derived_pin_value AS commit_, settled_at AS settledAt
+      FROM pico_model_job_queue
+      WHERE pico_identity_fingerprint_hex = ?
+        AND outcome = 'answered'
+        AND result_json IS NOT NULL
+      ORDER BY settled_at, job_id
+    `).all(picoIdentityFingerprintHex) as Array<{
+      jobId: string;
+      supplierIdentifier: string | null;
+      commit_: string | null;
+      settledAt: string | null;
+    }>;
+    return Object.freeze(rows.flatMap((row) => (
+      row.supplierIdentifier === null || row.commit_ === null || row.settledAt === null
+        ? []
+        : [Object.freeze({
+          jobId: row.jobId,
+          supplierIdentifier: row.supplierIdentifier,
+          commit: row.commit_,
+          settledAt: row.settledAt,
+        })]
+    )));
+  }
+
   public outcomeOf(jobId: string): { outcome: string | null; settledAt: string | null } {
     const row = this.db
       .prepare('SELECT outcome, settled_at AS settledAt FROM pico_model_job_queue WHERE job_id = ?')

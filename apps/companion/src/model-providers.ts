@@ -104,3 +104,68 @@ export async function revokePicoCompanionModelProvider(input: {
     throw new Error(`model_provider_revoke_rejected:${revoked.outcome}`);
   }
 }
+
+export interface PicoCompanionAnsweredReadView {
+  jobId: string;
+  supplier: string;
+  revision: string;
+  answeredAt: string;
+}
+
+/**
+ * ADR 0116 W5. What is waiting, without what it found.
+ *
+ * The reply is parsed rather than believed, and a value that arrived anyway is
+ * not carried forward - a device that rendered one would be persisting derived
+ * output onto a screen, which is the same rule with a different medium.
+ */
+export async function readPicoCompanionAnsweredReads(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionAnsweredReadView[]> {
+  const read = await input.livingDeviceLinkClient.request('home.model.reads.read', {});
+  if (read.outcome !== 'ok') {
+    throw new Error(`model_reads_read_rejected:${read.outcome}`);
+  }
+  const reads = (read.result as { reads?: unknown }).reads;
+  if (!Array.isArray(reads)) {
+    throw new Error('invalid_pico_model_reads_result');
+  }
+  return Object.freeze(reads.map((entry) => {
+    const record = entry as Record<string, unknown>;
+    if (typeof record.jobId !== 'string'
+      || typeof record.supplier !== 'string'
+      || typeof record.revision !== 'string'
+      || typeof record.answeredAt !== 'string') {
+      throw new Error('invalid_pico_model_read_result');
+    }
+    return Object.freeze({
+      jobId: record.jobId,
+      supplier: record.supplier,
+      revision: record.revision,
+      answeredAt: record.answeredAt,
+    });
+  }));
+}
+
+/** ADR 0116 W5's explicit write, sent from the device the person holds. */
+export async function keepPicoCompanionAnsweredRead(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  jobId: string;
+}): Promise<string> {
+  const kept = await input.livingDeviceLinkClient.request('home.model.read.keep', {
+    jobId: input.jobId,
+  });
+  if (kept.outcome !== 'ok') {
+    const refusal = (kept.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string'
+        ? `model_read_keep_rejected:${refusal}`
+        : `model_read_keep_rejected:${kept.outcome}`,
+    );
+  }
+  const memoryItemId = (kept.result as { memoryItemId?: unknown }).memoryItemId;
+  if (typeof memoryItemId !== 'string') {
+    throw new Error('invalid_pico_model_read_keep_result');
+  }
+  return memoryItemId;
+}

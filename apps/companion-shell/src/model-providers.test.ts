@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  parsePicoCompanionAnsweredReads,
+  picoCompanionAnsweredReadLines,
   parsePicoCompanionModelProviders,
   picoCompanionModelProviderLines,
   type PicoCompanionModelProvider,
@@ -80,6 +82,53 @@ describe('ADR 0152 - what arrives from a Home is parsed, not trusted', () => {
       const broken = { ...provider(), [field]: undefined };
       expect(() => parsePicoCompanionModelProviders([broken]))
         .toThrow('invalid_pico_companion_model_provider');
+    }
+  });
+});
+
+describe('ADR 0116 W5 - a waiting read says that it waits, not what it found', () => {
+  const read = {
+    jobId: 'job_library_abc',
+    supplier: 'a-library',
+    revision: 'c'.repeat(12),
+    answeredAt: '2026-08-14T12:00:00.000Z',
+  };
+
+  it('never renders the answer, because the keep is what releases it', () => {
+    // A headline that summarised the answer would be the answer, shown - and
+    // the whole point of the keep is that the person decides before derived
+    // output goes anywhere it stays.
+    const [line] = picoCompanionAnsweredReadLines([read]);
+    expect(line?.headline).toBe('Pico read something from a-library');
+    expect(line?.detail).toContain('Keep it');
+    expect(line?.detail).toContain('nothing is stored');
+    expect(JSON.stringify(line)).not.toContain('march');
+  });
+
+  it('shows the revision, because that is the correction point', () => {
+    // ADR 0133: if the answer turns out wrong, this says which version of the
+    // material it was wrong about.
+    const [line] = picoCompanionAnsweredReadLines([read]);
+    expect(line?.detail).toContain(read.revision);
+  });
+
+  it('drops a value that arrived anyway rather than rendering it', () => {
+    // This window has no place for one, and a field nobody declared is a field
+    // nobody checked.
+    const [parsed] = parsePicoCompanionAnsweredReads([
+      { ...read, values: [{ name: 'month', value: 'march' }] },
+    ]);
+    expect(JSON.stringify(parsed)).not.toContain('march');
+    expect(Object.keys(parsed!).sort())
+      .toEqual(['answeredAt', 'jobId', 'revision', 'supplier']);
+  });
+
+  it('refuses what did not arrive in the declared shape', () => {
+    expect(() => parsePicoCompanionAnsweredReads({}))
+      .toThrow('invalid_pico_companion_answered_reads');
+    for (const field of ['jobId', 'supplier', 'revision', 'answeredAt'] as const) {
+      expect(() => parsePicoCompanionAnsweredReads([{ ...read, [field]: undefined }]))
+        .toThrow('invalid_pico_companion_answered_read');
     }
   });
 });

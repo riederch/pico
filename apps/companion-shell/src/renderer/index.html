@@ -42,6 +42,16 @@
       <h2>What computes for you</h2>
       <ul id="provider-list" class="provider-list"></ul>
     </section>
+    <!--
+      ADR 0116 W5. What a read produced and nobody has kept. No answer appears
+      here: the values arrive when the person keeps them, and a window that
+      showed them first would be the auto-persist W5 forbids with a screen
+      standing in for a database.
+    -->
+    <section id="answered-reads" class="providers" hidden>
+      <h2>Waiting for you</h2>
+      <ul id="read-list" class="provider-list"></ul>
+    </section>
     <section id="recovery-card-form" class="form-card" hidden>
       <label for="pico-name">Pico name</label>
       <input id="pico-name" maxlength="256" autocomplete="off">

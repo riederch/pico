@@ -13,6 +13,8 @@ const channels = Object.freeze({
   getModelProviders: 'pico:model-providers:get',
   decideModelProvider: 'pico:model-provider:decide',
   revokeModelProvider: 'pico:model-provider:revoke',
+  getAnsweredReads: 'pico:model-reads:get',
+  keepAnsweredRead: 'pico:model-read:keep',
 });
 
 // No generic send/invoke and no raw ipcRenderer: this is the whole bridge.
@@ -56,6 +58,11 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   },
   revokeModelProvider: async (entryId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.revokeModelProvider, entryId);
+  },
+  getAnsweredReads: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.getAnsweredReads),
+  keepAnsweredRead: async (jobId: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.keepAnsweredRead, jobId);
   },
   closeWindow: (): void => {
     ipcRenderer.send(channels.closeWindow);

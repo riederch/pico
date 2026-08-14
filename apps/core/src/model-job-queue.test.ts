@@ -302,3 +302,59 @@ describe('ADR 0116 W5 - what an explicit keep is allowed to read', () => {
     }
   });
 });
+
+describe('ADR 0116 W5 - what waits, and whose it is', () => {
+  it('shows a person only their own answered reads', async () => {
+    // Two people's reads of two corpora are two private facts, and a list that
+    // mixed them would tell each what the other had Pico look at.
+    const { queue: q, close } = await queue();
+    try {
+      const mine = 'a'.repeat(64);
+      const theirs = 'b'.repeat(64);
+      for (const [jobId, person] of [['job_queue_0001', mine], ['job_queue_0002', theirs]] as const) {
+        q.enqueue({
+          job: job(jobId),
+          picoIdentityFingerprintHex: person,
+          entryId: 'a-measured-host',
+          derivedFrom: {
+            supplierIdentifier: 'a-library',
+            commit: 'c'.repeat(40),
+            pinCoversContent: true,
+          },
+          at: '2026-08-14T11:00:00.000Z',
+        });
+        q.settle({
+          jobId,
+          outcome: 'answered',
+          result: { values: [{ name: 'month', type: 'token', value: 'march', originClass: 'own_pico' }] },
+          at: '2026-08-14T12:00:00.000Z',
+        });
+      }
+
+      expect(q.answeredFor(mine).map((read) => read.jobId)).toEqual(['job_queue_0001']);
+      expect(q.answeredFor(theirs).map((read) => read.jobId)).toEqual(['job_queue_0002']);
+    } finally {
+      close();
+    }
+  });
+
+  it('lists nothing that has not been answered', async () => {
+    const { queue: q, close } = await queue();
+    try {
+      q.enqueue({
+        job: job(),
+        picoIdentityFingerprintHex: 'a'.repeat(64),
+        entryId: 'a-measured-host',
+        derivedFrom: { supplierIdentifier: 'a-library', commit: 'c'.repeat(40), pinCoversContent: true },
+        at: '2026-08-14T11:00:00.000Z',
+      });
+      expect(q.answeredFor('a'.repeat(64))).toHaveLength(0);
+
+      // A settled refusal is not something to keep either.
+      q.settle({ jobId: 'job_queue_0001', outcome: 'provider_unreachable', at: '2026-08-14T12:00:00.000Z' });
+      expect(q.answeredFor('a'.repeat(64))).toHaveLength(0);
+    } finally {
+      close();
+    }
+  });
+});

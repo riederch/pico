@@ -3,6 +3,8 @@ import {
   picoCompanionFloorAssurance,
   picoCompanionModelProviderLines,
   parsePicoCompanionModelProviders,
+  picoCompanionAnsweredReadLines,
+  parsePicoCompanionAnsweredReads,
   type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
@@ -17,6 +19,8 @@ declare global {
         carries: string;
       }): Promise<void>;
       revokeModelProvider(entryId: string): Promise<void>;
+      getAnsweredReads(): Promise<unknown>;
+      keepAnsweredRead(jobId: string): Promise<void>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
       requestCheck(): Promise<void>;
@@ -255,6 +259,46 @@ export function renderPicoCompanionModelProviders(
       + `measured ${providers[index]!.measuredAt.slice(0, 10)}`;
 
     item.append(headline, detail, measured);
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0116 W5 on the device. A list of things waiting, and a button each.
+ *
+ * The button is the whole point: nothing here persists, and the person's press
+ * is the write. Every string comes from `picoCompanionAnsweredReadLines`, so
+ * what this window may say is decided somewhere a test can reach.
+ */
+export function renderPicoCompanionAnsweredReads(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  keep: (jobId: string) => void,
+): void {
+  const reads = parsePicoCompanionAnsweredReads(value);
+  root.section.hidden = reads.length === 0;
+  root.list.replaceChildren();
+  for (const line of picoCompanionAnsweredReadLines(reads)) {
+    const item = root.document.createElement('li');
+    item.className = 'provider-line';
+    item.dataset.jobId = line.jobId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const button = root.document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Keep this';
+    button.addEventListener('click', () => {
+      keep(line.jobId);
+    });
+
+    item.append(headline, detail, button);
     root.list.append(item);
   }
 }

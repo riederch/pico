@@ -429,6 +429,18 @@ export const picoLinkDirectOperations = [
    */
   'home.model.provider.decision.submit',
   'home.model.provider.decision.revoke',
+  /**
+   * ADR 0116 W5. What a read produced and nobody has kept yet.
+   *
+   * Opted in for the reason the storage condition was: the decision is the
+   * person's and the Foundation UI is not where they are. **The list carries
+   * no values** - the answer arrives only when they keep it, because a list
+   * that carried the derived output would be the auto-persist W5 forbids,
+   * moved from a database into a window.
+   */
+  'home.model.reads.read',
+  /** ADR 0116 W5's explicit write, said from the device the person holds. */
+  'home.model.read.keep',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];
