@@ -2469,6 +2469,11 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // principal and the handler then refuses the operator by name. Host
   // administration installs and backs up; it does not decide on somebody's
   // behalf whether their memory may leave the house.
+  // ADR 0143 DP1 with ADR 0104. Attaching a corpus is a person's decision
+  // about their own material - two residents attach different libraries - so
+  // the class admits any authenticated principal and the handler refuses the
+  // operator by name, exactly as the model decision does.
+  accessClasses.register('POST', '/api/depot/attachments', 'authenticated');
   accessClasses.register('GET', '/api/model/providers/mine', 'authenticated');
   accessClasses.register('POST', '/api/model/providers/:entryId/decision', 'authenticated');
   accessClasses.register('DELETE', '/api/model/providers/:entryId/decision', 'authenticated');
@@ -4741,6 +4746,55 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       ? authority.principal.picoIdentityFingerprintHex
       : undefined;
   }
+
+  /**
+   * ADR 0143 DP1. A person says this material may be here, and is named for
+   * saying it.
+   *
+   * **Attaching creates no reach.** ADR 0138 CO3/CO4 default both fetch
+   * switches off, and this route does not touch them: saying "this corpus is
+   * mine" and saying "go and get it, unwatched" are two decisions, and a route
+   * that did both would collapse them at the moment a person was least likely
+   * to notice.
+   */
+  app.post('/api/depot/attachments', async (request, reply) => {
+    const person = decidingPerson(request);
+    if (person === undefined) {
+      // ADR 0087. Administration installs and backs up; whose corpus this is
+      // is not administration's to answer.
+      return sendNoStore(reply.code(403), { error: 'pico_depot_attachment_is_personal' });
+    }
+    const body = request.body as { remote?: unknown; commit?: unknown } | undefined;
+    try {
+      const attachment = store.attachPicoDepot({
+        pin: { remote: body?.remote, commit: body?.commit },
+        acceptedAt: new Date().toISOString(),
+        acceptedBy: person,
+      });
+      return sendNoStore(reply.code(201), {
+        depot: {
+          remote: attachment.pin.remote,
+          commit: attachment.pin.commit,
+          acceptedAt: attachment.acceptedAt,
+          // Said back rather than assumed, and this one decides something: the
+          // name recorded here is whose decision governs where this material
+          // may later be read. A person who attached a corpus and was not
+          // recorded would get no reads and no reason.
+          acceptedBy: attachment.acceptedBy ?? null,
+          // Said back for the same reason: a person who attached something is
+          // owed the fact that nothing will be fetched until they say so.
+          mayFetch: attachment.mayFetch,
+          mayFetchUnasked: attachment.mayFetchUnasked,
+        },
+      });
+    } catch (error) {
+      // The pin parser's refusal travels out as itself - a remote that is not
+      // a remote and a commit that is not a commit are different mistakes.
+      return sendNoStore(reply.code(400), {
+        error: error instanceof Error ? error.message : 'invalid_pico_depot_pin',
+      });
+    }
+  });
 
   app.get('/api/model/providers/mine', async (request, reply) => {
     const person = decidingPerson(request);

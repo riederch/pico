@@ -101,6 +101,70 @@ async function bootWithEntry(): Promise<{ app: AppWithInject; operator: string }
   return { app, operator: `Bearer ${session.session}` };
 }
 
+async function bootWithPerson(): Promise<{
+  app: AppWithInject;
+  operator: string;
+  person: string;
+}> {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-provider-person-'));
+  dirs.push(dir);
+  const databasePath = join(dir, 'pico.sqlite');
+
+  const store = await EventStore.open(databasePath, {});
+  store.picoModelProviderRegistry().put(
+    parsePicoModelProviderEntry(measured),
+    '2026-08-13T18:00:00.000Z',
+  );
+  store.close();
+
+  const logLines: string[] = [];
+  const app = await buildApp({
+    host: '127.0.0.1',
+    port: 0,
+    databasePath,
+    deviceId: 'pico-core',
+    logDestination: new Writable({
+      write(chunk: Buffer, _encoding, callback) {
+        logLines.push(chunk.toString('utf8'));
+        callback();
+      },
+    }),
+  }) as unknown as AppWithInject;
+  apps.push(app);
+
+  const logged = (key: string): string => {
+    for (const line of logLines) {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (typeof parsed[key] === 'string') {
+        return parsed[key];
+      }
+    }
+    throw new Error(`pico_host_log_missing:${key}`);
+  };
+
+  await app.inject({
+    method: 'POST',
+    url: '/api/auth/bootstrap',
+    payload: { bootstrapCode: logged('operatorBootstrapCode'), passphrase: 'person surface pass' },
+  });
+  const { device } = await openPicoHomeWithDevice(app, {
+    moveInCode: logged('picoHomeMoveInCode'),
+    idSuffix: 'provider_decision_20260813',
+  });
+  const operator = (await app.inject({
+    method: 'POST',
+    url: '/api/auth/session',
+    payload: { passphrase: 'person surface pass' },
+  })).json() as { session: string };
+
+  return {
+    app,
+    operator: `Bearer ${operator.session}`,
+    person: `Bearer ${device.session}`,
+  };
+}
+
+
 describe('ADR 0152 - the surface says the consequence and shows the measurement', () => {
   it('leads with what the provider sees, in words', async () => {
     const { app, operator } = await bootWithEntry();
@@ -181,68 +245,6 @@ describe('ADR 0152 - the surface says the consequence and shows the measurement'
 });
 
 describe('ADR 0152 - the personal half is a person\'s, and the operator is not one', () => {
-  async function bootWithPerson(): Promise<{
-    app: AppWithInject;
-    operator: string;
-    person: string;
-  }> {
-    const dir = mkdtempSync(join(tmpdir(), 'pico-provider-person-'));
-    dirs.push(dir);
-    const databasePath = join(dir, 'pico.sqlite');
-
-    const store = await EventStore.open(databasePath, {});
-    store.picoModelProviderRegistry().put(
-      parsePicoModelProviderEntry(measured),
-      '2026-08-13T18:00:00.000Z',
-    );
-    store.close();
-
-    const logLines: string[] = [];
-    const app = await buildApp({
-      host: '127.0.0.1',
-      port: 0,
-      databasePath,
-      deviceId: 'pico-core',
-      logDestination: new Writable({
-        write(chunk: Buffer, _encoding, callback) {
-          logLines.push(chunk.toString('utf8'));
-          callback();
-        },
-      }),
-    }) as unknown as AppWithInject;
-    apps.push(app);
-
-    const logged = (key: string): string => {
-      for (const line of logLines) {
-        const parsed = JSON.parse(line) as Record<string, unknown>;
-        if (typeof parsed[key] === 'string') {
-          return parsed[key];
-        }
-      }
-      throw new Error(`pico_host_log_missing:${key}`);
-    };
-
-    await app.inject({
-      method: 'POST',
-      url: '/api/auth/bootstrap',
-      payload: { bootstrapCode: logged('operatorBootstrapCode'), passphrase: 'person surface pass' },
-    });
-    const { device } = await openPicoHomeWithDevice(app, {
-      moveInCode: logged('picoHomeMoveInCode'),
-      idSuffix: 'provider_decision_20260813',
-    });
-    const operator = (await app.inject({
-      method: 'POST',
-      url: '/api/auth/session',
-      payload: { passphrase: 'person surface pass' },
-    })).json() as { session: string };
-
-    return {
-      app,
-      operator: `Bearer ${operator.session}`,
-      person: `Bearer ${device.session}`,
-    };
-  }
 
   it('lets a person decide and then see their own provider', async () => {
     const { app, person } = await bootWithPerson();
@@ -438,5 +440,68 @@ describe('ADR 0152 over ADR 0107 - the decision, made where the person is', () =
     expect(((await send('home.model.providers.read', {}))
       .result as { providers: Array<Record<string, unknown>> }).providers[0]!.decided)
       .toBe(false);
+  });
+});
+
+describe('ADR 0143 DP1 - a person attaches a corpus and is named for it', () => {
+  const pin = { remote: 'https://example.invalid/library.git', commit: 'a'.repeat(40) };
+
+  it('records who accepted it, and creates no reach', async () => {
+    const { app, person } = await bootWithPerson();
+    const attached = await app.inject({
+      method: 'POST',
+      url: '/api/depot/attachments',
+      headers: { authorization: person },
+      payload: pin,
+    });
+    expect(attached.statusCode).toBe(201);
+    // ADR 0138 CO3/CO4. Saying "this corpus is mine" and "go and get it,
+    // unwatched" are two decisions, and this route makes only the first.
+    const depot = (attached.json() as { depot: Record<string, unknown> }).depot;
+    expect(depot).toMatchObject({
+      remote: pin.remote,
+      mayFetch: false,
+      mayFetchUnasked: false,
+    });
+    // The name is the point of the route: it decides whose decision governs
+    // where this material may later be read. A corpus attached by nobody gets
+    // no reads and no reason.
+    expect(depot.acceptedBy).toEqual(expect.any(String));
+    expect(depot.acceptedBy).toHaveLength(64);
+  });
+
+  it('refuses the operator, because whose corpus this is is not theirs to say', async () => {
+    const { app, operator } = await bootWithPerson();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/depot/attachments',
+      headers: { authorization: operator },
+      payload: pin,
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'pico_depot_attachment_is_personal' });
+  });
+
+  it('passes the pin parser\'s refusal out as itself', async () => {
+    // A remote that is not a remote and a commit that is not a commit are
+    // different mistakes.
+    const { app, person } = await bootWithPerson();
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/depot/attachments',
+      headers: { authorization: person },
+      payload: { remote: pin.remote, commit: 'not-a-commit' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect((response.json() as { error: string }).error).toContain('commit');
+  });
+
+  it('is not reachable without a session at all', async () => {
+    const { app } = await bootWithPerson();
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/depot/attachments',
+      payload: pin,
+    })).statusCode).toBe(401);
   });
 });
