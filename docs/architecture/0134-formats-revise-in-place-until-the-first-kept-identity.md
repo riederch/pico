@@ -103,6 +103,16 @@ spent.
    vectors are regenerated with the change, which obligation 1 already
    requires.
 
+   **A surface the document does not mention gets no answer, so since
+   2026-08-14 the document is read against what is served.** Nineteen
+   routes appeared nowhere in it - the ADR 0107 Link intake among them -
+   and each had been added by somebody with no reason to open that file.
+   `surface:check` now compares both sides: every route the access-class
+   registry serves must be named there with its method, and every route
+   named there must still be served. An unmentioned surface would leave
+   this obligation to be settled at the call site by whoever was there,
+   which is the judgement call the class rule exists to remove.
+
 ### What this does not license
 
 It removes the version bump, not the discipline. Every in-place revision
@@ -318,8 +328,11 @@ Positive:
 Negative and residual:
 
 - the rule is at its most useful exactly when it is most tempting to
-  overuse, and the four obligations are enforced by reading rather than by
-  a check;
+  overuse, and three of the four obligations are enforced by reading
+  rather than by a check. Obligation 4 is now half-checked, and the halves
+  are worth keeping apart: that the document *names* every served surface
+  and gives it a class is read by `surface:check`; whether a particular
+  change is licensed by that class is still a judgement somebody makes;
 - collapsing the card touches canonical bytes, fixtures, a scan prefix and
   a first-run path - real work in a sensitive area for a property that is
   half correctness and half naming, and the naming half should be

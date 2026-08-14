@@ -101,6 +101,90 @@ for (const [form, klass] of formRows) {
   }
 }
 
+/**
+ * --- Completeness: a route that is not in here is an undocumented surface ---
+ *
+ * The class rule above assumes the document knows about the route. Nineteen
+ * did not appear at all - among them the ADR 0107 Link intake, which is the
+ * most consequential route this Home has - and nobody had miscounted: each was
+ * added by somebody with no reason to open this file, and the list rotted the
+ * same quiet way ADR 0104 S5's variable table did.
+ *
+ * **A list a document keeps and nothing reads is a list that drifts**, and
+ * this one drifting is not cosmetic. ADR 0134 obligation 4 asks this document
+ * whether a surface may be revised in place; a surface it does not mention
+ * gets no answer, so the question is settled at the call site by whoever is
+ * there - which is the judgement call the class rule exists to remove.
+ *
+ * The registry in `app.ts` is the other side, and it is exhaustive by
+ * construction: `assertClassified` refuses to start with an unregistered
+ * route, so no route can hide from this comparison.
+ *
+ * Prose counts. Several routes are described in a paragraph rather than a row
+ * - reader-custody is one family under one sentence - and a rule that only
+ * accepted table rows would push a document into a shape its subject does not
+ * have. What is checked is that the route is *there*, not where.
+ *
+ * **The method is part of the route.** A first draft compared paths alone and
+ * let a documented `GET` cover a `DELETE` nobody had written down - two
+ * different consequences behind one line. A wildcard family is the exception
+ * and is read as covering its members whatever the verb, because that is what
+ * `POST`/`GET /api/home/reader-custody/*` says in the sentence it lives in.
+ */
+const appPath = 'apps/core/src/app.ts';
+const appSource = readFileSync(join(repoRoot, appPath), 'utf8');
+const registered = [
+  ...appSource.matchAll(
+    /accessClasses\.register\(\s*'([A-Z]+)',\s*'([^']+)',\s*'([^']+)'/gu,
+  ),
+].map(([, method, route, accessClass]) => ({ method, route, accessClass }));
+
+if (registered.length === 0) {
+  errors.push(
+    `${appPath}: no access-class registrations found. This reader compares two `
+    + 'sides and one of them just disappeared, which is a broken reader rather '
+    + 'than a clean document.',
+  );
+}
+
+/** Paths this document names, including the wildcard families. */
+const documentedPaths = [
+  ...text.matchAll(/(\/api\/[A-Za-z0-9/:*_-]+)/gu),
+].map(([path_]) => path_);
+const documentedPrefixes = documentedPaths
+  .filter((path_) => path_.endsWith('*'))
+  .map((path_) => path_.slice(0, -1));
+
+export function documentsRoute(document, method, route, prefixes) {
+  if (prefixes.some((prefix) => route.startsWith(prefix))) {
+    return true;
+  }
+  return document.includes(`${method} ${route}`);
+}
+
+for (const { method, route, accessClass } of registered) {
+  if (!documentsRoute(text, method, route, documentedPrefixes)) {
+    errors.push(
+      `${path}: ${method} ${route} (${accessClass}) is served and appears `
+      + 'nowhere in this document. ADR 0134 obligation 4 cannot answer for a '
+      + 'surface it does not mention.',
+    );
+  }
+}
+
+const registeredRoutes = registered.map(({ route }) => route);
+for (const documented of new Set(documentedPaths)) {
+  const covered = documented.endsWith('*')
+    ? registeredRoutes.some((route) => route.startsWith(documented.slice(0, -1)))
+    : registeredRoutes.includes(documented);
+  if (!covered) {
+    errors.push(
+      `${path}: ${documented} is documented as a surface and is not served. A `
+      + 'stale row is a compatibility statement about something that is gone.',
+    );
+  }
+}
+
 // --- Probes: the reader has to be able to fail ------------------------------
 
 const probes = [
@@ -126,6 +210,19 @@ const probes = [
   },
 ];
 
+if (documentsRoute('`GET /api/x`', 'DELETE', '/api/x', [])) {
+  errors.push(
+    'Self-probe failed: a documented GET was read as covering an '
+    + 'undocumented DELETE on the same path.',
+  );
+}
+if (documentsRoute('`GET /api/x`', 'GET', '/api/x/y', [])) {
+  errors.push('Self-probe failed: a documented path was treated as a prefix.');
+}
+if (!documentsRoute('', 'POST', '/api/home/reader-custody/items', ['/api/home/reader-custody/'])) {
+  errors.push('Self-probe failed: a documented wildcard did not cover its family.');
+}
+
 for (const probe of probes) {
   const rows = tableRowsUnder(probe.document, probe.heading);
   if (rows === null || !probe.check(rows)) {
@@ -143,5 +240,6 @@ if (errors.length > 0) {
 
 console.log(
   `Surface-class check passed (${surfaceRows.length} surfaces, `
-  + `${formRows.length} canonical forms, all classed).`,
+  + `${formRows.length} canonical forms, all classed; `
+  + `${registered.length} served routes, each named).`,
 );
