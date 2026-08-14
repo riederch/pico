@@ -241,10 +241,26 @@ what the approval cryptographically binds.
   Original gate text: declared schemas for every reader output shape,
   refusal on parse failure, no free-text crossing; references resolve
   under ADR 0060's rules - materialized, expiring, never expandable.
-- **X3 - Data-flow origin on action arguments (binds the first tool
-  executor, with W4):** controller-computed derivation labels on every
-  argument in the canonical action request; Pico Rules consumes them;
-  ADR 0106 statements name them.
+- **X3 - Data-flow origin on action arguments (implemented; the executor
+  it binds does not exist yet):** all three clauses hold and had been
+  built piecemeal without anybody checking the chain end to end.
+  `parsePicoActionRequest` computes each argument's class as
+  `lowestPicoOriginClass` of its declared sources - the controller's
+  arithmetic, not the requester's claim, because a requester asserting
+  provenance is the attack rather than a typo. Pico Rules takes
+  `argumentOrigins` as part of its closed input. And the ADR 0106 statement
+  carries the class per argument.
+
+  **What was missing was the proof that the label survives every hop**,
+  which is the only thing that makes it a label. It does: a value whose
+  sources include `external_content` reaches the statement as
+  `external_content` however the request was dressed, hostile prose in an
+  argument stays an argument rather than entering the sentence, and
+  `picoApprovalSentenceForeignFields` stays empty while it does.
+
+  Nothing here is waiting on code. It is waiting on a tool executor to
+  exercise it, and the labels will be computed from real data flow the day
+  one exists rather than from sources a caller declares.
 - **X4 - Quarantined read job type (contract implemented 2026-08-13):**
   the ADR 0048/0049 job variant with typed, origin-carrying result values
   and planner delegation confined to the Pico trust boundary.
