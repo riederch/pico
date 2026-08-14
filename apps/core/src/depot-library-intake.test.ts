@@ -198,3 +198,45 @@ describe('ADR 0152 - a fetch does not choose a provider for a person', () => {
       .toEqual({ refusal: 'more_than_one_decided_entry' });
   });
 });
+
+describe('ADR 0143 DP1 - an attachment records who accepted it', () => {
+  it('keeps the name across a reattachment that does not know it', async () => {
+    // A caller that happens not to know who accepted this is not a caller
+    // correcting it: the person who said this material may be here is a fact
+    // about the past.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-attach-'));
+    dirs.push(dir);
+    const store = await EventStore.open(join(dir, 'pico.sqlite'), {});
+    try {
+      const pin = { remote: 'https://example.invalid/library.git', commit: 'a'.repeat(40) };
+      store.attachPicoDepot({
+        pin,
+        acceptedAt: '2026-08-14T10:00:00.000Z',
+        acceptedBy: 'a'.repeat(64),
+      });
+      expect(store.picoDepotAttachment(pin.remote)?.acceptedBy).toBe('a'.repeat(64));
+
+      store.attachPicoDepot({
+        pin: { ...pin, commit: 'b'.repeat(40) },
+        acceptedAt: '2026-08-14T11:00:00.000Z',
+      });
+      expect(store.picoDepotAttachment(pin.remote)?.acceptedBy).toBe('a'.repeat(64));
+    } finally {
+      store.close();
+    }
+  });
+
+  it('leaves it absent when nobody was recorded, rather than inventing one', async () => {
+    // Absent is a fact: it means nothing that needs attribution runs.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-attach-none-'));
+    dirs.push(dir);
+    const store = await EventStore.open(join(dir, 'pico.sqlite'), {});
+    try {
+      const pin = { remote: 'https://example.invalid/other.git', commit: 'c'.repeat(40) };
+      store.attachPicoDepot({ pin, acceptedAt: '2026-08-14T10:00:00.000Z' });
+      expect(store.picoDepotAttachment(pin.remote)?.acceptedBy).toBeUndefined();
+    } finally {
+      store.close();
+    }
+  });
+});

@@ -708,6 +708,14 @@ export interface PicoActionHistoryRecord {
 export interface PicoDepotAttachment {
   pin: PicoDepotPin;
   acceptedAt: string;
+  /**
+   * ADR 0143 DP1. Who accepted it, when the row knows.
+   *
+   * Absent on every attachment made before the column existed, and absent is
+   * a fact rather than a default: it means nobody can be attributed, so
+   * nothing that needs attribution runs.
+   */
+  acceptedBy?: string;
   /** ADR 0138 CO3. May Pico fetch this depot at all? Default off. */
   mayFetch: boolean;
   /** ADR 0138 CO4. May Pico fetch it without being asked? Default off. */
@@ -6776,6 +6784,16 @@ export class EventStore {
   public attachPicoDepot(input: {
     pin: unknown;
     acceptedAt: string;
+    /**
+     * ADR 0143 DP1. Who accepted this, when anybody knows.
+     *
+     * Optional because it was not always recorded, and a store that demanded
+     * it would refuse to reattach depots that already exist. What it buys is
+     * that a later read of this material has somebody to be attributed to -
+     * without it, a fetch has material and nobody whose decision governs
+     * where it may be read.
+     */
+    acceptedBy?: string;
   }): PicoDepotAttachment {
     this.ensureOpen();
     const pin = parsePicoDepotPin(input.pin);
@@ -6792,13 +6810,22 @@ export class EventStore {
 
     this.db
       .prepare(`
-        INSERT INTO pico_depot_attachment (remote, running_commit, accepted_at)
-        VALUES (?, ?, ?)
+        INSERT INTO pico_depot_attachment (
+          remote, running_commit, accepted_at,
+          accepted_by_pico_identity_fingerprint_hex
+        ) VALUES (?, ?, ?, ?)
         ON CONFLICT(remote) DO UPDATE SET
           running_commit = excluded.running_commit,
-          accepted_at = excluded.accepted_at
+          accepted_at = excluded.accepted_at,
+          -- A reattachment without a name does not erase the name that was
+          -- there: the person who accepted this is a fact about the past, and
+          -- a caller that happens not to know it is not a caller correcting it.
+          accepted_by_pico_identity_fingerprint_hex = COALESCE(
+            excluded.accepted_by_pico_identity_fingerprint_hex,
+            accepted_by_pico_identity_fingerprint_hex
+          )
       `)
-      .run(pin.remote, pin.commit, input.acceptedAt);
+      .run(pin.remote, pin.commit, input.acceptedAt, input.acceptedBy ?? null);
     this.rowCounter.recordInsert('depot_attachment');
     return this.picoDepotAttachment(pin.remote)!;
   }
@@ -6808,6 +6835,7 @@ export class EventStore {
     const row = this.db
       .prepare(`
         SELECT remote, running_commit AS runningCommit, accepted_at AS acceptedAt,
+               accepted_by_pico_identity_fingerprint_hex AS acceptedBy,
                may_fetch AS mayFetch, may_fetch_unasked AS mayFetchUnasked,
                offered_commit AS offeredCommit,
                last_fetch_condition AS lastFetchCondition,
@@ -6820,6 +6848,7 @@ export class EventStore {
         offeredCommit: string | null;
         lastFetchCondition: string | null;
         lastFetchAt: string | null;
+        acceptedBy: string | null;
       } | undefined;
     if (row === undefined) {
       return undefined;
@@ -6829,6 +6858,9 @@ export class EventStore {
       acceptedAt: row.acceptedAt,
       mayFetch: row.mayFetch === 1,
       mayFetchUnasked: row.mayFetchUnasked === 1,
+      ...(row.acceptedBy === null || row.acceptedBy === undefined
+        ? {}
+        : { acceptedBy: row.acceptedBy }),
       // Absent rather than null: the view these feed is a set of optional
       // facts, and `undefined` is the shape a caller can spread and omit.
       ...(row.offeredCommit === null ? {} : { offeredCommit: row.offeredCommit }),

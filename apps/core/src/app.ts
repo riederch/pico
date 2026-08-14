@@ -1741,6 +1741,34 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         requested += 1;
         if (decided.decision === 'allow') {
           executePicoAction({ decided, effects: moduleEffects, emit: emitActionFact });
+          /**
+           * ADR 0143 DP1 with ADR 0136 BR3. The fetch brought material, so
+           * this is the moment reads can be queued - and it is here rather
+           * than in the effect because ADR 0139 AC1 keeps the requester out of
+           * an effect on purpose.
+           *
+           * **Attributed to whoever accepted the attachment, or not at all.**
+           * A fetch runs on a timer with nobody present, so the person is the
+           * one who said this material may be here - and an attachment made
+           * before anybody recorded that has nobody, which means no reads.
+           * Picking somebody would be Pico deciding whose corpus this is.
+           */
+          if (attachment.acceptedBy !== undefined) {
+            void queuePicoDepotLibraryReads({
+              remote: attachment.pin.remote,
+              picoIdentityFingerprintHex: attachment.acceptedBy,
+            }).catch((error: unknown) => {
+              // A fetch that brought material succeeded. What Pico then failed
+              // to queue is a separate fact and does not undo it.
+              app.log.warn(
+                {
+                  remote: attachment.pin.remote,
+                  reason: error instanceof Error ? error.message : 'failed',
+                },
+                'Library reads were not queued after fetch.',
+              );
+            });
+          }
         }
       }
       return requested;

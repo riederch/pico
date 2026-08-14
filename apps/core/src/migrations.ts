@@ -120,6 +120,21 @@ export const picoModelProviderConsentMigrationId = '0013_pico_model_provider_con
  */
 export const picoModelJobQueueMigrationId = '0014_pico_model_job_queue' as const;
 
+/**
+ * ADR 0143 DP1. Who accepted this attachment.
+ *
+ * **Nothing recorded it, and that only became visible when something needed
+ * it.** A depot is attached by a person - DP1 makes a new commit a new
+ * decision, and a decision belongs to somebody - but the row held a pin, a
+ * reach switch and a date, and no name. So when a fetch wanted to queue reads
+ * of that material, there was nobody to queue them for.
+ *
+ * Nullable, and deliberately: attachments that already exist were accepted by
+ * somebody this schema never asked about, and inventing an answer would be
+ * worse than reads that stay unqueued until a person attaches again.
+ */
+export const picoDepotAcceptedByMigrationId = '0015_pico_depot_accepted_by' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1298,6 +1313,16 @@ const migrations: readonly MigrationDefinition[] = [
 
         CREATE INDEX idx_pico_model_job_queue_pending
         ON pico_model_job_queue (settled_at, enqueued_at);
+      `);
+    },
+  },
+  {
+    id: picoDepotAcceptedByMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_depot_attachment
+        ADD COLUMN accepted_by_pico_identity_fingerprint_hex TEXT NULL;
       `);
     },
   },

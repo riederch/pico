@@ -87,12 +87,15 @@ describe('ADR 0143 DP1 - a depot is attached at a commit', () => {
       .map((row) => (row as { name: string }).name);
     raw.close();
     // ADR 0143 DP6 unchanged: still no privacy domain. The two reach columns
-    // are ADR 0138 CO3/CO4 and say nothing about where a depot lives, and the
+    // are ADR 0138 CO3/CO4 and say nothing about where a depot lives, the
     // three fetch-outcome columns are what a fetch *learned* rather than
-    // anywhere it lives.
+    // anywhere it lives, and the accepting identity is who decided rather than
+    // where anything is - added when something finally needed somebody to
+    // attribute a read of this material to.
     expect(columns).toEqual([
       'remote', 'running_commit', 'accepted_at', 'may_fetch', 'may_fetch_unasked',
       'offered_commit', 'last_fetch_condition', 'last_fetch_at',
+      'accepted_by_pico_identity_fingerprint_hex',
     ]);
   });
 });
