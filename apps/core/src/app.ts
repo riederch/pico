@@ -1353,6 +1353,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     Object.freeze({ name: 'topic', type: 'token' }),
     Object.freeze({ name: 'summary', type: 'text' }),
   ]);
+  /** See the comment at its only use. This is not a decision, it is a gap. */
+  const picoDepotLibraryPlaceholderPrivacyDomain = 'household';
   const picoDepotLibraryReadQuestion =
     'What is this document about? Answer only from the quoted data.';
 
@@ -1446,7 +1448,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       at: () => new Date().toISOString(),
     }, {
       supplierIdentifier: 'git-library',
-      privacyDomain: 'household',
+      /**
+       * **A placeholder, and it is wrong on purpose rather than by accident.**
+       *
+       * ADR 0143 DP6 keeps a privacy domain off a depot deliberately: a column
+       * there "would have made two instances from one depot in two different
+       * spaces impossible to express, and would have put a delivery vehicle
+       * inside a person's privacy boundary". A constant here does both, one
+       * layer up, and this line is the shape that ADR arguing against.
+       *
+       * The domain belongs to the *supplier instance* - ADR 0137's IN1 says
+       * suppliers are instances and a person's decision about their own
+       * material - and `PicoSupplierManifest` has the field. What is missing
+       * is where an attached instance's declaration is recorded, which is a
+       * decision rather than a lookup. Until it is made, this queues into one
+       * named space and says so here rather than reading as though somebody
+       * chose it.
+       */
+      privacyDomain: picoDepotLibraryPlaceholderPrivacyDomain,
       picoIdentityFingerprintHex: input.picoIdentityFingerprintHex,
       entryId: chosen.entryId,
       plan: picoDepotLibraryReadPlan({ paths: depotLibraryPaths(input.remote) }),
