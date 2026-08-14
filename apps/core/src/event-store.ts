@@ -7319,6 +7319,60 @@ export class EventStore {
     return new PicoModelJobQueue(this.db);
   }
 
+  /**
+   * ADR 0104 S3. The memory-encryption decision as Pico holds it.
+   *
+   * Absent means nobody has decided *and* nothing has been inherited yet,
+   * which is the state every instance is in before its first boot under this
+   * schema. It is not "off": off is an answer.
+   */
+  public picoMemoryEncryptionDecision(): {
+    enabled: boolean;
+    decidedAt: string;
+    inheritedFromHost: boolean;
+  } | undefined {
+    this.ensureOpen();
+    const row = this.db.prepare(`
+      SELECT enabled, decided_at AS decidedAt,
+             inherited_from_host AS inheritedFromHost
+      FROM pico_memory_encryption_decision WHERE id = 1
+    `).get() as { enabled: number; decidedAt: string; inheritedFromHost: number } | undefined;
+    return row === undefined ? undefined : Object.freeze({
+      enabled: row.enabled === 1,
+      decidedAt: row.decidedAt,
+      inheritedFromHost: row.inheritedFromHost === 1,
+    });
+  }
+
+  /**
+   * ADR 0104 S3. Records the decision, and says whether a person made it.
+   *
+   * **An inherited value never overwrites a decided one.** Reading a host
+   * option is Pico noticing what it was booted with; a person answering is a
+   * person answering, and letting the first replace the second would put the
+   * add-on option back in charge through the door this table exists to close.
+   */
+  public decidePicoMemoryEncryption(input: {
+    enabled: boolean;
+    at: string;
+    inheritedFromHost: boolean;
+  }): void {
+    this.ensureOpen();
+    const existing = this.picoMemoryEncryptionDecision();
+    if (input.inheritedFromHost && existing !== undefined && !existing.inheritedFromHost) {
+      return;
+    }
+    this.db.prepare(`
+      INSERT INTO pico_memory_encryption_decision (
+        id, enabled, decided_at, inherited_from_host
+      ) VALUES (1, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        enabled = excluded.enabled,
+        decided_at = excluded.decided_at,
+        inherited_from_host = excluded.inherited_from_host
+    `).run(input.enabled ? 1 : 0, input.at, input.inheritedFromHost ? 1 : 0);
+  }
+
   public detachPicoDepot(remote: string): void {
     this.ensureOpen();
     this.db.prepare('DELETE FROM pico_depot_attachment WHERE remote = ?').run(remote);

@@ -147,6 +147,22 @@ export const picoDepotAcceptedByMigrationId = '0015_pico_depot_accepted_by' as c
  */
 export const picoModelJobProvenanceMigrationId = '0016_pico_model_job_provenance' as const;
 
+/**
+ * ADR 0104 S3. The memory-encryption decision, in Pico.
+ *
+ * **This is the older of the two violations ADR 0104 named**, and it has been
+ * a Home Assistant add-on option since before that ADR existed: a person's
+ * privacy decision living where whoever administers the host can see and set
+ * it, invisible from any other surface, and lost when the Home moves.
+ *
+ * The row records the decision and where it came from. `inheritedFromHost`
+ * matters because the two are different facts: a person who chose this and an
+ * instance that was booted with an environment variable are not the same
+ * thing, and a surface that showed them alike would be inventing consent.
+ */
+export const picoMemoryEncryptionDecisionMigrationId =
+  '0017_pico_memory_encryption_decision' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1350,6 +1366,22 @@ const migrations: readonly MigrationDefinition[] = [
       `);
       db.exec(`
         ALTER TABLE pico_model_job_queue ADD COLUMN derived_pin_covers_content INTEGER NULL;
+      `);
+    },
+  },
+  {
+    id: picoMemoryEncryptionDecisionMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_memory_encryption_decision (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          enabled INTEGER NOT NULL,
+          decided_at TEXT NOT NULL,
+          -- ADR 0104. True when nobody decided and Pico read the host option
+          -- it is trying to stop depending on.
+          inherited_from_host INTEGER NOT NULL
+        );
       `);
     },
   },

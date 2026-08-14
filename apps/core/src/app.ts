@@ -488,9 +488,43 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // Argon2id (ADR 0076), whether or not memory encryption is on.
   await sodium.ready;
 
+  /**
+   * ADR 0104 S3. Whether memory content is encrypted, decided in Pico.
+   *
+   * **Read in its own pass, and the reason is an ordering nobody chose.** The
+   * key store has to exist before the event store opens, and the decision
+   * lives inside the event store - so the decision is read from a connection
+   * that opens, migrates and closes before any of that. Two opens at boot is
+   * the cost of a setting that actually decides something; a decision read
+   * afterwards would be a setting that takes effect never.
+   *
+   * An instance with no decision inherits the host option and records that it
+   * inherited. That is ADR 0104's migration path: nothing changes for an
+   * existing install on the day it upgrades, and the next answer comes from
+   * Pico rather than from the add-on.
+   */
+  const memoryEncryptionDecision = await (async (): Promise<boolean> => {
+    const bootstrapStore = await EventStore.open(config.databasePath, {});
+    try {
+      const decided = bootstrapStore.picoMemoryEncryptionDecision();
+      if (decided !== undefined && !decided.inheritedFromHost) {
+        return decided.enabled;
+      }
+      const inherited = config.memoryEncryption === true;
+      bootstrapStore.decidePicoMemoryEncryption({
+        enabled: inherited,
+        at: new Date().toISOString(),
+        inheritedFromHost: true,
+      });
+      return inherited;
+    } finally {
+      bootstrapStore.close();
+    }
+  })();
+
   let keyStore: KeyStore | undefined;
   let memoryCrypto: MemoryContentCrypto | undefined;
-  if (config.memoryEncryption === true) {
+  if (memoryEncryptionDecision) {
     keyStore = new KeyStore(keyStorePath);
     memoryCrypto = new MemoryContentCrypto(sodium, keyStore);
   }
@@ -2544,6 +2578,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   accessClasses.register('POST', '/api/model/providers/:entryId/decision', 'authenticated');
   accessClasses.register('DELETE', '/api/model/providers/:entryId/decision', 'authenticated');
   accessClasses.register('POST', '/api/model/providers/:entryId/narrowing', 'host-admin');
+  // ADR 0104 S3. One answer for the instance rather than one per person - two
+  // residents cannot have their shared storage encrypted and not - so it sits
+  // where a retention policy does. What ADR 0104 objected to was the decision
+  // living in *host configuration*, not who sets it: this one is Pico's, moves
+  // with the Home, and is reachable from a Pico surface.
+  accessClasses.register('GET', '/api/memory/encryption', 'host-admin');
+  accessClasses.register('POST', '/api/memory/encryption', 'host-admin');
   accessClasses.register('GET', '/api/memory/retention-policies', 'host-admin');
   accessClasses.register('POST', '/api/memory/retention-policies', 'host-admin');
   accessClasses.register('GET', '/api/memory/retention-policies/:retentionPolicyId', 'host-admin');
@@ -5119,6 +5160,43 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       return sendNoStore(reply.code(404), { error: 'pico_model_provider_entry_not_found' });
     }
     return sendNoStore(reply.code(200), { narrowing });
+  });
+
+  /**
+   * ADR 0104 S3. The decision this Pico is running under, and where it came
+   * from.
+   */
+  app.get('/api/memory/encryption', async (_request, reply) => {
+    const decided = store.picoMemoryEncryptionDecision();
+    return sendNoStore(reply, {
+      enabled: memoryEncryptionDecision,
+      // Inherited and decided are different facts, and a surface that showed
+      // them alike would be inventing consent.
+      decided: decided !== undefined && !decided.inheritedFromHost,
+      ...(decided === undefined ? {} : { decidedAt: decided.decidedAt }),
+    });
+  });
+
+  app.post('/api/memory/encryption', async (request, reply) => {
+    const enabled = (request.body as { enabled?: unknown } | undefined)?.enabled;
+    if (typeof enabled !== 'boolean') {
+      return sendNoStore(reply.code(400), { error: 'invalid_memory_encryption_decision' });
+    }
+    store.decidePicoMemoryEncryption({
+      enabled,
+      at: new Date().toISOString(),
+      inheritedFromHost: false,
+    });
+    return sendNoStore(reply.code(200), {
+      enabled,
+      decided: true,
+      // **Said back rather than left to be discovered.** The key store is
+      // built before this process opened its database, so a decision taken now
+      // is a decision the next start reads. A surface that implied otherwise
+      // would have a person believing their content changed posture while it
+      // sat exactly as it was.
+      appliesAtNextStart: enabled !== memoryEncryptionDecision,
+    });
   });
 
   app.get('/api/memory/retention-policies', async (_request, reply) => {

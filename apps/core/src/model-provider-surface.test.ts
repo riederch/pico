@@ -667,3 +667,107 @@ describe('ADR 0116 W5 - the last inch is a person', () => {
     })).statusCode).toBe(404);
   });
 });
+
+describe('ADR 0104 S3 - the encryption decision moves into Pico', () => {
+  it('inherits the host option and records that nobody decided it', async () => {
+    // The migration path: nothing changes for an existing install on the day
+    // it upgrades, and the next answer comes from Pico rather than the add-on.
+    const { app, operator } = await bootWithPerson();
+    const read = (await app.inject({
+      method: 'GET',
+      url: '/api/memory/encryption',
+      headers: { authorization: operator },
+    })).json() as { enabled: boolean; decided: boolean };
+    expect(read.enabled).toBe(false);
+    // Inherited and decided are different facts.
+    expect(read.decided).toBe(false);
+  });
+
+  it('records a person\'s answer and says it applies at the next start', async () => {
+    // The key store is built before the database opens, so a decision taken
+    // now is one the next start reads. Implying otherwise would have somebody
+    // believing their content changed posture while it sat as it was.
+    const { app, operator } = await bootWithPerson();
+    const set = await app.inject({
+      method: 'POST',
+      url: '/api/memory/encryption',
+      headers: { authorization: operator },
+      payload: { enabled: true },
+    });
+    expect(set.statusCode).toBe(200);
+    expect(set.json()).toEqual({ enabled: true, decided: true, appliesAtNextStart: true });
+
+    const read = (await app.inject({
+      method: 'GET',
+      url: '/api/memory/encryption',
+      headers: { authorization: operator },
+    })).json() as { enabled: boolean; decided: boolean };
+    // Still running under what it booted with, and honest about it.
+    expect(read.enabled).toBe(false);
+    expect(read.decided).toBe(true);
+  });
+
+  it('boots under the decision rather than under the host option', async () => {
+    // The point of S3. An instance whose person answered runs on that answer,
+    // and the environment variable it was started with no longer decides.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-encryption-boot-'));
+    dirs.push(dir);
+    const databasePath = join(dir, 'pico.sqlite');
+    const seeded = await EventStore.open(databasePath, {});
+    seeded.decidePicoMemoryEncryption({
+      enabled: true,
+      at: '2026-08-14T10:00:00.000Z',
+      inheritedFromHost: false,
+    });
+    seeded.close();
+
+    const logLines: string[] = [];
+    const app = await buildApp({
+      host: '127.0.0.1',
+      port: 0,
+      databasePath,
+      deviceId: 'pico-core',
+      // The host says off. The person said on, and the person is who this
+      // table exists to let answer.
+      memoryEncryption: false,
+      logDestination: new Writable({
+        write(chunk: Buffer, _encoding, callback) {
+          logLines.push(chunk.toString('utf8'));
+          callback();
+        },
+      }),
+    }) as unknown as AppWithInject;
+    apps.push(app);
+
+    const bootstrapCode = logLines
+      .map((line) => JSON.parse(line) as { operatorBootstrapCode?: string })
+      .find((line) => typeof line.operatorBootstrapCode === 'string')?.operatorBootstrapCode;
+    await app.inject({
+      method: 'POST',
+      url: '/api/auth/bootstrap',
+      payload: { bootstrapCode, passphrase: 'encryption boot passphrase' },
+    });
+    const session = (await app.inject({
+      method: 'POST',
+      url: '/api/auth/session',
+      payload: { passphrase: 'encryption boot passphrase' },
+    })).json() as { session: string };
+
+    expect(((await app.inject({
+      method: 'GET',
+      url: '/api/memory/encryption',
+      headers: { authorization: `Bearer ${session.session}` },
+    })).json() as { enabled: boolean; decided: boolean }))
+      .toEqual({ enabled: true, decided: true, decidedAt: '2026-08-14T10:00:00.000Z' });
+  });
+
+  it('refuses an answer that is not one', async () => {
+    const { app, operator } = await bootWithPerson();
+    expect((await app.inject({
+      method: 'POST',
+      url: '/api/memory/encryption',
+      headers: { authorization: operator },
+      payload: { enabled: 'yes please' },
+    })).statusCode).toBe(400);
+  });
+});

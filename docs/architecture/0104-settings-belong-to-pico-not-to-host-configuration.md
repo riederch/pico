@@ -97,10 +97,24 @@ when it was added.
 - **S2 - No new host settings: Done as a rule.** Any new person-facing setting
   introduced as an add-on option, config file entry or environment variable is
   a defect from now on.
-- **S3 - `memory_encryption` moves into Pico: Open.** Needs a settings surface,
-  a durable store for the decision, and a migration for instances that already
-  set the option. Until then the add-on option stays, because removing it would
-  take away the only way to turn encryption on.
+- **S3 - `memory_encryption` moves into Pico: the decision does, 2026-08-14.**
+  A durable row holds it, an operator route sets it, and the boot reads it
+  before the key store is built - which needed a second, short-lived database
+  connection, because the key store has to exist before the event store opens
+  and the decision lives inside the event store. Two opens at boot is the cost
+  of a setting that decides something; a decision read afterwards would be a
+  setting that takes effect never.
+
+  **The migration is inheritance rather than a cut-over.** An instance with no
+  decision inherits the host option and records *that it inherited*, so nothing
+  changes on the day it upgrades and the next answer comes from Pico. Inherited
+  and decided are kept apart because they are different facts: an inherited
+  value never overwrites a decided one, or the add-on option would be back in
+  charge through the door this table exists to close.
+
+  The add-on option stays for now and stays transitional. What it still does is
+  supply the value an instance inherits on its first boot under this schema;
+  what it no longer does is decide. Retiring it is the remaining half of S3.
 - **S4 - `pico_foundation_token` retires: Open.** Bound to the ADR 0038/0041
   replacement of temporary Foundation hardening with real authentication, not
   to this ADR.

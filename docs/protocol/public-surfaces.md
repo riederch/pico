@@ -112,6 +112,8 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `GET /api/model/providers/mine` | experimental foundation administration surface | Lists the providers this person has decided about. Requires an identity session; an operator session is refused, because the decision is a resident's. |
 | `POST /api/model/providers/:entryId/decision` | experimental foundation administration surface | Records one person's declaration, allowance and credential reference against a shared finding. Requires an identity session. |
 | `DELETE /api/model/providers/:entryId/decision` | experimental foundation administration surface | Revokes that person's standing consent. The row keeps its date, so withdrawn stays distinguishable from never asked. |
+| `GET /api/memory/encryption` | experimental foundation administration surface | Reports whether memory content is encrypted, and whether a person decided that or Pico inherited it from the host option. Requires an operator session. |
+| `POST /api/memory/encryption` | experimental foundation administration surface | Records the decision in Pico. Says whether it applies at the next start, because the key store is built before the database opens. Requires an operator session. |
 | `GET /api/memory/retention-policies` | experimental foundation administration surface | Lists named retention policies. Requires an operator session. |
 | `POST /api/memory/retention-policies` | experimental foundation administration surface | Creates a retention policy. Requires an operator session. |
 | `GET /api/memory/retention-policies/:retentionPolicyId` | experimental foundation administration surface | Reads one retention policy. Requires an operator session. |

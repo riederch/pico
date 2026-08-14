@@ -337,3 +337,56 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     }
   });
 });
+
+describe('ADR 0104 S3 - an inherited value never overwrites a decided one', () => {
+  it('keeps a person\'s answer when a later boot reads the host option', async () => {
+    // Reading a host option is Pico noticing what it was booted with. A person
+    // answering is a person answering, and letting the first replace the
+    // second would put the add-on option back in charge through the door this
+    // table exists to close.
+    const dir = mkdtempSync(join(tmpdir(), 'pico-encryption-'));
+    dirs.push(dir);
+    const store = await EventStore.open(join(dir, 'pico.sqlite'), {});
+    try {
+      store.decidePicoMemoryEncryption({
+        enabled: true,
+        at: '2026-08-14T10:00:00.000Z',
+        inheritedFromHost: false,
+      });
+      store.decidePicoMemoryEncryption({
+        enabled: false,
+        at: '2026-08-14T11:00:00.000Z',
+        inheritedFromHost: true,
+      });
+      expect(store.picoMemoryEncryptionDecision()).toEqual({
+        enabled: true,
+        decidedAt: '2026-08-14T10:00:00.000Z',
+        inheritedFromHost: false,
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it('lets a person change an inherited value, and a later answer change that', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pico-encryption-2-'));
+    dirs.push(dir);
+    const store = await EventStore.open(join(dir, 'pico.sqlite'), {});
+    try {
+      store.decidePicoMemoryEncryption({
+        enabled: false,
+        at: '2026-08-14T10:00:00.000Z',
+        inheritedFromHost: true,
+      });
+      store.decidePicoMemoryEncryption({
+        enabled: true,
+        at: '2026-08-14T11:00:00.000Z',
+        inheritedFromHost: false,
+      });
+      expect(store.picoMemoryEncryptionDecision()?.enabled).toBe(true);
+      expect(store.picoMemoryEncryptionDecision()?.inheritedFromHost).toBe(false);
+    } finally {
+      store.close();
+    }
+  });
+});
