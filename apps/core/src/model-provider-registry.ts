@@ -1,6 +1,5 @@
 import {
   parsePicoModelProviderEntry,
-  picoModelProviderClasses,
   type PicoModelProviderAllowance,
   type PicoModelProviderClass,
   type PicoModelProviderEntry,
@@ -285,12 +284,15 @@ export class PicoModelProviderConsent {
     if (this.registry.get(input.entryId) === undefined) {
       throw new Error('pico_model_provider_entry_not_found');
     }
-    if (!(picoModelProviderClasses as readonly string[]).includes(input.providerClass)) {
-      throw new Error('invalid_pico_model_provider_class');
-    }
     // Composed before it is stored, so a decision that could not produce an
-    // entry is refused where it is made rather than discovered on read. The
-    // parser is the one that knows the wider allowance needs a credential.
+    // entry is refused where it is made rather than discovered on read.
+    //
+    // **This is the only class check, and there used to be two.** A guard here
+    // against ADR 0048's closed list read as belt and braces and was neither:
+    // the parser refuses the same value with the same error, so the guard
+    // could not fail and a mutation removing it changed nothing. Two places
+    // enforcing one rule is the drift shape this tree keeps removing, and a
+    // rule that cannot be observed to hold is worse than one place holding it.
     this.compose(this.registry.get(input.entryId)!.entry, {
       providerClass: input.providerClass,
       carries: input.carries,

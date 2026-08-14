@@ -224,6 +224,48 @@ describe('ADR 0152 - a shared finding with per-person decisions attached', () =>
     }
   });
 
+  it('refuses a class outside ADR 0048\'s list', async () => {
+    // The list is closed, and a decision naming something else is not a typo
+    // to be corrected - it is a class nobody decided existed.
+    const { registry: store, consent, close } = await registry();
+    try {
+      store.put(entry(), '2026-08-13T18:00:00.000Z');
+      expect(() => consent.decide({
+        entryId: 'a-measured-host',
+        picoIdentityFingerprintHex: alice,
+        providerClass: 'somebody_elses_basement' as never,
+        carries: 'live_turn',
+        at: '2026-08-13T18:01:00.000Z',
+      })).toThrow('invalid_pico_model_provider_class');
+    } finally {
+      close();
+    }
+  });
+
+  it('gives no entry when the finding it was decided about is gone', async () => {
+    // A decision outlives the measurement it was made against, and that is not
+    // a reason to invent one: an entry is what a person's decisions make of a
+    // finding, so without the finding there is nothing for them to have made.
+    const { registry: store, consent, close } = await registry();
+    try {
+      store.put(entry(), '2026-08-13T18:00:00.000Z');
+      consent.decide({
+        entryId: 'a-measured-host',
+        picoIdentityFingerprintHex: alice,
+        providerClass: 'declared_own_host',
+        carries: 'live_turn',
+        at: '2026-08-13T18:01:00.000Z',
+      });
+      expect(consent.entryFor('a-measured-host', alice)).toBeDefined();
+
+      store.remove('a-measured-host');
+      expect(consent.entryFor('a-measured-host', alice)).toBeUndefined();
+      expect(consent.listFor(alice)).toHaveLength(0);
+    } finally {
+      close();
+    }
+  });
+
   it('refuses a decision that could not produce an entry, where it is made', async () => {
     // ADR 0151 PV4. The wider allowance without a credential does not parse,
     // and the refusal belongs at the moment of deciding rather than on read.

@@ -152,6 +152,19 @@ describe('ADR 0049 - one job, one entry, one answer', () => {
     }
   });
 
+  it('treats a host that answers with a status as unreachable, not as an answer', async () => {
+    // A 500 is a host saying something went wrong at its end. It is not a
+    // refusal about this job, so ADR 0049's queue leaves the row pending and
+    // the next tick tries again - which only holds if this arrives as
+    // `provider_unreachable` rather than as a shape complaint.
+    const runtime = new PicoModelRuntime({
+      fetch: modelHost({ status: 500 }).fetch,
+      now: () => nowMs,
+    });
+    await expect(runtime.dispatch({ job: job(), entry: entry() }))
+      .rejects.toThrow('provider_unreachable: 500');
+  });
+
   it('constrains the decoder rather than asking politely', () => {
     // ADR 0117 X2 at the wire: a shape declared, not hoped for.
     expect(picoModelAnswerSchema(job())).toEqual({
