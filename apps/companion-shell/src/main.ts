@@ -464,6 +464,41 @@ function registerIpc(): void {
       await runtime.revokeModelProvider(entryId);
     },
   );
+  /**
+   * ADR 0116 W5. A read that fails shows nothing; a keep that fails must not.
+   *
+   * The asymmetry is the rule, not a style: not knowing what is waiting is an
+   * absence and ADR 0118 O4 says an absence never renders as broken. But a
+   * person who pressed "keep this" asked for something to happen, and silence
+   * there would leave them believing it did.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getAnsweredReads,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readAnsweredReads();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.keepAnsweredRead,
+    async (event: IpcMainInvokeEvent, jobId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof jobId !== 'string') {
+        throw new Error('invalid_answered_read');
+      }
+      return await runtime.keepAnsweredRead(jobId);
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.vetoRecovery,
     async (event: IpcMainInvokeEvent) => {

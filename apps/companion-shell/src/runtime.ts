@@ -31,6 +31,9 @@ import {
   decidePicoCompanionModelProvider,
   readPicoCompanionModelProviders,
   revokePicoCompanionModelProvider,
+  readPicoCompanionAnsweredReads,
+  keepPicoCompanionAnsweredRead,
+  type PicoCompanionAnsweredReadView,
   type PicoCompanionModelProviderView,
 } from '@pico/companion/model-providers';
 
@@ -46,6 +49,9 @@ export interface PicoCompanionShellRuntime {
     credentialRef?: string;
   }): Promise<void>;
   revokeModelProvider(entryId: string): Promise<void>;
+  /** ADR 0116 W5. What a read produced and nobody has kept. */
+  readAnsweredReads(): Promise<readonly PicoCompanionAnsweredReadView[]>;
+  keepAnsweredRead(jobId: string): Promise<string>;
   lockVault(): Promise<void>;
   status(): PicoCompanionAlarmCarrierStatus;
   stop(): Promise<void>;
@@ -226,6 +232,29 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           entryId,
+        });
+      }),
+      readAnsweredReads: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionAnsweredReads({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      keepAnsweredRead: async (jobId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await keepPicoCompanionAnsweredRead({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          jobId,
         });
       }),
       lockVault: async () => {
