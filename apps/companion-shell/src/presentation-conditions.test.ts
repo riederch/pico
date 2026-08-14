@@ -196,3 +196,49 @@ describe('ADR 0118 O1 the title only where custody allowed it', () => {
     expect(presented.at(-1)?.body).toContain('not given the words');
   });
 });
+
+describe('ADR 0118 O4 - no_model finally has a source', () => {
+  it('raises the absence when the decided provider did not answer', async () => {
+    const { notifications, presented } = adapter();
+
+    await notifications.reportModelReachability(false);
+
+    expect(presented.at(-1)?.conditions.map((condition) => condition.kind))
+      .toEqual(['no_model']);
+    // The remedy names what still works: no absence renders a working thing
+    // as broken.
+    expect(presented.at(-1)?.conditions[0]?.remedy).toContain('Capture, entry, recall and decide');
+  });
+
+  it('states nothing when reachability is not knowable', async () => {
+    // An unset field states nothing, which is not the same as stating that all
+    // is well - and a Home that never asked its provider anything must not
+    // stand under a condition because of it.
+    const { notifications, presented } = adapter();
+
+    await notifications.reportModelReachability(undefined);
+
+    expect(presented).toHaveLength(0);
+  });
+
+  it('composes with the other absences instead of replacing them', async () => {
+    // Each reporter knows one fact. A report that replaced the list would let
+    // one absence erase another while the person watched.
+    const { notifications, presented } = adapter();
+
+    await notifications.reportNetworkState(false);
+    await notifications.reportModelReachability(false);
+
+    expect(presented.at(-1)?.conditions.map((condition) => condition.kind))
+      .toEqual(['no_network', 'no_model']);
+  });
+
+  it('clears the absence when the provider answers again', async () => {
+    const { notifications, presented } = adapter();
+
+    await notifications.reportModelReachability(false);
+    await notifications.reportModelReachability(true);
+
+    expect(presented.at(-1)?.conditions).toEqual([]);
+  });
+});

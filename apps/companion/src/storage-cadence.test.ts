@@ -255,3 +255,63 @@ describe('ADR 0118 O1 - the device says it told the person', () => {
     }
   });
 });
+
+/**
+ * ADR 0118 O4's second half. `no_model` had a name, a remedy sentence and no
+ * source: the absence vocabulary was written before a model existed and nobody
+ * came back once one did.
+ */
+describe('ADR 0118 O4 - whether the decided model answers', () => {
+  it('reports it on the same check, not on a schedule of its own', async () => {
+    const reportModelReachability = vi.fn();
+    const started = await carrier({
+      readModelReachability: async () => false,
+      notifications: { notifyPendingRecovery: () => {}, reportModelReachability },
+    });
+
+    try {
+      await started.checkNow();
+      expect(reportModelReachability).toHaveBeenCalledWith(false);
+      expect(started.status().modelReadFailures).toBe(0);
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('carries not-knowable as itself rather than as good health', async () => {
+    // A Home that has never asked its provider anything is not a Home whose
+    // provider is fine, and only one of those may clear a standing condition.
+    const reportModelReachability = vi.fn();
+    const started = await carrier({
+      readModelReachability: async () => undefined,
+      notifications: { notifyPendingRecovery: () => {}, reportModelReachability },
+    });
+
+    try {
+      await started.checkNow();
+      expect(reportModelReachability).toHaveBeenCalledWith(undefined);
+    } finally {
+      started.stop();
+    }
+  });
+
+  it('says nothing when the read broke, and never fails the alarm', async () => {
+    const reportModelReachability = vi.fn();
+    const started = await carrier({
+      readModelReachability: async () => {
+        throw new Error('link_unreachable');
+      },
+      notifications: { notifyPendingRecovery: () => {}, reportModelReachability },
+    });
+
+    try {
+      const check = await started.checkNow();
+      expect(reportModelReachability).not.toHaveBeenCalled();
+      expect(started.status().modelReadFailures).toBe(started.status().checks);
+      expect(check.status).toBe('clear');
+      expect(started.status().readFailures).toBe(0);
+    } finally {
+      started.stop();
+    }
+  });
+});

@@ -241,3 +241,105 @@ describe('ADR 0143 DP1 - an attachment records who accepted it', () => {
     }
   });
 });
+
+describe('ADR 0152 SE5 - what an entry last did, derived from the queue', () => {
+  it('reads nothing as nothing rather than as a failure', async () => {
+    const { queue: q, close } = await queue();
+    try {
+      expect(q.observationFor('a-measured-host'))
+        .toEqual({ jobInFlight: false });
+    } finally {
+      close();
+    }
+  });
+
+  it('counts a handed-over job as in flight, not one still waiting its turn', async () => {
+    // A job in the queue says nothing about the machine. One that was handed
+    // over does.
+    const { queue: q, close } = await queue();
+    try {
+      await enqueuePicoDepotLibraryReads(
+        intake(q, async () => ({ text: 'fine', commit: 'a'.repeat(40) })),
+        {
+          supplierIdentifier: 'git-library',
+          privacyDomain: 'household',
+          picoIdentityFingerprintHex: 'a'.repeat(64),
+          entryId: 'a-measured-host',
+          plan: picoDepotLibraryReadPlan({ paths: ['a.md'] }),
+          expects,
+          question,
+        },
+      );
+      expect(q.observationFor('a-measured-host').jobInFlight).toBe(false);
+
+      q.recordAttempt('job_a_md', '2026-08-14T12:01:00.000Z');
+      expect(q.observationFor('a-measured-host').jobInFlight).toBe(true);
+    } finally {
+      close();
+    }
+  });
+
+  it('answers with the most recently settled job, not the first one', async () => {
+    const { queue: q, close } = await queue();
+    try {
+      await enqueuePicoDepotLibraryReads(
+        intake(q, async () => ({ text: 'fine', commit: 'a'.repeat(40) })),
+        {
+          supplierIdentifier: 'git-library',
+          privacyDomain: 'household',
+          picoIdentityFingerprintHex: 'a'.repeat(64),
+          entryId: 'a-measured-host',
+          plan: picoDepotLibraryReadPlan({ paths: ['a.md', 'b.md'] }),
+          expects,
+          question,
+        },
+      );
+      q.settle({
+        jobId: 'job_a_md',
+        outcome: 'provider_unreachable',
+        at: '2026-08-14T12:01:00.000Z',
+      });
+      q.settle({ jobId: 'job_b_md', outcome: 'ok', at: '2026-08-14T12:05:00.000Z' });
+
+      // The older failure is history; a surface that showed it would tell
+      // somebody their provider is down while it is answering.
+      expect(q.observationFor('a-measured-host')).toEqual({
+        jobInFlight: false,
+        lastOutcome: 'ok',
+        lastSettledAt: '2026-08-14T12:05:00.000Z',
+      });
+    } finally {
+      close();
+    }
+  });
+
+  it('answers per entry, so one machine\'s failure is not another\'s', async () => {
+    const { queue: q, close } = await queue();
+    try {
+      for (const entryId of ['a-measured-host', 'another-host']) {
+        await enqueuePicoDepotLibraryReads(
+          intake(q, async () => ({ text: 'fine', commit: 'a'.repeat(40) })),
+          {
+            supplierIdentifier: 'git-library',
+            privacyDomain: 'household',
+            picoIdentityFingerprintHex: 'a'.repeat(64),
+            entryId,
+            plan: picoDepotLibraryReadPlan({ paths: [`${entryId}.md`] }),
+            expects,
+            question,
+          },
+        );
+      }
+      q.settle({
+        jobId: 'job_a_measured_host_md',
+        outcome: 'provider_unreachable',
+        at: '2026-08-14T12:01:00.000Z',
+      });
+
+      expect(q.observationFor('a-measured-host').lastOutcome).toBe('provider_unreachable');
+      expect(q.observationFor('another-host').lastOutcome).toBeUndefined();
+    } finally {
+      close();
+    }
+  });
+});

@@ -91,6 +91,10 @@
       "types": "./dist/model-provider.d.ts",
       "import": "./dist/model-provider.js"
     },
+    "./model-provider-state": {
+      "types": "./dist/model-provider-state.d.ts",
+      "import": "./dist/model-provider-state.js"
+    },
     "./module": {
       "types": "./dist/module.d.ts",
       "import": "./dist/module.js"

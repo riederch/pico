@@ -317,6 +317,17 @@ describe('ADR 0152 SE1 - a measured provider in words', () => {
     }).ceiling).toContain('Narrowed here to 8,192 tokens');
   });
 
+  it('says what the provider last did, and what an unknown word is', () => {
+    // ADR 0152 SE5 on the host surface. A word this dashboard does not know is
+    // reported as unknown rather than printed raw: an unrecognised token on a
+    // screen is a state nobody wrote.
+    expect(picoModelProviderLines({ ...measured, state: 'did_not_answer' }).state)
+      .toBe('Did not answer the last job.');
+    expect(picoModelProviderLines({ ...measured, state: 'sulking' }).state)
+      .toContain('does not know');
+    expect(picoModelProviderLines(measured).state).toBe('Not reported by this Home.');
+  });
+
   it('carries the Home\'s sentence about what it sees rather than composing one', () => {
     // What an entry carries is decided where the entry is held. A dashboard
     // that composed its own would be a second place deciding what a person is

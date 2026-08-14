@@ -411,10 +411,22 @@ companion's list without anybody being told.
   its flag says, because a path that could not be approved offline must
   not be treated as approved once the network returns.
 
-  What is not done: nothing consumes these yet. There is no model
-  provider in the tree, so no code path can be shown to honour the
-  no-failover rule under real pressure. The rules are stated and tested
-  where they will be read; the enforcement lands with the provider.
+  **The provider arrived on 2026-08-13 and this paragraph did not follow
+  it until 2026-08-14.** What it said - "nothing consumes these yet, there
+  is no model provider in the tree" - had been false for a day, which is
+  how a status that nobody re-reads turns into a claim.
+
+  What is true now: `picoModelJobDeadlineMs` builds the absence threshold
+  from the entry's own measurement, so a provider that exceeds it is
+  refused as unavailable rather than waited on, and the refusal is a named
+  outcome rather than an empty answer. Nothing fails over between classes
+  because nothing fails over at all - the queue refuses to choose among
+  several decided entries instead of picking one, which is a stronger
+  posture than the rule asks for and is recorded as such.
+
+  Since 2026-08-14 the absence also reaches the person: a provider's state
+  is derived from settled jobs and said in words, with *working* and *did
+  not answer* kept apart (ADR 0152 SE5).
 
   Original gate text: unavailability is a typed outcome, not an empty
   result; no failover across provider classes; timeout equals absence;
@@ -423,8 +435,7 @@ companion's list without anybody being told.
   additive records in the ADR 0069 idiom, idempotent, origin-labeled
   under ADR 0116 W2 and typed under ADR 0117 X2, over the existing ADR
   0112 hook; never an edit of the captured record.
-- **O4 - Two states (implemented for `no_network`; `no_model` waits on a
-  model):** `picoAbsenceStates` splits ADR 0009's
+- **O4 - Two states (implemented; `no_model` got its source 2026-08-14):** `picoAbsenceStates` splits ADR 0009's
   single "offline or degraded" into `no_network` and `no_model`, and
   `PicoDegradationState` carries them as a list so both, either or
   neither can hold - a shape that cannot collapse them back into one.
@@ -434,6 +445,16 @@ companion's list without anybody being told.
   against every combination of absences. It is a total function over the
   family list rather than a lookup with a default, so a family added
   later gets the safe answer without anyone remembering to return here.
+
+  **`no_model` had a name, a remedy sentence and nothing that could raise
+  it** until 2026-08-14. The vocabulary was written before a model existed,
+  and when one arrived nobody came back. It is now reported on the ADR 0112
+  carrier's cadence - so the condition is ambient rather than something a
+  person sees only while a particular window is open - and derived from the
+  states of the providers *this person decided on*. A measured machine
+  nobody chose cannot raise it, and a Home that has asked nothing reports
+  not-knowable rather than absence, because an unset field states nothing
+  and that is not the same as stating that all is well.
 
   The companion now displays them. `PicoCompanionPresentation` carries
   `conditions` beside `kind` rather than folded into it, because the two

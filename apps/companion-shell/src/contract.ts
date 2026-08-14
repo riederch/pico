@@ -1,3 +1,5 @@
+import type { PicoModelProviderState } from '@pico/protocol/model-provider-state';
+
 /**
  * ADR 0113 C2/B3: the complete renderer-facing contract. It contains only
  * already-rendered presentation state. Key material, daemon paths, sockets,
@@ -64,6 +66,22 @@ export const picoCompanionConditionKinds = [
 ] as const;
 
 export type PicoCompanionConditionKind = typeof picoCompanionConditionKinds[number];
+
+/**
+ * ADR 0113 C2. The protocol's provider states, declared here because this file
+ * loads in the renderer, where a bare specifier does not resolve.
+ *
+ * A local copy of a closed list is exactly the drift this project keeps
+ * hitting, so it is bound to the protocol by a test rather than by intent -
+ * the same arrangement `browser:check` names as the remedy.
+ */
+export const picoCompanionModelProviderStates = [
+  'not_used_yet',
+  'working',
+  'answered',
+  'did_not_answer',
+  'different_model',
+] as const;
 
 export interface PicoCompanionCondition {
   kind: PicoCompanionConditionKind;
@@ -404,6 +422,14 @@ export interface PicoCompanionModelProvider {
   decided: boolean;
   sees: string;
   needsCredentialToSeeMore: boolean;
+  /**
+   * ADR 0152 SE5. What it last did, derived by the Home from settled jobs.
+   *
+   * Optional because a Home built before this answered without it, and a
+   * device that refused the whole list over a missing word would turn an older
+   * Home into a broken one (ADR 0118 O4).
+   */
+  state?: PicoModelProviderState;
 }
 
 /**
@@ -427,10 +453,41 @@ export interface PicoCompanionModelProviderLine {
   action: 'decide' | 'widen' | 'revoke';
 }
 
+/**
+ * ADR 0152 SE5. What a state adds to the line a person is reading.
+ *
+ * **Working and gone are different absences and get different sentences**:
+ * one ends by itself and the other needs somebody. A changed model is neither
+ * - it is a sentence about a decision to re-pin, never a warning to wave away.
+ *
+ * `not_used_yet` and `answered` add nothing, and that is deliberate: a note on
+ * a machine that is doing its job is noise, and noise is what makes the two
+ * sentences above stop being read.
+ */
+function picoCompanionModelStateDetail(
+  state: PicoModelProviderState | undefined,
+): string | undefined {
+  switch (state) {
+    case 'working':
+      return 'It is answering something now. The first answer after a quiet '
+        + 'spell takes longer, because the model has to be loaded first.';
+    case 'did_not_answer':
+      return 'It did not answer the last thing Pico sent. Summaries and '
+        + 'suggestions wait; everything you do yourself is unaffected.';
+    case 'different_model':
+      return 'It is serving a different model than the one that was measured. '
+        + 'Pico sends nothing there until somebody measures it again - the '
+        + 'numbers this decision was made on were measured against the old one.';
+    default:
+      return undefined;
+  }
+}
+
 export function picoCompanionModelProviderLines(
   providers: readonly PicoCompanionModelProvider[],
 ): readonly PicoCompanionModelProviderLine[] {
   return Object.freeze(providers.map((provider) => {
+    const stateDetail = picoCompanionModelStateDetail(provider.state);
     if (!provider.decided) {
       return Object.freeze({
         entryId: provider.entryId,
@@ -448,14 +505,17 @@ export function picoCompanionModelProviderLines(
         // help page: a person who never adds a credential gets a Pico whose
         // model never sees their memory, and nothing else will tell them.
         detail: 'It does not see what Pico remembers. That needs a way for this '
-          + 'machine to prove who it is.',
+          + 'machine to prove who it is.'
+          + (stateDetail === undefined ? '' : ` ${stateDetail}`),
         action: 'widen' as const,
       });
     }
     return Object.freeze({
       entryId: provider.entryId,
       headline: `${provider.model} sees this conversation and what Pico remembers`,
-      detail: 'You can withdraw this at any time.',
+      detail: `You can withdraw this at any time.${
+        stateDetail === undefined ? '' : ` ${stateDetail}`
+      }`,
       action: 'revoke' as const,
     });
   }));
@@ -481,6 +541,13 @@ export function parsePicoCompanionModelProviders(
       || typeof record.needsCredentialToSeeMore !== 'boolean') {
       throw new Error('invalid_pico_companion_model_provider');
     }
+    // A word this device does not know is dropped rather than believed: it
+    // would be rendered as a state, and an unknown state rendered is a
+    // sentence nobody wrote.
+    const state = (picoCompanionModelProviderStates as readonly string[])
+      .includes(record.state as string)
+      ? record.state as PicoModelProviderState
+      : undefined;
     return Object.freeze({
       entryId: record.entryId,
       model: record.model,
@@ -489,6 +556,7 @@ export function parsePicoCompanionModelProviders(
       decided: record.decided,
       sees: record.sees,
       needsCredentialToSeeMore: record.needsCredentialToSeeMore,
+      ...(state === undefined ? {} : { state }),
     });
   }));
 }

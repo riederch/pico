@@ -50,6 +50,8 @@ export type PicoCompanionShellNotifications = PicoCompanionNotificationAdapter
      * here rather than through the carrier's notification contract.
      */
     reportNetworkState(online: boolean): Promise<void>;
+    /** ADR 0118 O4. Whether the model this person decided on is answering. */
+    reportModelReachability(reachable: boolean | undefined): Promise<void>;
   };
 
 export function createPicoCompanionPresentationAdapter(
@@ -118,6 +120,16 @@ export function createPicoCompanionPresentationAdapter(
     /** ADR 0118 O4. The shell's own observation, composed with the rest. */
     reportNetworkState: async (online) => {
       await observe({ online });
+    },
+    /**
+     * ADR 0118 O4, and the half that waited for a model to exist.
+     *
+     * **Not knowable is carried as not knowable.** An unset field states
+     * nothing; turning it into `true` would clear a standing `no_model` on a
+     * Home that has simply never asked its provider anything.
+     */
+    reportModelReachability: async (reachable) => {
+      await observe(reachable === undefined ? {} : { modelReachable: reachable });
     },
     /**
      * ADR 0118 O1. States that something is due, and since when.

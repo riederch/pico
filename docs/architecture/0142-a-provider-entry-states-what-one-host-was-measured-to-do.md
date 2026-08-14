@@ -421,6 +421,48 @@ first chance to change that, and it does not require the queue to exist.
 
 ## Gates
 
+**Status of PE1-PE6, audited against the code on 2026-08-14.** They were
+written before the provider existed and never revisited after it shipped on
+2026-08-13; five of the six were built with the entry contract and the
+runtime, and one is narrower in practice than its text. A gate that says
+"open" about something that is built hides what is actually left, which is the
+same harm as one that claims something that is not.
+
+- **PE1 - An entry describes one deployment (implemented 2026-08-13):**
+  `parsePicoModelProviderEntry` takes the model identity and the reach as one
+  record and refuses an entry whose measurement does not name the deployment it
+  was taken on. Nothing derives an entry from model metadata.
+- **PE2 - Capacity is measured, not advertised (implemented 2026-08-13):** the
+  measurement carries `measuredAt` and the observed figures, `scripts/measure-
+  model-provider.ts` is the only thing that writes one, and ADR 0116 W3's
+  assembly is bounded by the entry rather than by the protocol ceiling. The
+  surfaces show the date beside the numbers (ADR 0152 SE7), because a figure
+  without one is an advertisement again.
+- **PE3 - Concurrency is declared and defaults to one (implemented, narrower
+  than the text):** the entry states `concurrentJobs` and
+  `PicoModelProviderLanes` serialises **one** job per entry regardless of what
+  it states. That satisfies the gate's rule - a runtime scheduling more than
+  the entry declares is a defect, and this never does - and does not use the
+  number. Recorded as it is rather than as the text suggests: a declared two
+  buys nothing today.
+- **PE4 - Warm-up is part of the availability contract (implemented
+  2026-08-13):** `picoModelJobDeadlineMs` is built from the entry's declared
+  residency plus its measured throughput, so a first job after an idle spell is
+  not reported as absent for taking as long as the entry says it takes. Nothing
+  fails over between classes, because nothing fails over at all - the queue
+  refuses to choose among several decided entries rather than picking one.
+- **PE5 - Unauthenticated reach is not a provider (implemented as ADR 0151
+  amended it):** the reach is `http:` or `https:` and carries no credential;
+  a credential over an unprotected transport does not parse; an entry without
+  one is valid and carries the live turn only. See ADR 0151 PV1-PV5.
+- **PE6 - The model is pinned (implemented 2026-08-13):** the entry records the
+  digest, `assertMeasuredModel` asks the host what it is serving before any
+  words leave, and a mismatch refuses as `model_is_not_the_measured_one`. Since
+  2026-08-14 it also reaches the person as its own state - a sentence about
+  re-pinning rather than an outage (ADR 0152 SE5).
+
+  Original gate text follows.
+
 - **PE1 - An entry describes one deployment (open):** provider identity is
   the pair of a model at a version and the host serving it; no entry is
   derived from model metadata alone, and none is portable between

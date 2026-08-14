@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { picoModelProviderStates } from '@pico/protocol/model-provider-state';
 import {
   parsePicoCompanionAnsweredReads,
+  picoCompanionModelProviderStates,
   picoCompanionAnsweredReadLines,
   parsePicoCompanionModelProviders,
   picoCompanionModelProviderLines,
@@ -158,5 +160,88 @@ describe('the window asks for both lists when it opens', () => {
     // ADR 0118 O4: no absence renders a working thing as broken.
     expect(renderer).toContain('providerSection.hidden = true;');
     expect(renderer).toContain('readSection.hidden = true;');
+  });
+});
+
+describe('ADR 0152 SE5 - loading and gone are told apart in the simple layer', () => {
+  it('says a provider is thinking rather than leaving a person to guess', () => {
+    // Working and gone are different absences: one ends by itself and the
+    // other needs somebody. The first answer after a quiet spell legitimately
+    // takes as long as the entry's declared residency (ADR 0142 PE4).
+    const [line] = picoCompanionModelProviderLines([
+      provider({ decided: true, needsCredentialToSeeMore: false, state: 'working' }),
+    ]);
+    expect(line?.detail).toContain('answering something now');
+    expect(line?.detail).toContain('loaded first');
+  });
+
+  it('says a provider did not answer, and what that costs', () => {
+    // ADR 0118 O4: the sentence names what still works, because no absence may
+    // render a working thing as broken.
+    const [line] = picoCompanionModelProviderLines([
+      provider({ decided: true, needsCredentialToSeeMore: false, state: 'did_not_answer' }),
+    ]);
+    expect(line?.detail).toContain('did not answer');
+    expect(line?.detail).toContain('everything you do yourself is unaffected');
+  });
+
+  it('states a changed model as a sentence about re-pinning', () => {
+    // ADR 0142 PE6 with SE5: never a dismissable warning. The numbers this
+    // decision was made on were measured against the old weights.
+    const [line] = picoCompanionModelProviderLines([
+      provider({ decided: true, needsCredentialToSeeMore: false, state: 'different_model' }),
+    ]);
+    expect(line?.detail).toContain('different model than the one that was measured');
+    expect(line?.detail).toContain('measures it again');
+  });
+
+  it('says nothing extra about a provider that is doing its job', () => {
+    // A note on every line is noise, and noise is what makes the sentences
+    // above stop being read.
+    for (const state of ['answered', 'not_used_yet'] as const) {
+      const [line] = picoCompanionModelProviderLines([
+        provider({ decided: true, needsCredentialToSeeMore: false, state }),
+      ]);
+      expect(line?.detail).toBe('You can withdraw this at any time.');
+    }
+  });
+
+  it('drops a state this version does not know instead of rendering it', () => {
+    // An unknown word rendered is a sentence nobody wrote.
+    const [parsed] = parsePicoCompanionModelProviders([{
+      entryId: 'a-measured-host',
+      model: 'a-model:measured',
+      contextTokens: 40960,
+      measuredAt: '2026-08-13T17:43:04.923Z',
+      decided: true,
+      sees: 'this conversation only',
+      needsCredentialToSeeMore: false,
+      state: 'sulking',
+    }]);
+    expect(parsed?.state).toBeUndefined();
+  });
+
+  it('reads a Home that answers without a state at all', () => {
+    // ADR 0118 O4. An older Home is not a broken one.
+    const [parsed] = parsePicoCompanionModelProviders([{
+      entryId: 'a-measured-host',
+      model: 'a-model:measured',
+      contextTokens: 40960,
+      measuredAt: '2026-08-13T17:43:04.923Z',
+      decided: true,
+      sees: 'this conversation only',
+      needsCredentialToSeeMore: false,
+    }]);
+    expect(parsed?.state).toBeUndefined();
+  });
+});
+
+describe('ADR 0113 C2 - the renderer copy of a closed list is bound to it', () => {
+  it('lists exactly the states the protocol defines', () => {
+    // This file loads in the renderer, where a bare specifier does not
+    // resolve, so the words are declared locally. A local copy of a closed
+    // list is the drift this project keeps hitting; the binding is this test
+    // rather than anybody's intent.
+    expect([...picoCompanionModelProviderStates]).toEqual([...picoModelProviderStates]);
   });
 });

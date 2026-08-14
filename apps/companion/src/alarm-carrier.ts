@@ -91,6 +91,14 @@ export interface PicoCompanionNotificationAdapter {
   reportDueEntries?(
     view: PicoHomeDueEntriesView,
   ): Promise<PicoCompanionDueEntriesTold | void> | void;
+  /**
+   * ADR 0118 O4. Whether the model this person decided on is answering.
+   *
+   * Reported only after a successful read, like the others, and `undefined`
+   * travels rather than being turned into `true`: not knowable and fine are
+   * different, and only one of them should clear a standing condition.
+   */
+  reportModelReachability?(reachable: boolean | undefined): void | Promise<void>;
 }
 
 /**
@@ -118,6 +126,11 @@ export interface StartPicoCompanionAlarmCarrierInput {
   readStorageCondition?: PicoCompanionStorageReader;
   /** ADR 0118 O1. Optional, like the storage read. */
   readDueEntries?: PicoCompanionDueEntriesReader;
+  /**
+   * ADR 0118 O4. Optional for the same reason: a Home that does not answer the
+   * provider read leaves `no_model` unstated rather than false.
+   */
+  readModelReachability?: () => Promise<boolean | undefined>;
   /**
    * ADR 0118 O1. Tells the Home that an entry reached the person.
    *
@@ -157,6 +170,8 @@ export interface PicoCompanionAlarmCarrierStatus {
    * lose the entry if this device never runs again.
    */
   dueEntryAcknowledgeFailures: number;
+  /** ADR 0118 O4. Counted separately: the model is secondary to the alarm. */
+  modelReadFailures: number;
 }
 
 export interface PicoCompanionAlarmCarrier {
@@ -194,6 +209,7 @@ export async function startPicoCompanionAlarmCarrier(
     storageReadFailures: 0,
     dueEntriesReadFailures: 0,
     dueEntryAcknowledgeFailures: 0,
+    modelReadFailures: 0,
   };
 
   /**
@@ -256,10 +272,33 @@ export async function startPicoCompanionAlarmCarrier(
     }
   };
 
+  /**
+   * ADR 0118 O4. Same posture as the other two: never fails the alarm, and a
+   * failed read says nothing rather than clearing what stands.
+   */
+  const readModel = async (): Promise<void> => {
+    if (input.readModelReachability === undefined) {
+      return;
+    }
+    let reachable: boolean | undefined;
+    try {
+      reachable = await input.readModelReachability();
+    } catch {
+      status.modelReadFailures += 1;
+      return;
+    }
+    try {
+      await input.notifications.reportModelReachability?.(reachable);
+    } catch {
+      status.notifyFailures += 1;
+    }
+  };
+
   const performCheck = async (): Promise<PicoCompanionAlarmCheck> => {
     const checkedAt = now().toISOString();
     await readStorage();
     await readDue();
+    await readModel();
     let snapshot: PicoCompanionLifecycleSnapshot;
     try {
       snapshot = await input.readLifecycle();

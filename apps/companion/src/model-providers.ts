@@ -1,3 +1,8 @@
+import {
+  picoModelIsReachable,
+  picoModelProviderStates,
+  type PicoModelProviderState,
+} from '@pico/protocol/model-provider-state';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 
 /**
@@ -23,6 +28,12 @@ export interface PicoCompanionModelProviderView {
   decided: boolean;
   sees: string;
   needsCredentialToSeeMore: boolean;
+  /**
+   * ADR 0152 SE5. Optional: a Home built before this answers without it, and
+   * a device that refused the list over a missing word would render an older
+   * Home as broken (ADR 0118 O4).
+   */
+  state?: PicoModelProviderState;
 }
 
 function asProviders(value: unknown): readonly PicoCompanionModelProviderView[] {
@@ -41,6 +52,13 @@ function asProviders(value: unknown): readonly PicoCompanionModelProviderView[] 
       || typeof record.needsCredentialToSeeMore !== 'boolean') {
       throw new Error('invalid_pico_model_provider_result');
     }
+    // A word this version does not know is dropped rather than carried: it
+    // would end up rendered, and an unknown state rendered is a sentence
+    // nobody wrote.
+    const state = (picoModelProviderStates as readonly string[])
+      .includes(record.state as string)
+      ? record.state as PicoModelProviderState
+      : undefined;
     return Object.freeze({
       entryId: record.entryId,
       model: record.model,
@@ -49,6 +67,7 @@ function asProviders(value: unknown): readonly PicoCompanionModelProviderView[] 
       decided: record.decided,
       sees: record.sees,
       needsCredentialToSeeMore: record.needsCredentialToSeeMore,
+      ...(state === undefined ? {} : { state }),
     });
   }));
 }
@@ -61,6 +80,28 @@ export async function readPicoCompanionModelProviders(input: {
     throw new Error(`model_providers_read_rejected:${read.outcome}`);
   }
   return asProviders(read.result);
+}
+
+/**
+ * ADR 0118 O4. Whether the model this person decided on is answering.
+ *
+ * **Only decided entries count.** A measured machine nobody chose is not a
+ * model this Home uses, and letting it raise `no_model` would put a standing
+ * absence on a Home that is working exactly as its owner set it up.
+ *
+ * `undefined` is the third answer and it is load-bearing: no decided provider,
+ * or none that has ever been asked, is *not knowable* rather than absent - and
+ * ADR 0118 O4's unset field states nothing, which is not the same as stating
+ * that all is well.
+ */
+export async function readPicoCompanionModelReachability(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<boolean | undefined> {
+  const providers = await readPicoCompanionModelProviders(input);
+  return picoModelIsReachable(providers
+    .filter((provider) => provider.decided)
+    .map((provider) => provider.state)
+    .filter((state): state is PicoModelProviderState => state !== undefined));
 }
 
 export async function decidePicoCompanionModelProvider(input: {

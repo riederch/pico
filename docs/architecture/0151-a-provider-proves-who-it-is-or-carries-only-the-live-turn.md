@@ -172,6 +172,22 @@ NAS, and none of that has become less true.
 
 ## Gates
 
+**Status of PV1-PV5, audited against the code on 2026-08-14: all five are
+implemented**, and every one of them is a refusal in the parser or at dispatch
+rather than a rule somebody applies.
+
+- `parsePicoModelProviderEntry` refuses `live_turn_and_retrieved_memory`
+  without a credential reference (PV4), refuses a credential on an unprotected
+  transport (PV5), and refuses the wider allowance on a class that may not
+  carry it whatever credential it holds (PV2).
+- `picoModelJobRefusal` decides the job's allowance against the entry's before
+  a request is built, so a job does not become sendable by the provider it
+  lands on (PV1, PV3).
+- The refusal reaches the person as words on their own device, where the
+  decision is made (ADR 0152 SE1).
+
+Original gate text follows.
+
 - **PV1 - The proof buys the memory, not the provider (concept-only):** an
   entry without a proven provider identity is valid and carries the live
   turn. Retrieved memory requires the proof on every job. No threshold, no

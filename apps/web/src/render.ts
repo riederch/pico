@@ -888,6 +888,7 @@ function createModelProviderRow(
     [lines.sees, false],
     [lines.measured, false],
     [lines.ceiling, false],
+    [lines.state, false],
   ] as Array<[string, boolean]>) {
     const cell = document.createElement('td');
     cell.textContent = text;
@@ -924,11 +925,20 @@ function createModelProviderRow(
  * person cannot tell a narrow machine from a narrowed one, and the second is a
  * decision somebody here made and can revisit.
  */
+const modelProviderStateLabels: Record<string, string> = {
+  not_used_yet: 'Nothing has been sent here yet.',
+  working: 'Answering something now.',
+  answered: 'Answered the last job.',
+  did_not_answer: 'Did not answer the last job.',
+  different_model: 'Serving a different model than the one measured. Re-measure to use it.',
+};
+
 export function picoModelProviderLines(entry: PicoModelProviderEntryView): {
   identity: string;
   sees: string;
   measured: string;
   ceiling: string;
+  state: string;
 } {
   const narrowed = entry.effective.contextTokens !== entry.measured.contextTokens
     || entry.effective.concurrentJobs !== entry.measured.concurrentJobs;
@@ -947,6 +957,12 @@ export function picoModelProviderLines(entry: PicoModelProviderEntryView): {
       ? `Narrowed here to ${formatCount(entry.effective.contextTokens)} tokens, `
         + `${entry.effective.concurrentJobs} at a time.`
       : 'Not narrowed: this Home uses what was measured.',
+    // ADR 0152 SE5. A word this dashboard does not know is reported as such
+    // rather than printed raw: an unrecognised token on a screen is a state
+    // nobody wrote.
+    state: entry.state === undefined
+      ? 'Not reported by this Home.'
+      : modelProviderStateLabels[entry.state] ?? 'Reported a state this dashboard does not know.',
   };
 }
 

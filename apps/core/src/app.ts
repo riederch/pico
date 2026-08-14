@@ -162,6 +162,7 @@ import type {
   PicoModelProviderAllowance,
   PicoModelProviderClass,
 } from '@pico/protocol/model-provider';
+import { picoModelProviderState } from '@pico/protocol/model-provider-state';
 import { picoLinkPushCandidates } from './link-push-occasion.js';
 import { sendPicoLinkPush } from './link-push-send.js';
 import {
@@ -3323,17 +3324,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           const mine = new Map(consent
             .listFor(principal.picoIdentityFingerprintHex)
             .map((entry) => [entry.entryId, entry]));
+          // ADR 0152 SE5. Derived from settled jobs, so it costs no request
+          // and reaches nothing: a surface read that probed a machine would be
+          // this Home reaching outside because somebody opened a window.
+          const queue = store.picoModelJobQueue();
           return {
             outcome: 'ok',
             result: {
               providers: store.picoModelProviderRegistry().list().map((record) => {
                 const decided = mine.get(record.entry.entryId);
                 const finding = picoModelProviderEffectiveEntry(record);
+                const observation = queue.observationFor(record.entry.entryId);
                 return {
                   entryId: record.entry.entryId,
                   model: record.entry.model.identifier,
                   contextTokens: finding.measurement.capacity.contextTokens,
                   measuredAt: record.entry.measurement.measuredAt,
+                  state: picoModelProviderState(observation),
+                  ...(observation.lastSettledAt === undefined
+                    ? {}
+                    : { stateSince: observation.lastSettledAt }),
                   // ADR 0152 SE1. The consequence in words, and the absence of
                   // a decision said as an absence rather than as a default.
                   decided: decided !== undefined,
@@ -5165,6 +5175,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
 
   app.get('/api/model/providers', async (_request, reply) => {
     const registry = store.picoModelProviderRegistry();
+    const queue = store.picoModelJobQueue();
     return sendNoStore(reply, {
       providers: registry.list().map((record) => {
         const effective = picoModelProviderEffectiveEntry(record);
@@ -5172,6 +5183,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           entryId: record.entry.entryId,
           model: record.entry.model.identifier,
           providerClass: record.entry.providerClass,
+          // ADR 0152 SE5. What it last did, derived from settled jobs.
+          state: picoModelProviderState(queue.observationFor(record.entry.entryId)),
           // ADR 0152 SE1. The consequence, in words, before any number.
           sees: record.entry.carries === 'live_turn'
             ? 'this conversation only'

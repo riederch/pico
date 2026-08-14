@@ -190,6 +190,51 @@ place.
 
 ## Gates
 
+**Status of SE1-SE6, audited against the code on 2026-08-14.** They were
+written as concepts and four of them were built while nobody updated the list.
+SE5 was the one that had not been, and the audit is what found it.
+
+- **SE1, SE2, SE3: implemented.** `picoCompanionModelProviderLines` is the one
+  place the person-facing words are chosen, and it leads with the consequence;
+  the allowance and the declaration are the headline rather than a detail
+  behind a disclosure; the measurement is shown and is not editable there -
+  narrowing lives on the host surface, in the class ADR 0087 puts it in.
+- **SE4: implemented.** `PicoModelProviderRegistry.narrow` refuses a widening
+  and names the measurement it was measured against, the route answers `409`
+  with that measurement, and the dashboard prints it. It refuses without
+  trimming, in ADR 0119 Q5's posture.
+- **SE5: implemented 2026-08-14, and it was the gap this audit was for.**
+  Until then a provider that had been unreachable for a day looked exactly like
+  one that was idle: the surface could say decided or not decided and nothing
+  else. The state is now derived from the job queue - never remembered, because
+  a second record of the same fact goes stale exactly when the thing it
+  describes changes - and three of the five states carry a sentence:
+
+  - **working** and **did not answer** are different absences, which is SE5's
+    demand: one ends by itself and the other needs somebody, and a first answer
+    after a quiet spell may legitimately take as long as ADR 0142 PE4's
+    declared residency.
+  - **a different model** is neither. It is a sentence about a deliberate
+    re-pin, never a dismissable warning, because the numbers the decision was
+    made on were measured against the old weights.
+  - **answered** and **not used yet** say nothing extra, deliberately: a note
+    on a machine that is doing its job is noise, and noise is what makes the
+    other three stop being read.
+
+  A job's own refusal is never rendered as the provider's state. A role that
+  may not run on this class or an answer in the wrong shape is a fact about
+  that job, and showing it as a broken machine would send somebody to restart
+  something that is answering perfectly.
+
+  This also gave ADR 0118 O4's `no_model` the source it had been waiting for
+  since the vocabulary was written: only *decided* entries count, and a Home
+  that has asked nothing reports not-knowable rather than absence.
+- **SE6: implemented.** The person's decisions are on their own device, and
+  the host half sits beside `memory_encryption` and the relay account in one
+  Foundation surface. There is no second place for either.
+
+Original gate text follows.
+
 - **SE1 - Two layers, one truth (concept-only):** the simple layer states
   the consequence, the layer behind it states the measurement. Both are
   true; neither is a reward. A sentence that is only true with a condition

@@ -229,6 +229,8 @@ export interface PicoModelProviderEntryView {
   };
   narrowing?: { contextTokens?: number; concurrentJobs?: number };
   effective: { contextTokens: number; concurrentJobs: number };
+  /** ADR 0152 SE5. What it last did, derived by the Home from settled jobs. */
+  state?: string;
 }
 
 export async function listModelProviders(

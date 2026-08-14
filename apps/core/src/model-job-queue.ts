@@ -1,4 +1,5 @@
 import { parsePicoModelJob, type PicoModelJob } from '@pico/protocol/model-job';
+import type { PicoModelProviderObservation } from '@pico/protocol/model-provider-state';
 import type Database from 'better-sqlite3';
 
 /**
@@ -269,6 +270,34 @@ export class PicoModelJobQueue {
           settledAt: row.settledAt,
         })]
     )));
+  }
+
+  /**
+   * ADR 0152 SE5 with ADR 0118 O2/O4. What this entry last did.
+   *
+   * Derived from the rows that are already here rather than from a column
+   * somebody keeps up to date: a second record of the same fact is a second
+   * record to keep in step, and it goes stale exactly when the thing it
+   * describes changes.
+   *
+   * In flight means handed over and not settled - `attempts` rather than
+   * enqueued, because a job waiting its turn says nothing about the machine.
+   */
+  public observationFor(entryId: string): PicoModelProviderObservation {
+    const inFlight = this.db.prepare(`
+      SELECT 1 AS present FROM pico_model_job_queue
+      WHERE entry_id = ? AND settled_at IS NULL AND attempts > 0 LIMIT 1
+    `).get(entryId) as { present: number } | undefined;
+    const last = this.db.prepare(`
+      SELECT outcome, settled_at AS settledAt FROM pico_model_job_queue
+      WHERE entry_id = ? AND settled_at IS NOT NULL
+      ORDER BY settled_at DESC, job_id DESC LIMIT 1
+    `).get(entryId) as { outcome: string | null; settledAt: string } | undefined;
+    return Object.freeze({
+      jobInFlight: inFlight !== undefined,
+      ...(last?.outcome == null ? {} : { lastOutcome: last.outcome }),
+      ...(last === undefined ? {} : { lastSettledAt: last.settledAt }),
+    });
   }
 
   public outcomeOf(jobId: string): { outcome: string | null; settledAt: string | null } {

@@ -31,6 +31,7 @@ import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform
 import {
   decidePicoCompanionModelProvider,
   readPicoCompanionModelProviders,
+  readPicoCompanionModelReachability,
   revokePicoCompanionModelProvider,
   readPicoCompanionAnsweredReads,
   keepPicoCompanionAnsweredRead,
@@ -180,11 +181,29 @@ export async function startPicoCompanionShellRuntime(input: {
       await createPicoCompanionDueEntryAcknowledger({ linkClient })(memoryItemId);
     });
 
+    /**
+     * ADR 0118 O4. Whether the decided provider is answering, on the cadence
+     * the carrier already keeps - a condition is ambient, so it may not depend
+     * on somebody having a window open.
+     */
+    const readModelReachability = async () => await serialized(async () => {
+      await input.automaticVaultUnlock?.ensureUnlocked();
+      const currentProfile = readPicoCompanionProfile(profilePath);
+      const linkClient = await createPicoCompanionLinkClient({
+        profile: currentProfile,
+        daemonClient,
+        sodium: input.sodium,
+        ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+      });
+      return await readPicoCompanionModelReachability({ livingDeviceLinkClient: linkClient });
+    });
+
     const carrier = await startPicoCompanionAlarmCarrier({
       readLifecycle,
       readStorageCondition,
       readDueEntries,
       acknowledgeDueEntry,
+      readModelReachability,
       notifications: input.notifications,
       ...(input.checkIntervalMs === undefined
         ? {}
