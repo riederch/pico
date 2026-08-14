@@ -3,6 +3,25 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
+## Home-Assistant-App als Pico Home benennen
+
+Die sichtbare Home-Assistant-App heisst derzeit `Pico Core`. Sie soll fuer
+Menschen als `Pico Home` auftreten, weil Core die darin laufende Software und
+nicht die eigenstaendige Produktrolle bezeichnet.
+
+Der Auftrag umfasst:
+
+- sichtbaren App-Namen und Paneltitel in `pico_core/config.yaml`,
+- Home-Assistant-Dokumentation, Installationshinweise und sichtbare Wortmarken,
+- alle Checks und Release-Stellen, die den sichtbaren Namen fest voraussetzen.
+
+Interne Bezeichnungen wie das Paket `@pico/core`, der Dienst, das Container-
+Image und der bestehende Slug `pico_core` werden nicht allein wegen der
+Produktbenennung geaendert. Falls eine solche technische Umbenennung noetig
+wird, muss sie als eigener, upgrade-kompatibler Schritt erfolgen. Eine
+bestehende Home-Assistant-Installation darf weder als zweite App erscheinen
+noch ihre Daten oder Update-Verbindung verlieren.
+
 ## Lizenzbedingungen: anwaltliche Durchsicht
 
 Die Bedingungen sind geaendert und als ADR 0111 dokumentiert: betriebliche

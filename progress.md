@@ -134,7 +134,7 @@ Lokale Host-Instanz für Claim, Mitgliedschaft, Betrieb und Verwaltung eines Pic
 | Datenhaltung | 97 % | In Arbeit | Founding-, Lifecycle-, Recovery-, Rotations-, Reader-/Writer-/KEK-, Mailbox-, Push-, Provider- und Setting-Evidence werden atomar persistiert und beim Boot reconciliiert. |
 | Sicherheit und Berechtigungen | 98 % | In Arbeit | Membership gewährt keine Readership; Operator entscheidet keine residentenspezifischen Provider- oder Depotfragen. Falsche Mailbox-/Signaturkombinationen, Replay, Restore und fehlende Key-Custody schließen fail-closed. |
 | Tests | 99 % | Weitgehend fertig | Die Core-, Protocol-, Relay-, Client- und Companion-Suiten decken Home-Ceremonies, Relay-Transport, Mailbox-Isolation, Push-Grenzen, Tamper, Rollback, Restore und Confused Deputy ab. |
-| Installation und Betrieb | 61 % | Teilweise implementiert | Host-Key-Pfad, Backup-Ausschluss, Recovery-Anker, restore-geschlossener Boot und Relay-Konfigurationsnaht existieren. Offen ist die sichtbare Umbenennung der Home-Assistant-App von `Pico Core` in `Pico Home` in App-Name, Paneltitel, Dokumentation und Grafiken; interne Namen und bestehende Installationen müssen dabei kompatibel bleiben. First-Boot-/HA-Validierung, produktiver Relay-Betrieb und Appliance-Gates IM1–IM3 fehlen ebenfalls. |
+| Installation und Betrieb | 61 % | Teilweise implementiert | Host-Key-Pfad, Backup-Ausschluss, Recovery-Anker, restore-geschlossener Boot und Relay-Konfigurationsnaht existieren. First-Boot-/HA-Validierung, produktiver Relay-Betrieb und Appliance-Gates IM1–IM3 fehlen. |
 
 ## Pico Link
 
