@@ -177,6 +177,17 @@ export const picoMemoryEncryptionDecisionMigrationId =
  */
 export const picoLinkRelayIdentityMigrationId = '0018_pico_link_relay_identity' as const;
 
+/**
+ * ADR 0151 PV1 with ADR 0138 CO1. Where a provider credential's seal lives.
+ *
+ * One per person per entry, because that is what the credential is: ADR 0152
+ * puts the reference on a person's decision, and two residents may hold two
+ * credentials at one provider. The secret is not here - only the seal, whose
+ * key lives in the key store and therefore never travels with a backup.
+ */
+export const picoModelProviderCredentialMigrationId =
+  '0019_pico_model_provider_credential' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1410,6 +1421,25 @@ const migrations: readonly MigrationDefinition[] = [
           account_id TEXT NOT NULL,
           decided_at TEXT NOT NULL,
           inherited_from_host INTEGER NOT NULL
+        );
+      `);
+    },
+  },
+  {
+    id: picoModelProviderCredentialMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_model_provider_credential (
+          entry_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          -- The name the decision points at. Part of the sealed associated
+          -- data, so a row edited to point elsewhere fails to open rather than
+          -- opening something else.
+          credential_ref TEXT NOT NULL,
+          seal_json TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (entry_id, pico_identity_fingerprint_hex)
         );
       `);
     },

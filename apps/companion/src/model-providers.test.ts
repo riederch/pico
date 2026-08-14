@@ -6,6 +6,7 @@ import {
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
   revokePicoCompanionModelProvider,
+  supplyPicoCompanionModelProviderCredential,
 } from './model-providers.js';
 
 /**
@@ -113,6 +114,45 @@ describe('ADR 0151 PV4 - the refusal travels as itself', () => {
       livingDeviceLinkClient: linkClient({ outcome: 'unavailable', result: {} }) as never,
       entryId: 'a-measured-host',
     })).rejects.toThrow(/model_provider_revoke_rejected:unavailable/u);
+  });
+});
+
+describe('ADR 0151 PV1 - handing over the secret, once', () => {
+  it('sends it over the sealed channel and keeps nothing back', async () => {
+    // The Home seals it on arrival and answers with the reference. There is no
+    // read operation, so nothing can pull it back out - and a companion that
+    // kept a copy would be a second custody nobody decided on.
+    const client = linkClient({
+      outcome: 'ok',
+      result: { credentialRef: 'a_credential_reference' },
+    });
+
+    expect(await supplyPicoCompanionModelProviderCredential({
+      livingDeviceLinkClient: client as never,
+      entryId: 'a-measured-host',
+      credentialRef: 'a_credential_reference',
+      secret: 'a-secret-this-test-made-up',
+    })).toBe('a_credential_reference');
+
+    expect(client.request).toHaveBeenCalledWith('home.model.provider.credential.submit', {
+      entryId: 'a-measured-host',
+      credentialRef: 'a_credential_reference',
+      secret: 'a-secret-this-test-made-up',
+    });
+  });
+
+  it('names a refusal rather than leaving a person to think it landed', async () => {
+    // A credential believed to be held is worse than one known to be missing:
+    // the decision that names it would look like it has something behind it.
+    await expect(supplyPicoCompanionModelProviderCredential({
+      livingDeviceLinkClient: linkClient({
+        outcome: 'invalid_arguments',
+        result: { refusal: 'pico_model_provider_entry_not_found' },
+      }) as never,
+      entryId: 'a-measured-host',
+      credentialRef: 'a_credential_reference',
+      secret: 'a-secret',
+    })).rejects.toThrow(/pico_model_provider_entry_not_found/u);
   });
 });
 

@@ -2,11 +2,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Writable } from 'node:stream';
+import sodium from 'libsodium-wrappers-sumo';
 import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
+import { KeyStore } from './key-store.js';
 import { picoLibraryReadJob } from './library-read.js';
+import { ModelProviderCredentialCrypto } from './model-provider-credential-crypto.js';
 
 /**
  * ADR 0049 with ADR 0142 PE3. The thing that actually runs jobs, which had no
@@ -104,6 +107,8 @@ async function boot(input: {
   entries: ReadonlyArray<{ entryId?: string; concurrentJobs?: number }>;
   decided?: boolean;
   jobs: ReadonlyArray<{ jobId: string; entryId: string }>;
+  /** ADR 0072 R6: what a restore looks like - the seal without its key. */
+  shredKeys?: boolean;
 }): Promise<{ app: AppWithSweep; databasePath: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'pico-model-sweep-'));
   dirs.push(dir);
@@ -116,6 +121,26 @@ async function boot(input: {
   }
   if (input.decided !== false) {
     const consent = store.picoModelProviderConsent();
+    // ADR 0151 PV1. The credential first, because PV4's reference may only
+    // name one this Home holds - which is the rule that stops an entry
+    // claiming a proof nothing backs.
+    await sodium.ready;
+    const credentials = new ModelProviderCredentialCrypto(sodium, new KeyStore(join(dir, 'keys')));
+    for (const entry of input.entries) {
+      const entryId = entry.entryId ?? 'a-measured-host';
+      consent.putCredential({
+        entryId,
+        picoIdentityFingerprintHex: person,
+        credentialRef: 'a_credential_reference',
+        seal: credentials.seal({
+          entryId,
+          picoIdentityFingerprintHex: person,
+          credentialRef: 'a_credential_reference',
+          secret: 'a-secret-this-test-made-up',
+        }),
+        at: '2026-08-13T18:30:00.000Z',
+      });
+    }
     for (const entry of input.entries) {
       consent.decide({
         entryId: entry.entryId ?? 'a-measured-host',
@@ -154,6 +179,10 @@ async function boot(input: {
     });
   }
   store.close();
+
+  if (input.shredKeys === true) {
+    rmSync(join(dir, 'keys'), { recursive: true, force: true });
+  }
 
   const app = await buildApp({
     host: '127.0.0.1',
@@ -281,6 +310,23 @@ describe('ADR 0138 - a job nobody decided for', () => {
     const store = await EventStore.open(databasePath, {});
     store.picoModelProviderRegistry()
       .put(parsePicoModelProviderEntry(measured({ concurrentJobs: 2 })), '2026-08-13T18:00:00.000Z');
+    await sodium.ready;
+    const mixedCredentials = new ModelProviderCredentialCrypto(
+      sodium,
+      new KeyStore(join(dir, 'keys')),
+    );
+    store.picoModelProviderConsent().putCredential({
+      entryId: 'a-measured-host',
+      picoIdentityFingerprintHex: person,
+      credentialRef: 'a_credential_reference',
+      seal: mixedCredentials.seal({
+        entryId: 'a-measured-host',
+        picoIdentityFingerprintHex: person,
+        credentialRef: 'a_credential_reference',
+        secret: 'a-secret-this-test-made-up',
+      }),
+      at: '2026-08-13T18:30:00.000Z',
+    });
     store.picoModelProviderConsent().decide({
       entryId: 'a-measured-host',
       picoIdentityFingerprintHex: person,
@@ -408,5 +454,51 @@ describe('ADR 0117 X2 - a value the protocol refuses is a wrong answer', () => {
 
     expect(await app.picoSweepModelJobs()).toBe(0);
     expect(outcomes(databasePath).job_one).toBe('answer_was_not_the_declared_shape');
+  });
+});
+
+describe('ADR 0151 PV1 - the credential the entry names actually travels', () => {
+  it('carries the sealed secret to the provider', async () => {
+    // The half PV1 was missing: an entry declared a reference and nothing
+    // could turn it into a secret, so every job went out unauthenticated and
+    // the entry's claim to prove who it is proved nothing.
+    const seen: Array<string | undefined> = [];
+    const host = modelHost();
+    vi.stubGlobal('fetch', (async (url: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(url)).pathname === '/api/generate') {
+        seen.push((init?.headers as Record<string, string> | undefined)?.authorization);
+      }
+      return await host.fetch(url, init);
+    }) as unknown as typeof globalThis.fetch);
+
+    const { app } = await boot({
+      entries: [{}],
+      jobs: [{ jobId: 'job_one', entryId: 'a-measured-host' }],
+    });
+
+    expect(await app.picoSweepModelJobs()).toBe(1);
+    expect(seen).toEqual(['Bearer a-secret-this-test-made-up']);
+  });
+
+  it('sends nothing and says so when the key is gone', async () => {
+    // ADR 0072 R6. A restored database holds the seal and no key: a Home that
+    // cannot prove who it is, rather than a Home that is broken.
+    const seen: Array<string | undefined> = [];
+    const host = modelHost();
+    vi.stubGlobal('fetch', (async (url: string | URL | Request, init?: RequestInit) => {
+      if (new URL(String(url)).pathname === '/api/generate') {
+        seen.push((init?.headers as Record<string, string> | undefined)?.authorization);
+      }
+      return await host.fetch(url, init);
+    }) as unknown as typeof globalThis.fetch);
+
+    const { app } = await boot({
+      entries: [{}],
+      jobs: [{ jobId: 'job_one', entryId: 'a-measured-host' }],
+      shredKeys: true,
+    });
+
+    expect(await app.picoSweepModelJobs()).toBe(1);
+    expect(seen).toEqual([undefined]);
   });
 });

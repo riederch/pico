@@ -166,6 +166,10 @@ import type {
   PicoModelProviderClass,
 } from '@pico/protocol/model-provider';
 import { picoModelProviderState } from '@pico/protocol/model-provider-state';
+import {
+  ModelProviderCredentialCrypto,
+  type PicoModelProviderCredentialSeal,
+} from './model-provider-credential-crypto.js';
 import type { PicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { picoLinkPushCandidates } from './link-push-occasion.js';
 import { sendPicoLinkPush } from './link-push-send.js';
@@ -674,6 +678,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       app.log.info(detail ?? {}, line);
     },
   });
+  /**
+   * ADR 0151 PV1 with ADR 0138 CO1. What turns a reference into a secret.
+   *
+   * Its key store is built whatever the memory-encryption decision says,
+   * because that decision is about *memory content*: a Home that keeps its
+   * notes in plaintext has not thereby decided to keep a provider credential
+   * in plaintext, and there would be nowhere to put one.
+   */
+  const modelProviderCredentials = new ModelProviderCredentialCrypto(
+    sodium,
+    new KeyStore(keyStorePath),
+  );
   // The sole-resident policy survives only while no signed Home exists. Claiming
   // switches the default at request time, including when claim happens in this
   // process, so there is no restart window where operator means read-all.
@@ -2117,7 +2133,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     ): Promise<number> => {
       queue.recordAttempt(row.job.jobId, at);
       try {
-        const result = await modelRuntime.dispatch({ job: row.job, entry });
+        const result = await modelRuntime.dispatch({
+          job: row.job,
+          entry,
+          ...(credentialFor(row, entry) === undefined
+            ? {}
+            : { credential: credentialFor(row, entry) }),
+        });
         queue.settle({ jobId: row.job.jobId, outcome: 'answered', result: result.output, at });
         return 1;
       } catch (error) {
@@ -2133,6 +2155,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         }
         return 0;
       }
+    };
+
+    /**
+     * ADR 0151 PV1. The secret this person's decision named, opened here.
+     *
+     * `key_unavailable` is answered as absence rather than thrown: a restored
+     * database holds the seal and no key (ADR 0072 R6), and that is a Home
+     * that cannot prove who it is rather than a Home that is broken. The
+     * dispatch says so and the provider's own refusal names the rest.
+     */
+    const credentialFor = (
+      row: PicoModelJobQueueRow,
+      entry: PicoModelProviderEntry,
+    ): string | undefined => {
+      if (entry.credentialRef === undefined) {
+        return undefined;
+      }
+      const seal = consent.credentialSealFor(
+        row.entryId,
+        row.picoIdentityFingerprintHex,
+        entry.credentialRef,
+      );
+      if (seal === undefined) {
+        return undefined;
+      }
+      const opened = modelProviderCredentials.open({
+        seal: seal as PicoModelProviderCredentialSeal,
+        entryId: row.entryId,
+        picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+        credentialRef: entry.credentialRef,
+      });
+      return opened.status === 'ok' ? opened.secret : undefined;
     };
 
     /**
@@ -3425,6 +3479,51 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
               }),
             } as unknown as Record<string, unknown>,
           };
+        }
+        /**
+         * ADR 0151 PV1 with ADR 0138 CO1. A secret arrives, and stops being
+         * one.
+         *
+         * Sealed in the same breath it is received: nothing writes it to a
+         * log, nothing keeps it in a field, and the reply carries the
+         * reference rather than any part of it. There is no read-back
+         * operation, which is what makes "the credential is Pico's" a property
+         * of the shape rather than a promise about behaviour.
+         *
+         * A person may only supply one for themselves, because `principal` is
+         * where the identity comes from - there is no argument for it, which
+         * is ADR 0148 EX2's construction applied to a second subject.
+         */
+        case 'home.model.provider.credential.submit': {
+          if (principal === undefined
+            || typeof args.entryId !== 'string'
+            || typeof args.credentialRef !== 'string'
+            || typeof args.secret !== 'string'
+            || args.credentialRef === ''
+            || args.secret === ''
+            || Object.keys(args).length !== 3) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          try {
+            store.picoModelProviderConsent().putCredential({
+              entryId: args.entryId,
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+              credentialRef: args.credentialRef,
+              seal: modelProviderCredentials.seal({
+                entryId: args.entryId,
+                picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+                credentialRef: args.credentialRef,
+                secret: args.secret,
+              }),
+              at: new Date().toISOString(),
+            });
+          } catch (error) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'refused' },
+            };
+          }
+          return { outcome: 'ok', result: { credentialRef: args.credentialRef } };
         }
         case 'home.model.provider.decision.submit': {
           if (principal === undefined

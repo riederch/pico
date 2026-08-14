@@ -427,6 +427,20 @@ export const picoLinkDirectOperations = [
    * withdraws it and keeps the date, because "withdrew" and "never asked" are
    * different facts.
    */
+  /**
+   * ADR 0151 PV1 with ADR 0138 CO1. The secret that makes a reference real.
+   *
+   * It rides the sealed channel from the person's own device, and it is the
+   * only operation in this list that carries a secret at all. That is the
+   * reason it is here rather than on a Foundation route: ADR 0087 keeps host
+   * administration out of a resident's decisions, and a credential a person
+   * holds at a provider is part of theirs.
+   *
+   * The Home seals it immediately and answers nothing but the reference. There
+   * is no operation to read one back, and that absence is the design: nothing
+   * needs it, so nothing may ask.
+   */
+  'home.model.provider.credential.submit',
   'home.model.provider.decision.submit',
   'home.model.provider.decision.revoke',
   /**
@@ -2282,6 +2296,23 @@ export const picoMemoryDekWrapAdLabel = 'pico.mem.ad.dek-wrap.v1' as const;
  * the person again. That is ADR 0138's "read scope where reading is all that is
  * needed" carried by the cipher rather than by a column somebody could update.
  */
+/**
+ * ADR 0151 PV1 with ADR 0138 CO1. A model provider credential at rest.
+ *
+ * Its own suite and its own labels, for the reason CO1 gave when it refused to
+ * reuse the memory suite: the associated data has to name what the thing
+ * actually is. A supplier credential's AD binds a supplier and the privacy
+ * domain it attached into; a provider credential has neither. It belongs to
+ * **one person's decision about one entry**, so that is what its AD binds, and
+ * a seal cannot be moved to another entry, to another resident, or renamed.
+ */
+export const picoModelProviderCredentialSuite =
+  'pico.suite.model-provider-credential.v1' as const;
+export const picoModelProviderCredentialAdLabel =
+  'pico.model.ad.provider-credential.v1' as const;
+export const picoModelProviderCredentialDekWrapAdLabel =
+  'pico.model.ad.provider-credential-dek-wrap.v1' as const;
+
 export const picoSupplierCredentialSuite = 'pico.suite.supplier-credential.v1' as const;
 export const picoSupplierCredentialAdLabel = 'pico.supplier.ad.credential.v1' as const;
 export const picoSupplierCredentialDekWrapAdLabel = 'pico.supplier.ad.dek-wrap.v1' as const;
@@ -4441,6 +4472,57 @@ export function buildPicoMemoryContentAd(input: {
     asciiBytes(input.memoryItemId),
     asciiBytes(input.privacyDomain),
     asciiBytes(input.contentType),
+  ]);
+}
+
+export function buildPicoModelProviderCredentialAd(input: {
+  suite: string;
+  entryId: string;
+  picoIdentityFingerprintHex: string;
+  credentialRef: string;
+}): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'entryId',
+    'picoIdentityFingerprintHex',
+    'credentialRef',
+  ]);
+
+  return concatCanonicalElements([
+    asciiBytes(picoModelProviderCredentialAdLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.entryId),
+    // ADR 0152. Two residents may hold two credentials at one provider, and
+    // neither may open the other's.
+    asciiBytes(input.picoIdentityFingerprintHex),
+    // ADR 0151 PV4. The name the decision points at is part of what was
+    // sealed, so a reference cannot be re-pointed at a different secret.
+    asciiBytes(input.credentialRef),
+  ]);
+}
+
+export function buildPicoModelProviderCredentialDekWrapAd(input: {
+  suite: string;
+  keyEnvelopeId: string;
+  domainId: string;
+  entryId: string;
+  picoIdentityFingerprintHex: string;
+}): Uint8Array {
+  assertExactKeys(input as unknown as Record<string, unknown>, [
+    'suite',
+    'keyEnvelopeId',
+    'domainId',
+    'entryId',
+    'picoIdentityFingerprintHex',
+  ]);
+
+  return concatCanonicalElements([
+    asciiBytes(picoModelProviderCredentialDekWrapAdLabel),
+    asciiBytes(input.suite),
+    asciiBytes(input.keyEnvelopeId),
+    asciiBytes(input.domainId),
+    asciiBytes(input.entryId),
+    asciiBytes(input.picoIdentityFingerprintHex),
   ]);
 }
 

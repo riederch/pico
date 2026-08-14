@@ -354,6 +354,7 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
 
 type PicoLinkSend = (
   operation: 'home.model.providers.read'
+    | 'home.model.provider.credential.submit'
     | 'home.model.provider.decision.submit'
     | 'home.model.provider.decision.revoke',
   args: Record<string, unknown>,
@@ -370,7 +371,7 @@ type PicoLinkSend = (
  * is a second thing to keep in step, and the half that drifts is always the
  * one nobody is looking at.
  */
-async function bootWithLinkDevice(): Promise<{
+async function bootWithLinkDevice(options: { reach?: string } = {}): Promise<{
   app: AppWithInject;
   databasePath: string;
   send: PicoLinkSend;
@@ -381,7 +382,11 @@ async function bootWithLinkDevice(): Promise<{
 
   const store = await EventStore.open(databasePath, {});
   store.picoModelProviderRegistry().put(
-    parsePicoModelProviderEntry(measured),
+    // ADR 0151 PV5. A credential obliges a transport that protects it, so a
+    // test about credentials needs an entry that could hold one.
+    parsePicoModelProviderEntry(options.reach === undefined
+      ? measured
+      : { ...measured, reach: options.reach }),
     '2026-08-13T18:00:00.000Z',
   );
   store.close();
@@ -870,5 +875,100 @@ describe('ADR 0152 SE5 - the state travels with the finding', () => {
     const providers = (read.result as { providers: Array<Record<string, unknown>> }).providers;
     expect(providers[0]?.state).toBe('not_used_yet');
     expect('stateSince' in (providers[0] ?? {})).toBe(false);
+  });
+});
+
+describe('ADR 0151 PV1 - the reference has to name something this Home holds', () => {
+  const overHttps = { reach: 'https://provider.invalid' };
+
+  it('refuses a decision naming a credential nobody supplied', async () => {
+    // The gap this closes: an entry could declare it proves who it is while no
+    // Home could produce a secret, so every job on it went out
+    // unauthenticated and the claim proved nothing.
+    const { send } = await bootWithLinkDevice(overHttps);
+
+    const decided = await send('home.model.provider.decision.submit', {
+      entryId: 'a-measured-host',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn_and_retrieved_memory',
+      credentialRef: 'a_credential_reference',
+    });
+
+    expect(decided.response.outcome).toBe('invalid_arguments');
+    expect(decided.result.refusal).toBe('pico_model_provider_credential_not_held');
+  });
+
+  it('takes the secret, answers the reference, and lets the decision through', async () => {
+    const { send } = await bootWithLinkDevice(overHttps);
+
+    const supplied = await send('home.model.provider.credential.submit', {
+      entryId: 'a-measured-host',
+      credentialRef: 'a_credential_reference',
+      secret: 'a-secret-this-test-made-up',
+    });
+    expect(supplied.response.outcome).toBe('ok');
+    // The reply carries the reference and no part of the secret.
+    expect(supplied.result).toEqual({ credentialRef: 'a_credential_reference' });
+    expect(JSON.stringify(supplied.result)).not.toContain('a-secret-this-test-made-up');
+
+    expect((await send('home.model.provider.decision.submit', {
+      entryId: 'a-measured-host',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn_and_retrieved_memory',
+      credentialRef: 'a_credential_reference',
+    })).response.outcome).toBe('ok');
+  });
+
+  it('refuses a credential for an entry that does not exist', async () => {
+    const { send } = await bootWithLinkDevice(overHttps);
+
+    const supplied = await send('home.model.provider.credential.submit', {
+      entryId: 'a-host-nobody-measured',
+      credentialRef: 'a_credential_reference',
+      secret: 'a-secret',
+    });
+    expect(supplied.response.outcome).toBe('invalid_arguments');
+    expect(supplied.result.refusal).toBe('pico_model_provider_entry_not_found');
+  });
+
+  it('refuses an empty secret rather than sealing nothing', async () => {
+    // A sealed empty string is a credential this Home would then believe it
+    // holds, and a decision naming it would pass the check that exists to stop
+    // exactly that.
+    const { send } = await bootWithLinkDevice(overHttps);
+
+    expect((await send('home.model.provider.credential.submit', {
+      entryId: 'a-measured-host',
+      credentialRef: 'a_credential_reference',
+      secret: '',
+    })).response.outcome).toBe('invalid_arguments');
+  });
+
+  it('forgets the secret when the decision is withdrawn', async () => {
+    // ADR 0138 CO1. The withdrawal is a thing to remember; the credential is a
+    // thing this Home now has no reason to hold.
+    const { send } = await bootWithLinkDevice(overHttps);
+
+    await send('home.model.provider.credential.submit', {
+      entryId: 'a-measured-host',
+      credentialRef: 'a_credential_reference',
+      secret: 'a-secret-this-test-made-up',
+    });
+    await send('home.model.provider.decision.submit', {
+      entryId: 'a-measured-host',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn_and_retrieved_memory',
+      credentialRef: 'a_credential_reference',
+    });
+    await send('home.model.provider.decision.revoke', { entryId: 'a-measured-host' });
+
+    // Deciding again with the same reference is now refused: the seal went
+    // with the withdrawal.
+    expect((await send('home.model.provider.decision.submit', {
+      entryId: 'a-measured-host',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn_and_retrieved_memory',
+      credentialRef: 'a_credential_reference',
+    })).result.refusal).toBe('pico_model_provider_credential_not_held');
   });
 });

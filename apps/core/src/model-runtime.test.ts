@@ -241,11 +241,13 @@ describe('ADR 0151 PV1 with ADR 0138 CO1 - a declared credential that nobody can
         return new Response('no', { status: 401 });
       }) as unknown as typeof globalThis.fetch,
       now: () => nowMs,
-      credential: () => 'a-secret-the-host-does-not-accept',
     });
 
-    await expect(runtime.dispatch({ job: job(), entry: withCredential() }))
-      .rejects.toThrow(/credential_refused/u);
+    await expect(runtime.dispatch({
+      job: job(),
+      entry: withCredential(),
+      credential: 'a-secret-the-host-does-not-accept',
+    })).rejects.toThrow(/credential_refused/u);
   });
 
   it('carries the credential when the Home can produce one', async () => {
@@ -259,10 +261,13 @@ describe('ADR 0151 PV1 with ADR 0138 CO1 - a declared credential that nobody can
         return await fake.fetch(url, init);
       }) as typeof globalThis.fetch,
       now: () => nowMs,
-      credential: () => 'a-secret-this-test-made-up',
     });
 
-    await runtime.dispatch({ job: job(), entry: withCredential() });
+    await runtime.dispatch({
+      job: job(),
+      entry: withCredential(),
+      credential: 'a-secret-this-test-made-up',
+    });
     expect(seen).toEqual(['Bearer a-secret-this-test-made-up']);
   });
 

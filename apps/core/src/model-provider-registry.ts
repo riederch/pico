@@ -300,6 +300,21 @@ export class PicoModelProviderConsent {
       decidedAt: input.at,
     });
 
+    /**
+     * ADR 0151 PV4, with the half that used to be missing.
+     *
+     * PV4 makes the wider allowance unwritable without the reference that
+     * earns it, and until 2026-08-14 the reference could name nothing at all:
+     * an entry said it proves who it is, no Home could produce a secret, and
+     * every job on it went out unauthenticated. A rule that a decision may
+     * name only a credential this Home actually holds is what turns the
+     * reference back into a claim about something.
+     */
+    if (input.credentialRef !== undefined
+      && this.credentialSealFor(input.entryId, input.picoIdentityFingerprintHex, input.credentialRef) === undefined) {
+      throw new Error('pico_model_provider_credential_not_held');
+    }
+
     this.db.prepare(`
       INSERT INTO pico_model_provider_consent (
         entry_id, pico_identity_fingerprint_hex, provider_class, carries,
@@ -333,6 +348,69 @@ export class PicoModelProviderConsent {
       UPDATE pico_model_provider_consent SET revoked_at = ?
       WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
     `).run(at, entryId, picoIdentityFingerprintHex);
+    /**
+     * ADR 0138 CO1. The secret goes with the decision that justified holding
+     * it.
+     *
+     * The row stays and the seal does not, and the two are different facts:
+     * the withdrawal is a thing this Home should remember, the credential is a
+     * thing it now has no reason to hold. Keeping it "in case they come back"
+     * would be a Home storing somebody's secret for a decision they revoked.
+     */
+    this.db.prepare(`
+      DELETE FROM pico_model_provider_credential
+      WHERE entry_id = ? AND pico_identity_fingerprint_hex = ?
+    `).run(entryId, picoIdentityFingerprintHex);
+  }
+
+  /**
+   * ADR 0151 PV1. Records the sealed credential a decision may then name.
+   *
+   * One per person per entry: re-supplying replaces, which is how a rotated
+   * secret arrives without a second row and without a moment where two are
+   * held. The reference travels with it because it is sealed into the
+   * associated data - a row edited to point at another name fails to open
+   * rather than opening something else.
+   */
+  public putCredential(input: {
+    entryId: string;
+    picoIdentityFingerprintHex: string;
+    credentialRef: string;
+    seal: unknown;
+    at: string;
+  }): void {
+    if (this.registry.get(input.entryId) === undefined) {
+      throw new Error('pico_model_provider_entry_not_found');
+    }
+    this.db.prepare(`
+      INSERT INTO pico_model_provider_credential (
+        entry_id, pico_identity_fingerprint_hex, credential_ref, seal_json, created_at
+      ) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(entry_id, pico_identity_fingerprint_hex) DO UPDATE SET
+        credential_ref = excluded.credential_ref,
+        seal_json = excluded.seal_json,
+        created_at = excluded.created_at
+    `).run(
+      input.entryId,
+      input.picoIdentityFingerprintHex,
+      input.credentialRef,
+      JSON.stringify(input.seal),
+      input.at,
+    );
+  }
+
+  /** The seal this person holds for this entry under this exact name, if any. */
+  public credentialSealFor(
+    entryId: string,
+    picoIdentityFingerprintHex: string,
+    credentialRef: string,
+  ): unknown | undefined {
+    const row = this.db.prepare(`
+      SELECT seal_json AS sealJson FROM pico_model_provider_credential
+      WHERE entry_id = ? AND pico_identity_fingerprint_hex = ? AND credential_ref = ?
+    `).get(entryId, picoIdentityFingerprintHex, credentialRef) as
+      { sealJson: string } | undefined;
+    return row === undefined ? undefined : JSON.parse(row.sealJson) as unknown;
   }
 
   /** The entry this person's decisions make of this finding, or nothing. */

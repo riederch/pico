@@ -152,6 +152,9 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       // ADR 0152: a person's decision about their own words has to be made
       // where the person is, and ADR 0087 says nobody may answer for them.
       'home.model.providers.read',
+      // ADR 0151 PV1: the one operation that carries a secret, from the person
+      // who holds it. There is no operation to read one back.
+      'home.model.provider.credential.submit',
       'home.model.provider.decision.submit',
       'home.model.provider.decision.revoke',
       // ADR 0116 W5: what is waiting, and the explicit keep that persists it.

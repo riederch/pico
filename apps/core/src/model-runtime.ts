@@ -54,8 +54,6 @@ import type { PicoEventOriginClass } from '@pico/protocol';
 export interface PicoModelRuntimePorts {
   fetch?: typeof globalThis.fetch;
   now?: () => number;
-  /** Resolved from ADR 0138 CO1 custody. Absent is the ordinary case. */
-  credential?: (entry: PicoModelProviderEntry) => string | undefined;
   log?: (line: string, detail?: Record<string, unknown>) => void;
 }
 
@@ -265,6 +263,15 @@ export class PicoModelRuntime {
   public async dispatch(input: {
     job: PicoModelJob;
     entry: PicoModelProviderEntry;
+    /**
+     * ADR 0151 PV1. The secret the entry's reference names, already opened.
+     *
+     * Resolved by the caller rather than by a port here, because the seal is
+     * bound to the *person* whose decision holds it (ADR 0152) and a runtime
+     * that took only an entry could not name whose credential to open. The
+     * caller is the sweep, which knows both.
+     */
+    credential?: string;
     expectedAnswerTokens?: number;
   }): Promise<PicoModelResult> {
     const { job, entry } = input;
@@ -291,7 +298,7 @@ export class PicoModelRuntime {
      * how "it does not know us" gets reported as "it is down". The 401/403
      * case is named below for exactly that reason.
      */
-    if (entry.credentialRef !== undefined && this.ports.credential?.(entry) === undefined) {
+    if (entry.credentialRef !== undefined && input.credential === undefined) {
       this.log('provider entry declares a credential this Home cannot produce', {
         entryId: entry.entryId,
         credentialRef: entry.credentialRef,
@@ -312,6 +319,7 @@ export class PicoModelRuntime {
   private async send(input: {
     job: PicoModelJob;
     entry: PicoModelProviderEntry;
+    credential?: string;
     expectedAnswerTokens?: number;
   }): Promise<PicoModelResult> {
     const { job, entry } = input;
@@ -333,7 +341,7 @@ export class PicoModelRuntime {
 
     let answered: PicoModelProviderGenerationResponse;
     try {
-      const credential = this.ports.credential?.(entry);
+      const credential = input.credential;
       const response = await this.call(`${entry.reach}/api/generate`, {
         method: 'POST',
         headers: {

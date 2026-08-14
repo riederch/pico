@@ -264,11 +264,35 @@ receives the credential; it does not keep it.
   provider that answers `401` is now reported as `credential_refused` instead
   of as an unreachable machine - but neither is the missing half.
 
-  What is missing is the path from a person to a sealed credential: a surface
-  that takes one, a place to keep the seal for something that is not a supplier
-  attachment, and a resolver at dispatch. That is a decision about where a
-  provider credential lives, not a wiring job, which is why it is written down
-  here rather than guessed at.
+  **The path was built the same day, and the decision it needed is recorded
+  here.** A provider credential is not a supplier attachment: it belongs to one
+  person's decision about one entry (ADR 0152), so that is what its associated
+  data binds - entry, resident, reference - and a seal cannot be moved to
+  another entry, opened by another resident, or re-pointed at another name.
+  Three tests state the three refusals, as they do for the supplier seal.
+
+  **Its key is not a privacy domain's, and that is the difference that
+  mattered.** A supplier credential lives in the domain its supplier attached
+  into so a domain shred takes it. A provider credential belongs to nobody's
+  content; what makes it meaningless is the person withdrawing their decision,
+  so that is what deletes it. It is wrapped under a key domain of its own,
+  which keeps it out of every backup for the same ADR 0072 R6 reason - a
+  restored database holds the seal and no key, and the open reports that
+  instead of pretending.
+
+  **The key store is built whatever the memory-encryption decision says.** That
+  decision is about memory *content*: a Home that keeps its notes in plaintext
+  has not thereby decided to keep a credential in plaintext, and under the old
+  arrangement there would have been nowhere to put one.
+
+  The secret arrives over the ADR 0107 channel from the person's own device -
+  the only operation in that closed list carrying a secret at all - is sealed
+  in the same breath, and the reply carries the reference and nothing else.
+  **There is no read-back operation**, which is what makes "the credential is
+  Pico's" a property of the shape rather than a promise about behaviour.
+
+  `SupplierCredentialCrypto` still has no caller. Suppliers are the other half
+  of CO1 and are unchanged by this.
 
 - **CO2 - Condition is a typed value (implemented):**
   `picoSupplierConditions` is the closed list, with `out_of_scope` from

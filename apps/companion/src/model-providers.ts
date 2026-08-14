@@ -104,6 +104,44 @@ export async function readPicoCompanionModelReachability(input: {
     .filter((state): state is PicoModelProviderState => state !== undefined));
 }
 
+/**
+ * ADR 0151 PV1. Hands the Home the secret its entry's reference names.
+ *
+ * **The secret leaves this device once and is never asked for again.** The
+ * Home seals it on arrival and answers with the reference; there is no read
+ * operation, so nothing here - or anywhere else - can pull it back out. A
+ * companion that kept a copy "for convenience" would be a second custody
+ * nobody decided on.
+ */
+export async function supplyPicoCompanionModelProviderCredential(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  entryId: string;
+  credentialRef: string;
+  secret: string;
+}): Promise<string> {
+  const supplied = await input.livingDeviceLinkClient.request(
+    'home.model.provider.credential.submit',
+    {
+      entryId: input.entryId,
+      credentialRef: input.credentialRef,
+      secret: input.secret,
+    },
+  );
+  if (supplied.outcome !== 'ok') {
+    const refusal = (supplied.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string'
+        ? `model_provider_credential_rejected:${refusal}`
+        : `model_provider_credential_rejected:${supplied.outcome}`,
+    );
+  }
+  const credentialRef = (supplied.result as { credentialRef?: unknown }).credentialRef;
+  if (typeof credentialRef !== 'string') {
+    throw new Error('invalid_pico_model_provider_credential_result');
+  }
+  return credentialRef;
+}
+
 export async function decidePicoCompanionModelProvider(input: {
   livingDeviceLinkClient: PicoLinkDirectClient;
   entryId: string;

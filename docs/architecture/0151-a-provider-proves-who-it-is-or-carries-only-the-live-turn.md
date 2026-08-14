@@ -201,9 +201,21 @@ Refusing to dispatch at all was the other option and was rejected: it would
 stop a provider that answers today from being used, on a Home whose owner
 decided that question is postponed.
 
-**So PV1 is enforced as far as the entry goes and unenforced beyond it.** A job
-carrying retrieved memory reaches only an entry that declares a credential -
-and what arrives at the provider is not yet a proof. See ADR 0138 CO1.
+**Closed the same day.** A person supplies the secret from their own device
+over `home.model.provider.credential.submit`, the Home seals it against that
+entry, that resident and that reference, and the sweep opens it where it knows
+whose job it is dispatching.
+
+The rule that makes the reference mean something is at the decision: **a
+decision may name only a credential this Home actually holds.** Without it,
+PV4's "the wider allowance is stated together with what earns it" was satisfied
+by a name pointing at nothing - which is precisely how an entry came to claim a
+proof it could not give. Withdrawing the decision deletes the seal, because the
+withdrawal is what makes holding it unjustified.
+
+What remains open is the neighbouring finding this ADR already records: a
+provider that accepts any bearer makes the proof true and meaningless. That is
+about the far side, not about this half.
 
 Original gate text follows.
 
