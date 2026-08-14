@@ -69,6 +69,12 @@ export interface PicoDepotLibraryIntakePorts {
    * an error and not a job.
    */
   readExcerpt: (path: string) => Promise<{ text: string; commit: string } | null>;
+  /**
+   * ADR 0136 BR6. Whether the pin covers the content, asked once for the
+   * working copy rather than guessed per file - it is a property of how the
+   * repository stores things (LFS), not of any one document.
+   */
+  pinCoversContent: boolean;
   queue: PicoModelJobQueue;
   jobId: (path: string) => string;
   nowMs: () => number;
@@ -152,6 +158,11 @@ export async function enqueuePicoDepotLibraryReads(
         picoIdentityFingerprintHex: input.picoIdentityFingerprintHex,
         entryId: input.entryId,
         at: ports.at(),
+        derivedFrom: {
+          supplierIdentifier: input.supplierIdentifier,
+          commit: excerpt.commit,
+          pinCoversContent: ports.pinCoversContent,
+        },
       });
       queued += 1;
     } catch {

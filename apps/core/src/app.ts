@@ -148,6 +148,7 @@ import { createPicoLinkRelayTransport } from './link-relay-transport.js';
 import { PicoSupplierHost } from './supplier-host.js';
 import { PicoModelDispatchError, PicoModelRuntime } from './model-runtime.js';
 import { picoModelJobRefusalIsFinal } from './model-job-queue.js';
+import { buildPicoLibraryDerivation } from '@pico/protocol/library-pin';
 import {
   enqueuePicoDepotLibraryReads,
   picoDepotLibraryReadPlan,
@@ -1490,6 +1491,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     for (const supplier of suppliers) {
     const report = await enqueuePicoDepotLibraryReads({
       readExcerpt: async (path) => await depotLibraryExcerpt(input.remote, path),
+      // ADR 0136 BR6, asked of the working copy rather than assumed. Until the
+      // condition read is wired here, an unproven coverage is `false`, which
+      // is the honest half of "an unasked question and a negative answer are
+      // different facts" - the derivation says the pin does not cover, and a
+      // person keeping it sees that rather than a claim.
+      pinCoversContent: false,
       queue: store.picoModelJobQueue(),
       jobId: (path) => `job_library_${createHash('sha256')
         .update(`${input.remote}\u0000${path}`).digest('hex').slice(0, 32)}`,
@@ -2530,6 +2537,9 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   // the class admits any authenticated principal and the handler refuses the
   // operator by name, exactly as the model decision does.
   accessClasses.register('POST', '/api/depot/attachments', 'authenticated');
+  // ADR 0116 W5. Keeping what a read produced is an explicit write by the
+  // person whose material it is - never a consequence of the read finishing.
+  accessClasses.register('POST', '/api/model/jobs/:jobId/keep', 'authenticated');
   accessClasses.register('GET', '/api/model/providers/mine', 'authenticated');
   accessClasses.register('POST', '/api/model/providers/:entryId/decision', 'authenticated');
   accessClasses.register('DELETE', '/api/model/providers/:entryId/decision', 'authenticated');
@@ -4848,6 +4858,70 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // a remote and a commit that is not a commit are different mistakes.
       return sendNoStore(reply.code(400), {
         error: error instanceof Error ? error.message : 'invalid_pico_depot_pin',
+      });
+    }
+  });
+
+  /**
+   * ADR 0116 W5, and the reason this is a route rather than a line in the
+   * sweep.
+   *
+   * **"No auto-persist of derived output."** A reader's values are derived
+   * from material Pico did not author, and a result that became a memory item
+   * on its own would be the replication step the planner-reader split, the
+   * origin labels and the quarantined read were all built to remove. The last
+   * inch is a person, and it is this route.
+   *
+   * What gets written keeps its provenance: ADR 0136 BR6's derivation names
+   * the supplier and the commit, and `pinCoversContent` is asked rather than
+   * assumed - a partial derivation cannot be constructed, so an item either
+   * says what covers it or is not written.
+   */
+  app.post('/api/model/jobs/:jobId/keep', async (request, reply) => {
+    const person = decidingPerson(request);
+    if (person === undefined) {
+      return sendNoStore(reply.code(403), { error: 'pico_kept_memory_is_personal' });
+    }
+    const jobId = (request.params as { jobId: string }).jobId;
+    const kept = store.picoModelJobQueue().keptView(jobId);
+    if (kept === undefined) {
+      return sendNoStore(reply.code(404), { error: 'pico_model_job_not_found' });
+    }
+    if (kept.picoIdentityFingerprintHex !== person) {
+      // Somebody else's read of somebody else's material. Not found rather
+      // than forbidden: whose jobs exist is not this caller's business either.
+      return sendNoStore(reply.code(404), { error: 'pico_model_job_not_found' });
+    }
+    if (kept.outcome !== 'answered' || kept.values === undefined) {
+      return sendNoStore(reply.code(409), {
+        error: 'pico_model_job_has_no_answer',
+        outcome: kept.outcome,
+      });
+    }
+
+    const memoryItemId = `memory_${createHash('sha256')
+      .update(`kept\u0000${jobId}`).digest('hex').slice(0, 32)}`;
+    try {
+      const item = store.memory().create({
+        memoryItemId,
+        privacyDomain: kept.privacyDomain,
+        owner: `pico:identity:${person}`,
+        controller: `pico:identity:${person}`,
+        contentType: 'application/json',
+        // The declared values, canonically. Not prose: ADR 0117 X2 kept the
+        // reader's answer to named values, and flattening them into a sentence
+        // here would give back the channel that closed.
+        content: JSON.stringify(kept.values),
+        derivedFrom: buildPicoLibraryDerivation({
+          supplierIdentifier: kept.supplierIdentifier,
+          pin: { kind: 'commit', value: kept.commit },
+          pinCoversContent: kept.pinCoversContent,
+        }),
+      });
+      return sendNoStore(reply.code(201), { memoryItemId: item.memoryItemId });
+    } catch (error) {
+      return sendNoStore(reply.code(400), {
+        error: error instanceof Error ? error.message : 'pico_kept_memory_refused',
       });
     }
   });

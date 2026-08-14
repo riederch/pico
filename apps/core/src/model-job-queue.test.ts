@@ -45,13 +45,17 @@ function job(jobId = 'job_queue_0001') {
   }, nowMs);
 }
 
-async function queue(): Promise<{ queue: PicoModelJobQueue; close: () => void }> {
+async function queue(): Promise<{
+  queue: PicoModelJobQueue;
+  db: Database.Database;
+  close: () => void;
+}> {
   const dir = mkdtempSync(join(tmpdir(), 'pico-job-queue-'));
   dirs.push(dir);
   const databasePath = join(dir, 'pico.sqlite');
   (await EventStore.open(databasePath, {})).close();
   const db = new Database(databasePath);
-  return { queue: new PicoModelJobQueue(db), close: () => { db.close(); } };
+  return { queue: new PicoModelJobQueue(db), db, close: () => { db.close(); } };
 }
 
 describe('ADR 0049 - which refusals are worth trying again', () => {
@@ -82,12 +86,22 @@ describe('ADR 0049 - the queue holds jobs and forgets nothing quietly', () => {
         job: job('job_queue_0001'),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:00:00.000Z',
       });
       q.enqueue({
         job: job('job_queue_0002'),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:30:00.000Z',
       });
       expect(q.pendingCount()).toBe(2);
@@ -106,6 +120,11 @@ describe('ADR 0049 - the queue holds jobs and forgets nothing quietly', () => {
         job: job(),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:00:00.000Z',
       });
       const muchLater = Date.parse('2026-08-14T13:00:00.000Z');
@@ -124,6 +143,11 @@ describe('ADR 0049 - the queue holds jobs and forgets nothing quietly', () => {
         job: job(),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:00:00.000Z',
       });
       q.recordAttempt('job_queue_0001', '2026-08-14T12:00:00.000Z');
@@ -150,12 +174,22 @@ describe('ADR 0049 - the queue holds jobs and forgets nothing quietly', () => {
         job: job('job_queue_0001'),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:00:00.000Z',
       });
       q.enqueue({
         job: job('job_queue_0002'),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:30:00.000Z',
       });
       // The same job again, later. It must not become one row more, and it
@@ -166,10 +200,103 @@ describe('ADR 0049 - the queue holds jobs and forgets nothing quietly', () => {
         job: job('job_queue_0001'),
         picoIdentityFingerprintHex: 'a'.repeat(64),
         entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'a'.repeat(40),
+          pinCoversContent: true,
+        },
         at: '2026-08-14T11:45:00.000Z',
       });
       expect(q.pendingCount()).toBe(2);
       expect(q.next(nowMs, '2026-08-14T12:00:00.000Z')?.job.jobId).toBe('job_queue_0001');
+    } finally {
+      close();
+    }
+  });
+});
+
+describe('ADR 0116 W5 - what an explicit keep is allowed to read', () => {
+  it('hands back the provenance recorded at enqueue, not reconstructed later', async () => {
+    // By the time somebody keeps the answer the working copy has moved on, and
+    // the commit this was read at is gone from it.
+    const { queue: q, close } = await queue();
+    try {
+      q.enqueue({
+        job: job(),
+        picoIdentityFingerprintHex: 'a'.repeat(64),
+        entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'c'.repeat(40),
+          pinCoversContent: true,
+        },
+        at: '2026-08-14T11:00:00.000Z',
+      });
+      q.settle({
+        jobId: 'job_queue_0001',
+        outcome: 'answered',
+        result: { values: [{ name: 'month', type: 'token', value: 'march', originClass: 'own_pico' }] },
+        at: '2026-08-14T12:02:00.000Z',
+      });
+
+      const kept = q.keptView('job_queue_0001');
+      expect(kept?.supplierIdentifier).toBe('a-library');
+      expect(kept?.commit).toBe('c'.repeat(40));
+      expect(kept?.pinCoversContent).toBe(true);
+      expect(kept?.privacyDomain).toBe('household');
+      expect(kept?.values).toHaveLength(1);
+    } finally {
+      close();
+    }
+  });
+
+  it('says the pin does not cover when it does not, rather than rounding up', async () => {
+    // ADR 0136 BR6: an unasked question and a negative answer are different
+    // facts, and a keep that read `false` as `true` would put a claim in a
+    // memory item that nobody made.
+    const { queue: q, close } = await queue();
+    try {
+      q.enqueue({
+        job: job(),
+        picoIdentityFingerprintHex: 'a'.repeat(64),
+        entryId: 'a-measured-host',
+        derivedFrom: {
+          supplierIdentifier: 'a-library',
+          commit: 'c'.repeat(40),
+          pinCoversContent: false,
+        },
+        at: '2026-08-14T11:00:00.000Z',
+      });
+      expect(q.keptView('job_queue_0001')?.pinCoversContent).toBe(false);
+    } finally {
+      close();
+    }
+  });
+
+  it('is not a keep at all when the provenance is incomplete', async () => {
+    // ADR 0136 BR6 refuses a partial derivation, so a row from before
+    // provenance was recorded is not a keep with gaps.
+    const { queue: q, db, close } = await queue();
+    try {
+      q.enqueue({
+        job: job(),
+        picoIdentityFingerprintHex: 'a'.repeat(64),
+        entryId: 'a-measured-host',
+        derivedFrom: { supplierIdentifier: 'a-library', commit: 'c'.repeat(40), pinCoversContent: true },
+        at: '2026-08-14T11:00:00.000Z',
+      });
+      q.settle({ jobId: 'job_queue_0001', outcome: 'answered', at: '2026-08-14T12:00:00.000Z' });
+      // A settled job with no values is not keepable either: there is nothing
+      // a person could be keeping.
+      expect(q.keptView('job_queue_0001')?.values).toBeUndefined();
+      expect(q.keptView('nothing_here')).toBeUndefined();
+
+      // And a row from before provenance was recorded is not a keep with
+      // gaps - it is not a keep. ADR 0136 BR6 refuses a partial derivation.
+      db.prepare(`
+        UPDATE pico_model_job_queue SET derived_pin_value = NULL WHERE job_id = ?
+      `).run('job_queue_0001');
+      expect(q.keptView('job_queue_0001')).toBeUndefined();
     } finally {
       close();
     }

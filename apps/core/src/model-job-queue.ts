@@ -75,11 +75,18 @@ export class PicoModelJobQueue {
     picoIdentityFingerprintHex: string;
     entryId: string;
     at: string;
+    /**
+     * ADR 0136 BR6. Where these bytes came from, recorded now rather than
+     * reconstructed later: by the time somebody keeps the answer, the working
+     * copy has moved on and the commit this was read at is gone from it.
+     */
+    derivedFrom: { supplierIdentifier: string; commit: string; pinCoversContent: boolean };
   }): void {
     this.db.prepare(`
       INSERT INTO pico_model_job_queue (
-        job_id, pico_identity_fingerprint_hex, entry_id, job_json, enqueued_at
-      ) VALUES (?, ?, ?, ?, ?)
+        job_id, pico_identity_fingerprint_hex, entry_id, job_json, enqueued_at,
+        derived_from_supplier, derived_pin_value, derived_pin_covers_content
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id) DO NOTHING
     `).run(
       input.job.jobId,
@@ -87,6 +94,9 @@ export class PicoModelJobQueue {
       input.entryId,
       JSON.stringify(input.job),
       input.at,
+      input.derivedFrom.supplierIdentifier,
+      input.derivedFrom.commit,
+      input.derivedFrom.pinCoversContent ? 1 : 0,
     );
   }
 
@@ -156,6 +166,67 @@ export class PicoModelJobQueue {
     return (this.db
       .prepare('SELECT COUNT(*) AS pending FROM pico_model_job_queue WHERE settled_at IS NULL')
       .get() as { pending: number }).pending;
+  }
+
+  /**
+   * ADR 0116 W5. Everything the explicit keep needs, and nothing it does not.
+   *
+   * The provenance is read back out of the job's own reference rather than
+   * carried alongside: the commit an excerpt was taken at is a property of
+   * that excerpt, and a second copy would be a second thing to keep in step.
+   */
+  public keptView(jobId: string): {
+    picoIdentityFingerprintHex: string;
+    outcome: string | null;
+    privacyDomain: string;
+    supplierIdentifier: string;
+    commit: string;
+    pinCoversContent: boolean;
+    values?: unknown;
+  } | undefined {
+    const row = this.db.prepare(`
+      SELECT pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+             job_json AS jobJson, outcome, result_json AS resultJson,
+             derived_from_supplier AS supplierIdentifier,
+             derived_pin_value AS commit_,
+             derived_pin_covers_content AS pinCoversContent
+      FROM pico_model_job_queue WHERE job_id = ?
+    `).get(jobId) as {
+      picoIdentityFingerprintHex: string;
+      jobJson: string;
+      outcome: string | null;
+      resultJson: string | null;
+      supplierIdentifier: string | null;
+      commit_: string | null;
+      pinCoversContent: number | null;
+    } | undefined;
+    if (row === undefined) {
+      return undefined;
+    }
+    const job = JSON.parse(row.jobJson) as {
+      references?: Array<{ privacyDomain?: string }>;
+    };
+    const reference = job.references?.[0];
+    const output = row.resultJson === null
+      ? undefined
+      : (JSON.parse(row.resultJson) as { values?: unknown }).values;
+    if (row.supplierIdentifier === null
+      || row.commit_ === null
+      || row.pinCoversContent === null
+      || reference?.privacyDomain === undefined) {
+      // A row queued before provenance was recorded. ADR 0136 BR6 refuses a
+      // partial derivation, so this is not a keep with gaps - it is not a keep.
+      return undefined;
+    }
+    return {
+      picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+      outcome: row.outcome,
+      privacyDomain: reference.privacyDomain,
+      supplierIdentifier: row.supplierIdentifier,
+      commit: row.commit_,
+      pinCoversContent: row.pinCoversContent === 1,
+      ...(output === undefined ? {} : { values: output }),
+    };
   }
 
   public outcomeOf(jobId: string): { outcome: string | null; settledAt: string | null } {

@@ -135,6 +135,18 @@ export const picoModelJobQueueMigrationId = '0014_pico_model_job_queue' as const
  */
 export const picoDepotAcceptedByMigrationId = '0015_pico_depot_accepted_by' as const;
 
+/**
+ * ADR 0136 BR6. What a queued read was taken from, kept with the row.
+ *
+ * A derivation names a supplier, a pin and whether that pin covers the
+ * content, and ADR 0136 BR6 refuses a partial one - `pinCoversContent` is
+ * "not a field with a default: an unasked question and a negative answer are
+ * different facts". None of it is recoverable from the job, and reconstructing
+ * it at the moment somebody keeps the answer would be reconstructing it from
+ * a working copy that has moved on.
+ */
+export const picoModelJobProvenanceMigrationId = '0016_pico_model_job_provenance' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1323,6 +1335,21 @@ const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         ALTER TABLE pico_depot_attachment
         ADD COLUMN accepted_by_pico_identity_fingerprint_hex TEXT NULL;
+      `);
+    },
+  },
+  {
+    id: picoModelJobProvenanceMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_model_job_queue ADD COLUMN derived_from_supplier TEXT NULL;
+      `);
+      db.exec(`
+        ALTER TABLE pico_model_job_queue ADD COLUMN derived_pin_value TEXT NULL;
+      `);
+      db.exec(`
+        ALTER TABLE pico_model_job_queue ADD COLUMN derived_pin_covers_content INTEGER NULL;
       `);
     },
   },

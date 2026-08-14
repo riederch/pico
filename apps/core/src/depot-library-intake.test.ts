@@ -40,6 +40,7 @@ function intake(q: PicoModelJobQueue, readExcerpt: (path: string) => Promise<{
   return {
     readExcerpt,
     queue: q,
+    pinCoversContent: true,
     jobId: (path: string) => `job_${path.replace(/[^a-z0-9]/gu, '_')}`,
     nowMs: () => nowMs,
     at: () => '2026-08-14T12:00:00.000Z',
