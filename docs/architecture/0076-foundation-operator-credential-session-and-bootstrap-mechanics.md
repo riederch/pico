@@ -61,6 +61,24 @@ Sessions live in a process-local map keyed by digest. They are **never written t
 | Bound | maximum concurrent sessions per process (proposed default: 32), oldest-first eviction |
 | Logging | never logged, never in error messages, never in URLs |
 
+**Both revocations reached a surface on 2026-08-14, and until then only
+`curl` did.** The routes had existed since this ADR shipped: replacing the
+passphrase and ending every session were things a person could be told about
+and not do. They are in the Foundation dashboard now, and one property drove
+the whole rendering - **both end the session making the call.** A dashboard
+that reported success and stayed as it was would look connected, fail on the
+next request, and the person would blame the Home rather than the page. So it
+logs itself out, hides what an ended session can no longer reach, and says so
+with the count of what went.
+
+The change asks for the current passphrase because this ADR requires it: an
+open session is not enough, so possession of a session and knowledge of the
+passphrase stay two different claims and the dangerous change needs both. The
+repeat field is the surface's own addition and the only check that belongs
+there rather than at the Home - a typo the Home cannot see, on a credential
+nobody can recover. The length rule stays the Home's, and its sentence
+travels; a second copy in a browser would be a second place to change it.
+
 Not persisting is a decision, not laziness. It **resolves the ADR 0075 restore-resurrection question by construction**: a restored backup cannot resurrect a revoked session, because no backup ever contained one. It also removes the need to exclude session rows from `sqlite-backup` and keeps the ADR 0072 backup story unchanged. It follows the ADR 0039 in-memory ticket precedent for exactly the same reason: a credential that is cheap to recreate should not become durable state.
 
 The residual honest limit stands: a restored backup **can** resurrect a replaced operator credential, bounded by nothing but the operator noticing. A credential epoch does not fix this (the epoch restores too). It is documented, not denied.

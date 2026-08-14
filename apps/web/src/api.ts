@@ -208,6 +208,74 @@ export async function shredPrivacyDomain(
 }
 
 /**
+ * ADR 0076. Replacing the operator credential, and what it costs.
+ *
+ * **The current passphrase is required even though a session is open.** A live
+ * session is not enough: a stolen one must not be able to lock the real
+ * operator out, so possession of the session and knowledge of the passphrase
+ * are two different claims and the dangerous change needs both.
+ *
+ * The reply counts what it ended. Every session goes, **including the one
+ * making this call** - so a caller that carried on afterwards would be holding
+ * a credential the Home no longer knows.
+ */
+export class PicoOperatorPassphraseInvalidError extends Error {
+  public constructor() {
+    super('operator_passphrase_invalid');
+    this.name = 'PicoOperatorPassphraseInvalidError';
+  }
+}
+
+export async function changeOperatorPassphrase(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+  input: { currentPassphrase: string; passphrase: string },
+): Promise<{ revokedSessions: number }> {
+  const url = buildEndpointUrl(baseUrl, '/api/auth/credential');
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { ...buildFoundationHeaders(options), 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+
+  if (response.status === 401) {
+    throw new PicoOperatorPassphraseInvalidError();
+  }
+  if (!response.ok) {
+    // The shape rule is the Home's and its sentence travels: a second copy
+    // here would be a second place to change when the rule does.
+    throw new Error(await describeFailure(response, 'Changing the passphrase'));
+  }
+
+  return { revokedSessions: readRevokedSessions(await response.json()) };
+}
+
+/** ADR 0076. Ends every session, this one included. */
+export async function revokeAllSessions(
+  baseUrl: string,
+  options: FoundationAccessOptions,
+): Promise<{ revokedSessions: number }> {
+  const url = buildEndpointUrl(baseUrl, '/api/auth/sessions');
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: buildFoundationHeaders(options),
+  });
+
+  if (!response.ok) {
+    throw new Error(await describeFailure(response, 'Ending the sessions'));
+  }
+
+  return { revokedSessions: readRevokedSessions(await response.json()) };
+}
+
+function readRevokedSessions(data: unknown): number {
+  if (!isRecord(data) || typeof data.revokedSessions !== 'number') {
+    throw new Error('The session endpoint did not report how many sessions it ended.');
+  }
+  return data.revokedSessions;
+}
+
+/**
  * ADR 0127 M3 with ADR 0129 SR6. The two switches a module has.
  *
  * They are separate calls because they are separate decisions: activation says

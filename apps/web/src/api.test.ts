@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_PICO_HOME_URL,
   PicoModuleHasDependentsError,
+  PicoOperatorPassphraseInvalidError,
+  changeOperatorPassphrase,
+  revokeAllSessions,
   setModuleActivation,
   setModuleCapture,
   PicoRelayIdentityInUseError,
@@ -249,6 +252,65 @@ describe('memory content read', () => {
 
     const [url] = fetchMock.mock.calls[0];
     expect(url.toString()).toContain('/api/memory/domains/domain%20a%2Fb/items');
+  });
+});
+
+describe('ADR 0076 - replacing the operator credential', () => {
+  it('sends both passphrases, because a session alone is not enough', async () => {
+    // A stolen session must not be able to lock the real operator out, so
+    // possession and knowledge are two claims and this needs both.
+    const fetchMock = vi.fn(async () => jsonResponse(200, { revokedSessions: 2 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await changeOperatorPassphrase('http://localhost:3100', {}, {
+      currentPassphrase: 'the old one',
+      passphrase: 'the new one',
+    })).toEqual({ revokedSessions: 2 });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.toString()).toBe('http://localhost:3100/api/auth/credential');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(String(init.body))).toEqual({
+      currentPassphrase: 'the old one',
+      passphrase: 'the new one',
+    });
+  });
+
+  it('tells a wrong current passphrase apart from a refused new one', async () => {
+    // Only one of the two is worth retrying, and a single message would leave
+    // a person changing the wrong field.
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(401, { error: 'invalid' })));
+    await expect(changeOperatorPassphrase('http://localhost:3100', {}, {
+      currentPassphrase: 'wrong',
+      passphrase: 'a new passphrase',
+    })).rejects.toThrow(PicoOperatorPassphraseInvalidError);
+
+    // The shape rule is the Home's and its sentence travels rather than being
+    // restated here, where it would be a second place to change.
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      jsonResponse(400, { error: 'Operator passphrase must be at least 12 characters.' })));
+    await expect(changeOperatorPassphrase('http://localhost:3100', {}, {
+      currentPassphrase: 'the old one',
+      passphrase: 'short',
+    })).rejects.toThrow(/at least 12 characters/u);
+  });
+
+  it('refuses a reply that does not say how many sessions it ended', async () => {
+    // The count is what the surface tells the person; inventing one would be
+    // reporting an outcome nobody observed.
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse(200, {})));
+    await expect(revokeAllSessions('http://localhost:3100', {}))
+      .rejects.toThrow(/did not report how many sessions/u);
+  });
+
+  it('ends every session over the session route', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, { revokedSessions: 4 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    expect(await revokeAllSessions('http://localhost:3100', {})).toEqual({ revokedSessions: 4 });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(url.toString()).toBe('http://localhost:3100/api/auth/sessions');
+    expect(init.method).toBe('DELETE');
   });
 });
 

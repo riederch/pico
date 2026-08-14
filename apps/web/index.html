@@ -163,6 +163,27 @@
         </article>
 
         <!--
+          ADR 0076. The operator credential, and the one property the surface
+          has to be honest about: both of these end every session, including
+          the one being used to make the call. A dashboard that stayed as it
+          was would look logged in and fail on everything.
+        -->
+        <article class="card full">
+          <div class="card-header"><h2>Operator credential</h2></div>
+          <p class="form-hint admin-note">Changing the passphrase needs the current one: an open session is not enough, so a stolen session cannot lock the real operator out. Both actions below end every session on every device, this one included.</p>
+          <form id="passphrase-form" class="admin-form">
+            <div class="filter-field"><label for="passphrase-current">Current passphrase</label><input id="passphrase-current" type="password" autocomplete="current-password" /></div>
+            <div class="filter-field"><label for="passphrase-next">New passphrase</label><input id="passphrase-next" type="password" autocomplete="new-password" /></div>
+            <div class="filter-field"><label for="passphrase-repeat">Repeat the new passphrase</label><input id="passphrase-repeat" type="password" autocomplete="new-password" /></div>
+            <div class="filter-field admin-form-actions">
+              <button id="passphrase-button" type="submit">Change passphrase</button>
+              <button id="revoke-sessions-button" class="secondary-button" type="button">End every session</button>
+            </div>
+          </form>
+          <p id="credential-status" class="form-hint" role="status" aria-live="polite"></p>
+        </article>
+
+        <!--
           ADR 0127 M3 with ADR 0129 SR6. Two switches per module, and they are
           different questions: whether a feature exists, and whether Pico may
           write down what it observes. Activation defaults to on because a Home

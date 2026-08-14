@@ -7,6 +7,7 @@ import {
   picoMemoryContentLabel,
   picoMemoryEncryptionLines,
   picoModuleDroppedLine,
+  picoSessionsEndedLine,
   picoModuleLines,
   picoModelProviderLines,
   picoRelayIdentityLines,
@@ -279,6 +280,26 @@ describe('ADR 0104 S5 - the relay account in words', () => {
   });
 });
 
+describe('ADR 0076 - what ending every session did', () => {
+  it('says this one went too, because it did', () => {
+    // The surface has to behave as though it is true. A dashboard that
+    // reported success and stayed logged in would look connected, fail on the
+    // next call, and the person would blame the Home.
+    expect(picoSessionsEndedLine(3))
+      .toBe('3 sessions ended, this one included. Log in again to continue.');
+  });
+
+  it('counts one session as one', () => {
+    expect(picoSessionsEndedLine(1)).toContain('1 session ended');
+  });
+
+  it('does not report nothing as an accomplishment', () => {
+    // A static-token caller holds no session at all, and "0 sessions ended"
+    // phrased as a success would read as if something happened.
+    expect(picoSessionsEndedLine(0)).toBe('No operator sessions were open. Nothing was ended.');
+  });
+});
+
 describe('ADR 0127 M3 with ADR 0129 SR6 - two switches, never one', () => {
   const module = {
     identifier: 'spatial-recall',
@@ -435,5 +456,41 @@ describe('the dashboard shell carries what the view requires', () => {
     expect(html).toContain('id="encryption-form"');
     expect(html).toContain('id="relay-identity-form"');
     expect(html.indexOf('id="relay-identity-form"')).toBeLessThan(html.indexOf('danger-card'));
+  });
+});
+
+/**
+ * ADR 0076. The wiring layer has no test harness in this app, so the rule that
+ * lives there is read from the source - the same arrangement the companion
+ * renderer uses, and for the same reason: a rule that only holds because
+ * somebody remembered it is a rule that stops holding.
+ */
+describe('ADR 0076 - the dashboard logs itself out when the Home does', () => {
+  const main = readFileSync(resolve(import.meta.dirname, 'main.ts'), 'utf8');
+
+  it('forgets the session after a passphrase change and after ending sessions', () => {
+    // Both routes end every session, this one included. A dashboard that
+    // stayed as it was would look connected and fail on the next call.
+    const changed = main.slice(main.indexOf('async function changePassphrase'));
+    expect(changed.slice(0, changed.indexOf('async function endEverySession')))
+      .toContain('forgetOperatorSession(');
+
+    const ended = main.slice(main.indexOf('async function endEverySession'));
+    expect(ended.slice(0, ended.indexOf('\n  /**'))).toContain('forgetOperatorSession(');
+  });
+
+  it('hides what an ended session can no longer reach', () => {
+    const forget = main.slice(main.indexOf('function forgetOperatorSession'));
+    const body = forget.slice(0, forget.indexOf('\n  }'));
+    expect(body).toContain('operatorSession = undefined;');
+    expect(body).toContain('view.setAdminVisible(false)');
+    expect(body).toContain('view.setContentReadVisible(false)');
+  });
+
+  it('clears the passphrase fields whichever way it went', () => {
+    // A passphrase left in a field is one a person walks away from.
+    const changed = main.slice(main.indexOf('async function changePassphrase'));
+    const body = changed.slice(0, changed.indexOf('async function endEverySession'));
+    expect(body.match(/view\.clearPassphraseForm\(\)/gu)?.length).toBeGreaterThanOrEqual(2);
   });
 });

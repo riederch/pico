@@ -1,6 +1,7 @@
 import { realtimeMessageType } from './protocol-values.js';
 import {
   PicoModelProviderNarrowingRefusedError,
+  PicoOperatorPassphraseInvalidError,
   PicoModuleHasDependentsError,
   PicoRelayIdentityInUseError,
   createRetentionPolicy,
@@ -8,6 +9,8 @@ import {
   decideRelayIdentity,
   listModelProviders,
   narrowModelProvider,
+  changeOperatorPassphrase,
+  revokeAllSessions,
   setModuleActivation,
   setModuleCapture,
   readMemoryEncryption,
@@ -24,7 +27,11 @@ import {
   shredPrivacyDomain,
   updateRetentionPolicy,
 } from './api.js';
-import { createDashboardView, picoModuleDroppedLine } from './render.js';
+import {
+  createDashboardView,
+  picoModuleDroppedLine,
+  picoSessionsEndedLine,
+} from './render.js';
 import type { DashboardState, EventFilters, MemoryContentListResponse, PicoEvent, RealtimeMessage, RetentionPolicy } from './types.js';
 import { connectRealtime, type RealtimeClient } from './websocket.js';
 
@@ -90,6 +97,14 @@ export function startDashboard(document: Document): void {
 
   view.onRetentionPolicySubmitted(() => {
     void saveRetentionPolicy();
+  });
+
+  view.onPassphraseChangeRequested(() => {
+    void changePassphrase();
+  });
+
+  view.onRevokeSessionsRequested(() => {
+    void endEverySession();
   });
 
   view.onModuleActivationRequested((input) => {
@@ -251,6 +266,76 @@ export function startDashboard(document: Document): void {
     await refreshHomeSettings();
     await refreshModelProviders();
     void connect(view.getBaseUrl());
+  }
+
+  /**
+   * ADR 0076. Both of these end the session this dashboard is using, so both
+   * end with the dashboard actually logged out.
+   *
+   * Reporting success and staying as it was would leave a window that looks
+   * connected and fails on the next call - and the person would blame the
+   * Home rather than the page.
+   */
+  function forgetOperatorSession(message: string): void {
+    operatorSession = undefined;
+    view.setAdminVisible(false);
+    view.setContentReadVisible(false);
+    view.setOperatorStatus(message, 'idle');
+  }
+
+  async function changePassphrase(): Promise<void> {
+    const form = view.readPassphraseForm();
+
+    if (form.currentPassphrase === '' || form.passphrase === '') {
+      view.setCredentialStatus('Both the current and the new passphrase are needed.', 'error');
+      return;
+    }
+    if (form.passphrase !== form.repeat) {
+      // The one check that belongs here rather than at the Home: a typo it
+      // cannot see, on a credential nobody can recover.
+      view.setCredentialStatus('The two new passphrases do not match.', 'error');
+      return;
+    }
+
+    view.setCredentialStatus('Changing the passphrase...');
+
+    let ended: { revokedSessions: number };
+    try {
+      ended = await changeOperatorPassphrase(state.baseUrl, foundationAccess(), {
+        currentPassphrase: form.currentPassphrase,
+        passphrase: form.passphrase,
+      });
+    } catch (error) {
+      // Said as itself: a wrong current passphrase is a different thing from a
+      // passphrase the Home refused, and only one of them is worth retrying.
+      view.setCredentialStatus(
+        error instanceof PicoOperatorPassphraseInvalidError
+          ? 'The current passphrase is not right. Nothing was changed.'
+          : formatUnknownError(error),
+        'error',
+      );
+      view.clearPassphraseForm();
+      return;
+    }
+
+    view.clearPassphraseForm();
+    view.setCredentialStatus(`Passphrase changed. ${picoSessionsEndedLine(ended.revokedSessions)}`, 'active');
+    forgetOperatorSession('Logged out: the passphrase changed. Log in with the new one.');
+  }
+
+  async function endEverySession(): Promise<void> {
+    view.setCredentialStatus('Ending every session...');
+
+    let ended: { revokedSessions: number };
+    try {
+      ended = await revokeAllSessions(state.baseUrl, foundationAccess());
+    } catch (error) {
+      view.setCredentialStatus(formatUnknownError(error), 'error');
+      return;
+    }
+
+    view.setCredentialStatus(picoSessionsEndedLine(ended.revokedSessions), 'active');
+    forgetOperatorSession('Logged out: every session was ended.');
   }
 
   /**

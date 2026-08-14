@@ -48,6 +48,12 @@ export interface DashboardView {
    * ADR 0104. The two decisions that belong to Pico, shown as what is running
    * and what was decided - never as one line.
    */
+  /** ADR 0076. The credential, and the sessions both actions end. */
+  readPassphraseForm(): { currentPassphrase: string; passphrase: string; repeat: string };
+  clearPassphraseForm(): void;
+  setCredentialStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
+  onPassphraseChangeRequested(handler: () => void): void;
+  onRevokeSessionsRequested(handler: () => void): void;
   /** ADR 0127 M3 with ADR 0129 SR6. The two switches each module has. */
   renderModules(modules: readonly PicoModuleView[]): void;
   setModuleStatus(message: string, state?: 'idle' | 'active' | 'error'): void;
@@ -131,6 +137,12 @@ interface DashboardElements {
   entryStatus: HTMLElement;
   entriesBody: HTMLTableSectionElement;
   entriesEmpty: HTMLElement;
+  passphraseForm: HTMLFormElement;
+  passphraseCurrentInput: HTMLInputElement;
+  passphraseNextInput: HTMLInputElement;
+  passphraseRepeatInput: HTMLInputElement;
+  revokeSessionsButton: HTMLButtonElement;
+  credentialStatus: HTMLElement;
   moduleCount: HTMLElement;
   modulesBody: HTMLTableSectionElement;
   modulesEmpty: HTMLElement;
@@ -272,6 +284,12 @@ export function createDashboardView(document: Document): DashboardView {
     entryStatus: requireElement(document, 'entry-status', HTMLElement),
     entriesBody: requireElement(document, 'entries-body', HTMLTableSectionElement),
     entriesEmpty: requireElement(document, 'entries-empty', HTMLElement),
+    passphraseForm: requireElement(document, 'passphrase-form', HTMLFormElement),
+    passphraseCurrentInput: requireElement(document, 'passphrase-current', HTMLInputElement),
+    passphraseNextInput: requireElement(document, 'passphrase-next', HTMLInputElement),
+    passphraseRepeatInput: requireElement(document, 'passphrase-repeat', HTMLInputElement),
+    revokeSessionsButton: requireElement(document, 'revoke-sessions-button', HTMLButtonElement),
+    credentialStatus: requireElement(document, 'credential-status', HTMLElement),
     moduleCount: requireElement(document, 'module-count', HTMLElement),
     modulesBody: requireElement(document, 'modules-body', HTMLTableSectionElement),
     modulesEmpty: requireElement(document, 'modules-empty', HTMLElement),
@@ -507,6 +525,35 @@ export function createDashboardView(document: Document): DashboardView {
     onTimeBoundEntryRequested(handler: () => void): void {
       elements.entryForm.addEventListener('submit', (event) => {
         event.preventDefault();
+        handler();
+      });
+    },
+    readPassphraseForm(): { currentPassphrase: string; passphrase: string; repeat: string } {
+      return {
+        currentPassphrase: elements.passphraseCurrentInput.value,
+        passphrase: elements.passphraseNextInput.value,
+        repeat: elements.passphraseRepeatInput.value,
+      };
+    },
+    clearPassphraseForm(): void {
+      // Cleared whichever way it went. A passphrase left in a field is one a
+      // person walks away from.
+      elements.passphraseCurrentInput.value = '';
+      elements.passphraseNextInput.value = '';
+      elements.passphraseRepeatInput.value = '';
+    },
+    setCredentialStatus(message: string, state: 'idle' | 'active' | 'error' = 'idle'): void {
+      elements.credentialStatus.textContent = message;
+      elements.credentialStatus.dataset.state = state;
+    },
+    onPassphraseChangeRequested(handler: () => void): void {
+      elements.passphraseForm.addEventListener('submit', (event) => {
+        event.preventDefault();
+        handler();
+      });
+    },
+    onRevokeSessionsRequested(handler: () => void): void {
+      elements.revokeSessionsButton.addEventListener('click', () => {
         handler();
       });
     },
@@ -1009,6 +1056,25 @@ function createModelProviderRow(
 
   return row;
 }
+
+/**
+ * ADR 0076. What ending every session did, said as what it did.
+ *
+ * **Including this one, and the sentence says so**, because the surface has to
+ * behave as though it is true: a dashboard that reported success and stayed
+ * logged in would look connected and fail on the next call, and the person
+ * would blame the Home.
+ */
+export function picoSessionsEndedLine(revokedSessions: number): string {
+  if (revokedSessions === 0) {
+    // Possible: a static-token caller holds no session at all. Saying "0
+    // sessions ended" as a success would read as if something happened.
+    return 'No operator sessions were open. Nothing was ended.';
+  }
+  return `${revokedSessions} ${revokedSessions === 1 ? 'session' : 'sessions'} ended, `
+    + 'this one included. Log in again to continue.';
+}
+
 
 /**
  * ADR 0127 M3 with ADR 0129 SR6 and ADR 0128. A module, in words.
