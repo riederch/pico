@@ -7,6 +7,7 @@ import { EventStore } from './event-store.js';
 import { PicoModelJobQueue } from './model-job-queue.js';
 import {
   enqueuePicoDepotLibraryReads,
+  pickPicoDepotIntakeEntry,
   maxPicoDepotLibraryReadsPerAttachment,
   picoDepotLibraryReadPlan,
 } from './depot-library-intake.js';
@@ -176,5 +177,24 @@ describe('ADR 0136 BR2 - the core lists and the supplier reads', () => {
     } finally {
       close();
     }
+  });
+});
+
+describe('ADR 0152 - a fetch does not choose a provider for a person', () => {
+  it('runs nothing when nobody decided, which is not a failure', () => {
+    // ADR 0138: reaching outside is off until somebody says so.
+    expect(pickPicoDepotIntakeEntry([])).toEqual({ refusal: 'no_decided_entry' });
+  });
+
+  it('uses the only entry, because one is not a choice', () => {
+    expect(pickPicoDepotIntakeEntry(['a-measured-host'])).toEqual({ entryId: 'a-measured-host' });
+  });
+
+  it('refuses to pick among several, by name', () => {
+    // A fetch that took the first would be a background task deciding whose
+    // machine reads this person's corpus, silently, while they were not
+    // looking.
+    expect(pickPicoDepotIntakeEntry(['a-measured-host', 'another-host']))
+      .toEqual({ refusal: 'more_than_one_decided_entry' });
   });
 });

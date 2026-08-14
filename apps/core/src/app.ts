@@ -141,8 +141,14 @@ import {
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
+import { PicoSupplierHost } from './supplier-host.js';
 import { PicoModelDispatchError, PicoModelRuntime } from './model-runtime.js';
 import { picoModelJobRefusalIsFinal } from './model-job-queue.js';
+import {
+  enqueuePicoDepotLibraryReads,
+  picoDepotLibraryReadPlan,
+  pickPicoDepotIntakeEntry,
+} from './depot-library-intake.js';
 import {
   PicoModelProviderNarrowingError,
   picoModelProviderEffectiveEntry,
@@ -208,7 +214,7 @@ import {
   type OperatorStore,
 } from './operator-store.js';
 import { SessionStore, type SessionPrincipal } from './session-store.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { fetchPicoDepot } from './depot-fetch.js';
 import { PicoDepotWorkspace } from './depot-workspace.js';
 import { PicoSupplierScratch } from './supplier-scratch.js';
@@ -1333,6 +1339,126 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * different things on purpose: the row says what is true now, the chain says
    * what happened.
    */
+  /**
+   * ADR 0136 BR2. The three things the intake needs, kept beside each other so
+   * the boundary they draw is readable in one place.
+   *
+   * `depotLibraryPaths` lists the core's own working copy - Pico fetched it,
+   * so the names are its knowledge. `depotLibraryExcerpt` asks the supplier
+   * for the bytes, because those never are. And the requester is read from the
+   * action rather than assumed, since whose corpus this is decides where it
+   * may be read.
+   */
+  const picoDepotLibraryReadExpectations = Object.freeze([
+    Object.freeze({ name: 'topic', type: 'token' }),
+    Object.freeze({ name: 'summary', type: 'text' }),
+  ]);
+  const picoDepotLibraryReadQuestion =
+    'What is this document about? Answer only from the quoted data.';
+
+  function depotLibraryPaths(remote: string): readonly string[] {
+    const root = depotWorkspace.pathFor(remote);
+    if (!existsSync(root)) {
+      return [];
+    }
+    const found: string[] = [];
+    const walk = (current: string, prefix: string): void => {
+      for (const entry of readdirSync(current, { withFileTypes: true })) {
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') {
+          // `.git` above all: a working copy's own plumbing is not the corpus,
+          // and a plan that queued it would spend a person's afternoon on
+          // object files.
+          continue;
+        }
+        const path = `${prefix}${entry.name}`;
+        if (entry.isDirectory()) {
+          walk(join(current, entry.name), `${path}/`);
+        } else if (entry.isFile()) {
+          found.push(path);
+        }
+      }
+    };
+    walk(root, '');
+    return found;
+  }
+
+  async function depotLibraryExcerpt(
+    remote: string,
+    path: string,
+  ): Promise<{ text: string; commit: string } | null> {
+    const host = new PicoSupplierHost({
+      // The shipped depot, which ADR 0143 DP6 pins to the release. A depot a
+      // person attached brings its own entry point, and that is the version of
+      // this line the first external library will need.
+      entryPoint: join(process.cwd(), 'bridges', 'suppliers', 'git-library', 'index.js'),
+      requestTimeoutMs: 10_000,
+    });
+    try {
+      await host.hello();
+      const offered = await host.offer({
+        workingCopy: depotWorkspace.pathFor(remote),
+        path,
+      });
+      const items = (offered.items ?? []) as Array<{ text?: string; pin?: { value?: string } }>;
+      const first = items[0];
+      return first?.text === undefined || first.pin?.value === undefined
+        ? null
+        : { text: first.text, commit: first.pin.value };
+    } finally {
+      host.close();
+    }
+  }
+
+  /**
+   * ADR 0143 DP1 with ADR 0136 BR3. The fetch is the occasion, and this is
+   * **not** inside the `depot.fetch` effect.
+   *
+   * It cannot be. An ADR 0139 AC1 request names an effect and its arguments
+   * and nothing else - who may ask was decided before the effect ran, and the
+   * effect deliberately never learns it. So an effect cannot pick the entry a
+   * person decided about, because it does not know whose fetch this is.
+   *
+   * That is the request contract working rather than a gap, and the honest
+   * consequence is that queuing happens where the requester is still known:
+   * one call from whatever ran the action, with the person named. Until a
+   * caller passes one, no reads are queued and nothing pretends otherwise.
+   */
+  const queuePicoDepotLibraryReads = async (input: {
+    remote: string;
+    picoIdentityFingerprintHex: string;
+  }): Promise<{ queued: number; refusal?: string }> => {
+    const chosen = pickPicoDepotIntakeEntry(
+      store.picoModelProviderConsent()
+        .listFor(input.picoIdentityFingerprintHex)
+        .map((entry) => entry.entryId),
+    );
+    if (!('entryId' in chosen)) {
+      // Not a failure. ADR 0138: reaching outside is off until somebody says
+      // so, and choosing among several is ADR 0152's surface's question.
+      return { queued: 0, refusal: chosen.refusal };
+    }
+    const report = await enqueuePicoDepotLibraryReads({
+      readExcerpt: async (path) => await depotLibraryExcerpt(input.remote, path),
+      queue: store.picoModelJobQueue(),
+      jobId: (path) => `job_library_${createHash('sha256')
+        .update(`${input.remote}\u0000${path}`).digest('hex').slice(0, 32)}`,
+      nowMs: () => Date.now(),
+      at: () => new Date().toISOString(),
+    }, {
+      supplierIdentifier: 'git-library',
+      privacyDomain: 'household',
+      picoIdentityFingerprintHex: input.picoIdentityFingerprintHex,
+      entryId: chosen.entryId,
+      plan: picoDepotLibraryReadPlan({ paths: depotLibraryPaths(input.remote) }),
+      expects: picoDepotLibraryReadExpectations,
+      question: picoDepotLibraryReadQuestion,
+    });
+    app.log.info({ remote: input.remote, ...report }, 'Queued library reads after fetch.');
+    return { queued: report.queued };
+  };
+
+  app.decorate('picoQueueDepotLibraryReads', queuePicoDepotLibraryReads);
+
   const depotEffects: Record<string, PicoBoundEffect> = {
     'depot.fetch': (request, capabilities) => {
       const depotRemote = request.arguments
@@ -1357,6 +1483,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       if (outcome.status === 'condition') {
         throw new Error(`pico_depot_fetch_condition:${outcome.condition}`);
       }
+
     },
   };
 

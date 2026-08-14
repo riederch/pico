@@ -164,3 +164,34 @@ export async function enqueuePicoDepotLibraryReads(
 
   return Object.freeze({ queued, absent, refused, omitted: input.plan.omitted });
 }
+
+/**
+ * ADR 0152, and the one thing a fetch may not decide for a person.
+ *
+ * A queued job names the entry it will run on, so something has to choose -
+ * and choosing between providers on somebody's behalf is exactly what ADR
+ * 0152's surface exists to ask about. So this chooses only when there is
+ * nothing to choose:
+ *
+ * - **no decided entry** means no jobs, which is ADR 0138's posture rather
+ *   than a failure: reaching outside is off until somebody says so;
+ * - **exactly one** is not a choice, and is used;
+ * - **more than one** is a choice, and it is refused by name. A fetch that
+ *   picked the first would be a background task deciding whose machine reads
+ *   this person's corpus, silently, at a moment they were not looking.
+ */
+export type PicoDepotIntakeEntryChoice =
+  | { entryId: string }
+  | { refusal: 'no_decided_entry' | 'more_than_one_decided_entry' };
+
+export function pickPicoDepotIntakeEntry(
+  decidedEntryIds: readonly string[],
+): PicoDepotIntakeEntryChoice {
+  if (decidedEntryIds.length === 0) {
+    return Object.freeze({ refusal: 'no_decided_entry' as const });
+  }
+  if (decidedEntryIds.length > 1) {
+    return Object.freeze({ refusal: 'more_than_one_decided_entry' as const });
+  }
+  return Object.freeze({ entryId: decidedEntryIds[0]! });
+}
