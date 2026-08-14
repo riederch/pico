@@ -141,6 +141,8 @@ import {
 } from '@pico/protocol/depot';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
 import { createPicoLinkRelayTransport } from './link-relay-transport.js';
+import { PicoModelDispatchError, PicoModelRuntime } from './model-runtime.js';
+import { picoModelJobRefusalIsFinal } from './model-job-queue.js';
 import {
   PicoModelProviderNarrowingError,
   picoModelProviderEffectiveEntry,
@@ -610,6 +612,13 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   let homeSetupNonceHex: string | undefined;
   let pendingHomeClaim: PendingPicoHomeClaim | undefined;
   const accessClasses = new AccessClassRegistry();
+  // ADR 0049. One runtime per Home, because ADR 0142 PE3's lane is per entry
+  // and a second runtime would be a second lane over one accelerator.
+  const modelRuntime = new PicoModelRuntime({
+    log: (line, detail) => {
+      app.log.info(detail ?? {}, line);
+    },
+  });
   // The sole-resident policy survives only while no signed Home exists. Claiming
   // switches the default at request time, including when claim happens in this
   // process, so there is no restart window where operator means read-all.
@@ -1773,7 +1782,98 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return sent;
   };
 
+  /**
+   * ADR 0049. The scheduler that drains the queue, and does not fill it.
+   *
+   * **One job per tick, on purpose.** ADR 0142 PE3 measured one lane, so a
+   * tick that drained the queue would be a tick that held the accelerator for
+   * as long as the queue was long - and the sweep beside this one, which reads
+   * a relay, would wait behind somebody's summarisation. The queue empties at
+   * the rate the provider actually has.
+   *
+   * A refusal that cannot change settles the row. Retrying
+   * `entry_may_not_carry_these_words` would be a Home asking the same question
+   * every six minutes and receiving the same answer, which is the shape ADR
+   * 0150 PU5 refused for pushes and refuses here for the same reason.
+   */
+  const sweepPicoModelJobs = async (): Promise<number> => {
+    const queue = store.picoModelJobQueue();
+    const nowMs = Date.now();
+    const at = new Date(nowMs).toISOString();
+    const next = queue.next(nowMs, at);
+    if (next === undefined) {
+      return 0;
+    }
+    const entry = store.picoModelProviderConsent()
+      .entryFor(next.entryId, next.picoIdentityFingerprintHex);
+    if (entry === undefined) {
+      // No decision, or a withdrawn one. Not a failure and not retried: ADR
+      // 0138's posture is that reaching outside is off until somebody says so,
+      // and a queue that waited for a person to change their mind would be a
+      // queue holding a job against a decision already made.
+      queue.settle({ jobId: next.job.jobId, outcome: 'no_decision_for_this_entry', at });
+      return 0;
+    }
+
+    queue.recordAttempt(next.job.jobId, at);
+    try {
+      const result = await modelRuntime.dispatch({ job: next.job, entry });
+      queue.settle({
+        jobId: next.job.jobId,
+        outcome: 'answered',
+        result: result.output,
+        at,
+      });
+      return 1;
+    } catch (error) {
+      const refusal = error instanceof PicoModelDispatchError
+        ? error.refusal
+        : 'dispatch_failed';
+      if (picoModelJobRefusalIsFinal(refusal)) {
+        queue.settle({ jobId: next.job.jobId, outcome: refusal, at });
+      } else {
+        // Left pending. The world may be different in six minutes; whose words
+        // these are will not be.
+        app.log.warn({ jobId: next.job.jobId, refusal }, 'Model job did not run.');
+      }
+      return 0;
+    }
+  };
+
+  app.decorate('picoSweepModelJobs', sweepPicoModelJobs);
+
   app.decorate('picoSweepLinkPushes', sweepPicoLinkPushes);
+
+  /**
+   * ADR 0049 with ADR 0118 O1. The queue drains on its own timer.
+   *
+   * Separate from the relay sweep rather than folded into it, because the two
+   * wait on different things: a relay sweep waits on an operator that may be
+   * unreachable, and this waits on an accelerator that may be busy. One timer
+   * for both would make each one's slowest case the other's.
+   *
+   * It runs whether or not a relay is configured - a Home with no relay still
+   * has a provider, and a queue that only drained when a relay existed would
+   * be a coupling nobody meant.
+   */
+  const modelJobScheduler = startPicoPeriodicTaskScheduler({
+    tasks: [{
+      identifier: 'model-job-sweep',
+      intervalMs: config.modelJobSweepIntervalMs ?? 60_000,
+    }],
+    request: async () => {
+      try {
+        await sweepPicoModelJobs();
+      } catch (error) {
+        // A provider that is absent is the world failing, not this Home. The
+        // row stays pending and the next tick tries again.
+        app.log.warn(
+          { reason: error instanceof Error ? error.message : 'failed' },
+          'Model job sweep did not complete.',
+        );
+      }
+    },
+  });
 
   const linkRelaySweepScheduler = relayTransport === undefined ? undefined
     : startPicoPeriodicTaskScheduler({
@@ -1819,6 +1919,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     timeBoundScheduler.stop();
     depotFetchScheduler.stop();
     linkRelaySweepScheduler?.stop();
+    modelJobScheduler.stop();
     sockets.clear();
     store.close();
   });

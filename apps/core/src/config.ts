@@ -92,6 +92,8 @@ export interface CoreConfig {
   linkRelayAccountId?: string;
   /** ADR 0149. How often this Home reads its relay mailboxes. */
   linkRelaySweepIntervalMs?: number;
+  /** ADR 0049. How often the model job queue is drained, one job a tick. */
+  modelJobSweepIntervalMs?: number;
   /** When true, recorded memory content is stored domain_encrypted (ADR 0071). Default false (plaintext foundation data). */
   memoryEncryption?: boolean;
   deviceId: string;

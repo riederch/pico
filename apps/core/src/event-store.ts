@@ -2,6 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { PicoModelProviderConsent, PicoModelProviderRegistry } from './model-provider-registry.js';
+import { PicoModelJobQueue } from './model-job-queue.js';
 import {
   picoModuleConsentDrift,
   picoModuleConsentIsCurrent,
@@ -7278,6 +7279,12 @@ export class EventStore {
   public picoModelProviderConsent(): PicoModelProviderConsent {
     this.ensureOpen();
     return new PicoModelProviderConsent(this.db, new PicoModelProviderRegistry(this.db));
+  }
+
+  /** ADR 0049. The job queue, over this store's connection. */
+  public picoModelJobQueue(): PicoModelJobQueue {
+    this.ensureOpen();
+    return new PicoModelJobQueue(this.db);
   }
 
   public detachPicoDepot(remote: string): void {

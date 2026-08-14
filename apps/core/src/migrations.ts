@@ -109,6 +109,17 @@ export const picoModelProviderEntryMigrationId = '0012_pico_model_provider_entry
  */
 export const picoModelProviderConsentMigrationId = '0013_pico_model_provider_consent' as const;
 
+/**
+ * ADR 0049's job queue, which that ADR named and nothing built.
+ *
+ * **The queue is the seam, and it is deliberately dumb.** What Pico wants read
+ * is a product decision nobody has taken; that a queued job should eventually
+ * run is not. So this holds jobs and their outcomes and knows nothing about
+ * why any of them exist - whatever decides that later writes rows here and
+ * changes nothing else.
+ */
+export const picoModelJobQueueMigrationId = '0014_pico_model_job_queue' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1261,6 +1272,32 @@ const migrations: readonly MigrationDefinition[] = [
           revoked_at TEXT NULL,
           PRIMARY KEY (entry_id, pico_identity_fingerprint_hex)
         );
+      `);
+    },
+  },
+  {
+    id: picoModelJobQueueMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_model_job_queue (
+          job_id TEXT PRIMARY KEY,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          entry_id TEXT NOT NULL,
+          job_json TEXT NOT NULL,
+          enqueued_at TEXT NOT NULL,
+          -- Set when the job stopped being pending, whichever way it went. A
+          -- refusal that cannot change is as final as an answer, and the
+          -- column that says so is the same one.
+          settled_at TEXT NULL,
+          outcome TEXT NULL,
+          result_json TEXT NULL,
+          attempts INTEGER NOT NULL DEFAULT 0,
+          last_attempt_at TEXT NULL
+        );
+
+        CREATE INDEX idx_pico_model_job_queue_pending
+        ON pico_model_job_queue (settled_at, enqueued_at);
       `);
     },
   },
