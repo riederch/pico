@@ -189,3 +189,43 @@ describe('ADR 0143 DP1 - what arrived is verified against what was accepted', ()
     expect(existsSync(into)).toBe(false);
   });
 });
+
+describe('ADR 0143 DP3 - what Pico hands the program it invokes', () => {
+  it('runs git with a stripped environment, not with this process\'s', () => {
+    // The rule is stated in the fetcher and reachable only through the real
+    // runner, so every other test in this file - which injects its own - would
+    // pass with the environment leaking. A depot must not reach this process's
+    // environment through the fetcher any more than through its manifest.
+    //
+    // `GIT_DIR` is the probe because git obeys it: if it leaked, the fetch
+    // would work on a repository that is not the one asked for, and this
+    // succeeding is the evidence that it did not arrive.
+    const { remote, first } = makeRemote();
+    const into = join(temp('into'), 'depot');
+    const before = { dir: process.env.GIT_DIR, trace: process.env.GIT_TRACE };
+    process.env.GIT_DIR = join(temp('elsewhere'), 'not-a-repository.git');
+    process.env.GIT_TRACE = '1';
+
+    try {
+      const outcome = fetchPicoDepot({
+        pin: { remote, commit: first },
+        into,
+      });
+
+      expect(outcome.status).toBe('fetched');
+      expect(existsSync(join(into, '.git'))).toBe(true);
+      expect(readFileSync(join(into, 'index.js'), 'utf8')).toContain('async () => ({})');
+    } finally {
+      if (before.dir === undefined) {
+        delete process.env.GIT_DIR;
+      } else {
+        process.env.GIT_DIR = before.dir;
+      }
+      if (before.trace === undefined) {
+        delete process.env.GIT_TRACE;
+      } else {
+        process.env.GIT_TRACE = before.trace;
+      }
+    }
+  });
+});

@@ -291,8 +291,17 @@ receives the credential; it does not keep it.
   **There is no read-back operation**, which is what makes "the credential is
   Pico's" a property of the shape rather than a promise about behaviour.
 
-  `SupplierCredentialCrypto` still has no caller. Suppliers are the other half
-  of CO1 and are unchanged by this.
+  **`SupplierCredentialCrypto` still has no caller, and that is now a decision
+  rather than an oversight.** Wiring it needs two things the provider half did
+  not: a slot in ADR 0136 BR2's closed supplier transport for handing a
+  credential over for one use, and a surface for supplying one. Neither has a
+  consumer - the only supplier that exists is a local git working copy, whose
+  own header says it needs no credential, and building the hand-over now would
+  add a second unused mechanism beside the one this entry already reports.
+
+  What is missing is not the cipher. It is a supplier that needs one, and the
+  wire shape should be decided by the first supplier that does rather than
+  guessed at by the one that does not.
 
 - **CO2 - Condition is a typed value (implemented):**
   `picoSupplierConditions` is the closed list, with `out_of_scope` from

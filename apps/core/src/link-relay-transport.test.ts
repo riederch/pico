@@ -223,6 +223,45 @@ describe('ADR 0149 - the collector over the real surface', () => {
     expect(posted).toBe(0);
   });
 
+  it('swallows only the one refusal that means it is already done', async () => {
+    // The rule is the transport's, not this relay's - which answers
+    // `mailbox_not_yours` and nothing else here - so it is proven against a
+    // relay that answers something else. Anything but "already not ours" is a
+    // mailbox this Home believes it closed and an operator that still holds it.
+    const { baseUrl } = await startRelay();
+    const transport = createPicoLinkRelayTransport({
+      baseUrl,
+      accountId: account,
+      fetch: async () => new Response(
+        JSON.stringify({ refusal: 'unknown_account' }),
+        { status: 403, headers: { 'content-type': 'application/json' } },
+      ),
+    });
+    await expect(transport.deregister(picoLinkRelayMailboxOf(homeInbound)))
+      .rejects.toThrow(/pico_link_relay_deregistration_refused:unknown_account/u);
+  });
+
+  it('throws rather than reporting an empty mailbox when a collect is refused', async () => {
+    // An empty list from a refused collect says "nothing is waiting" when
+    // nobody looked - the one answer this family must never give.
+    const { baseUrl } = await startRelay();
+    const transport = createPicoLinkRelayTransport({ baseUrl, accountId: 'f'.repeat(32) });
+    await expect(transport.collect({ mailbox: picoLinkRelayMailboxOf(homeInbound) }))
+      .rejects.toThrow(/pico_link_relay_collect_refused/u);
+  });
+
+  it('answers a refused delivery instead of throwing, because the caller can act', async () => {
+    // ADR 0147's outcomes are all things a caller does something about: a full
+    // mailbox drains, an unknown one needs a new address, a revoked one needs
+    // a new relationship. A throw would flatten all three into "the transport
+    // broke" and lose what to do next.
+    const { baseUrl } = await startRelay();
+    const transport = createPicoLinkRelayTransport({ baseUrl, accountId: account });
+
+    await expect(transport.deliver(packet('f'.repeat(32), 'AAAA')))
+      .resolves.toBe('mailbox_unknown');
+  });
+
   it('splits an address through the protocol parser rather than on @', () => {
     expect(picoLinkRelayMailboxOf(homeInbound)).toBe('1'.repeat(32));
     // ADR 0147 RY3: a second splitter would get the two-`@` case wrong.
