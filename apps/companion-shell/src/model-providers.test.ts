@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { picoModelProviderStates } from '@pico/protocol/model-provider-state';
-import { renderPicoCompanionModelProviders } from './model-provider-views.js';
+import {
+  renderPicoCompanionAnsweredReads,
+  renderPicoCompanionModelProviders,
+} from './model-provider-views.js';
 import {
   parsePicoCompanionAnsweredReads,
   picoCompanionModelProviderStates,
@@ -358,6 +361,36 @@ describe('ADR 0152 SE2 - the control is on the line, and it acts', () => {
       entryId: 'a-measured-host',
       providerClass: 'declared_own_host',
     }]);
+  });
+
+  it('keeps the read on the line it sits on', () => {
+    // ADR 0116 W5. The press is the write, so a button pointed at another job
+    // would persist somebody else's answer - and the list carries several.
+    const root = fakeDocument();
+    const kept: string[] = [];
+    renderPicoCompanionAnsweredReads(root, [
+      {
+        jobId: 'job_one',
+        supplier: 'a-library',
+        revision: 'dddddddddddd',
+        answeredAt: '2026-08-14T12:00:00.000Z',
+      },
+      {
+        jobId: 'job_two',
+        supplier: 'a-library',
+        revision: 'eeeeeeeeeeee',
+        answeredAt: '2026-08-14T12:05:00.000Z',
+      },
+    ], (jobId: string) => { kept.push(jobId); });
+
+    const lines = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children;
+    for (const line of lines) {
+      const button = line.children.find((child) => child.tag === 'button');
+      (button as unknown as { click(): void }).click();
+    }
+    expect(kept).toEqual(['job_one', 'job_two']);
   });
 
   it('hides the section when a Home has nothing measured', () => {

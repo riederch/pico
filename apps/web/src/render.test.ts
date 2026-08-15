@@ -2,6 +2,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  createModelProviderRow,
+  createModuleRow,
+  createRetentionPolicyRow,
   eventHistoryNoticeLabel,
   eventTableColumnLabels,
   picoMemoryContentLabel,
@@ -492,5 +495,128 @@ describe('ADR 0076 - the dashboard logs itself out when the Home does', () => {
     const changed = main.slice(main.indexOf('async function changePassphrase'));
     const body = changed.slice(0, changed.indexOf('async function endEverySession'));
     expect(body.match(/view\.clearPassphraseForm\(\)/gu)?.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+/**
+ * The same question ADR 0152 SE2 turned out to need on the device: not "is
+ * there a button" but "does it act on the row it sits on".
+ *
+ * A row action pointed at the wrong subject is a defect a screenshot passes
+ * and a person discovers by losing something - a revoked policy that was not
+ * theirs to revoke, a module switched off that they were reading about.
+ */
+function fakeDocument(): Document {
+  const createElement = (tag: string): Record<string, unknown> => {
+    const children: unknown[] = [];
+    const listeners: Array<() => void> = [];
+    return {
+      tag,
+      children,
+      listeners,
+      className: '',
+      textContent: '',
+      type: '',
+      dataset: {} as Record<string, string>,
+      hidden: false,
+      append: (...nodes: unknown[]) => { children.push(...nodes); },
+      addEventListener: (_name: string, handler: () => void) => { listeners.push(handler); },
+      classList: { add: () => {} },
+    };
+  };
+  return { createElement } as unknown as Document;
+}
+
+interface FakeNode {
+  tag: string;
+  textContent: string;
+  children: FakeNode[];
+  listeners: Array<() => void>;
+}
+
+function buttons(row: unknown): FakeNode[] {
+  const node = row as unknown as FakeNode;
+  return node.children
+    .flatMap((child) => [child, ...child.children])
+    .filter((child) => child.tag === 'button');
+}
+
+describe('every row acts on the row it sits on', () => {
+  it('edits and revokes the policy in that row, not another', () => {
+    const pressed: string[] = [];
+    const row = createRetentionPolicyRow(
+      fakeDocument(),
+      {
+        retentionPolicyId: 'short-lived',
+        displayName: 'Short lived',
+        mode: 'keep_until_deleted',
+        createdAt: '2026-08-14T12:00:00.000Z',
+        updatedAt: '2026-08-14T12:00:00.000Z',
+      },
+      (id) => { pressed.push(`edit:${id}`); },
+      (id) => { pressed.push(`revoke:${id}`); },
+    );
+
+    const [edit, revoke] = buttons(row);
+    expect([edit?.textContent, revoke?.textContent]).toEqual(['Edit', 'Revoke']);
+    edit?.listeners.forEach((run) => { run(); });
+    revoke?.listeners.forEach((run) => { run(); });
+    expect(pressed).toEqual(['edit:short-lived', 'revoke:short-lived']);
+  });
+
+  it('switches the module in that row, and asks for the opposite of what it is', () => {
+    // ADR 0127 M3. A button that sent the state it already has would do
+    // nothing and look like it worked.
+    const pressed: unknown[] = [];
+    const row = createModuleRow(
+      fakeDocument(),
+      {
+        identifier: 'spatial-recall',
+        kind: 'product',
+        active: true,
+        capturing: false,
+        effectBearing: false,
+        dependencies: [],
+      },
+      (input) => { pressed.push(input); },
+      (input) => { pressed.push(input); },
+    );
+
+    const [activation, capture] = buttons(row);
+    expect(activation?.textContent).toBe('Switch off');
+    expect(capture?.textContent).toBe('Start recording');
+    activation?.listeners.forEach((run) => { run(); });
+    capture?.listeners.forEach((run) => { run(); });
+    expect(pressed).toEqual([
+      { identifier: 'spatial-recall', active: false },
+      { identifier: 'spatial-recall', capturing: true },
+    ]);
+  });
+
+  it('narrows the entry in that row', () => {
+    const pressed: string[] = [];
+    const row = createModelProviderRow(
+      fakeDocument(),
+      {
+        entryId: 'a-measured-host',
+        model: 'a-model:measured',
+        providerClass: 'declared_own_host',
+        sees: 'this conversation only',
+        needsCredentialToSeeMore: true,
+        measured: {
+          at: '2026-08-13T17:43:04.923Z',
+          contextTokens: 40_960,
+          generationTokensPerSecond: 26.31,
+          concurrentJobs: 1,
+        },
+        effective: { contextTokens: 40_960, concurrentJobs: 1 },
+      },
+      (entryId) => { pressed.push(entryId); },
+    );
+
+    const [narrow] = buttons(row);
+    expect(narrow?.textContent).toBe('Narrow');
+    narrow?.listeners.forEach((run) => { run(); });
+    expect(pressed).toEqual(['a-measured-host']);
   });
 });

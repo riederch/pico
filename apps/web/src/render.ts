@@ -929,7 +929,16 @@ function enabledCapabilityNames(status: SystemStatus): string {
   return enabled.length === 0 ? 'none' : enabled.join(', ');
 }
 
-function createRetentionPolicyRow(
+/**
+ * ADR 0152 SE2's lesson, applied to every row that carries a control.
+ *
+ * Exported so a test can render one into a document it provides and press
+ * what it built. "The button exists" and "the button acts on the row it sits
+ * on" are different claims, and a row action pointed at the wrong subject is
+ * the kind of defect a screenshot passes and a person discovers by losing
+ * something.
+ */
+export function createRetentionPolicyRow(
   document: Document,
   policy: RetentionPolicy,
   onEdit: (retentionPolicyId: string) => void,
@@ -972,7 +981,7 @@ function createRetentionPolicyRow(
 }
 
 
-function createModuleRow(
+export function createModuleRow(
   document: Document,
   module: PicoModuleView,
   onActivation: (input: { identifier: string; active: boolean }) => void,
@@ -1019,7 +1028,7 @@ function createModuleRow(
   return row;
 }
 
-function createModelProviderRow(
+export function createModelProviderRow(
   document: Document,
   entry: PicoModelProviderEntryView,
   onNarrow: (entryId: string) => void,
