@@ -237,6 +237,87 @@ describe('controller-signed share-envelope issuance (ADR 0084)', () => {
     }
   });
 
+  it('ends the window on the monotonic clock even when the wall clock goes back', async () => {
+    // ADR 0120 N1's whole reason. A pending issuance holds a sealed wrap, so
+    // it is an exposure window - and a wall clock wound backward must not be
+    // able to keep that wrap alive longer than it was meant to live.
+    let monotonic = 0;
+    const fixture = createFixture({ monotonicNow: () => monotonic });
+    try {
+      const prepared = await fixture.issuer.prepare(prepareInput(), new Date(AT));
+      if (!prepared.ok) {
+        throw new Error(prepared.reason);
+      }
+      // The wall clock says the ceremony started a minute from now; the
+      // monotonic one says the window is spent.
+      monotonic = 3 * 60 * 1_000;
+      await expect(fixture.issuer.finalize(
+        prepared.pending.issuanceId,
+        sign(
+          buildPicoShareEnvelopeSignatureInput(prepared.pending.envelope),
+          controller.privateKey,
+        ),
+        new Date('2026-07-27T09:59:00.000Z'),
+      )).resolves.toEqual({ ok: false, reason: 'unknown_or_expired_issuance' });
+      expect(fixture.store.picoShareEnvelopes()).toEqual([]);
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('bounds what it holds unsigned, dropping the oldest rather than growing', async () => {
+    // Every pending issuance holds a sealed wrap in memory. An unbounded map
+    // would make "prepare" a way to fill this process with other people's
+    // key material, and the ceremony that is actually happening is the newest.
+    const fixture = createFixture({ maxPending: 2 });
+    try {
+      const first = await fixture.issuer.prepare(prepareInput(), new Date(AT));
+      const second = await fixture.issuer.prepare(prepareInput(), new Date(AT));
+      const third = await fixture.issuer.prepare(prepareInput(), new Date(AT));
+      if (!first.ok || !second.ok || !third.ok) {
+        throw new Error('prepare refused');
+      }
+
+      // The oldest is gone; the newest two are still finalizable.
+      await expect(fixture.issuer.finalize(
+        first.pending.issuanceId,
+        sign(
+          buildPicoShareEnvelopeSignatureInput(first.pending.envelope),
+          controller.privateKey,
+        ),
+        new Date(AT),
+      )).resolves.toEqual({ ok: false, reason: 'unknown_or_expired_issuance' });
+
+      await expect(fixture.issuer.finalize(
+        third.pending.issuanceId,
+        sign(
+          buildPicoShareEnvelopeSignatureInput(third.pending.envelope),
+          controller.privateKey,
+        ),
+        new Date(AT),
+      )).resolves.toMatchObject({ ok: true, inserted: true });
+    } finally {
+      fixture.close();
+    }
+  });
+
+  it('refuses a second signature over an envelope it already stored', async () => {
+    // Idempotent retry is one signature arriving twice. A *different* one over
+    // the same issuance is somebody else's claim to have controlled this, and
+    // answering it with the stored record would launder it.
+    const fixture = createFixture();
+    try {
+      const stored = await issue(fixture);
+      await expect(fixture.issuer.finalize(
+        stored.issuanceId,
+        'f'.repeat(128),
+        new Date(AT),
+      )).resolves.toEqual({ ok: false, reason: 'conflicting_record' });
+    } finally {
+      fixture.close();
+    }
+  });
+
   it('refuses stored host, domain, reader and issuer binding swaps', async () => {
     const fixture = createFixture();
     try {
@@ -387,7 +468,13 @@ type FreshnessOption =
   | 'unavailable'
   | ((query: PicoIdentityReaderKeyFreshnessQuery) => PicoIdentityReaderKeyFreshnessResult);
 
-function createFixture(options: { freshness?: FreshnessOption } = {}) {
+function createFixture(options: {
+  freshness?: FreshnessOption;
+  /** ADR 0120 N1's second clock, so a test can wind one and not the other. */
+  monotonicNow?: () => number;
+  pendingTtlMs?: number;
+  maxPending?: number;
+} = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'pico-share-envelope-test-'));
   const databasePath = join(dir, 'pico.sqlite');
   const keyStore = new KeyStore(join(dir, 'keys'));
@@ -476,7 +563,15 @@ function createFixture(options: { freshness?: FreshnessOption } = {}) {
       ? undefined
       : { check: async (query) => freshness(query) },
   );
-  const issuer = new PicoShareEnvelopeIssuer(store, sodium, selector, keyStore);
+  const issuer = new PicoShareEnvelopeIssuer(
+    store,
+    sodium,
+    selector,
+    keyStore,
+    options.pendingTtlMs ?? 2 * 60 * 1_000,
+    options.maxPending ?? 128,
+    options.monotonicNow ?? (() => 0),
+  );
   let closed = false;
   return {
     dir,
@@ -505,7 +600,9 @@ function createFixture(options: { freshness?: FreshnessOption } = {}) {
   };
 }
 
-async function issue(fixture: ReturnType<typeof createFixture>): Promise<void> {
+async function issue(
+  fixture: ReturnType<typeof createFixture>,
+): Promise<{ issuanceId: string }> {
   const prepared = await fixture.issuer.prepare(prepareInput(), new Date(AT));
   if (!prepared.ok) {
     throw new Error(prepared.reason);
@@ -519,6 +616,7 @@ async function issue(fixture: ReturnType<typeof createFixture>): Promise<void> {
     new Date(AT),
   );
   expect(finalized).toMatchObject({ ok: true, inserted: true });
+  return { issuanceId: prepared.pending.issuanceId };
 }
 
 function prepareInput() {
