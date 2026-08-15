@@ -75,6 +75,99 @@ describe('Home domain read grants (ADR 0082)', () => {
     })).toEqual({ ok: false, reason: 'foreign_home' });
   });
 
+  it('refuses a grant edited after it was signed', () => {
+    // Every other check here reads a field the verifier compares itself. These
+    // two are protected by the signature alone: the domain a grant is *for*
+    // and the reader it is *to*. An edit that slipped through would hand
+    // somebody a domain nobody granted them.
+    const founding = foundingRecord();
+    const signed = issueGrant();
+
+    const domainSwapped = {
+      ...signed,
+      grant: { ...signed.grant, privacyDomain: 'domain-somebody-elses' },
+    };
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: domainSwapped,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_signature' });
+
+    const readerSwapped = {
+      ...signed,
+      grant: { ...signed.grant, readerPicoIdentityFingerprintHex: 'e'.repeat(64) },
+    };
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: readerSwapped,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_signature' });
+
+    const windowSwapped = {
+      ...signed,
+      grant: { ...signed.grant, validUntil: '2099-01-01T00:00:00.000Z' },
+    };
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: windowSwapped,
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_signature' });
+  });
+
+  it('refuses a record that is not this schema, and a suite that is not ours', () => {
+    // ADR 0025. A record from a different suite is not a weaker claim, it is a
+    // claim in a language this Home does not read.
+    const founding = foundingRecord();
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: { ...issueGrant(), schema: 'pico.home.domain-read-grant.v0' as never },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_grant_schema' });
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: issueGrant({ suite: 'somebody.elses.suite.v1' as never }),
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'foreign_suite' });
+  });
+
+  it('accepts a grant from a previous era only when that key is still accepted', () => {
+    // ADR 0115. The chain vouches for history, only the head stamps anything
+    // new - so a grant signed under the retired host key stays verifiable, and
+    // only because this Home says which keys it still accepts.
+    const founding = foundingRecord();
+    const earlier = issueGrant({ hostSigningKeyFingerprintHex: '9'.repeat(64) });
+
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: earlier,
+      foundingRecord: founding,
+      acceptedHostSigningKeyFingerprintHexes: ['1'.repeat(64), '9'.repeat(64)],
+    })).toEqual({ ok: true });
+
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: earlier,
+      foundingRecord: founding,
+      acceptedHostSigningKeyFingerprintHexes: ['1'.repeat(64)],
+    })).toEqual({ ok: false, reason: 'foreign_host_key' });
+  });
+
+  it('refuses an issuer key that is the wrong role or the wrong key', () => {
+    // The controller is named by fingerprint; the record carrying the public
+    // key has to be *that* key, in the role that may sign for an identity.
+    const founding = foundingRecord();
+    const signed = issueGrant();
+
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: {
+        ...signed,
+        issuerIdentityKeyRecord: { ...controllerKeyRecord, keyRole: 'device_signing' as never },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_key_role' });
+
+    expect(verifyPicoHomeDomainReadGrant(sodium, {
+      record: {
+        ...signed,
+        issuerIdentityKeyRecord: { ...controllerKeyRecord, publicKeyHex: 'a'.repeat(64) },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'issuer_key_fingerprint_mismatch' });
+  });
+
   it('requires lifecycle statements to bind the exact grant and advance its order', () => {
     const grant = issueGrant();
     expect(verifyPicoHomeDomainReadGrantLifecycle(sodium, {
