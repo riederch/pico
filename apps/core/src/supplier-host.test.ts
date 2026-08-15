@@ -357,3 +357,106 @@ describe('ADR 0136 BR1 - the memory_item slot, over a real process', () => {
     expect(offered.items).toEqual([]);
   });
 });
+
+/**
+ * ADR 0136 BR2 with ADR 0097's framing. What the host does with bytes a
+ * supplier should not be sending.
+ *
+ * The shipped runner cannot produce these - a supplier module exports handlers
+ * and never touches the wire - so the rogue runtime below stands in for one
+ * that was replaced or subverted. That is the case the framing rules exist
+ * for: every one of them is about a process on the other side behaving badly,
+ * and none of them could be observed while only well-behaved processes ran.
+ */
+function rogueRuntime(body: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-rogue-runtime-'));
+  tempDirs.push(dir);
+  const path = join(dir, 'runtime.mjs');
+  writeFileSync(path, `#!/usr/bin/env node\n${body}\n`, { mode: 0o755 });
+  return path;
+}
+
+function rogueHost(runtime: string): PicoSupplierHost {
+  const host = new PicoSupplierHost({
+    entryPoint: shippedEntryPoint,
+    execPath: runtime,
+    requestTimeoutMs: 1_000,
+  });
+  hosts.push(host);
+  return host;
+}
+
+describe('ADR 0097 framing - a supplier that speaks out of turn', () => {
+  it('drops an answer belonging to no request rather than interpreting it', async () => {
+    // The core is the client in initiative: a frame arriving unasked has no
+    // request to belong to. Interpreting one would let a supplier decide when
+    // Pico takes something in.
+    const host = rogueHost(rogueRuntime(`
+      const unasked = JSON.stringify({
+        family: 'pico.supplier.response.v1',
+        requestId: 'never-asked-for',
+        ok: true,
+        result: { protocolVersion: 1, slots: [] },
+      });
+      const body = Buffer.from(unasked, 'utf8');
+      const frame = Buffer.allocUnsafe(4 + body.byteLength);
+      frame.writeUInt32BE(body.byteLength, 0);
+      body.copy(frame, 4);
+      process.stdout.write(frame);
+      setTimeout(() => {}, 5_000);
+    `));
+
+    // The unasked answer is dropped, so `hello` waits and times out rather
+    // than resolving with somebody else's frame.
+    await expect(host.hello()).rejects.toThrow(/unreachable|timed_out|refused/u);
+  });
+
+  it('drops a frame whose family is not the response family', async () => {
+    // The rogue answers the *right* request id under the wrong family, so
+    // nothing but the family check stands between this and an accepted answer.
+    // Every response carries one family; anything else is a supplier speaking
+    // out of turn, and there is no inbound family it could be.
+    const host = rogueHost(rogueRuntime(`
+      let buffered = Buffer.alloc(0);
+      process.stdin.on('data', (chunk) => {
+        buffered = Buffer.concat([buffered, chunk]);
+        if (buffered.byteLength < 4) return;
+        const length = buffered.readUInt32BE(0);
+        if (buffered.byteLength < 4 + length) return;
+        const asked = JSON.parse(buffered.subarray(4, 4 + length).toString('utf8'));
+        buffered = buffered.subarray(4 + length);
+        const body = Buffer.from(JSON.stringify({
+          family: 'pico.supplier.hello.v1',
+          requestId: asked.requestId,
+          ok: true,
+          result: { protocolVersion: 1, slots: [] },
+        }), 'utf8');
+        const frame = Buffer.allocUnsafe(4 + body.byteLength);
+        frame.writeUInt32BE(body.byteLength, 0);
+        body.copy(frame, 4);
+        process.stdout.write(frame);
+      });
+      setTimeout(() => {}, 5_000);
+    `));
+
+    await expect(host.hello()).rejects.toThrow(/unreachable|timed_out|refused/u);
+  });
+
+  it('ends the connection on a declared body it will not allocate', async () => {
+    // Checked before the body is buffered: a supplier that declares four
+    // gigabytes must not be able to make this process reserve them.
+    const host = rogueHost(rogueRuntime(`
+      const frame = Buffer.alloc(4);
+      frame.writeUInt32BE(4_000_000_000, 0);
+      process.stdout.write(frame);
+      setTimeout(() => {}, 5_000);
+    `));
+
+    // It ends the connection rather than waiting for four gigabytes that will
+    // never arrive, so this fails at once instead of at the request timeout -
+    // and the elapsed time is the only way to tell those two apart.
+    const startedAt = Date.now();
+    await expect(host.hello()).rejects.toThrow();
+    expect(Date.now() - startedAt).toBeLessThan(900);
+  });
+});
