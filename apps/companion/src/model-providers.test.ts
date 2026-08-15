@@ -21,6 +21,7 @@ function linkClient(response: unknown) {
 const provider = {
   entryId: 'a-measured-host',
   model: 'a-model:measured',
+  providerClass: 'declared_own_host',
   contextTokens: 40960,
   measuredAt: '2026-08-13T17:43:04.923Z',
   decided: true,

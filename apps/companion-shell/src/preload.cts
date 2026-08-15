@@ -12,6 +12,7 @@ const channels = Object.freeze({
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
   decideModelProvider: 'pico:model-provider:decide',
+  widenModelProvider: 'pico:model-provider:widen',
   revokeModelProvider: 'pico:model-provider:revoke',
   getAnsweredReads: 'pico:model-reads:get',
   keepAnsweredRead: 'pico:model-read:keep',
@@ -48,13 +49,19 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   beginFirstRun: async (source: string): Promise<void> => {
     await ipcRenderer.invoke(channels.beginFirstRun, source);
   },
-  // ADR 0152. Three narrow calls: a read, a decision and a withdrawal. No
-  // credential crosses this bridge - a reference to one does, and the
-  // credential itself stays under ADR 0138 CO1 custody where it was put.
+  // ADR 0152. Four narrow calls: a read, a decision, a widening and a
+  // withdrawal. **No credential crosses this bridge**, and the widening is
+  // what would have broken that: the secret is typed into the main process
+  // through ADR 0113's keystroke capture, so what travels here is the entry
+  // and the declaration being confirmed. The credential itself stays under
+  // ADR 0138 CO1 custody where it was put.
   getModelProviders: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getModelProviders),
   decideModelProvider: async (decision: unknown): Promise<void> => {
     await ipcRenderer.invoke(channels.decideModelProvider, decision);
+  },
+  widenModelProvider: async (widening: unknown): Promise<void> => {
+    await ipcRenderer.invoke(channels.widenModelProvider, widening);
   },
   revokeModelProvider: async (entryId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.revokeModelProvider, entryId);

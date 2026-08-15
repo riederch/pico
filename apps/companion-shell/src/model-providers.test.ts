@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { picoModelProviderStates } from '@pico/protocol/model-provider-state';
+import { renderPicoCompanionModelProviders } from './model-provider-views.js';
 import {
   parsePicoCompanionAnsweredReads,
   picoCompanionModelProviderStates,
@@ -21,6 +22,7 @@ function provider(overrides: Partial<PicoCompanionModelProvider> = {}): PicoComp
   return {
     entryId: 'a-measured-host',
     model: 'a-model:measured',
+    providerClass: 'declared_own_host',
     contextTokens: 40960,
     measuredAt: '2026-08-13T17:43:04.923Z',
     decided: false,
@@ -211,6 +213,7 @@ describe('ADR 0152 SE5 - loading and gone are told apart in the simple layer', (
     const [parsed] = parsePicoCompanionModelProviders([{
       entryId: 'a-measured-host',
       model: 'a-model:measured',
+      providerClass: 'declared_own_host',
       contextTokens: 40960,
       measuredAt: '2026-08-13T17:43:04.923Z',
       decided: true,
@@ -226,6 +229,7 @@ describe('ADR 0152 SE5 - loading and gone are told apart in the simple layer', (
     const [parsed] = parsePicoCompanionModelProviders([{
       entryId: 'a-measured-host',
       model: 'a-model:measured',
+      providerClass: 'declared_own_host',
       contextTokens: 40960,
       measuredAt: '2026-08-13T17:43:04.923Z',
       decided: true,
@@ -233,6 +237,134 @@ describe('ADR 0152 SE5 - loading and gone are told apart in the simple layer', (
       needsCredentialToSeeMore: false,
     }]);
     expect(parsed?.state).toBeUndefined();
+  });
+});
+
+describe('ADR 0152 SE2 - the decision is on the line that states it', () => {
+  it('labels the control with the consequence rather than the mechanism', () => {
+    // What a person agrees to is what this machine will see. "Submit" would be
+    // the one sentence in this surface no test could hold to anything - and
+    // the one they actually act on.
+    const [undecided] = picoCompanionModelProviderLines([provider()]);
+    expect(undecided?.actionLabel).toBe('Let it see this conversation');
+
+    const [narrow] = picoCompanionModelProviderLines([
+      provider({ decided: true, needsCredentialToSeeMore: true }),
+    ]);
+    expect(narrow?.actionLabel).toContain('credential');
+    expect(narrow?.actionLabel).toContain('what Pico remembers');
+
+    const [wide] = picoCompanionModelProviderLines([
+      provider({ decided: true, needsCredentialToSeeMore: false }),
+    ]);
+    expect(wide?.actionLabel).toBe('Withdraw');
+  });
+
+  it('carries the declaration the person is confirming rather than inventing one', () => {
+    // ADR 0048: the class is a person's judgement. A device that sent one it
+    // made up would be declaring on their behalf.
+    expect(picoCompanionModelProviderLines([provider()])[0]?.providerClass)
+      .toBe('declared_own_host');
+  });
+});
+
+describe('ADR 0151 PV1 - the secret does not cross the renderer bridge', () => {
+  const preload = readFileSync(join(import.meta.dirname, 'preload.cts'), 'utf8');
+  const renderer = readFileSync(join(import.meta.dirname, 'renderer.ts'), 'utf8');
+  const main = readFileSync(join(import.meta.dirname, 'main.ts'), 'utf8');
+
+  /** Code without the paragraphs explaining it: a comment that says "secret"
+   * is a file keeping its reason, not carrying one. */
+  const withoutComments = (source: string): string => source
+    .replace(/\/\*[\s\S]*?\*\//gu, '')
+    .replace(/\/\/[^\n]*/gu, '');
+
+  it('never mentions a credential, in any call it makes', () => {
+    // ADR 0113 C2's no-secret renderer contract, kept when a secret arrived.
+    // The rule is the whole file rather than the one call somebody thought of:
+    // a secret smuggled through a *different* bridge call would satisfy a
+    // narrower check and break the same contract.
+    expect(withoutComments(renderer)).not.toContain('secret');
+    expect(withoutComments(preload)).not.toContain('secret');
+    expect(preload).toContain('widenModelProvider');
+  });
+
+  it('captures the keystrokes in the main process, as the passphrase already is', () => {
+    const handler = main.slice(main.indexOf('picoCompanionIpcChannels.widenModelProvider'));
+    const body = handler.slice(0, handler.indexOf('ipcMain.handle', 1));
+    expect(body).toContain('captureSecret(');
+    expect(body).toContain('runtime.widenModelProvider(');
+  });
+});
+
+/**
+ * A document just real enough to render into. The renderer takes its document
+ * as an argument, so what it puts on a line can be read rather than inferred
+ * from the source - and "the control exists" and "the control is on the line"
+ * are different claims.
+ */
+function fakeDocument(): { document: Document; list: HTMLElement; section: HTMLElement } {
+  const createElement = (tag: string): Record<string, unknown> => {
+    const children: unknown[] = [];
+    const listeners: Array<() => void> = [];
+    return {
+      tag,
+      children,
+      listeners,
+      className: '',
+      textContent: '',
+      type: '',
+      dataset: {} as Record<string, string>,
+      hidden: false,
+      append: (...nodes: unknown[]) => { children.push(...nodes); },
+      replaceChildren: (...nodes: unknown[]) => { children.splice(0, children.length, ...nodes); },
+      addEventListener: (_name: string, handler: () => void) => { listeners.push(handler); },
+      click: () => { for (const handler of listeners) handler(); },
+    };
+  };
+  const document = { createElement } as unknown as Document;
+  return {
+    document,
+    list: createElement('ul') as unknown as HTMLElement,
+    section: createElement('section') as unknown as HTMLElement,
+  };
+}
+
+describe('ADR 0152 SE2 - the control is on the line, and it acts', () => {
+  it('puts the labelled button on the line and reports what was pressed', () => {
+    // A button built and never appended is a decision surface that cannot
+    // decide - which is what this window was until today.
+    const root = fakeDocument();
+    const acted: unknown[] = [];
+    renderPicoCompanionModelProviders(root, [{
+      entryId: 'a-measured-host',
+      model: 'a-model:measured',
+      providerClass: 'declared_own_host',
+      contextTokens: 40960,
+      measuredAt: '2026-08-13T17:43:04.923Z',
+      decided: false,
+      sees: 'nothing yet - you have not decided about this one',
+      needsCredentialToSeeMore: true,
+    }], (act: unknown) => { acted.push(act); });
+
+    const line = (root.list as unknown as { children: Array<{ children: Array<Record<string, unknown>> }> })
+      .children[0]!;
+    const button = line.children.find((child) => child.tag === 'button');
+    expect(button?.textContent).toBe('Let it see this conversation');
+
+    (button as unknown as { click(): void }).click();
+    expect(acted).toEqual([{
+      action: 'decide',
+      entryId: 'a-measured-host',
+      providerClass: 'declared_own_host',
+    }]);
+  });
+
+  it('hides the section when a Home has nothing measured', () => {
+    // ADR 0118 O4: nothing computing for you is an absence, not a fault.
+    const root = fakeDocument();
+    renderPicoCompanionModelProviders(root, [], () => {});
+    expect(root.section.hidden).toBe(true);
   });
 });
 

@@ -3460,6 +3460,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 return {
                   entryId: record.entry.entryId,
                   model: record.entry.model.identifier,
+                  // ADR 0048 with ADR 0152 SE2. What the finding says this
+                  // machine is - sent because the decision restates it, and a
+                  // person cannot confirm a declaration they were never shown.
+                  providerClass: record.entry.providerClass,
                   contextTokens: finding.measurement.capacity.contextTokens,
                   measuredAt: record.entry.measurement.measuredAt,
                   state: picoModelProviderState(observation),

@@ -451,6 +451,40 @@ function registerIpc(): void {
       });
     },
   );
+  /**
+   * ADR 0151 PV1 with ADR 0113 C2. The secret is typed where no page sees it.
+   *
+   * The renderer asks for the widening and never touches the credential: the
+   * keystrokes are captured in this process, exactly as the Vault passphrase
+   * and the Card PIN already are, and the window is told a character count.
+   * That is what keeps the preload's own rule true - no secret crosses that
+   * bridge - now that there is a secret to keep off it.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.widenModelProvider,
+    async (event: IpcMainInvokeEvent, widening: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = widening as Record<string, unknown> | undefined;
+      if (typeof record?.entryId !== 'string' || typeof record.providerClass !== 'string') {
+        throw new Error('invalid_model_provider_widening');
+      }
+      const secret = await captureSecret({
+        title: 'Enter the credential for this provider',
+        instruction: 'Type what this machine asks Pico to prove itself with, then press '
+          + 'Enter. Your Home seals it; this device keeps no copy.',
+        maximumLength: 4_096,
+        validate: (value: string) => value.length > 0,
+      });
+      await runtime.widenModelProvider({
+        entryId: record.entryId,
+        providerClass: record.providerClass,
+        secret,
+      });
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.revokeModelProvider,
     async (event: IpcMainInvokeEvent, entryId: unknown) => {

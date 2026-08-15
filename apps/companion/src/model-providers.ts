@@ -23,6 +23,14 @@ import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client
 export interface PicoCompanionModelProviderView {
   entryId: string;
   model: string;
+  /**
+   * ADR 0048 with ADR 0152 SE2. What the finding says this machine is.
+   *
+   * Carried because the decision restates it: a person confirming where their
+   * words may go is confirming *this*, and a device that sent a class it made
+   * up would be declaring on their behalf.
+   */
+  providerClass: string;
   contextTokens: number;
   measuredAt: string;
   decided: boolean;
@@ -45,6 +53,7 @@ function asProviders(value: unknown): readonly PicoCompanionModelProviderView[] 
     const record = entry as Record<string, unknown>;
     if (typeof record.entryId !== 'string'
       || typeof record.model !== 'string'
+      || typeof record.providerClass !== 'string'
       || typeof record.contextTokens !== 'number'
       || typeof record.measuredAt !== 'string'
       || typeof record.decided !== 'boolean'
@@ -62,6 +71,7 @@ function asProviders(value: unknown): readonly PicoCompanionModelProviderView[] 
     return Object.freeze({
       entryId: record.entryId,
       model: record.model,
+      providerClass: record.providerClass,
       contextTokens: record.contextTokens,
       measuredAt: record.measuredAt,
       decided: record.decided,

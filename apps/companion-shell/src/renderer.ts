@@ -1,13 +1,13 @@
 import {
   parsePicoCompanionPresentation,
   picoCompanionFloorAssurance,
-  picoCompanionModelProviderLines,
-  parsePicoCompanionModelProviders,
-  picoCompanionAnsweredReadLines,
-  parsePicoCompanionAnsweredReads,
   type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
+import {
+  renderPicoCompanionAnsweredReads,
+  renderPicoCompanionModelProviders,
+} from './model-provider-views.js';
 
 declare global {
   interface Window {
@@ -17,6 +17,10 @@ declare global {
         entryId: string;
         providerClass: string;
         carries: string;
+      }): Promise<void>;
+      widenModelProvider(widening: {
+        entryId: string;
+        providerClass: string;
       }): Promise<void>;
       revokeModelProvider(entryId: string): Promise<void>;
       getAnsweredReads(): Promise<unknown>;
@@ -209,6 +213,26 @@ function refreshModelViews(): void {
       renderPicoCompanionModelProviders(
         { list: providerList, section: providerSection, document },
         providers,
+        (act) => {
+          // Asked again afterwards rather than edited in place, for the reason
+          // the keep is: what a Home decided is the Home's answer, and this
+          // window's guess about it would be a second one.
+          const done = act.action === 'decide'
+            ? window.picoCompanion.decideModelProvider({
+              entryId: act.entryId,
+              providerClass: act.providerClass,
+              // ADR 0151 PV1: the narrower allowance is what saying yes
+              // yields. The wider one needs a credential and is its own act.
+              carries: 'live_turn',
+            })
+            : act.action === 'widen'
+              ? window.picoCompanion.widenModelProvider({
+                entryId: act.entryId,
+                providerClass: act.providerClass,
+              })
+              : window.picoCompanion.revokeModelProvider(act.entryId);
+          void done.then(refreshModelViews, refreshModelViews);
+        },
       );
     }, () => {
       providerSection.hidden = true;
@@ -262,87 +286,4 @@ function requireSelect(id: string): HTMLSelectElement {
     throw new Error(`invalid_renderer_select:${id}`);
   }
   return element;
-}
-
-/**
- * ADR 0152 SE1/SE5 on the device.
- *
- * The renderer chooses no words. It prints what
- * `picoCompanionModelProviderLines` decided, with `textContent` throughout -
- * a model identifier arrives from a Home over a Link reply, which makes it
- * exactly the sort of string that must never become markup.
- */
-export function renderPicoCompanionModelProviders(
-  root: { list: HTMLElement; section: HTMLElement; document: Document },
-  value: unknown,
-): void {
-  const providers = parsePicoCompanionModelProviders(value);
-  root.section.hidden = providers.length === 0;
-  root.list.replaceChildren();
-  const lines = picoCompanionModelProviderLines(providers);
-  for (const [index, line] of lines.entries()) {
-    const item = root.document.createElement('li');
-    item.className = 'provider-line';
-    item.dataset.entryId = line.entryId;
-    item.dataset.action = line.action;
-
-    const headline = root.document.createElement('p');
-    headline.className = 'headline';
-    headline.textContent = line.headline;
-
-    const detail = root.document.createElement('p');
-    detail.className = 'detail';
-    detail.textContent = line.detail;
-
-    // SE3. The measurement is visible and not editable here, with the moment
-    // it was taken - an entry measured months ago is a claim rather than a
-    // finding, and only the date says which.
-    const measured = root.document.createElement('p');
-    measured.className = 'measured';
-    measured.textContent = `${providers[index]!.contextTokens} tokens of context, `
-      + `measured ${providers[index]!.measuredAt.slice(0, 10)}`;
-
-    item.append(headline, detail, measured);
-    root.list.append(item);
-  }
-}
-
-/**
- * ADR 0116 W5 on the device. A list of things waiting, and a button each.
- *
- * The button is the whole point: nothing here persists, and the person's press
- * is the write. Every string comes from `picoCompanionAnsweredReadLines`, so
- * what this window may say is decided somewhere a test can reach.
- */
-export function renderPicoCompanionAnsweredReads(
-  root: { list: HTMLElement; section: HTMLElement; document: Document },
-  value: unknown,
-  keep: (jobId: string) => void,
-): void {
-  const reads = parsePicoCompanionAnsweredReads(value);
-  root.section.hidden = reads.length === 0;
-  root.list.replaceChildren();
-  for (const line of picoCompanionAnsweredReadLines(reads)) {
-    const item = root.document.createElement('li');
-    item.className = 'provider-line';
-    item.dataset.jobId = line.jobId;
-
-    const headline = root.document.createElement('p');
-    headline.className = 'headline';
-    headline.textContent = line.headline;
-
-    const detail = root.document.createElement('p');
-    detail.className = 'detail';
-    detail.textContent = line.detail;
-
-    const button = root.document.createElement('button');
-    button.type = 'button';
-    button.textContent = 'Keep this';
-    button.addEventListener('click', () => {
-      keep(line.jobId);
-    });
-
-    item.append(headline, detail, button);
-    root.list.append(item);
-  }
 }

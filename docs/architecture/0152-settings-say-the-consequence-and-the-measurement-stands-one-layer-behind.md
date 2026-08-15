@@ -232,6 +232,30 @@ SE5 was the one that had not been, and the audit is what found it.
 - **SE6: implemented.** The person's decisions are on their own device, and
   the host half sits beside `memory_encryption` and the relay account in one
   Foundation surface. There is no second place for either.
+- **SE2: it was a list, not a surface, until 2026-08-15.** The window showed
+  what each provider sees and offered no way to answer: the lines carried an
+  action and the renderer drew no control, so the one decision this ADR exists
+  for could not be made anywhere. A read-only rendering of a decision satisfies
+  SE1 and fails SE2, which is the distinction the audit missed on the first
+  pass.
+
+  Each line now carries one control, labelled with the consequence rather than
+  the mechanism - "Let it see this conversation", not "Submit" - because that
+  label is the sentence a person actually acts on, and a word chosen in the
+  renderer would be the only one in this surface no test could hold.
+
+  **The declaration travels with the finding.** ADR 0048 makes the class a
+  person's judgement, so the read carries what the entry says it is and the
+  decision restates it. A device that sent a class it composed would be
+  declaring on somebody's behalf.
+
+  **Widening is one act, and the secret never reaches the page.** ADR 0151 PV4
+  lets a decision name only a credential the Home holds, so the order matters
+  and is not left to a window: the runtime supplies the credential and decides
+  in one call. The secret is typed into the main process through ADR 0113's
+  keystroke capture, exactly as the Vault passphrase already is - the renderer
+  contains the word nowhere, and a test reads the whole file rather than the
+  one call somebody thought of.
 
 Original gate text follows.
 

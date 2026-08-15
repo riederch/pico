@@ -17,6 +17,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
   decideModelProvider: 'pico:model-provider:decide',
+  widenModelProvider: 'pico:model-provider:widen',
   revokeModelProvider: 'pico:model-provider:revoke',
   getAnsweredReads: 'pico:model-reads:get',
   keepAnsweredRead: 'pico:model-read:keep',
@@ -75,6 +76,16 @@ export type PicoCompanionConditionKind = typeof picoCompanionConditionKinds[numb
  * hitting, so it is bound to the protocol by a test rather than by intent -
  * the same arrangement `browser:check` names as the remedy.
  */
+/**
+ * ADR 0151 PV4. What a device calls the credential it hands over.
+ *
+ * A person types a secret, not a name. The seal is keyed by entry and resident
+ * already, so the reference carries no information a person could supply and
+ * asking for one would be asking them to invent a label for a thing they
+ * cannot see.
+ */
+export const picoCompanionModelProviderCredentialRef = 'provider_credential';
+
 export const picoCompanionModelProviderStates = [
   'not_used_yet',
   'working',
@@ -417,6 +428,14 @@ function assertDisplayText(value: unknown, maximum: number): void {
 export interface PicoCompanionModelProvider {
   entryId: string;
   model: string;
+  /**
+   * ADR 0048 with ADR 0152 SE2. What the finding says this machine is.
+   *
+   * Carried because the decision restates it: a person confirming where their
+   * words may go is confirming *this*, and a device that sent a class it made
+   * up would be declaring on their behalf.
+   */
+  providerClass: string;
   contextTokens: number;
   measuredAt: string;
   decided: boolean;
@@ -451,6 +470,19 @@ export interface PicoCompanionModelProviderLine {
   detail: string;
   /** What the person can do next, which is never more than one thing. */
   action: 'decide' | 'widen' | 'revoke';
+  /**
+   * ADR 0152 SE2. The words on the button, chosen here like every other word.
+   *
+   * A control labelled from the renderer would be the one sentence in this
+   * surface that no test could hold to anything - and it is the sentence a
+   * person actually acts on.
+   */
+  actionLabel: string;
+  /**
+   * ADR 0048. The declaration the person is confirming, carried so the device
+   * never invents one.
+   */
+  providerClass: string;
 }
 
 /**
@@ -495,6 +527,10 @@ export function picoCompanionModelProviderLines(
         // Not "it is off". Off is an answer, and nobody gave one.
         detail: 'Pico will not send anything here until you say so.',
         action: 'decide' as const,
+        // The consequence, not the mechanism: what the person is agreeing to
+        // is what this machine will see.
+        actionLabel: 'Let it see this conversation',
+        providerClass: provider.providerClass,
       });
     }
     if (provider.needsCredentialToSeeMore) {
@@ -508,6 +544,8 @@ export function picoCompanionModelProviderLines(
           + 'machine to prove who it is.'
           + (stateDetail === undefined ? '' : ` ${stateDetail}`),
         action: 'widen' as const,
+        actionLabel: 'Add a credential and let it see what Pico remembers',
+        providerClass: provider.providerClass,
       });
     }
     return Object.freeze({
@@ -517,6 +555,8 @@ export function picoCompanionModelProviderLines(
         stateDetail === undefined ? '' : ` ${stateDetail}`
       }`,
       action: 'revoke' as const,
+      actionLabel: 'Withdraw',
+      providerClass: provider.providerClass,
     });
   }));
 }
@@ -534,6 +574,7 @@ export function parsePicoCompanionModelProviders(
     const record = entry as Record<string, unknown>;
     if (typeof record.entryId !== 'string'
       || typeof record.model !== 'string'
+      || typeof record.providerClass !== 'string'
       || typeof record.contextTokens !== 'number'
       || typeof record.measuredAt !== 'string'
       || typeof record.decided !== 'boolean'
@@ -551,6 +592,7 @@ export function parsePicoCompanionModelProviders(
     return Object.freeze({
       entryId: record.entryId,
       model: record.model,
+      providerClass: record.providerClass,
       contextTokens: record.contextTokens,
       measuredAt: record.measuredAt,
       decided: record.decided,

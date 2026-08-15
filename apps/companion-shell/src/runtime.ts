@@ -32,12 +32,14 @@ import {
   decidePicoCompanionModelProvider,
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
+  supplyPicoCompanionModelProviderCredential,
   revokePicoCompanionModelProvider,
   readPicoCompanionAnsweredReads,
   keepPicoCompanionAnsweredRead,
   type PicoCompanionAnsweredReadView,
   type PicoCompanionModelProviderView,
 } from '@pico/companion/model-providers';
+import { picoCompanionModelProviderCredentialRef } from './contract.js';
 
 export interface PicoCompanionShellRuntime {
   checkNow(): Promise<PicoCompanionAlarmCheck>;
@@ -49,6 +51,18 @@ export interface PicoCompanionShellRuntime {
     providerClass: string;
     carries: string;
     credentialRef?: string;
+  }): Promise<void>;
+  /**
+   * ADR 0151 PV1. Hands over the secret and then widens, as one act.
+   *
+   * Two calls in one direction rather than two the renderer makes: PV4 lets a
+   * decision name only a credential this Home holds, so the order is not a
+   * detail a window may get wrong.
+   */
+  widenModelProvider(input: {
+    entryId: string;
+    providerClass: string;
+    secret: string;
   }): Promise<void>;
   revokeModelProvider(entryId: string): Promise<void>;
   /** ADR 0116 W5. What a read produced and nobody has kept. */
@@ -260,6 +274,30 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           ...decision,
+        });
+      }),
+      widenModelProvider: async (widening) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const linkClient = await createPicoCompanionLinkClient({
+          profile: readPicoCompanionProfile(profilePath),
+          daemonClient,
+          sodium: input.sodium,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+        // The Home seals it on arrival; nothing here keeps a copy, and the
+        // reference it answers with is what the decision then names.
+        const credentialRef = await supplyPicoCompanionModelProviderCredential({
+          livingDeviceLinkClient: linkClient,
+          entryId: widening.entryId,
+          credentialRef: picoCompanionModelProviderCredentialRef,
+          secret: widening.secret,
+        });
+        await decidePicoCompanionModelProvider({
+          livingDeviceLinkClient: linkClient,
+          entryId: widening.entryId,
+          providerClass: widening.providerClass,
+          carries: 'live_turn_and_retrieved_memory',
+          credentialRef,
         });
       }),
       revokeModelProvider: async (entryId) => await serialized(async () => {
