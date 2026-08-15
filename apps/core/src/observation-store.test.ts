@@ -288,6 +288,48 @@ describe('ADR 0129 SR2 condensation: readings become a memory and stop existing'
     expect(left.map((row) => row.observedAt)).toEqual([at(10)]);
   });
 
+  it('carries the custody the core decided, not what the module knows about', () => {
+    // ADR 0129 SR2: the module decides what the readings mean; the privacy
+    // domain, the encryption posture and the retention policy are custody, and
+    // custody is not the module's. A condensation that dropped them would
+    // write somebody's movements in plaintext under no policy while every
+    // caller believed otherwise.
+    const { store } = openStore('condense-custody', { encrypted: true });
+    store.retentionPolicies().create({
+      retentionPolicyId: 'short-lived',
+      displayName: 'Short lived',
+      mode: 'delete_after_max_age',
+      maxAgeDays: 7,
+    });
+    store.appendPicoObservations([fix(30)]);
+    const window = store.picoObservationWindow({
+      kind: 'location_fix',
+      privacyDomain: 'domain-private',
+    });
+
+    expect(condensePicoObservations(store.memory(), {
+      module: 'spatial-recall',
+      memory: {
+        memoryItemId: 'mem_parked_sealed',
+        contentType: 'application/vnd.pico.parking-event',
+        content: JSON.stringify({ parkedAt: at(30) }),
+      },
+      consumed: window,
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      contentPosture: 'domain_encrypted',
+      retentionPolicyRef: 'short-lived',
+      deleteObservations: (ids) => store.deletePicoObservations(ids),
+    })).toEqual({ recorded: true, consumed: 1 });
+
+    const item = store.memory().getInDomain('mem_parked_sealed', 'domain-private');
+    expect(item?.contentPosture).toBe('domain_encrypted');
+    expect(item?.retentionPolicyRef).toBe('short-lived');
+    // And it is really sealed: the plaintext is not what the row holds.
+    expect(store.memory().getInDomain('mem_parked_sealed', 'domain-private')?.content)
+      .toContain('parkedAt');
+  });
+
   it('consumes nothing when the module derived nothing', () => {
     // A drive that has not finished is not a drive that produced nothing, and
     // deleting the window anyway would throw away readings a later pass could
