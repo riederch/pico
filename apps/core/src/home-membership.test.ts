@@ -113,6 +113,96 @@ describe('Pico Home membership credentials (ADR 0080 H6)', () => {
     })).toEqual({ ok: false, reason: 'home_host_membership_is_not_reissued' });
   });
 
+  it('refuses a credential edited after it was signed', () => {
+    // Every refusal above is a field the verifier compares itself, so each
+    // would fail with no signature check at all. **The subject is not one of
+    // them**: it is checked only against the Home Host Pico, so a credential
+    // re-pointed at another resident passes every explicit rule here and is
+    // stopped by the signature alone. What it would buy is somebody else's
+    // membership of this Home.
+    const founding = foundingRecord();
+    const signed = issueCredential();
+
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: {
+        ...signed,
+        membership: { ...signed.membership, subjectPicoIdentityFingerprintHex: 'e'.repeat(64) },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_signature' });
+
+    // The window and the scopes are the other two nothing else compares.
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: {
+        ...signed,
+        membership: { ...signed.membership, validUntil: '2099-07-19T11:00:00.000Z' },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_signature' });
+
+    // A well-formed scope list that is not the one signed: refused by the
+    // signature.
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: {
+        ...signed,
+        membership: { ...signed.membership, scopes: ['host.use'] },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_issuer_signature' });
+
+    // And a scope outside the closed list never reaches the signature at all:
+    // the builder refuses to canonicalise a vocabulary it does not have, which
+    // is a stronger refusal and a different one.
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: {
+        ...signed,
+        membership: {
+          ...signed.membership,
+          scopes: ['host.use', 'packet.receive', 'host.admin' as never],
+        },
+      },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'malformed_membership_record' });
+  });
+
+  it('refuses another schema and another suite before it reads anything else', () => {
+    // ADR 0025. A record in a language this Home does not read is not a weaker
+    // claim about membership; it is not a claim about membership.
+    const founding = foundingRecord();
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: { ...issueCredential(), schema: 'pico.home.membership.v0' as never },
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'invalid_credential_schema' });
+
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: issueCredential({ membership: { suite: 'somebody.elses.suite.v1' as never } }),
+      foundingRecord: founding,
+    })).toEqual({ ok: false, reason: 'foreign_suite' });
+  });
+
+  it('keeps a credential from a previous era exactly as long as the chain says', () => {
+    // ADR 0115. The accepted host-key chain vouches for a credential's era:
+    // boot re-verification passes the whole chain, new intake passes the head.
+    // Without the first, a host rotation would evict every member at the next
+    // start; without the second, a retired key could still admit people.
+    const founding = foundingRecord();
+    const earlier = issueCredential({
+      membership: { hostSigningKeyFingerprintHex: '9'.repeat(64) },
+    });
+
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: earlier,
+      foundingRecord: founding,
+      acceptedHostSigningKeyFingerprintHexes: [hostSigningFingerprintHex(), '9'.repeat(64)],
+    })).toEqual({ ok: true });
+
+    expect(verifyPicoHomeMembershipAuthority(sodium, {
+      credential: earlier,
+      foundingRecord: founding,
+      acceptedHostSigningKeyFingerprintHexes: [hostSigningFingerprintHex()],
+    })).toEqual({ ok: false, reason: 'foreign_host_key' });
+  });
+
   it('refuses a lifecycle statement that names a different member', () => {
     const credential = issueCredential();
     const evicted = issueLifecycle(credential, {
