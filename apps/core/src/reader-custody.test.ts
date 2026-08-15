@@ -510,6 +510,70 @@ describe('ReaderCustodyStore (ADR 0086)', () => {
       rotatedAt: '2026-07-27T10:07:00.000Z',
       lifecycleOrder: 'seq:0000000000000007',
     });
+
+    /**
+     * ADR 0088's completeness, in the direction that costs something.
+     *
+     * The envelopes are not covered by the owner's signature - it signs the
+     * rotation, and the envelopes are what the rotation is *for* - so the
+     * counting is the only thing standing between a revoked reader and the
+     * next KEK version. An extra envelope hands them the key they were just
+     * removed from; a missing owner envelope leaves the owner locked out of
+     * their own domain.
+     */
+    const withRevokedReaderEnvelope = structuredClone(rotationV3);
+    withRevokedReaderEnvelope.envelopes.push(makeEnvelope(records, {
+      grantId: readerGrant.grant.readerGrantId,
+      kekVersion: rotationV3.rotation.kekVersion,
+      readerKeyRecord: readerGrant.readerKeyRecord,
+      grantedAt: rotationV3.rotation.rotatedAt,
+    }));
+    expect(harness.store.recordKekRotation(
+      withRevokedReaderEnvelope,
+      rotationV3.rotation.rotatedAt,
+    )).toEqual({ ok: false, reason: 'invalid_rotation' });
+
+    const withoutOwnerEnvelope = structuredClone(rotationV3);
+    withoutOwnerEnvelope.envelopes = [];
+    expect(harness.store.recordKekRotation(
+      withoutOwnerEnvelope,
+      rotationV3.rotation.rotatedAt,
+    )).toEqual({ ok: false, reason: 'invalid_rotation' });
+
+    // ADR 0088. A rotation that names no cause at all is not a rotation this
+    // protocol can even express: the signature input refuses an empty set, so
+    // it fails before anything is signed rather than at the store.
+    expect(() => makeRotation(records, {
+      rotationId: 'reader_rotation_0003_no_cause',
+      previousKekVersion: 2,
+      causeLifecycleIds: [],
+      remainingReaders: [],
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    })).toThrow('invalid_rotation_causes');
+
+    // One that names *a* cause, correctly signed, and not the debt that is
+    // actually open: accepting it would clear the write barrier a revocation
+    // opened while the revoked reader still holds the current key.
+    expect(harness.store.recordKekRotation(makeRotation(records, {
+      rotationId: 'reader_rotation_0003_wrong_cause',
+      previousKekVersion: 2,
+      causeLifecycleIds: ['memberlc_that_never_happened'],
+      remainingReaders: [],
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    }), '2026-07-27T10:07:00.000Z')).toEqual({ ok: false, reason: 'invalid_rotation' });
+
+    // And one that skips a version: `n+1` or nothing, or the chain stops
+    // saying which key any envelope belongs to.
+    expect(harness.store.recordKekRotation(makeRotation(records, {
+      rotationId: 'reader_rotation_0003_skips',
+      previousKekVersion: 3,
+      causeLifecycleIds: [readerRevoked.lifecycle.lifecycleId],
+      remainingReaders: [],
+      rotatedAt: '2026-07-27T10:07:00.000Z',
+      lifecycleOrder: 'seq:0000000000000007',
+    }), '2026-07-27T10:07:00.000Z')).toEqual({ ok: false, reason: 'invalid_rotation' });
     expect(harness.store.recordKekRotation(
       rotationV3,
       '2026-07-27T10:06:59.999Z',
