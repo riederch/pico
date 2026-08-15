@@ -22,6 +22,29 @@ wird, muss sie als eigener, upgrade-kompatibler Schritt erfolgen. Eine
 bestehende Home-Assistant-Installation darf weder als zweite App erscheinen
 noch ihre Daten oder Update-Verbindung verlieren.
 
+## Companion-Ressourcenbedarf ohne Electron messen
+
+Ziel ist ausschliesslich weniger RAM- und CPU-Verbrauch; eine native
+Produktform ist kein Selbstzweck. Die Linux-Tray-Messung vom 2026-08-14 liegt
+bei 222.669.824 Byte PSS und 95.821.824 Byte `Private_Dirty +
+Private_Hugetlb` ueber sieben Electron-Prozesse. Davon entfallen 110.164.992
+Byte PSS auf GPU-, Utility- und weitere Chromium-Prozesse; wie viel des
+112.504.832-Byte-Browserprozesses der Pico-/Node-Kern allein benoetigt, ist
+nicht getrennt gemessen. Fuer CPU gibt es noch keine belastbare
+Leerlaufmessung.
+
+Vor einer Portierungsentscheidung einen reproduzierbaren Headless-Benchmark
+ausfuehren: denselben Companion-Core und Vault-Pfad ohne Electron starten und
+PSS, privaten Speicher, Leerlauf-CPU sowie Wakeups gegen den paketierten
+Tray-Betrieb vergleichen. Zuerst ausserdem den statischen Importumfang auf
+weitere unnoetig frueh geladene Module pruefen.
+
+Nur wenn diese Messung eine fuer das Produkt relevante Einsparung zeigt, eine
+native oder leichtere Shell bewerten. Der bewaehrte TypeScript-Vertrauenspfad
+bleibt dabei zunaechst erhalten. Eine vollstaendige Neuimplementierung von
+Vault, kanonischen Formen, Zeremonien oder Kryptographie ist nicht Teil dieses
+TODOs und braeuchte eine eigene Architekturentscheidung.
+
 ## Lizenzbedingungen: anwaltliche Durchsicht
 
 Die Bedingungen sind geaendert und als ADR 0111 dokumentiert: betriebliche
