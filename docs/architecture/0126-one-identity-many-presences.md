@@ -273,6 +273,29 @@ version of a concept, and the versions drift where nobody is looking.
   exists to prevent. `offering()` takes affordances and returns presences;
   there is nothing in its signature to branch on.
 
+  **The first presence announces itself since 2026-08-16**, which is what
+  turned the registry from a table into a fact. ADR 0113's companion was named
+  the first presence retroactively under P5; now it says so, refreshing at a
+  third of the lease - a refresh landing on the boundary would make a running
+  device look absent whenever a round trip was slow.
+
+  What it declares is **observed, not assumed**. A window, a notification and
+  a secure field are properties of the shell; a camera and a printer are
+  properties of the machine, so both are looked up - a `PATH` walk and a
+  directory listing, never a spawn, because a probe that ran `zbarcam` would
+  open a camera to answer a question about a filesystem. The affordances are
+  rebuilt on every refresh rather than captured at start: a printer unplugged
+  an hour ago is a fact that changed. Nothing declares `location`,
+  `microphone` or `composite_tier`, because this runtime has no path for the
+  first two and ADR 0124's tier has no assets - a declared tier nothing can
+  render is the same false fact one layer up.
+
+  **The check about presence types got sharper when its first honest caller
+  tripped it.** It refused the word anywhere; a presence declaring its own
+  type in an object literal decides nothing, and that is how a presence gets a
+  label at all. It now refuses the *read* - `.presenceType` - and leaves the
+  declaration alone, which shrank the exemption list rather than growing it.
+
   What P2 does not do is the half ADR 0126 already calls the hard one:
   ownership, selection and takeover are P4, and P4 stays blocked on an Action
   Runner that does not exist.

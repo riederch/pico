@@ -21,6 +21,13 @@ import { fileURLToPath } from 'node:url';
  * label exists so a person can recognise their own device; the moment code
  * decides anything from it, affordances have become decoration.
  *
+ * The first version of this rule refused the *word* anywhere, and the first
+ * honest caller tripped it: a presence declaring its own type in an object
+ * literal is how a presence gets a label at all, and it decides nothing. So
+ * the rule refuses the *read* - `.presenceType` - and leaves the declaration
+ * alone. Sharper than the exemption list it replaces, because a shape cannot
+ * be added to by anybody in a hurry.
+ *
  * Both are checked against code with comments and string contents stripped, in
  * the idiom `check-relay-boundary.mjs` uses, so the paragraph explaining a rule
  * cannot satisfy the check enforcing it.
@@ -96,9 +103,10 @@ if (affordances.length === 0) {
  * instead of being an accident of a glob.
  */
 const mayReadPresenceType = new Set([
+  // Defines the vocabulary and parses an announcement into it.
   'packages/protocol/src/presence.ts',
+  // Persists the label and reads it back for the row it hands to a surface.
   'apps/core/src/presence-registry.ts',
-  'apps/companion-shell/src/contract.ts',
 ]);
 
 for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'))) {
@@ -107,11 +115,14 @@ for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'
     continue;
   }
   const code = strip(readFileSync(file, 'utf8'));
-  if (/presenceType/u.test(code)) {
+  // A read, not a declaration. `presenceType: 'desktop_companion'` states a
+  // fact about oneself; `x.presenceType` is where a branch on a device class
+  // begins, and the branch is what ADR 0126 forbids.
+  if (/\.presenceType\b|\['presenceType'\]|\bpresenceType\s*===/u.test(code)) {
     errors.push(
       `${path} reads \`presenceType\`. The Core plans against declared affordances and `
-      + 'never against device classes (ADR 0126); add the file to the visible exemption '
-      + 'list only if it is showing the label to a person.',
+      + 'never against device classes (ADR 0126); declaring your own type is fine, '
+      + 'deciding from somebody else\'s is the branch this refuses.',
     );
   }
 }

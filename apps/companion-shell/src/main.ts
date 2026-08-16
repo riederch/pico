@@ -234,10 +234,17 @@ async function startServiceCore(): Promise<void> {
      * the window is unaffected.
      */
     const platformSecrets = await relayKeystore();
+    /**
+     * ADR 0126 P2. What this machine can do, looked up rather than assumed -
+     * and looked up here, because the probe is the one part of an
+     * announcement that depends on the platform.
+     */
+    const { createLinuxPicoCompanionPresenceProbe } = await import('./presence-probe.js');
     runtime = await startPicoCompanionShellRuntime({
       notifications,
       sodium,
       profilePath,
+      presenceProbe: createLinuxPicoCompanionPresenceProbe(),
       ...(automaticVaultUnlock === undefined
         ? {}
         : { automaticVaultUnlock }),

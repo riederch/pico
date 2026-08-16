@@ -38,6 +38,11 @@ import type { PicoCompanionShellNotifications } from './presentation-adapter.js'
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
+  announcePicoCompanionPresence,
+  type PicoCompanionPresenceProbe,
+} from '@pico/companion/presence';
+import { picoPresenceLeaseMs } from '@pico/protocol/presence';
+import {
   claimPicoCompanionRelay,
   createPicoCompanionRelayAccount,
   defaultPicoCompanionRelayOperatorsPath,
@@ -170,6 +175,15 @@ export async function startPicoCompanionShellRuntime(input: {
    * a file with a lock painted on it (ADR 0081 P3).
    */
   platformSecrets?: PicoCompanionPlatformSecretPort;
+  /**
+   * ADR 0126 P2. What this machine can actually do, observed.
+   *
+   * Absent means a runtime that declares only what the shell always offers -
+   * a window, a notification and a secure field. Assuming a camera would put
+   * a false fact in the field ADR 0126 says is a fact.
+   */
+  presenceProbe?: PicoCompanionPresenceProbe;
+  presenceRefreshMs?: number;
 }): Promise<PicoCompanionShellRuntime> {
   const profilePath = input.profilePath ?? defaultPicoCompanionProfilePath();
   const profile = readPicoCompanionProfile(profilePath);
@@ -301,6 +315,47 @@ export async function startPicoCompanionShellRuntime(input: {
         ? {}
         : { checkIntervalMs: input.checkIntervalMs }),
     });
+    /**
+     * ADR 0126 P2/P5. This device saying it is here, and what it can do.
+     *
+     * **Refreshed well inside the lease**, at a third of it: a refresh that
+     * lands exactly at the boundary makes a device that is running look absent
+     * every time a round trip is slow, and a person watching their own device
+     * flicker would be right to distrust the list.
+     *
+     * Failures are quiet. Not being able to announce is an absence, and ADR
+     * 0118 O4's rule is that no absence renders a working thing as broken -
+     * the window keeps working, the Home shows the presence as quiet, and the
+     * next refresh says otherwise.
+     */
+    const announcePresence = async (): Promise<void> => {
+      try {
+        await serialized(async () => {
+          await input.automaticVaultUnlock?.ensureUnlocked();
+          await announcePicoCompanionPresence({
+            livingDeviceLinkClient: await createPicoCompanionLinkClient({
+              profile: readPicoCompanionProfile(profilePath),
+              daemonClient,
+              sodium: input.sodium,
+              ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+            }),
+            profile: readPicoCompanionProfile(profilePath),
+            probe: input.presenceProbe ?? { canScanWithCamera: () => false, canPrint: () => false },
+          });
+        });
+      } catch {
+        // Quiet on purpose; see above.
+      }
+    };
+    void announcePresence();
+    const presenceRefresh = setInterval(
+      () => void announcePresence(),
+      input.presenceRefreshMs ?? Math.floor(picoPresenceLeaseMs / 3),
+    );
+    // Unref'd: a tray that could not exit because a heartbeat was pending
+    // would be a heartbeat holding a product open.
+    presenceRefresh.unref();
+
     let stopped = false;
     return {
       checkNow: async () => await carrier.checkNow(),
@@ -582,6 +637,7 @@ export async function startPicoCompanionShellRuntime(input: {
           return;
         }
         stopped = true;
+        clearInterval(presenceRefresh);
         carrier.stop();
         await Promise.allSettled([
           daemonClient.close(),

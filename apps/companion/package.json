@@ -50,6 +50,10 @@
       "types": "./dist/platform-secrets.d.ts",
       "import": "./dist/platform-secrets.js"
     },
+    "./presence": {
+      "types": "./dist/presence.d.ts",
+      "import": "./dist/presence.js"
+    },
     "./relay-operator": {
       "types": "./dist/relay-operator.d.ts",
       "import": "./dist/relay-operator.js"
