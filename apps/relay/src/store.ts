@@ -327,6 +327,17 @@ export class PicoRelayStore {
   }
 
   /**
+   * ADR 0149 RS7. Whether a presented credential is an account in good
+   * standing, asked from the door before a body is read.
+   *
+   * The same question `activeAccount` answers and the only part the rate
+   * limiter needs: it charges a budget, it does not act on the account.
+   */
+  public isActiveAccount(credential: string): boolean {
+    return this.activeAccount(credential) !== undefined;
+  }
+
+  /**
    * The account a presented credential belongs to, or nothing.
    *
    * A revoked account answers the same as one that never existed. ADR 0077 C4

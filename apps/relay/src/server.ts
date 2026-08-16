@@ -1,6 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { parsePicoLinkPacket } from '@pico/protocol/link-packet';
+import {
+  parsePicoLinkPacket,
+  parsePicoLinkPacketAddress,
+} from '@pico/protocol/link-packet';
 import {
   MAX_PICO_LINK_RELAY_BODY_BYTES,
   MAX_PICO_LINK_RELAY_COLLECT_PACKETS,
@@ -11,6 +14,14 @@ import {
   picoLinkRelayAccountHeader,
   picoLinkRelayRoutes,
 } from '@pico/protocol/link-relay-surface';
+import {
+  PicoRelayRateLimit,
+  PicoRelayRateLimitRegistry,
+  picoRelayAccountRequestsPerMinute,
+  picoRelayMailboxDeliveriesPerMinute,
+  picoRelayRateLimitRegistryCeiling,
+  picoRelayUnattributedRequestsPerMinute,
+} from './rate-limit.js';
 import type { PicoRelayStore } from './store.js';
 
 /**
@@ -41,6 +52,7 @@ export interface PicoRelayServerOptions {
   port: number;
   maxConnections?: number;
   now?: () => Date;
+  log?: (line: Record<string, unknown>) => void;
 }
 
 export interface PicoRelayServer {
@@ -52,6 +64,8 @@ export interface PicoRelayServer {
 interface Answer {
   status: number;
   body: Record<string, unknown>;
+  /** Set only by a bound, so the caller is told when to come back. */
+  retryAfterSeconds?: number;
 }
 
 const refused = (refusal: string): Answer => ({ status: 409, body: { refusal } });
@@ -60,6 +74,46 @@ export async function startPicoRelayServer(
   options: PicoRelayServerOptions,
 ): Promise<PicoRelayServer> {
   const now = options.now ?? (() => new Date());
+
+  /**
+   * ADR 0149 RS7. Three levels, and the level a request lands on is decided
+   * from its headers - before its body is read.
+   *
+   * The mailbox port had connection, header, body and timeout ceilings and no
+   * bound on how often anybody could ask. That was survivable while nothing
+   * shipped; ADR 0153 made this a container people put on the internet.
+   *
+   * **Charging one shared bucket for everything would have been the wrong
+   * shape**, and the operator port learned that the hard way: one budget means
+   * whoever hammers it decides who else gets served. So an active account is
+   * charged its own bucket, and everything else - deliveries, probes, wrong
+   * credentials - shares one, because before a body is parsed they are the
+   * same request.
+   *
+   * Deliveries are charged twice: the shared bucket bounds the parse work, and
+   * a per-mailbox bucket, tighter, means somebody spamming one relationship
+   * hits their target's ceiling long before the shared one. One recipient's
+   * flood does not refuse everybody else's mail.
+   */
+  const unattributed = new PicoRelayRateLimit({
+    capacity: picoRelayUnattributedRequestsPerMinute,
+    perMinute: picoRelayUnattributedRequestsPerMinute,
+    now: () => now().getTime(),
+  });
+  const perAccount = new PicoRelayRateLimitRegistry({
+    capacity: picoRelayAccountRequestsPerMinute,
+    perMinute: picoRelayAccountRequestsPerMinute,
+    ceiling: picoRelayRateLimitRegistryCeiling,
+    now: () => now().getTime(),
+    onFull: (ceiling) => options.log?.({ event: 'relay_account_rate_registry_full', ceiling }),
+  });
+  const perMailbox = new PicoRelayRateLimitRegistry({
+    capacity: picoRelayMailboxDeliveriesPerMinute,
+    perMinute: picoRelayMailboxDeliveriesPerMinute,
+    ceiling: picoRelayRateLimitRegistryCeiling,
+    now: () => now().getTime(),
+    onFull: (ceiling) => options.log?.({ event: 'relay_mailbox_rate_registry_full', ceiling }),
+  });
 
   const server = createServer((request, response) => {
     void handle(request, response).catch(() => {
@@ -72,6 +126,29 @@ export async function startPicoRelayServer(
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     response.setHeader('cache-control', 'no-store');
     response.setHeader('x-content-type-options', 'nosniff');
+
+    /**
+     * ADR 0149 RS7. Who is asking, then which budget, then everything else.
+     *
+     * The account is read from the header rather than from the body, so a
+     * caller past their budget never gets to send one - and the charge happens
+     * before the route is looked at, so a rate-limited unknown route and a
+     * rate-limited real one answer identically, which is the property the 404
+     * below exists for.
+     */
+    const presented = request.headers[picoLinkRelayAccountHeader];
+    const account = typeof presented === 'string' && options.store.isActiveAccount(presented)
+      ? presented
+      : undefined;
+    const bucket = account === undefined
+      ? unattributed
+      : perAccount.forKey(account) ?? unattributed;
+    const budget = bucket.take();
+    if (!budget.allowed) {
+      response.setHeader('retry-after', String(budget.retryAfterSeconds));
+      send(response, { status: 429, body: { error: 'too_many_requests' } });
+      return;
+    }
 
     const route = (request.url ?? '').split('?')[0];
     const known = Object.values(picoLinkRelayRoutes) as readonly string[];
@@ -123,6 +200,27 @@ export async function startPicoRelayServer(
     // 0147 RY1 left nothing on a packet to authenticate.
     if (route === picoLinkRelayRoutes.deliver) {
       const packet = parsePicoLinkPacket(body, now().getTime());
+      /**
+       * ADR 0149 RS7. The second level, charged only for a mailbox this relay
+       * actually holds.
+       *
+       * Untracked mailboxes get no bucket on purpose: a delivery to one is
+       * refused as `mailbox_unknown` anyway, and creating a bucket per address
+       * a stranger invented is how a map grows with somebody else's
+       * imagination.
+       */
+      const address = parsePicoLinkPacketAddress(packet.to);
+      const held = options.store.mailboxFor(address.mailbox);
+      if (held !== undefined) {
+        const mailboxBudget = perMailbox.forKey(address.mailbox)?.take();
+        if (mailboxBudget !== undefined && !mailboxBudget.allowed) {
+          return {
+            status: 429,
+            body: { error: 'too_many_requests' },
+            retryAfterSeconds: mailboxBudget.retryAfterSeconds,
+          };
+        }
+      }
       const outcome = options.store.deliver({
         packet,
         nowMs: now().getTime(),
@@ -132,6 +230,7 @@ export async function startPicoRelayServer(
     }
 
     const account = assertPicoLinkRelayAccount(request.headers[picoLinkRelayAccountHeader]);
+
 
     if (route === picoLinkRelayRoutes.register) {
       const parsed = parsePicoLinkRelayRegisterRequest(body);
@@ -239,6 +338,9 @@ function send(response: ServerResponse, answer: Answer): void {
   response.writeHead(answer.status, {
     'content-type': 'application/json',
     'content-length': Buffer.byteLength(body),
+    ...(answer.retryAfterSeconds === undefined
+      ? {}
+      : { 'retry-after': String(answer.retryAfterSeconds) }),
     // A request whose body was refused still has one arriving. Closing after
     // the answer is what stops the rest of it being read into nothing.
     ...(answer.status === 413 ? { connection: 'close' } : {}),

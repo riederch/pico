@@ -189,7 +189,8 @@ migration costs nothing today and cannot be had at this price again.
 - **A revoked account's mailboxes stay revocable but their packets stay.**
   Revocation stops the credential; it does not sweep the queues, which is a
   separate decision about what a relay owes a customer who has left.
-- **The mailbox port has no request-rate bound.** It has connection,
-  header, body and timeout ceilings (ADR 0149) and no per-minute one. That is
-  a different question with a different shape - `deliver` takes no credential
-  by RS3, so there is nobody to charge - and it is not settled here.
+- ~~**The mailbox port has no request-rate bound.**~~ Closed the same day as
+  ADR 0149 RS7. The shape turned out to be different rather than absent: a
+  delivery carries no sender to charge, but it names a *target*, and that is
+  the attribution that matters - one recipient's flood should not refuse
+  everybody else's mail.

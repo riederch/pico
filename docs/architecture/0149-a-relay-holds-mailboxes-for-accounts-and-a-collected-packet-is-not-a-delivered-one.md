@@ -2,6 +2,13 @@
 
 ## Status
 
+Status note, 2026-08-16: **RS7 added, because ADR 0153 changed who can reach
+this.** RS6 bounded what a relay *holds* - mailboxes per account, packets per
+mailbox, lifetime - and the surface had connection, header, body and timeout
+ceilings. Nothing bounded how often anybody could ask. That was survivable
+while `apps/relay` was a library nobody could start; it stopped being
+survivable when the relay became a container people put on the internet.
+
 Accepted; **RS1-RS6 implemented 2026-08-12** as `apps/relay`'s store and its
 boundary check. Decided 2026-08-12. The Home's collecting side, the HTTP surface,
 the client, the transport joining them and the device's reply correlation
@@ -172,6 +179,36 @@ operator, and it says so rather than picking one.
 - **RS6 - Bounded, and its own ceilings (implemented 2026-08-12):** mailboxes per account,
   packets per mailbox, packet lifetime, and a refusal by name for each.
   Nothing here trims to make room, in ADR 0119 Q5's posture.
+
+- **RS7 - Bounded in time as well as in size (implemented 2026-08-16):** a
+  request rate, in three levels, answered with `429` and a `Retry-After`.
+
+  **Whose budget a request spends is decided from its headers, before its body
+  is read.** An active account is charged its own bucket; everything else -
+  deliveries, probes, wrong credentials - shares one, because before a body is
+  parsed those are the same request. One shared budget for all of it was tried
+  on the operator port first and is the wrong shape: it lets whoever hammers
+  the door decide who else gets served (ADR 0154 RO9 records that mistake).
+
+  **A delivery is charged twice, and the second charge is the interesting
+  one.** The shared bucket bounds the parse work; a per-mailbox bucket, six
+  hundred against sixty a minute, means somebody spamming one relationship
+  reaches their target's ceiling long before the shared one - so one
+  recipient's flood does not refuse everybody else's mail. RY1 removed the
+  sender field, so the *target* is the only thing a delivery can be attributed
+  to, and it turns out to be the one that matters.
+
+  Only a mailbox this relay actually holds gets a bucket. A delivery to an
+  unknown address is refused anyway, and a bucket per address a stranger
+  invented is how a map grows with somebody else's imagination. The per-key
+  registries have a ceiling and **do not evict**: a least-recently-used map
+  would let an attacker push a bucket out and get a fresh, full one back - the
+  reset is the attack. A full registry stops tracking, falls back to the
+  shared bucket the request was already charged, and says so once.
+
+  Counting is global rather than per source address. A relay behind a reverse
+  proxy sees one address for everybody, and the header that would say
+  otherwise is one nobody signed.
 
 ### The surface, and why the obvious route shape is out
 

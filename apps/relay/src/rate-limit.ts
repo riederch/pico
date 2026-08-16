@@ -116,3 +116,89 @@ export const picoRelayUnauthenticatedRequestsPerMinute = 10;
  * turn the administration port into a load generator.
  */
 export const picoRelayOperatorRequestsPerMinute = 60;
+
+/**
+ * ADR 0149 RS7. Buckets kept per key, with a ceiling and no eviction.
+ *
+ * **Nothing is evicted, on purpose.** A least-recently-used map would let an
+ * attacker push a bucket out and get a fresh, full one back - the reset is the
+ * attack, and it is available to anybody who can make requests. Instead the
+ * registry fills and then answers `undefined`, and the caller falls back to
+ * the shared bucket it was already charged. Overflow makes the accounting
+ * coarser and never more permissive.
+ *
+ * The ceiling is generous because the keys are the relay's own data - active
+ * accounts and registered mailboxes, both bounded by what the operator issued.
+ * It is not a guess about traffic; it is a guard against a map that grows with
+ * somebody else's imagination.
+ */
+export class PicoRelayRateLimitRegistry {
+  private readonly buckets = new Map<string, PicoRelayRateLimit>();
+
+  private reportedFull = false;
+
+  public constructor(
+    private readonly options: PicoRelayRateLimitOptions & {
+      ceiling: number;
+      onFull?: (ceiling: number) => void;
+    },
+  ) {}
+
+  /** The bucket for this key, or nothing once the registry is full. */
+  public forKey(key: string): PicoRelayRateLimit | undefined {
+    const existing = this.buckets.get(key);
+    if (existing !== undefined) {
+      return existing;
+    }
+    if (this.buckets.size >= this.options.ceiling) {
+      if (!this.reportedFull) {
+        // Said out loud once. A cap that quietly stopped applying would read
+        // as "everything is bounded" while it was not - the silent-truncation
+        // failure ADR 0119 Q5 refuses, in a different store.
+        this.reportedFull = true;
+        this.options.onFull?.(this.options.ceiling);
+      }
+      return undefined;
+    }
+    const created = new PicoRelayRateLimit(this.options);
+    this.buckets.set(key, created);
+    return created;
+  }
+
+  public size(): number {
+    return this.buckets.size;
+  }
+}
+
+/**
+ * ADR 0149 RS7. What everything without a valid account credential shares.
+ *
+ * Deliveries, probes and wrong credentials in one bucket, because before a
+ * body is parsed they are the same request - and ADR 0147 RY1 removed the
+ * sender field, so even after parsing there is nothing to tell two senders
+ * apart by. Generous, because this is the bound on legitimate inbound mail for
+ * every Home this relay serves.
+ */
+export const picoRelayUnattributedRequestsPerMinute = 600;
+
+/**
+ * Per registered target mailbox, and tighter than the shared budget by design.
+ *
+ * The point of the two levels: somebody spamming one relationship hits this
+ * long before they reach the shared ceiling, so one recipient's flood does not
+ * refuse everybody else's mail.
+ */
+export const picoRelayMailboxDeliveriesPerMinute = 60;
+
+/**
+ * Per active account.
+ *
+ * A customer's runaway loop exhausts its own budget and no one else's - the
+ * same reasoning as the operator port's two buckets, one surface over. The
+ * relay's total ceiling is therefore accounts times this, which is bounded by
+ * what the operator chose to issue.
+ */
+export const picoRelayAccountRequestsPerMinute = 120;
+
+/** How many per-key buckets each registry will hold before it stops tracking. */
+export const picoRelayRateLimitRegistryCeiling = 4_096;

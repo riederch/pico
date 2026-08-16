@@ -98,6 +98,7 @@ try {
     store,
     host: config.host,
     port: config.port,
+    log,
     ...(config.maxConnections === undefined ? {} : { maxConnections: config.maxConnections }),
   });
   health = await startPicoRelayHealthListener({

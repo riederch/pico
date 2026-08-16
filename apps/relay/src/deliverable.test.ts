@@ -12,6 +12,15 @@ import { startPicoRelayHealthListener } from './health.js';
 import { startPicoRelayServer } from './server.js';
 import { PicoRelayStore } from './store.js';
 import { picoLinkRelayRoutes } from '@pico/protocol/link-relay-surface';
+import {
+  picoLinkExpiryBucketFor,
+  picoLinkPacketSchema,
+} from '@pico/protocol/link-packet';
+import {
+  PicoRelayRateLimitRegistry,
+  picoRelayMailboxDeliveriesPerMinute,
+  picoRelayUnattributedRequestsPerMinute,
+} from './rate-limit.js';
 
 /**
  * ADR 0153 PK2/PK3. The difference between a server and a deliverable.
@@ -188,5 +197,173 @@ describe('ADR 0153 PK7 - a relay ships with no accounts', () => {
       capacity: 8,
       registeredAt: '2026-08-16T12:00:00.000Z',
     })).toEqual({ ok: false, refusal: 'unknown_account' });
+  });
+});
+
+describe('ADR 0149 RS7 - a bound on the mailbox port', () => {
+  const mailbox = '1'.repeat(32);
+  const other = '2'.repeat(32);
+
+  async function bounded(): Promise<{
+    url: string;
+    store: PicoRelayStore;
+    account: string;
+    advance(ms: number): void;
+    deliver(to: string): Promise<Response>;
+    call(route: string, body: unknown, credential?: string): Promise<Response>;
+  }> {
+    const opened = store();
+    let clockMs = Date.parse('2026-08-16T12:00:00.000Z');
+    let tagCounter = 0;
+    const account = 'c'.repeat(32);
+    opened.createAccount({
+      credential: account,
+      mailboxQuota: 4,
+      maxCapacity: 64,
+      at: '2026-08-16T11:00:00.000Z',
+    });
+    for (const held of [mailbox, other]) {
+      opened.register({
+        accountId: account,
+        mailbox: held,
+        capacity: 64,
+        registeredAt: '2026-08-16T11:00:00.000Z',
+      });
+    }
+    const server = await startPicoRelayServer({
+      store: opened,
+      host: '127.0.0.1',
+      port: 0,
+      now: () => new Date(clockMs),
+    });
+    closers.push(() => server.close());
+    const url = `http://127.0.0.1:${server.port}`;
+    return {
+      url,
+      store: opened,
+      account,
+      advance: (ms) => {
+        clockMs += ms;
+      },
+      deliver: async (to) => {
+        // A distinct tag each time, because a repeat is deduplicated by
+        // ADR 0147 RY6 and would never reach the bound this is measuring.
+        tagCounter += 1;
+        return await fetch(`${url}${picoLinkRelayRoutes.deliver}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            schema: picoLinkPacketSchema,
+            to: `${to}@relay.example`,
+            tag: String(tagCounter).padStart(32, '0'),
+            expiresAt: picoLinkExpiryBucketFor(clockMs + 60 * 60 * 1_000),
+            payload: 'AAAA',
+          }),
+        });
+      },
+      call: async (route, body, credential) => await fetch(`${url}${route}`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(credential === undefined ? {} : { 'x-pico-relay-account': credential }),
+        },
+        body: JSON.stringify(body),
+      }),
+    };
+  }
+
+  it('bounds an unattributed caller and says when to come back', async () => {
+    const relay = await bounded();
+    let refused: Response | undefined;
+    for (let attempt = 0; attempt <= picoRelayUnattributedRequestsPerMinute; attempt += 1) {
+      const answer = await fetch(`${relay.url}/nothing-here`, { method: 'POST' });
+      if (answer.status === 429) {
+        refused = answer;
+        break;
+      }
+    }
+    expect(refused).toBeDefined();
+    expect(Number(refused!.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+
+  it('leaves an account\'s budget untouched while strangers hammer', async () => {
+    // The operator port learned this the hard way: one budget means whoever
+    // hammers it decides who else gets served.
+    const relay = await bounded();
+    for (let attempt = 0; attempt <= picoRelayUnattributedRequestsPerMinute; attempt += 1) {
+      await fetch(`${relay.url}/nothing-here`, { method: 'POST' });
+    }
+    const collected = await relay.call(
+      picoLinkRelayRoutes.collect,
+      { mailbox },
+      relay.account,
+    );
+    expect(collected.status).toBe(200);
+  });
+
+  it('stops a flood at its target rather than at everybody\'s expense', async () => {
+    // The second level. Sixty a minute per mailbox against six hundred shared,
+    // so somebody spamming one relationship never reaches the ceiling that
+    // would refuse everybody else's mail.
+    const relay = await bounded();
+    let refusedAt = -1;
+    for (let attempt = 0; attempt <= picoRelayMailboxDeliveriesPerMinute; attempt += 1) {
+      const answer = await relay.deliver(mailbox);
+      if (answer.status === 429) {
+        refusedAt = attempt;
+        break;
+      }
+    }
+    expect(refusedAt).toBeGreaterThan(0);
+    expect(refusedAt).toBeLessThanOrEqual(picoRelayMailboxDeliveriesPerMinute);
+
+    // The other mailbox is unaffected, which is the whole point.
+    const spared = await relay.deliver(other);
+    expect(spared.status).not.toBe(429);
+  });
+
+  it('creates no bucket for a mailbox nobody registered', async () => {
+    // A bucket per address a stranger invented is how a map grows with
+    // somebody else's imagination.
+    const relay = await bounded();
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const answer = await relay.deliver('f'.repeat(32));
+      expect(answer.status).toBe(409);
+    }
+  });
+
+  it('stops tracking rather than evicting when a registry fills', () => {
+    // Eviction would let an attacker push a bucket out and get a fresh, full
+    // one back - the reset is the attack.
+    const registry = new PicoRelayRateLimitRegistry({
+      capacity: 1,
+      perMinute: 1,
+      ceiling: 2,
+      now: () => 0,
+    });
+    expect(registry.forKey('a')).toBeDefined();
+    expect(registry.forKey('b')).toBeDefined();
+    expect(registry.forKey('c')).toBeUndefined();
+    // And the one that was there is the same bucket, not a refilled one.
+    expect(registry.forKey('a')!.take().allowed).toBe(true);
+    expect(registry.forKey('a')!.take().allowed).toBe(false);
+    expect(registry.size()).toBe(2);
+  });
+
+  it('says once that a registry stopped tracking', () => {
+    const full: number[] = [];
+    const registry = new PicoRelayRateLimitRegistry({
+      capacity: 1,
+      perMinute: 1,
+      ceiling: 1,
+      now: () => 0,
+      onFull: (ceiling) => full.push(ceiling),
+    });
+    registry.forKey('a');
+    registry.forKey('b');
+    registry.forKey('c');
+    // A cap that quietly stopped applying would read as "everything is
+    // bounded" while it was not.
+    expect(full).toEqual([1]);
   });
 });
