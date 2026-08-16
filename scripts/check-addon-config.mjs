@@ -143,8 +143,24 @@ console.log('Home Assistant add-on config check passed.');
  * flat string maps, so this stays a targeted reader rather than a YAML
  * dependency - the same tradeoff the other check scripts make.
  */
+/**
+ * A top-level mapping, with **empty and absent told apart**.
+ *
+ * `options: {}` is a statement - this add-on has no person-facing option, and
+ * under ADR 0104 S2 that is the goal rather than an oversight. A missing
+ * `options:` is an omission. The first version of this reader could not see
+ * the difference, and reported the goal as a fault on the day the tree reached
+ * it: `memory_encryption` was the last option, and removing it made the file
+ * look unfinished to the check that was meant to keep it honest.
+ *
+ * ADR 0117 X1's construction, in a YAML reader.
+ */
 function readTopLevelMapping(source, name) {
   const lines = source.split('\n');
+  const inline = lines.findIndex((line) => line === `${name}: {}`);
+  if (inline !== -1) {
+    return new Map();
+  }
   const start = lines.findIndex((line) => line === `${name}:`);
 
   if (start === -1) {

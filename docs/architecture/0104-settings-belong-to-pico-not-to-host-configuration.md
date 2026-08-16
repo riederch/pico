@@ -2,6 +2,22 @@
 
 ## Status
 
+Status note, 2026-08-16: **S3's retirement is carried out.**
+`memory_encryption` is gone from the add-on configuration in 0.2.0, and
+`options` is now empty - which is the shape S2 was asking for rather than an
+accident: there is no person-facing option in host configuration to set.
+
+The removal was safe by construction rather than by the release ordering this
+gate first rested on. That ordering could not cover an instance that upgrades
+late, because it passes through no release; what covers it is that an absent
+variable is not a value. With nothing passed, the boot asks the store what it
+holds, so a Home with encrypted content stays encrypted.
+
+`check-addon-config.mjs` needed one correction to say so. Its reader could not
+tell an *empty* `options` mapping from a *missing* one, so on the day the tree
+reached S2's goal it reported the goal as a fault. Empty and absent are
+different statements (ADR 0117 X1), including in a YAML reader.
+
 Accepted; currently violated in two named places. `memory_encryption` is a
 Home Assistant add-on option and `pico_foundation_token` is a Home Assistant
 add-on option, and both are decisions a person makes about their own Pico.

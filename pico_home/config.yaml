@@ -22,22 +22,25 @@ panel_admin: true
 # An optional option with no default is declared in `schema` alone, which is
 # what `applyPicoHomeAssistantAppOptions` already expects (it treats a missing,
 # null or blank token as "no token" and stays in ingress mode).
-# `memory_encryption` is retiring (ADR 0104 S3, decided 2026-08-14). The
-# decision now lives in Pico, in `pico_memory_encryption_decision`, and is set
-# through the Foundation surface rather than here.
+# `memory_encryption` was removed in 0.2.0 (ADR 0104 S3, decided 2026-08-14,
+# carried out on 2026-08-16). The decision lives in Pico, in
+# `pico_memory_encryption_decision`, and is set through the Foundation surface
+# - a privacy decision belongs to the person and not to host configuration,
+# which is what this ADR objected to.
 #
-# Removing it does not strand anybody: with no variable passed, the boot asks
-# the store what it holds, and a Home with `domain_encrypted` content inherits
-# encryption rather than reading absence as "off". This option stays for one
-# release for the one case that leaves no trace - encryption on and nothing
-# encrypted yet - and the release after that removes it.
+# It stranded nobody, and not because of the release ordering the retirement
+# was first argued from: an instance that upgrades late passes through no
+# release at all. What makes it safe is that **an absent variable is not a
+# value** - with nothing passed, the boot asks the store what it holds, and a
+# Home with `domain_encrypted` content inherits encryption rather than reading
+# absence as "off". `PICO_MEMORY_ENCRYPTION` stays in the runtime as a silent
+# inheritance source; it costs nothing and decides nothing.
 #
-# Do not add a person-facing option here. ADR 0104 S2 makes that a defect.
-options:
-  memory_encryption: false
+# `options` is now empty, and that is the point: there is no person-facing
+# option here to set. Do not add one. ADR 0104 S2 makes that a defect.
+options: {}
 schema:
   pico_foundation_token: password?
-  memory_encryption: bool?
 ports:
   3100/tcp: null
 ports_description:

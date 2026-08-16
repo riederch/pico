@@ -33,6 +33,13 @@ of the project, it is.
 - Ships a derivation of your own notes on the narrower model allowance
   (ADR 0151 PV1), so asking a follow-up question about an answer you kept no
   longer requires a provider that proved who it is.
+- **Removes the `memory_encryption` option.** Whether Pico encrypts what it
+  remembers is a decision about your own privacy, and it belongs to you rather
+  than to add-on configuration - it lives in Pico and is set through the
+  Foundation surface (ADR 0104 S3). If you had it switched on, it stays on:
+  with nothing passed, Pico asks its own store what it holds, so a Home with
+  encrypted content stays encrypted rather than reading a missing setting as
+  "off". You do not have to do anything.
 - Does not change the wire contract. `picoProtocolVersion` stays `0.1.7`.
 
 ## Earlier releases, as the `Pico Core` add-on

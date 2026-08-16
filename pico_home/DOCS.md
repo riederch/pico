@@ -176,9 +176,17 @@ The add-on exposes these user-configurable options:
 | Option | Purpose |
 | --- | --- |
 | `pico_foundation_token` | Optional temporary token mapped to `PICO_FOUNDATION_TOKEN` for direct Foundation access. |
-| `memory_encryption` | **Retiring (ADR 0104 S3).** The decision now lives in Pico and is set through the Foundation surface; this option remains for one release so an upgrading instance has something to inherit on its first boot, and is removed in the release after. Setting it here still maps to `PICO_MEMORY_ENCRYPTION`, which stays afterwards as a silent inheritance source rather than as a way to decide. |
 
-The entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. If `memory_encryption` is `true`, it sets `PICO_MEMORY_ENCRYPTION` unless that variable was already configured.
+**`memory_encryption` was removed in 0.2.0** (ADR 0104 S3). Whether Pico
+encrypts what it remembers is a decision about your own privacy, so it belongs
+to you and not to add-on configuration - it is set through the Foundation
+surface and kept inside Pico.
+
+Nothing is stranded by its absence. With no variable passed, Pico asks its own
+store what it holds: a Home with encrypted content stays encrypted rather than
+reading a missing setting as "off". If you had it switched on, it stays on.
+
+The entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. `PICO_MEMORY_ENCRYPTION` is still read if something sets it, as a silent inheritance source; nothing in this add-on sets it any more.
 
 The Home Assistant host adapter also sets `PICO_FOUNDATION_ACCESS_MODE=trusted-proxy` when Home Assistant's options file exists and no explicit access mode was already configured. That mode was called `ha-ingress`; the former name still works, and the boot log says so once (ADR 0128 H5).
 
@@ -233,7 +241,7 @@ If the add-on fails after selecting an older version and reports an unsupported 
 
 ## Memory keys and backup separation
 
-Pico Home keeps a key store at `/data/keys` for memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per KEK version, ADR 0072). With `memory_encryption` off (the default) no memory content is encrypted and the key store stays empty. With `memory_encryption` on, recorded memory content is encrypted at rest under a per-domain key (ADR 0071/0073), and that domain's key files appear here.
+Pico Home keeps a key store at `/data/keys` for memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per KEK version, ADR 0072). With encryption off, no memory content is encrypted and the key store stays empty. With it on, recorded memory content is encrypted at rest under a per-domain key (ADR 0071/0073), and that domain's key files appear here. The decision is Pico's own, set through the Foundation surface rather than in this add-on's configuration (ADR 0104 S3).
 
 Pico Home setup mode also keeps host identity keys at `/data/home-host-keys` (`PICO_HOME_HOST_KEY_STORE_PATH`, ADR 0080 H5). These keys identify the host infrastructure for a claimed Home; they are not resident Pico identity keys and do not grant domain plaintext access.
 
