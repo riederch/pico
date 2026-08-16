@@ -43,6 +43,25 @@
       <ul id="provider-list" class="provider-list"></ul>
     </section>
     <!--
+      ADR 0116 W1. The requesting side, where a person asks their own Home
+      about their own memory. The domain is typed rather than chosen from a
+      list, because this device is not told which domains exist - it learns
+      that a domain is unreadable by being refused, and ADR 0077 C4 keeps that
+      refusal from being an inventory.
+    -->
+    <section id="recall" class="providers" hidden>
+      <h2>Ask about what you remember</h2>
+      <form id="recall-form" class="form-card">
+        <label for="recall-domain">Which part of your memory</label>
+        <input id="recall-domain" maxlength="128" autocomplete="off" spellcheck="false">
+        <label for="recall-question">Your question</label>
+        <input id="recall-question" maxlength="4000" autocomplete="off">
+        <button id="recall-ask" type="submit">Ask</button>
+      </form>
+      <p id="recall-status" class="detail" role="status" aria-live="polite"></p>
+      <ul id="recall-list" class="provider-list"></ul>
+    </section>
+    <!--
       ADR 0116 W5. What a read produced and nobody has kept. No answer appears
       here: the values arrive when the person keeps them, and a window that
       showed them first would be the auto-persist W5 forbids with a screen

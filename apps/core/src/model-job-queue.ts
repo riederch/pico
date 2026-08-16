@@ -323,23 +323,25 @@ export class PicoModelJobQueue {
     jobId: string;
     question: string;
     askedAt: string;
-    settledAt: string;
-    outcome: string;
+    settledAt?: string;
+    outcome?: string;
     values?: unknown;
   }> {
+    // Unsettled ones are in the list on purpose. A question that vanished
+    // until an answer existed would leave a person who just asked looking at
+    // nothing, unable to tell a slow provider from a lost question.
     const rows = this.db.prepare(`
       SELECT job_id AS jobId, job_json AS jobJson, enqueued_at AS askedAt,
              settled_at AS settledAt, outcome, result_json AS resultJson
       FROM pico_model_job_queue
       WHERE pico_identity_fingerprint_hex = ?
         AND kind = 'recall'
-        AND settled_at IS NOT NULL
-      ORDER BY settled_at DESC, job_id DESC
+      ORDER BY enqueued_at DESC, job_id DESC
     `).all(picoIdentityFingerprintHex) as Array<{
       jobId: string;
       jobJson: string;
       askedAt: string;
-      settledAt: string;
+      settledAt: string | null;
       outcome: string | null;
       resultJson: string | null;
     }>;
@@ -358,8 +360,10 @@ export class PicoModelJobQueue {
         jobId: row.jobId,
         question: typeof asked?.text === 'string' ? asked.text : '',
         askedAt: row.askedAt,
-        settledAt: row.settledAt,
-        outcome: row.outcome ?? 'unknown',
+        // ADR 0117 X1's construction: waiting is an absent settlement rather
+        // than a status word that has to be told apart from a real one.
+        ...(row.settledAt === null ? {} : { settledAt: row.settledAt }),
+        ...(row.outcome === null ? {} : { outcome: row.outcome }),
         ...(output === undefined ? {} : { values: output }),
       });
     }));

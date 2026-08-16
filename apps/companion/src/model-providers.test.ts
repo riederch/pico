@@ -6,6 +6,8 @@ import {
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
   revokePicoCompanionModelProvider,
+  askPicoCompanionRecall,
+  readPicoCompanionRecalls,
   supplyPicoCompanionModelProviderCredential,
 } from './model-providers.js';
 
@@ -252,5 +254,90 @@ describe('ADR 0118 O4 - only a provider this person decided on can be absent', (
         result: { providers: [provider] },
       }) as never,
     })).toBeUndefined();
+  });
+});
+
+describe('ADR 0116 W1 - asking, and reading what came back', () => {
+  it('carries the refusal as itself, because each one names a next step', async () => {
+    // Four refusals guard the ask and every one of them is actionable: a
+    // domain you may not read, no decided provider, a question too long, and
+    // material this provider may not carry. "Something went wrong" throws all
+    // four away.
+    for (const refusal of [
+      'not_readable',
+      'no_decided_entry',
+      'invalid_pico_recall_question',
+      'entry_may_not_carry_these_words',
+    ]) {
+      await expect(askPicoCompanionRecall({
+        livingDeviceLinkClient: linkClient({
+          outcome: 'invalid_arguments',
+          result: { refusal },
+        }) as never,
+        privacyDomain: 'domain-private',
+        question: 'where did I park?',
+      })).rejects.toThrow(new RegExp(refusal, 'u'));
+    }
+  });
+
+  it('answers with what the question will be formed from', async () => {
+    const client = linkClient({
+      outcome: 'ok',
+      result: { jobId: 'job_recall_1', included: 4, omitted: 5, carries: 'live_turn' },
+    });
+
+    expect(await askPicoCompanionRecall({
+      livingDeviceLinkClient: client as never,
+      privacyDomain: 'domain-private',
+      question: 'where did I park?',
+    })).toEqual({ jobId: 'job_recall_1', included: 4, omitted: 5, carries: 'live_turn' });
+    expect(client.request).toHaveBeenCalledWith('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'where did I park?',
+    });
+  });
+
+  it('reads the declared values by name rather than by position', async () => {
+    // A reader answers a shape. A device that trusted the order would render
+    // the wrong field the first time a shape grew.
+    const [recall] = await readPicoCompanionRecalls({
+      livingDeviceLinkClient: linkClient({
+        outcome: 'ok',
+        result: {
+          recalls: [{
+            jobId: 'job_recall_1',
+            question: 'where did I park?',
+            askedAt: '2026-08-16T12:00:00.000Z',
+            settledAt: '2026-08-16T12:01:00.000Z',
+            outcome: 'answered',
+            values: [
+              { name: 'found_in_memory', type: 'boolean', value: true },
+              { name: 'answer', type: 'text', value: 'On Bergstrasse.' },
+            ],
+          }],
+        },
+      }) as never,
+    });
+
+    expect(recall?.answer).toBe('On Bergstrasse.');
+    expect(recall?.foundInMemory).toBe(true);
+  });
+
+  it('reads a question nobody has answered yet as waiting rather than empty', async () => {
+    const [recall] = await readPicoCompanionRecalls({
+      livingDeviceLinkClient: linkClient({
+        outcome: 'ok',
+        result: {
+          recalls: [{
+            jobId: 'job_recall_1',
+            question: 'where did I park?',
+            askedAt: '2026-08-16T12:00:00.000Z',
+          }],
+        },
+      }) as never,
+    });
+
+    expect(recall?.settledAt).toBeUndefined();
+    expect(recall?.answer).toBeUndefined();
   });
 });

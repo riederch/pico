@@ -5,10 +5,13 @@ import { picoModelProviderStates } from '@pico/protocol/model-provider-state';
 import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
+  renderPicoCompanionRecalls,
 } from './model-provider-views.js';
 import {
   parsePicoCompanionAnsweredReads,
   picoCompanionModelProviderStates,
+  picoCompanionRecallLines,
+  parsePicoCompanionRecalls,
   picoCompanionAnsweredReadLines,
   parsePicoCompanionModelProviders,
   picoCompanionModelProviderLines,
@@ -408,5 +411,100 @@ describe('ADR 0113 C2 - the renderer copy of a closed list is bound to it', () =
     // list is the drift this project keeps hitting; the binding is this test
     // rather than anybody's intent.
     expect([...picoCompanionModelProviderStates]).toEqual([...picoModelProviderStates]);
+  });
+});
+
+describe('ADR 0116 W1 - four states, and never fewer', () => {
+  const asked = {
+    jobId: 'job_recall_1',
+    question: 'where did I park?',
+    askedAt: '2026-08-16T12:00:00.000Z',
+  };
+
+  it('says waiting rather than failed while nobody has answered', () => {
+    // Nobody has looked yet. "Nothing found" and "did not answer" are both
+    // claims about a look that has not happened.
+    expect(picoCompanionRecallLines([asked])[0]?.state)
+      .toBe('Waiting for the provider you decided on.');
+  });
+
+  it('tells an empty answer apart from an unanswered question', () => {
+    // The pair a single "answered" would collapse - and the empty one is the
+    // more useful, because it is what sends a person to look elsewhere.
+    const [found] = picoCompanionRecallLines([{
+      ...asked,
+      settledAt: '2026-08-16T12:01:00.000Z',
+      outcome: 'answered',
+      foundInMemory: false,
+    }]);
+    expect(found?.state).toBe('Nothing in what it read answers that.');
+
+    const [refused] = picoCompanionRecallLines([{
+      ...asked,
+      settledAt: '2026-08-16T12:01:00.000Z',
+      outcome: 'provider_unreachable',
+    }]);
+    expect(refused?.state).toContain('did not answer this one');
+    // ADR 0118 O4: what still works is part of what happened.
+    expect(refused?.state).toContain('Nothing else is affected');
+  });
+
+  it('never carries an answer without the label that says what it is', () => {
+    // ADR 0117 X5. A model's words about a person's material are not
+    // something Pico knows, and the label is produced by the same call as the
+    // answer so no caller can forget it.
+    const [line] = picoCompanionRecallLines([{
+      ...asked,
+      settledAt: '2026-08-16T12:01:00.000Z',
+      outcome: 'answered',
+      foundInMemory: true,
+      answer: 'On Bergstrasse, next to the pharmacy.',
+    }]);
+
+    expect(line?.answer?.text).toBe('On Bergstrasse, next to the pharmacy.');
+    expect(line?.answer?.label).toContain('A model wrote this');
+    expect(line?.answer?.label).toContain('Pico did not check it');
+  });
+
+  it('shows no answer at all when the reader returned none', () => {
+    const [line] = picoCompanionRecallLines([{
+      ...asked,
+      settledAt: '2026-08-16T12:01:00.000Z',
+      outcome: 'answered',
+      foundInMemory: true,
+    }]);
+    expect(line?.answer).toBeUndefined();
+  });
+});
+
+describe('ADR 0117 X5 - the label reaches the window, above the answer', () => {
+  it('puts the label before the answer on the line', () => {
+    // A person who reads the answer and scrolls away has already been told
+    // what it is.
+    const root = fakeDocument();
+    renderPicoCompanionRecalls(root, [{
+      jobId: 'job_recall_1',
+      question: 'where did I park?',
+      askedAt: '2026-08-16T12:00:00.000Z',
+      settledAt: '2026-08-16T12:01:00.000Z',
+      outcome: 'answered',
+      foundInMemory: true,
+      answer: 'On Bergstrasse.',
+    }]);
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<{ textContent: string }> }>;
+    }).children[0]!;
+    const texts = line.children.map((child) => child.textContent);
+    expect(texts[0]).toBe('where did I park?');
+    expect(texts).toContain('On Bergstrasse.');
+    const labelAt = texts.findIndex((text) => text.includes('A model wrote this'));
+    expect(labelAt).toBeGreaterThan(-1);
+    expect(labelAt).toBeLessThan(texts.indexOf('On Bergstrasse.'));
+  });
+
+  it('refuses a list that is not the declared shape', () => {
+    expect(() => parsePicoCompanionRecalls([{ jobId: 'job_1' }]))
+      .toThrow('invalid_pico_companion_recall');
   });
 });

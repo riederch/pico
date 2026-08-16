@@ -313,9 +313,21 @@ what the approval cryptographically binds.
   said at that revision" and "this is what a document said" are different
   claims.
 
-  Still open: the companion renders no untrusted content today, so X5 has
-  nothing to hold there yet. Its answered-reads view satisfies the rule by
-  carrying no content at all rather than by labelling any.
+  **The companion got something to label on 2026-08-16.** Its answered-reads
+  view still carries no content - it satisfies the rule by having nothing to
+  label - but the recall view carries a model's prose about a person's own
+  notes, which is exactly this gate's subject: words nobody in the house wrote,
+  about material the person did.
+
+  So the answer and its label are produced by one call and appended together,
+  the same arrangement the dashboard uses and for the same reason. The label
+  goes above, so a person who reads the answer and scrolls away has already
+  been told what it is, and it says the two things that are true: a model wrote
+  it, and Pico did not check it.
+
+  Falsified three ways - the label emptied, the label moved below the answer,
+  and the empty-answer state collapsed into the answered one - each failing a
+  test.
 
 ## Threat ledger
 

@@ -7,6 +7,7 @@ import {
 import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
+  renderPicoCompanionRecalls,
 } from './model-provider-views.js';
 
 declare global {
@@ -25,6 +26,12 @@ declare global {
       revokeModelProvider(entryId: string): Promise<void>;
       getAnsweredReads(): Promise<unknown>;
       keepAnsweredRead(jobId: string): Promise<void>;
+      askRecall(ask: { privacyDomain: string; question: string }): Promise<{
+        included: number;
+        omitted: number;
+        carries: string;
+      }>;
+      getRecalls(): Promise<unknown>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
       requestCheck(): Promise<void>;
@@ -202,10 +209,62 @@ void window.picoCompanion.getPresentation().then(render);
  * reopening the window. What is *not* quiet is a keep that fails: the main
  * process throws there, because somebody pressed a button and asked.
  */
+const recallSection = requireElement('recall');
+const recallList = requireElement('recall-list');
+const recallForm = requireElement('recall-form');
+const recallDomain = requireInput('recall-domain');
+const recallQuestion = requireInput('recall-question');
+const recallStatus = requireElement('recall-status');
 const providerSection = requireElement('model-providers');
 const providerList = requireElement('provider-list');
 const readSection = requireElement('answered-reads');
 const readList = requireElement('read-list');
+
+/**
+ * ADR 0116 W1. What the person asked, refreshed like everything else.
+ *
+ * The section is shown whenever the Home answered the read at all - asking is
+ * something a person can do before any provider has answered anything, and
+ * hiding the field until an answer exists would hide the only way to get one.
+ */
+function refreshRecalls(): void {
+  void window.picoCompanion.getRecalls()
+    .then((recalls) => {
+      recallSection.hidden = false;
+      renderPicoCompanionRecalls(
+        { list: recallList, section: recallSection, document },
+        recalls,
+      );
+    }, () => {
+      recallSection.hidden = true;
+    });
+}
+
+recallForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const privacyDomain = recallDomain.value.trim();
+  const question = recallQuestion.value.trim();
+  if (privacyDomain === '' || question === '') {
+    recallStatus.textContent = 'Name the part of your memory, and what you want to know.';
+    return;
+  }
+  recallStatus.textContent = 'Asking...';
+  void window.picoCompanion.askRecall({ privacyDomain, question })
+    .then((asked) => {
+      // ADR 0119 Q5. What the answer will be formed from, before it exists.
+      recallStatus.textContent = asked.omitted === 0
+        ? `Asked, over ${asked.included} of your memories.`
+        : `Asked, over ${asked.included} of your memories. `
+          + `${asked.omitted} did not fit and were left out.`;
+      recallQuestion.value = '';
+      refreshRecalls();
+    }, (error: unknown) => {
+      // The refusal as itself: each of them names something to do next.
+      recallStatus.textContent = error instanceof Error
+        ? error.message.replace(/^Error: /u, '')
+        : 'That question did not reach your Home.';
+    });
+});
 
 function refreshModelViews(): void {
   void window.picoCompanion.getModelProviders()
@@ -255,6 +314,7 @@ function refreshModelViews(): void {
 }
 
 refreshModelViews();
+refreshRecalls();
 
 function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);

@@ -258,3 +258,105 @@ export async function keepPicoCompanionAnsweredRead(input: {
   }
   return memoryItemId;
 }
+
+/**
+ * ADR 0116 W1 on the device. A question, and what came back.
+ *
+ * The values arrive here where a library read's do not, and the difference is
+ * the act rather than the data: a recall is something this person asked a
+ * moment ago, so putting the answer in front of them is the delivery. A
+ * library read is a background inventory of material nobody asked to see, and
+ * W5 keeps its values behind an explicit keep.
+ */
+export interface PicoCompanionRecallView {
+  jobId: string;
+  question: string;
+  askedAt: string;
+  /** Absent while the provider has not answered - waiting is an absence. */
+  settledAt?: string;
+  outcome?: string;
+  answer?: string;
+  /** ADR 0117 X2. Whether the material contained an answer at all. */
+  foundInMemory?: boolean;
+}
+
+/**
+ * ADR 0116 W1. Asks, and answers with what the question will be formed from.
+ *
+ * The counts come back before any answer exists, because ADR 0119 Q5's posture
+ * is that a bound says what it left out: "answered from four of your notes,
+ * and there were nine" is a fact a person can act on, and discovering it
+ * afterwards is not.
+ */
+export async function askPicoCompanionRecall(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  privacyDomain: string;
+  question: string;
+}): Promise<{ jobId: string; included: number; omitted: number; carries: string }> {
+  const asked = await input.livingDeviceLinkClient.request('home.recall.ask', {
+    privacyDomain: input.privacyDomain,
+    question: input.question,
+  });
+  if (asked.outcome !== 'ok') {
+    // Carried out as itself. Every refusal this operation gives names
+    // something a person can do next, and "something went wrong" would throw
+    // all four away.
+    const refusal = (asked.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string'
+        ? `recall_rejected:${refusal}`
+        : `recall_rejected:${asked.outcome}`,
+    );
+  }
+  const record = asked.result as Record<string, unknown>;
+  if (typeof record.jobId !== 'string'
+    || typeof record.included !== 'number'
+    || typeof record.omitted !== 'number'
+    || typeof record.carries !== 'string') {
+    throw new Error('invalid_pico_recall_result');
+  }
+  return {
+    jobId: record.jobId,
+    included: record.included,
+    omitted: record.omitted,
+    carries: record.carries,
+  };
+}
+
+export async function readPicoCompanionRecalls(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionRecallView[]> {
+  const read = await input.livingDeviceLinkClient.request('home.recall.read', {});
+  if (read.outcome !== 'ok') {
+    throw new Error(`recall_read_rejected:${read.outcome}`);
+  }
+  const recalls = (read.result as { recalls?: unknown }).recalls;
+  if (!Array.isArray(recalls)) {
+    throw new Error('invalid_pico_recall_read_result');
+  }
+  return Object.freeze(recalls.map((entry) => {
+    const record = entry as Record<string, unknown>;
+    if (typeof record.jobId !== 'string'
+      || typeof record.question !== 'string'
+      || typeof record.askedAt !== 'string') {
+      throw new Error('invalid_pico_recall_entry');
+    }
+    // The declared values, read by name rather than by position: a reader
+    // answers a shape, and a device that trusted the order would render the
+    // wrong field the first time a shape grew.
+    const values = Array.isArray(record.values) ? record.values : [];
+    const valueOf = (name: string): unknown => (values as Array<Record<string, unknown>>)
+      .find((value) => value.name === name)?.value;
+    const answer = valueOf('answer');
+    const found = valueOf('found_in_memory');
+    return Object.freeze({
+      jobId: record.jobId,
+      question: record.question,
+      askedAt: record.askedAt,
+      ...(typeof record.settledAt === 'string' ? { settledAt: record.settledAt } : {}),
+      ...(typeof record.outcome === 'string' ? { outcome: record.outcome } : {}),
+      ...(typeof answer === 'string' ? { answer } : {}),
+      ...(typeof found === 'boolean' ? { foundInMemory: found } : {}),
+    });
+  }));
+}

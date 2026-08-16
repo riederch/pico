@@ -485,6 +485,45 @@ function registerIpc(): void {
       });
     },
   );
+  /**
+   * ADR 0116 W1. A question this person asked, and the list of them.
+   *
+   * The ask throws on a refusal and the read does not: not knowing what you
+   * asked before is an absence (ADR 0118 O4), while a question that never
+   * reached your Home is something the person needs told - they are standing
+   * there waiting for an answer that is not coming.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.askRecall,
+    async (event: IpcMainInvokeEvent, ask: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = ask as Record<string, unknown> | undefined;
+      if (typeof record?.privacyDomain !== 'string' || typeof record.question !== 'string') {
+        throw new Error('invalid_recall_ask');
+      }
+      return await runtime.askRecall({
+        privacyDomain: record.privacyDomain,
+        question: record.question,
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.getRecalls,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readRecalls();
+      } catch {
+        return [];
+      }
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.revokeModelProvider,
     async (event: IpcMainInvokeEvent, entryId: unknown) => {

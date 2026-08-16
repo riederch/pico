@@ -30,8 +30,11 @@ import type { PicoCompanionShellNotifications } from './presentation-adapter.js'
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import {
   decidePicoCompanionModelProvider,
+  askPicoCompanionRecall,
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
+  readPicoCompanionRecalls,
+  type PicoCompanionRecallView,
   supplyPicoCompanionModelProviderCredential,
   revokePicoCompanionModelProvider,
   readPicoCompanionAnsweredReads,
@@ -65,6 +68,14 @@ export interface PicoCompanionShellRuntime {
     secret: string;
   }): Promise<void>;
   revokeModelProvider(entryId: string): Promise<void>;
+  /** ADR 0116 W1. Asks about a privacy domain this person may read. */
+  askRecall(input: { privacyDomain: string; question: string }): Promise<{
+    jobId: string;
+    included: number;
+    omitted: number;
+    carries: string;
+  }>;
+  readRecalls(): Promise<readonly PicoCompanionRecallView[]>;
   /** ADR 0116 W5. What a read produced and nobody has kept. */
   readAnsweredReads(): Promise<readonly PicoCompanionAnsweredReadView[]>;
   keepAnsweredRead(jobId: string): Promise<string>;
@@ -298,6 +309,29 @@ export async function startPicoCompanionShellRuntime(input: {
           providerClass: widening.providerClass,
           carries: 'live_turn_and_retrieved_memory',
           credentialRef,
+        });
+      }),
+      askRecall: async (ask) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await askPicoCompanionRecall({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...ask,
+        });
+      }),
+      readRecalls: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionRecalls({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
         });
       }),
       revokeModelProvider: async (entryId) => await serialized(async () => {

@@ -21,6 +21,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   revokeModelProvider: 'pico:model-provider:revoke',
   getAnsweredReads: 'pico:model-reads:get',
   keepAnsweredRead: 'pico:model-read:keep',
+  askRecall: 'pico:recall:ask',
+  getRecalls: 'pico:recalls:get',
 });
 
 export type PicoCompanionPresentationKind =
@@ -599,6 +601,115 @@ export function parsePicoCompanionModelProviders(
       sees: record.sees,
       needsCredentialToSeeMore: record.needsCredentialToSeeMore,
       ...(state === undefined ? {} : { state }),
+    });
+  }));
+}
+
+/**
+ * ADR 0116 W1 on the device. A question this person asked, and its state.
+ *
+ * Four states and never fewer: waiting, answered from something, answered from
+ * nothing, and did not answer. The middle two are the pair a single "answered"
+ * would collapse - and "I have nothing about that" is the more useful of the
+ * two, because it is the one that tells a person to look somewhere else.
+ */
+export interface PicoCompanionRecall {
+  jobId: string;
+  question: string;
+  askedAt: string;
+  settledAt?: string;
+  outcome?: string;
+  answer?: string;
+  foundInMemory?: boolean;
+}
+
+export interface PicoCompanionRecallLine {
+  jobId: string;
+  question: string;
+  /** What state this question is in, as a sentence. */
+  state: string;
+  /**
+   * ADR 0117 X5. The answer, and never without its label.
+   *
+   * A model's words about a person's material are not something Pico knows.
+   * The label is produced by the same call that produces the answer, because
+   * a labelling step somebody must remember is one somebody will forget - and
+   * here forgetting it would let a sentence a model composed read as a fact
+   * this Home holds.
+   */
+  answer?: { label: string; text: string };
+}
+
+export function picoCompanionRecallLines(
+  recalls: readonly PicoCompanionRecall[],
+): readonly PicoCompanionRecallLine[] {
+  return Object.freeze(recalls.map((recall) => {
+    if (recall.settledAt === undefined) {
+      return Object.freeze({
+        jobId: recall.jobId,
+        question: recall.question,
+        // Not "failed" and not "nothing found": nobody has looked yet.
+        state: 'Waiting for the provider you decided on.',
+      });
+    }
+    if (recall.outcome !== 'answered') {
+      return Object.freeze({
+        jobId: recall.jobId,
+        question: recall.question,
+        // ADR 0118 O4. What still works is part of what happened: this is one
+        // question that did not get answered, not a Home that stopped.
+        state: 'Your provider did not answer this one. Nothing else is affected, '
+          + 'and asking again is free.',
+      });
+    }
+    if (recall.foundInMemory === false) {
+      return Object.freeze({
+        jobId: recall.jobId,
+        question: recall.question,
+        // The honest empty answer, and the one worth having: it sends a person
+        // to look elsewhere instead of reading a confident sentence about
+        // nothing.
+        state: 'Nothing in what it read answers that.',
+      });
+    }
+    return Object.freeze({
+      jobId: recall.jobId,
+      question: recall.question,
+      state: 'Answered from what you remember.',
+      ...(recall.answer === undefined ? {} : {
+        answer: Object.freeze({
+          label: 'A model wrote this from your own notes. Pico did not check it.',
+          text: recall.answer,
+        }),
+      }),
+    });
+  }));
+}
+
+export function parsePicoCompanionRecalls(value: unknown): readonly PicoCompanionRecall[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_recalls');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_recall');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.jobId !== 'string'
+      || typeof record.question !== 'string'
+      || typeof record.askedAt !== 'string') {
+      throw new Error('invalid_pico_companion_recall');
+    }
+    return Object.freeze({
+      jobId: record.jobId,
+      question: record.question,
+      askedAt: record.askedAt,
+      ...(typeof record.settledAt === 'string' ? { settledAt: record.settledAt } : {}),
+      ...(typeof record.outcome === 'string' ? { outcome: record.outcome } : {}),
+      ...(typeof record.answer === 'string' ? { answer: record.answer } : {}),
+      ...(typeof record.foundInMemory === 'boolean'
+        ? { foundInMemory: record.foundInMemory }
+        : {}),
     });
   }));
 }

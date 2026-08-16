@@ -16,6 +16,8 @@ const channels = Object.freeze({
   revokeModelProvider: 'pico:model-provider:revoke',
   getAnsweredReads: 'pico:model-reads:get',
   keepAnsweredRead: 'pico:model-read:keep',
+  askRecall: 'pico:recall:ask',
+  getRecalls: 'pico:recalls:get',
 });
 
 // No generic send/invoke and no raw ipcRenderer: this is the whole bridge.
@@ -71,6 +73,13 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   keepAnsweredRead: async (jobId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.keepAnsweredRead, jobId);
   },
+  // ADR 0116 W1. A question and its answers. Content rather than a secret:
+  // what a person types here is the thing they are asking about, and it goes
+  // to their own Home over the sealed channel.
+  askRecall: async (ask: unknown): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.askRecall, ask),
+  getRecalls: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.getRecalls),
   closeWindow: (): void => {
     ipcRenderer.send(channels.closeWindow);
   },

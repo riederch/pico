@@ -3,6 +3,8 @@ import {
   parsePicoCompanionModelProviders,
   picoCompanionAnsweredReadLines,
   parsePicoCompanionAnsweredReads,
+  picoCompanionRecallLines,
+  parsePicoCompanionRecalls,
 } from './contract.js';
 
 /**
@@ -124,6 +126,56 @@ export function renderPicoCompanionAnsweredReads(
     });
 
     item.append(headline, detail, button);
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0116 W1 with ADR 0117 X5. A question, its state, and a labelled answer.
+ *
+ * **The answer never appears without its label**, and the two are appended
+ * together for the reason X5 gives: a labelling step somebody must remember is
+ * one somebody will forget, and forgetting it here would let a sentence a
+ * model composed read as a fact this Home holds.
+ *
+ * `textContent` throughout. The answer is a model's prose about a person's
+ * notes, which makes it exactly the string that must never become markup.
+ */
+export function renderPicoCompanionRecalls(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+): void {
+  const recalls = parsePicoCompanionRecalls(value);
+  root.list.replaceChildren();
+  for (const line of picoCompanionRecallLines(recalls)) {
+    const item = root.document.createElement('li');
+    item.className = 'provider-line';
+    item.dataset.jobId = line.jobId;
+
+    const question = root.document.createElement('p');
+    question.className = 'headline';
+    question.textContent = line.question;
+
+    const state = root.document.createElement('p');
+    state.className = 'detail';
+    state.textContent = line.state;
+
+    item.append(question, state);
+
+    if (line.answer !== undefined) {
+      const label = root.document.createElement('p');
+      label.className = 'measured';
+      label.textContent = line.answer.label;
+
+      const answer = root.document.createElement('p');
+      answer.className = 'detail';
+      answer.textContent = line.answer.text;
+
+      // The label first: a person who reads the answer and scrolls away has
+      // already been told what it is.
+      item.append(label, answer);
+    }
+
     root.list.append(item);
   }
 }
