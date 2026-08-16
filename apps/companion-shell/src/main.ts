@@ -634,7 +634,7 @@ function registerIpc(): void {
       if (typeof record?.baseUrl !== 'string' || typeof record.accountRef !== 'string') {
         throw new Error('invalid_relay_account_request');
       }
-      await runtime.revokeRelayAccount({
+      return await runtime.revokeRelayAccount({
         baseUrl: record.baseUrl,
         accountRef: record.accountRef,
       });

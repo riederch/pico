@@ -10,6 +10,7 @@ import {
   picoCompanionRelayLines,
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
+  picoCompanionRelayRevocationLine,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -180,5 +181,30 @@ describe('ADR 0154 - the words for a relay this person runs', () => {
       ...relay,
       accounts: [{ accountRef: 'a', status: 'maybe' }],
     }])).toThrow('invalid_pico_companion_relay_account');
+  });
+});
+
+describe('ADR 0154 RO5 - what withdrawing a key cost', () => {
+  it('says nothing was lost when nothing was', () => {
+    expect(picoCompanionRelayRevocationLine({ mailboxesEnded: 0, packetsDropped: 0 }))
+      .toBe('That key no longer works. It held no addresses.');
+    expect(picoCompanionRelayRevocationLine({ mailboxesEnded: 2, packetsDropped: 0 }))
+      .toContain('Nothing was waiting at them.');
+  });
+
+  it('names the discarded mail rather than folding it into "done"', () => {
+    // The mail this drops has no reader left to notice it: the account that
+    // could have collected is the account that just stopped existing. If this
+    // sentence does not say so, nothing does.
+    const line = picoCompanionRelayRevocationLine({ mailboxesEnded: 1, packetsDropped: 3 });
+    expect(line).toContain('one address ended with it');
+    expect(line).toContain('3 waiting messages were discarded');
+    expect(line).toContain('nobody could have collected them');
+  });
+
+  it('counts one of each without reading like a robot', () => {
+    const line = picoCompanionRelayRevocationLine({ mailboxesEnded: 1, packetsDropped: 1 });
+    expect(line).toContain('one address');
+    expect(line).toContain('One waiting message was discarded');
   });
 });

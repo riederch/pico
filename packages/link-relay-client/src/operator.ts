@@ -5,6 +5,7 @@ import {
   picoRelayOperatorRoutes,
   type PicoRelayAccountSummary,
   type PicoRelayDescription,
+  type PicoRelayRevocation,
 } from '@pico/protocol/link-relay-operator';
 
 /**
@@ -129,19 +130,32 @@ export class PicoRelayOperatorClient {
     };
   }
 
-  /** ADR 0154 RO5. Ends an account. The row stays; the credential stops. */
+  /**
+   * ADR 0154 RO5. Ends an account, and says what ended with it.
+   *
+   * The row stays and the credential stops; the account's mailboxes end too,
+   * because leaving them open made this relay answer `accepted` to senders
+   * posting into an address nobody could ever collect from.
+   */
   public async revokeAccount(input: {
     credential: string;
     accountRef: string;
-  }): Promise<PicoRelayOperatorAnswer<true>> {
+  }): Promise<PicoRelayOperatorAnswer<PicoRelayRevocation>> {
     const answer = await this.post(
       picoRelayOperatorRoutes.accountRevoke,
       { credential: input.credential },
       { accountRef: input.accountRef },
     );
-    return answer.accepted
-      ? { ok: true, value: true }
-      : { ok: false, refusal: refusalOf(answer.body) };
+    if (!answer.accepted) {
+      return { ok: false, refusal: refusalOf(answer.body) };
+    }
+    const { accountRef, mailboxesEnded, packetsDropped } = answer.body;
+    if (typeof accountRef !== 'string'
+      || typeof mailboxesEnded !== 'number'
+      || typeof packetsDropped !== 'number') {
+      throw new Error('invalid_pico_relay_revocation_answer');
+    }
+    return { ok: true, value: Object.freeze({ accountRef, mailboxesEnded, packetsDropped }) };
   }
 
   /** What this relay holds, minus the keys it no longer keeps. */

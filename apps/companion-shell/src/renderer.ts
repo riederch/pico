@@ -1,6 +1,7 @@
 import {
   parsePicoCompanionPresentation,
   picoCompanionFloorAssurance,
+  picoCompanionRelayRevocationLine,
   type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
@@ -43,7 +44,10 @@ declare global {
         mailboxQuota: number,
         maxCapacity: number,
       ): Promise<{ credential: string; accountRef: string }>;
-      revokeRelayAccount(baseUrl: string, accountRef: string): Promise<void>;
+      revokeRelayAccount(baseUrl: string, accountRef: string): Promise<{
+        mailboxesEnded: number;
+        packetsDropped: number;
+      }>;
       forgetRelay(baseUrl: string): Promise<void>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
@@ -277,8 +281,11 @@ function refreshRelays(): void {
           if (action.action === 'revoke') {
             void window.picoCompanion
               .revokeRelayAccount(action.baseUrl, action.accountRef)
-              .then(() => {
-                relayStatus.textContent = 'That key no longer works.';
+              .then((ended) => {
+                // What it cost, not just that it worked. Revoking is the one
+                // destructive thing here, and the dropped mail has no other
+                // reader left to notice it.
+                relayStatus.textContent = picoCompanionRelayRevocationLine(ended);
                 refreshRelays();
               }, (error: unknown) => {
                 relayStatus.textContent = refusalText(error, 'That key was not withdrawn.');

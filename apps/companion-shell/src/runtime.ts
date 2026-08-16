@@ -129,7 +129,11 @@ export interface PicoCompanionShellRuntime {
     mailboxQuota: number;
     maxCapacity: number;
   }): Promise<{ credential: string; accountRef: string }>;
-  revokeRelayAccount(input: { baseUrl: string; accountRef: string }): Promise<void>;
+  /** ADR 0154 RO5. Says what ended, because nothing else can observe it. */
+  revokeRelayAccount(input: { baseUrl: string; accountRef: string }): Promise<{
+    mailboxesEnded: number;
+    packetsDropped: number;
+  }>;
   forgetRelay(baseUrl: string): Promise<void>;
   /** ADR 0116 W5. What a read produced and nobody has kept. */
   readAnsweredReads(): Promise<readonly PicoCompanionAnsweredReadView[]>;
@@ -468,6 +472,10 @@ export async function startPicoCompanionShellRuntime(input: {
         if (!revoked.ok) {
           throw new Error(revoked.refusal);
         }
+        return {
+          mailboxesEnded: revoked.revocation.mailboxesEnded,
+          packetsDropped: revoked.revocation.packetsDropped,
+        };
       }),
       forgetRelay: async (baseUrl) => await serialized(async () => {
         forgetPicoCompanionRelay({

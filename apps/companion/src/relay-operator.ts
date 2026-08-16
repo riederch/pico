@@ -19,6 +19,7 @@ import {
   maxPicoRelayMailboxQuota,
   picoRelayOperatorCredentialPattern,
   type PicoRelayAccountSummary,
+  type PicoRelayRevocation,
 } from '@pico/protocol/link-relay-operator';
 import {
   requirePicoCompanionKeystoreBackend,
@@ -186,10 +187,12 @@ export async function revokePicoCompanionRelayAccount(input: {
   accountRef: string;
   secrets: PicoCompanionPlatformSecretPort;
   fetch?: typeof globalThis.fetch;
-}): Promise<{ ok: true } | { ok: false; refusal: string }> {
+}): Promise<{ ok: true; revocation: PicoRelayRevocation } | { ok: false; refusal: string }> {
   return await withCredential(input, async (client, credential) => {
     const revoked = await client.revokeAccount({ credential, accountRef: input.accountRef });
-    return revoked.ok ? { ok: true as const } : { ok: false as const, refusal: revoked.refusal };
+    return revoked.ok
+      ? { ok: true as const, revocation: revoked.value }
+      : { ok: false as const, refusal: revoked.refusal };
   });
 }
 

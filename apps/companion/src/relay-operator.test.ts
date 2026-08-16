@@ -91,7 +91,12 @@ function relayHost(state: { claimed: boolean; accounts: Array<Record<string, unk
     }
     if (route === picoRelayOperatorRoutes.accountRevoke) {
       return new Response(
-        JSON.stringify({ accountRef: body.accountRef, status: 'revoked' }),
+        JSON.stringify({
+          accountRef: body.accountRef,
+          status: 'revoked',
+          mailboxesEnded: 1,
+          packetsDropped: 4,
+        }),
         { status: 200 },
       );
     }
@@ -286,13 +291,18 @@ describe('ADR 0154 RO3/RO5/RO6 - administering from the client', () => {
     });
     expect(listed.ok && listed.accounts).toHaveLength(1);
 
+    // ADR 0154 RO5. What ended travels: the dropped mail has no reader left
+    // to notice it, so the count is the only observation of it there is.
     expect(await revokePicoCompanionRelayAccount({
       path: file,
       baseUrl: 'https://relay.example:3202',
       accountRef: '0123456789ab',
       secrets: keystore(),
       fetch: relayHost(state),
-    })).toEqual({ ok: true });
+    })).toEqual({
+      ok: true,
+      revocation: { accountRef: '0123456789ab', mailboxesEnded: 1, packetsDropped: 4 },
+    });
   });
 
   it('says so rather than guessing when this device never claimed the relay', async () => {

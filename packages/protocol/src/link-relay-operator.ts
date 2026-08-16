@@ -79,6 +79,20 @@ export interface PicoRelayAccountSummary {
   revokedAt?: string;
 }
 
+/**
+ * ADR 0154 RO5. What ending an account actually ended.
+ *
+ * Carried rather than implied: revoking is the one destructive thing an
+ * operator does here, and the only reader of a dropped queue is the account
+ * that just stopped existing - so if these numbers do not travel, nothing can
+ * observe what happened, including the person who pressed the button.
+ */
+export interface PicoRelayRevocation {
+  accountRef: string;
+  mailboxesEnded: number;
+  packetsDropped: number;
+}
+
 export interface PicoRelayDescription {
   /** The hostname senders resolve to reach this relay (ADR 0147 RY3). */
   operator: string;

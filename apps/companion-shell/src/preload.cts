@@ -105,9 +105,8 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
       mailboxQuota,
       maxCapacity,
     }),
-  revokeRelayAccount: async (baseUrl: string, accountRef: string): Promise<void> => {
-    await ipcRenderer.invoke(channels.revokeRelayAccount, { baseUrl, accountRef });
-  },
+  revokeRelayAccount: async (baseUrl: string, accountRef: string): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.revokeRelayAccount, { baseUrl, accountRef }),
   forgetRelay: async (baseUrl: string): Promise<void> => {
     await ipcRenderer.invoke(channels.forgetRelay, baseUrl);
   },

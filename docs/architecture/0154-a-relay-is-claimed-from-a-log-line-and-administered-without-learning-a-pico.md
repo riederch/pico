@@ -93,12 +93,32 @@ otherwise.
   question it could answer before, and can no longer answer "what is customer
   seven's credential".
 
-- **RO5 - An account can be taken back.** `upsertAccount` only ever began an
-  account. A credential that cannot be revoked is one a leak makes permanent,
-  and a client with a button to issue and none to withdraw is a surface that
-  tells half the truth. Revoked is a state on the row rather than a deleted
-  row, for ADR 0147 RY4's reason: the difference between "never existed" and
-  "ended" is answerable only if the ending is kept.
+- **RO5 - An account can be taken back, and its mailboxes end with it.**
+  `upsertAccount` only ever began an account. A credential that cannot be
+  revoked is one a leak makes permanent, and a client with a button to issue
+  and none to withdraw is a surface that tells half the truth. Revoked is a
+  state on the row rather than a deleted row, for ADR 0147 RY4's reason: the
+  difference between "never existed" and "ended" is answerable only if the
+  ending is kept.
+
+  **The first version revoked the account and forgot its mailboxes**, which
+  was worse than the gap it was recorded as. Those mailboxes stayed `open`, so
+  the relay went on answering `accepted` to senders posting into an address
+  nobody could ever collect from - the old credential is refused and no new one
+  inherits a mailbox. ADR 0149 names that exact failure in its own words, about
+  registration ordering: a sender writing into nothing while both sides believe
+  the exchange succeeded is the thing a relay exists to prevent. It arrived
+  through the mechanism meant to end a relationship.
+
+  So revocation ends the account's open mailboxes, which makes `deliver` answer
+  `mailbox_revoked` on its own - RY4's existing vocabulary, no new outcome -
+  and drops their queues, for the reason `deregister` already states: those
+  packets were addressed to a relationship that has ended.
+
+  **What ended is counted and returned**, because otherwise nothing could
+  observe it: the only reader of a dropped queue is the account that just
+  stopped existing. The operator is told how many addresses ended and how much
+  waiting mail went with them, in the client, in words.
 
 - **RO6 - The quota bounds both axes.** Mailboxes per account was the
   operator's; packets per mailbox came from the caller's register request and
@@ -186,9 +206,11 @@ migration costs nothing today and cannot be had at this price again.
   a real one: log aggregation ships it somewhere else. It is single-use and
   expires with the process, so the window is a restart wide, and the reset
   path exists for the case where it was seen by the wrong person.
-- **A revoked account's mailboxes stay revocable but their packets stay.**
-  Revocation stops the credential; it does not sweep the queues, which is a
-  separate decision about what a relay owes a customer who has left.
+- ~~**A revoked account's mailboxes stay revocable but their packets stay.**~~
+  Closed on 2026-08-16, and it was a defect rather than a gap - see RO5. The
+  question it was standing in for is still open in a smaller form: a relay owes
+  a departing customer nothing here, and whether it should owe them a window to
+  collect before the queues go is a product decision nobody has needed yet.
 - ~~**The mailbox port has no request-rate bound.**~~ Closed the same day as
   ADR 0149 RS7. The shape turned out to be different rather than absent: a
   delivery carries no sender to charge, but it names a *target*, and that is

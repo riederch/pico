@@ -908,6 +908,36 @@ export function picoCompanionRelayLines(
 }
 
 /**
+ * ADR 0154 RO5. What withdrawing a key cost, in the words a person reads.
+ *
+ * Revoking is the one destructive act on this surface, and the mail it drops
+ * has no reader left to notice it - the account that could have collected is
+ * the account that just stopped existing. So the numbers are said plainly
+ * rather than folded into "done".
+ */
+export function picoCompanionRelayRevocationLine(ended: {
+  mailboxesEnded: number;
+  packetsDropped: number;
+}): string {
+  if (ended.mailboxesEnded === 0) {
+    return 'That key no longer works. It held no addresses.';
+  }
+  const addresses = ended.mailboxesEnded === 1
+    ? 'one address'
+    : `${ended.mailboxesEnded} addresses`;
+  if (ended.packetsDropped === 0) {
+    return `That key no longer works, and ${addresses} ended with it. `
+      + 'Nothing was waiting at them.';
+  }
+  const waiting = ended.packetsDropped === 1
+    ? 'one waiting message was'
+    : `${ended.packetsDropped} waiting messages were`;
+  return `That key no longer works, and ${addresses} ended with it. `
+    + `${waiting[0]!.toUpperCase()}${waiting.slice(1)} discarded - nobody could have `
+    + 'collected them once the key stopped.';
+}
+
+/**
  * ADR 0154 RO3. The one moment an access key exists outside the relay.
  *
  * Written as its own presentation rather than a line in a list, because it is

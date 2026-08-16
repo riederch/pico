@@ -265,7 +265,8 @@ export class PicoRelayStore {
    * what revoking a credential means.
    */
   public revokeAccount(input: { accountRef: string; at: string }):
-  { ok: true } | { ok: false; refusal: 'unknown_account' | 'account_already_revoked' } {
+  { ok: true; mailboxesEnded: number; packetsDropped: number }
+    | { ok: false; refusal: 'unknown_account' | 'account_already_revoked' } {
     const found = this.accountSummaries().find((account) => account.accountRef === input.accountRef);
     if (found === undefined) {
       return { ok: false, refusal: 'unknown_account' };
@@ -273,13 +274,52 @@ export class PicoRelayStore {
     if (found.status === 'revoked') {
       return { ok: false, refusal: 'account_already_revoked' };
     }
-    this.db
-      .prepare(`
-        UPDATE relay_account SET status = 'revoked', revoked_at = ?
-        WHERE substr(account_digest, 1, ?) = ?
-      `)
-      .run(input.at, picoRelayAccountRefLength, input.accountRef);
-    return { ok: true };
+    /**
+     * ADR 0154 RO5 with ADR 0147 RY4. **The mailboxes end with the account,
+     * and the first version of this forgot them.**
+     *
+     * Revoking only the account left its mailboxes `open`, so this relay went
+     * on answering `accepted` to senders posting into an address nobody could
+     * ever collect from - the old credential is refused, and no new one
+     * inherits a mailbox. ADR 0149 names that failure in its own words, about
+     * a different mechanism: a sender writing into nothing while both sides
+     * believe the exchange succeeded is the thing a relay exists to prevent.
+     * It arrived here through the mechanism meant to end a relationship.
+     *
+     * So an account's mailboxes are revoked with it, which makes `deliver`
+     * answer `mailbox_revoked` on its own - RY4's existing vocabulary, no new
+     * outcome - and their queues go, for `deregister`'s stated reason: those
+     * packets were addressed to a relationship that has ended, and holding
+     * them would be holding material for somebody who has stopped listening.
+     */
+    const ended = this.db.transaction(() => {
+      this.db
+        .prepare(`
+          UPDATE relay_account SET status = 'revoked', revoked_at = ?
+          WHERE substr(account_digest, 1, ?) = ?
+        `)
+        .run(input.at, picoRelayAccountRefLength, input.accountRef);
+      const open = this.db
+        .prepare(`
+          SELECT mailbox FROM relay_mailbox
+          WHERE substr(account_digest, 1, ?) = ? AND status = 'open'
+        `)
+        .all(picoRelayAccountRefLength, input.accountRef) as Array<{ mailbox: string }>;
+      let dropped = 0;
+      for (const row of open) {
+        this.db.prepare("UPDATE relay_mailbox SET status = 'revoked' WHERE mailbox = ?")
+          .run(row.mailbox);
+        dropped += this.db
+          .prepare('DELETE FROM relay_packet WHERE mailbox = ?')
+          .run(row.mailbox).changes;
+      }
+      // Counted rather than done quietly. Dropping a queue is the one
+      // destructive thing revocation does, and the only public reader of a
+      // queue is the account that just stopped existing - so if this number
+      // does not travel, nothing can ever observe it, including a test.
+      return { ended: open.length, dropped };
+    })();
+    return { ok: true, mailboxesEnded: ended.ended, packetsDropped: ended.dropped };
   }
 
   /**

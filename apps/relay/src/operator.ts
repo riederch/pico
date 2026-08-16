@@ -197,8 +197,22 @@ export async function startPicoRelayOperatorListener(options: {
           send(response, 409, { refusal: revoked.refusal });
           return;
         }
-        options.log?.({ event: 'relay_account_revoked', accountRef: parsed.accountRef });
-        send(response, 200, { accountRef: parsed.accountRef, status: 'revoked' });
+        options.log?.({
+          event: 'relay_account_revoked',
+          accountRef: parsed.accountRef,
+          mailboxesEnded: revoked.mailboxesEnded,
+          packetsDropped: revoked.packetsDropped,
+        });
+        // What ended travels with the answer: an operator revoking a customer
+        // is entitled to know how many live addresses that just stopped and
+        // how much waiting mail went with them. Finding out from a support
+        // call is finding out too late.
+        send(response, 200, {
+          accountRef: parsed.accountRef,
+          status: 'revoked',
+          mailboxesEnded: revoked.mailboxesEnded,
+          packetsDropped: revoked.packetsDropped,
+        });
         return;
       }
       default:

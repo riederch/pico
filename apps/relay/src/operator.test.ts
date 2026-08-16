@@ -7,6 +7,11 @@ import {
   picoRelayOperatorHeader,
   picoRelayOperatorRoutes,
 } from '@pico/protocol/link-relay-operator';
+import {
+  parsePicoLinkPacket,
+  picoLinkExpiryBucketFor,
+  picoLinkPacketSchema,
+} from '@pico/protocol/link-packet';
 import { PicoRelayClaimCode, picoRelayCredentialDigest } from './operator-claim.js';
 import {
   PicoRelayRateLimit,
@@ -229,6 +234,94 @@ describe('ADR 0154 RO5 - an account can be taken back', () => {
     const accounts = listed.body.accounts as Array<Record<string, unknown>>;
     expect(accounts[0]?.status).toBe('revoked');
     expect(accounts[0]?.revokedAt).toBeTypeOf('string');
+  });
+
+  it('ends the account\'s mailboxes with it, so no sender writes into nothing', async () => {
+    /**
+     * The defect this closes, found by asking what a revoked account leaves
+     * behind: revoking only the account left its mailboxes open, so the relay
+     * answered `accepted` to senders posting into an address nobody could ever
+     * collect from - the old credential is refused and no new one inherits a
+     * mailbox. ADR 0149 names that failure in its own words about registration
+     * ordering; it arrived here through the mechanism meant to end a
+     * relationship.
+     */
+    const { relay: opened, credential } = await claimed();
+    const created = await opened.call(
+      picoRelayOperatorRoutes.accountCreate,
+      { mailboxQuota: 2, maxCapacity: 8 },
+      credential,
+    );
+    const issued = created.body.credential as string;
+    const ref = (created.body.account as { accountRef: string }).accountRef;
+    const mailbox = '4'.repeat(32);
+    opened.store.register({
+      accountId: issued,
+      mailbox,
+      capacity: 8,
+      registeredAt: '2026-08-16T12:00:00.000Z',
+    });
+    const nowMs = Date.parse('2026-08-16T12:00:00.000Z');
+    const packet = parsePicoLinkPacket({
+      schema: picoLinkPacketSchema,
+      to: `${mailbox}@relay.example`,
+      tag: '5'.repeat(32),
+      expiresAt: picoLinkExpiryBucketFor(nowMs + 3_600_000),
+      payload: 'AAAA',
+    }, nowMs);
+    // Three packets in one mailbox, so the count below tells "counted the
+    // deletes" apart from "counted the mailboxes" - with one of each, a
+    // `dropped += 1` in the wrong place passes.
+    expect(opened.store.deliver({
+      packet,
+      nowMs,
+      acceptedAt: '2026-08-16T12:00:00.000Z',
+    })).toBe('accepted');
+    for (const tag of ['7', '8']) {
+      expect(opened.store.deliver({
+        packet: parsePicoLinkPacket({
+          schema: picoLinkPacketSchema,
+          to: `${mailbox}@relay.example`,
+          tag: tag.repeat(32),
+          expiresAt: picoLinkExpiryBucketFor(nowMs + 3_600_000),
+          payload: 'AAAA',
+        }, nowMs),
+        nowMs,
+        acceptedAt: '2026-08-16T12:00:00.000Z',
+      })).toBe('accepted');
+    }
+
+    const revoked = await opened.call(
+      picoRelayOperatorRoutes.accountRevoke,
+      { accountRef: ref },
+      credential,
+    );
+    // The operator is told what ended, rather than finding out from a support
+    // call - and the packet count is the only way the dropped queue is
+    // observable at all, because the one reader of a queue is the account that
+    // just stopped existing.
+    expect(revoked.body.mailboxesEnded).toBe(1);
+    expect(revoked.body.packetsDropped).toBe(3);
+
+    // ADR 0147 RY4's existing answer, reached without a new outcome: the
+    // mailbox row is revoked, so `deliver` says so on its own.
+    expect(opened.store.mailboxFor(mailbox)?.status).toBe('revoked');
+    expect(opened.store.deliver({
+      packet: parsePicoLinkPacket({
+        schema: picoLinkPacketSchema,
+        to: `${mailbox}@relay.example`,
+        tag: '6'.repeat(32),
+        expiresAt: picoLinkExpiryBucketFor(nowMs + 3_600_000),
+        payload: 'AAAA',
+      }, nowMs),
+      nowMs,
+      acceptedAt: '2026-08-16T12:00:00.000Z',
+    })).toBe('mailbox_revoked');
+
+    // And the queue goes, for `deregister`'s stated reason: those packets were
+    // addressed to a relationship that has ended.
+    const listed = await opened.call(picoRelayOperatorRoutes.accountList, {}, credential);
+    expect((listed.body.accounts as Array<Record<string, unknown>>)[0]?.openMailboxes).toBe(0);
   });
 
   it('refuses a second revocation and an unknown handle by name', async () => {
