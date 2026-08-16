@@ -3,24 +3,36 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
-## Home-Assistant-App als Pico Home benennen
+## Neue Home-Assistant-App Pico Home erstellen
 
-Die sichtbare Home-Assistant-App heisst derzeit `Pico Core`. Sie soll fuer
-Menschen als `Pico Home` auftreten, weil Core die darin laufende Software und
-nicht die eigenstaendige Produktrolle bezeichnet.
+`Pico Home` wird als neue Home-Assistant-App aufgebaut und nicht aus der
+bestehenden App `Pico Core` umbenannt. Sie erhaelt eine eigene technische
+App-Identitaet, insbesondere ein eigenes Verzeichnis, den neuen Slug
+`pico_home`, ein eigenes Container-Image und einen eigenen Release- und
+Updatepfad.
+
+Pico Core bleibt die technische Laufzeit, die innerhalb eines Pico Home dessen
+Aufgaben ausfuehrt. Das Paket `@pico/core` darf deshalb in der neuen App
+weiterverwendet werden; neu gebaut wird die Home-Assistant-Produkt- und
+Installationshuelle, nicht die bereits nachgewiesene Core-Logik.
 
 Der Auftrag umfasst:
 
-- sichtbaren App-Namen und Paneltitel in `pico_core/config.yaml`,
-- Home-Assistant-Dokumentation, Installationshinweise und sichtbare Wortmarken,
-- alle Checks und Release-Stellen, die den sichtbaren Namen fest voraussetzen.
+- eine minimal installierbare App, die sichtbar meldet, dass Pico Home laeuft,
+  und ihre installierte Version anzeigt,
+- eigene Home-Assistant-Metadaten, Bilder, Dokumentation und sichtbare
+  Wortmarken,
+- ein eigenes Mehrplattform-Container-Image und einen dazu passenden
+  CI-/Releasepfad,
+- dauerhaftes App-Datenverzeichnis, First-Boot-Verhalten, Gesundheitstest und
+  kontrolliertes Update von Version A auf Version B,
+- spaetere Einbindung der bestehenden Core-Laufzeit hinter der neuen
+  Produktgrenze.
 
-Interne Bezeichnungen wie das Paket `@pico/core`, der Dienst, das Container-
-Image und der bestehende Slug `pico_core` werden nicht allein wegen der
-Produktbenennung geaendert. Falls eine solche technische Umbenennung noetig
-wird, muss sie als eigener, upgrade-kompatibler Schritt erfolgen. Eine
-bestehende Home-Assistant-Installation darf weder als zweite App erscheinen
-noch ihre Daten oder Update-Verbindung verlieren.
+Die bisherige App `pico_core` bleibt waehrend des Aufbaus unveraendert und wird
+nicht automatisch in `pico_home` migriert. Ob und wie sie nach erfolgreicher
+Abnahme von Pico Home entfernt oder nur noch als Entwicklungsartefakt behalten
+wird, ist ein eigener, ausdruecklicher Migrations- und Aufraeumschritt.
 
 ## Installierbarer und updatefaehiger Alpha-Stand
 
@@ -32,10 +44,11 @@ aufbauen koennen.
 
 Der erste Umfang ist:
 
-- **Pico Home:** die bestehende Home-Assistant-App verwenden und sichtbar als
-  `Pico Home` benennen. Eine echte Home-Assistant-Installation sowie ein
-  Update von Version A auf Version B muessen Daten, App-Identitaet und
-  Updateverbindung erhalten.
+- **Pico Home:** die neue Home-Assistant-App `pico_home` mit eigenem Image und
+  Updatepfad verwenden. Eine echte Home-Assistant-Installation sowie ein
+  Update von Version A auf Version B muessen deren Daten, App-Identitaet und
+  Updateverbindung erhalten; die bestehende App `pico_core` bleibt davon
+  getrennt.
 - **Pico Relay:** als eigenstaendigen OCI-Container mit ausfuehrbarem
   Startpfad, dauerhaftem SQLite-Datentraeger und einem fuer den Betrieb
   geeigneten Gesundheitssignal ausliefern. Pico Relay wird keine
