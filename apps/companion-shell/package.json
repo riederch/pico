@@ -8,6 +8,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-renderer.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
+    "measure:headless": "node scripts/measure-headless.mjs",
+    "premeasure:headless": "pnpm build",
     "package:linux": "node scripts/package-linux.mjs",
     "prepackage:linux": "pnpm build",
     "preverify:linux": "pnpm build",

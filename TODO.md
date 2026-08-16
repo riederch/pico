@@ -67,28 +67,59 @@ Betreiber aus seinem eigenen Relay aussperrt.
   Integritaet, Gesundheitstest, Datensicherung, Rollback und
   Updateaufzeichnung durchgaengig abgesichert sind.
 
-## Companion-Ressourcenbedarf ohne Electron messen
+## Companion-Ressourcenbedarf ohne Electron - gemessen am 2026-08-16
 
-Ziel ist ausschliesslich weniger RAM- und CPU-Verbrauch; eine native
-Produktform ist kein Selbstzweck. Die Linux-Tray-Messung vom 2026-08-14 liegt
-bei 222.669.824 Byte PSS und 95.821.824 Byte `Private_Dirty +
-Private_Hugetlb` ueber sieben Electron-Prozesse. Davon entfallen 110.164.992
-Byte PSS auf GPU-, Utility- und weitere Chromium-Prozesse; wie viel des
-112.504.832-Byte-Browserprozesses der Pico-/Node-Kern allein benoetigt, ist
-nicht getrennt gemessen. Fuer CPU gibt es noch keine belastbare
-Leerlaufmessung.
+**Die Messung liegt vor.** `pnpm companion:measure-headless` startet denselben
+Companion-Kern ohne Electron, misst PSS, privaten Speicher, Leerlauf-CPU und
+Wakeups und schreibt den Bericht nach
+`apps/companion-shell/out/headless-core-memory-linux.json`.
 
-Vor einer Portierungsentscheidung einen reproduzierbaren Headless-Benchmark
-ausfuehren: denselben Companion-Core und Vault-Pfad ohne Electron starten und
-PSS, privaten Speicher, Leerlauf-CPU sowie Wakeups gegen den paketierten
-Tray-Betrieb vergleichen. Zuerst ausserdem den statischen Importumfang auf
-weitere unnoetig frueh geladene Module pruefen.
+Der tragende Teil ist die **Kontrollmessung**. Ohne sie liest sich die
+Tray-Zahl als "222,7 MB sparen", und das ist falsch: ein Headless-Produkt
+zahlt weiterhin fuer eine JavaScript-Laufzeit.
 
-Nur wenn diese Messung eine fuer das Produkt relevante Einsparung zeigt, eine
-native oder leichtere Shell bewerten. Der bewaehrte TypeScript-Vertrauenspfad
-bleibt dabei zunaechst erhalten. Eine vollstaendige Neuimplementierung von
-Vault, kanonischen Formen, Zeremonien oder Kryptographie ist nicht Teil dieses
-TODOs und braeuchte eine eigene Architekturentscheidung.
+| Gemessen (PSS, Median aus drei Laeufen) | |
+|---|---|
+| Nacktes Node, im Leerlauf | **31,1 MB** |
+| Node + Companion-Kern geladen | **50,7 MB** |
+| Nur `libsodium-wrappers-sumo` | 46,4 MB |
+| Paketierter Tray, sieben Prozesse (2026-08-14) | **222,7 MB** |
+
+Daraus:
+
+- **Electron kostet 172,0 MB** - 77 Prozent des Trays.
+- **Pico-eigenes JavaScript kostet 4,3 MB.**
+- **`libsodium` kostet 15,3 MB**, also mehr als das Dreifache des gesamten
+  uebrigen Pico-Codes.
+- **Ein Headless-Produkt zahlt weiterhin 50,7 MB.**
+- Leerlauf-CPU und Wakeups sind in allen Varianten **null** ueber ein
+  Fuenf-Sekunden-Fenster. Fuer den Tray ist das nicht gemessen; die
+  CPU-Frage ist damit fuer den Kern beantwortet und fuer Chromium offen.
+
+### Der Importumfang ist geprueft, und es gibt nichts zu holen
+
+Der zweite Teil des Auftrags war, den statischen Importumfang auf unnoetig
+frueh geladene Module zu pruefen. Es gibt genau einen schweren Kandidaten,
+`libsodium-wrappers-sumo`, das `main.ts` auf oberster Ebene importiert - und
+er laesst sich nicht verschieben:
+
+- `sodium` importiert und `sodium` importiert **plus** `await ready` messen
+  identisch (46,4 MB). Die Kosten stecken im Modul, nicht in der
+  Initialisierung, ein spaeteres `await` bringt also nichts.
+- `startServiceCore` wartet in seiner ersten Zeile auf `sodium.ready`. Nicht
+  importieren ginge nur, wenn der Tray ohne laufenden Kern nuetzlich waere.
+
+### Was das entscheidet: nichts
+
+ADR 0113 hat Electron aus Gruenden gewaehlt, die nicht Speicher heissen - ein
+shell-freier Kern mit einer Schale darueber, ein Produktpfad, keine zweite
+Vertrauensgrenze. 172 MB heben das nicht auf. Was die Messung beseitigt, ist
+die Moeglichkeit, in beide Richtungen aus einer Zahl zu argumentieren, die
+niemand erhoben hat.
+
+Wer die Frage spaeter wieder aufmacht, hat jetzt drei Groessen statt einer:
+was Chromium kostet, was ohne es bliebe, und dass der Loewenanteil des Rests
+eine Kryptobibliothek ist, die jede Form von Pico braucht.
 
 ## Lizenzbedingungen: anwaltliche Durchsicht
 

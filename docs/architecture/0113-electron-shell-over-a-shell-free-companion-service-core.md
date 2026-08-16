@@ -2,6 +2,25 @@
 
 ## Status
 
+Status note, 2026-08-16: **the memory question is measured, and it does not
+overturn this ADR.** `TODO.md` carried a Linux tray figure of 222.7 MB PSS
+over seven processes with no way to tell what of it was Chromium, so the
+obvious reading - drop Electron, save 222 MB - was available to anybody and
+supported by nothing.
+
+`pnpm companion:measure-headless` now weighs the same companion core in plain
+Node, with bare Node as the control. Electron costs 172.0 MB; Pico's own
+JavaScript costs 4.3 MB; `libsodium-wrappers-sumo` costs 15.3 MB, and a
+headless product would still pay 50.7 MB. Idle CPU and wakeups are zero for
+the core over a five-second window.
+
+Two things follow. **C1 holds under measurement**: the companion core imports
+and runs in plain Node, which is what "shell-free" was supposed to mean and
+what a boundary check can only approximate. And the eager-import audit this
+ADR's neighbours asked for is done with nothing to collect - libsodium is the
+one heavy module loaded at start, importing it and initialising it measure
+identically, and `startServiceCore` awaits it on its first line.
+
 Accepted; partially implemented. This ADR makes the ADR 0105 B2 shell
 decision the previous ADRs deliberately left open: the person-side
 background companion ships as an Electron application whose main process

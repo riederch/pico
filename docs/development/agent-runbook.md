@@ -191,6 +191,16 @@ Direkte lokale Smokes muessen einen expliziten Access Mode und disposable
 Pfade/Ports verwenden. Niemals echte lokale Datenbanken, Host Keys oder
 Memory-Key-Stores in Testcontainer einbinden.
 
+Speichermessung ohne Electron (ADR 0113, `TODO.md`):
+
+```bash
+npx pnpm@9.0.0 companion:measure-headless
+```
+
+Misst nacktes Node als Kontrolle, den Companion-Kern und `libsodium` einzeln,
+und vergleicht gegen den zuletzt aufgezeichneten Tray-Bericht. Ohne die
+Kontrolle sagt die Tray-Zahl nichts.
+
 Relevante Quellen:
 
 - `docker/home.Dockerfile`
