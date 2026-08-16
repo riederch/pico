@@ -391,6 +391,13 @@ administration is where breaking it would have been convenient.
 | Account credentials | issued by the relay, shown once, stored only as a digest |
 | Claim code | in memory, in the log, never in `/data` |
 
+The administration port is bounded: ten requests a minute for a caller with no
+valid credential, sixty for the operator, answered with `429` and a
+`Retry-After`. The two budgets are separate so that somebody hammering an
+exposed port cannot lock the operator out of their own relay. Neither bound is
+what protects the credentials - a 128-bit bearer already ends that argument -
+they bound the work an exposed port can be made to do.
+
 **A fresh relay holds no accounts and refuses every registration** as
 `unknown_account`, saying so once in its boot log.
 

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import Database from 'better-sqlite3';
 import type {
   PicoRelayAccountSummary,
@@ -193,12 +194,25 @@ export class PicoRelayStore {
     return true;
   }
 
-  /** ADR 0154 RO1. Whether a presented credential administers this relay. */
+  /**
+   * ADR 0154 RO1. Whether a presented credential administers this relay.
+   *
+   * Compared in constant time, like the claim code beside it. The values are
+   * digests rather than secrets, so the leak an ordinary `===` offers is a
+   * prefix of a hash rather than of a key - but "the thing that leaks is not
+   * quite the secret" is the reasoning that ages badly, and the fix is one
+   * function call.
+   */
   public isOperator(credential: string): boolean {
     const row = this.db
       .prepare('SELECT credential_digest AS digest FROM relay_operator WHERE id = 1')
       .get() as { digest: string } | undefined;
-    return row !== undefined && row.digest === picoRelayCredentialDigest(credential);
+    if (row === undefined) {
+      return false;
+    }
+    const expected = Buffer.from(row.digest, 'utf8');
+    const actual = Buffer.from(picoRelayCredentialDigest(credential), 'utf8');
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
   }
 
   /**

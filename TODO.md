@@ -42,9 +42,11 @@ Pico-Identitaet ist. Ein unbeanspruchter Relay schreibt einen einmaligen
 Claim-Code in sein Log, der Client tauscht ihn gegen das Betreiber-Credential
 und verwahrt es im Keystore des Desktops.
 
-Drei Dinge sind dabei mitgekommen, die vorher fehlten: Konten lassen sich
-sperren, der Relay speichert Credentials nur noch als Digest, und die Quota
-begrenzt jetzt beide Achsen statt nur der Mailboxzahl.
+Vier Dinge sind dabei mitgekommen, die vorher fehlten: Konten lassen sich
+sperren, der Relay speichert Credentials nur noch als Digest, die Quota
+begrenzt jetzt beide Achsen statt nur der Mailboxzahl, und der Admin-Port hat
+eine Rate-Grenze mit getrennten Budgets - damit wer haemmert nicht den
+Betreiber aus seinem eigenen Relay aussperrt.
 
 ### Offen: was diese Arbeit nicht enthaelt
 

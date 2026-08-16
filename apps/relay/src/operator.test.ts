@@ -8,6 +8,11 @@ import {
   picoRelayOperatorRoutes,
 } from '@pico/protocol/link-relay-operator';
 import { PicoRelayClaimCode, picoRelayCredentialDigest } from './operator-claim.js';
+import {
+  PicoRelayRateLimit,
+  picoRelayOperatorRequestsPerMinute,
+  picoRelayUnauthenticatedRequestsPerMinute,
+} from './rate-limit.js';
 import { startPicoRelayOperatorListener } from './operator.js';
 import { startPicoRelayServer } from './server.js';
 import { PicoRelayStore } from './store.js';
@@ -31,6 +36,7 @@ interface Relay {
   store: PicoRelayStore;
   claimCode: PicoRelayClaimCode;
   url: string;
+  advance(ms: number): void;
   call(route: string, body?: unknown, credential?: string): Promise<{
     status: number;
     body: Record<string, unknown>;
@@ -43,11 +49,15 @@ async function relay(): Promise<Relay> {
   const store = new PicoRelayStore(join(dir, 'relay.sqlite'), 'relay.example');
   closers.push(() => store.close());
   const claimCode = new PicoRelayClaimCode();
+  // A clock the test moves, so the bucket's refill is arithmetic rather than
+  // a wait - and so the other tests here are not silently racing it.
+  let clockMs = Date.parse('2026-08-16T12:00:00.000Z');
   const listener = await startPicoRelayOperatorListener({
     store,
     claimCode,
     host: '127.0.0.1',
     port: 0,
+    now: () => new Date(clockMs),
   });
   closers.push(() => listener.close());
   const url = `http://127.0.0.1:${listener.port}`;
@@ -55,6 +65,9 @@ async function relay(): Promise<Relay> {
     store,
     claimCode,
     url,
+    advance: (ms) => {
+      clockMs += ms;
+    },
     call: async (route, body, credential) => {
       const response = await fetch(`${url}${route}`, {
         method: 'POST',
@@ -335,5 +348,92 @@ describe('ADR 0154 RO8 - a lost credential is recoverable', () => {
     expect(opened.store.isOperator(credential)).toBe(false);
     expect(opened.store.accountSummaries()).toHaveLength(1);
     expect(opened.store.hasAccounts()).toBe(true);
+  });
+});
+
+describe('ADR 0154 RO9 - a bound on the door, and what it is for', () => {
+  it('refuses an unauthenticated caller past its budget, and says when to come back', async () => {
+    const opened = await relay();
+    opened.claimCode.mint();
+
+    // Ten a minute. A person typing a claim code off a screen needs two or
+    // three; anybody at this budget is not typing.
+    for (let attempt = 0; attempt < picoRelayUnauthenticatedRequestsPerMinute; attempt += 1) {
+      expect((await opened.call(picoRelayOperatorRoutes.claim, { claimCode: 'x'.repeat(43) })).status)
+        .toBe(409);
+    }
+    const refused = await fetch(`${opened.url}${picoRelayOperatorRoutes.claim}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ claimCode: 'x'.repeat(43) }),
+    });
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toEqual({ refusal: 'too_many_requests' });
+    // Never zero: a `Retry-After: 0` invites the retry this exists to stop.
+    expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(0);
+
+    // And it refills rather than latching.
+    opened.advance(60_000);
+    expect((await opened.call(picoRelayOperatorRoutes.claim, { claimCode: 'x'.repeat(43) })).status)
+      .toBe(409);
+  });
+
+  it('leaves the operator\'s own budget untouched while a stranger hammers', async () => {
+    // The whole reason there are two buckets. One would let anybody who can
+    // reach the port lock the operator out of their own relay - trading a
+    // resource bound for a denial of service against the person who needs the
+    // door.
+    const { relay: opened, credential } = await claimed();
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await opened.call(picoRelayOperatorRoutes.accountList, {}, '0'.repeat(32));
+    }
+    expect((await opened.call(picoRelayOperatorRoutes.accountList, {}, credential)).status)
+      .toBe(200);
+  });
+
+  it('bounds the operator too, so a stolen credential is not a load generator', async () => {
+    const { relay: opened, credential } = await claimed();
+    let refusedAt = -1;
+    for (let attempt = 0; attempt <= picoRelayOperatorRequestsPerMinute; attempt += 1) {
+      const answer = await opened.call(picoRelayOperatorRoutes.accountList, {}, credential);
+      if (answer.status === 429) {
+        refusedAt = attempt;
+        break;
+      }
+    }
+    expect(refusedAt).toBeGreaterThan(0);
+    expect(refusedAt).toBeLessThanOrEqual(picoRelayOperatorRequestsPerMinute);
+  });
+
+  it('charges the bound before the route, so a refused probe learns nothing', async () => {
+    // The 404 on this port answers an unknown route exactly like a wrong
+    // method. A bound applied after route matching would answer 429 for one
+    // and 404 for the other, and the difference is a map.
+    const opened = await relay();
+    for (let attempt = 0; attempt < picoRelayUnauthenticatedRequestsPerMinute; attempt += 1) {
+      await opened.call(picoRelayOperatorRoutes.claim, { claimCode: 'x'.repeat(43) });
+    }
+    const unknown = await fetch(`${opened.url}/nothing-here`, { method: 'POST' });
+    const known = await fetch(`${opened.url}${picoRelayOperatorRoutes.accountList}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(known.status).toBe(unknown.status);
+    expect(await known.text()).toBe(await unknown.text());
+  });
+
+  it('does not refill on a clock that went backwards', () => {
+    // ADR 0120's posture: a bad clock costs a wait, never an open door.
+    let clockMs = 1_000_000;
+    const limit = new PicoRelayRateLimit({
+      capacity: 2,
+      perMinute: 60,
+      now: () => clockMs,
+    });
+    expect(limit.take().allowed).toBe(true);
+    expect(limit.take().allowed).toBe(true);
+    clockMs -= 60_000;
+    expect(limit.take().allowed).toBe(false);
   });
 });

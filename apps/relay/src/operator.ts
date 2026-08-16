@@ -1,14 +1,19 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import {
-  assertPicoRelayOperatorCredential,
   parsePicoRelayAccountCreateRequest,
   parsePicoRelayAccountRevokeRequest,
   parsePicoRelayClaimRequest,
+  picoRelayOperatorCredentialPattern,
   picoRelayOperatorHeader,
   picoRelayOperatorRoutes,
 } from '@pico/protocol/link-relay-operator';
 import { mintPicoRelayCredential, picoRelayCredentialDigest, type PicoRelayClaimCode } from './operator-claim.js';
+import {
+  PicoRelayRateLimit,
+  picoRelayOperatorRequestsPerMinute,
+  picoRelayUnauthenticatedRequestsPerMinute,
+} from './rate-limit.js';
 import type { PicoRelayStore } from './store.js';
 
 /**
@@ -47,6 +52,26 @@ export async function startPicoRelayOperatorListener(options: {
 }): Promise<PicoRelayOperatorListener> {
   const now = options.now ?? (() => new Date());
 
+  /**
+   * ADR 0154 RO9. Two buckets, charged before anything else happens.
+   *
+   * A caller is identified and then charged to their own budget, so an
+   * attacker hammering the door cannot spend the operator's. Neither bucket
+   * exists to make a 128-bit credential harder to guess - the entropy already
+   * ends that argument. They exist so a port somebody deliberately exposed
+   * cannot be turned into a load generator.
+   */
+  const unauthenticated = new PicoRelayRateLimit({
+    capacity: picoRelayUnauthenticatedRequestsPerMinute,
+    perMinute: picoRelayUnauthenticatedRequestsPerMinute,
+    now: () => now().getTime(),
+  });
+  const authenticated = new PicoRelayRateLimit({
+    capacity: picoRelayOperatorRequestsPerMinute,
+    perMinute: picoRelayOperatorRequestsPerMinute,
+    now: () => now().getTime(),
+  });
+
   const server: Server = createServer((request, response) => {
     void handle(request, response).catch(() => {
       send(response, 500, { error: 'operator_request_failed' });
@@ -56,6 +81,38 @@ export async function startPicoRelayOperatorListener(options: {
   async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
     response.setHeader('cache-control', 'no-store');
     response.setHeader('x-content-type-options', 'nosniff');
+
+    /**
+     * ADR 0154 RO9. Who this is, then which budget, then everything else.
+     *
+     * **The order is the design, and the obvious one is wrong.** Charging the
+     * unauthenticated bucket first and refunding it once a credential turned
+     * out to be valid reads well and does the opposite of what it promises: a
+     * stranger who empties that bucket then refuses the operator's next
+     * request before it can prove anything. A test found it, which is the
+     * only reason it is not in this file.
+     *
+     * So the credential is checked first. That is a digest and one indexed
+     * query, which is the floor of work an unauthenticated caller can force
+     * here - bounded by the connection ceiling and the timeouts rather than by
+     * the bucket, and cheap enough to be the price of telling callers apart.
+     * The body is read after, so a caller past their budget never gets to send
+     * one.
+     */
+    const presented = request.headers[picoRelayOperatorHeader];
+    const isOperator = typeof presented === 'string'
+      && picoRelayOperatorCredentialPattern.test(presented)
+      && options.store.isOperator(presented);
+
+    // Charged before the route is looked at, so a rate-limited unknown route
+    // and a rate-limited real one answer identically - the same property the
+    // 404 below carries, kept through the bound rather than around it.
+    const budget = (isOperator ? authenticated : unauthenticated).take();
+    if (!budget.allowed) {
+      response.setHeader('retry-after', String(budget.retryAfterSeconds));
+      send(response, 429, { refusal: 'too_many_requests' });
+      return;
+    }
 
     const route = (request.url ?? '').split('?')[0] ?? '';
     const known = Object.values(picoRelayOperatorRoutes) as readonly string[];
@@ -80,20 +137,11 @@ export async function startPicoRelayOperatorListener(options: {
       return;
     }
 
-    // Everything below needs the credential the claim handed out.
-    let credential: string;
-    try {
-      credential = assertPicoRelayOperatorCredential(
-        request.headers[picoRelayOperatorHeader],
-      );
-    } catch {
-      send(response, 401, { error: 'invalid_pico_relay_operator_credential' });
-      return;
-    }
-    if (!options.store.isOperator(credential)) {
-      // A relay nobody has claimed and a wrong credential answer the same
-      // here. The claim route tells the two apart, because that is where the
-      // difference is something a caller can act on.
+    // Everything below needs the credential the claim handed out. A relay
+    // nobody has claimed and a wrong credential answer the same here; the
+    // claim route tells those two apart, because that is where the difference
+    // is something a caller can act on.
+    if (!isOperator) {
       send(response, 401, { error: 'invalid_pico_relay_operator_credential' });
       return;
     }

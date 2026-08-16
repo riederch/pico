@@ -117,6 +117,34 @@ otherwise.
   do this, because operator administration protects a network surface and not
   the host.
 
+- **RO9 - The administration port is bounded, and the bound does not lock the
+  operator out.** Two token buckets: ten requests a minute for an
+  unauthenticated caller, sixty for the operator, refused with `429` and a
+  `Retry-After` that is never zero.
+
+  **It is not what protects the credentials.** The claim code is 256 bits and
+  the operator credential 128; grinding them was never the threat, and a
+  bucket sold as making brute force harder would be decoration over a number
+  that already ends the argument. What it bounds is the work an
+  unauthenticated caller can make an exposed port do.
+
+  **The order is the design, and the obvious order is wrong.** Charging one
+  bucket first and refunding it once a credential proved valid reads well and
+  does the opposite of what it promises: a stranger who empties that bucket
+  then refuses the operator's next request before it can prove anything -
+  trading a resource bound for a denial of service against the one person who
+  needs the door. So the credential is checked first, at the cost of one
+  digest and one indexed query per request, and the caller is charged to their
+  own budget. That cost is the floor of what an unauthenticated caller can
+  force here; it is bounded by the connection ceiling and the timeouts rather
+  than by the bucket. **The first version had it the wrong way round and a
+  test found it**, which is the only reason it is not in the tree.
+
+  Global rather than per-source, deliberately: a relay behind a reverse proxy
+  sees one address for everybody, and the header that would say otherwise is
+  one nobody signed. Counting per source would be counting one source or
+  trusting a forgeable string.
+
 ## What this does not do
 
 **It does not make the relay know its customers.** An account is still a
@@ -161,6 +189,7 @@ migration costs nothing today and cannot be had at this price again.
 - **A revoked account's mailboxes stay revocable but their packets stay.**
   Revocation stops the credential; it does not sweep the queues, which is a
   separate decision about what a relay owes a customer who has left.
-- **No rate limiting on the administration port.** It holds a 128-bit bearer
-  and sits on loopback by default; an operator who exposes it takes on what
-  everybody who exposes an admin port takes on.
+- **The mailbox port has no request-rate bound.** It has connection,
+  header, body and timeout ceilings (ADR 0149) and no per-minute one. That is
+  a different question with a different shape - `deliver` takes no credential
+  by RS3, so there is nobody to charge - and it is not settled here.
