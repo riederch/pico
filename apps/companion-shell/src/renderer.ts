@@ -11,6 +11,7 @@ import {
   renderPicoCompanionRecalls,
   renderPicoCompanionRelays,
   renderPicoCompanionRelayAccountIssued,
+  renderPicoCompanionDevices,
 } from './model-provider-views.js';
 
 declare global {
@@ -37,6 +38,13 @@ declare global {
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
+      getDevices(): Promise<unknown>;
+      switchDevice(
+        presenceId: string,
+        affordance: string | undefined,
+        enabled: boolean,
+      ): Promise<void>;
+      forgetDevice(presenceId: string): Promise<void>;
       getRelays(): Promise<unknown>;
       claimRelay(baseUrl: string, claimCode: string): Promise<{ operator: string }>;
       createRelayAccount(
@@ -237,6 +245,52 @@ const providerSection = requireElement('model-providers');
 const providerList = requireElement('provider-list');
 const readSection = requireElement('answered-reads');
 const readList = requireElement('read-list');
+const deviceSection = requireElement('devices');
+const deviceList = requireElement('device-list');
+const deviceStatus = requireElement('device-status');
+
+/**
+ * ADR 0126 P2/P6. The person's devices, and their word about each one.
+ *
+ * Fails quietly like its neighbours (ADR 0118 O4): not knowing which devices
+ * you have is an absence, and an absence must not render a working thing as
+ * broken. What a person pressed always answers.
+ */
+function refreshDevices(): void {
+  void window.picoCompanion.getDevices()
+    .then((devices) => {
+      renderPicoCompanionDevices(
+        { list: deviceList, section: deviceSection, document },
+        devices,
+        (action) => {
+          if (action.action === 'forget') {
+            void window.picoCompanion.forgetDevice(action.presenceId).then(() => {
+              deviceStatus.textContent = 'Forgotten, with everything you had decided '
+                + 'about it. The device itself is untouched, and announcing again '
+                + 'brings it back as new.';
+              refreshDevices();
+            }, (error: unknown) => {
+              deviceStatus.textContent = refusalText(error, 'That device is still here.');
+            });
+            return;
+          }
+          void window.picoCompanion
+            .switchDevice(action.presenceId, action.affordance, action.enabled)
+            .then(() => {
+              deviceStatus.textContent = action.enabled
+                ? 'Allowed again.'
+                : 'Pico will not use that.';
+              refreshDevices();
+            }, (error: unknown) => {
+              deviceStatus.textContent = refusalText(error, 'That was not changed.');
+            });
+        },
+      );
+    }, () => {
+      deviceSection.hidden = true;
+    });
+}
+
 const relaySection = requireElement('relays');
 const relayList = requireElement('relay-list');
 const relayIssued = requireElement('relay-issued');
@@ -470,6 +524,7 @@ function refreshModelViews(): void {
 
 refreshModelViews();
 refreshRecalls();
+refreshDevices();
 refreshRelays();
 
 function requireElement(id: string): HTMLElement {

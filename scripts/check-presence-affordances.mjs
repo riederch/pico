@@ -107,6 +107,10 @@ const mayReadPresenceType = new Set([
   'packages/protocol/src/presence.ts',
   // Persists the label and reads it back for the row it hands to a surface.
   'apps/core/src/presence-registry.ts',
+  // Turns the label into a word a person recognises their own device by, and
+  // nothing else: the switch there produces a string and decides nothing. A
+  // person choosing between two rows has to know which machine each one is.
+  'apps/companion-shell/src/contract.ts',
 ]);
 
 for (const file of sourceFiles(join(repoRoot, 'apps'), join(repoRoot, 'packages'))) {

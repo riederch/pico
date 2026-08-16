@@ -8,6 +8,8 @@ import {
   picoCompanionRelayLines,
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
+  picoCompanionDeviceLines,
+  parsePicoCompanionDevices,
 } from './contract.js';
 
 /**
@@ -304,4 +306,85 @@ export function renderPicoCompanionRelayAccountIssued(
   value.textContent = issued.credential;
 
   root.block.append(headline, detail, value);
+}
+
+/**
+ * ADR 0126 P2/P6 on the device - the person's own devices, and the switches.
+ *
+ * Every string comes from `picoCompanionDeviceLines`, including the button
+ * labels. A control labelled in the renderer would be the one sentence in this
+ * surface no test could hold to anything, and it is the sentence a person
+ * actually acts on.
+ */
+export function renderPicoCompanionDevices(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (input:
+    | { action: 'switch'; presenceId: string; affordance?: string; enabled: boolean }
+    | { action: 'forget'; presenceId: string }) => void,
+): void {
+  const devices = parsePicoCompanionDevices(value);
+  root.section.hidden = devices.length === 0;
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionDeviceLines(devices)) {
+    const item = root.document.createElement('li');
+    item.className = 'device-line';
+    item.dataset.presenceId = line.presenceId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const offers = root.document.createElement('ul');
+    offers.className = 'device-offers';
+    for (const offer of line.offers) {
+      const offerItem = root.document.createElement('li');
+      offerItem.className = 'device-offer';
+      offerItem.dataset.affordance = offer.affordance;
+      offerItem.dataset.withheld = String(offer.withheld);
+
+      const offerHeadline = root.document.createElement('p');
+      offerHeadline.className = 'detail';
+      offerHeadline.textContent = offer.headline;
+
+      const toggle = root.document.createElement('button');
+      toggle.type = 'button';
+      toggle.textContent = offer.actionLabel;
+      toggle.addEventListener('click', () => act({
+        action: 'switch',
+        presenceId: line.presenceId,
+        affordance: offer.affordance,
+        enabled: offer.withheld,
+      }));
+
+      offerItem.append(offerHeadline, toggle);
+      offers.append(offerItem);
+    }
+
+    // The whole-device switch, beside the per-affordance ones rather than
+    // among them: "not this device" is a different statement, and it keeps
+    // meaning that after the device gains something new.
+    const deviceToggle = root.document.createElement('button');
+    deviceToggle.type = 'button';
+    deviceToggle.textContent = line.deviceActionLabel;
+    deviceToggle.addEventListener('click', () => act({
+      action: 'switch',
+      presenceId: line.presenceId,
+      enabled: line.deviceActionLabel.startsWith('Use'),
+    }));
+
+    const forget = root.document.createElement('button');
+    forget.type = 'button';
+    forget.className = 'quiet';
+    forget.textContent = line.forgetLabel;
+    forget.addEventListener('click', () => act({ action: 'forget', presenceId: line.presenceId }));
+
+    item.append(headline, detail, offers, deviceToggle, forget);
+    root.list.append(item);
+  }
 }

@@ -371,6 +371,26 @@ version of a concept, and the versions drift where nobody is looking.
   presence, so a person who removes a phone and later pairs another under the
   same id does not silently inherit last year's answers.
 
+  **Reachable from the companion window since 2026-08-16, and not before.**
+  The registry, the switch and the operation all existed and the only way to
+  use them was a signed Link request nobody could send by hand - so on by
+  default was the one state a person could be in, which is the same gap ADR
+  0129 SR6 records about its own switches ("reachable since 2026-08-14, and
+  not before").
+
+  **The window is where a machine fact becomes a sentence.** The registry
+  holds `camera`, which is right for a planner and useless to somebody
+  deciding whether to allow it; the line says *it can read a Recovery Card
+  with its camera*. A withheld one says the fact and the decision in the same
+  breath - "it can, and you have told Pico not to" - which is the sentence the
+  two-table split was for, and which a merged row could not produce. Quiet,
+  switched off and gone get three different sentences (ADR 0152 SE5), and
+  forgetting says what it costs rather than calling itself tidying. A device
+  whose type this window does not know is still shown, because hiding it would
+  hide a device from its owner. `contract.test.ts` asserts a sentence exists
+  for every affordance the protocol declares, since a closed map beside a
+  closed vocabulary is exactly the pair that drifts.
+
 ## Consequences
 
 Positive:

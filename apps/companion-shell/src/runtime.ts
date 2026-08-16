@@ -39,6 +39,9 @@ import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
   announcePicoCompanionPresence,
+  forgetPicoCompanionDevice,
+  readPicoCompanionDevices,
+  switchPicoCompanionDevice,
   type PicoCompanionPresenceProbe,
 } from '@pico/companion/presence';
 import { picoPresenceLeaseMs } from '@pico/protocol/presence';
@@ -111,6 +114,14 @@ export interface PicoCompanionShellRuntime {
     privacyDomain: string;
     status: string;
   }>;
+  /** ADR 0126 P2/P6. The person's own devices, as their Home knows them. */
+  readDevices(): Promise<readonly unknown[]>;
+  switchDevice(input: {
+    presenceId: string;
+    affordance?: string;
+    enabled: boolean;
+  }): Promise<void>;
+  forgetDevice(presenceId: string): Promise<void>;
   /**
    * ADR 0154. Relays this person operates - a different hat from having a
    * Pico, and one this device holds the only credential for.
@@ -454,6 +465,43 @@ export async function startPicoCompanionShellRuntime(input: {
             sodium: input.sodium,
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
+        });
+      }),
+      readDevices: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionDevices({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      switchDevice: async ({ presenceId, affordance, enabled }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await switchPicoCompanionDevice({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          presenceId,
+          ...(affordance === undefined ? {} : { affordance }),
+          enabled,
+        });
+      }),
+      forgetDevice: async (presenceId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await forgetPicoCompanionDevice({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          presenceId,
         });
       }),
       readRelays: async () => await serialized(async () => {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { picoPresenceAffordances } from '@pico/protocol/presence';
 import {
   parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionPresentation,
@@ -11,6 +12,8 @@ import {
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
   picoCompanionRelayRevocationLine,
+  picoCompanionDeviceLines,
+  parsePicoCompanionDevices,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -206,5 +209,76 @@ describe('ADR 0154 RO5 - what withdrawing a key cost', () => {
     const line = picoCompanionRelayRevocationLine({ mailboxesEnded: 1, packetsDropped: 1 });
     expect(line).toContain('one address');
     expect(line).toContain('One waiting message was discarded');
+  });
+});
+
+describe('ADR 0126 P2/P6 - the words for a person\'s own devices', () => {
+  const device = {
+    presenceId: 'device-abc',
+    presenceType: 'desktop_companion',
+    affordances: ['camera', 'display'],
+    withheld: [],
+    enabled: true,
+    connected: true,
+    lastSeenAt: '2026-08-16T12:00:00.000Z',
+  };
+
+  it('turns a machine fact into what would happen', () => {
+    // The registry holds `camera`, which is right for a planner and useless
+    // to a person deciding whether to allow it.
+    const [line] = picoCompanionDeviceLines([device]);
+    expect(line?.offers.map((offer) => offer.headline)).toEqual([
+      'It can read a Recovery Card with its camera',
+      'It can show you things in a window',
+    ]);
+  });
+
+  it('says the fact is still true when the person has said no', () => {
+    // ADR 0126 keeps the affordance and the switch apart precisely so this
+    // sentence can exist.
+    const [line] = picoCompanionDeviceLines([{ ...device, withheld: ['camera'] }]);
+    expect(line?.offers[0]?.headline)
+      .toBe('It can read a Recovery Card with its camera, and you have told Pico not to');
+    expect(line?.offers[0]?.actionLabel).toBe('Allow this again');
+    expect(line?.offers[1]?.actionLabel).toBe('Do not use this');
+  });
+
+  it('tells quiet apart from switched off', () => {
+    // ADR 0152 SE5. One absence ends by itself, the other needs somebody.
+    expect(picoCompanionDeviceLines([device])[0]?.detail).toBe('Here now.');
+    expect(picoCompanionDeviceLines([{ ...device, connected: false }])[0]?.detail)
+      .toContain('Not answering right now');
+    expect(picoCompanionDeviceLines([{ ...device, enabled: false }])[0]?.detail)
+      .toContain('whatever it says it can do');
+  });
+
+  it('says what forgetting costs rather than calling it tidying', () => {
+    expect(picoCompanionDeviceLines([device])[0]?.forgetLabel)
+      .toBe('Forget this device and everything you decided about it');
+  });
+
+  it('names a device a person can recognise, and never hides an unknown one', () => {
+    expect(picoCompanionDeviceLines([device])[0]?.headline).toBe('A computer');
+    expect(picoCompanionDeviceLines([{ ...device, presenceType: 'mobile_companion' }])[0]?.headline)
+      .toBe('A phone');
+    // Hiding a device whose type this window does not know would hide a
+    // device from its owner.
+    expect(picoCompanionDeviceLines([{ ...device, presenceType: 'from_the_future' }])[0]?.headline)
+      .toBe('A device');
+  });
+
+  it('has a sentence for every affordance the protocol declares', () => {
+    // A closed map beside a closed vocabulary is the drift this tree names
+    // out loud, so it is asserted rather than trusted.
+    for (const affordance of picoPresenceAffordances) {
+      const [line] = picoCompanionDeviceLines([{ ...device, affordances: [affordance] }]);
+      expect(line?.offers[0]?.headline).not.toBe(`It can ${affordance}`);
+      expect(line?.offers[0]?.headline.length).toBeGreaterThan(`It can ${affordance}`.length);
+    }
+  });
+
+  it('refuses a device row that is missing what a line needs', () => {
+    expect(() => parsePicoCompanionDevices([{ presenceId: 'x' }]))
+      .toThrow('invalid_pico_companion_device');
   });
 });

@@ -108,3 +108,73 @@ export async function announcePicoCompanionPresence(input: {
   }
   return { ok: true };
 }
+
+/**
+ * ADR 0126 P2/P6. The person's own devices, as their Home knows them.
+ *
+ * Read from the Home rather than assembled here, because the answer includes
+ * devices this one has never met - which is the whole point of a registry
+ * that belongs to the identity rather than to a machine.
+ */
+export interface PicoCompanionDeviceView {
+  presenceId: string;
+  presenceType: string;
+  affordances: readonly string[];
+  withheld: readonly string[];
+  enabled: boolean;
+  connected: boolean;
+  registeredAt: string;
+  lastSeenAt: string;
+}
+
+export async function readPicoCompanionDevices(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionDeviceView[]> {
+  const read = await input.livingDeviceLinkClient.request('home.presence.read', {});
+  if (read.outcome !== 'ok') {
+    throw new Error(`presence_read_rejected:${read.outcome}`);
+  }
+  const presences = (read.result as { presences?: unknown }).presences;
+  if (!Array.isArray(presences)) {
+    throw new Error('invalid_pico_presence_read');
+  }
+  return Object.freeze(presences as PicoCompanionDeviceView[]);
+}
+
+/**
+ * ADR 0126 P6. The person's word about one of their devices.
+ *
+ * `affordance` absent means the whole device, which is a different statement
+ * from switching each of its affordances - and stays different after the
+ * device gains a new one.
+ */
+export async function switchPicoCompanionDevice(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  presenceId: string;
+  affordance?: string;
+  enabled: boolean;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.presence.switch', {
+    presenceId: input.presenceId,
+    ...(input.affordance === undefined ? {} : { affordance: input.affordance }),
+    enabled: input.enabled,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `presence_switch_${answer.outcome}`);
+  }
+}
+
+/** Removes a device from the list. The device itself is untouched. */
+export async function forgetPicoCompanionDevice(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  presenceId: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.presence.forget', {
+    presenceId: input.presenceId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `presence_forget_${answer.outcome}`);
+  }
+}

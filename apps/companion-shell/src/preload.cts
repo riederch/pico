@@ -20,6 +20,9 @@ const channels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  getDevices: 'pico:devices:get',
+  switchDevice: 'pico:device:switch',
+  forgetDevice: 'pico:device:forget',
   getRelays: 'pico:relays:get',
   claimRelay: 'pico:relay:claim',
   createRelayAccount: 'pico:relay-account:create',
@@ -92,6 +95,17 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   // built there too.
   grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
+  getDevices: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDevices),
+  switchDevice: async (
+    presenceId: string,
+    affordance: string | undefined,
+    enabled: boolean,
+  ): Promise<void> => {
+    await ipcRenderer.invoke(channels.switchDevice, { presenceId, affordance, enabled });
+  },
+  forgetDevice: async (presenceId: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.forgetDevice, presenceId);
+  },
   getRelays: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getRelays),
   claimRelay: async (baseUrl: string, claimCode: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.claimRelay, { baseUrl, claimCode }),

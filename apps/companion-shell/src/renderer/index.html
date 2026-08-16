@@ -73,6 +73,16 @@
       <ul id="read-list" class="provider-list"></ul>
     </section>
     <!--
+      ADR 0126 P2/P6. The person's own devices, and what each may be used for.
+      Hidden when the Home knows of none, which on a device that has just
+      announced itself is a moment rather than a state.
+    -->
+    <section id="devices" class="providers" hidden>
+      <h2>Your devices</h2>
+      <ul id="device-list" class="provider-list"></ul>
+      <p id="device-status" class="detail"></p>
+    </section>
+    <!--
       ADR 0154. A different hat: here the person runs a machine other people's
       Picos post through. Hidden until this device has claimed one, because a
       window that showed relay administration to everybody would be teaching

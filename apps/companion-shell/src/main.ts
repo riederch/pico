@@ -574,6 +574,60 @@ function registerIpc(): void {
     },
   );
   /**
+   * ADR 0126 P2/P6. The person's devices, and their word about each one.
+   *
+   * The read fails quietly - not knowing which devices you have is an absence
+   * (ADR 0118 O4) - while a switch throws, because somebody pressed it and is
+   * waiting to be told whether it took.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getDevices,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readDevices();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.switchDevice,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.presenceId !== 'string'
+        || typeof record.enabled !== 'boolean'
+        || (record.affordance !== undefined && typeof record.affordance !== 'string')) {
+        throw new Error('invalid_device_switch');
+      }
+      await runtime.switchDevice({
+        presenceId: record.presenceId,
+        ...(record.affordance === undefined ? {} : { affordance: record.affordance }),
+        enabled: record.enabled,
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.forgetDevice,
+    async (event: IpcMainInvokeEvent, presenceId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof presenceId !== 'string') {
+        throw new Error('invalid_device_forget');
+      }
+      await runtime.forgetDevice(presenceId);
+    },
+  );
+  /**
    * ADR 0154. The relay surface. Every one of these throws its refusal rather
    * than answering empty: somebody pressed a button and is waiting, and
    * "already claimed", "wrong code" and "no keystore" are three different

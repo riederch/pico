@@ -25,6 +25,9 @@ export const picoCompanionIpcChannels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  getDevices: 'pico:devices:get',
+  switchDevice: 'pico:device:switch',
+  forgetDevice: 'pico:device:forget',
   getRelays: 'pico:relays:get',
   claimRelay: 'pico:relay:claim',
   createRelayAccount: 'pico:relay-account:create',
@@ -955,4 +958,157 @@ export function picoCompanionRelayAccountIssued(credential: string): {
       + 'the relay - so if it is lost, withdraw the key and make another.',
     credential,
   });
+}
+
+/**
+ * ADR 0126 P2/P6 - the person's own devices, in words.
+ *
+ * **This is where a machine fact becomes a sentence.** The registry holds
+ * `camera`, which is exactly right for a planner and useless to a person
+ * deciding whether to allow it. What a person needs to know is what would
+ * happen: *this device can read a Recovery Card with its camera*. The
+ * translation lives here, in one place a test can hold, rather than in a
+ * renderer where each label would be somebody's improvisation.
+ */
+export interface PicoCompanionDevice {
+  presenceId: string;
+  presenceType: string;
+  affordances: readonly string[];
+  withheld: readonly string[];
+  enabled: boolean;
+  connected: boolean;
+  lastSeenAt: string;
+}
+
+export interface PicoCompanionDeviceLine {
+  presenceId: string;
+  headline: string;
+  detail: string;
+  offers: readonly {
+    affordance: string;
+    headline: string;
+    /** What pressing the control does next, in the words of the consequence. */
+    actionLabel: string;
+    withheld: boolean;
+  }[];
+  /** The whole-device switch, which is a different statement from all of them. */
+  deviceActionLabel: string;
+  forgetLabel: string;
+}
+
+/**
+ * What a device would do with each thing it declared.
+ *
+ * A closed map beside a closed vocabulary, which is the drift risk this tree
+ * names out loud - so `contract.test.ts` asserts every affordance in
+ * `@pico/protocol` has a sentence here, and an unknown key cannot be typed.
+ */
+const picoCompanionAffordanceSentences: Readonly<Record<string, string>> = Object.freeze({
+  display: 'show you things in a window',
+  notification: 'get your attention when you are not looking',
+  secure_input: 'take a passphrase without the page ever seeing it',
+  camera: 'read a Recovery Card with its camera',
+  microphone: 'listen with its microphone',
+  printer: 'print a Recovery Card',
+  location: 'tell where it is',
+  composite_tier: 'draw Pico in full rather than as a still picture',
+});
+
+export function picoCompanionDeviceLines(
+  devices: readonly PicoCompanionDevice[],
+): readonly PicoCompanionDeviceLine[] {
+  return Object.freeze(devices.map((device) => Object.freeze({
+    presenceId: device.presenceId,
+    headline: picoCompanionDeviceName(device.presenceType),
+    detail: picoCompanionDeviceDetail(device),
+    offers: Object.freeze(device.affordances.map((affordance) => {
+      const withheld = device.withheld.includes(affordance);
+      const sentence = picoCompanionAffordanceSentences[affordance] ?? affordance;
+      return Object.freeze({
+        affordance,
+        headline: withheld
+          // The fact stays true and the sentence says so. ADR 0126 keeps the
+          // affordance and the switch apart precisely so this can be said.
+          ? `It can ${sentence}, and you have told Pico not to`
+          : `It can ${sentence}`,
+        actionLabel: withheld ? 'Allow this again' : 'Do not use this',
+        withheld,
+      });
+    })),
+    deviceActionLabel: device.enabled ? 'Do not use this device' : 'Use this device again',
+    // Said as what it costs. The device is not touched; what goes is the row
+    // and every answer the person gave about it.
+    forgetLabel: 'Forget this device and everything you decided about it',
+  })));
+}
+
+/**
+ * ADR 0126. The label a person recognises their own device by.
+ *
+ * The one place a presence type is read, and it produces **a word and never a
+ * decision** - `presence:check` allows this file for that reason and refuses
+ * every other read. A person choosing between two rows needs to know which
+ * machine each one is; nothing here plans anything.
+ */
+function picoCompanionDeviceName(presenceType: string): string {
+  switch (presenceType) {
+    case 'desktop_companion':
+      return 'A computer';
+    case 'mobile_companion':
+      return 'A phone';
+    case 'surface':
+      return 'A surface';
+    case 'embodiment':
+      return 'Something with sensors';
+    default:
+      // A type this window does not know is still one of the person's devices.
+      // Hiding it would hide a device from its owner.
+      return 'A device';
+  }
+}
+
+function picoCompanionDeviceDetail(device: PicoCompanionDevice): string {
+  if (!device.enabled) {
+    return 'You have switched this device off. Pico uses nothing on it, whatever it '
+      + 'says it can do.';
+  }
+  if (device.connected) {
+    return 'Here now.';
+  }
+  /**
+   * ADR 0152 SE5. Quiet and gone are different absences and get different
+   * sentences: one ends by itself and the other needs somebody. A device that
+   * is asleep is not a device that is lost, and the list keeps it either way.
+   */
+  return `Not answering right now. It was last here on ${device.lastSeenAt.slice(0, 10)}.`;
+}
+
+export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanionDevice[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_devices');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_device');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.presenceId !== 'string'
+      || typeof record.presenceType !== 'string'
+      || typeof record.lastSeenAt !== 'string'
+      || typeof record.enabled !== 'boolean'
+      || typeof record.connected !== 'boolean'
+      || !Array.isArray(record.affordances)
+      || !Array.isArray(record.withheld)) {
+      throw new Error('invalid_pico_companion_device');
+    }
+    return Object.freeze({
+      presenceId: record.presenceId,
+      presenceType: record.presenceType,
+      affordances: Object.freeze(record.affordances.map(String)),
+      withheld: Object.freeze(record.withheld.map(String)),
+      enabled: record.enabled,
+      connected: record.connected,
+      lastSeenAt: record.lastSeenAt,
+    });
+  }));
 }
