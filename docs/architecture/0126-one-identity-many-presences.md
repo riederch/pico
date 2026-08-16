@@ -291,9 +291,30 @@ version of a concept, and the versions drift where nobody is looking.
   reuses, the device-local profile is presence-local rather than identity
   state, and further platforms are further presences rather than further
   products.
-- **P6 - Per-presence switch-off (open):** a person can disable an
-  individual sensor, actuator or whole presence, generalising ADR 0129 SR6
-  beyond spatial recall.
+- **P6 - Per-presence switch-off (implemented 2026-08-16):** a person can
+  disable one affordance of one presence, or a whole presence, over
+  `home.presence.switch`, recorded as a content-free
+  `home.presence_switch_changed` in the shape ADR 0129 SR6 already uses.
+
+  **A second table, not a flag on the affordance**, and that is this gate's
+  one shape decision. An affordance is a fact about a runtime; a switch is the
+  person's word about it. Merging them would make "you have no camera" and
+  "you told me not to use your camera" the same row, and no surface could then
+  say the second sentence. So the view carries `affordances` unchanged and
+  `withheld` beside it, and only `offering()` - the planning question, *can
+  this be done here* - combines them.
+
+  **On until the person says no, which is the opposite of SR6's default and
+  for SR6's own reason.** Capture defaults off because recording is an act
+  nobody expects from installing a feature. An affordance is not an act - it
+  is a fact a runtime declared about itself - and defaulting it off would make
+  every newly paired device useless until somebody worked through a list.
+
+  Switching a *whole* presence off is a different statement from switching
+  each of its affordances, and stays different: it keeps meaning "not this
+  device" after the device gains a microphone. Switches are deleted with the
+  presence, so a person who removes a phone and later pairs another under the
+  same id does not silently inherit last year's answers.
 
 ## Consequences
 

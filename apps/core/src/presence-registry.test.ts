@@ -268,3 +268,144 @@ describe('ADR 0126 - planning asks what a runtime can do, never what it is', () 
     expect(presences.forIdentity('b'.repeat(64), Date.now())).toEqual([]);
   });
 });
+
+describe('ADR 0126 P6 - the person switches one off', () => {
+  it('keeps the fact and withdraws the permission', async () => {
+    /**
+     * The whole reason the switch is a second table. A withheld affordance is
+     * still true - the phone still has a camera - and a surface has to be able
+     * to say "you have one and you told me not to use it". Merging the two
+     * would make that sentence unsayable.
+     */
+    const presences = await registry();
+    const at = '2026-08-16T12:00:00.000Z';
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['display', 'camera'] }),
+      at,
+    });
+    presences.setSwitch({
+      picoIdentityFingerprintHex: identity,
+      presenceId: 'desktop-01',
+      affordance: 'camera',
+      enabled: false,
+      at,
+    });
+
+    const nowMs = Date.parse(at) + 1_000;
+    const [presence] = presences.forIdentity(identity, nowMs);
+    expect(presence?.affordances).toEqual(['camera', 'display']);
+    expect(presence?.withheld).toEqual(['camera']);
+    expect(presence?.enabled).toBe(true);
+
+    // And planning stops offering it, which is the point.
+    expect(presences.offering({
+      picoIdentityFingerprintHex: identity, affordances: ['camera'], nowMs,
+    })).toEqual([]);
+    expect(presences.offering({
+      picoIdentityFingerprintHex: identity, affordances: ['display'], nowMs,
+    })).toHaveLength(1);
+  });
+
+  it('switches a whole presence off without touching its affordances', async () => {
+    // "Not this device" is a different statement from switching each of its
+    // affordances, and it keeps meaning that after the device gains a
+    // microphone.
+    const presences = await registry();
+    const at = '2026-08-16T12:00:00.000Z';
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['display'] }),
+      at,
+    });
+    presences.setSwitch({
+      picoIdentityFingerprintHex: identity, presenceId: 'desktop-01', enabled: false, at,
+    });
+
+    const nowMs = Date.parse(at) + 1_000;
+    const [presence] = presences.forIdentity(identity, nowMs);
+    expect(presence?.enabled).toBe(false);
+    expect(presence?.withheld).toEqual([]);
+    expect(presences.offering({
+      picoIdentityFingerprintHex: identity, affordances: ['display'], nowMs,
+    })).toEqual([]);
+
+    // A later announcement declaring more does not re-enable it.
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['display', 'microphone'] }),
+      at: '2026-08-16T12:00:30.000Z',
+    });
+    expect(presences.offering({
+      picoIdentityFingerprintHex: identity,
+      affordances: ['microphone'],
+      nowMs: Date.parse('2026-08-16T12:00:31.000Z'),
+    })).toEqual([]);
+  });
+
+  it('is on until the person says no', async () => {
+    /**
+     * The opposite default from ADR 0129 SR6's capture, and for the reason
+     * SR6 gives for its own: capture defaults off because recording is an act
+     * nobody expects from installing a feature. An affordance is a fact a
+     * runtime declared about itself, and defaulting it off would make every
+     * newly paired device useless until somebody worked through a list.
+     */
+    const presences = await registry();
+    const at = '2026-08-16T12:00:00.000Z';
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['display', 'microphone'] }),
+      at,
+    });
+    const [presence] = presences.forIdentity(identity, Date.parse(at) + 1_000);
+    expect(presence?.withheld).toEqual([]);
+    expect(presence?.enabled).toBe(true);
+  });
+
+  it('switches back on, and says whether anything changed', async () => {
+    const presences = await registry();
+    const at = '2026-08-16T12:00:00.000Z';
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['camera'] }),
+      at,
+    });
+    const off = { picoIdentityFingerprintHex: identity, presenceId: 'desktop-01', affordance: 'camera' as const, at };
+    expect(presences.setSwitch({ ...off, enabled: false })).toEqual({ changed: true });
+    // Saying it twice is not an error and is not a change - a device that
+    // retried after a dropped answer must not have to reason about it.
+    expect(presences.setSwitch({ ...off, enabled: false })).toEqual({ changed: false });
+    expect(presences.setSwitch({ ...off, enabled: true })).toEqual({ changed: true });
+    expect(presences.setSwitch({ ...off, enabled: true })).toEqual({ changed: false });
+    expect(presences.forIdentity(identity, Date.parse(at) + 1_000)[0]?.withheld).toEqual([]);
+  });
+
+  it('lets the switches go with the device', async () => {
+    // A person who removed a phone and later paired a new one under the same
+    // id would otherwise silently inherit last year's answers - decisions
+    // about a device that no longer exists.
+    const presences = await registry();
+    const at = '2026-08-16T12:00:00.000Z';
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['camera'] }),
+      at,
+    });
+    presences.setSwitch({
+      picoIdentityFingerprintHex: identity,
+      presenceId: 'desktop-01',
+      affordance: 'camera',
+      enabled: false,
+      at,
+    });
+    presences.forget({ picoIdentityFingerprintHex: identity, presenceId: 'desktop-01' });
+    presences.announce({
+      picoIdentityFingerprintHex: identity,
+      announcement: announcement({ affordances: ['camera'] }),
+      at: '2026-08-16T13:00:00.000Z',
+    });
+    expect(presences.forIdentity(identity, Date.parse('2026-08-16T13:00:01.000Z'))[0]?.withheld)
+      .toEqual([]);
+  });
+});

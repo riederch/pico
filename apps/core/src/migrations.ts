@@ -225,6 +225,24 @@ export const picoModelJobRecallContextMigrationId =
 export const picoPresenceRegistryMigrationId =
   '0022_pico_presence_registry' as const;
 
+/**
+ * ADR 0126 P6. What a person has switched off on one of their presences.
+ *
+ * **A separate table from the registry, and that is the decision.** An
+ * affordance is a fact about a runtime and a switch is the person's word about
+ * it; merging them would let "you have no camera" and "you told me not to use
+ * your camera" become the same row, and a surface reading it could no longer
+ * say the second sentence. ADR 0126's fact-versus-permission split is the
+ * whole subject of that ADR, so it gets two tables rather than a flag.
+ *
+ * A row means switched *off*. Absence means the person has not said no, which
+ * is the honest default for a fact a runtime declared about itself - unlike
+ * ADR 0129 SR6's capture, which defaults off because recording is an act
+ * rather than a property.
+ */
+export const picoPresenceSwitchMigrationId =
+  '0023_pico_presence_switch' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1523,6 +1541,28 @@ const migrations: readonly MigrationDefinition[] = [
 
         CREATE INDEX pico_presence_identity_idx
           ON pico_presence (pico_identity_fingerprint_hex, last_seen_at DESC);
+      `);
+    },
+  },
+  {
+    id: picoPresenceSwitchMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_presence_switch (
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          presence_id TEXT NOT NULL,
+          -- NULL means the whole presence rather than one of its affordances.
+          -- A sentinel string would be a value somebody could also declare as
+          -- an affordance one day; absence cannot collide with a name.
+          affordance TEXT NULL,
+          decided_at TEXT NOT NULL
+        );
+
+        CREATE UNIQUE INDEX pico_presence_switch_unique_idx
+          ON pico_presence_switch (
+            pico_identity_fingerprint_hex, presence_id, IFNULL(affordance, '')
+          );
       `);
     },
   },

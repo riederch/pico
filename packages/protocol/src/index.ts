@@ -61,6 +61,7 @@ export const foundationEventTypes = [
    * somebody goes. Content-free - an identifier and a direction.
    */
   'home.module_capture_changed',
+  'home.presence_switch_changed',
   /**
    * ADR 0140 RL4. A person said what may happen when an effect is requested.
    *
@@ -137,6 +138,7 @@ export const serverSynthesizedFoundationEventTypes = [
   // it is the Home's to write - a client asserting it would be asserting
   // somebody else's permission.
   'home.module_capture_changed',
+  'home.presence_switch_changed',
   // ADR 0140 RL4. A rule is what answers a request; a client writing its own
   // rule record would be granting itself the permission it is about to ask
   // for.
@@ -508,6 +510,15 @@ export const picoLinkDirectOperations = [
   'home.presence.read',
   /** The person's own word that a device of theirs is no longer one. */
   'home.presence.forget',
+  /**
+   * ADR 0126 P6. The person switching one affordance, or a whole presence,
+   * off - and on again.
+   *
+   * A separate operation from announcing, because they are different parties
+   * saying different things: a runtime states what it can do, and a person
+   * states what it may. One operation would let a runtime send its own switch.
+   */
+  'home.presence.switch',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];

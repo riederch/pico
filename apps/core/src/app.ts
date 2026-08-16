@@ -1,4 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  picoPresenceAffordances,
+  type PicoPresenceAffordance,
+} from '@pico/protocol/presence';
 import { statfsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import Fastify from 'fastify';
@@ -3689,6 +3693,54 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 .forIdentity(principal.picoIdentityFingerprintHex, Date.now()),
             } as unknown as Record<string, unknown>,
           };
+        }
+        /**
+         * ADR 0126 P6, generalising ADR 0129 SR6. The person's word about what
+         * one of their devices may be used for.
+         *
+         * A separate operation from announcing, because they are different
+         * parties saying different things: a runtime states what it can do,
+         * and a person states what it may. One operation would let a runtime
+         * send its own switch.
+         *
+         * Absent `affordance` means the whole presence, which is a different
+         * statement from switching each of its affordances - "not this device"
+         * keeps meaning that after the device gains a microphone.
+         */
+        case 'home.presence.switch': {
+          if (principal === undefined
+            || typeof args.presenceId !== 'string'
+            || typeof args.enabled !== 'boolean'
+            || (args.affordance !== undefined
+              && !(picoPresenceAffordances as readonly string[]).includes(args.affordance as string))) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const changed = store.picoPresenceRegistry().setSwitch({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            presenceId: args.presenceId,
+            ...(args.affordance === undefined
+              ? {}
+              : { affordance: args.affordance as PicoPresenceAffordance }),
+            enabled: args.enabled,
+            at: new Date().toISOString(),
+          });
+          if (changed.changed) {
+            // Content-free, in the shape ADR 0129 SR6 already uses: which
+            // device, which affordance if any, and which way. What the device
+            // is *for* is nobody's business but the person's.
+            const switchEvent = factory.create({
+              deviceId: config.deviceId,
+              type: 'home.presence_switch_changed',
+              payload: {
+                presenceId: args.presenceId,
+                ...(args.affordance === undefined ? {} : { affordance: args.affordance }),
+                enabled: args.enabled,
+              },
+            });
+            store.append(switchEvent);
+            broadcast(switchEvent);
+          }
+          return { outcome: 'ok', result: { changed: changed.changed } };
         }
         case 'home.presence.forget': {
           if (principal === undefined || typeof args.presenceId !== 'string') {

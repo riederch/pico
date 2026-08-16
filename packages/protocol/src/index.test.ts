@@ -156,6 +156,7 @@ describe('Pico protocol types', () => {
       // ADR 0127 M3: a module was switched on or off.
       'home.module_activation_changed',
       'home.module_capture_changed',
+      'home.presence_switch_changed',
       'home.rule_decision_changed',
       'home.supplier_attachment_changed',
       // ADR 0122 Y6: the running code changed.
@@ -184,6 +185,7 @@ describe('Pico protocol types', () => {
       'home.clock_divergence_detected',
       'home.module_activation_changed',
       'home.module_capture_changed',
+      'home.presence_switch_changed',
       'home.rule_decision_changed',
       'home.supplier_attachment_changed',
       'home.version_changed',

@@ -96,6 +96,7 @@ import {
   picoModelJobKindMigrationId,
   picoModelJobRecallContextMigrationId,
   picoPresenceRegistryMigrationId,
+  picoPresenceSwitchMigrationId,
   picoModelProviderCredentialMigrationId,
   picoMemoryEncryptionDecisionMigrationId,
   picoModelJobProvenanceMigrationId,
@@ -417,6 +418,7 @@ describe('Pico Home Core app', () => {
           { id: picoModelJobKindMigrationId, appliedAt: expect.any(String) },
           { id: picoModelJobRecallContextMigrationId, appliedAt: expect.any(String) },
           { id: picoPresenceRegistryMigrationId, appliedAt: expect.any(String) },
+          { id: picoPresenceSwitchMigrationId, appliedAt: expect.any(String) },
         ],
       },
       // ADR 0119 Q5. A development host has no free-space source and

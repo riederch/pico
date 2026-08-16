@@ -31,7 +31,21 @@ import {
 export interface PicoPresenceView {
   presenceId: string;
   presenceType: PicoPresenceType;
+  /**
+   * ADR 0126. What the runtime declared it can do, unchanged by anything the
+   * person decided.
+   *
+   * A withheld affordance stays here, because it is still true: the phone
+   * still has a camera. What the person changed is whether Pico may use it,
+   * and that is the next field. Merging them would make "you have no camera"
+   * and "you told me not to use your camera" the same row, and no surface
+   * could then say the second sentence.
+   */
   affordances: readonly PicoPresenceAffordance[];
+  /** ADR 0126 P6. What the person switched off, by name. */
+  withheld: readonly PicoPresenceAffordance[];
+  /** ADR 0126 P6. False when the person switched the whole presence off. */
+  enabled: boolean;
   registeredAt: string;
   lastSeenAt: string;
   /** ADR 0118 O2. Derived from the lease, never read from a column. */
@@ -126,7 +140,8 @@ export class PicoPresenceRegistry {
   ): readonly PicoPresenceView[] {
     const rows = this.db
       .prepare(`
-        SELECT presence_id AS presenceId, presence_type AS presenceType,
+        SELECT pico_identity_fingerprint_hex AS identityFingerprintHex,
+               presence_id AS presenceId, presence_type AS presenceType,
                affordances_json AS affordancesJson,
                registered_at AS registeredAt, last_seen_at AS lastSeenAt
         FROM pico_presence
@@ -152,7 +167,12 @@ export class PicoPresenceRegistry {
   }): readonly PicoPresenceView[] {
     return this.forIdentity(input.picoIdentityFingerprintHex, input.nowMs)
       .filter((presence) => presence.connected
-        && input.affordances.every((affordance) => presence.affordances.includes(affordance)));
+        && presence.enabled
+        // Declared *and* not withheld. The two are separate facts everywhere
+        // else in this file; this is the one place they are combined, because
+        // "can this be done here" is the question a plan actually asks.
+        && input.affordances.every((affordance) => presence.affordances.includes(affordance)
+          && !presence.withheld.includes(affordance)));
   }
 
   /**
@@ -166,9 +186,63 @@ export class PicoPresenceRegistry {
    * that is back.
    */
   public forget(input: { picoIdentityFingerprintHex: string; presenceId: string }): boolean {
-    return this.db
+    const gone = this.db
       .prepare('DELETE FROM pico_presence WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?')
       .run(input.picoIdentityFingerprintHex, input.presenceId).changes > 0;
+    if (gone) {
+      // The switches go with the device. Keeping them would mean a person who
+      // removed a phone and later paired a new one under the same id would
+      // silently inherit last year's answers - decisions they made about a
+      // device that no longer exists.
+      this.db
+        .prepare('DELETE FROM pico_presence_switch WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?')
+        .run(input.picoIdentityFingerprintHex, input.presenceId);
+    }
+    return gone;
+  }
+
+  /**
+   * ADR 0126 P6, generalising ADR 0129 SR6 beyond spatial recall.
+   *
+   * **A row means switched off; absence means the person has not said no.**
+   * That is the opposite default from SR6's capture, and for the reason SR6
+   * gives for its own: capture defaults off because *recording* is an act
+   * somebody would not expect from installing a feature. An affordance is not
+   * an act - it is a fact a runtime declared about itself - and defaulting it
+   * off would make every newly paired device useless until the person went
+   * through a list.
+   *
+   * Passing no affordance switches the whole presence, which is a different
+   * statement from switching each of its affordances: "not this device" keeps
+   * meaning that after the device gains a microphone.
+   */
+  public setSwitch(input: {
+    picoIdentityFingerprintHex: string;
+    presenceId: string;
+    affordance?: PicoPresenceAffordance;
+    enabled: boolean;
+    at: string;
+  }): { changed: boolean } {
+    const affordance = input.affordance ?? null;
+    if (input.enabled) {
+      const removed = this.db
+        .prepare(`
+          DELETE FROM pico_presence_switch
+          WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?
+            AND IFNULL(affordance, '') = IFNULL(?, '')
+        `)
+        .run(input.picoIdentityFingerprintHex, input.presenceId, affordance).changes;
+      return { changed: removed > 0 };
+    }
+    const written = this.db
+      .prepare(`
+        INSERT INTO pico_presence_switch (
+          pico_identity_fingerprint_hex, presence_id, affordance, decided_at
+        ) VALUES (?, ?, ?, ?)
+        ON CONFLICT DO NOTHING
+      `)
+      .run(input.picoIdentityFingerprintHex, input.presenceId, affordance, input.at).changes;
+    return { changed: written > 0 };
   }
 
   private rowFor(
@@ -177,7 +251,8 @@ export class PicoPresenceRegistry {
   ): PresenceRow | undefined {
     return this.db
       .prepare(`
-        SELECT presence_id AS presenceId, presence_type AS presenceType,
+        SELECT pico_identity_fingerprint_hex AS identityFingerprintHex,
+               presence_id AS presenceId, presence_type AS presenceType,
                affordances_json AS affordancesJson,
                registered_at AS registeredAt, last_seen_at AS lastSeenAt
         FROM pico_presence
@@ -187,10 +262,21 @@ export class PicoPresenceRegistry {
   }
 
   private viewOf(row: PresenceRow, nowMs: number): PicoPresenceView {
+    const switches = this.db
+      .prepare(`
+        SELECT affordance FROM pico_presence_switch
+        WHERE pico_identity_fingerprint_hex = ? AND presence_id = ?
+      `)
+      .all(row.identityFingerprintHex, row.presenceId) as Array<{ affordance: string | null }>;
     return Object.freeze({
       presenceId: row.presenceId,
       presenceType: row.presenceType,
       affordances: Object.freeze(JSON.parse(row.affordancesJson) as PicoPresenceAffordance[]),
+      withheld: Object.freeze(switches
+        .map((entry) => entry.affordance)
+        .filter((affordance): affordance is PicoPresenceAffordance => affordance !== null)
+        .sort()),
+      enabled: !switches.some((entry) => entry.affordance === null),
       registeredAt: row.registeredAt,
       lastSeenAt: row.lastSeenAt,
       connected: isPicoPresenceConnected({ lastSeenAt: row.lastSeenAt }, nowMs, this.leaseMs),
@@ -199,6 +285,7 @@ export class PicoPresenceRegistry {
 }
 
 interface PresenceRow {
+  identityFingerprintHex: string;
   presenceId: string;
   presenceType: PicoPresenceType;
   affordancesJson: string;
