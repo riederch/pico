@@ -452,6 +452,23 @@ export const picoLinkDirectOperations = [
    * that carried the derived output would be the auto-persist W5 forbids,
    * moved from a database into a window.
    */
+  /**
+   * ADR 0116 W1. A person asks their Home something about what it remembers.
+   *
+   * The requesting side, and it rides this channel for the reason every other
+   * decision in this family does: the question is the person's own words, the
+   * answer is formed from their memories, and ADR 0087 keeps host
+   * administration out of both. A Foundation route would have made "what do
+   * you remember about X" a thing an operator could ask on somebody's behalf.
+   *
+   * It answers with a job id and nothing else. The work is queued rather than
+   * awaited, because a provider that takes thirty seconds must not hold a
+   * sealed request open - and because the answer arrives in the same place
+   * every other answered read does.
+   */
+  'home.recall.ask',
+  /** ADR 0116 W1. What this person asked, and what came back. */
+  'home.recall.read',
   'home.model.reads.read',
   /** ADR 0116 W5's explicit write, said from the device the person holds. */
   'home.model.read.keep',

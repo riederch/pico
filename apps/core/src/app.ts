@@ -167,6 +167,14 @@ import type {
 } from '@pico/protocol/model-provider';
 import { picoModelProviderState } from '@pico/protocol/model-provider-state';
 import {
+  maxPicoRecallCandidates,
+  picoRecallItemOf,
+  picoRecallJob,
+  picoRecallPlan,
+} from './recall.js';
+import { pickPicoDecidedModelEntry } from './model-provider-registry.js';
+import { picoModelJobRefusal, type PicoModelJob } from '@pico/protocol/model-job';
+import {
   ModelProviderCredentialCrypto,
   type PicoModelProviderCredentialSeal,
 } from './model-provider-credential-crypto.js';
@@ -3379,6 +3387,122 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * a rate is the layer behind it. The numbers stay where the
          * measurement is.
          */
+        /**
+         * ADR 0116 W1. The requesting side: a person asks about what their
+         * Home remembers.
+         *
+         * **Four refusals before any words are assembled**, and each names
+         * something the person can act on rather than something they have to
+         * guess at: a domain they may not read, a provider nobody decided on,
+         * a question this Home will not carry, and material that needs a wider
+         * allowance than their provider has.
+         *
+         * The last one is the interesting one. Nothing here chooses an
+         * allowance - `picoModelJobAllowanceFor` reads the origins of what was
+         * actually included, so asking over your own notes needs only the live
+         * turn and asking over a housemate's note needs a provider that proved
+         * who it is (ADR 0151 PV1). The refusal happens here, before anything
+         * is queued, rather than as a job that fails at dispatch: a person who
+         * asked a question deserves the answer now.
+         */
+        case 'home.recall.ask': {
+          if (principal === undefined
+            || typeof args.privacyDomain !== 'string'
+            || typeof args.question !== 'string'
+            || Object.keys(args).length !== 2) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          // ADR 0077. "May use this Home" and "may read this domain" are two
+          // authorities, and the sealed channel only answered the first.
+          if (!readership.mayRead({
+            sessionDigest: 'pico-link-direct',
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+          }, args.privacyDomain)) {
+            // The same silence ADR 0077 C4 uses everywhere else: telling "you
+            // may not" apart from "there is no such domain" makes this a
+            // grant oracle.
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_readable' } };
+          }
+
+          const consent = store.picoModelProviderConsent();
+          const chosen = pickPicoDecidedModelEntry(
+            consent.listFor(principal.picoIdentityFingerprintHex)
+              .map((entry) => entry.entryId),
+          );
+          if ('refusal' in chosen) {
+            return { outcome: 'invalid_arguments', result: { refusal: chosen.refusal } };
+          }
+          const entry = consent.entryFor(chosen.entryId, principal.picoIdentityFingerprintHex)!;
+
+          const candidates = store.memory()
+            .recentInDomain(args.privacyDomain, maxPicoRecallCandidates)
+            .flatMap((item: MemoryItem) => {
+              const recallItem = picoRecallItemOf(item);
+              return recallItem === undefined ? [] : [recallItem];
+            });
+          const plan = picoRecallPlan({
+            question: args.question,
+            candidates,
+            contextTokens: entry.measurement.capacity.contextTokens,
+          });
+
+          const jobId = `job_recall_${randomBytes(16).toString('hex')}`;
+          let job: PicoModelJob;
+          try {
+            job = picoRecallJob({
+              jobId,
+              question: args.question,
+              items: plan.included,
+              nowMs: Date.now(),
+            });
+          } catch (error) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'refused' },
+            };
+          }
+
+          const refusal = picoModelJobRefusal(job, entry);
+          if (refusal !== null) {
+            return { outcome: 'invalid_arguments', result: { refusal } };
+          }
+
+          store.picoModelJobQueue().enqueue({
+            job,
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            entryId: chosen.entryId,
+            at: new Date().toISOString(),
+            kind: 'recall',
+          });
+
+          return {
+            outcome: 'ok',
+            result: {
+              jobId,
+              // What the answer will have been formed from, said before it
+              // exists: ADR 0119 Q5's posture, so "answered from four of your
+              // notes, and there were nine" is a fact rather than a surprise.
+              included: plan.included.length,
+              omitted: plan.omitted,
+              carries: job.carries,
+            },
+          };
+        }
+        /**
+         * ADR 0116 W1. The questions this person asked, and what came back.
+         */
+        case 'home.recall.read': {
+          if (Object.keys(args).length !== 0 || principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              recalls: store.picoModelJobQueue()
+                .recallsFor(principal.picoIdentityFingerprintHex),
+            } as unknown as Record<string, unknown>,
+          };
+        }
         /**
          * ADR 0116 W5. What is waiting for this person, without the answers.
          */

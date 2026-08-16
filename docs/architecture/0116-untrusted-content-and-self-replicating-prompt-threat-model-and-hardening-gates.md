@@ -260,10 +260,36 @@ patched afterwards.
   quote prefix or the two separators fails the escape test, whose own
   splitting is deliberately more permissive than JavaScript's.
 
-  What is not claimed: there is no model runtime, so nothing yet calls
-  this. The rule that a consumer may not assemble a context any other way
-  is enforced in the milestone that builds the first consumer, and W3
-  stays that milestone's precondition rather than a finished defense.
+  **The first consumer arrived on 2026-08-16**, and with it the requesting
+  side W1 always presupposed. Until then a Home could read its own
+  libraries on an occasion and nobody could *ask* it anything: the whole
+  model strand sat under a requesting side that did not exist.
+
+  `home.recall.ask` is that side. A person asks about a privacy domain
+  from the device they are holding; the question enters as the one
+  `person_present` unit, every memory item enters carrying the origin it
+  was recorded with, and the assembly puts the first in the instruction
+  layer and the rest in quoted data. **Nothing chooses an allowance**: it
+  falls out of the origins actually included, so a question over the
+  person's own notes runs on any decided provider, and one that pulls in a
+  housemate's synced note needs a provider that proved who it is (ADR 0151
+  PV1) - refused before anything is queued rather than at dispatch,
+  because a person who asked deserves the answer now.
+
+  Four refusals guard it and each names something actionable: a domain
+  ADR 0077 says this identity may not read (with C4's one silence, so it
+  is not a grant oracle), a Home where nobody decided on a provider, a
+  question longer than this Home carries, and material the decided
+  provider may not take.
+
+  **What it cannot do is find things.** There is no index and no
+  similarity search, so "relevant" means "recent in the domain you named",
+  bounded by the entry's measured window with the number left out stated
+  rather than implied. That limit is written into the code that has it.
+
+  What is still not claimed: the rule that *no other* consumer may
+  assemble a context another way is still enforced by there being one.
+  The second consumer is when that stops being true by construction.
   ADR 0002's relationship tiers are deliberately absent; that vocabulary
   is W6's.
 - **W4 - Action approvals over the hold channel (open; binds the first

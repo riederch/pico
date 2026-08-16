@@ -13,6 +13,7 @@ import {
   picoLinkPushLedgerMigrationId,
   picoDepotAcceptedByMigrationId,
   picoLinkRelayIdentityMigrationId,
+  picoModelJobKindMigrationId,
   picoModelProviderCredentialMigrationId,
   picoMemoryEncryptionDecisionMigrationId,
   picoModelJobProvenanceMigrationId,
@@ -124,6 +125,10 @@ describe('database migrations', () => {
         },
         {
           id: picoModelProviderCredentialMigrationId,
+          requiresBackup: false,
+        },
+        {
+          id: picoModelJobKindMigrationId,
           requiresBackup: false,
         },
       ],
@@ -242,6 +247,10 @@ describe('database migrations', () => {
       },
       {
         id: picoModelProviderCredentialMigrationId,
+        appliedAt: expect.any(String),
+      },
+      {
+        id: picoModelJobKindMigrationId,
         appliedAt: expect.any(String),
       },
     ]);
@@ -367,12 +376,13 @@ describe('database migrations', () => {
         picoMemoryEncryptionDecisionMigrationId,
         picoLinkRelayIdentityMigrationId,
         picoModelProviderCredentialMigrationId,
+        picoModelJobKindMigrationId,
       ],
       pendingMigrations: [],
       unknownMigrationIds: [],
       backupRequired: false,
     });
-    expect(listAppliedMigrations(db)).toHaveLength(19);
+    expect(listAppliedMigrations(db)).toHaveLength(20);
     expect(listMigrationAuditRecords(db)).toHaveLength(1);
 
     db.close();
@@ -446,7 +456,7 @@ describe('database migrations', () => {
 
     const count = db.prepare('SELECT COUNT(*) AS count FROM pico_event').get() as { count: number };
     expect(count.count).toBe(1);
-    expect(listAppliedMigrations(db)).toHaveLength(19);
+    expect(listAppliedMigrations(db)).toHaveLength(20);
 
     db.close();
   });
@@ -476,6 +486,7 @@ describe('database migrations', () => {
       picoMemoryEncryptionDecisionMigrationId,
       picoLinkRelayIdentityMigrationId,
       picoModelProviderCredentialMigrationId,
+      picoModelJobKindMigrationId,
     ]);
     expect(listMigrationAuditRecords(db)).toEqual([
       {
@@ -503,6 +514,7 @@ describe('database migrations', () => {
           picoMemoryEncryptionDecisionMigrationId,
           picoLinkRelayIdentityMigrationId,
           picoModelProviderCredentialMigrationId,
+          picoModelJobKindMigrationId,
         ],
       },
     ]);
@@ -582,6 +594,7 @@ describe('database migrations', () => {
           picoMemoryEncryptionDecisionMigrationId,
           picoLinkRelayIdentityMigrationId,
           picoModelProviderCredentialMigrationId,
+          picoModelJobKindMigrationId,
         ],
         errorMessage: expect.stringContaining('schema_migration_audit already exists'),
       },

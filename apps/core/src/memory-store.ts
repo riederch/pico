@@ -352,6 +352,29 @@ export class MemoryStore {
    * extra row to detect `hasMore` without a second query. Only active items are
    * returned; deleted and tombstoned items are not content (C5).
    */
+  /**
+   * ADR 0116 W3. The newest items in a domain, bounded.
+   *
+   * Newest first and capped, because the caller deciding what fits into a
+   * model context must not have to read a hundred thousand rows to find out -
+   * and because a question asked now is most often about now.
+   */
+  public recentInDomain(privacyDomain: string, limit: number): MemoryItem[] {
+    if (!Number.isInteger(limit) || limit < 1) {
+      throw new Error('Memory recent limit must be a positive integer.');
+    }
+    const rows = this.db
+      .prepare(`
+        SELECT * FROM memory_item
+        WHERE privacy_domain = ? AND deletion_state = 'active'
+        ORDER BY created_at DESC, memory_item_id DESC
+        LIMIT ?
+      `)
+      .all(privacyDomain, limit) as MemoryItemRow[];
+
+    return rows.map((row) => this.resolveContent(mapRow(row)));
+  }
+
   public listInDomainPage(
     privacyDomain: string,
     options: { limit?: number; after?: MemoryContentCursor | null } = {},

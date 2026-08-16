@@ -353,7 +353,10 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
 });
 
 type PicoLinkSend = (
-  operation: 'home.model.providers.read'
+  operation: 'home.recall.ask'
+    | 'home.recall.read'
+    | 'home.model.reads.read'
+    | 'home.model.providers.read'
     | 'home.model.provider.credential.submit'
     | 'home.model.provider.decision.submit'
     | 'home.model.provider.decision.revoke',
@@ -371,7 +374,15 @@ type PicoLinkSend = (
  * is a second thing to keep in step, and the half that drifts is always the
  * one nobody is looking at.
  */
-async function bootWithLinkDevice(options: { reach?: string } = {}): Promise<{
+async function bootWithLinkDevice(options: {
+  reach?: string;
+  /**
+   * ADR 0077. Substituted so a recall test can exercise what happens *after*
+   * the readership check; one test below proves the check itself against the
+   * real membership-and-grant policy.
+   */
+  readership?: { mayRead: (principal: unknown, privacyDomain: string) => boolean };
+} = {}): Promise<{
   app: AppWithInject;
   databasePath: string;
   send: PicoLinkSend;
@@ -397,6 +408,9 @@ async function bootWithLinkDevice(options: { reach?: string } = {}): Promise<{
     port: 0,
     databasePath,
     deviceId: 'pico-core',
+    ...(options.readership === undefined
+      ? {}
+      : { readership: options.readership as never }),
     logDestination: new Writable({
       write(chunk: Buffer, _encoding, callback) {
         logLines.push(chunk.toString('utf8'));
@@ -970,5 +984,168 @@ describe('ADR 0151 PV1 - the reference has to name something this Home holds', (
       carries: 'live_turn_and_retrieved_memory',
       credentialRef: 'a_credential_reference',
     })).result.refusal).toBe('pico_model_provider_credential_not_held');
+  });
+});
+
+describe('ADR 0116 W1 - a person asks about what their Home remembers', () => {
+  /**
+   * A claimed Home, one measured entry, a decision to use it, and a domain
+   * this person may read.
+   */
+  async function bootWithDecision(options: { readable?: boolean } = {}): Promise<{
+    send: PicoLinkSend;
+    databasePath: string;
+  }> {
+    const setup = await bootWithLinkDevice(options.readable === false ? {} : {
+      readership: { mayRead: (_principal, privacyDomain) => privacyDomain === 'domain-private' },
+    });
+    const decided = await setup.send('home.model.provider.decision.submit', {
+      entryId: 'a-measured-host',
+      providerClass: 'declared_own_host',
+      carries: 'live_turn',
+    });
+    expect(decided.response.outcome).toBe('ok');
+    return { send: setup.send, databasePath: setup.databasePath };
+  }
+
+  it('queues a job over the person\'s own notes and says what it was formed from', async () => {
+    const setup = await bootWithDecision();
+    const store = await EventStore.open(setup.databasePath, {});
+    // Two notes the person wrote themselves.
+    for (const [index, text] of ['parked on Bergstrasse', 'milk, bread'].entries()) {
+      store.memory().create({
+        memoryItemId: `mem_${index}`,
+        privacyDomain: 'domain-private',
+        owner: 'pico-owner',
+        controller: 'pico-owner',
+        contentType: 'text/plain',
+        content: text,
+        origin: 'person_present',
+      });
+    }
+    store.close();
+
+    const asked = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'where did I park?',
+    });
+
+    expect(asked.response.outcome).toBe('ok');
+    // A question over the person's own words needs no proven provider.
+    expect(asked.result.carries).toBe('live_turn');
+    expect(asked.result.included).toBe(2);
+    expect(asked.result.omitted).toBe(0);
+    expect(typeof asked.result.jobId).toBe('string');
+  });
+
+  it('refuses a domain this person may not read, without saying which it is', async () => {
+    // ADR 0077 C4 against the real policy: a claimed Home reads by membership
+    // *and* grant, and this device holds neither for that domain. Telling "you
+    // may not" apart from "there is no such domain" would make this a grant
+    // oracle.
+    const setup = await bootWithDecision({ readable: false });
+    const refused = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'what is in there?',
+    });
+
+    expect(refused.response.outcome).toBe('invalid_arguments');
+    expect(refused.result.refusal).toBe('not_readable');
+  });
+
+  it('refuses before assembling anything when nobody decided on a provider', async () => {
+    // ADR 0138. Reaching outside is off until somebody says so, and a question
+    // is not a decision to reach.
+    const setup = await bootWithLinkDevice({
+      readership: { mayRead: () => true },
+    });
+    const refused = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'where did I park?',
+    });
+
+    expect(refused.result.refusal).toBe('no_decided_entry');
+  });
+
+  it('refuses a question this Home will not carry rather than trimming it', async () => {
+    const setup = await bootWithDecision();
+    const refused = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'x'.repeat(4_001),
+    });
+
+    expect(refused.result.refusal).toBe('invalid_pico_recall_question');
+  });
+
+  it('refuses when what was included needs more than the provider may carry', async () => {
+    // The load-bearing one. Nothing chooses the allowance: it falls out of the
+    // origins actually included, so a housemate's synced note turns the same
+    // question into one that needs a provider which proved who it is.
+    const setup = await bootWithDecision();
+    const store = await EventStore.open(setup.databasePath, {});
+    store.memory().create({
+      memoryItemId: 'mem_theirs',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'text/plain',
+      content: 'a note that arrived from somebody else',
+      origin: 'external_content',
+    });
+    store.close();
+
+    const refused = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'what did we agree?',
+    });
+
+    expect(refused.response.outcome).toBe('invalid_arguments');
+    expect(refused.result.refusal).toBe('entry_may_not_carry_these_words');
+  });
+
+  it('lists what was asked with the answer, once it has one', async () => {
+    // ADR 0116 W5's list withholds values because it is a background inventory
+    // of material nobody asked to see. A recall is the opposite act: the
+    // person asked a moment ago, and putting the answer in front of them is
+    // the delivery rather than a persistence.
+    const setup = await bootWithDecision();
+    const asked = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'where did I park?',
+    });
+    const jobId = asked.result.jobId as string;
+
+    const store = await EventStore.open(setup.databasePath, {});
+    store.picoModelJobQueue().settle({
+      jobId,
+      outcome: 'answered',
+      result: {
+        values: [
+          { name: 'answer', type: 'text', value: 'on Bergstrasse', originClass: 'own_pico' },
+        ],
+      },
+      at: '2026-08-16T12:05:00.000Z',
+    });
+    store.close();
+
+    const read = await setup.send('home.recall.read', {});
+    const recalls = (read.result as { recalls: Array<Record<string, unknown>> }).recalls;
+    expect(recalls).toHaveLength(1);
+    expect(recalls[0]?.question).toBe('where did I park?');
+    expect(recalls[0]?.outcome).toBe('answered');
+    expect(recalls[0]?.values).toBeDefined();
+  });
+
+  it('keeps a recall out of the library list, and a library read out of this one', async () => {
+    // Two kinds, two lists, and the row says which it is rather than the
+    // absence of a library pin standing in for it.
+    const setup = await bootWithDecision();
+    await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'where did I park?',
+    });
+
+    const read = await setup.send('home.model.reads.read', {});
+    expect((read.result as { reads: unknown[] }).reads).toEqual([]);
   });
 });

@@ -188,6 +188,17 @@ export const picoLinkRelayIdentityMigrationId = '0018_pico_link_relay_identity' 
 export const picoModelProviderCredentialMigrationId =
   '0019_pico_model_provider_credential' as const;
 
+/**
+ * ADR 0116 W1 with W5. Which kind of work a queued job is.
+ *
+ * Until now every job was a library read, so "has a library derivation" and
+ * "is a library read" were the same fact and one stood in for the other. The
+ * requesting side adds a second kind, and letting absence of provenance mean
+ * "recall" would make a third kind silently join the second - so the row says
+ * what it is instead of being inferred from what it lacks.
+ */
+export const picoModelJobKindMigrationId = '0020_pico_model_job_kind' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1441,6 +1452,19 @@ const migrations: readonly MigrationDefinition[] = [
           created_at TEXT NOT NULL,
           PRIMARY KEY (entry_id, pico_identity_fingerprint_hex)
         );
+      `);
+    },
+  },
+  {
+    id: picoModelJobKindMigrationId,
+    requiresBackup: false,
+    up(db) {
+      // Every row that exists is a library read: it is the only kind that has
+      // ever been queued, which is exactly why the default is safe here and
+      // would not be for the next one.
+      db.exec(`
+        ALTER TABLE pico_model_job_queue
+        ADD COLUMN kind TEXT NOT NULL DEFAULT 'library_read';
       `);
     },
   },

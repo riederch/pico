@@ -157,6 +157,10 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.model.provider.credential.submit',
       'home.model.provider.decision.submit',
       'home.model.provider.decision.revoke',
+      // ADR 0116 W1: the requesting side - a person asking about what their
+      // Home remembers, from the device they are holding.
+      'home.recall.ask',
+      'home.recall.read',
       // ADR 0116 W5: what is waiting, and the explicit keep that persists it.
       'home.model.reads.read',
       'home.model.read.keep',

@@ -45,6 +45,16 @@ export function picoModelJobRefusalIsFinal(refusal: string): boolean {
   return (picoModelJobFinalRefusals as readonly string[]).includes(refusal);
 }
 
+/**
+ * ADR 0116 W1. Which kind of work a queued job is.
+ *
+ * Stated on the row rather than inferred from what it lacks: "no library
+ * derivation" meant "recall" for exactly as long as there were two kinds, and
+ * a third would have joined the second without anybody deciding it.
+ */
+export const picoModelJobKinds = ['library_read', 'recall'] as const;
+export type PicoModelJobKind = typeof picoModelJobKinds[number];
+
 export interface PicoModelJobQueueRow {
   jobId: string;
   picoIdentityFingerprintHex: string;
@@ -80,14 +90,26 @@ export class PicoModelJobQueue {
      * ADR 0136 BR6. Where these bytes came from, recorded now rather than
      * reconstructed later: by the time somebody keeps the answer, the working
      * copy has moved on and the commit this was read at is gone from it.
+     *
+     * Absent for a recall (ADR 0116 W1): a question over the person's own
+     * memories was derived from no supplier, and a fabricated pin would be the
+     * lie BR6's completeness rule exists to prevent.
      */
-    derivedFrom: { supplierIdentifier: string; commit: string; pinCoversContent: boolean };
+    derivedFrom?: { supplierIdentifier: string; commit: string; pinCoversContent: boolean };
+    kind?: PicoModelJobKind;
   }): void {
+    const kind = input.kind ?? 'library_read';
+    if (kind === 'library_read' && input.derivedFrom === undefined) {
+      // A library read without its derivation is the partial provenance ADR
+      // 0136 BR6 refuses, arriving one step earlier than the keep that would
+      // have caught it.
+      throw new Error('pico_model_job_library_read_without_derivation');
+    }
     this.db.prepare(`
       INSERT INTO pico_model_job_queue (
         job_id, pico_identity_fingerprint_hex, entry_id, job_json, enqueued_at,
-        derived_from_supplier, derived_pin_value, derived_pin_covers_content
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        derived_from_supplier, derived_pin_value, derived_pin_covers_content, kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id) DO NOTHING
     `).run(
       input.job.jobId,
@@ -95,9 +117,10 @@ export class PicoModelJobQueue {
       input.entryId,
       JSON.stringify(input.job),
       input.at,
-      input.derivedFrom.supplierIdentifier,
-      input.derivedFrom.commit,
-      input.derivedFrom.pinCoversContent ? 1 : 0,
+      input.derivedFrom?.supplierIdentifier ?? null,
+      input.derivedFrom?.commit ?? null,
+      input.derivedFrom === undefined ? null : (input.derivedFrom.pinCoversContent ? 1 : 0),
+      kind,
     );
   }
 
@@ -263,6 +286,7 @@ export class PicoModelJobQueue {
              derived_pin_value AS commit_, settled_at AS settledAt
       FROM pico_model_job_queue
       WHERE pico_identity_fingerprint_hex = ?
+        AND kind = 'library_read'
         AND outcome = 'answered'
         AND result_json IS NOT NULL
       ORDER BY settled_at, job_id
@@ -282,6 +306,63 @@ export class PicoModelJobQueue {
           settledAt: row.settledAt,
         })]
     )));
+  }
+
+  /**
+   * ADR 0116 W1. The questions this person asked, and what came back.
+   *
+   * **The answers travel, and that is not a hole in W5.** W5 forbids derived
+   * output persisting itself; a library read holds its values back from the
+   * list because that list is a background inventory of material the person
+   * never asked to see. A recall is the opposite act: somebody asked a
+   * question a moment ago, and putting the answer in front of them is the
+   * delivery rather than a persistence. Keeping it as a memory item is still
+   * a separate decision they have not made yet.
+   */
+  public recallsFor(picoIdentityFingerprintHex: string): ReadonlyArray<{
+    jobId: string;
+    question: string;
+    askedAt: string;
+    settledAt: string;
+    outcome: string;
+    values?: unknown;
+  }> {
+    const rows = this.db.prepare(`
+      SELECT job_id AS jobId, job_json AS jobJson, enqueued_at AS askedAt,
+             settled_at AS settledAt, outcome, result_json AS resultJson
+      FROM pico_model_job_queue
+      WHERE pico_identity_fingerprint_hex = ?
+        AND kind = 'recall'
+        AND settled_at IS NOT NULL
+      ORDER BY settled_at DESC, job_id DESC
+    `).all(picoIdentityFingerprintHex) as Array<{
+      jobId: string;
+      jobJson: string;
+      askedAt: string;
+      settledAt: string;
+      outcome: string | null;
+      resultJson: string | null;
+    }>;
+    return Object.freeze(rows.map((row) => {
+      const job = JSON.parse(row.jobJson) as {
+        units?: Array<{ originClass?: string; text?: string }>;
+      };
+      // The question is the one unit above the instruction threshold, and it
+      // is read back from the job rather than stored twice: two records of one
+      // sentence are two records to keep in step.
+      const asked = job.units?.find((unit) => unit.originClass === 'person_present');
+      const output = row.resultJson === null
+        ? undefined
+        : (JSON.parse(row.resultJson) as { values?: unknown }).values;
+      return Object.freeze({
+        jobId: row.jobId,
+        question: typeof asked?.text === 'string' ? asked.text : '',
+        askedAt: row.askedAt,
+        settledAt: row.settledAt,
+        outcome: row.outcome ?? 'unknown',
+        ...(output === undefined ? {} : { values: output }),
+      });
+    }));
   }
 
   /**
