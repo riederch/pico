@@ -50,9 +50,9 @@ const productFacingDocuments = [
   'COMMERCIAL.md',
   'LICENSE-FAQ.md',
   'TRADEMARK.md',
-  'pico_core/README.md',
-  'pico_core/DOCS.md',
-  'pico_core/CHANGELOG.md',
+  'pico_home/README.md',
+  'pico_home/DOCS.md',
+  'pico_home/CHANGELOG.md',
 ];
 
 const cli = 'pico-vault';

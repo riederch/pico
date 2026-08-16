@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.2.0
+
+**This add-on replaces `Pico Core`, and it is not an update of it.**
+
+Home Assistant identifies an add-on by its slug. The slug changed from
+`pico_core` to `pico_home`, so the Supervisor treats this as a different
+add-on: it installs beside the old one, gets its own `/data`, and starts as an
+Empty Pico Home. Nothing moves across - not the database, not the keys, not
+your option values.
+
+Why now: what you install is the place your Pico lives, and ADR 0026 has
+called that a **Pico Home** since long before this package existed. "Core" is
+the runtime inside it, and it keeps that name where it belongs - in the code.
+The rename is only affordable while no Home has been founded for keeps, which
+is true today and will not stay true (ADR 0153).
+
+**If you were running `Pico Core`:** its data is still on your machine and
+this release cannot bring it over. Uninstall the old add-on when you are ready
+to lose it. There is no supported way to migrate a founded Home between
+add-ons, so treat anything in the old one as disposable - which, at this stage
+of the project, it is.
+
+- Renames the add-on to `Pico Home`, slug `pico_home`, image
+  `ghcr.io/riederch/pico/home:0.2.0`.
+- Publishes **Pico Relay** as its own container image,
+  `ghcr.io/riederch/pico/relay:0.2.0`. A relay is not a Home Assistant add-on
+  on purpose: it has to stay reachable when one household's Supervisor is
+  restarting.
+- Publishes the **Pico Client** Debian package as a release asset, built and
+  byte-verified by the same job that verifies the release.
+- Ships a derivation of your own notes on the narrower model allowance
+  (ADR 0151 PV1), so asking a follow-up question about an answer you kept no
+  longer requires a provider that proved who it is.
+- Does not change the wire contract. `picoProtocolVersion` stays `0.1.7`.
+
+## Earlier releases, as the `Pico Core` add-on
+
+The entries below describe the add-on this one replaces. They are kept because
+they are what happened, not because they apply to `pico_home` - every version
+number and image tag in them belongs to `ghcr.io/riederch/pico/core`.
+
 ## 0.1.9
 
 Fixes the add-on refusing to start after the 0.1.8 update.

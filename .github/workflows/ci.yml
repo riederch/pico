@@ -55,8 +55,22 @@ jobs:
           PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE: "1"
         run: pnpm release:verify
 
-  container:
-    name: Build and smoke-test Pico Core container
+      # ADR 0153 PK6. `release:verify` builds this package and takes it apart
+      # again, byte by byte, to check it. Keeping it means the artifact a
+      # person downloads is the one that was verified - not a second build
+      # made for publishing, which is one build of one artifact too many.
+      - name: Keep the verified client package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pico-client-linux-amd64
+          path: |
+            apps/companion-shell/out/*.deb
+            apps/companion-shell/out/*.deb.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  home_image:
+    name: Build and smoke-test the Pico Home container
     runs-on: ubuntu-latest
     needs: verify
     # ADR 0122 Y1. These live on the one job that publishes, rather than on
@@ -114,7 +128,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ghcr.io/riederch/pico/core
+          images: ghcr.io/riederch/pico/home
           tags: |
             type=ref,event=branch
             type=ref,event=tag
@@ -125,84 +139,84 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: docker/core.Dockerfile
+          file: docker/home.Dockerfile
           load: true
           platforms: linux/amd64
-          tags: pico-core:amd64-test
+          tags: pico-home:amd64-test
 
       - name: Smoke-test amd64 container health endpoint and dashboard
         run: |
-          docker run --rm -d --name pico-core-smoke-amd64 -p 3100:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -e PICO_FOUNDATION_TOKEN=ci-smoke-token pico-core:amd64-test
+          docker run --rm -d --name pico-home-smoke-amd64 -p 3100:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -e PICO_FOUNDATION_TOKEN=ci-smoke-token pico-home:amd64-test
           for i in $(seq 1 20); do
             if curl -fsS http://127.0.0.1:3100/health && curl -fsS http://127.0.0.1:3100/ | grep -q "Pico Home Foundation Dashboard"; then
-              docker stop pico-core-smoke-amd64
+              docker stop pico-home-smoke-amd64
               exit 0
             fi
             sleep 1
           done
-          docker logs pico-core-smoke-amd64 || true
-          docker stop pico-core-smoke-amd64 || true
+          docker logs pico-home-smoke-amd64 || true
+          docker stop pico-home-smoke-amd64 || true
           exit 1
 
       - name: Smoke-test amd64 add-on foundation token option
         run: |
           mkdir -p /tmp/pico-addon-options-amd64
           printf '{"pico_foundation_token":"ci-token"}\n' > /tmp/pico-addon-options-amd64/options.json
-          docker run --rm -d --name pico-core-token-amd64 -p 3102:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -v /tmp/pico-addon-options-amd64:/data pico-core:amd64-test
+          docker run --rm -d --name pico-home-token-amd64 -p 3102:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -v /tmp/pico-addon-options-amd64:/data pico-home:amd64-test
           for i in $(seq 1 20); do
             if curl -fsS http://127.0.0.1:3102/health; then
               status_without_token=$(curl -sS -o /tmp/pico-token-amd64-without-token.txt -w '%{http_code}' http://127.0.0.1:3102/api/system/status || true)
               if [ "$status_without_token" = "401" ] && curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:3102/api/system/status | grep -q '"service":"pico-home-core"'; then
-                docker stop pico-core-token-amd64
+                docker stop pico-home-token-amd64
                 exit 0
               fi
             fi
             sleep 1
           done
-          docker logs pico-core-token-amd64 || true
-          docker stop pico-core-token-amd64 || true
+          docker logs pico-home-token-amd64 || true
+          docker stop pico-home-token-amd64 || true
           exit 1
 
       - name: Build local arm64 smoke-test image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: docker/core.Dockerfile
+          file: docker/home.Dockerfile
           load: true
           platforms: linux/arm64
-          tags: pico-core:arm64-test
+          tags: pico-home:arm64-test
 
       - name: Smoke-test arm64 container health endpoint and dashboard
         run: |
-          docker run --platform linux/arm64 --rm -d --name pico-core-smoke-arm64 -p 3101:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -e PICO_FOUNDATION_TOKEN=ci-smoke-token pico-core:arm64-test
+          docker run --platform linux/arm64 --rm -d --name pico-home-smoke-arm64 -p 3101:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -e PICO_FOUNDATION_TOKEN=ci-smoke-token pico-home:arm64-test
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3101/health && curl -fsS http://127.0.0.1:3101/ | grep -q "Pico Home Foundation Dashboard"; then
-              docker stop pico-core-smoke-arm64
+              docker stop pico-home-smoke-arm64
               exit 0
             fi
             sleep 1
           done
-          docker logs pico-core-smoke-arm64 || true
-          docker stop pico-core-smoke-arm64 || true
+          docker logs pico-home-smoke-arm64 || true
+          docker stop pico-home-smoke-arm64 || true
           exit 1
 
       - name: Smoke-test arm64 add-on foundation token option
         run: |
           mkdir -p /tmp/pico-addon-options-arm64
           printf '{"pico_foundation_token":"ci-token"}\n' > /tmp/pico-addon-options-arm64/options.json
-          docker run --platform linux/arm64 --rm -d --name pico-core-token-arm64 -p 3103:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -v /tmp/pico-addon-options-arm64:/data pico-core:arm64-test
+          docker run --platform linux/arm64 --rm -d --name pico-home-token-arm64 -p 3103:3100 -e PICO_FOUNDATION_ACCESS_MODE=direct-token -v /tmp/pico-addon-options-arm64:/data pico-home:arm64-test
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3103/health; then
               status_without_token=$(curl -sS -o /tmp/pico-token-arm64-without-token.txt -w '%{http_code}' http://127.0.0.1:3103/api/system/status || true)
               if [ "$status_without_token" = "401" ] && curl -fsS -H "Authorization: Bearer ci-token" http://127.0.0.1:3103/api/system/status | grep -q '"service":"pico-home-core"'; then
-                docker stop pico-core-token-arm64
+                docker stop pico-home-token-arm64
                 exit 0
               fi
             fi
             sleep 1
           done
-          docker logs pico-core-token-arm64 || true
-          docker stop pico-core-token-arm64 || true
+          docker logs pico-home-token-arm64 || true
+          docker stop pico-home-token-arm64 || true
           exit 1
 
       - name: Build and optionally push multi-arch release image
@@ -210,7 +224,7 @@ jobs:
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
-          file: docker/core.Dockerfile
+          file: docker/home.Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -241,7 +255,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.event.repository.private == false
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
-          subject-name: ghcr.io/riederch/pico/core
+          subject-name: ghcr.io/riederch/pico/home
           subject-digest: ${{ steps.release_image.outputs.digest }}
           push-to-registry: true
 
@@ -270,5 +284,252 @@ jobs:
         run: |
           echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "ghcr.io/riederch/pico/core@${{ steps.release_image.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "ghcr.io/riederch/pico/home@${{ steps.release_image.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  relay_image:
+    name: Build and smoke-test the Pico Relay container
+    runs-on: ubuntu-latest
+    needs: verify
+    # ADR 0153. A second published image, so a second set of the permissions
+    # ADR 0122 Y1/Y2 put on the job that publishes rather than on the workflow.
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ADR 0122 Y4, per image. The relay's tag history is its own, so the
+      # check runs against the relay's repository rather than the Home's.
+      - name: Verify the release neither republishes nor downgrades
+        if: github.ref_type == 'tag'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PICO_RELEASE_IMAGE: ghcr.io/riederch/pico/relay
+        run: node scripts/check-release-monotonic.mjs
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ghcr.io/riederch/pico/relay
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=sha,prefix=sha-
+
+      - name: Build local amd64 smoke-test image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/relay.Dockerfile
+          load: true
+          platforms: linux/amd64
+          tags: pico-relay:amd64-test
+
+      # ADR 0153 PK2/PK3/PK7. What a deliverable owes: it refuses to start
+      # unconfigured, it answers a health check on its own port, the public
+      # port stays a surface with no map of itself, and an unprovisioned relay
+      # says so instead of looking broken.
+      - name: Smoke-test the relay container
+        run: |
+          set -euo pipefail
+
+          # PK2: no operator, no relay. A guessed hostname would issue
+          # addresses pointing at somebody else's machine.
+          if docker run --rm --name pico-relay-unconfigured pico-relay:amd64-test; then
+            echo "relay started without PICO_RELAY_OPERATOR" >&2
+            exit 1
+          fi
+
+          docker run --rm -d --name pico-relay-smoke \
+            -p 3200:3200 \
+            -e PICO_RELAY_OPERATOR=relay.ci.invalid \
+            pico-relay:amd64-test
+
+          ok=0
+          for i in $(seq 1 30); do
+            # PK3: the health port is not published, so the check runs inside
+            # the container - which is the deployment shape it is built for.
+            if docker exec pico-relay-smoke node -e "fetch('http://127.0.0.1:3201/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1)).catch(()=>process.exit(1))"; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ok" != "1" ]; then
+            docker logs pico-relay-smoke || true
+            docker stop pico-relay-smoke || true
+            exit 1
+          fi
+
+          # PK3 again, from the outside: the public port must answer a health
+          # probe exactly as it answers any unknown route.
+          unknown=$(curl -sS -o /tmp/relay-unknown.txt -w '%{http_code}' http://127.0.0.1:3200/nothing-here)
+          health=$(curl -sS -o /tmp/relay-health.txt -w '%{http_code}' http://127.0.0.1:3200/health)
+          if [ "$unknown" != "$health" ] || ! cmp -s /tmp/relay-unknown.txt /tmp/relay-health.txt; then
+            echo "the public port tells a health probe apart from an unknown route" >&2
+            docker logs pico-relay-smoke || true
+            docker stop pico-relay-smoke || true
+            exit 1
+          fi
+
+          # PK7: unprovisioned, and saying so rather than looking broken.
+          docker logs pico-relay-smoke 2>&1 | grep -q relay_accounts_unprovisioned
+
+          docker stop pico-relay-smoke
+
+      - name: Build local arm64 smoke-test image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/relay.Dockerfile
+          load: true
+          platforms: linux/arm64
+          tags: pico-relay:arm64-test
+
+      - name: Smoke-test the arm64 relay container
+        run: |
+          set -euo pipefail
+          docker run --platform linux/arm64 --rm -d --name pico-relay-arm64 \
+            -e PICO_RELAY_OPERATOR=relay.ci.invalid \
+            pico-relay:arm64-test
+          ok=0
+          for i in $(seq 1 40); do
+            if docker exec pico-relay-arm64 node -e "fetch('http://127.0.0.1:3201/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1)).catch(()=>process.exit(1))"; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          docker logs pico-relay-arm64 || true
+          docker stop pico-relay-arm64 || true
+          [ "$ok" = "1" ]
+
+      - name: Build and optionally push multi-arch release image
+        id: release_image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: docker/relay.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Attest build provenance
+        if: github.event_name != 'pull_request' && github.event.repository.private == false
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-name: ghcr.io/riederch/pico/relay
+          subject-digest: ${{ steps.release_image.outputs.digest }}
+          push-to-registry: true
+
+      # ADR 0122 Y2. Said per artifact rather than once: a reader of this run
+      # needs to know which of the published things carries provenance, and
+      # "one of them was skipped" is not an answer.
+      - name: Report that build provenance was not attested
+        if: github.event_name != 'pull_request' && github.event.repository.private == true
+        run: |
+          {
+            echo "### Pico Relay build provenance: not attested"
+            echo
+            echo "GitHub does not store attestations for user-owned private"
+            echo "repositories, so ADR 0122 Y2 is unmet for this image too."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report the published digest
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "### Published image" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "ghcr.io/riederch/pico/relay@${{ steps.release_image.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  client_package:
+    name: Publish the Pico Client package
+    runs-on: ubuntu-latest
+    needs: verify
+    # Only on a tag. `main` builds the package and verifies it on every push;
+    # what a tag adds is a place to download it from, and a release asset that
+    # appeared on every commit would make "released" mean nothing.
+    if: github.ref_type == 'tag'
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # ADR 0153 PK6. Downloaded rather than rebuilt: this is the exact package
+      # `release:verify` took apart and checked. A second build would produce
+      # a different file with the same name, and the checksum below would then
+      # attest to something nobody verified.
+      - name: Take the verified client package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pico-client-linux-amd64
+          path: client-package
+
+      - name: Verify the checksum that travelled with it
+        run: |
+          set -euo pipefail
+          cd client-package
+          sha256sum --check ./*.deb.sha256
+          ls -l
+
+      - name: Attest the package's provenance
+        if: github.event.repository.private == false
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: client-package/*.deb
+
+      - name: Report that package provenance was not attested
+        if: github.event.repository.private == true
+        run: |
+          {
+            echo "### Pico Client build provenance: not attested"
+            echo
+            echo "GitHub does not store attestations for user-owned private"
+            echo "repositories, so ADR 0122 Y2 is unmet for this package."
+            echo "The checksum published beside it says which bytes were"
+            echo "verified; it does not say who built them."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # `gh` rather than a release action: one fewer third-party action to pin,
+      # and the token it uses is the one this job already has.
+      - name: Attach the package to the release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          if ! gh release view "$tag" >/dev/null 2>&1; then
+            gh release create "$tag" --title "$tag" --notes "Pico $tag" --draft
+          fi
+          gh release upload "$tag" client-package/*.deb client-package/*.deb.sha256 --clobber
+          echo "### Published client package" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat client-package/*.deb.sha256 >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"

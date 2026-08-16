@@ -21,7 +21,7 @@ Pico ist ein pnpm-/TypeScript-Monorepo. Aktuelle Workspace-Pakete:
 - `packages/identity` - lokale Identity-Verifikation und Lifecycle-Projektion
 - `packages/vault` - minimale verschluesselte Keyfile-/Custody-Runtime
 
-Das Home-Assistant-Add-on-Paket liegt unter `pico_core/`.
+Das Home-Assistant-Add-on-Paket liegt unter `pico_home/` (ADR 0153; frueher `pico_home/`).
 
 ## Paketmanager
 
@@ -183,7 +183,8 @@ Probe-Verzeichnisse werden auch nach einem Fehlschlag entfernt.
 Lokales Core-Image:
 
 ```bash
-podman build -f docker/core.Dockerfile -t pico-core:local .
+podman build -f docker/home.Dockerfile -t pico-home:local .
+podman build -f docker/relay.Dockerfile -t pico-relay:local .
 ```
 
 Direkte lokale Smokes muessen einen expliziten Access Mode und disposable
@@ -192,9 +193,10 @@ Memory-Key-Stores in Testcontainer einbinden.
 
 Relevante Quellen:
 
-- `docker/core.Dockerfile`
-- `pico_core/config.yaml`
-- `pico_core/DOCS.md`
+- `docker/home.Dockerfile`
+- `docker/relay.Dockerfile`
+- `pico_home/config.yaml`
+- `pico_home/DOCS.md`
 - `.github/workflows/ci.yml`
 - `docs/release/backup-before-migration.md`
 

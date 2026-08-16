@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Home Assistant add-on metadata gate.
+ * Home Assistant add-on metadata and published-image gate.
  *
  * The add-on options were never checked by anything: `check-version.mjs` only
  * reads the version line, and the container smoke tests mount a finished
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
-const configPath = 'pico_core/config.yaml';
+const configPath = 'pico_home/config.yaml';
 const errors = [];
 
 const config = readFileSync(join(repoRoot, configPath), 'utf8');
@@ -74,28 +74,58 @@ if (options !== undefined && schema !== undefined) {
  * The check maps back to `src/` rather than looking in `dist/`, so it does
  * not depend on a build having run and cannot be satisfied by a leftover.
  */
-const dockerfilePath = 'docker/core.Dockerfile';
-const dockerfile = readFileSync(join(repoRoot, dockerfilePath), 'utf8');
-const cmdMatch = /^CMD\s+\[([^\]]*)\]/mu.exec(dockerfile);
+/**
+ * Every published image, not just the one this file was written for. ADR 0153
+ * added a second deliverable, and a check that guarded the first one only
+ * would have left the new image's CMD unguarded on the day it was written -
+ * which is the day it is most likely to be wrong.
+ */
+const dockerfilePaths = ['docker/home.Dockerfile', 'docker/relay.Dockerfile'];
 
-if (cmdMatch === null) {
-  errors.push(`${dockerfilePath}: no exec-form CMD found.`);
-} else {
+for (const dockerfilePath of dockerfilePaths) {
+  if (!existsSync(join(repoRoot, dockerfilePath))) {
+    errors.push(`${dockerfilePath}: missing. A published deliverable has no image to build from.`);
+    continue;
+  }
+  const dockerfile = readFileSync(join(repoRoot, dockerfilePath), 'utf8');
+  const cmdMatch = /^CMD\s+\[([^\]]*)\]/mu.exec(dockerfile);
+
+  if (cmdMatch === null) {
+    errors.push(`${dockerfilePath}: no exec-form CMD found.`);
+    continue;
+  }
   const argv = [...cmdMatch[1].matchAll(/"([^"]*)"/gu)].map((match) => match[1]);
   const entry = argv.find((argument) => argument.endsWith('.js'));
 
   if (entry === undefined) {
     errors.push(`${dockerfilePath}: CMD names no JavaScript entry.`);
-  } else {
-    const source = entry.replace(/\/dist\//u, '/src/').replace(/\.js$/u, '.ts');
-    if (!existsSync(join(repoRoot, source))) {
-      errors.push(
-        `${dockerfilePath}: CMD runs ${entry}, but ${source} does not exist. `
-        + 'A stale dist/ keeps a removed entry working locally; a clean image '
-        + 'build does not.',
-      );
-    }
+    continue;
   }
+  const source = entry.replace(/\/dist\//u, '/src/').replace(/\.js$/u, '.ts');
+  if (!existsSync(join(repoRoot, source))) {
+    errors.push(
+      `${dockerfilePath}: CMD runs ${entry}, but ${source} does not exist. `
+      + 'A stale dist/ keeps a removed entry working locally; a clean image '
+      + 'build does not.',
+    );
+  }
+}
+
+/**
+ * ADR 0153 PK1. Home Assistant identifies an add-on by its slug and finds it
+ * by its directory, so the two disagreeing is a rename that stopped halfway.
+ * The Supervisor's own failure for this is obscure and arrives on an install.
+ */
+const slug = /^slug:\s*(\S+)/mu.exec(config)?.[1];
+const directory = configPath.split('/')[0];
+if (slug === undefined) {
+  errors.push(`${configPath}: no \`slug\` declared.`);
+} else if (slug !== directory) {
+  errors.push(
+    `${configPath}: slug \`${slug}\` does not match its directory \`${directory}\`. `
+    + 'Home Assistant finds an add-on by directory and identifies it by slug; '
+    + 'a mismatch is a half-finished rename.',
+  );
 }
 
 if (errors.length > 0) {

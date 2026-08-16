@@ -142,7 +142,7 @@ docs/release/versioning.md
 The active Home Assistant add-on version lives in:
 
 ```text
-pico_core/config.yaml
+pico_home/config.yaml
 ```
 
 The matching semver GHCR image tag is created by the release Git tag build. Default-branch pushes publish only `main` and `sha-*` image tags and must not mutate semver image tags.
@@ -157,7 +157,7 @@ Expected Pico image asset paths:
 docs/assets/pico-design-concept.png
 docs/assets/pico-ha-icon.png
 docs/assets/pico-readme-hero.png
-pico_core/icon.png
+pico_home/icon.png
 ```
 
 ## Sign-off

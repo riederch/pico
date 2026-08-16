@@ -36,7 +36,7 @@
       "productionUses": []
     },
     {
-      "path": "pico_core/icon.png",
+      "path": "pico_home/icon.png",
       "pathBase": "repository-root",
       "sha256": "fb48e9c17f74d3e1f727d8aea58a093b5d446449d28002b1cb92f181bd59ebd4",
       "class": "production_asset",
@@ -55,7 +55,7 @@
       "productionUses": ["Home-Assistant-Add-on-Icon 256x256"]
     },
     {
-      "path": "pico_core/logo.png",
+      "path": "pico_home/logo.png",
       "pathBase": "repository-root",
       "sha256": "6b283b620b11b3e82e0648a831e70e2ee963f064bb0607d7646926b7dc4c3413",
       "class": "production_asset",

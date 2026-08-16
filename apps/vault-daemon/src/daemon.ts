@@ -60,7 +60,7 @@ import {
   type PicoVaultDaemonUnlockRequest,
 } from './protocol.js';
 
-const DAEMON_VERSION = '0.1.9';
+const DAEMON_VERSION = '0.2.0';
 
 export const PICO_VAULT_DAEMON_IDLE_LOCK_CEILING_MS = 5 * 60 * 1_000;
 export const PICO_VAULT_DAEMON_MAX_UNLOCK_DURATION_CEILING_MS = 15 * 60 * 1_000;

@@ -101,7 +101,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.1.9
+0.2.0
 ```
 
 Prepared foundation pieces include:
@@ -171,8 +171,8 @@ The avatar communicates state and risk. For example:
 ## Documentation map
 
 - [`ReadmeTech.md`](ReadmeTech.md) - full technical README
-- [`pico_core/README.md`](pico_core/README.md) - Home Assistant add-on overview
-- [`pico_core/DOCS.md`](pico_core/DOCS.md) - Home Assistant add-on installation and operation details
+- [`pico_home/README.md`](pico_home/README.md) - Home Assistant add-on overview
+- [`pico_home/DOCS.md`](pico_home/DOCS.md) - Home Assistant add-on installation and operation details
 - [`docs/architecture`](docs/architecture) - architecture decisions and concept notes
 - [`docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md`](docs/architecture/0027-dedicated-pico-home-image-and-first-boot-setup.md) - future dedicated Pico Home Image and first-boot setup concept
 - [`docs/architecture/0028-pico-link-transport-facade-and-relay-network.md`](docs/architecture/0028-pico-link-transport-facade-and-relay-network.md) - Pico Link transport facade, relay network, Home endpoints and low-bandwidth transport concept

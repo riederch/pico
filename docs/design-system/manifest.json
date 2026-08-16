@@ -282,7 +282,7 @@
     {
       "path": "07_Governance/approved-character-assets.json",
       "bytes": 3321,
-      "sha256": "9a8990ab15bf2dbb25b71980924292fee67c308f7654ab8e2cbdc1420147adf5"
+      "sha256": "cbed84ae152cf1946f564bb8ec2106d9da35f7011795837e18441fa62ab4a8f7"
     },
     {
       "path": "07_Governance/Character_Core_Modeling_Brief.md",
@@ -306,13 +306,13 @@
     },
     {
       "path": "07_Governance/Legacy_Asset_Register.md",
-      "bytes": 2840,
-      "sha256": "87c5b43911e025386a5f05d7d01973ec5aae3a5f6b54731ab4e98caada4e6fd1"
+      "bytes": 3068,
+      "sha256": "cf6ef0dadd197290f1b95fd20899db4d0fa899bde922e98970e01057eebcb690"
     },
     {
       "path": "07_Governance/legacy-character-assets.json",
       "bytes": 2641,
-      "sha256": "7bba81372e97d687cca982558b0f86e9eb377820ddcc918f4c42374d17e4dbfa"
+      "sha256": "02eb6aaf31dcb388a141f98186866b784b5ce4b615b763072e6266866755376e"
     },
     {
       "path": "07_Governance/official-appearance-generators.json",

@@ -5,19 +5,19 @@
   "note": "Bestandsassets von vor der Repository-Integration von Character Design v3.2.1. Sie werden ausgeliefert, sind aber keine Character-Referenzen und keine Production-Assets. Der Release-Gate pinnt ihre Pruefsummen, damit ein stiller Austausch auffaellt, und verlangt fuer jedes ausgelieferte Bild einen Registry-Eintrag.",
   "assets": [
     {
-      "path": "pico_core/icon.svg",
+      "path": "pico_home/icon.svg",
       "sha256": "11f4f3a9c9690f5c2f75c327f6b282110133724f0c9b26fcbf6171a6861850ef",
       "class": "legacy_asset",
       "depictsCharacter": true,
-      "currentUse": "Nicht mehr ausgeliefert und nicht mehr die Quelle von pico_core/icon.png; liegt nur noch als Bestandsdatei im Repository.",
+      "currentUse": "Nicht mehr ausgeliefert und nicht mehr die Quelle von pico_home/icon.png; liegt nur noch als Bestandsdatei im Repository.",
       "openMigration": "Entscheidung offen: Diese Datei ist eine neu gezeichnete, vereinfachte PICO-Geometrie und kann nicht regelkonform ersetzt werden, weil ein Vektornachbau der Character-Referenz genau das verbotene Neuzeichnen waere. Entweder ersatzlos entfernen oder als ausdruecklich nicht-normative Altlast behalten."
     },
     {
-      "path": "pico_core/logo.svg",
+      "path": "pico_home/logo.svg",
       "sha256": "b4d6469700200c561c888099d4311c277fc0f74fd14c76d9fa5ae52915461458",
       "class": "legacy_asset",
       "depictsCharacter": true,
-      "currentUse": "Nicht mehr ausgeliefert und nicht mehr die Quelle von pico_core/logo.png; liegt nur noch als Bestandsdatei im Repository.",
+      "currentUse": "Nicht mehr ausgeliefert und nicht mehr die Quelle von pico_home/logo.png; liegt nur noch als Bestandsdatei im Repository.",
       "openMigration": "Entscheidung offen wie bei icon.svg: entfernen oder als nicht-normative Altlast behalten."
     },
     {

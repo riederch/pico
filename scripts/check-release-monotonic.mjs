@@ -112,7 +112,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
 
   const candidate = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')).version;
-  const image = process.env.PICO_RELEASE_IMAGE ?? 'ghcr.io/riederch/pico/core';
+  const image = process.env.PICO_RELEASE_IMAGE ?? 'ghcr.io/riederch/pico/home';
 
   let published;
   try {

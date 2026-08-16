@@ -7,10 +7,12 @@ const packageFiles = [
   'apps/companion/package.json',
   'apps/companion-shell/package.json',
   'apps/core/package.json',
+  'apps/relay/package.json',
   'apps/vault-daemon/package.json',
   'apps/web/package.json',
   'packages/appearance/package.json',
   'packages/identity/package.json',
+  'packages/link-relay-client/package.json',
   'packages/protocol/package.json',
   'packages/sync/package.json',
   'packages/vault/package.json',
@@ -33,7 +35,7 @@ for (const packageFile of packageFiles) {
   assertVersion(packageJson.version, `${packageFile} version`);
 }
 
-assertVersion(matchRequired('pico_core/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_core/config.yaml version');
+assertVersion(matchRequired('pico_home/config.yaml', /^version:\s*"([^"]+)"/m, 'Home Assistant add-on version'), 'pico_home/config.yaml version');
 assertVersion(matchRequired('apps/core/src/app.ts', /const SERVICE_VERSION = '([^']+)'/, 'service version'), 'apps/core/src/app.ts SERVICE_VERSION');
 assertVersion(matchRequired('apps/vault-daemon/src/daemon.ts', /const DAEMON_VERSION = '([^']+)'/, 'vault daemon version'), 'apps/vault-daemon/src/daemon.ts DAEMON_VERSION');
 // The protocol version is a separate axis and is deliberately NOT compared to
@@ -46,9 +48,9 @@ assertSemver(protocolVersion, 'packages/protocol/src/index.ts picoProtocolVersio
 assertVersion(currentVersionFence('README.md'), 'README.md current version');
 assertVersion(currentVersionFence('ReadmeTech.md'), 'ReadmeTech.md current version');
 assertVersion(matchRequired('ReadmeTech.md', /Current tag:\n\n```text\n([0-9]+\.[0-9]+\.[0-9]+)\n```/, 'Home Assistant add-on current tag'), 'ReadmeTech.md current add-on tag');
-assertVersion(currentVersionFence('pico_core/README.md'), 'pico_core/README.md current version');
-assertVersion(matchRequired('pico_core/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest changelog heading'), 'pico_core/CHANGELOG.md latest heading');
-assertVersion(matchRequired('pico_core/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/core:([0-9]+\.[0-9]+\.[0-9]+)/, 'current add-on image tag'), 'pico_core/CHANGELOG.md current image tag');
+assertVersion(currentVersionFence('pico_home/README.md'), 'pico_home/README.md current version');
+assertVersion(matchRequired('pico_home/CHANGELOG.md', /^## ([0-9]+\.[0-9]+\.[0-9]+)$/m, 'latest changelog heading'), 'pico_home/CHANGELOG.md latest heading');
+assertVersion(matchRequired('pico_home/CHANGELOG.md', /ghcr\.io\/riederch\/pico\/home:([0-9]+\.[0-9]+\.[0-9]+)/, 'current add-on image tag'), 'pico_home/CHANGELOG.md current image tag');
 assertAllVersions('docs/release/versioning.md', collectSemvers('docs/release/versioning.md'), 'docs/release/versioning.md version references');
 assertProtocolVersion(matchRequired('docs/protocol/public-surfaces.md', /claims compatibility with protocol version `([0-9]+\.[0-9]+\.[0-9]+)`/, 'public protocol compatibility claim version'), 'docs/protocol/public-surfaces.md compatibility claim version');
 assertProtocolVersion(matchRequired('docs/protocol/public-surfaces.md', /"protocolVersion": "([0-9]+\.[0-9]+\.[0-9]+)"/, 'public protocol claim example version'), 'docs/protocol/public-surfaces.md protocolVersion example');

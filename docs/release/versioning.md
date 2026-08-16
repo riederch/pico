@@ -5,7 +5,7 @@ This document is the central checklist for version bumps in Pico.
 ## Current version
 
 ```text
-0.1.9
+0.2.0
 ```
 
 ## Version locations
@@ -16,6 +16,8 @@ When the Pico version changes, update all version-bearing files in the same comm
 |---|---|---|---|
 | `package.json` | `version` | Root workspace/package version | Yes |
 | `apps/core/package.json` | `version` | Pico Core service package version | Yes |
+| `apps/relay/package.json` | `version` | Pico Relay package version | Yes |
+| `packages/link-relay-client/package.json` | `version` | Relay client package version | Yes |
 | `apps/vault-daemon/package.json` | `version` | Vault daemon package version | Yes |
 | `apps/web/package.json` | `version` | Web client package version | Yes |
 | `packages/identity/package.json` | `version` | Identity package version | Yes |
@@ -24,15 +26,32 @@ When the Pico version changes, update all version-bearing files in the same comm
 | `packages/vault/package.json` | `version` | Vault package version | Yes |
 | `apps/core/src/app.ts` | `SERVICE_VERSION` | Version served by the Foundation API | Yes |
 | `apps/vault-daemon/src/daemon.ts` | `DAEMON_VERSION` | Version reported by the Vault daemon | Yes |
-| `pico_core/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
+| `pico_home/config.yaml` | `version` | Active Home Assistant add-on version shown by HA | Yes |
 | `README.md` | Current version text | Non-technical documentation | Yes |
 | `ReadmeTech.md` | Current version and Home Assistant add-on tag/version text | Technical documentation | Yes |
-| `pico_core/README.md` | Current version text | Add-on documentation | Yes |
-| `pico_core/CHANGELOG.md` | version heading and image tag | Home Assistant-facing update notes | Yes |
+| `pico_home/README.md` | Current version text | Add-on documentation | Yes |
+| `pico_home/CHANGELOG.md` | version heading and image tag | Home Assistant-facing update notes | Yes |
 | `docs/release/versioning.md` | every version reference | This checklist | Yes |
 
 `scripts/check-version.mjs` enforces this table. If a version-bearing location
 is added, add it there rather than relying on this list being read.
+
+## One version, three deliverables
+
+ADR 0153 PK4. A tag publishes all three at the same number:
+
+```text
+v0.2.0
+├── ghcr.io/riederch/pico/home:0.2.0     Pico Home, the Home Assistant add-on
+├── ghcr.io/riederch/pico/relay:0.2.0    Pico Relay, a standalone container
+└── pico-companion_0.2.0_amd64.deb       Pico Client, attached to the release
+```
+
+The cost is recorded rather than discovered: a client-only fix raises the
+Home's version too, and Home Assistant offers an update containing nothing for
+that install. The alternative - three version lines and a hand-kept
+interoperability matrix - buys accuracy in a number nobody interoperates on,
+because the wire contract is `picoProtocolVersion` and always was.
 
 ## Format freeze: has a kept identity been founded?
 
@@ -89,10 +108,10 @@ against `picoProtocolVersion`, not against the release version.
 The active Home Assistant add-on metadata lives in:
 
 ```text
-pico_core/config.yaml
+pico_home/config.yaml
 ```
 
-`pico_core/` is the single source of truth for the Home Assistant add-on repository metadata. Historical add-on drafts must not be kept as live `config.yaml` files with the same slug, because that creates versioning and automation ambiguity.
+`pico_home/` is the single source of truth for the Home Assistant add-on repository metadata. Historical add-on drafts must not be kept as live `config.yaml` files with the same slug, because that creates versioning and automation ambiguity.
 
 The options/schema contract is enforced by the release gate:
 
@@ -137,22 +156,22 @@ pnpm version:check
 
 This check compares the root package version with package metadata, Pico Home Core runtime version constants, Home Assistant add-on metadata, README current-version blocks, the latest add-on changelog heading, and current protocol compatibility examples.
 
-The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.1.9`, so `.github/workflows/ci.yml` is not a version-bearing file.
+The CI workflow does not carry a hardcoded version number. Semver container tags are derived from pushed Git tags such as `v0.2.0`, so `.github/workflows/ci.yml` is not a version-bearing file.
 
-Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is generated. A tag build must use the exact Git tag `v${package.json.version}`; for example, package version `0.1.9` must be released from Git tag `v0.1.9`.
+Tag builds run `scripts/check-release-tag.mjs` before Docker image metadata is generated. A tag build must use the exact Git tag `v${package.json.version}`; for example, package version `0.2.0` must be released from Git tag `v0.2.0`.
 
 ## Container image tags
 
-`pico_core/config.yaml` stores the image name without a literal tag:
+`pico_home/config.yaml` stores the image name without a literal tag:
 
 ```text
-ghcr.io/riederch/pico/core
+ghcr.io/riederch/pico/home
 ```
 
-The versioned release artifact for add-on version `0.1.9` is the matching semver image tag:
+The versioned release artifact for add-on version `0.2.0` is the matching semver image tag:
 
 ```text
-ghcr.io/riederch/pico/core:0.1.9
+ghcr.io/riederch/pico/home:0.2.0
 ```
 
 The CI workflow publishes different tag classes for different events:
@@ -187,7 +206,7 @@ Before a release with backup-requiring migrations is tagged, the release must do
 
 ## Release bump procedure
 
-1. Choose the next semantic version, for example `0.1.9`.
+1. Choose the next semantic version, for example `0.2.0`.
 2. Update every location listed in the table above.
 3. Check whether the release contains backup-requiring database migrations. If yes, apply the backup-before-migration release rule.
 4. Run the release gates locally:
@@ -201,8 +220,8 @@ Before a release with backup-requiring migrations is tagged, the release must do
 7. Create and push the matching Git tag. The tag build publishes the versioned image tag:
 
    ```bash
-   git tag v0.1.9
-   git push origin v0.1.9
+   git tag v0.2.0
+   git push origin v0.2.0
    ```
 
 ## Upgrade contract

@@ -1,7 +1,7 @@
-name: Pico Core
-version: "0.1.9"
-slug: pico_core
-description: Local-first personal AI companion core for Home Assistant.
+name: Pico Home
+version: "0.2.0"
+slug: pico_home
+description: A place where your Pico lives, on your own Home Assistant.
 url: https://github.com/riederch/pico
 arch:
   - amd64
@@ -9,12 +9,12 @@ arch:
 startup: services
 boot: auto
 init: false
-image: ghcr.io/riederch/pico/core
+image: ghcr.io/riederch/pico/home
 ingress: true
 ingress_port: 3100
 ingress_entry: /
 ingress_stream: true
-panel_title: Pico Core
+panel_title: Pico Home
 panel_admin: true
 # Only options with a real default belong here. A `null` default is not the
 # same as "unset": the Supervisor reads it back as a missing value and rejects
@@ -41,7 +41,7 @@ schema:
 ports:
   3100/tcp: null
 ports_description:
-  3100/tcp: Pico Core internal ingress, API and WebSocket endpoint
+  3100/tcp: Pico Home internal ingress, API and WebSocket endpoint
 watchdog: "http://[HOST]:[PORT:3100]/health"
 # Memory Domain Content Keys live under /data/keys (ADR 0072 R6). Pico Home
 # host identity keys live under /data/home-host-keys (ADR 0080 H5). Neither key

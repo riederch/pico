@@ -1,29 +1,37 @@
-# Pico Core app documentation
+# Pico Home add-on documentation
 
 ## Current status
 
-Pico Core is a foundation app, not a production-ready Home Assistant assistant.
+Pico Home is a foundation add-on, not a production-ready Home Assistant assistant.
+It runs **Pico Core**, the technical runtime, and presents it as a **Pico
+Home**, the place a Pico lives (ADR 0026, ADR 0153).
 
 The current app has no production authentication model, no Home Assistant entity integration, no policy engine and no protected personal data domains. It now declares Home Assistant ingress metadata for the foundation dashboard, but real Home Assistant install validation is still pending. Port `3100` is the internal service port for ingress and watchdog use; it is not published to the Home Assistant host by default.
 
 The current Foundation HTTP and WebSocket API is local diagnostics only. Direct Foundation HTTP API and realtime access can be protected with the temporary `PICO_FOUNDATION_TOKEN` and short-lived WebSocket tickets, but this is not production authentication, authorization, membership, claim or a production memory boundary. Current `deviceId` values are client-supplied metadata, and current `signature` values are stored as unverified metadata rather than cryptographic proof.
 
-Pico Core should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
+Pico Home should not be exposed to the public internet by port forwarding or reverse proxying the current foundation API. Future remote reachability is intended to use Pico Link transports, primarily Pico Relay, with Pico Home acting as a local endpoint in that transport network.
 
 The current Foundation API exposure boundary is documented in `../docs/architecture/0030-foundation-api-exposure-and-local-trust-boundary.md`. The staged hardening direction for Home Assistant ingress and a temporary direct-access Foundation token is documented in `../docs/architecture/0038-foundation-local-access-hardening-and-ingress-boundary.md`. The direct-access WebSocket ticket boundary is documented in `../docs/architecture/0039-foundation-websocket-ticket-boundary.md`. The concrete Home Assistant ingress metadata, app token option and packaging-default direction are documented in `../docs/architecture/0040-foundation-home-assistant-ingress-and-addon-token-options.md`. The explicit Foundation access-mode gate is documented in `../docs/architecture/0041-foundation-access-modes-and-direct-port-gate.md`.
 
 ## Installation
 
-1. Add this repository as a Home Assistant app repository.
-2. Install the `Pico Core` app.
-3. Start the app.
-4. Open the foundation dashboard through the Home Assistant app panel when available.
+1. Add this repository as a Home Assistant add-on repository.
+2. Install the **Pico Home** add-on.
+3. Start it.
+4. Open the foundation dashboard through the Home Assistant panel.
+
+**If you previously ran the `Pico Core` add-on, this does not update it.** The
+slug changed, so the Supervisor installs Pico Home beside it with its own
+`/data`. Nothing carries over - not the database, not the keys, not your
+option values - and there is no supported migration between the two. Uninstall
+the old add-on when you are ready to lose what is in it.
 
 ## Ports
 
 | Port | Purpose |
 | --- | --- |
-| `3100/tcp` | Internal Pico Core ingress, API and WebSocket endpoint |
+| `3100/tcp` | Internal Pico Home ingress, API and WebSocket endpoint |
 
 The foundation app declares Home Assistant ingress metadata that points to internal service port `3100`. The host port mapping is disabled by default with Home Assistant's `null` port mapping form.
 
@@ -40,7 +48,7 @@ ingress: true
 ingress_port: 3100
 ingress_entry: /
 ingress_stream: true
-panel_title: Pico Core
+panel_title: Pico Home
 panel_admin: true
 ```
 
@@ -124,7 +132,7 @@ Do not model remote access as:
 ```text
 Internet
 -> router port forwarding / public reverse proxy
--> Pico Core port 3100
+-> Pico Home port 3100
 ```
 
 Pico Relay is transport only. It must not become an owner of resident identities, memory, actions, relationships or private data.
@@ -137,21 +145,21 @@ Home Assistant app presentation expects PNG image assets in the app directory:
 
 | Path | Purpose | Required format |
 | --- | --- | --- |
-| `pico_core/icon.png` | square app icon | PNG, 1:1 aspect ratio, recommended 128x128px |
-| `pico_core/logo.png` | wide app logo | PNG, recommended around 250x100px |
+| `pico_home/icon.png` | square add-on icon | PNG, 1:1 aspect ratio, recommended 128x128px |
+| `pico_home/logo.png` | wide add-on logo | PNG, recommended around 250x100px |
 
 The repository currently also contains SVG source assets:
 
 ```text
-pico_core/icon.svg
-pico_core/logo.svg
+pico_home/icon.svg
+pico_home/logo.svg
 ```
 
-If Home Assistant still shows the default or an old app image, verify that `icon.png` and `logo.png` exist in `pico_core/`, then reload the Home Assistant Supervisor repository cache.
+If Home Assistant still shows the default or an old app image, verify that `icon.png` and `logo.png` exist in `pico_home/`, then reload the Home Assistant Supervisor repository cache.
 
 ## Persistent data
 
-Pico Core stores its SQLite database in the app persistent data directory:
+Pico Home stores its SQLite database in the add-on persistent data directory:
 
 ```text
 /data/pico.sqlite
@@ -163,14 +171,14 @@ The current foundation event store is not a production memory, location history,
 
 ## Options
 
-The current foundation app exposes these user-configurable options:
+The add-on exposes these user-configurable options:
 
 | Option | Purpose |
 | --- | --- |
 | `pico_foundation_token` | Optional temporary token mapped to `PICO_FOUNDATION_TOKEN` for direct Foundation access. |
 | `memory_encryption` | **Retiring (ADR 0104 S3).** The decision now lives in Pico and is set through the Foundation surface; this option remains for one release so an upgrading instance has something to inherit on its first boot, and is removed in the release after. Setting it here still maps to `PICO_MEMORY_ENCRYPTION`, which stays afterwards as a silent inheritance source rather than as a way to decide. |
 
-The app entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. If `memory_encryption` is `true`, it sets `PICO_MEMORY_ENCRYPTION` unless that variable was already configured.
+The entrypoint reads Home Assistant's `/data/options.json` file before starting Core. If `pico_foundation_token` is present and non-empty, it sets `PICO_FOUNDATION_TOKEN` unless that environment variable was already explicitly configured. If `memory_encryption` is `true`, it sets `PICO_MEMORY_ENCRYPTION` unless that variable was already configured.
 
 The Home Assistant host adapter also sets `PICO_FOUNDATION_ACCESS_MODE=trusted-proxy` when Home Assistant's options file exists and no explicit access mode was already configured. That mode was called `ha-ingress`; the former name still works, and the boot log says so once (ADR 0128 H5).
 
@@ -184,7 +192,7 @@ Planned future options may include:
 
 | Option | Purpose |
 | --- | --- |
-| `pico_port` | Runtime port selection, if the app entrypoint is changed to apply it safely. |
+| `pico_port` | Runtime port selection, if the entrypoint is changed to apply it safely. |
 | `relay_enabled` | Future opt-in outbound Pico Relay connection, if the Relay and Pico Link security model exists. |
 
 ## Update behavior
@@ -194,18 +202,18 @@ Updates are delivered through the normal Home Assistant app update flow.
 The app image in `config.yaml` is the tagless image name:
 
 ```text
-ghcr.io/riederch/pico/core
+ghcr.io/riederch/pico/home
 ```
 
-The release artifact for the app version must exist as the matching semver image tag. For app version `0.1.7`, the required image is:
+The release artifact for the add-on version must exist as the matching semver image tag. For add-on version `0.2.0`, the required image is:
 
 ```text
-ghcr.io/riederch/pico/core:0.1.7
+ghcr.io/riederch/pico/home:0.2.0
 ```
 
-The Git release tag, root `package.json` version, package versions, `pico_core/config.yaml` version, changelog entry and published semver container tag must stay aligned. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
+The Git release tag, root `package.json` version, package versions, `pico_home/config.yaml` version, changelog entry and published semver container tag must stay aligned. One tag publishes all three Pico deliverables at that version (ADR 0153 PK4). Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
 
-The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. During startup, Pico Core runs migrations through the backup-aware path: if a pending migration requires backup, Core creates a backup first and fails startup if backup creation fails. The backup directory defaults to `/data/backups` in the app because the database path defaults to `/data/pico.sqlite`. The app runtime does not yet run an automatic rollback workflow during startup.
+The foundation codebase includes migration tests and explicit SQLite backup/restore helpers. During startup, the runtime runs migrations through the backup-aware path: if a pending migration requires backup, it creates a backup first and fails startup if backup creation fails. The backup directory defaults to `/data/backups` in the app because the database path defaults to `/data/pico.sqlite`. The add-on does not yet run an automatic rollback workflow during startup.
 
 Schema updates are recorded in an internal `schema_migration_audit` table when migrations are applied or fail after the audit table is available. This is diagnostic update metadata only; it is not the future policy/tool audit trail.
 
@@ -213,40 +221,43 @@ Schema updates are recorded in an internal `schema_migration_audit` table when m
 
 For the current foundation app, rollback is a manual recovery procedure:
 
-1. Stop the Pico Core app.
+1. Stop the Pico Home add-on.
 2. Keep a copy of `/data/pico.sqlite` before replacing it.
-3. Reinstall or select the previous Pico Core app/container version through Home Assistant.
+3. Reinstall or select the previous Pico Home add-on version through Home Assistant.
 4. Restore the matching SQLite backup to `/data/pico.sqlite` while the app is stopped.
 5. Start the app and check `/health` and `/api/system/status`.
 
-Do not restore over a running Pico Core database. The tested restore helper replaces the database file only through an explicit overwrite call and removes stale SQLite WAL/SHM sidecar files for that target path.
+Do not restore over a running Pico Home database. The tested restore helper replaces the database file only through an explicit overwrite call and removes stale SQLite WAL/SHM sidecar files for that target path.
 
-If the app fails after selecting an older version and reports an unsupported migration, keep the app stopped and restore the database backup created for that older version. The older Core is expected to refuse databases that contain migrations from a newer Core.
+If the add-on fails after selecting an older version and reports an unsupported migration, keep it stopped and restore the database backup created for that older version. The older runtime is expected to refuse databases that contain migrations from a newer one.
 
 ## Memory keys and backup separation
 
-Pico Core keeps a key store at `/data/keys` for memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per KEK version, ADR 0072). With `memory_encryption` off (the default) no memory content is encrypted and the key store stays empty. With `memory_encryption` on, recorded memory content is encrypted at rest under a per-domain key (ADR 0071/0073), and that domain's key files appear here.
+Pico Home keeps a key store at `/data/keys` for memory-content encryption keys (`PICO_KEY_STORE_PATH`, one file per KEK version, ADR 0072). With `memory_encryption` off (the default) no memory content is encrypted and the key store stays empty. With `memory_encryption` on, recorded memory content is encrypted at rest under a per-domain key (ADR 0071/0073), and that domain's key files appear here.
 
 Pico Home setup mode also keeps host identity keys at `/data/home-host-keys` (`PICO_HOME_HOST_KEY_STORE_PATH`, ADR 0080 H5). These keys identify the host infrastructure for a claimed Home; they are not resident Pico identity keys and do not grant domain plaintext access.
 
-The design rule, in force now, is that **keys and data must never share a backup artifact**. The app configuration excludes `/data/keys` and `/data/home-host-keys` from app backups (`backup_exclude`), and the SQLite backup helper copies database files only. At startup Pico Core refuses to run if `PICO_KEY_STORE_PATH` or `PICO_HOME_HOST_KEY_STORE_PATH` is set inside the SQLite backup directory or equal to the database directory, and it also refuses to overlap the two key stores.
+The design rule, in force now, is that **keys and data must never share a backup artifact**. The app configuration excludes `/data/keys` and `/data/home-host-keys` from app backups (`backup_exclude`), and the SQLite backup helper copies database files only. At startup the runtime refuses to run if `PICO_KEY_STORE_PATH` or `PICO_HOME_HOST_KEY_STORE_PATH` is set inside the SQLite backup directory or equal to the database directory, and it also refuses to overlap the two key stores.
 
 Once memory-content encryption ships, this separation is what makes deletion real: destroying a domain's keys makes its content unreadable, including in old backups that never contained the keys. The consequence is deliberate: **restoring a database backup without a separate copy of the keys leaves encrypted memory permanently unreadable.** Recovery will be an explicit, passphrase-protected key export you create and store separately from data backups, never an automatic part of a data restore. If you keep your own backups, back up `/data/keys` separately from `/data/pico.sqlite` and its backups.
 
 ## Current limitations
 
+Kept current on purpose: a limitation list that has stopped being true is
+worse than none, because it is the part of a document a person trusts.
+
 - No Home Assistant entity integration yet.
-- Home Assistant ingress metadata exists, but real HA install validation is still pending.
+- Real Home Assistant ingress validation on a live install is still pending.
 - Direct port `3100` is not mapped to the Home Assistant host by default.
-- No companion chat UI yet.
-- No production authentication model yet.
-- No authorization model yet.
-- No policy engine yet.
-- No tool executor yet.
-- No protected personal data domains yet.
-- No production memory model yet.
+- No companion chat UI in this add-on. The product surface is the Pico Client
+  on your own device; this dashboard is diagnosis (ADR 0112, ADR 0113).
+- The Foundation dashboard's login is instance administration, not a Pico
+  identity and not Home membership.
+- No policy engine and no action runner yet, so nothing here executes actions.
 - No automatic rollback flow for failed or reverted database updates yet.
-- No Pico Link transport facade yet.
-- No Pico Relay support yet.
+- Relay transport exists in the protocol and in a separate deliverable, but
+  this add-on has no relay configuration surface yet.
 - No Meshtastic or other low-bandwidth transport adapter yet.
-- No Pico identity, Home identity or device key model yet.
+- Not production-ready, and no compatibility promise: no kept identity has
+  been founded, so surfaces may change under their existing version name
+  (ADR 0134).

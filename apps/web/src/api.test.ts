@@ -27,18 +27,18 @@ describe('foundation URL helpers', () => {
   });
 
   it('preserves a Home Assistant ingress path prefix from the dashboard location', () => {
-    expect(defaultPicoHomeUrl(browserLocation('https://ha.local/api/hassio_ingress/pico_core/')))
-      .toBe('https://ha.local/api/hassio_ingress/pico_core');
+    expect(defaultPicoHomeUrl(browserLocation('https://ha.local/api/hassio_ingress/pico_home/')))
+      .toBe('https://ha.local/api/hassio_ingress/pico_home');
   });
 
   it('preserves a non-file path prefix when the dashboard URL has no trailing slash', () => {
-    expect(defaultPicoHomeUrl(browserLocation('https://ha.local/api/hassio_ingress/pico_core')))
-      .toBe('https://ha.local/api/hassio_ingress/pico_core');
+    expect(defaultPicoHomeUrl(browserLocation('https://ha.local/api/hassio_ingress/pico_home')))
+      .toBe('https://ha.local/api/hassio_ingress/pico_home');
   });
 
   it('uses the parent path when the dashboard URL points to an html file', () => {
-    expect(defaultPicoHomeUrl(browserLocation('https://ha.local/api/hassio_ingress/pico_core/index.html?cache=1#top')))
-      .toBe('https://ha.local/api/hassio_ingress/pico_core');
+    expect(defaultPicoHomeUrl(browserLocation('https://ha.local/api/hassio_ingress/pico_home/index.html?cache=1#top')))
+      .toBe('https://ha.local/api/hassio_ingress/pico_home');
   });
 
   it('falls back to the local development URL outside http(s)', () => {
@@ -46,18 +46,18 @@ describe('foundation URL helpers', () => {
   });
 
   it('normalizes manually entered base URLs with path prefixes', () => {
-    expect(normalizePicoHomeUrl('https://ha.local/api/hassio_ingress/pico_core/'))
-      .toBe('https://ha.local/api/hassio_ingress/pico_core');
+    expect(normalizePicoHomeUrl('https://ha.local/api/hassio_ingress/pico_home/'))
+      .toBe('https://ha.local/api/hassio_ingress/pico_home');
   });
 
   it('builds endpoint URLs below the configured base path', () => {
-    expect(buildEndpointUrl('https://ha.local/api/hassio_ingress/pico_core', '/api/system/status').toString())
-      .toBe('https://ha.local/api/hassio_ingress/pico_core/api/system/status');
+    expect(buildEndpointUrl('https://ha.local/api/hassio_ingress/pico_home', '/api/system/status').toString())
+      .toBe('https://ha.local/api/hassio_ingress/pico_home/api/system/status');
   });
 
   it('clears base URL query strings and fragments when building endpoints', () => {
-    expect(buildEndpointUrl('https://ha.local/api/hassio_ingress/pico_core?old=1#section', '/health').toString())
-      .toBe('https://ha.local/api/hassio_ingress/pico_core/health');
+    expect(buildEndpointUrl('https://ha.local/api/hassio_ingress/pico_home?old=1#section', '/health').toString())
+      .toBe('https://ha.local/api/hassio_ingress/pico_home/health');
   });
 });
 

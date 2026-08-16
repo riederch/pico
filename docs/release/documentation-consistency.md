@@ -10,9 +10,9 @@ Pico keeps several README-style documents with different scopes.
 | `.agent-context.md` | compact current handoff with the next concrete work block | coding agents |
 | `README.md` | non-technical project introduction | interested readers, users, repository visitors |
 | `ReadmeTech.md` | full technical project README | contributors, reviewers, operators, future architecture work |
-| `pico_core/README.md` | Home Assistant add-on overview in the style of the root README | Home Assistant users browsing the add-on |
-| `pico_core/DOCS.md` | Home Assistant add-on installation and operation documentation | Home Assistant users and administrators |
-| `pico_core/CHANGELOG.md` | add-on-specific change history | Home Assistant users and administrators |
+| `pico_home/README.md` | Home Assistant add-on overview in the style of the root README | Home Assistant users browsing the add-on |
+| `pico_home/DOCS.md` | Home Assistant add-on installation and operation documentation | Home Assistant users and administrators |
+| `pico_home/CHANGELOG.md` | add-on-specific change history | Home Assistant users and administrators |
 | `docs/architecture/*.md` | architecture decisions and concept constraints | architecture and design work |
 | `docs/protocol/*.md` | protocol surfaces, compatibility levels and conformance fixture planning | protocol and compatibility work |
 | `docs/development/*.md` | on-demand runbooks, development notes and preserved reviewer context that should not bloat root or active handoff files | maintainers and future agents |
@@ -61,11 +61,11 @@ Long explanatory sections that are useful for reviewers but too detailed for the
 
 ## Home Assistant add-on README purpose
 
-`pico_core/README.md` is the Home Assistant add-on overview.
+`pico_home/README.md` is the Home Assistant add-on overview.
 
 It should follow the tone and structure of the root `README.md`, but focus on the add-on context:
 
-- what Pico Core is
+- what a Pico Home is, and that Pico Core is the runtime inside it
 - why Home Assistant is a useful entry point
 - what the add-on provides today
 - what the add-on is not
@@ -73,11 +73,11 @@ It should follow the tone and structure of the root `README.md`, but focus on th
 - API and endpoint overview
 - links to `DOCS.md`, `CHANGELOG.md`, root `README.md`, `ReadmeTech.md`, architecture notes and release docs
 
-It should not contain the complete project architecture, long ADR summaries, or detailed installation steps. Those belong in `ReadmeTech.md`, `docs/architecture/` or `pico_core/DOCS.md`.
+It should not contain the complete project architecture, long ADR summaries, or detailed installation steps. Those belong in `ReadmeTech.md`, `docs/architecture/` or `pico_home/DOCS.md`.
 
 ## Home Assistant add-on DOCS purpose
 
-`pico_core/DOCS.md` is the Home Assistant add-on installation and operation document.
+`pico_home/DOCS.md` is the Home Assistant add-on installation and operation document.
 
 It should cover:
 
@@ -96,20 +96,20 @@ It should not become the main product vision or architecture document.
 
 ## Maintenance rule
 
-When changing `README.md`, also check `ReadmeTech.md` and `pico_core/README.md` in the same change.
+When changing `README.md`, also check `ReadmeTech.md` and `pico_home/README.md` in the same change.
 
 When changing add-on behaviour, also check:
 
-- `pico_core/README.md`
-- `pico_core/DOCS.md`
-- `pico_core/CHANGELOG.md`
+- `pico_home/README.md`
+- `pico_home/DOCS.md`
+- `pico_home/CHANGELOG.md`
 - `ReadmeTech.md`
 
 When changing architecture decisions, also check:
 
 - `README.md` if the concept affects public positioning
 - `ReadmeTech.md` if the concept affects technical framing
-- `pico_core/README.md` if the concept affects the Home Assistant add-on positioning
+- `pico_home/README.md` if the concept affects the Home Assistant add-on positioning
 - `docs/architecture/implementation-status.md` if the change affects whether an ADR is implemented, partially implemented, reserved, concept-only or blocked before production
 
 ## Concept consistency rule
@@ -197,8 +197,8 @@ Before merging documentation changes, check:
 
 1. Does `README.md` stay readable for non-technical readers?
 2. Does `ReadmeTech.md` include everything stated in `README.md`?
-3. Does `pico_core/README.md` align with the root README while staying add-on-specific?
-4. Does `pico_core/DOCS.md` remain operational instead of visionary?
+3. Does `pico_home/README.md` align with the root README while staying add-on-specific?
+4. Does `pico_home/DOCS.md` remain operational instead of visionary?
 5. Do relevant files use the same current version?
 6. Do relevant files describe Pico as a policy-gated personal agent foundation, not just as a chatbot?
 7. Do relevant files avoid promising production readiness?

@@ -16,7 +16,19 @@ have to set anything up again. An upgrade that requires manual repair has
 failed its contract even when it eventually starts.
 
 Where a release cannot keep that promise, the release says so in
-`pico_core/CHANGELOG.md` with the exact steps, before anyone installs it.
+`pico_home/CHANGELOG.md` with the exact steps, before anyone installs it.
+
+## A slug change is not an upgrade
+
+Home Assistant identifies an add-on by its slug, so renaming one produces a
+*different* add-on rather than a new version of the same one: its own `/data`,
+its own options, none of the old state. This document's promise does not reach
+across that line and no release can make it.
+
+That happened once, deliberately, in 0.2.0 (`pico_core` to `pico_home`,
+ADR 0153), while `versioning.md` still records that no kept identity has been
+founded. It is affordable exactly once more than never, and the honest cost is
+stated in the changelog rather than discovered by whoever updates.
 
 ## State that survives an upgrade
 
@@ -51,7 +63,7 @@ itself, no matter what it does at boot.
 
 ### Add-on option schema changes are migrations
 
-Adding, removing, renaming or retyping an option in `pico_core/config.yaml`
+Adding, removing, renaming or retyping an option in `pico_home/config.yaml`
 changes how the Supervisor validates values that are already stored on the
 person's machine. That makes it a migration with no runtime hook, because the
 validation happens before any Pico code runs.
@@ -80,21 +92,21 @@ manifest unknown` on a real install.
 4. Confirm the image exists before touching Home Assistant:
 
    ```bash
-   TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:riederch/pico/core:pull&service=ghcr.io" | jq -r .token)
+   TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:riederch/pico/home:pull&service=ghcr.io" | jq -r .token)
    curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer $TOKEN" \
-     https://ghcr.io/v2/riederch/pico/core/manifests/<version>
+     https://ghcr.io/v2/riederch/pico/home/manifests/<version>
    ```
 
    `200` means ready. `404` means the tag build has not finished or did not
    run — Home Assistant will offer the update and then fail to install it.
-5. Record the image digest in the release's `pico_core/CHANGELOG.md` entry
+5. Record the image digest in the release's `pico_home/CHANGELOG.md` entry
    (ADR 0122 Y3). This is what makes a later re-tag detectable and what a
    digest-pinned rollback pulls:
 
    ```bash
    curl -sI -H "Authorization: Bearer $TOKEN" \
      -H "Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json" \
-     https://ghcr.io/v2/riederch/pico/core/manifests/<version> \
+     https://ghcr.io/v2/riederch/pico/home/manifests/<version> \
      | tr -d '\r' | grep -i '^docker-content-digest'
    ```
 
@@ -115,7 +127,7 @@ Honest limits, because rollback is where the exclusions bite.
   trust the tag pins the digest instead:
 
   ```bash
-  docker pull ghcr.io/riederch/pico/core@sha256:<digest-from-the-changelog>
+  docker pull ghcr.io/riederch/pico/home@sha256:<digest-from-the-changelog>
   ```
 
   Once ADR 0122 Y2 attestations exist, a moved tag additionally fails

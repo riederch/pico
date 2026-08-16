@@ -93,6 +93,33 @@ export class PicoRelayStore {
     this.db.close();
   }
 
+  /**
+   * ADR 0153 PK2. Whether this store can still do its job, asked cheaply.
+   *
+   * A store-and-forward whose disk has gone read-only, vanished under it or
+   * corrupted is still a running process, and that is the failure nobody sees
+   * until the packets were needed. So the health listener asks the table
+   * rather than the event loop. It throws on failure rather than returning
+   * false, because the reason belongs in the caller's log and a boolean would
+   * throw it away.
+   */
+  public probe(): void {
+    this.db.prepare('SELECT COUNT(*) AS n FROM relay_mailbox').get();
+  }
+
+  /**
+   * Whether anybody may register here at all.
+   *
+   * A relay with no accounts refuses every registration as `unknown_account`,
+   * which is correct and indistinguishable at the door from a caller using the
+   * wrong credential. The boot log is the one place that difference can be
+   * stated, and stating it needs this question asked rather than assumed.
+   */
+  public hasAccounts(): boolean {
+    const row = this.db.prepare('SELECT COUNT(*) AS n FROM relay_account').get() as { n: number };
+    return row.n > 0;
+  }
+
   /** Operator business, out of band. The relay learns a quota and no more. */
   public upsertAccount(input: { accountId: string; mailboxQuota: number }): void {
     if (!Number.isInteger(input.mailboxQuota) || input.mailboxQuota <= 0) {

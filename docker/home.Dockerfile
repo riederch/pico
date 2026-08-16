@@ -1,3 +1,10 @@
+# Pico Home - the Home Assistant add-on image and the standalone container.
+#
+# ADR 0153. What ships is a Pico Home; `apps/core` is the runtime inside it,
+# which is why the CMD at the bottom still names the core and the image does
+# not. Renaming the process to match the product would have moved a product
+# decision into every import in the tree.
+#
 # ADR 0122 Y1. Pinned by digest, with the tag kept as a comment: a tag says
 # what an image was called, a digest says which bytes were built against.
 FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS base

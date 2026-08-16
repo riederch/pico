@@ -2,6 +2,19 @@
 
 ## Status
 
+Status note, 2026-08-16: **every name in this ADR moved, and the structure
+did not.** ADR 0153 renamed the add-on from `pico_core` to `pico_home`, the
+image from `ghcr.io/riederch/pico/core` to `.../home`, and the Dockerfile from
+`docker/core.Dockerfile` to `docker/home.Dockerfile`. The layout, the version
+rule and the update flow below hold exactly as written, with those three
+substitutions.
+
+Left as it stands rather than edited, per ADR 0128: this ADR is the record of
+how the add-on release was structured, and it structured a thing called Pico
+Core. Two more deliverables now ship from the same repository - a relay image
+and a client package - which ADR 0153 covers; this one remains the add-on
+half.
+
 Accepted for the foundation phase.
 
 The Pico repository is also the first Home Assistant add-on repository.

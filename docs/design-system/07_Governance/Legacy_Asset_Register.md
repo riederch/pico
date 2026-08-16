@@ -4,6 +4,10 @@ Diese Bestandsassets entstanden vor der verbindlichen Repository-Integration
 von PICO Character Design v3.2.1. Sie bleiben vorübergehend sichtbar, sind aber
 keine Character-Referenzen und dürfen nicht als Vorlage für neue Arbeit dienen.
 
+Am 2026-08-16 sind die vier Add-on-Assets von `pico_core/` nach `pico_home/`
+gewandert (ADR 0153). Die Dateien selbst sind unverändert - ihre Prüfsummen in
+beiden Registries stehen weiterhin - nur ihr Ort hat sich geändert.
+
 Die verbindliche Liste ist maschinenlesbar und steht in
 `legacy-character-assets.json`. Ihre Pfade sind repository-relativ, weil diese
 Assets ausserhalb des Design-System-Pakets ausgeliefert werden. Die folgende
@@ -11,7 +15,7 @@ Tabelle ist die lesbare Fassung derselben Einträge:
 
 | Pfad | Aktuelle Verwendung | Offene Migration |
 |---|---|---|
-| `pico_core/icon.svg`, `pico_core/logo.svg` | nichts mehr; nicht mehr die Quelle der ausgelieferten PNG | Entscheidung offen: entfernen oder als nicht-normative Altlast behalten |
+| `pico_home/icon.svg`, `pico_home/logo.svg` | nichts mehr; nicht mehr die Quelle der ausgelieferten PNG | Entscheidung offen: entfernen oder als nicht-normative Altlast behalten |
 | `docs/assets/pico-design-concept.png` | README-Konzeptbild | nur historische Präsentation; Urdesign liegt im Design-System-Paket |
 | `docs/assets/pico-ha-icon.png` | Präsentationsasset | nicht als Production-Asset wiederverwenden |
 | `docs/assets/pico-readme-hero.png` | README-Hero | bei nächster visueller Revision aus freigegebenen Production-Assets neu zusammensetzen |
@@ -36,7 +40,7 @@ daher:
 
 ## Warum die beiden SVG nicht einfach ersetzt wurden
 
-`pico_core/icon.png` und `pico_core/logo.png` sind seit dem 2026-08-02
+`pico_home/icon.png` und `pico_home/logo.png` sind seit dem 2026-08-02
 freigegebene Production-Assets und stehen in `approved-character-assets.json`.
 Ihre SVG-Gegenstücke konnten nicht mitwandern: Die verbindlichen
 Character-Referenzen sind Renderings, und ein Vektornachbau davon wäre genau

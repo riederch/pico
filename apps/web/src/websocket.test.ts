@@ -7,12 +7,12 @@ describe('realtime WebSocket URL helper', () => {
   });
 
   it('preserves Home Assistant ingress path prefixes', () => {
-    expect(buildWebSocketUrl('https://ha.local/api/hassio_ingress/pico_core', undefined))
-      .toBe('wss://ha.local/api/hassio_ingress/pico_core/ws');
+    expect(buildWebSocketUrl('https://ha.local/api/hassio_ingress/pico_home', undefined))
+      .toBe('wss://ha.local/api/hassio_ingress/pico_home/ws');
   });
 
   it('adds short-lived realtime tickets under the prefixed WebSocket URL', () => {
-    expect(buildWebSocketUrl('https://ha.local/api/hassio_ingress/pico_core', 'ticket with spaces'))
-      .toBe('wss://ha.local/api/hassio_ingress/pico_core/ws?ticket=ticket+with+spaces');
+    expect(buildWebSocketUrl('https://ha.local/api/hassio_ingress/pico_home', 'ticket with spaces'))
+      .toBe('wss://ha.local/api/hassio_ingress/pico_home/ws?ticket=ticket+with+spaces');
   });
 });

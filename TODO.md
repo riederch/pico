@@ -3,77 +3,63 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
-## Neue Home-Assistant-App Pico Home erstellen
+## Auslieferbare Pakete - umgesetzt am 2026-08-16, mit einem offenen Punkt
 
-`Pico Home` wird als neue Home-Assistant-App aufgebaut und nicht aus der
-bestehenden App `Pico Core` umbenannt. Sie erhaelt eine eigene technische
-App-Identitaet, insbesondere ein eigenes Verzeichnis, den neuen Slug
-`pico_home`, ein eigenes Container-Image und einen eigenen Release- und
-Updatepfad.
+**Entschieden und gebaut als ADR 0153.** Drei Auslieferungen, benannt nach
+dem, was eine Person bekommt:
 
-Pico Core bleibt die technische Laufzeit, die innerhalb eines Pico Home dessen
-Aufgaben ausfuehrt. Das Paket `@pico/core` darf deshalb in der neuen App
-weiterverwendet werden; neu gebaut wird die Home-Assistant-Produkt- und
-Installationshuelle, nicht die bereits nachgewiesene Core-Logik.
+| Auslieferung | Was es ist | Updateweg |
+|---|---|---|
+| Pico Home | Home-Assistant-App `pico_home`, Image `ghcr.io/riederch/pico/home` | Supervisor |
+| Pico Relay | Container `ghcr.io/riederch/pico/relay` | Container-Verwaltung |
+| Pico Client | `pico-companion_<version>_amd64.deb` als Release-Asset | Paketverwaltung |
 
-Der Auftrag umfasst:
+Der urspruengliche Auftrag verlangte, `pico_core` waehrend des Aufbaus stehen
+zu lassen und spaeter getrennt zu entfernen. Der Nutzer hat das am 2026-08-16
+umentschieden: entfernt und ersetzt, weil noch nichts produktiv ist. Ein
+Slugwechsel ist kein Update - der Supervisor sieht eine andere App mit eigenem
+`/data` - und genau deshalb ist er nur so lange bezahlbar, wie kein Zuhause
+auf Dauer gegruendet ist. Die Laufzeit heisst weiterhin Pico Core: `apps/core`,
+`@pico/core`, `pico-home-core`. Umbenannt wurde die Produkthuelle, nicht der
+Prozess.
 
-- eine minimal installierbare App, die sichtbar meldet, dass Pico Home laeuft,
-  und ihre installierte Version anzeigt,
-- eigene Home-Assistant-Metadaten, Bilder, Dokumentation und sichtbare
-  Wortmarken,
-- ein eigenes Mehrplattform-Container-Image und einen dazu passenden
-  CI-/Releasepfad,
-- dauerhaftes App-Datenverzeichnis, First-Boot-Verhalten, Gesundheitstest und
-  kontrolliertes Update von Version A auf Version B,
-- spaetere Einbindung der bestehenden Core-Laufzeit hinter der neuen
-  Produktgrenze.
+Eine Version fuer alle drei, aus einem Tag (PK4). Der Preis steht in
+`docs/release/versioning.md`: ein reiner Client-Fix hebt auch die Version des
+Zuhauses. Die Wire-Kompatibilitaet haengt weiterhin allein an
+`picoProtocolVersion`.
 
-Die bisherige App `pico_core` bleibt waehrend des Aufbaus unveraendert und wird
-nicht automatisch in `pico_home` migriert. Ob und wie sie nach erfolgreicher
-Abnahme von Pico Home entfernt oder nur noch als Entwicklungsartefakt behalten
-wird, ist ein eigener, ausdruecklicher Migrations- und Aufraeumschritt.
+### Offen: wie ein Betreiber einen Relay-Account anlegt
 
-## Installierbarer und updatefaehiger Alpha-Stand
+`PicoRelayStore.upsertAccount` ist als "Operator business, out of band"
+dokumentiert - was stimmte, solange der einzige Aufrufer ein Test war. In
+einem Container gibt es dieses Out-of-band nicht.
 
-Fuer Pico soll ein bewusst kleiner, installierbarer Stand entstehen, der auf
-jeder bereits sinnvoll abgrenzbaren Plattform sichtbar meldet: Pico laeuft und
-welche Version installiert ist. Ziel ist noch kein fertiges Produkt, sondern
-ein belastbarer Installations- und Updatepfad, auf dem spaetere Funktionen
-aufbauen koennen.
+Der Relay laeuft, haelt, leitet weiter und laesst Pakete ablaufen. Er kann
+seine erste Registrierung nicht annehmen. Drei Formen sind sichtbar - ein CLI
+im Image, ein aus der Umgebung gesaetes erstes Konto, eine sechste
+Administrationsroute - und sie unterscheiden sich darin, wer von wo ein Konto
+anlegen darf. Das ist eine Autoritaetsfrage, keine Paketierungsfrage. Die
+dritte Form ist bereits abgeraten: eine Administrationsroute auf dem
+oeffentlichen Port wuerde PK3 in derselben Datei aufheben, die ihn festlegt.
 
-Der erste Umfang ist:
+### Offen: was diese Arbeit nicht enthaelt
 
-- **Pico Home:** die neue Home-Assistant-App `pico_home` mit eigenem Image und
-  Updatepfad verwenden. Eine echte Home-Assistant-Installation sowie ein
-  Update von Version A auf Version B muessen deren Daten, App-Identitaet und
-  Updateverbindung erhalten; die bestehende App `pico_core` bleibt davon
-  getrennt.
-- **Pico Relay:** als eigenstaendigen OCI-Container mit ausfuehrbarem
-  Startpfad, dauerhaftem SQLite-Datentraeger und einem fuer den Betrieb
-  geeigneten Gesundheitssignal ausliefern. Pico Relay wird keine
-  Home-Assistant-App, weil es unabhaengig von einem einzelnen Pico Home
-  erreichbar sein muss.
-- **Pico Client fuer Linux:** das vorhandene Debian-Paket als gemeinsamen
-  Installer fuer Vault, Companion-Hintergrunddienst und Bedienoberflaeche
-  weiterverwenden. Nach Installation und automatischem Start muss der Client
-  seinen laufenden Zustand und seine Version ohne Terminal anzeigen.
-- **Eigenstaendige Pico Surfaces:** erst paketieren, sobald die erste
-  Zielplattform wie Smartwatch oder kleines Home-Display festgelegt ist. Ein
-  losgeloestes Demo-Paket ohne festgelegte Vault-Verbindung zaehlt nicht als
-  belastbarer Produktpfad.
-
-Updates laufen ueber den nativen Plattformweg: Home Assistant fuer Pico Home,
-Container-Verwaltung fuer Pico Relay und die Paketverwaltung beziehungsweise
-ein spaeterer signierter Desktop-Updater fuer den Linux-Client. Der erste
-Meilenstein prueft kontrollierte Updates von Version A auf Version B.
-Unbeaufsichtigte automatische Updates bleiben deaktiviert, bis Herkunft und
-Integritaet des Artefakts, Gesundheitstest, Datensicherung, Rollback und
-Updateaufzeichnung durchgaengig abgesichert sind.
-
-Nicht Teil dieses Alpha-Meilensteins sind ein oeffentlicher Relay-Betrieb,
-oeffentliche Kompatibilitaetsversprechen, neue Produktfunktionen oder getrennte
-Installer fuer Vault und die Desktop-Oberflaeche.
+- **Echte Home-Assistant-Validierung.** Der Container-Smoke prueft den
+  Supervisor nicht. Ingress, Optionsvalidierung und ein Update von A auf B auf
+  einer echten Installation bleiben Handarbeit.
+- **Windows- und macOS-Client.** Braucht Runner der jeweiligen Plattform und
+  Signaturzertifikate auf eine Rechtsperson - Nachbarschaft von ADR 0111 L3.
+- **Android.** ADR 0131, und das ist keine Paketierung, sondern eine eigene
+  Implementierung des Vault-Vertrauenspfads.
+- **Eigenstaendige Pico Surfaces.** Weiterhin erst, wenn eine Zielplattform
+  feststeht. Ein losgeloestes Demo-Paket ohne festgelegte Vault-Verbindung
+  zaehlt nicht als belastbarer Produktpfad.
+- **Ein Weg zwischen zwei Zuhausen.** Diese Umbenennung war bezahlbar, weil
+  nichts gegruendet ist. Sie schafft keinen Export/Import-Pfad - der naechste
+  Umzug, etwa auf das Appliance-Image aus ADR 0027, braucht einen.
+- **Unbeaufsichtigte automatische Updates** bleiben aus, bis Herkunft,
+  Integritaet, Gesundheitstest, Datensicherung, Rollback und
+  Updateaufzeichnung durchgaengig abgesichert sind.
 
 ## Companion-Ressourcenbedarf ohne Electron messen
 

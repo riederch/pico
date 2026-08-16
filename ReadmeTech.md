@@ -54,7 +54,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.1.9
+0.2.0
 ```
 
 Implemented or prepared:
@@ -294,7 +294,7 @@ Details are documented in:
 │   ├── protocol          # shared event and payload types
 │   ├── sync              # Lamport clock and version-vector helpers
 │   └── vault             # minimal person-role keyfile runtime
-├── pico_core             # active Home Assistant add-on metadata
+├── pico_home             # active Home Assistant add-on metadata
 ├── repository.yaml       # Home Assistant add-on repository metadata
 ├── README.md             # non-technical project introduction
 ├── ReadmeTech.md         # full technical project documentation
@@ -310,29 +310,29 @@ Details are documented in:
 Pico currently ships a foundation add-on definition under:
 
 ```text
-pico_core/
+pico_home/
 ```
 
-`pico_core/` is the single source of truth for the Home Assistant add-on metadata.
+`pico_home/` is the single source of truth for the Home Assistant add-on metadata.
 
 The add-on uses the prebuilt container image:
 
 ```text
-ghcr.io/riederch/pico/core
+ghcr.io/riederch/pico/home
 ```
 
-`pico_core/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.1.9` is:
+`pico_home/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.2.0` is:
 
 ```text
-ghcr.io/riederch/pico/core:0.1.9
+ghcr.io/riederch/pico/home:0.2.0
 ```
 
-The published Git tag must match the add-on version and root package version exactly, for example `v0.1.9` for version `0.1.9`. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
+The published Git tag must match the add-on version and root package version exactly, for example `v0.2.0` for version `0.2.0`. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
 
 Current tag:
 
 ```text
-0.1.9
+0.2.0
 ```
 
 The add-on exposes Pico Home Core on port `3100`, serves the foundation dashboard at `/`, and defines a watchdog against:
@@ -503,7 +503,7 @@ Expected image asset paths:
 docs/assets/pico-design-concept.png
 docs/assets/pico-ha-icon.png
 docs/assets/pico-readme-hero.png
-pico_core/icon.png
+pico_home/icon.png
 ```
 
 ## Concept documents

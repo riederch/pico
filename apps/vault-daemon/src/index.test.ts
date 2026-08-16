@@ -363,7 +363,7 @@ describe('Pico Vault daemon wire contract (ADR 0097 D3)', () => {
     if (helloResponse.ok) {
       expect(helloResponse.result).toEqual({
         protocolVersion: 1,
-        daemonVersion: '0.1.9',
+        daemonVersion: '0.2.0',
         locked: true,
       });
     }
