@@ -147,6 +147,29 @@ household's Supervisor is not a transport.
 lockstep. Recorded in PK4 with its cost, so the day the cost is felt, nobody
 has to reconstruct why.
 
+## What building it actually taught
+
+**A `HEALTHCHECK` in the image was written and then removed.** Building the
+relay image twice showed why: with Docker's image format the check lands in
+the config, and with the OCI format - which is what a pushed multi-arch
+manifest uses - it is dropped with a warning, because the OCI image config has
+no field for it.
+
+```text
+podman inspect pico-relay:oci    --format '{{json .HealthCheck}}'  -> null
+podman inspect pico-relay:docker --format '{{json .HealthCheck}}'  -> {...}
+```
+
+An instruction that survives in one format and vanishes in the one we publish
+is worse than none, because the image then looks like it carries a check it
+does not - the same failure as a stale limitation list, in a file nobody
+reads twice. Forcing Docker media types would bring it back and would trade a
+property this repository can verify for two build flags it cannot.
+
+So the check belongs to whoever runs the relay, which is where it was going to
+live anyway: compose, systemd and Kubernetes all declare their own and ignore
+the image's. What the image owes them is an endpoint, and PK3 is the endpoint.
+
 ## Residuals
 
 - **No path between Homes.** This rename is affordable because nothing is

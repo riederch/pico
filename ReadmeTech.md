@@ -305,6 +305,70 @@ Details are documented in:
 └── .github/workflows     # CI pipeline
 ```
 
+## What Pico ships
+
+Three deliverables, named after what a person gets (ADR 0153):
+
+| Deliverable | What it is | How it updates |
+|---|---|---|
+| Pico Home | Home Assistant add-on `pico_home`, image `ghcr.io/riederch/pico/home` | Home Assistant Supervisor |
+| Pico Relay | OCI container `ghcr.io/riederch/pico/relay` | container management |
+| Pico Client | `pico-companion_<version>_amd64.deb`, attached to the GitHub release | package management |
+
+All three carry the repository version and ship from one tag. The wire contract
+is a separate axis and lives in `picoProtocolVersion`.
+
+`apps/core`, `@pico/core` and the `pico-home-core` service keep their names.
+The product shell was renamed, not the runtime: a Pico Home is the place, Pico
+Core is the process inside it.
+
+## Pico Relay as a deliverable
+
+Deliberately not a Home Assistant add-on: a relay has to stay reachable when
+one household's Supervisor is restarting.
+
+```bash
+docker run -d \
+  -p 3200:3200 \
+  -v /srv/pico-relay:/data \
+  -e PICO_RELAY_OPERATOR=relay.example.org \
+  ghcr.io/riederch/pico/relay:0.2.0
+```
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `PICO_RELAY_OPERATOR` | **none - refuses to start** | The hostname senders resolve to reach this relay. A guessed one would issue addresses pointing at somebody else's machine. |
+| `PICO_RELAY_HOST` | `0.0.0.0` | Where the public listener binds. |
+| `PICO_RELAY_PORT` | `3200` | The public port. Five POST routes, and nothing that says so. |
+| `PICO_RELAY_HEALTH_HOST` | `127.0.0.1` | Where the health listener binds. |
+| `PICO_RELAY_HEALTH_PORT` | `3201` | The health port. Must differ from the public one. |
+| `PICO_RELAY_DATABASE_PATH` | `/data/relay.sqlite` | The queue. Mount it, or a restart forgets what it was holding. |
+| `PICO_RELAY_MAX_CONNECTIONS` | `256` | Connection ceiling. |
+
+**The health signal is on its own port, and that is a boundary rather than a
+layout.** ADR 0149 makes the public port answer an unknown route exactly as it
+answers a wrong method, so the surface carries no map of itself; a `/health`
+there would be the one request that answered differently, and that difference
+says "a Pico relay lives here". So the public port has no health route, and
+`curl http://relay:3200/health` returns the same `404` as any other path.
+
+The image carries **no `HEALTHCHECK` instruction**, deliberately: it is dropped
+when an image is published in the OCI format, so an image would look like it
+carried a check it did not. Declare one where you run it:
+
+```bash
+node -e "fetch('http://127.0.0.1:3201/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+```
+
+It answers `{"status":"ok"}` or `{"status":"unavailable"}` with `503`, and it
+asks the store rather than the event loop - a store-and-forward whose disk has
+gone read-only is still a running process.
+
+**A fresh relay holds no accounts and refuses every registration** as
+`unknown_account`, saying so once in its boot log. How an operator provisions
+one is an open decision (ADR 0153), because it settles who may create an
+account and from where.
+
 ## Home Assistant add-on
 
 Pico currently ships a foundation add-on definition under:

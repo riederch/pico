@@ -53,9 +53,28 @@ ENV PICO_RELAY_HEALTH_PORT=3201
 
 VOLUME ["/data"]
 
+# **No HEALTHCHECK instruction here, and that is a finding rather than an
+# omission.** One was written, and building this file twice showed what it is
+# worth: with `--format docker` the check lands in the image config, and with
+# the OCI format - which is what a pushed multi-arch manifest uses - it is
+# dropped with a warning, because the OCI image config has no field for it.
+#
+#     podman inspect pico-relay:oci    --format '{{json .HealthCheck}}'  -> null
+#     podman inspect pico-relay:docker --format '{{json .HealthCheck}}'  -> {...}
+#
+# An instruction that survives in one format and vanishes in the one we
+# publish is worse than none: it makes the image look like it carries a check
+# it does not. Forcing Docker media types would bring it back and would trade
+# a verifiable property for two build flags nobody here can test.
+#
+# So the check belongs to whoever runs the relay, which is where it was going
+# to live anyway - compose, systemd and Kubernetes all declare their own and
+# ignore the image's. What the image owes them is an endpoint, and it has one.
+# The command, for any of those:
+#
+#     node -e "fetch('http://127.0.0.1:3201/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+#
 # Node rather than curl, because curl is not in the slim image and adding a
 # package to ask one question is a larger attack surface than the question.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PICO_RELAY_HEALTH_PORT||3201)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "apps/relay/dist/main.js"]
