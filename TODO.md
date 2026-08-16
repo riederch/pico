@@ -22,6 +22,46 @@ wird, muss sie als eigener, upgrade-kompatibler Schritt erfolgen. Eine
 bestehende Home-Assistant-Installation darf weder als zweite App erscheinen
 noch ihre Daten oder Update-Verbindung verlieren.
 
+## Installierbarer und updatefaehiger Alpha-Stand
+
+Fuer Pico soll ein bewusst kleiner, installierbarer Stand entstehen, der auf
+jeder bereits sinnvoll abgrenzbaren Plattform sichtbar meldet: Pico laeuft und
+welche Version installiert ist. Ziel ist noch kein fertiges Produkt, sondern
+ein belastbarer Installations- und Updatepfad, auf dem spaetere Funktionen
+aufbauen koennen.
+
+Der erste Umfang ist:
+
+- **Pico Home:** die bestehende Home-Assistant-App verwenden und sichtbar als
+  `Pico Home` benennen. Eine echte Home-Assistant-Installation sowie ein
+  Update von Version A auf Version B muessen Daten, App-Identitaet und
+  Updateverbindung erhalten.
+- **Pico Relay:** als eigenstaendigen OCI-Container mit ausfuehrbarem
+  Startpfad, dauerhaftem SQLite-Datentraeger und einem fuer den Betrieb
+  geeigneten Gesundheitssignal ausliefern. Pico Relay wird keine
+  Home-Assistant-App, weil es unabhaengig von einem einzelnen Pico Home
+  erreichbar sein muss.
+- **Pico Client fuer Linux:** das vorhandene Debian-Paket als gemeinsamen
+  Installer fuer Vault, Companion-Hintergrunddienst und Bedienoberflaeche
+  weiterverwenden. Nach Installation und automatischem Start muss der Client
+  seinen laufenden Zustand und seine Version ohne Terminal anzeigen.
+- **Eigenstaendige Pico Surfaces:** erst paketieren, sobald die erste
+  Zielplattform wie Smartwatch oder kleines Home-Display festgelegt ist. Ein
+  losgeloestes Demo-Paket ohne festgelegte Vault-Verbindung zaehlt nicht als
+  belastbarer Produktpfad.
+
+Updates laufen ueber den nativen Plattformweg: Home Assistant fuer Pico Home,
+Container-Verwaltung fuer Pico Relay und die Paketverwaltung beziehungsweise
+ein spaeterer signierter Desktop-Updater fuer den Linux-Client. Der erste
+Meilenstein prueft kontrollierte Updates von Version A auf Version B.
+Unbeaufsichtigte automatische Updates bleiben deaktiviert, bis Herkunft und
+Integritaet des Artefakts, Gesundheitstest, Datensicherung, Rollback und
+Updateaufzeichnung durchgaengig abgesichert sind.
+
+Nicht Teil dieses Alpha-Meilensteins sind ein oeffentlicher Relay-Betrieb,
+oeffentliche Kompatibilitaetsversprechen, neue Produktfunktionen oder getrennte
+Installer fuer Vault und die Desktop-Oberflaeche.
+
 ## Companion-Ressourcenbedarf ohne Electron messen
 
 Ziel ist ausschliesslich weniger RAM- und CPU-Verbrauch; eine native
