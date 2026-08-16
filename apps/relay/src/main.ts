@@ -1,7 +1,9 @@
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { loadPicoRelayConfig } from './config.js';
 import { startPicoRelayHealthListener, type PicoRelayHealthListener } from './health.js';
+import { PicoRelayClaimCode } from './operator-claim.js';
+import { startPicoRelayOperatorListener, type PicoRelayOperatorListener } from './operator.js';
 import { startPicoRelayServer, type PicoRelayServer } from './server.js';
 import { PicoRelayStore } from './store.js';
 
@@ -14,12 +16,17 @@ import { PicoRelayStore } from './store.js';
  * meant the deliverable existed everywhere except where somebody could
  * install it.
  *
- * Deliberately not here: anything that creates an account. A relay with no
- * accounts refuses every registration as `unknown_account`, which is the
- * honest state of a machine nobody has provisioned - and provisioning is an
- * authority question ADR 0153 leaves open rather than a start-up convenience.
- * A first account seeded from the environment would answer that question in
- * this file, quietly, which is the shape of decision this tree does not make.
+ * **Three listeners, and that is the design rather than the layout.** The
+ * mailbox port keeps exactly five routes that answer an unknown route the way
+ * they answer a wrong method (ADR 0153 PK3); health and administration each
+ * get their own port, bound to loopback, so exposing either is a separate
+ * deliberate act (ADR 0154 RO1/RO7).
+ *
+ * Provisioning is no longer absent and is still not seeded from here: ADR 0154
+ * has the relay mint a one-time claim code while nobody has claimed it, and
+ * the Pico Client trades that for the operator credential. An account created
+ * from an environment variable would have put a credential in a compose file
+ * and answered an authority question in a start-up path.
  */
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -34,6 +41,7 @@ const log = (line: Record<string, unknown>): void => {
 let store: PicoRelayStore | undefined;
 let server: PicoRelayServer | undefined;
 let health: PicoRelayHealthListener | undefined;
+let operator: PicoRelayOperatorListener | undefined;
 
 async function closeRuntime(): Promise<void> {
   // The door first, then the health signal, then the store: a health check
@@ -44,11 +52,16 @@ async function closeRuntime(): Promise<void> {
   } finally {
     server = undefined;
     try {
-      await health?.close();
+      await operator?.close();
     } finally {
-      health = undefined;
-      store?.close();
-      store = undefined;
+      operator = undefined;
+      try {
+        await health?.close();
+      } finally {
+        health = undefined;
+        store?.close();
+        store = undefined;
+      }
     }
   }
 }
@@ -93,6 +106,32 @@ try {
     port: config.healthPort,
     log,
   });
+
+  /**
+   * ADR 0154 RO8. The escape from a lost operator credential, without a shell
+   * inside the product path: a file beside the database and a restart.
+   *
+   * The same shape the Home uses for a forgotten operator passphrase, and the
+   * same honest posture - anybody with file access to the host can do this,
+   * because operator administration protects a network surface and not the
+   * host. The accounts stay; losing the administration credential is not a
+   * reason to cut off every customer.
+   */
+  const resetMarker = join(dirname(config.databasePath), 'operator-reset');
+  if (existsSync(resetMarker)) {
+    store.forgetOperator();
+    rmSync(resetMarker, { force: true });
+    log({ event: 'relay_operator_reset', marker: resetMarker });
+  }
+
+  const claimCode = new PicoRelayClaimCode();
+  operator = await startPicoRelayOperatorListener({
+    store,
+    claimCode,
+    host: config.operatorHost,
+    port: config.operatorPort,
+    log,
+  });
   log({
     event: 'relay_listening',
     operator: config.operator,
@@ -100,18 +139,35 @@ try {
     port: server.port,
     healthHost: health.host,
     healthPort: health.port,
+    operatorHost: operator.host,
+    operatorPort: operator.port,
     databasePath: config.databasePath,
   });
-  if (!store.hasAccounts()) {
-    // Said once, at the only moment an operator is looking at this log. A
-    // relay with no accounts refuses every registration as `unknown_account`,
-    // which at the door is indistinguishable from a wrong credential - so the
-    // difference is stated here or nowhere.
+
+  if (!store.isClaimed()) {
+    /**
+     * ADR 0154 RO2. The protected display channel a container has.
+     *
+     * Whoever can read this log can already stop the process, which is the
+     * same argument the Home makes for its operator bootstrap code. Single
+     * use, in memory only, and re-minted on restart - so a leaked log line is
+     * a window one restart wide rather than a standing key.
+     */
+    log({
+      event: 'relay_unclaimed',
+      claimCode: claimCode.mint(),
+      message:
+        'Nobody has claimed this relay. Enter this code in the Pico Client to '
+        + `administer it. It is single-use and replaced when this process restarts.`,
+    });
+  } else if (!store.hasAccounts()) {
+    // Claimed and empty. Said once, because at the door an unprovisioned relay
+    // and a wrong credential are the same `unknown_account`.
     log({
       event: 'relay_accounts_unprovisioned',
       message:
-        'This relay holds no accounts, so every registration is refused as '
-        + 'unknown_account. Provisioning is an open decision (ADR 0153).',
+        'This relay holds no active accounts, so every registration is refused '
+        + 'as unknown_account. Create one from the Pico Client.',
     });
   }
 } catch (error) {

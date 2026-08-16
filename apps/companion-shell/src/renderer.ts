@@ -8,6 +8,8 @@ import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
   renderPicoCompanionRecalls,
+  renderPicoCompanionRelays,
+  renderPicoCompanionRelayAccountIssued,
 } from './model-provider-views.js';
 
 declare global {
@@ -34,6 +36,15 @@ declare global {
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
+      getRelays(): Promise<unknown>;
+      claimRelay(baseUrl: string, claimCode: string): Promise<{ operator: string }>;
+      createRelayAccount(
+        baseUrl: string,
+        mailboxQuota: number,
+        maxCapacity: number,
+      ): Promise<{ credential: string; accountRef: string }>;
+      revokeRelayAccount(baseUrl: string, accountRef: string): Promise<void>;
+      forgetRelay(baseUrl: string): Promise<void>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
       requestCheck(): Promise<void>;
@@ -222,6 +233,104 @@ const providerSection = requireElement('model-providers');
 const providerList = requireElement('provider-list');
 const readSection = requireElement('answered-reads');
 const readList = requireElement('read-list');
+const relaySection = requireElement('relays');
+const relayList = requireElement('relay-list');
+const relayIssued = requireElement('relay-issued');
+const relayStatus = requireElement('relay-status');
+const relayUrl = requireInput('relay-url');
+const relayCode = requireInput('relay-code');
+const relayClaim = requireButton('relay-claim-submit');
+const relayClaimStatus = requireElement('relay-claim-status');
+
+/**
+ * ADR 0154. The relays this device administers.
+ *
+ * Fails quietly like its neighbours (ADR 0118 O4): not knowing is an absence,
+ * and an absence must not render a working machine as broken. What is *not*
+ * quiet is anything a person pressed - those say what happened, by name.
+ */
+function refreshRelays(): void {
+  void window.picoCompanion.getRelays()
+    .then((relays) => {
+      renderPicoCompanionRelays(
+        { list: relayList, section: relaySection, document },
+        relays,
+        (action) => {
+          if (action.action === 'create') {
+            relayStatus.textContent = 'Asking the relay for a key...';
+            void window.picoCompanion.createRelayAccount(action.baseUrl, 4, 64)
+              .then((issued) => {
+                relayStatus.textContent = '';
+                // ADR 0154 RO3. Shown once, in its own block, because a
+                // redraw of the list would take it away and nothing can
+                // produce it again.
+                renderPicoCompanionRelayAccountIssued(
+                  { block: relayIssued, document },
+                  issued.credential,
+                );
+                refreshRelays();
+              }, (error: unknown) => {
+                relayStatus.textContent = refusalText(error, 'The relay did not issue a key.');
+              });
+            return;
+          }
+          if (action.action === 'revoke') {
+            void window.picoCompanion
+              .revokeRelayAccount(action.baseUrl, action.accountRef)
+              .then(() => {
+                relayStatus.textContent = 'That key no longer works.';
+                refreshRelays();
+              }, (error: unknown) => {
+                relayStatus.textContent = refusalText(error, 'That key was not withdrawn.');
+              });
+            return;
+          }
+          void window.picoCompanion.forgetRelay(action.baseUrl).then(() => {
+            // Said as what it costs, not as a tidy-up.
+            relayStatus.textContent = 'Forgotten here. The relay still considers '
+              + 'itself taken over; getting back in needs the reset file on its disk.';
+            refreshRelays();
+          }, (error: unknown) => {
+            relayStatus.textContent = refusalText(error, 'That relay is still here.');
+          });
+        },
+      );
+    }, () => {
+      relaySection.hidden = true;
+    });
+}
+
+relayClaim.addEventListener('click', () => {
+  const baseUrl = relayUrl.value.trim();
+  const claimCode = relayCode.value.trim();
+  if (baseUrl === '' || claimCode === '') {
+    relayClaimStatus.textContent = 'Name where it answers, and the code from its log.';
+    return;
+  }
+  if (!/^[a-z]+:\/\//u.test(baseUrl)) {
+    // Said here rather than as a refusal from three layers down, because this
+    // one is a typo and the person is looking at the field.
+    relayClaimStatus.textContent = 'Start the address with its scheme, and end it with the port.';
+    return;
+  }
+  relayClaimStatus.textContent = 'Taking over...';
+  void window.picoCompanion.claimRelay(baseUrl, claimCode)
+    .then((claimed) => {
+      relayClaimStatus.textContent = `You now run the relay at ${claimed.operator}.`;
+      relayCode.value = '';
+      refreshRelays();
+    }, (error: unknown) => {
+      // Each refusal names something different to do next: look at the log
+      // again, restart the relay, or find out who already took it over.
+      relayClaimStatus.textContent = refusalText(error, 'That relay was not taken over.');
+    });
+});
+
+function refusalText(error: unknown, fallback: string): string {
+  return error instanceof Error
+    ? error.message.replace(/^Error: /u, '')
+    : fallback;
+}
 
 /**
  * ADR 0116 W1. What the person asked, refreshed like everything else.
@@ -354,6 +463,7 @@ function refreshModelViews(): void {
 
 refreshModelViews();
 refreshRecalls();
+refreshRelays();
 
 function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);

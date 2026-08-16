@@ -25,6 +25,11 @@ export const picoCompanionIpcChannels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  getRelays: 'pico:relays:get',
+  claimRelay: 'pico:relay:claim',
+  createRelayAccount: 'pico:relay-account:create',
+  revokeRelayAccount: 'pico:relay-account:revoke',
+  forgetRelay: 'pico:relay:forget',
 });
 
 export type PicoCompanionPresentationKind =
@@ -782,4 +787,142 @@ export function parsePicoCompanionAnsweredReads(
       answeredAt: record.answeredAt,
     });
   }));
+}
+
+/**
+ * ADR 0154 - the words for a relay this person operates.
+ *
+ * **A different hat, and the surface says so.** Everywhere else in this window
+ * the person is somebody with a Pico; here they are somebody who runs a
+ * machine other people's Picos post through. Blurring the two would be the
+ * naming failure ADR 0026 exists to prevent, one screen further in.
+ */
+export interface PicoCompanionRelay {
+  baseUrl: string;
+  operator: string;
+  claimedAt: string;
+  accounts?: readonly {
+    accountRef: string;
+    status: 'active' | 'revoked';
+    mailboxQuota: number;
+    maxCapacity: number;
+    openMailboxes: number;
+  }[];
+}
+
+export interface PicoCompanionRelayLine {
+  baseUrl: string;
+  headline: string;
+  detail: string;
+  actionLabel: string;
+  accounts: readonly {
+    accountRef: string;
+    headline: string;
+    detail: string;
+    revokable: boolean;
+  }[];
+}
+
+/**
+ * What arrives over IPC is untrusted until it has a shape, exactly as
+ * everything else on this channel is. A relay's hostname comes from the relay,
+ * which makes it a stranger's string.
+ */
+export function parsePicoCompanionRelays(value: unknown): readonly PicoCompanionRelay[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_relays');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_relay');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.baseUrl !== 'string'
+      || typeof record.operator !== 'string'
+      || typeof record.claimedAt !== 'string') {
+      throw new Error('invalid_pico_companion_relay');
+    }
+    const accounts = Array.isArray(record.accounts)
+      ? Object.freeze(record.accounts.map((account) => {
+        const row = account as Record<string, unknown>;
+        if (typeof row?.accountRef !== 'string'
+          || (row.status !== 'active' && row.status !== 'revoked')
+          || typeof row.mailboxQuota !== 'number'
+          || typeof row.maxCapacity !== 'number'
+          || typeof row.openMailboxes !== 'number') {
+          throw new Error('invalid_pico_companion_relay_account');
+        }
+        return Object.freeze({
+          accountRef: row.accountRef,
+          status: row.status,
+          mailboxQuota: row.mailboxQuota,
+          maxCapacity: row.maxCapacity,
+          openMailboxes: row.openMailboxes,
+        });
+      }))
+      : undefined;
+    return Object.freeze({
+      baseUrl: record.baseUrl,
+      operator: record.operator,
+      claimedAt: record.claimedAt,
+      // Absent and empty are different: a relay whose accounts could not be
+      // read is not a relay with no accounts (ADR 0117 X1's construction).
+      ...(accounts === undefined ? {} : { accounts }),
+    });
+  }));
+}
+
+export function picoCompanionRelayLines(
+  relays: readonly PicoCompanionRelay[],
+): readonly PicoCompanionRelayLine[] {
+  return Object.freeze(relays.map((relay) => {
+    const accounts = relay.accounts ?? [];
+    const active = accounts.filter((account) => account.status === 'active').length;
+    return Object.freeze({
+      baseUrl: relay.baseUrl,
+      headline: `You run the relay at ${relay.operator}`,
+      detail: active === 0
+        // Not "it is broken". An unprovisioned relay is running correctly and
+        // refusing everybody, and those are different sentences.
+        ? 'Nobody can post through it yet. Give somebody an access key to let '
+          + 'their Pico use it.'
+        : `${active === 1 ? 'One device can' : `${active} devices can`} post `
+          + 'through it. It never sees what they send.',
+      actionLabel: 'Give somebody access',
+      accounts: Object.freeze(accounts.map((account) => Object.freeze({
+        accountRef: account.accountRef,
+        headline: account.status === 'active'
+          ? `Access key ${account.accountRef}`
+          : `Access key ${account.accountRef}, withdrawn`,
+        detail: account.status === 'active'
+          ? `${account.openMailboxes} of ${account.mailboxQuota} `
+            + `${account.mailboxQuota === 1 ? 'address' : 'addresses'} in use, `
+            + `up to ${account.maxCapacity} waiting messages each.`
+          // ADR 0154 RO5. The row stays so this sentence can exist: "was
+          // withdrawn" and "never existed" are different things to be told.
+          : 'This key no longer works. Whoever held it needs a new one.',
+        revokable: account.status === 'active',
+      }))),
+    });
+  }));
+}
+
+/**
+ * ADR 0154 RO3. The one moment an access key exists outside the relay.
+ *
+ * Written as its own presentation rather than a line in a list, because it is
+ * the only thing in this surface a person has to act on *now* - nothing stores
+ * it and no screen can show it again.
+ */
+export function picoCompanionRelayAccountIssued(credential: string): {
+  headline: string;
+  detail: string;
+  credential: string;
+} {
+  return Object.freeze({
+    headline: 'Give this key to the person whose Pico will use the relay',
+    detail: 'It is shown once. Nothing keeps a copy - not this device and not '
+      + 'the relay - so if it is lost, withdraw the key and make another.',
+    credential,
+  });
 }

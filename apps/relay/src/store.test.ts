@@ -45,7 +45,7 @@ function packet(over: { mailbox?: string; tag?: string; expiresAt?: string; payl
 
 function readyStore(capacity = 4): PicoRelayStore {
   const store = openStore();
-  store.upsertAccount({ accountId: 'account-1', mailboxQuota: 2 });
+  store.createAccount({ credential: 'account-1', mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
   store.register({
     accountId: 'account-1',
     mailbox: mailboxOf('a'),
@@ -69,7 +69,7 @@ describe('ADR 0149 RS2 - an account, never a Pico', () => {
     // and an addressable mailbox somebody can guess is an open relay into that
     // one relationship (ADR 0147 RY2).
     const store = openStore();
-    store.upsertAccount({ accountId: 'account-1', mailboxQuota: 2 });
+    store.createAccount({ credential: 'account-1', mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     expect(() => store.register({
       accountId: 'account-1', mailbox: 'alice', capacity: 4, registeredAt: acceptedAt,
     })).toThrow('invalid_pico_link_mailbox');
@@ -78,7 +78,7 @@ describe('ADR 0149 RS2 - an account, never a Pico', () => {
 
   it('holds a quota and nothing else about an account', () => {
     const store = openStore();
-    store.upsertAccount({ accountId: 'account-1', mailboxQuota: 1 });
+    store.createAccount({ credential: 'account-1', mailboxQuota: 1, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     expect(store.register({
       accountId: 'account-1', mailbox: mailboxOf('a'), capacity: 4, registeredAt: acceptedAt,
     }).ok).toBe(true);
@@ -181,7 +181,7 @@ describe('ADR 0149 RS4 - collection needs the account that registered', () => {
     // Telling one customer that another holds a given mailbox is a fact this
     // relay has no reason to disclose.
     const store = readyStore();
-    store.upsertAccount({ accountId: 'account-2', mailboxQuota: 1 });
+    store.createAccount({ credential: 'account-2', mailboxQuota: 1, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     expect(store.collect({ accountId: 'account-2', mailbox: mailboxOf('a'), nowMs }))
       .toEqual({ ok: false, refusal: 'mailbox_not_yours' });
     expect(store.collect({ accountId: 'account-2', mailbox: mailboxOf('z'), nowMs }))
@@ -191,7 +191,7 @@ describe('ADR 0149 RS4 - collection needs the account that registered', () => {
 
   it('refuses another account acknowledging or deregistering', () => {
     const store = readyStore();
-    store.upsertAccount({ accountId: 'account-2', mailboxQuota: 1 });
+    store.createAccount({ credential: 'account-2', mailboxQuota: 1, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     expect(store.acknowledge({ accountId: 'account-2', mailbox: mailboxOf('a'), tags: [] }).ok)
       .toBe(false);
     expect(store.deregister({ accountId: 'account-2', mailbox: mailboxOf('a') }).ok).toBe(false);
@@ -268,7 +268,7 @@ describe('ADR 0147 RY4 - deregistration leaves a tombstone', () => {
     const path = join(dir, 'relay.sqlite');
 
     const first = new PicoRelayStore(path, operator);
-    first.upsertAccount({ accountId: 'account-1', mailboxQuota: 2 });
+    first.createAccount({ credential: 'account-1', mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     first.register({ accountId: 'account-1', mailbox: mailboxOf('a'), capacity: 4, registeredAt: acceptedAt });
     first.deliver({ packet: packet(), nowMs, acceptedAt });
     first.close();

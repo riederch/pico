@@ -86,7 +86,7 @@ async function startRelay(): Promise<{ baseUrl: string; relay: PicoRelayStore }>
   tempDirs.push(dir);
   const relay = new PicoRelayStore(join(dir, 'relay.sqlite'), operator);
   stores.push(relay);
-  relay.upsertAccount({ accountId: account, mailboxQuota: 4 });
+  relay.createAccount({ credential: account, mailboxQuota: 4, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
   // The device's mailbox exists at the operator, because ADR 0148 registers
   // one before handing the address over.
   for (const mailbox of [deviceMailbox, strayMailbox]) {

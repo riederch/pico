@@ -26,6 +26,9 @@ importers:
 
   apps/companion:
     dependencies:
+      '@pico/link-relay-client':
+        specifier: workspace:*
+        version: link:../../packages/link-relay-client
       '@pico/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol

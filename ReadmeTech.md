@@ -364,10 +364,41 @@ It answers `{"status":"ok"}` or `{"status":"unavailable"}` with `503`, and it
 asks the store rather than the event loop - a store-and-forward whose disk has
 gone read-only is still a running process.
 
+### Taking one over, from the Pico Client
+
+ADR 0154. There is no CLI, and that is the decision rather than an omission.
+
+A relay nobody has claimed mints a one-time code and writes it to its log:
+
+```text
+{"event":"relay_unclaimed","claimCode":"...","message":"Nobody has claimed this relay..."}
+```
+
+Enter it in the Pico Client together with the administration address. The
+client trades the code for the operator credential, keeps that credential in
+the desktop's own keystore, and administers the relay from there: issue an
+access key, withdraw one, see what each account holds. The code is spent on
+first use and re-minted when the process restarts, so a leaked log line opens
+a window one restart wide.
+
+Nothing in that path teaches the relay who anybody is. Two bearer credentials
+and some integers - ADR 0149 RS2 is a property of the whole process, and
+administration is where breaking it would have been convenient.
+
+| What | Where it lives |
+|---|---|
+| Operator credential | the desktop keystore on the device that claimed it, never on the relay in the clear |
+| Account credentials | issued by the relay, shown once, stored only as a digest |
+| Claim code | in memory, in the log, never in `/data` |
+
 **A fresh relay holds no accounts and refuses every registration** as
-`unknown_account`, saying so once in its boot log. How an operator provisions
-one is an open decision (ADR 0153), because it settles who may create an
-account and from where.
+`unknown_account`, saying so once in its boot log.
+
+**If the operator credential is lost**, create `/data/operator-reset` beside
+the database and restart. The relay forgets its operator and mints a new claim
+code; the accounts stay, because losing the administration credential is not a
+reason to cut off every customer. Anybody with file access to the host can do
+this - operator administration protects a network surface, not the host.
 
 ## Home Assistant add-on
 

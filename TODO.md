@@ -28,19 +28,23 @@ Eine Version fuer alle drei, aus einem Tag (PK4). Der Preis steht in
 Zuhauses. Die Wire-Kompatibilitaet haengt weiterhin allein an
 `picoProtocolVersion`.
 
-### Offen: wie ein Betreiber einen Relay-Account anlegt
+### Geschlossen am 2026-08-16: wie ein Betreiber einen Relay-Account anlegt
 
-`PicoRelayStore.upsertAccount` ist als "Operator business, out of band"
-dokumentiert - was stimmte, solange der einzige Aufrufer ein Test war. In
-einem Container gibt es dieses Out-of-band nicht.
+**Als ADR 0154, und mit keiner der drei Formen, die hier standen.** Der Nutzer
+hat jeden CLI-Pfad ausgeschlossen: jede Konfiguration laeuft ueber den Pico
+Client.
 
-Der Relay laeuft, haelt, leitet weiter und laesst Pakete ablaufen. Er kann
-seine erste Registrierung nicht annehmen. Drei Formen sind sichtbar - ein CLI
-im Image, ein aus der Umgebung gesaetes erstes Konto, eine sechste
-Administrationsroute - und sie unterscheiden sich darin, wer von wo ein Konto
-anlegen darf. Das ist eine Autoritaetsfrage, keine Paketierungsfrage. Die
-dritte Form ist bereits abgeraten: eine Administrationsroute auf dem
-oeffentlichen Port wuerde PK3 in derselben Datei aufheben, die ihn festlegt.
+Der Move-In Code liess sich nicht kopieren - er endet in einem beidseitig
+signierten Gruendungsdatensatz, und ADR 0149 RS2 verbietet dem Relay jede
+Identitaet, Delegation und Signatur. Kopierbar war der *andere* Code des
+Zuhauses: der Foundation-Operator-Bootstrap-Code, der ausdruecklich keine
+Pico-Identitaet ist. Ein unbeanspruchter Relay schreibt einen einmaligen
+Claim-Code in sein Log, der Client tauscht ihn gegen das Betreiber-Credential
+und verwahrt es im Keystore des Desktops.
+
+Drei Dinge sind dabei mitgekommen, die vorher fehlten: Konten lassen sich
+sperren, der Relay speichert Credentials nur noch als Digest, und die Quota
+begrenzt jetzt beide Achsen statt nur der Mailboxzahl.
 
 ### Offen: was diese Arbeit nicht enthaelt
 

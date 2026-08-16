@@ -14,28 +14,28 @@ import {
   connectPicoVaultDaemonClient,
   type PicoVaultDaemonClient,
 } from '@pico/vault-daemon';
+import {
+  picoCompanionLinuxKeystoreBackends,
+  requirePicoCompanionKeystoreBackend,
+  type PicoCompanionLinuxKeystoreBackend,
+  type PicoCompanionPlatformSecretPort,
+} from './platform-secrets.js';
 import type { PicoCompanionProfile } from './profile.js';
 
 export const picoCompanionPlatformUnlockSchema =
   'pico.companion.platform-unlock.v1' as const;
 
-export const picoCompanionLinuxKeystoreBackends = [
-  'gnome_libsecret',
-  'kwallet',
-  'kwallet5',
-  'kwallet6',
-] as const;
-
-export type PicoCompanionLinuxKeystoreBackend =
-  typeof picoCompanionLinuxKeystoreBackends[number];
-
-export interface PicoCompanionPlatformSecretPort {
-  platform: 'linux';
-  selectedBackend(): string;
-  isEncryptionAvailable(): boolean;
-  encryptString(plainText: string): Uint8Array;
-  decryptString(encrypted: Uint8Array): string;
-}
+/**
+ * Re-exported from `platform-secrets.ts`, which is where they live since
+ * 2026-08-16. They moved because this module reaches the Vault daemon and the
+ * keystore rules are needed by things that must not (ADR 0154); callers that
+ * import them from here keep working.
+ */
+export {
+  picoCompanionLinuxKeystoreBackends,
+  type PicoCompanionLinuxKeystoreBackend,
+  type PicoCompanionPlatformSecretPort,
+} from './platform-secrets.js';
 
 export interface PicoCompanionAutomaticVaultUnlock {
   ensureUnlocked(): Promise<void>;
@@ -282,22 +282,7 @@ function parsePicoCompanionPlatformUnlock(
   }) as PicoCompanionPlatformUnlockRecord;
 }
 
-function requireUsableBackend(
-  secrets: PicoCompanionPlatformSecretPort,
-): PicoCompanionLinuxKeystoreBackend {
-  if (secrets.platform !== 'linux' || !secrets.isEncryptionAvailable()) {
-    throw new Error('platform_keystore_unavailable');
-  }
-  const backend = secrets.selectedBackend();
-  if (!picoCompanionLinuxKeystoreBackends.includes(
-    backend as PicoCompanionLinuxKeystoreBackend,
-  )) {
-    throw new Error(backend === 'basic_text'
-      ? 'platform_keystore_plaintext_refused'
-      : 'platform_keystore_unavailable');
-  }
-  return backend as PicoCompanionLinuxKeystoreBackend;
-}
+const requireUsableBackend = requirePicoCompanionKeystoreBackend;
 
 function profileBinding(
   profile: PicoCompanionProfile,

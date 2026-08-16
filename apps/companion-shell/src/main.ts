@@ -19,10 +19,8 @@ import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
-import type {
-  PicoCompanionAutomaticVaultUnlock,
-  PicoCompanionPlatformSecretPort,
-} from '@pico/companion/platform-unlock';
+import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
+import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
 import {
   openPicoCompanionVaultProductSession,
@@ -230,6 +228,12 @@ async function startServiceCore(): Promise<void> {
         ),
       });
     }
+    /**
+     * ADR 0154. The keystore this session can reach, offered rather than
+     * required: without it the relay surface refuses, and everything else in
+     * the window is unaffected.
+     */
+    const platformSecrets = await relayKeystore();
     runtime = await startPicoCompanionShellRuntime({
       notifications,
       sodium,
@@ -237,6 +241,7 @@ async function startServiceCore(): Promise<void> {
       ...(automaticVaultUnlock === undefined
         ? {}
         : { automaticVaultUnlock }),
+      ...(platformSecrets === undefined ? {} : { platformSecrets }),
     });
   } catch (error) {
     presentServiceError(error);
@@ -559,6 +564,93 @@ function registerIpc(): void {
         throw new Error('invalid_domain_read_grant');
       }
       return await runtime.grantDomainRead({ privacyDomain: privacyDomain.trim() });
+    },
+  );
+  /**
+   * ADR 0154. The relay surface. Every one of these throws its refusal rather
+   * than answering empty: somebody pressed a button and is waiting, and
+   * "already claimed", "wrong code" and "no keystore" are three different
+   * things to do next.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getRelays,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readRelays();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.claimRelay,
+    async (event: IpcMainInvokeEvent, claim: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = claim as Record<string, unknown> | undefined;
+      if (typeof record?.baseUrl !== 'string' || typeof record.claimCode !== 'string') {
+        throw new Error('invalid_relay_claim');
+      }
+      return await runtime.claimRelay({
+        baseUrl: record.baseUrl.trim(),
+        claimCode: record.claimCode.trim(),
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.createRelayAccount,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.baseUrl !== 'string'
+        || typeof record.mailboxQuota !== 'number'
+        || typeof record.maxCapacity !== 'number') {
+        throw new Error('invalid_relay_account_request');
+      }
+      return await runtime.createRelayAccount({
+        baseUrl: record.baseUrl,
+        mailboxQuota: record.mailboxQuota,
+        maxCapacity: record.maxCapacity,
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.revokeRelayAccount,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.baseUrl !== 'string' || typeof record.accountRef !== 'string') {
+        throw new Error('invalid_relay_account_request');
+      }
+      await runtime.revokeRelayAccount({
+        baseUrl: record.baseUrl,
+        accountRef: record.accountRef,
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.forgetRelay,
+    async (event: IpcMainInvokeEvent, baseUrl: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof baseUrl !== 'string') {
+        throw new Error('invalid_relay_forget');
+      }
+      await runtime.forgetRelay(baseUrl);
     },
   );
   ipcMain.handle(
@@ -1144,4 +1236,25 @@ function presentServiceError(error: unknown): void {
   });
   presentationPort.present(state);
   presentationPort.notify(state);
+}
+
+/**
+ * ADR 0154 with ADR 0081 P3. The OS keystore, if this desktop has a real one.
+ *
+ * Returns nothing rather than throwing when it does not: a missing keystore
+ * costs the relay surface and nothing else, and a window that failed to start
+ * over it would be trading the whole product for one screen.
+ */
+async function relayKeystore(): Promise<PicoCompanionPlatformSecretPort | undefined> {
+  try {
+    const [electronModule, platformKeystoreModule] = await Promise.all([
+      import('electron'),
+      import('./platform-keystore.js'),
+    ]);
+    const secrets = platformKeystoreModule
+      .createLinuxElectronPlatformSecretPort(electronModule.safeStorage);
+    return secrets.isEncryptionAvailable() ? secrets : undefined;
+  } catch {
+    return undefined;
+  }
 }

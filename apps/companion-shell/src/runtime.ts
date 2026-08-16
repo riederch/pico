@@ -36,6 +36,16 @@ import type { VaultSodium } from '@pico/vault';
 import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import type { PicoCompanionShellNotifications } from './presentation-adapter.js';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
+import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
+import {
+  claimPicoCompanionRelay,
+  createPicoCompanionRelayAccount,
+  defaultPicoCompanionRelayOperatorsPath,
+  forgetPicoCompanionRelay,
+  readPicoCompanionRelayAccounts,
+  readPicoCompanionRelayOperators,
+  revokePicoCompanionRelayAccount,
+} from '@pico/companion/relay-operator';
 import {
   decidePicoCompanionModelProvider,
   askPicoCompanionRecall,
@@ -96,6 +106,31 @@ export interface PicoCompanionShellRuntime {
     privacyDomain: string;
     status: string;
   }>;
+  /**
+   * ADR 0154. Relays this person operates - a different hat from having a
+   * Pico, and one this device holds the only credential for.
+   */
+  readRelays(): Promise<readonly {
+    baseUrl: string;
+    operator: string;
+    claimedAt: string;
+    accounts?: readonly {
+      accountRef: string;
+      status: 'active' | 'revoked';
+      mailboxQuota: number;
+      maxCapacity: number;
+      openMailboxes: number;
+    }[];
+  }[]>;
+  claimRelay(input: { baseUrl: string; claimCode: string }): Promise<{ operator: string }>;
+  /** ADR 0154 RO3. Returns the access key once. Nothing keeps a copy. */
+  createRelayAccount(input: {
+    baseUrl: string;
+    mailboxQuota: number;
+    maxCapacity: number;
+  }): Promise<{ credential: string; accountRef: string }>;
+  revokeRelayAccount(input: { baseUrl: string; accountRef: string }): Promise<void>;
+  forgetRelay(baseUrl: string): Promise<void>;
   /** ADR 0116 W5. What a read produced and nobody has kept. */
   readAnsweredReads(): Promise<readonly PicoCompanionAnsweredReadView[]>;
   keepAnsweredRead(jobId: string): Promise<string>;
@@ -123,6 +158,14 @@ export async function startPicoCompanionShellRuntime(input: {
   fetch?: typeof fetch;
   checkIntervalMs?: number;
   automaticVaultUnlock?: PicoCompanionAutomaticVaultUnlock;
+  /**
+   * ADR 0154. Where a relay operator credential is kept.
+   *
+   * Optional, and its absence is a refusal rather than a fallback: without a
+   * real OS keystore there is nowhere to put a bearer credential that is not
+   * a file with a lock painted on it (ADR 0081 P3).
+   */
+  platformSecrets?: PicoCompanionPlatformSecretPort;
 }): Promise<PicoCompanionShellRuntime> {
   const profilePath = input.profilePath ?? defaultPicoCompanionProfilePath();
   const profile = readPicoCompanionProfile(profilePath);
@@ -354,6 +397,84 @@ export async function startPicoCompanionShellRuntime(input: {
           }),
         });
       }),
+      readRelays: async () => await serialized(async () => {
+        const relaysPath = defaultPicoCompanionRelayOperatorsPath(profilePath);
+        const relays = readPicoCompanionRelayOperators(relaysPath);
+        const secrets = input.platformSecrets;
+        if (secrets === undefined) {
+          // Listed without their accounts rather than hidden: the person can
+          // still see which relays this device claimed, and reaching one needs
+          // a credential this session cannot open.
+          return relays;
+        }
+        return await Promise.all(relays.map(async (relay) => {
+          const listed = await readPicoCompanionRelayAccounts({
+            path: relaysPath,
+            baseUrl: relay.baseUrl,
+            secrets,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          });
+          // A relay that cannot be reached is still a relay this device
+          // operates. Dropping it from the list would make an unreachable
+          // machine look like one nobody claimed.
+          return listed.ok ? { ...relay, accounts: listed.accounts } : relay;
+        }));
+      }),
+      claimRelay: async ({ baseUrl, claimCode }) => await serialized(async () => {
+        const secrets = requireSecrets(input.platformSecrets);
+        const claimed = await claimPicoCompanionRelay({
+          path: defaultPicoCompanionRelayOperatorsPath(profilePath),
+          baseUrl,
+          claimCode,
+          secrets,
+          at: new Date().toISOString(),
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+        if (!claimed.ok) {
+          // Somebody pressed a button and is standing there. Each refusal is
+          // a different thing to do next, so it travels as itself.
+          throw new Error(claimed.refusal);
+        }
+        return { operator: claimed.operator };
+      }),
+      createRelayAccount: async ({ baseUrl, mailboxQuota, maxCapacity }) =>
+        await serialized(async () => {
+          const secrets = requireSecrets(input.platformSecrets);
+          const created = await createPicoCompanionRelayAccount({
+            path: defaultPicoCompanionRelayOperatorsPath(profilePath),
+            baseUrl,
+            mailboxQuota,
+            maxCapacity,
+            secrets,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          });
+          if (!created.ok) {
+            throw new Error(created.refusal);
+          }
+          return {
+            credential: created.issued.credential,
+            accountRef: created.issued.account.accountRef,
+          };
+        }),
+      revokeRelayAccount: async ({ baseUrl, accountRef }) => await serialized(async () => {
+        const secrets = requireSecrets(input.platformSecrets);
+        const revoked = await revokePicoCompanionRelayAccount({
+          path: defaultPicoCompanionRelayOperatorsPath(profilePath),
+          baseUrl,
+          accountRef,
+          secrets,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+        if (!revoked.ok) {
+          throw new Error(revoked.refusal);
+        }
+      }),
+      forgetRelay: async (baseUrl) => await serialized(async () => {
+        forgetPicoCompanionRelay({
+          path: defaultPicoCompanionRelayOperatorsPath(profilePath),
+          baseUrl,
+        });
+      }),
       keepRecall: async (jobId) => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();
         return await keepPicoCompanionRecall({
@@ -467,4 +588,20 @@ export async function startPicoCompanionShellRuntime(input: {
     ]);
     throw error;
   }
+}
+
+/**
+ * ADR 0154 with ADR 0081 P3. No keystore, no relay administration.
+ *
+ * A refusal rather than a fallback: the alternative to the OS keystore is a
+ * file, and a bearer credential in a file is the thing the keystore exists to
+ * not be.
+ */
+function requireSecrets(
+  secrets: PicoCompanionPlatformSecretPort | undefined,
+): PicoCompanionPlatformSecretPort {
+  if (secrets === undefined) {
+    throw new Error('platform_keystore_unavailable');
+  }
+  return secrets;
 }

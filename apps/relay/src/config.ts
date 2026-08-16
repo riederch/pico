@@ -34,11 +34,23 @@ export const defaultPicoRelayPort = 3200;
 export const defaultPicoRelayHealthPort = 3201;
 export const defaultPicoRelayHealthHost = '127.0.0.1';
 
+/**
+ * ADR 0154 RO1/RO7. The administration surface, on its own port and closed.
+ *
+ * Loopback by default for the same reason the health port is: an operator who
+ * wants to administer this relay from their own device says so and arranges a
+ * transport. Nobody gets a remote administration port by installing.
+ */
+export const defaultPicoRelayOperatorPort = 3202;
+export const defaultPicoRelayOperatorHost = '127.0.0.1';
+
 export interface PicoRelayConfig {
   host: string;
   port: number;
   healthHost: string;
   healthPort: number;
+  operatorHost: string;
+  operatorPort: number;
   databasePath: string;
   operator: string;
   maxConnections?: number;
@@ -68,16 +80,27 @@ export function loadPicoRelayConfig(
       'PICO_RELAY_HEALTH_PORT',
       defaultPicoRelayHealthPort,
     ),
+    operatorHost: (env.PICO_RELAY_OPERATOR_HOST ?? defaultPicoRelayOperatorHost).trim(),
+    operatorPort: readPort(
+      env.PICO_RELAY_OPERATOR_PORT,
+      'PICO_RELAY_OPERATOR_PORT',
+      defaultPicoRelayOperatorPort,
+    ),
     databasePath: (env.PICO_RELAY_DATABASE_PATH ?? '/data/relay.sqlite').trim(),
     operator,
   };
 
+  // The whole point of PK3 and RO1 is that these are three listeners. Sharing
+  // a port would put a route back on the public surface through configuration
+  // rather than through code, which is worse - it would pass every test.
   if (config.port === config.healthPort) {
-    // The whole point of PK3 is that these are two listeners. Sharing a port
-    // would put the health route back on the public surface through
-    // configuration rather than through code, which is worse - it would pass
-    // every test.
     throw new Error('PICO_RELAY_HEALTH_PORT must differ from PICO_RELAY_PORT');
+  }
+  if (config.port === config.operatorPort) {
+    throw new Error('PICO_RELAY_OPERATOR_PORT must differ from PICO_RELAY_PORT');
+  }
+  if (config.healthPort === config.operatorPort) {
+    throw new Error('PICO_RELAY_OPERATOR_PORT must differ from PICO_RELAY_HEALTH_PORT');
   }
 
   const maxConnections = env.PICO_RELAY_MAX_CONNECTIONS;

@@ -51,6 +51,14 @@ ENV PICO_RELAY_HEALTH_PORT=3201
 # it. It is the hostname senders resolve to reach this relay, so a guessed one
 # would issue addresses pointing at somebody else's machine.
 
+# ADR 0154 RO1/RO7. Administration, on a third port and on loopback. Also not
+# exposed: an operator administering from their own device publishes it
+# deliberately, behind a transport they chose. A relay nobody has claimed
+# writes a one-time claim code to its log; the Pico Client trades it for the
+# operator credential. There is no CLI in this image, on purpose.
+ENV PICO_RELAY_OPERATOR_HOST=127.0.0.1
+ENV PICO_RELAY_OPERATOR_PORT=3202
+
 VOLUME ["/data"]
 
 # **No HEALTHCHECK instruction here, and that is a finding rather than an

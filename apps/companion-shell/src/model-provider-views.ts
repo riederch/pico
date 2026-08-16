@@ -5,6 +5,9 @@ import {
   parsePicoCompanionAnsweredReads,
   picoCompanionRecallLines,
   parsePicoCompanionRecalls,
+  picoCompanionRelayLines,
+  picoCompanionRelayAccountIssued,
+  parsePicoCompanionRelays,
 } from './contract.js';
 
 /**
@@ -190,4 +193,115 @@ export function renderPicoCompanionRecalls(
 
     root.list.append(item);
   }
+}
+
+/**
+ * ADR 0154 on the device - the relays this person operates.
+ *
+ * **The one control that shows a secret**, and it is written to be read once:
+ * the access key an account creation returns exists nowhere else, so it goes
+ * into an element the person can copy and is never fetched again. Everything
+ * else here is a handle, a count and a state.
+ */
+export function renderPicoCompanionRelays(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (input:
+    | { action: 'create'; baseUrl: string }
+    | { action: 'revoke'; baseUrl: string; accountRef: string }
+    | { action: 'forget'; baseUrl: string }) => void,
+): void {
+  const relays = parsePicoCompanionRelays(value);
+  root.section.hidden = relays.length === 0;
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionRelayLines(relays)) {
+    const item = root.document.createElement('li');
+    item.className = 'relay-line';
+    item.dataset.baseUrl = line.baseUrl;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const create = root.document.createElement('button');
+    create.type = 'button';
+    create.textContent = line.actionLabel;
+    create.addEventListener('click', () => act({ action: 'create', baseUrl: line.baseUrl }));
+
+    const accounts = root.document.createElement('ul');
+    accounts.className = 'relay-accounts';
+    for (const account of line.accounts) {
+      const accountItem = root.document.createElement('li');
+      accountItem.className = 'relay-account';
+      accountItem.dataset.accountRef = account.accountRef;
+
+      const accountHeadline = root.document.createElement('p');
+      accountHeadline.className = 'headline';
+      accountHeadline.textContent = account.headline;
+
+      const accountDetail = root.document.createElement('p');
+      accountDetail.className = 'detail';
+      accountDetail.textContent = account.detail;
+
+      accountItem.append(accountHeadline, accountDetail);
+      if (account.revokable) {
+        const revoke = root.document.createElement('button');
+        revoke.type = 'button';
+        revoke.textContent = 'Withdraw this key';
+        revoke.addEventListener('click', () => act({
+          action: 'revoke',
+          baseUrl: line.baseUrl,
+          accountRef: account.accountRef,
+        }));
+        accountItem.append(revoke);
+      }
+      accounts.append(accountItem);
+    }
+
+    const forget = root.document.createElement('button');
+    forget.type = 'button';
+    forget.className = 'quiet';
+    // Said as what it costs. ADR 0154 RO8: this drops the only copy of the
+    // credential, and the way back in is a file on the relay's disk.
+    forget.textContent = 'Forget this relay on this device';
+    forget.addEventListener('click', () => act({ action: 'forget', baseUrl: line.baseUrl }));
+
+    item.append(headline, detail, create, accounts, forget);
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0154 RO3. The access key, shown once because it exists once.
+ *
+ * Rendered as its own block rather than into the list: nothing stores it, so
+ * a redraw of the list would take it away, and a person who has not copied it
+ * yet would have to withdraw the key and issue another.
+ */
+export function renderPicoCompanionRelayAccountIssued(
+  root: { block: HTMLElement; document: Document },
+  credential: string,
+): void {
+  const issued = picoCompanionRelayAccountIssued(credential);
+  root.block.replaceChildren();
+  root.block.hidden = false;
+
+  const headline = root.document.createElement('p');
+  headline.className = 'headline';
+  headline.textContent = issued.headline;
+
+  const detail = root.document.createElement('p');
+  detail.className = 'detail';
+  detail.textContent = issued.detail;
+
+  const value = root.document.createElement('code');
+  value.className = 'relay-access-key';
+  value.textContent = issued.credential;
+
+  root.block.append(headline, detail, value);
 }

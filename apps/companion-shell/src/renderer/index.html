@@ -72,6 +72,33 @@
       <h2>Waiting for you</h2>
       <ul id="read-list" class="provider-list"></ul>
     </section>
+    <!--
+      ADR 0154. A different hat: here the person runs a machine other people's
+      Picos post through. Hidden until this device has claimed one, because a
+      window that showed relay administration to everybody would be teaching
+      most people a role they do not have.
+    -->
+    <section id="relays" class="providers" hidden>
+      <h2>Relays you run</h2>
+      <ul id="relay-list" class="provider-list"></ul>
+      <p id="relay-issued" class="form-card" hidden></p>
+      <p id="relay-status" class="detail"></p>
+    </section>
+    <section id="relay-claim" class="form-card">
+      <h2>Take over a relay</h2>
+      <!--
+        No example address here. The shell-boundary check refuses any
+        scheme-and-slashes literal in this page, which is a blunt rule and the
+        right one: it cannot tell a placeholder from a remote reference, and
+        the version that could is the version that eventually gets it wrong.
+      -->
+      <label for="relay-url">Its administration address, with the scheme and port</label>
+      <input id="relay-url" maxlength="512" autocomplete="off">
+      <label for="relay-code">The code from its log</label>
+      <input id="relay-code" maxlength="256" autocomplete="off">
+      <button id="relay-claim-submit" type="button">Take over this relay</button>
+      <p id="relay-claim-status" class="detail"></p>
+    </section>
     <section id="recovery-card-form" class="form-card" hidden>
       <label for="pico-name">Pico name</label>
       <input id="pico-name" maxlength="256" autocomplete="off">

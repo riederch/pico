@@ -20,6 +20,11 @@ const channels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  getRelays: 'pico:relays:get',
+  claimRelay: 'pico:relay:claim',
+  createRelayAccount: 'pico:relay-account:create',
+  revokeRelayAccount: 'pico:relay-account:revoke',
+  forgetRelay: 'pico:relay:forget',
 });
 
 // No generic send/invoke and no raw ipcRenderer: this is the whole bridge.
@@ -87,6 +92,25 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   // built there too.
   grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
+  getRelays: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getRelays),
+  claimRelay: async (baseUrl: string, claimCode: string): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.claimRelay, { baseUrl, claimCode }),
+  createRelayAccount: async (
+    baseUrl: string,
+    mailboxQuota: number,
+    maxCapacity: number,
+  ): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.createRelayAccount, {
+      baseUrl,
+      mailboxQuota,
+      maxCapacity,
+    }),
+  revokeRelayAccount: async (baseUrl: string, accountRef: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.revokeRelayAccount, { baseUrl, accountRef });
+  },
+  forgetRelay: async (baseUrl: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.forgetRelay, baseUrl);
+  },
   keepRecall: async (jobId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.keepRecall, jobId);
   },

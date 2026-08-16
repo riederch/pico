@@ -7,6 +7,9 @@ import {
   parsePicoCompanionRecoveryCardSetupInput,
   picoCompanionIdlePresentation,
   picoCompanionIpcChannels,
+  picoCompanionRelayLines,
+  picoCompanionRelayAccountIssued,
+  parsePicoCompanionRelays,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -111,5 +114,71 @@ describe('the bridge and the contract are one list', () => {
     const declared = [...preload.matchAll(/^  (\w+): '(pico:[a-z:-]+)',$/gmu)]
       .map(([, name]) => name);
     expect(declared.sort()).toEqual(Object.keys(picoCompanionIpcChannels).sort());
+  });
+});
+
+describe('ADR 0154 - the words for a relay this person runs', () => {
+  const relay = {
+    baseUrl: 'https://relay.example:3202',
+    operator: 'relay.example',
+    claimedAt: '2026-08-16T12:00:00.000Z',
+  };
+
+  it('says a relay with no keys is refusing, not broken', () => {
+    // An unprovisioned relay is running correctly and turning everybody away.
+    // "Something is wrong" would send a person looking at logs for a machine
+    // that is doing exactly what it was told.
+    const [line] = picoCompanionRelayLines([{ ...relay, accounts: [] }]);
+    expect(line?.headline).toBe('You run the relay at relay.example');
+    expect(line?.detail).toContain('Nobody can post through it yet');
+    expect(line?.detail).not.toContain('error');
+  });
+
+  it('counts devices rather than rows, and says what the relay never sees', () => {
+    const [line] = picoCompanionRelayLines([{
+      ...relay,
+      accounts: [
+        { accountRef: '0123456789ab', status: 'active', mailboxQuota: 4, maxCapacity: 64, openMailboxes: 2 },
+        { accountRef: 'ba9876543210', status: 'revoked', mailboxQuota: 1, maxCapacity: 8, openMailboxes: 0 },
+      ],
+    }]);
+    expect(line?.detail).toContain('One device can post through it');
+    expect(line?.detail).toContain('never sees what they send');
+    expect(line?.accounts.map((account) => account.revokable)).toEqual([true, false]);
+  });
+
+  it('tells a withdrawn key from one that never existed', () => {
+    // ADR 0154 RO5. The row is kept so this sentence can exist at all.
+    const [line] = picoCompanionRelayLines([{
+      ...relay,
+      accounts: [
+        { accountRef: 'ba9876543210', status: 'revoked', mailboxQuota: 1, maxCapacity: 8, openMailboxes: 0 },
+      ],
+    }]);
+    expect(line?.accounts[0]?.headline).toContain('withdrawn');
+    expect(line?.accounts[0]?.detail).toContain('needs a new one');
+  });
+
+  it('says an access key is shown once, on the screen that shows it', () => {
+    const issued = picoCompanionRelayAccountIssued('f'.repeat(32));
+    expect(issued.credential).toBe('f'.repeat(32));
+    expect(issued.detail).toContain('shown once');
+    expect(issued.detail).toContain('withdraw the key and make another');
+  });
+
+  it('keeps absent accounts distinct from no accounts', () => {
+    // ADR 0117 X1's construction: a relay this device could not reach is not
+    // a relay with nobody on it.
+    expect(parsePicoCompanionRelays([relay])[0]?.accounts).toBeUndefined();
+    expect(parsePicoCompanionRelays([{ ...relay, accounts: [] }])[0]?.accounts).toEqual([]);
+  });
+
+  it('refuses a relay row that is missing what a line needs', () => {
+    expect(() => parsePicoCompanionRelays([{ baseUrl: 'https://x', operator: 'x' }]))
+      .toThrow('invalid_pico_companion_relay');
+    expect(() => parsePicoCompanionRelays([{
+      ...relay,
+      accounts: [{ accountRef: 'a', status: 'maybe' }],
+    }])).toThrow('invalid_pico_companion_relay_account');
   });
 });

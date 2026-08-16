@@ -47,8 +47,8 @@ async function startRelay(): Promise<string> {
   tempDirs.push(dir);
   const store = new PicoRelayStore(join(dir, 'relay.sqlite'), operator);
   stores.push(store);
-  store.upsertAccount({ accountId: account, mailboxQuota: 2 });
-  store.upsertAccount({ accountId: otherAccount, mailboxQuota: 2 });
+  store.createAccount({ credential: account, mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
+  store.createAccount({ credential: otherAccount, mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
   const server = await startPicoRelayServer({ store, host: '127.0.0.1', port: 0 });
   servers.push(server);
   return `http://${server.host}:${server.port}`;

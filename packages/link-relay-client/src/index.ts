@@ -222,3 +222,19 @@ export class PicoLinkRelayClient {
     return refusal;
   }
 }
+
+/**
+ * ADR 0154. The other relationship with the same machine: whoever holds the
+ * operator credential rather than an account.
+ *
+ * Re-exported through this package's one entry point, and kept in its own
+ * module - a single class doing both would make it easy to hand an
+ * administration credential to code that only ever needed to collect packets.
+ */
+export {
+  PicoRelayOperatorClient,
+  defaultPicoRelayOperatorTimeoutMs,
+  type PicoRelayIssuedAccount,
+  type PicoRelayOperatorAnswer,
+  type PicoRelayOperatorClientOptions,
+} from './operator.js';

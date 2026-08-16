@@ -116,7 +116,7 @@ describe('ADR 0153 PK3 - the health signal, and where it is not', () => {
 
   it('tells the health reader nothing about the relay\'s customers', async () => {
     const opened = store();
-    opened.upsertAccount({ accountId: 'a'.repeat(32), mailboxQuota: 4 });
+    opened.createAccount({ credential: 'a'.repeat(32), mailboxQuota: 4, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     const health = await startPicoRelayHealthListener({
       store: opened,
       host: '127.0.0.1',
@@ -174,7 +174,7 @@ describe('ADR 0153 PK7 - a relay ships with no accounts', () => {
   it('knows whether anybody may register at all', () => {
     const opened = store();
     expect(opened.hasAccounts()).toBe(false);
-    opened.upsertAccount({ accountId: 'b'.repeat(32), mailboxQuota: 2 });
+    opened.createAccount({ credential: 'b'.repeat(32), mailboxQuota: 2, maxCapacity: 1_000, at: '2026-01-01T00:00:00.000Z' });
     expect(opened.hasAccounts()).toBe(true);
   });
 

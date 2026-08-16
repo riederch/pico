@@ -67,6 +67,10 @@
       "types": "./dist/link-relay-surface.d.ts",
       "import": "./dist/link-relay-surface.js"
     },
+    "./link-relay-operator": {
+      "types": "./dist/link-relay-operator.d.ts",
+      "import": "./dist/link-relay-operator.js"
+    },
     "./home-assistant": {
       "types": "./dist/home-assistant.d.ts",
       "import": "./dist/home-assistant.js"

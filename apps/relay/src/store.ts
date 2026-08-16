@@ -1,4 +1,9 @@
 import Database from 'better-sqlite3';
+import type {
+  PicoRelayAccountSummary,
+} from '@pico/protocol/link-relay-operator';
+import { picoRelayAccountRefLength } from '@pico/protocol/link-relay-operator';
+import { picoRelayCredentialDigest } from './operator-claim.js';
 import {
   picoLinkMailboxPattern,
   parsePicoLinkPacketAddress,
@@ -30,6 +35,15 @@ import {
 export const picoRelayRefusals = [
   'unknown_account',
   'account_mailbox_quota_reached',
+  /**
+   * ADR 0154 RO6. The second axis, which used to have no ceiling at all.
+   *
+   * Packets per mailbox came from the caller's register request and was stored
+   * unchecked, so an account with a quota of one could ask for a mailbox
+   * holding a million. Named separately from the quota refusal, because they
+   * are two different things for an operator to raise.
+   */
+  'capacity_above_account_ceiling',
   'mailbox_not_yours',
   'mailbox_already_registered',
 ] as const;
@@ -38,7 +52,12 @@ export type PicoRelayRefusal = typeof picoRelayRefusals[number];
 
 export interface PicoRelayMailbox {
   mailbox: string;
-  accountId: string;
+  /**
+   * ADR 0154 RO4. The digest of the owning account's credential, never the
+   * credential. Renamed from `accountId` when the credential stopped being
+   * stored: a field called id that holds a key is how a key reaches a log line.
+   */
+  accountDigest: string;
   status: 'open' | 'revoked';
   capacity: number;
   registeredAt: string;
@@ -53,6 +72,11 @@ export interface PicoRelayCollected {
 export class PicoRelayStore {
   private readonly db: Database.Database;
 
+  /** The hostname this relay answers as, for a client that just connected. */
+  public get operatorName(): string {
+    return this.operator;
+  }
+
   public constructor(databasePath: string, private readonly operator: string) {
     if (typeof operator !== 'string' || operator.trim() === '') {
       throw new Error('invalid_pico_relay_operator');
@@ -60,9 +84,28 @@ export class PicoRelayStore {
     this.db = new Database(databasePath);
     this.db.pragma('journal_mode = WAL');
     this.db.exec(`
+      -- ADR 0154 RO2/RO4. One row or none, holding the digest of the operator
+      -- credential. A relay's database is not the key to the relay it came
+      -- from, which it was until this table existed.
+      CREATE TABLE IF NOT EXISTS relay_operator (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        credential_digest TEXT NOT NULL,
+        claimed_at TEXT NOT NULL
+      );
+
+      -- ADR 0154 RO4/RO5/RO6. Keyed by digest, bounded on both axes, and
+      -- endable. No migration from the earlier shape, which keyed accounts by
+      -- the credential itself: no relay has ever been published, and
+      -- \`versioning.md\` records that nothing is kept for good yet. Writing a
+      -- migration for a database that exists nowhere would be inventing a
+      -- compatibility burden and then honouring it.
       CREATE TABLE IF NOT EXISTS relay_account (
-        account_id TEXT PRIMARY KEY,
-        mailbox_quota INTEGER NOT NULL
+        account_digest TEXT PRIMARY KEY,
+        mailbox_quota INTEGER NOT NULL,
+        max_capacity INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('active', 'revoked')),
+        created_at TEXT NOT NULL,
+        revoked_at TEXT
       );
 
       -- A revoked mailbox stays, because ADR 0147 RY4 needs the revoked
@@ -70,7 +113,7 @@ export class PicoRelayStore {
       -- deliberate ending into a typo the sender reads as its own mistake.
       CREATE TABLE IF NOT EXISTS relay_mailbox (
         mailbox TEXT PRIMARY KEY,
-        account_id TEXT NOT NULL,
+        account_digest TEXT NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('open', 'revoked')),
         capacity INTEGER NOT NULL,
         registered_at TEXT NOT NULL
@@ -116,21 +159,180 @@ export class PicoRelayStore {
    * stated, and stating it needs this question asked rather than assumed.
    */
   public hasAccounts(): boolean {
-    const row = this.db.prepare('SELECT COUNT(*) AS n FROM relay_account').get() as { n: number };
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n FROM relay_account WHERE status = 'active'")
+      .get() as { n: number };
     return row.n > 0;
   }
 
-  /** Operator business, out of band. The relay learns a quota and no more. */
-  public upsertAccount(input: { accountId: string; mailboxQuota: number }): void {
+  /**
+   * ADR 0154 RO2. Whether anybody has claimed this relay.
+   *
+   * Asked at boot to decide whether to mint a claim code, and by `describe` so
+   * a client that has just connected can tell "fresh" from "somebody else's".
+   */
+  public isClaimed(): boolean {
+    return this.db.prepare('SELECT COUNT(*) AS n FROM relay_operator').get() !== undefined
+      && (this.db.prepare('SELECT COUNT(*) AS n FROM relay_operator').get() as { n: number }).n > 0;
+  }
+
+  /**
+   * ADR 0154 RO2/RO3. Records the operator credential's digest, once.
+   *
+   * Returns false rather than overwriting: a second claim on a claimed relay
+   * is either a mistake or somebody replaying a log line, and both want the
+   * same answer.
+   */
+  public claim(input: { credentialDigest: string; at: string }): boolean {
+    if (this.isClaimed()) {
+      return false;
+    }
+    this.db
+      .prepare('INSERT INTO relay_operator (id, credential_digest, claimed_at) VALUES (1, ?, ?)')
+      .run(input.credentialDigest, input.at);
+    return true;
+  }
+
+  /** ADR 0154 RO1. Whether a presented credential administers this relay. */
+  public isOperator(credential: string): boolean {
+    const row = this.db
+      .prepare('SELECT credential_digest AS digest FROM relay_operator WHERE id = 1')
+      .get() as { digest: string } | undefined;
+    return row !== undefined && row.digest === picoRelayCredentialDigest(credential);
+  }
+
+  /**
+   * ADR 0154 RO8. Forgets the operator so a fresh claim code can be minted.
+   *
+   * The accounts stay. Losing the administration credential is not a reason to
+   * cut off every customer, and conflating the two would make the recovery
+   * path more destructive than the loss it recovers from.
+   */
+  public forgetOperator(): void {
+    this.db.prepare('DELETE FROM relay_operator').run();
+  }
+
+  /**
+   * ADR 0154 RO3/RO4. Issues an account, storing the digest of a credential
+   * this relay generated.
+   *
+   * The credential is the caller's to return to the operator once; nothing
+   * here keeps it, which is why there is no route that can hand it back.
+   */
+  public createAccount(input: {
+    credential: string;
+    mailboxQuota: number;
+    maxCapacity: number;
+    at: string;
+  }): PicoRelayAccountSummary {
     if (!Number.isInteger(input.mailboxQuota) || input.mailboxQuota <= 0) {
       throw new Error('invalid_pico_relay_quota');
     }
+    if (!Number.isInteger(input.maxCapacity) || input.maxCapacity <= 0) {
+      throw new Error('invalid_pico_relay_capacity');
+    }
+    const digest = picoRelayCredentialDigest(input.credential);
     this.db
       .prepare(`
-        INSERT INTO relay_account (account_id, mailbox_quota) VALUES (?, ?)
-        ON CONFLICT(account_id) DO UPDATE SET mailbox_quota = excluded.mailbox_quota
+        INSERT INTO relay_account
+          (account_digest, mailbox_quota, max_capacity, status, created_at)
+        VALUES (?, ?, ?, 'active', ?)
       `)
-      .run(input.accountId, input.mailboxQuota);
+      .run(digest, input.mailboxQuota, input.maxCapacity, input.at);
+    return this.accountSummaries().find((account) => account.accountRef === refOf(digest))!;
+  }
+
+  /**
+   * ADR 0154 RO5. Ends an account, keeping the row.
+   *
+   * ADR 0147 RY4's reasoning applied one level up: "never existed" and "ended"
+   * are different facts, and only one of them stays answerable if the row goes.
+   * The mailboxes stay as they are - the credential stops working, which is
+   * what revoking a credential means.
+   */
+  public revokeAccount(input: { accountRef: string; at: string }):
+  { ok: true } | { ok: false; refusal: 'unknown_account' | 'account_already_revoked' } {
+    const found = this.accountSummaries().find((account) => account.accountRef === input.accountRef);
+    if (found === undefined) {
+      return { ok: false, refusal: 'unknown_account' };
+    }
+    if (found.status === 'revoked') {
+      return { ok: false, refusal: 'account_already_revoked' };
+    }
+    this.db
+      .prepare(`
+        UPDATE relay_account SET status = 'revoked', revoked_at = ?
+        WHERE substr(account_digest, 1, ?) = ?
+      `)
+      .run(input.at, picoRelayAccountRefLength, input.accountRef);
+    return { ok: true };
+  }
+
+  /**
+   * ADR 0154 RO4. What the operator can see, which is everything except a key.
+   *
+   * The handle is the digest's first bytes: enough to point at a row and
+   * revoke it, and not a credential. A list route that named accounts by their
+   * credential would hand every key back on every read.
+   */
+  public accountSummaries(): readonly PicoRelayAccountSummary[] {
+    const rows = this.db
+      .prepare(`
+        SELECT
+          a.account_digest AS digest,
+          a.mailbox_quota AS mailboxQuota,
+          a.max_capacity AS maxCapacity,
+          a.status AS status,
+          a.created_at AS createdAt,
+          a.revoked_at AS revokedAt,
+          (
+            SELECT COUNT(*) FROM relay_mailbox m
+            WHERE m.account_digest = a.account_digest AND m.status = 'open'
+          ) AS openMailboxes
+        FROM relay_account a
+        ORDER BY a.created_at, a.account_digest
+      `)
+      .all() as Array<{
+      digest: string;
+      mailboxQuota: number;
+      maxCapacity: number;
+      status: 'active' | 'revoked';
+      createdAt: string;
+      revokedAt: string | null;
+      openMailboxes: number;
+    }>;
+    return Object.freeze(rows.map((row) => Object.freeze({
+      accountRef: refOf(row.digest),
+      status: row.status,
+      mailboxQuota: row.mailboxQuota,
+      maxCapacity: row.maxCapacity,
+      openMailboxes: row.openMailboxes,
+      createdAt: row.createdAt,
+      ...(row.revokedAt === null ? {} : { revokedAt: row.revokedAt }),
+    })));
+  }
+
+  /**
+   * The account a presented credential belongs to, or nothing.
+   *
+   * A revoked account answers the same as one that never existed. ADR 0077 C4
+   * is the Home's version of the same rule: telling a caller that their
+   * credential *used* to work is a fact about the operator's decisions, and
+   * the caller already knows what they did.
+   */
+  private activeAccount(credential: string): {
+    digest: string;
+    mailboxQuota: number;
+    maxCapacity: number;
+  } | undefined {
+    return this.db
+      .prepare(`
+        SELECT account_digest AS digest, mailbox_quota AS mailboxQuota, max_capacity AS maxCapacity
+        FROM relay_account WHERE account_digest = ? AND status = 'active'
+      `)
+      .get(picoRelayCredentialDigest(credential)) as {
+      digest: string; mailboxQuota: number; maxCapacity: number;
+    } | undefined;
   }
 
   /**
@@ -152,11 +354,15 @@ export class PicoRelayStore {
     if (!picoLinkMailboxPattern.test(input.mailbox)) {
       throw new Error('invalid_pico_link_mailbox');
     }
-    const account = this.db
-      .prepare('SELECT mailbox_quota AS quota FROM relay_account WHERE account_id = ?')
-      .get(input.accountId) as { quota: number } | undefined;
+    const account = this.activeAccount(input.accountId);
     if (account === undefined) {
       return { ok: false, refusal: 'unknown_account' };
+    }
+    if (input.capacity > account.maxCapacity) {
+      // ADR 0154 RO6. The axis that had no ceiling: capacity arrives from the
+      // caller, and without this an account with a quota of one could ask for
+      // a mailbox holding a million packets.
+      return { ok: false, refusal: 'capacity_above_account_ceiling' };
     }
     if (this.mailboxFor(input.mailbox) !== undefined) {
       // Including a revoked one. Reusing a name whose tombstone answers
@@ -165,9 +371,9 @@ export class PicoRelayStore {
       return { ok: false, refusal: 'mailbox_already_registered' };
     }
     const held = this.db
-      .prepare("SELECT COUNT(*) AS held FROM relay_mailbox WHERE account_id = ? AND status = 'open'")
-      .get(input.accountId) as { held: number };
-    if (held.held >= account.quota) {
+      .prepare("SELECT COUNT(*) AS held FROM relay_mailbox WHERE account_digest = ? AND status = 'open'")
+      .get(account.digest) as { held: number };
+    if (held.held >= account.mailboxQuota) {
       // ADR 0119 Q5's posture, in somebody else's machine: a ceiling refuses
       // and never makes room by dropping what is already there.
       return { ok: false, refusal: 'account_mailbox_quota_reached' };
@@ -175,17 +381,17 @@ export class PicoRelayStore {
 
     this.db
       .prepare(`
-        INSERT INTO relay_mailbox (mailbox, account_id, status, capacity, registered_at)
+        INSERT INTO relay_mailbox (mailbox, account_digest, status, capacity, registered_at)
         VALUES (?, ?, 'open', ?, ?)
       `)
-      .run(input.mailbox, input.accountId, input.capacity, input.registeredAt);
+      .run(input.mailbox, account.digest, input.capacity, input.registeredAt);
     return { ok: true, mailbox: this.mailboxFor(input.mailbox)! };
   }
 
   public mailboxFor(mailbox: string): PicoRelayMailbox | undefined {
     const row = this.db
       .prepare(`
-        SELECT mailbox, account_id AS accountId, status, capacity, registered_at AS registeredAt
+        SELECT mailbox, account_digest AS accountDigest, status, capacity, registered_at AS registeredAt
         FROM relay_mailbox WHERE mailbox = ?
       `)
       .get(mailbox) as PicoRelayMailbox | undefined;
@@ -260,8 +466,15 @@ export class PicoRelayStore {
     mailbox: string;
     nowMs: number;
   }): { ok: true; packets: readonly PicoRelayCollected[] } | { ok: false; refusal: PicoRelayRefusal } {
+    const account = this.activeAccount(input.accountId);
     const registration = this.mailboxFor(input.mailbox);
-    if (registration === undefined || registration.accountId !== input.accountId) {
+    if (account === undefined
+      || registration === undefined
+      || registration.accountDigest !== account.digest) {
+      // One answer for three states: not yours, not there, and a credential
+      // this relay has stopped honouring. ADR 0154 RO5 - a revoked account
+      // learns that its credential no longer works, and nothing about whose
+      // mailbox it was asking after.
       return { ok: false, refusal: 'mailbox_not_yours' };
     }
     this.pruneExpired(input.mailbox, input.nowMs);
@@ -280,8 +493,15 @@ export class PicoRelayStore {
     mailbox: string;
     tags: readonly string[];
   }): { ok: true; removed: number } | { ok: false; refusal: PicoRelayRefusal } {
+    const account = this.activeAccount(input.accountId);
     const registration = this.mailboxFor(input.mailbox);
-    if (registration === undefined || registration.accountId !== input.accountId) {
+    if (account === undefined
+      || registration === undefined
+      || registration.accountDigest !== account.digest) {
+      // One answer for three states: not yours, not there, and a credential
+      // this relay has stopped honouring. ADR 0154 RO5 - a revoked account
+      // learns that its credential no longer works, and nothing about whose
+      // mailbox it was asking after.
       return { ok: false, refusal: 'mailbox_not_yours' };
     }
     const statement = this.db.prepare('DELETE FROM relay_packet WHERE mailbox = ? AND tag = ?');
@@ -304,8 +524,15 @@ export class PicoRelayStore {
     accountId: string;
     mailbox: string;
   }): { ok: true } | { ok: false; refusal: PicoRelayRefusal } {
+    const account = this.activeAccount(input.accountId);
     const registration = this.mailboxFor(input.mailbox);
-    if (registration === undefined || registration.accountId !== input.accountId) {
+    if (account === undefined
+      || registration === undefined
+      || registration.accountDigest !== account.digest) {
+      // One answer for three states: not yours, not there, and a credential
+      // this relay has stopped honouring. ADR 0154 RO5 - a revoked account
+      // learns that its credential no longer works, and nothing about whose
+      // mailbox it was asking after.
       return { ok: false, refusal: 'mailbox_not_yours' };
     }
     this.db.prepare("UPDATE relay_mailbox SET status = 'revoked' WHERE mailbox = ?").run(input.mailbox);
@@ -326,4 +553,16 @@ export class PicoRelayStore {
       }
     }
   }
+}
+
+/**
+ * ADR 0154 RO4. A non-secret handle for one account.
+ *
+ * The digest's first bytes. Truncation is safe here because the value is only
+ * ever compared against digests this relay computed - it names a row, it never
+ * authenticates one, and every route that acts on it has already checked the
+ * operator credential.
+ */
+function refOf(digest: string): string {
+  return digest.slice(0, picoRelayAccountRefLength);
 }

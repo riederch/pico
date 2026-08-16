@@ -46,6 +46,14 @@
       "types": "./dist/link-relay-sweep.d.ts",
       "import": "./dist/link-relay-sweep.js"
     },
+    "./platform-secrets": {
+      "types": "./dist/platform-secrets.d.ts",
+      "import": "./dist/platform-secrets.js"
+    },
+    "./relay-operator": {
+      "types": "./dist/relay-operator.d.ts",
+      "import": "./dist/relay-operator.js"
+    },
     "./pending-reply": {
       "types": "./dist/pending-reply.d.ts",
       "import": "./dist/pending-reply.js"
@@ -102,6 +110,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@pico/link-relay-client": "workspace:*",
     "@pico/protocol": "workspace:*",
     "@pico/vault": "workspace:*",
     "@pico/vault-daemon": "workspace:*"
