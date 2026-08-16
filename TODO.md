@@ -310,14 +310,26 @@ Offen bleiben daraus zwei kleinere Luecken, beide stromaufwaerts:
   Realisierung aus, und hier hat sie nie stattgefunden. Als Nicht-Achse
   festgehalten in ADR 0135 D3.
 
-ADR-Nummern sind vergeben: **0124** ist die Architektur (autorierter
+ADR-Nummern zu diesem Abschnitt: **0124** ist die Architektur (autorierter
 Character Core und gestufte Darstellung, angelegt 2026-08-02), **0125** ist
-PAS, **0126** ist Multi-Presence. Weiter vergeben: **0130** Desktop-
-Bedienflaeche, **0131** Android als Vollclient, **0132** Recovery-Card-
-Generator, **0133** Ableitungsgrundsatz, **0134** Formatrevision vor dem
-Freeze, **0135** Design-System-Lesbarkeit. Naechste freie Nummer: **0136** -
-vor dem Schreiben hier beanspruchen, sonst kollidieren zwei parallele
-Sitzungen still.
+PAS, **0126** ist Multi-Presence.
+
+**Die freie Nummer steht nicht hier, sondern in `docs/architecture/`.** Diese
+Datei hat sie bis 2026-08-16 als "0136" gefuehrt, waehrend dort schon 0152
+lag - sechzehn ADRs lang zeigte ausgerechnet der Satz, der stille Kollisionen
+verhindern sollte, auf die falsche Zahl. Eine von Hand gepflegte Zweitliste
+neben einem Verzeichnis, das die Wahrheit ohnehin traegt, geht auseinander;
+die Frage ist nur, wann es jemand merkt.
+
+Die naechste freie Nummer ist deshalb die hoechste im Verzeichnis plus eins:
+
+```
+ls docs/architecture/ | grep -oE '^0[0-9]{3}' | sort -n | tail -1
+```
+
+Am 2026-08-16 sind das 0001 bis 0152 luecklos, naechste frei also **0153**.
+Beansprucht wird eine Nummer, indem die Datei angelegt wird - nicht, indem sie
+hier eingetragen wird.
 
 ## Security-Initiative: Backlog abgearbeitet
 
