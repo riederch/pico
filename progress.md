@@ -26,7 +26,7 @@
 
 ### Tatsächliche Komponenten
 
-Diese Teile laufen als eigene Programme, erscheinen auf Geräten und Bildschirmen oder werden als eigenständige Erweiterungen an Pico angebunden.
+Diese Teile laufen als eigene Programme oder erscheinen auf Geräten und Bildschirmen.
 
 | Pico-Komponente | Wofür ist das da? | Fortschritt | Status | Nachgewiesener Stand | Verbleibende Lücken |
 | --------------- | ----------------- | ----------: | ------ | ------------------- | ------------------- |
@@ -34,7 +34,6 @@ Diese Teile laufen als eigene Programme, erscheinen auf Geräten und Bildschirme
 | Pico Vault | Der private Kern eines persönlichen Pico. Hier werden Wissen, digitale Schlüssel, der Stand des Datenabgleichs und Sicherungen lokal aufbewahrt. Die Geräte und Bildschirme einer Person greifen von außen darauf zu. | 95 % | In Arbeit | Vault-Daemons führen Claim-, Domain-, Membership-, Reader-, Recovery-, Device-, Root- und Host-Key-Ceremonies mit hold-gebundenen Sessions und signaturgenauen Approvals aus; Linux `safeStorage` hält nur die profilgebundene Unlock-Hülle. | Produktiver Onboarding-Aufruf, weitere Platform-Keystores, eigenständige Daemon-Paketierung/Autostart, macOS-/Windows-Transport, Protected Display und Betriebshärtung. |
 | Pico Surfaces | Die Geräte und Bildschirme, über die ein Mensch mit Pico spricht oder Pico bedient. Sie zeigen Antworten und Rückfragen an, nehmen Eingaben entgegen und speichern selbst möglichst wenig. Heute gibt es die Übersicht im Browser und die Linux-App; später sollen etwa Smartwatches und kleine Displays dazukommen. | 69 % | Teilweise implementiert | Das frameworkfreie Dashboard bedient Foundation-Diagnose, Termine, Memory-/Relay-Einstellungen und die gemessene Provider-Ansicht. Die Linux-Companion trägt Erstlauf, Keystore-Sessions, Recovery, Approval, Provider-Entscheidungen und ausdrückliches Keep wartender Reads durch einen sandboxed Renderer. | Freigegebener Character Core, Appearance-Renderer/-Persistenz/-Sync, Voice, Avatar-Zustände, mobile sowie macOS-/Windows-Flächen und breitere Alltagsflows. |
 | Pico Relay | Ein optionaler Vermittlungsserver für den Fall, dass sich ein Gerät und ein Pico Home nicht direkt erreichen können. Er bewahrt verschlüsselte Nachrichten vorübergehend auf und leitet sie weiter. Er kann sie nicht lesen und entscheidet nichts für ein Pico. | 76 % | Teilweise implementiert | Ein eigenständiger SQLite-Dienst registriert begrenzte Mailboxes, nimmt versiegelte Pakete an und bietet Abholung, Acknowledgement sowie Deregistrierung über fünf feste POST-Routen. Getrennte Clients, Core-/Companion-Sweeps und Pushes schließen den lokal getesteten Weg. | Real betriebener Operator, produktiver Account-Lifecycle, Deployment/TLS/Monitoring, Abuse-Schutz über Quoten hinaus, festgelegte Tombstone-Aufbewahrung und weitere Metadatenminimierung. |
-| Pico Bridges und Libraries | Erweiterungen, über die Pico Informationen aus anderen Systemen oder aus bereitgestellten Dokumentsammlungen erhält. Eine Bridge fragt ein anderes System ab; eine Library liest eine lokale Sammlung auch ohne Netz. Beide liefern nur Daten und entscheiden nichts für Pico. | 71 % | Teilweise implementiert | Eine ausgelieferte Git Library läuft getrennt vom Core, liest begrenzte Ausschnitte aus einer festgelegten Arbeitskopie und reicht sie mit Herkunft und Versionsstand an den geschützten Leseweg weiter. Abruf, Ablage und persönliche Zuordnung sind lokal verbunden. | Reale Bridges zu anderen Systemen, breitere Dateiformate, einfache Einrichtung, Zugangsdaten-Ceremonies, signierte Verteilung und belastbarer Betrieb. |
 
 ### Technische Bausteine, Protokolle und Schichten
 
@@ -56,6 +55,7 @@ Lokaler Foundation-Service für APIs, Events, Memory, Auth und Pico-Home-Betrieb
 | --- | ---: | --- | --- |
 | Architektur | 97 % | In Arbeit | Store-, Session-, Home-/Device-, Recovery-, Root-/Host-Rotation-, Custody-, Supplier-, Model-, Action-, Relay- und Link-Grenzen sind explizit; Relay und Transport besitzen keine Identity-, Policy- oder Decryption-Authority. |
 | Kernfunktionen | 97 % | In Arbeit | Events, verschlüsseltes Memory, Termine, Beobachtungen und Orte sowie Lifecycle-, Recovery- und Custody-Flows funktionieren lokal. Hinzu kommen gepinnter Depot-Fetch, Library-Intake, Modelljob-Queue/-Runtime, ausdrückliches Keep, Relay-Collection und begrenzte Pushes. Mobile Sensorik, Planner und breite Executor-Integration fehlen. |
+| Erweiterungen und Datenquellen | 71 % | Teilweise implementiert | Der Core verwaltet Bridges zu anderen Systemen und Libraries mit bereitgestellten Dokumentsammlungen, führt ihren Code aber aus Sicherheitsgründen getrennt aus. Eine Git Library kann festgelegte Ausschnitte mit Herkunft und Versionsstand in den geschützten Leseweg liefern; reale Bridges, breitere Dateiformate, einfache Einrichtung und signierte fremde Quellen fehlen. |
 | Datenhaltung | 98 % | In Arbeit | 18 Migrationen (`0001_initial_schema` bis `0018_pico_link_relay_identity`) bilden Modul-/Rule-Entscheidungen, Supplier/Depot, Relay-Mailboxes und Push-Ledger, Provider-Messungen und personenbezogene Entscheidungen, Modelljobs samt Provenienz sowie Pico-eigene Settings ab. Acht Hochwachstums-Stores besitzen Q5-Obergrenzen; Arbeitskopien und Supplier-Scratch sind reconciliierte Dateiartefakte, keine autoritativen Stores. Alte Entwicklungsdatenbanken mit unbekannten konsolidierten Migrationen werden fail-closed abgewiesen. |
 | Schnittstellen | 96 % | In Arbeit | Foundation-, Pico-Link- und Relay-Flächen bleiben getrennt. 61 bediente Routen sind gegen die Flächendokumentation geprüft; persönliche Provider-/Keep-Entscheidungen sind identity-gebunden, Home-weite Mess- und Setting-Flächen host-admin-gebunden. |
 | Sicherheit und Berechtigungen | 98 % | In Arbeit | Signierte Authority, Vorprüfungen gegen Status-Orakel, Recovery-Anker, Rotation Debt, serverkontrollierte Origins, geschlossene Rule-Eingaben, presence-gebundene Approvals und fail-closed Ressourcenpfade sind testgebunden. Attestation, verifizierter Deployment-Pfad und Container-Härtung bleiben offen. |
@@ -153,19 +153,6 @@ Eigenständiger Vermittlungsdienst, der verschlüsselte Pico-Link-Pakete vorübe
 | Installation und Betrieb | 25 % | Frühe Umsetzung | Server und Store laufen lokal und in echten Clienttests, aber ein ausgelieferter Start- und Deploymentpfad fehlt. Ebenso offen sind TLS-Terminierung, Account-Ausgabe und -Widerruf, Monitoring, Betreiberbetrieb und belastbare Aufbewahrungsregeln. |
 | Tests | 94 % | Weitgehend fertig | Relay hat 29 Store-/Server-Tests, Link-Relay-Client 9 Tests gegen den echten Server; Core und Companion ergänzen Collector-, Transport-, Sweep-, Restore- und Push-Fälle. Boundary-Gates prüfen die Trennung von Identität und Datenhaltung. |
 
-## Pico Bridges und Libraries
-
-Getrennt angebundene Zulieferer für Informationen, die Pico nicht selbst erzeugt. Bridges fragen andere Systeme über das Netz ab; Libraries lesen bereitgestellte Sammlungen ohne Netz. Pico behält die Kontrolle darüber, was davon verwendet oder dauerhaft gespeichert wird.
-
-| Bereich | Fortschritt | Status | Kurzbeschreibung |
-| --- | ---: | --- | --- |
-| Architektur | 96 % | In Arbeit | Drei feste Übergabestellen, getrennte Prozesse sowie die Unterschiede zwischen Bridge und Library sind festgelegt. Zulieferer erhalten keine Identitäts-, Regel-, Aktions- oder Speicherhoheit. |
-| Kernfunktionen | 72 % | In Arbeit | Depot-Abruf, festgelegte Arbeitskopie, Prozessstart, begrenztes Lesen, Herkunftsnachweis und die ausdrückliche Übernahme in Picos Memory funktionieren für die Git Library. Eine reale Bridge ist noch nicht umgesetzt. |
-| Sicherheit und Datenschutz | 91 % | In Arbeit | Fremde Inhalte werden beim Eingang als solche markiert, bleiben im geschützten Leseweg und dürfen nur nach persönlicher Entscheidung gespeichert werden. Libraries dürfen beim Lesen nicht auf das Netz zugreifen. |
-| Integration mit anderen Pico-Komponenten | 81 % | In Arbeit | Core, Depot-Modul, Memory, Modelljobs und Companion verbinden Abruf, persönliche Zuordnung, Lesen und Behalten. Regeln für mehrere Quellen, Reichweite und Kosten sind vertraglich gebunden. |
-| Installation und Betrieb | 38 % | Frühe Umsetzung | Die Git Library wird mit Pico ausgeliefert und in einem getrennten Prozess gestartet. Ein allgemeiner Einrichtungsweg, signierte fremde Depots, Zugangsdaten-Ceremonies und produktiver Betrieb fehlen. |
-| Tests | 93 % | Weitgehend fertig | Supplier-, Supply-Chain-, Core-, Protocol- und Companion-Tests prüfen Prozessgrenze, Größen- und Pfadgrenzen, Versionsbindung, Herkunft, persönliche Freigabe und fehlende Netzrechte. Reale Fremdsysteme sind nicht angebunden. |
-
 ## Pico Link
 
 Begrenzte Grundlage für sichere Kommunikation zwischen Picos und Homes. Direct ist als lokaler Laufzeitpfad implementiert; Pico Relay kann dieselben versiegelten Pakete vermitteln, bleibt aber eine eigene Komponente. Es besteht kein öffentlicher Kompatibilitätsclaim.
@@ -207,6 +194,6 @@ Wenn der Auftrag "aktualisiere progress.md" lautet, diese Datei anhand des aktue
 5. Keine nächsten Blöcke, nächsten Schritte, Prioritäten, Reihenfolgen, Model-/Effort-Empfehlungen oder handlungsorientierten Einstiegspunkte aufnehmen. Solche Inhalte gehören in `.agent-context.md`.
 6. Bestehende Aussagen durch den aktuellen Zustand ersetzen; Git-Historie und Commits bilden den zeitlichen Verlauf.
 7. Offene Lücken und Risiken als gegenwärtige Eigenschaften benennen, nicht als Arbeitsplan formulieren.
-8. Keine neuen Hauptkomponenten erfinden. Eigenständig laufende Pico-Dienste oder Zulieferer nicht unter einem Protokoll oder dem Core verstecken; rein technische Themen nur als Unterbereiche klar erkennbarer Pico-Komponenten führen.
+8. Keine neuen Hauptkomponenten erfinden. Nur Pico-Knotenrollen und unabhängig betriebene Pico-Dienste als Hauptkomponenten führen. Vom Core verwaltete Zulieferer wie Bridges und Libraries trotz Prozessgrenze als Core-Unterbereich führen; rein technische Themen ebenfalls ihren tatsächlichen Komponenten zuordnen.
 9. Fortschritt realistisch bewerten und klar zwischen konzipiert, dokumentiert, prototypisch umgesetzt, implementiert und praktisch funktionsfähig unterscheiden.
 10. Ausschließlich `progress.md` verändern.
