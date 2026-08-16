@@ -63,6 +63,11 @@ export const foundationEventTypes = [
   'home.module_capture_changed',
   'home.presence_switch_changed',
   /**
+   * ADR 0126 P3. Something a presence held became something the identity
+   * keeps. Content-free: which crossing, from where, into which domain.
+   */
+  'home.state_crossed',
+  /**
    * ADR 0140 RL4. A person said what may happen when an effect is requested.
    *
    * The third decision recorded in this shape, and the one that decides about
@@ -139,6 +144,11 @@ export const serverSynthesizedFoundationEventTypes = [
   // somebody else's permission.
   'home.module_capture_changed',
   'home.presence_switch_changed',
+  /**
+   * ADR 0126 P3. Something a presence held became something the identity
+   * keeps. Content-free: which crossing, from where, into which domain.
+   */
+  'home.state_crossed',
   // ADR 0140 RL4. A rule is what answers a request; a client writing its own
   // rule record would be granting itself the permission it is about to ask
   // for.

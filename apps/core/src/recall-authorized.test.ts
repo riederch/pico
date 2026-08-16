@@ -246,6 +246,24 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
     expect((await send('home.recall.keep', { jobId: recalls[0]?.jobId })).response.outcome)
       .toBe('ok');
 
+    /**
+     * ADR 0126 P3. The crossing left a record, which it did not before.
+     *
+     * Read from the event log rather than from the answer, because the point
+     * of the door is that the record exists whether or not the caller looked
+     * at it - and content-free, so what crossed stays the memory item's
+     * business.
+     */
+    const crossings = (await app.inject({
+      method: 'GET',
+      url: '/api/events/tail?limit=50',
+    })).json() as { events: Array<{ type: string; payload: Record<string, unknown> }> };
+    const crossed = crossings.events.filter((event) => event.type === 'home.state_crossed');
+    expect(crossed).toHaveLength(1);
+    expect(crossed[0]?.payload.kind).toBe('recall_answer');
+    expect(crossed[0]?.payload.privacyDomain).toBe('domain-private');
+    expect(JSON.stringify(crossed[0]?.payload)).not.toContain('Bergstrasse');
+
     const again = await send('home.recall.ask', {
       privacyDomain: 'domain-private',
       question: 'And where was that again?',

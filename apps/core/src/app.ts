@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { crossPicoStateBoundary } from './state-crossing.js';
 import {
   picoPresenceAffordances,
   type PicoPresenceAffordance,
@@ -3627,15 +3628,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
              * instruct. So the answer boundary's rule applies here too.
              */
             const derived = memory.derivedOriginFor(kept.privacyDomain, kept.memoryItemIds);
-            memory.create({
-              memoryItemId,
+            /**
+             * ADR 0126 P3. Through the crossing rather than straight into the
+             * store, and the difference is a record: this is a device's
+             * derived sentence becoming something the identity keeps, which is
+             * the one act ADR 0126 calls explicit *and* audited. It was
+             * explicit and unaudited until this went through the door.
+             */
+            const crossed = crossPicoStateBoundary({
+              store,
+              kind: 'recall_answer',
               privacyDomain: kept.privacyDomain,
               owner: `pico:identity:${principal.picoIdentityFingerprintHex}`,
               controller: `pico:identity:${principal.picoIdentityFingerprintHex}`,
               contentType: 'text/plain',
               content: answer,
               origin: derived === 'person_present' ? 'own_pico' : derived,
+              sourceCount: kept.memoryItemIds.length,
+              deviceId: config.deviceId,
+              memoryItemId,
+              appendEvent: ({ type, payload }) => {
+                const crossingEvent = factory.create({
+                  deviceId: config.deviceId,
+                  type,
+                  payload,
+                });
+                store.append(crossingEvent);
+                broadcast(crossingEvent);
+              },
             });
+            if (!crossed.ok) {
+              return { outcome: 'invalid_arguments', result: { refusal: crossed.refusal } };
+            }
           } catch (error) {
             return {
               outcome: 'invalid_arguments',

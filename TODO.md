@@ -171,11 +171,21 @@ wurde nur beim Namen `PresenceCapability`, und das steht in der ADR unter den
 verworfenen Alternativen.
 
 Offen sind jetzt Implementierungs-Gates in der ADR, keine Vorfragen mehr.
-**P2 und P6 sind am 2026-08-16 implementiert** - Registry, Lease, berechneter
-Verbindungszustand, geschlossenes Affordance-Vokabular, `presence:check` im
-Gate, und die Abschaltbarkeit je Affordance oder ganzer Praesenz. Offen:
-**P3** die Zustandsgrenze samt Umzug des Beobachtungspuffers; **P4** blockiert
-weiterhin am fehlenden Action Runner, **P5** ist erledigt.
+**P2, P6 und die haelfte von P3 sind am 2026-08-16 implementiert.** Registry,
+Lease, berechneter Verbindungszustand, geschlossenes Affordance-Vokabular,
+`presence:check` im Gate, Abschaltbarkeit je Affordance oder ganzer Praesenz -
+und die Zustandsgrenze als Tuer: `crossPicoStateBoundary` schreibt Memory Item
+und Protokoll in einem Zug, und `home.recall.keep` geht seitdem hindurch.
+
+**Offen aus P3 bleibt der Umzug des Beobachtungspuffers**, vom Nutzer am
+2026-08-16 bewusst zurueckgestellt. Der Grund steht in den Zahlen:
+`appendPicoObservations` hat ausser Tests keinen Aufrufer, der Core haelt also
+gar keine Rohmessungen, und die einzige existierende Praesenz ist ein Desktop
+ohne Standortsensor. Der Umzug wartet auf ADR 0131s Android-Laufzeit; die
+Kreuzungsart `derived_observation` ist schon deklariert, damit das Telefon
+durch dieselbe Tuer geht.
+
+**P4** blockiert weiterhin am fehlenden Action Runner, **P5** ist erledigt.
 
 P3 bleibt der Punkt mit der Entscheidung darin: ein Telefon in der Tiefgarage
 hat kein Zuhause, also funktioniert "wo habe ich geparkt" ausgerechnet offline

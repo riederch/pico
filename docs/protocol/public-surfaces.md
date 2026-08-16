@@ -299,6 +299,7 @@ home.clock_divergence_detected
 home.module_activation_changed
 home.module_capture_changed
 home.presence_switch_changed
+home.state_crossed
 home.rule_decision_changed
 home.supplier_attachment_changed
 home.version_changed
@@ -330,6 +331,7 @@ home.clock_divergence_detected
 home.module_activation_changed
 home.module_capture_changed
 home.presence_switch_changed
+home.state_crossed
 home.rule_decision_changed
 home.supplier_attachment_changed
 home.version_changed

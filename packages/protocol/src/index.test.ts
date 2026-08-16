@@ -157,6 +157,7 @@ describe('Pico protocol types', () => {
       'home.module_activation_changed',
       'home.module_capture_changed',
       'home.presence_switch_changed',
+      'home.state_crossed',
       'home.rule_decision_changed',
       'home.supplier_attachment_changed',
       // ADR 0122 Y6: the running code changed.
@@ -186,6 +187,7 @@ describe('Pico protocol types', () => {
       'home.module_activation_changed',
       'home.module_capture_changed',
       'home.presence_switch_changed',
+      'home.state_crossed',
       'home.rule_decision_changed',
       'home.supplier_attachment_changed',
       'home.version_changed',

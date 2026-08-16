@@ -276,10 +276,42 @@ version of a concept, and the versions drift where nobody is looking.
   What P2 does not do is the half ADR 0126 already calls the hard one:
   ownership, selection and takeover are P4, and P4 stays blocked on an Action
   Runner that does not exist.
-- **P3 - The state crossing (open):** promotion from presence-local to
-  durable state as an explicit, audited step, with ADR 0129's five places
-  answered at the crossing; the SR2 buffer relocates to presence-local and
-  the Core stops holding raw samples.
+- **P3 - The state crossing (half implemented 2026-08-16, half deferred by
+  the user):** the crossing exists as a door; the SR2 buffer stays where it
+  is until a runtime with a sensor exists.
+
+  **The crossing had already happened once before it had a name.** Keeping a
+  recall answer is exactly this gate's subject - a derived sentence a device
+  is holding becomes a memory item because the person said so (ADR 0116 W5) -
+  and it wrote the item with no record of the promotion. The one act this ADR
+  calls *explicit, audited* was explicit and unaudited.
+
+  `crossPicoStateBoundary` is now the only way that happens: it writes the
+  memory item **and** the content-free `home.state_crossed` record, so an
+  audit is not something a caller is trusted to append beside its write. A
+  rule a surface enforces is a rule anything else walks past; here promoting
+  *is* recording. The record carries which crossing, from which presence when
+  one is known, into which domain, and how many sources - never what crossed,
+  because an audit trail repeating the content would be a second copy of it in
+  a place with different deletion rules.
+
+  The five places are asked at the boundary rather than re-implemented there:
+  material with no domain is refused, because a shred reaches memory items by
+  domain and material landing without one is material a deletion somebody
+  relied on would miss; the Q5 ceiling is named at the door instead of
+  arriving as a store error, because "your Home is full" and "that crossing
+  was malformed" are different things to be told.
+
+  **The buffer relocation is deliberately not done**, decided by the user on
+  2026-08-16 after the measurement below. `appendPicoObservations` has no
+  caller outside tests - no route, no module and no device writes an
+  observation - so "the Core stops holding raw samples" would today be an
+  improvement on paper: it holds none. And the only presence that exists is a
+  desktop with no location sensor, so a presence-local buffer would be code
+  nobody could run against a real device, which is the reason SR5 gives for
+  leaving its own capture port unfilled. The kind is declared
+  (`derived_observation`) and unused, so the door the phone will use is the
+  door that exists.
 - **P4 - Ownership and idempotency (open, blocked):** selection, handover,
   running-action ownership and controlled takeover. Blocked on the Action
   Runner, which does not exist; without it there is nothing to own.

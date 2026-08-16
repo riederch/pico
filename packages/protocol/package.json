@@ -67,6 +67,10 @@
       "types": "./dist/link-relay-surface.d.ts",
       "import": "./dist/link-relay-surface.js"
     },
+    "./state-crossing": {
+      "types": "./dist/state-crossing.d.ts",
+      "import": "./dist/state-crossing.js"
+    },
     "./presence": {
       "types": "./dist/presence.d.ts",
       "import": "./dist/presence.js"
