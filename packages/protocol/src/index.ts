@@ -466,6 +466,22 @@ export const picoLinkDirectOperations = [
    * sealed request open - and because the answer arrives in the same place
    * every other answered read does.
    */
+  /**
+   * ADR 0082 with ADR 0087. The device issues the grant that lets it read.
+   *
+   * **The Home relays; it never mints.** The statement arrives already signed
+   * by the Home Host Pico's identity key, which lives in the person's Vault
+   * and nowhere else, and the handler verifies that signature before anything
+   * is recorded - so this operation adds a way to *carry* authority and no way
+   * to create it.
+   *
+   * It exists because the alternative was worse than a missing feature: until
+   * it did, a person who wanted to ask their own Home about their own memory
+   * needed somebody with a Foundation session to relay a grant for them. The
+   * one thing they cannot delegate is the signature, and it was the only part
+   * they could already produce.
+   */
+  'home.domain.read-grant.submit',
   'home.recall.ask',
   /** ADR 0116 W1. What this person asked, and what came back. */
   'home.recall.read',

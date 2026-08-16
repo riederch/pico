@@ -23,6 +23,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   keepAnsweredRead: 'pico:model-read:keep',
   askRecall: 'pico:recall:ask',
   getRecalls: 'pico:recalls:get',
+  grantDomainRead: 'pico:domain-read-grant:issue',
 });
 
 export type PicoCompanionPresentationKind =

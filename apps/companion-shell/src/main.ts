@@ -524,6 +524,26 @@ function registerIpc(): void {
       }
     },
   );
+  /**
+   * ADR 0082 with ADR 0100. The person's own device issuing the grant.
+   *
+   * It throws on a refusal rather than answering an empty result: somebody
+   * pressed a button and is standing there, and the three refusals this can
+   * give are three different things to do next.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.grantDomainRead,
+    async (event: IpcMainInvokeEvent, privacyDomain: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof privacyDomain !== 'string' || privacyDomain.trim() === '') {
+        throw new Error('invalid_domain_read_grant');
+      }
+      return await runtime.grantDomainRead({ privacyDomain: privacyDomain.trim() });
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.revokeModelProvider,
     async (event: IpcMainInvokeEvent, entryId: unknown) => {

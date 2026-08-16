@@ -18,6 +18,7 @@ const channels = Object.freeze({
   keepAnsweredRead: 'pico:model-read:keep',
   askRecall: 'pico:recall:ask',
   getRecalls: 'pico:recalls:get',
+  grantDomainRead: 'pico:domain-read-grant:issue',
 });
 
 // No generic send/invoke and no raw ipcRenderer: this is the whole bridge.
@@ -80,6 +81,11 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     await ipcRenderer.invoke(channels.askRecall, ask),
   getRecalls: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getRecalls),
+  // ADR 0082. A domain name and nothing else: the signature is made in the
+  // main process from the key the Vault holds, and the statement it signs is
+  // built there too.
+  grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
   closeWindow: (): void => {
     ipcRenderer.send(channels.closeWindow);
   },

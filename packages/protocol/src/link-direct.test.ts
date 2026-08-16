@@ -157,6 +157,9 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.model.provider.credential.submit',
       'home.model.provider.decision.submit',
       'home.model.provider.decision.revoke',
+      // ADR 0082: the device issues the grant that lets it read, signed by
+      // the key its Vault holds. The Home relays it and never mints one.
+      'home.domain.read-grant.submit',
       // ADR 0116 W1: the requesting side - a person asking about what their
       // Home remembers, from the device they are holding.
       'home.recall.ask',

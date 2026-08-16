@@ -7,6 +7,14 @@ import {
 } from '@pico/companion/alarm-carrier';
 import { createPicoCompanionLifecycleReader } from '@pico/companion/lifecycle-reader';
 import {
+  grantPicoCompanionDomainRead,
+  readPicoCompanionHomeId,
+} from '@pico/companion/domain-read-grant';
+// The narrow subpath, not the barrel: ADR 0136's boundary check caught the
+// barrel pulling the vault CLI and the PDF generator into the tray's reachable
+// closure - the same finding ADR 0138 already records against recovery.
+import { createPicoVaultDaemonCeremonySigner } from '@pico/vault-daemon/ceremony-signer';
+import {
   createPicoCompanionDueEntriesReader,
   createPicoCompanionDueEntryAcknowledger,
   createPicoCompanionStorageReader,
@@ -76,6 +84,15 @@ export interface PicoCompanionShellRuntime {
     carries: string;
   }>;
   readRecalls(): Promise<readonly PicoCompanionRecallView[]>;
+  /**
+   * ADR 0082 with ADR 0100. Issues the grant that lets this device read one
+   * part of its person's memory - signed here, recorded there.
+   */
+  grantDomainRead(input: { privacyDomain: string }): Promise<{
+    grantId: string;
+    privacyDomain: string;
+    status: string;
+  }>;
   /** ADR 0116 W5. What a read produced and nobody has kept. */
   readAnsweredReads(): Promise<readonly PicoCompanionAnsweredReadView[]>;
   keepAnsweredRead(jobId: string): Promise<string>;
@@ -333,6 +350,49 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
         });
+      }),
+      grantDomainRead: async ({ privacyDomain }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        const linkClient = await createPicoCompanionLinkClient({
+          profile,
+          daemonClient,
+          sodium: input.sodium,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+        /**
+         * ADR 0080. The Home this device belongs to, asked rather than kept:
+         * the profile pins who the Home Host Pico is and which host keys to
+         * accept, and the identifier of the Home itself is something the Home
+         * answers on the read this device already performs.
+         */
+        const homeId = await readPicoCompanionHomeId({ livingDeviceLinkClient: linkClient });
+        const signer = createPicoVaultDaemonCeremonySigner({
+          socketPath: input.vaultSocketPath ?? defaultPicoVaultDaemonSocketPath(),
+          keyRole: 'pico_identity',
+          keyFingerprintHex: profile.identity.keyFingerprintHex,
+        });
+        try {
+          const nowMs = Date.now();
+          return await grantPicoCompanionDomainRead({
+            livingDeviceLinkClient: linkClient,
+            signer,
+            homeId,
+            hostSigningKeyFingerprintHex: profile.host.signingKeyFingerprintHex,
+            homeHostPicoIdentityFingerprintHex:
+              profile.home.homeHostPicoIdentityFingerprintHex,
+            identityPublicKeyHex: profile.identity.publicKeyHex,
+            privacyDomain,
+            validFrom: new Date(nowMs).toISOString(),
+            // A year, and it ends. A grant without an end is one nobody ever
+            // revisits, and ADR 0082 makes the window part of what was signed
+            // precisely so it cannot quietly become permanent.
+            validUntil: new Date(nowMs + 365 * 24 * 60 * 60 * 1_000).toISOString(),
+            nowMs,
+          });
+        } finally {
+          signer.close();
+        }
       }),
       revokeModelProvider: async (entryId) => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();

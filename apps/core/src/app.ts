@@ -3388,6 +3388,57 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * measurement is.
          */
         /**
+         * ADR 0082 with ADR 0087. The device issues; this Home records.
+         *
+         * The same store call the Foundation relay route makes, reached from
+         * the channel a person's own device speaks - so the grant that lets
+         * somebody read their own memory no longer needs a second party with
+         * a Foundation session to carry it.
+         *
+         * **Nothing here is authority.** The record arrives signed by the Home
+         * Host Pico's identity key and `recordPicoHomeDomainReadGrant` refuses
+         * it unless that signature verifies against the founding record, the
+         * reader is an active member, and the domain is one this Home actually
+         * holds. A sender who forged any of it gets the same refusal as a
+         * sender who mistyped it.
+         */
+        case 'home.domain.read-grant.submit': {
+          if (principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          let statement: Omit<PicoHomeDomainReadGrantRecord, 'createdAt'>;
+          try {
+            statement = parsePicoHomeDomainReadGrantStatement(args);
+          } catch (error) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'refused' },
+            };
+          }
+          const recorded = store.recordPicoHomeDomainReadGrant({
+            sodium,
+            record: { ...statement, createdAt: new Date().toISOString() },
+          });
+          if (!recorded.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: recorded.reason } };
+          }
+          if (recorded.inserted) {
+            appendServerEvent('home.domain_read_granted', {
+              grantId: recorded.grant.grantId,
+              privacyDomain: recorded.grant.privacyDomain,
+              readerPicoIdentityFingerprintHex: recorded.grant.readerPicoIdentityFingerprintHex,
+            });
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              grantId: recorded.grant.grantId,
+              privacyDomain: recorded.grant.privacyDomain,
+              status: recorded.grant.status,
+            },
+          };
+        }
+        /**
          * ADR 0116 W1. The requesting side: a person asks about what their
          * Home remembers.
          *

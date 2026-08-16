@@ -303,14 +303,17 @@ patched afterwards.
   test injects a readership, which is right for testing what happens after
   the check and useless for testing the check.
 
-  **What a person still cannot do is issue that grant from their device.**
-  The signature has to come from the identity key their Vault holds, the
-  ceremony signer that would produce it exists (ADR 0100), and the
-  operation that would carry the signed statement over the Link channel
-  does not. Until it does, a Home whose owner wants to ask about their own
-  memory needs somebody with a Foundation session to relay a grant - which
-  is the last stand-in on this path and is named here rather than left to
-  be discovered.
+  **That last stand-in went on 2026-08-16.** `home.domain.read-grant.submit`
+  carries a grant the person's own Vault signed, and the companion has the
+  control beside the question - because the moment somebody learns they
+  need one is the moment their question was refused.
+
+  The Home relays and never mints: the statement arrives signed, the
+  handler verifies it against the founding record before recording
+  anything, and a forged signature is refused on this channel exactly as
+  on the Foundation one. What the device adds is the ability to *carry*
+  authority the person was holding the whole time, in the Vault on the
+  device in their hand.
 
   What is still not claimed: the rule that *no other* consumer may
   assemble a context another way is still enforced by there being one.

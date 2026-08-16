@@ -86,6 +86,10 @@
       "types": "./dist/first-run.d.ts",
       "import": "./dist/first-run.js"
     },
+    "./domain-read-grant": {
+      "types": "./dist/domain-read-grant.d.ts",
+      "import": "./dist/domain-read-grant.js"
+    },
     "./model-providers": {
       "types": "./dist/model-providers.d.ts",
       "import": "./dist/model-providers.js"

@@ -198,21 +198,25 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
 
     // An unsigned claim to the same authority is refused: relaying is not
     // minting, and the route that transports evidence verifies it first.
-    const forged = await app.inject({
-      method: 'POST',
-      url: '/api/home/domain-read-grants',
-      headers: { authorization: `Bearer ${device.session}` },
-      payload: { ...signed, issuerSignatureHex: 'f'.repeat(128) },
+    // Forged, over the channel the device actually uses: the Home relays and
+    // never mints, so a signature that does not verify is refused here exactly
+    // as it is on the Foundation route.
+    const forged = await send('home.domain.read-grant.submit', {
+      ...signed,
+      issuerSignatureHex: 'f'.repeat(128),
     });
-    expect(forged.statusCode).toBe(401);
-    expect(forged.json()).toEqual({ error: 'invalid_issuer_signature' });
+    expect(forged.response.outcome).toBe('invalid_arguments');
+    expect(forged.result.refusal).toBe('invalid_issuer_signature');
 
-    expect((await app.inject({
-      method: 'POST',
-      url: '/api/home/domain-read-grants',
-      headers: { authorization: `Bearer ${device.session}` },
-      payload: signed,
-    })).statusCode).toBe(201);
+    // And the real one, issued by the device itself - no Foundation session
+    // anywhere on this path.
+    const issued = await send('home.domain.read-grant.submit', signed);
+    expect(issued.response.outcome).toBe('ok');
+    expect(issued.result).toEqual({
+      grantId: 'grant_recall_0001',
+      privacyDomain: 'domain-private',
+      status: 'active',
+    });
 
     const asked = await send('home.recall.ask', {
       privacyDomain: 'domain-private',

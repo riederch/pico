@@ -32,6 +32,7 @@ declare global {
         carries: string;
       }>;
       getRecalls(): Promise<unknown>;
+      grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
       requestCheck(): Promise<void>;
@@ -215,6 +216,7 @@ const recallForm = requireElement('recall-form');
 const recallDomain = requireInput('recall-domain');
 const recallQuestion = requireInput('recall-question');
 const recallStatus = requireElement('recall-status');
+const recallGrant = requireButton('recall-grant');
 const providerSection = requireElement('model-providers');
 const providerList = requireElement('provider-list');
 const readSection = requireElement('answered-reads');
@@ -263,6 +265,30 @@ recallForm.addEventListener('submit', (event) => {
       recallStatus.textContent = error instanceof Error
         ? error.message.replace(/^Error: /u, '')
         : 'That question did not reach your Home.';
+    });
+});
+
+/**
+ * ADR 0082. The grant a person issues for their own device.
+ *
+ * Beside the question rather than in a settings page, because the moment a
+ * person learns they need one is the moment their question was refused - and
+ * the refusal already says which domain it was about.
+ */
+recallGrant.addEventListener('click', () => {
+  const privacyDomain = recallDomain.value.trim();
+  if (privacyDomain === '') {
+    recallStatus.textContent = 'Name the part of your memory first.';
+    return;
+  }
+  recallStatus.textContent = 'Your Vault will ask you to approve this...';
+  void window.picoCompanion.grantDomainRead(privacyDomain)
+    .then((granted) => {
+      recallStatus.textContent = `This device may now read ${granted.privacyDomain}.`;
+    }, (error: unknown) => {
+      recallStatus.textContent = error instanceof Error
+        ? error.message.replace(/^Error: /u, '')
+        : 'Your Home did not record that.';
     });
 });
 
