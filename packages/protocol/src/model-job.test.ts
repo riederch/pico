@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { mayPicoOriginInstruct } from './model-context.js';
 import {
   parsePicoModelJob,
   picoModelJobAllowanceFor,
@@ -126,10 +127,29 @@ describe('ADR 0151 PV3 - the allowance follows whose words the job carries', () 
   it('needs the wider allowance for anybody else\'s', () => {
     // This is the reading ADR 0151 left open, taken conservatively and in one
     // place: words their author never offered to a provider.
-    for (const origin of ['own_pico', 'home_member', 'remote_pico', 'external_content', 'unattributed'] as const) {
+    for (const origin of ['home_member', 'remote_pico', 'external_content', 'unattributed'] as const) {
       expect(picoModelJobAllowanceFor([{ originClass: origin, text: 'x' }]))
         .toBe('live_turn_and_retrieved_memory');
     }
+  });
+
+  it('keeps a derivation of the person\'s own words on the live turn', () => {
+    // The threshold moved on 2026-08-16, and only for this question. What may
+    // *instruct* and whose words are *disclosed* are different tests, and one
+    // constant for both made a summary of somebody's own notes into a thing
+    // they needed a proven provider to ask about.
+    expect(picoModelJobAllowanceFor([{ originClass: 'own_pico', text: 'You parked on Bergstrasse.' }]))
+      .toBe('live_turn');
+    // And the instruction threshold did not move with it: `own_pico` still
+    // may not instruct, which is the rule that breaks laundering.
+    expect(mayPicoOriginInstruct('own_pico')).toBe(false);
+  });
+
+  it('still needs the wider allowance once anybody else is in the same job', () => {
+    expect(picoModelJobAllowanceFor([
+      { originClass: 'own_pico', text: 'Pico wrote this.' },
+      { originClass: 'home_member', text: 'A housemate wrote this.' },
+    ])).toBe('live_turn_and_retrieved_memory');
   });
 
   it('takes the lowest origin present, not the first', () => {
@@ -189,6 +209,21 @@ describe('ADR 0060 - a job carrying prepared packets', () => {
       references: [],
       carries: 'live_turn',
     }), nowMs).carries).toBe('live_turn');
+  });
+
+  it('needs the wider allowance for a packet even of the person\'s own material', () => {
+    // A reference *is* retrieved memory - a bounded packet prepared from a
+    // store - so it decides this on its own, whatever class it holds. Since
+    // 2026-08-16 `own_pico` units travel on the live turn, and a library
+    // excerpt is `own_pico`: without this the job that reads a person's own
+    // corpus would quietly stop needing a proven provider.
+    const read = parsePicoModelJob(job({
+      units: [{ originClass: 'person_present', text: 'What does the note say?' }],
+      references: [{ ...packet, originClass: 'own_pico' }],
+      carries: 'live_turn_and_retrieved_memory',
+    }), nowMs);
+    expect(picoModelJobAllowanceFor(read.units, read.references))
+      .toBe('live_turn_and_retrieved_memory');
   });
 
   it('counts a packet\'s origin toward what the job carries', () => {

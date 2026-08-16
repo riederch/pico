@@ -71,10 +71,36 @@ describe('ADR 0116 W2 - what was included decides where it may go', () => {
     expect(job.units.map((unit) => unit.originClass)).toEqual(['person_present', 'own_pico']);
   });
 
-  it('reads an item recorded before origins existed as not the person speaking', () => {
-    // The conservative reading costs the wider allowance rather than a wrong
-    // label, and a wrong label here is a laundering step.
-    expect(picoRecallItemOf(item({ origin: undefined }))?.origin).toBe('own_pico');
+  it('reads an item nobody labelled as unattributed, not as its own', () => {
+    // The class that says "no origin was recorded" is the truthful reading and
+    // the conservative one at once: it may not instruct, and it needs a proven
+    // provider. Guessing `own_pico` would now send unlabelled material to an
+    // unproven one on the strength of the guess.
+    expect(picoRecallItemOf(item({ origin: undefined }))?.origin).toBe('unattributed');
+    expect(picoRecallJob({
+      jobId: 'job_recall_unlabelled',
+      question: 'what did I write?',
+      items: [picoRecallItemOf(item({ origin: undefined }))!],
+      nowMs: Date.parse('2026-08-16T12:00:00.000Z'),
+    }).carries).toBe('live_turn_and_retrieved_memory');
+  });
+
+  it('keeps a question over an answer Pico derived from the person\'s notes on the live turn', () => {
+    // ADR 0151 PV1 since 2026-08-16. Keeping one recall answer used to make the
+    // next question over the same domain need a proven provider - a summary of
+    // somebody's own notes is still their own words, and the provider that
+    // would receive it is the one that wrote it.
+    const job = picoRecallJob({
+      jobId: 'job_recall_own',
+      question: 'and where was that again?',
+      items: [recallItem('You parked on Bergstrasse.', 'own_pico')],
+      nowMs: Date.parse('2026-08-16T12:00:00.000Z'),
+    });
+
+    expect(job.carries).toBe('live_turn');
+    // What may instruct did not move with it: the derivation is still quoted
+    // data, and only the question is above the instruction threshold.
+    expect(job.units.filter((unit) => unit.originClass === 'person_present')).toHaveLength(1);
   });
 
   it('offers nothing for an item whose content cannot be produced', () => {

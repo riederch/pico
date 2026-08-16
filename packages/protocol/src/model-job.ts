@@ -5,6 +5,7 @@ import {
 import {
   lowestPicoOriginClass,
   picoInstructionThresholdOriginClass,
+  picoOwnDerivationOriginClass,
   type PicoModelContextUnit,
 } from './model-context.js';
 import {
@@ -102,16 +103,43 @@ export function picoModelRoleMayRunOn(
  * and not from its reasoning, which is about second parties learning what
  * people wrote. If it is ever taken, it is taken here, visibly, rather than by
  * a job quietly declaring what suits it.
+ *
+ * **The threshold moved on 2026-08-16, and one line is where it moved.**
+ * `own_pico` used to force the wider allowance because it sits below ADR
+ * 0116's instruction threshold - and that threshold answers a different
+ * question. What may *instruct* and whose words are *disclosed* are not the
+ * same test, and using one constant for both made a summary of somebody's own
+ * notes into a thing they needed a proven provider to ask about.
+ *
+ * A derivation of the person's own words is still their words. The provider
+ * that would receive it is, in the ordinary case, the one that wrote it. So
+ * the disclosure question stops at `own_pico`, and the instruction question
+ * does not move at all: ADR 0116 W3 still keeps Pico's own output out of the
+ * instruction layer, which is the rule that breaks laundering.
+ *
+ * Below `own_pico` nothing changes. A housemate's note, a synced item and a
+ * stranger's mail carry words their author never offered to a provider, which
+ * is exactly what ADR 0048's split protects.
  */
 export function picoModelJobAllowanceFor(
   units: readonly PicoModelContextUnit[],
   references: readonly PicoModelContextRef[] = [],
 ): PicoModelProviderAllowance {
-  const lowest = lowestPicoOriginClass([
-    ...units.map((unit) => unit.originClass),
-    ...references.map((reference) => reference.originClass),
-  ]);
+  if (references.length > 0) {
+    /**
+     * ADR 0060. A reference *is* retrieved memory - a bounded packet prepared
+     * from a store for this job - so a job carrying one carries the thing this
+     * allowance is named after, whatever class the packet holds.
+     *
+     * This is why a library read stays wide: its excerpt is `own_pico` because
+     * a tracked corpus is the person's own material, and it is still material
+     * fetched out of a store rather than the words of the turn.
+     */
+    return 'live_turn_and_retrieved_memory';
+  }
+  const lowest = lowestPicoOriginClass(units.map((unit) => unit.originClass));
   return lowest === picoInstructionThresholdOriginClass
+    || lowest === picoOwnDerivationOriginClass
     ? 'live_turn'
     : 'live_turn_and_retrieved_memory';
 }

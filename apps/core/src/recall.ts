@@ -23,10 +23,11 @@ import type { MemoryItem } from './memory-store.js';
  * bookkeeping:
  *
  * - **it decides where the words may go.** `picoModelJobAllowanceFor` reads
- *   the lowest origin present, so a question over the person's own notes needs
- *   only the live turn, while one that pulls in a housemate's note or a
- *   supplier's document needs a provider that proved who it is (ADR 0151 PV1).
- *   Nothing here chooses that; it falls out of what was actually included.
+ *   the lowest origin present, so a question over the person's own notes - or
+ *   over an answer Pico derived from them - needs only the live turn, while
+ *   one that pulls in a housemate's note or a supplier's document needs a
+ *   provider that proved who it is (ADR 0151 PV1). Nothing here chooses that;
+ *   it falls out of what was actually included.
  * - **it decides what may instruct.** ADR 0117 X2's assembly puts
  *   `person_present` text in the instruction block and everything else in
  *   quoted data, so a note that says "ignore your instructions" is data about
@@ -206,9 +207,21 @@ export function picoRecallItemOf(item: MemoryItem): PicoRecallItem | undefined {
   return Object.freeze({
     memoryItemId: item.memoryItemId,
     content: item.content,
-    // ADR 0116 W2. An item recorded before origins existed is not the person
-    // speaking - `own_pico` is the conservative reading, and it costs the
-    // wider allowance rather than a wrong label.
-    origin: item.origin ?? 'own_pico',
+    /**
+     * ADR 0116 W2. An item with no recorded origin is `unattributed`, which is
+     * the class that says exactly that.
+     *
+     * This used to read `own_pico`, on the reasoning that the conservative
+     * label costs the wider allowance rather than a wrong one. Since 2026-08-16
+     * `own_pico` no longer costs the wider allowance (ADR 0151 PV1), so that
+     * reasoning would now buy the opposite of what it was for: material nobody
+     * labelled would travel to a provider that never proved who it is, on the
+     * strength of a guess this file made.
+     *
+     * `unattributed` is both the truthful reading and the conservative one -
+     * it may not instruct, and it needs a proven provider - which is what a
+     * missing label should cost.
+     */
+    origin: item.origin ?? 'unattributed',
   });
 }

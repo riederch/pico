@@ -232,5 +232,31 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
     expect(recalls[0]?.question).toBe('Where did I park?');
     expect(recalls[0]?.outcome).toBe('answered');
     expect(JSON.stringify(recalls[0]?.values)).toContain('Bergstrasse');
+
+    /**
+     * ADR 0151 PV1 since 2026-08-16, end to end on the only provider this Home
+     * has - one that has proved nothing and carries the live turn.
+     *
+     * Keeping the answer files it as `own_pico`, which is what ADR 0116 W3
+     * requires: a model's sentence is not the person speaking. Until the
+     * threshold moved, that same label also meant the next question over the
+     * same domain needed a provider with a credential - so a person who used
+     * their Home once could not use it twice. This is that follow-up.
+     */
+    expect((await send('home.recall.keep', { jobId: recalls[0]?.jobId })).response.outcome)
+      .toBe('ok');
+
+    const again = await send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'And where was that again?',
+    });
+    expect(again.response.outcome).toBe('ok');
+    expect(again.result.included).toBe(2);
+    expect(await app.picoSweepModelJobs()).toBe(1);
+
+    const reread = await send('home.recall.read', {});
+    const answered = (reread.result as { recalls: Array<Record<string, unknown>> }).recalls
+      .find((recall) => recall.question === 'And where was that again?');
+    expect(answered?.outcome).toBe('answered');
   });
 });

@@ -36,6 +36,21 @@ export const picoOriginTrustDescending = [
 ] as const;
 
 /**
+ * ADR 0151 PV1. Where *disclosure* stops, which is one step below where
+ * *instruction* stops.
+ *
+ * `own_pico` covers this Pico's own output. It may never instruct - output
+ * from a context that held untrusted content is untrusted, and that is the
+ * threshold above. But a derivation of the person's own words is still their
+ * words, so sending one to a provider discloses nothing their own notes did
+ * not already, and the allowance question stops here.
+ *
+ * Two constants because they are two questions. One constant for both is what
+ * made a summary of somebody's own notes need a proven provider to ask about.
+ */
+export const picoOwnDerivationOriginClass = 'own_pico' as const;
+
+/**
  * Only the present person crosses it. `own_pico` deliberately does not: it
  * covers this Pico's own model output, and output produced from a context that
  * held untrusted content is itself untrusted. Treating it as instruction is

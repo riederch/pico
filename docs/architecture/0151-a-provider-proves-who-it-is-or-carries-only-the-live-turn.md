@@ -2,6 +2,37 @@
 
 ## Status
 
+Status note, 2026-08-16: **PV1's allowance stops at `own_pico`, not above
+it.** A derivation from the person's own notes stays on the live turn.
+
+Found by using it. A person asked their Home where they parked, kept the
+answer, and asked a follow-up over the same domain - and got
+`entry_may_not_carry_these_words`. Nothing foreign had entered. The kept
+answer was Pico's own sentence about their own note, and that alone moved the
+next question onto a provider that had to prove who it is.
+
+The cause was one constant answering two questions. ADR 0116 W3's instruction
+threshold is `person_present`, because output produced from a context that
+held untrusted content may never instruct - that is the rule that breaks
+memory laundering, and it has not moved. The allowance asks something else:
+whose words a second party would learn. A summary of somebody's own notes is
+their own words, and the provider that would receive it is, in the ordinary
+case, the one that wrote it.
+
+So there are two constants now, `picoInstructionThresholdOriginClass` and
+`picoOwnDerivationOriginClass`, and the second is one step lower. Below it
+nothing changed: a housemate's note, a synced item and a stranger's mail
+carry words their author never offered to a provider, which is what ADR 0048's
+split protects.
+
+**One residual, and it is the interesting half.** A memory item with no
+recorded origin used to be read as `own_pico` on the reasoning that the
+conservative label costs the wider allowance rather than a wrong one. That
+reasoning has just been inverted: unlabelled material would now travel to an
+unproven provider on the strength of a guess. Such an item is read as
+`unattributed` instead - the class that says exactly what is known about it,
+and the one that still needs a proof.
+
 Status note, 2026-08-14: **PV5 checks the transport and cannot check the far
 side, which a real proxy made visible on the first try.** A TLS endpoint was
 put in front of the measured host, with a valid chain, and it answered a
@@ -222,7 +253,10 @@ Original gate text follows.
 - **PV1 - The proof buys the memory, not the provider (concept-only):** an
   entry without a proven provider identity is valid and carries the live
   turn. Retrieved memory requires the proof on every job. No threshold, no
-  grace period, no first-use exception.
+  grace period, no first-use exception. *Amended 2026-08-16: "retrieved
+  memory" means words somebody other than the person offered, or a packet
+  fetched from a store. Pico's own derivation of the person's own notes is
+  neither, and stays on the live turn - see the status note.*
 
 - **PV2 - One class, two allowances (concept-only):** the allowance is a
   property of the entry, not of the class. The unauthenticated LAN host

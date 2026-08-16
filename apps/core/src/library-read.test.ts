@@ -1,3 +1,4 @@
+import { picoModelJobAllowanceFor } from '@pico/protocol/model-job';
 import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
 import { picoModelJobRefusal } from '@pico/protocol/model-job';
 import { describe, expect, it } from 'vitest';
@@ -90,6 +91,13 @@ describe('the read a library occasion asks for', () => {
     expect(read.references[0]?.excerpt).toContain('Vaillant');
     // Two layers, and only the first is anybody's instruction.
     expect(read.carries).toBe('live_turn_and_retrieved_memory');
+    // Derived, not just declared. The excerpt is `own_pico` and `own_pico`
+    // units have travelled on the live turn since 2026-08-16, so what keeps
+    // this read wide is that a reference is retrieved memory by being one -
+    // and a declaration alone would pass the parser either way, because the
+    // parser refuses understating and permits overstating.
+    expect(picoModelJobAllowanceFor(read.units, read.references))
+      .toBe('live_turn_and_retrieved_memory');
   });
 
   it('refuses a read with no declared answer shape', () => {
