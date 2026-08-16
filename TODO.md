@@ -3,7 +3,7 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
-## Auslieferbare Pakete - umgesetzt am 2026-08-16, mit einem offenen Punkt
+## Auslieferbare Pakete - umgesetzt am 2026-08-16
 
 **Entschieden und gebaut als ADR 0153.** Drei Auslieferungen, benannt nach
 dem, was eine Person bekommt:
@@ -210,18 +210,18 @@ als ADR 0124.
 
 ### Was vorliegt
 
-Wegwerf-Prototyp und Messinstrument liegen bislang nur in
-`~/Downloads/pico-sdf-prototyp/`, also unversioniert. Der Prototyp darf dort
-bleiben, das Messinstrument nicht: Es ist die Abnahmepruefung fuer das extern
-modellierte Modell und gehoert nach `tools/`. Ablehnen wuerde der Asset-Gate
-nur die gerenderten Bilder, nicht die Skripte.
+**Korrigiert am 2026-08-16: das Messinstrument liegt seit dem 2026-08-02 im
+Repository.** Dieser Absatz forderte weiterhin einen Umzug, der laenger unten
+im selben Abschnitt schon als erledigt steht - `tools/character-silhouette/`
+mit `measure.mjs`, aufrufbar als `pnpm character:measure` (Commit `991df82`).
+Zwei Absaetze ueber dieselbe Sache, die auseinandergelaufen sind.
+
+Nur der Wegwerf-Prototyp liegt weiterhin unversioniert in
+`~/Downloads/pico-sdf-prototyp/`, und darf das:
 
 - `pico-sdf3.mjs`: PICO als Signed Distance Field, CPU-Raymarching, rund 200
   Zeilen ohne Abhaengigkeiten. Weiche Schatten, Verdeckungsverschattung,
   GGX-Glanz, Naeherung fuer Streuung, Umgebungsspiegelung.
-- `measure.py`: legt erzeugte und gemessene Silhouette uebereinander, normiert
-  auf Kopfbreite und Kopfmitte, kamera- und aufloesungsunabhaengig. Das ist
-  Schritt 2 des Character-Freigabeprozesses als Messung.
 - Stand: **96,7 Prozent Kerndeckung** (Kopf, Hals, Rumpf ohne Arme).
 
 ### Befunde, die nicht verlorengehen duerfen
