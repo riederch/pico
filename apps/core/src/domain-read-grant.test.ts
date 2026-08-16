@@ -236,6 +236,37 @@ describe('Home domain read grants (ADR 0082)', () => {
     )).toBe(false);
   });
 
+  it('refuses a grant to somebody who is not a member of this Home', () => {
+    // ADR 0082. A grant names a reader, and a reader who is not in the Home is
+    // a stranger this statement would let read a domain. The verification says
+    // the signature is genuine; only this says the subject belongs here.
+    const store = openClaimedStore();
+    store.memory().create({
+      memoryItemId: 'memory_domain_grant_stranger',
+      privacyDomain: DOMAIN,
+      owner: 'test',
+      controller: 'test',
+      contentType: 'text/plain',
+      content: 'secret',
+    });
+
+    expect(store.recordPicoHomeDomainReadGrant({
+      sodium,
+      record: issueGrant({ readerPicoIdentityFingerprintHex: 'f'.repeat(64) }),
+    })).toEqual({ ok: false, reason: 'reader_is_not_active_member' });
+  });
+
+  it('refuses a grant over a domain this Home does not hold in host custody', () => {
+    // A domain that does not exist yet is not a domain to grant reading of:
+    // the grant would sit there authorizing a name nobody has written to.
+    const store = openClaimedStore();
+
+    expect(store.recordPicoHomeDomainReadGrant({
+      sodium,
+      record: issueGrant(),
+    })).toEqual({ ok: false, reason: 'domain_is_not_host_custody' });
+  });
+
   it('drops malformed lifecycle and grant authority during boot-style reconciliation', () => {
     const store = openClaimedStore();
     store.memory().create({

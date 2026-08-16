@@ -287,6 +287,31 @@ patched afterwards.
   bounded by the entry's measured window with the number left out stated
   rather than implied. That limit is written into the code that has it.
 
+  **Proven against a real provider on 2026-08-16, and then against the
+  real authorization.** Three questions over three notes on the measured
+  host: two answered from the notes, and the third - about something the
+  notes do not contain - came back with `found_in_memory` false rather
+  than an invented neighbour. Adding one item with a foreign origin to the
+  same domain turned the same question into `entry_may_not_carry_these_
+  words`, which is ADR 0151 PV1 holding without anybody choosing it.
+
+  The first run used a readership that said yes to everything. The second
+  did not: the Home Host Pico signed a domain read grant for itself, this
+  Home relayed it over the ADR 0087 surface, and the same question was
+  refused as `not_readable` before the grant and answered after it. That
+  path is now a test rather than a one-off script - every other recall
+  test injects a readership, which is right for testing what happens after
+  the check and useless for testing the check.
+
+  **What a person still cannot do is issue that grant from their device.**
+  The signature has to come from the identity key their Vault holds, the
+  ceremony signer that would produce it exists (ADR 0100), and the
+  operation that would carry the signed statement over the Link channel
+  does not. Until it does, a Home whose owner wants to ask about their own
+  memory needs somebody with a Foundation session to relay a grant - which
+  is the last stand-in on this path and is named here rather than left to
+  be discovered.
+
   What is still not claimed: the rule that *no other* consumer may
   assemble a context another way is still enforced by there being one.
   The second consumer is when that stops being true by construction.
