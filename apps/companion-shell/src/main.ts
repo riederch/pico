@@ -531,6 +531,23 @@ function registerIpc(): void {
    * pressed a button and is standing there, and the three refusals this can
    * give are three different things to do next.
    */
+  /**
+   * ADR 0116 W5. A keep that fails must not be quiet: somebody pressed a
+   * button and is waiting to be told their answer was kept.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.keepRecall,
+    async (event: IpcMainInvokeEvent, jobId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof jobId !== 'string') {
+        throw new Error('invalid_recall_keep');
+      }
+      return await runtime.keepRecall(jobId);
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.grantDomainRead,
     async (event: IpcMainInvokeEvent, privacyDomain: unknown) => {

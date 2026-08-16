@@ -323,10 +323,38 @@ patched afterwards.
 - **W4 - Action approvals over the hold channel (open; binds the first
   tool executor):** ADR 0010 decisions realized with ADR 0099/0106
   semantics for tool families; unknown families gated by default.
-- **W5 - Replication break (open; binds companion and connectors):** no
-  auto-persist of derived output, no auto-forward, egress only through
-  declared connector seams with audit, and the self-replication
-  tripwire.
+- **W5 - Replication break (the no-auto-persist half is implemented; the
+  rest binds companion and connectors):** no auto-persist of derived
+  output, no auto-forward, egress only through declared connector seams
+  with audit, and the self-replication tripwire.
+
+  **Both kinds of derived output now persist only on a person's press.** A
+  library read's values are withheld from its list and arrive on
+  `home.model.read.keep`; a recall's answer is shown - because a person
+  asked for it a moment ago and showing is the delivery - and becomes a
+  memory item only on `home.recall.keep`.
+
+  Keeping a recall answer is a *derivation*, and three refusals follow from
+  taking that word seriously:
+
+  - **an answer that found nothing is not keepable.** The reader said the
+    material does not answer the question; storing that sentence would put
+    an absence into somebody's memory as though it were a finding.
+  - **an answer with no sources is not a derivation.** It would be an item
+    with nothing to be wrong about.
+  - **a source that has been deleted stops being one.** The row keeps its
+    origin class, so the derivation would still resolve - which is exactly
+    why this had to be a rule rather than a consequence of the content
+    being gone. A summary written *after* somebody deleted the note it is
+    about would outlive their deletion and look like an ordinary memory.
+
+  **And the class is corrected where W3 says it must be.** A derivation
+  takes the lowest origin among its sources, which over the person's own
+  notes is `person_present` - filing a model's sentence as the person
+  speaking. The answer boundary already refused that (`own_pico`, never
+  the person); the keep applies the same correction, because otherwise
+  reading your own notes would be the one path that launders a model's
+  words into an instruction.
 - **W6 - Free-text operation blockers (open; binds the first free-text
   Link operation):** relationship tiers, per-sender quotas, origin
   labeling at intake and W3 land in the same milestone as the operation.

@@ -259,22 +259,54 @@ export class MemoryStore {
       derivedFromMemoryItemIds: readonly string[];
     },
   ): MemoryItem {
-    if (input.derivedFromMemoryItemIds.length === 0) {
+    const { derivedFromMemoryItemIds: sources, ...rest } = input;
+    return this.create({
+      ...rest,
+      origin: this.derivedOriginFor(input.privacyDomain, sources),
+    });
+  }
+
+  /**
+   * ADR 0116 W2. The class a derivation takes, resolved from its sources.
+   *
+   * Separate from `createDerived` because a second caller needs the answer
+   * without the item: a model's output is derived from what it read *and* may
+   * never be `person_present`, so the model boundary corrects this class
+   * before it writes. Two resolutions of one question would be two answers
+   * waiting to disagree - and the one that drifted would be the one deciding
+   * whether a stranger's words can instruct.
+   */
+  public derivedOriginFor(
+    privacyDomain: string,
+    derivedFromMemoryItemIds: readonly string[],
+  ): PicoEventOriginClass {
+    if (derivedFromMemoryItemIds.length === 0) {
       throw new Error('A derived memory item requires at least one source.');
     }
     const sources: PicoEventOriginClass[] = [];
-    for (const sourceId of input.derivedFromMemoryItemIds) {
-      const source = this.getInDomain(sourceId, input.privacyDomain);
+    for (const sourceId of derivedFromMemoryItemIds) {
+      const source = this.getInDomain(sourceId, privacyDomain);
       if (source === undefined) {
         throw new Error(`Derivation source is not in this domain: ${sourceId}`);
+      }
+      if (source.deletionState !== 'active') {
+        /**
+         * A deleted item is a tombstone, and deriving from one would let a
+         * summary of something a person removed outlive the removal - written
+         * *after* they removed it, and looking like an ordinary memory.
+         *
+         * The class would still resolve: the row keeps its origin. That is
+         * exactly why this has to be a rule rather than a side effect of the
+         * content being gone.
+         */
+        throw new Error(`Derivation source is deleted: ${sourceId}`);
       }
       if (source.origin === undefined) {
         throw new Error(`Derivation source carries no origin class: ${sourceId}`);
       }
       sources.push(source.origin);
     }
-    const { derivedFromMemoryItemIds: _sources, ...rest } = input;
-    return this.create({ ...rest, origin: lowestPicoOriginClass(sources) });
+    return lowestPicoOriginClass(sources);
   }
 
   public getInDomain(memoryItemId: string, privacyDomain: string): MemoryItem | undefined {

@@ -490,7 +490,7 @@ describe('ADR 0117 X5 - the label reaches the window, above the answer', () => {
       outcome: 'answered',
       foundInMemory: true,
       answer: 'On Bergstrasse.',
-    }]);
+    }], () => {});
 
     const line = (root.list as unknown as {
       children: Array<{ children: Array<{ textContent: string }> }>;
@@ -506,5 +506,61 @@ describe('ADR 0117 X5 - the label reaches the window, above the answer', () => {
   it('refuses a list that is not the declared shape', () => {
     expect(() => parsePicoCompanionRecalls([{ jobId: 'job_1' }]))
       .toThrow('invalid_pico_companion_recall');
+  });
+});
+
+describe('ADR 0116 W5 - the press is the write', () => {
+  it('offers a keep only where there is an answer, and keeps that one', () => {
+    // Nothing persists without it, so a button on a question that is still
+    // waiting would be a promise this window cannot make.
+    const root = fakeDocument();
+    const kept: string[] = [];
+    renderPicoCompanionRecalls(root, [
+      {
+        jobId: 'job_waiting',
+        question: 'where did I park?',
+        askedAt: '2026-08-16T12:00:00.000Z',
+      },
+      {
+        jobId: 'job_answered',
+        question: 'when is the dentist?',
+        askedAt: '2026-08-16T12:00:00.000Z',
+        settledAt: '2026-08-16T12:01:00.000Z',
+        outcome: 'answered',
+        foundInMemory: true,
+        answer: 'The 3rd of September.',
+      },
+    ], (jobId: string) => { kept.push(jobId); });
+
+    const lines = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children;
+    expect(lines[0]!.children.some((child) => child.tag === 'button')).toBe(false);
+
+    const button = lines[1]!.children.find((child) => child.tag === 'button');
+    expect(button?.textContent).toBe('Keep this answer');
+    (button as unknown as { click(): void }).click();
+    expect(kept).toEqual(['job_answered']);
+  });
+
+  it('offers no keep for an answer that found nothing', () => {
+    // There is nothing to keep: the reader said the material does not answer
+    // it, and keeping that sentence would put an absence in somebody's memory
+    // as if it were a finding.
+    const root = fakeDocument();
+    renderPicoCompanionRecalls(root, [{
+      jobId: 'job_empty',
+      question: 'what is my neighbour called?',
+      askedAt: '2026-08-16T12:00:00.000Z',
+      settledAt: '2026-08-16T12:01:00.000Z',
+      outcome: 'answered',
+      foundInMemory: false,
+      answer: 'Nothing here says.',
+    }], () => {});
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    expect(line.children.some((child) => child.tag === 'button')).toBe(false);
   });
 });

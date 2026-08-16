@@ -3524,6 +3524,10 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             entryId: chosen.entryId,
             at: new Date().toISOString(),
             kind: 'recall',
+            recallContext: {
+              privacyDomain: args.privacyDomain,
+              memoryItemIds: plan.included.map((item) => item.memoryItemId),
+            },
           });
 
           return {
@@ -3553,6 +3557,72 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 .recallsFor(principal.picoIdentityFingerprintHex),
             } as unknown as Record<string, unknown>,
           };
+        }
+        /**
+         * ADR 0116 W5. One answer becomes a memory item, because a person said
+         * so.
+         *
+         * **The derivation is real rather than stated.** `createDerived`
+         * resolves every source from the store and takes the lowest origin
+         * among them, so an answer formed partly from a housemate's note is
+         * kept as `external_content` and not as something Pico knows - and an
+         * answer whose sources have since been deleted cannot be kept at all,
+         * because there is nothing left to derive it from.
+         */
+        case 'home.recall.keep': {
+          if (principal === undefined || typeof args.jobId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const kept = store.picoModelJobQueue().recallKeptView(args.jobId);
+          if (kept === undefined
+            || kept.picoIdentityFingerprintHex !== principal.picoIdentityFingerprintHex) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_found' } };
+          }
+          if (kept.outcome !== 'answered' || kept.values === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_answer' } };
+          }
+          if (kept.memoryItemIds.length === 0) {
+            // An answer formed from nothing is not a derivation, and keeping it
+            // would put a sentence in somebody's memory with no source to be
+            // wrong about.
+            return { outcome: 'invalid_arguments', result: { refusal: 'nothing_to_derive_from' } };
+          }
+          const answer = (kept.values as Array<{ name: string; value: unknown }>)
+            .find((value) => value.name === 'answer')?.value;
+          if (typeof answer !== 'string') {
+            return { outcome: 'invalid_arguments', result: { refusal: 'no_answer' } };
+          }
+          const memoryItemId = `mem_recall_${randomBytes(16).toString('hex')}`;
+          try {
+            const memory = store.memory();
+            /**
+             * ADR 0116 W2/W3, and the correction a plain derivation does not
+             * make.
+             *
+             * A derivation takes the lowest class among its sources - and over
+             * the person's own notes that class is `person_present`, which
+             * would file a model's sentence as the person speaking. W3 refuses
+             * exactly that: output from a context is never an instruction, or
+             * a read of a stranger's mail re-enters as something that may
+             * instruct. So the answer boundary's rule applies here too.
+             */
+            const derived = memory.derivedOriginFor(kept.privacyDomain, kept.memoryItemIds);
+            memory.create({
+              memoryItemId,
+              privacyDomain: kept.privacyDomain,
+              owner: `pico:identity:${principal.picoIdentityFingerprintHex}`,
+              controller: `pico:identity:${principal.picoIdentityFingerprintHex}`,
+              contentType: 'text/plain',
+              content: answer,
+              origin: derived === 'person_present' ? 'own_pico' : derived,
+            });
+          } catch (error) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'refused' },
+            };
+          }
+          return { outcome: 'ok', result: { memoryItemId } };
         }
         /**
          * ADR 0116 W5. What is waiting for this person, without the answers.

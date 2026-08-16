@@ -97,6 +97,11 @@ export class PicoModelJobQueue {
      */
     derivedFrom?: { supplierIdentifier: string; commit: string; pinCoversContent: boolean };
     kind?: PicoModelJobKind;
+    /**
+     * ADR 0116 W5 with W2. What a recall read, so its answer can be kept as
+     * something derived from it rather than as an item about nothing.
+     */
+    recallContext?: { privacyDomain: string; memoryItemIds: readonly string[] };
   }): void {
     const kind = input.kind ?? 'library_read';
     if (kind === 'library_read' && input.derivedFrom === undefined) {
@@ -108,8 +113,9 @@ export class PicoModelJobQueue {
     this.db.prepare(`
       INSERT INTO pico_model_job_queue (
         job_id, pico_identity_fingerprint_hex, entry_id, job_json, enqueued_at,
-        derived_from_supplier, derived_pin_value, derived_pin_covers_content, kind
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        derived_from_supplier, derived_pin_value, derived_pin_covers_content, kind,
+        recall_context_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id) DO NOTHING
     `).run(
       input.job.jobId,
@@ -121,6 +127,7 @@ export class PicoModelJobQueue {
       input.derivedFrom?.commit ?? null,
       input.derivedFrom === undefined ? null : (input.derivedFrom.pinCoversContent ? 1 : 0),
       kind,
+      input.recallContext === undefined ? null : JSON.stringify(input.recallContext),
     );
   }
 
@@ -367,6 +374,49 @@ export class PicoModelJobQueue {
         ...(output === undefined ? {} : { values: output }),
       });
     }));
+  }
+
+  /**
+   * ADR 0116 W5. What one recall answered, for the person who asked it.
+   *
+   * The values *and* what they were formed from, because keeping an answer is
+   * a derivation: ADR 0116 W2 takes the lowest origin among the sources, which
+   * is a question only the sources can answer.
+   */
+  public recallKeptView(jobId: string): {
+    picoIdentityFingerprintHex: string;
+    outcome: string | null;
+    privacyDomain: string;
+    memoryItemIds: readonly string[];
+    values?: unknown;
+  } | undefined {
+    const row = this.db.prepare(`
+      SELECT pico_identity_fingerprint_hex AS picoIdentityFingerprintHex,
+             outcome, result_json AS resultJson, recall_context_json AS contextJson
+      FROM pico_model_job_queue WHERE job_id = ? AND kind = 'recall'
+    `).get(jobId) as {
+      picoIdentityFingerprintHex: string;
+      outcome: string | null;
+      resultJson: string | null;
+      contextJson: string | null;
+    } | undefined;
+    if (row === undefined || row.contextJson === null) {
+      return undefined;
+    }
+    const context = JSON.parse(row.contextJson) as {
+      privacyDomain: string;
+      memoryItemIds: string[];
+    };
+    const output = row.resultJson === null
+      ? undefined
+      : (JSON.parse(row.resultJson) as { values?: unknown }).values;
+    return Object.freeze({
+      picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
+      outcome: row.outcome,
+      privacyDomain: context.privacyDomain,
+      memoryItemIds: Object.freeze(context.memoryItemIds),
+      ...(output === undefined ? {} : { values: output }),
+    });
   }
 
   /**

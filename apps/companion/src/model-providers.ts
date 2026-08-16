@@ -360,3 +360,36 @@ export async function readPicoCompanionRecalls(input: {
     });
   }));
 }
+
+/**
+ * ADR 0116 W5. The person's own write, and the only thing that persists an
+ * answer.
+ *
+ * The refusals are the answer to different questions and travel as themselves:
+ * `no_answer` means it is not finished, `nothing_to_derive_from` means there
+ * was nothing in that domain to be right or wrong about, and a deleted source
+ * means the material this was formed from is gone - which is the one case
+ * where a person is being told that keeping it would outlive their own
+ * deletion.
+ */
+export async function keepPicoCompanionRecall(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  jobId: string;
+}): Promise<string> {
+  const kept = await input.livingDeviceLinkClient.request('home.recall.keep', {
+    jobId: input.jobId,
+  });
+  if (kept.outcome !== 'ok') {
+    const refusal = (kept.result as { refusal?: unknown }).refusal;
+    throw new Error(
+      typeof refusal === 'string'
+        ? `recall_keep_rejected:${refusal}`
+        : `recall_keep_rejected:${kept.outcome}`,
+    );
+  }
+  const memoryItemId = (kept.result as { memoryItemId?: unknown }).memoryItemId;
+  if (typeof memoryItemId !== 'string') {
+    throw new Error('invalid_pico_recall_keep_result');
+  }
+  return memoryItemId;
+}

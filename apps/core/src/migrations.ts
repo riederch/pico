@@ -199,6 +199,18 @@ export const picoModelProviderCredentialMigrationId =
  */
 export const picoModelJobKindMigrationId = '0020_pico_model_job_kind' as const;
 
+/**
+ * ADR 0116 W5 with W2. What a recall's answer was derived from.
+ *
+ * A library read records its provenance as a supplier and a commit; a recall
+ * has neither, and its sources are memory items in one domain. Without them a
+ * kept answer would be a new item claiming to be about nothing - and ADR 0116
+ * W2's derivation takes the lowest origin among its sources, which is
+ * unanswerable if nobody wrote the sources down.
+ */
+export const picoModelJobRecallContextMigrationId =
+  '0021_pico_model_job_recall_context' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1465,6 +1477,18 @@ const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         ALTER TABLE pico_model_job_queue
         ADD COLUMN kind TEXT NOT NULL DEFAULT 'library_read';
+      `);
+    },
+  },
+  {
+    id: picoModelJobRecallContextMigrationId,
+    requiresBackup: false,
+    up(db) {
+      // Nullable, because a library read has no such context and inventing an
+      // empty one for it would make "this job has sources" unanswerable.
+      db.exec(`
+        ALTER TABLE pico_model_job_queue
+        ADD COLUMN recall_context_json TEXT NULL;
       `);
     },
   },

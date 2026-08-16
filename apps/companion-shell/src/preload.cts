@@ -19,6 +19,7 @@ const channels = Object.freeze({
   askRecall: 'pico:recall:ask',
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
+  keepRecall: 'pico:recall:keep',
 });
 
 // No generic send/invoke and no raw ipcRenderer: this is the whole bridge.
@@ -86,6 +87,9 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   // built there too.
   grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
+  keepRecall: async (jobId: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.keepRecall, jobId);
+  },
   closeWindow: (): void => {
     ipcRenderer.send(channels.closeWindow);
   },

@@ -33,6 +33,7 @@ declare global {
       }>;
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
+      keepRecall(jobId: string): Promise<void>;
       getPresentation(): Promise<unknown>;
       onPresentationChanged(listener: (state: unknown) => void): () => void;
       requestCheck(): Promise<void>;
@@ -236,6 +237,18 @@ function refreshRecalls(): void {
       renderPicoCompanionRecalls(
         { list: recallList, section: recallSection, document },
         recalls,
+        (jobId) => {
+          // The write ADR 0116 W5 requires, and the list is asked for again
+          // rather than edited: what is kept is the Home's answer.
+          void window.picoCompanion.keepRecall(jobId).then(() => {
+            recallStatus.textContent = 'Kept. It is part of what you remember now.';
+            refreshRecalls();
+          }, (error: unknown) => {
+            recallStatus.textContent = error instanceof Error
+              ? error.message.replace(/^Error: /u, '')
+              : 'That answer was not kept.';
+          });
+        },
       );
     }, () => {
       recallSection.hidden = true;

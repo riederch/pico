@@ -24,6 +24,7 @@ export const picoCompanionIpcChannels = Object.freeze({
   askRecall: 'pico:recall:ask',
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
+  keepRecall: 'pico:recall:keep',
 });
 
 export type PicoCompanionPresentationKind =
@@ -629,6 +630,8 @@ export interface PicoCompanionRecallLine {
   question: string;
   /** What state this question is in, as a sentence. */
   state: string;
+  /** ADR 0116 W5. Present only when there is an answer to keep. */
+  keepable?: true;
   /**
    * ADR 0117 X5. The answer, and never without its label.
    *
@@ -677,6 +680,7 @@ export function picoCompanionRecallLines(
       jobId: recall.jobId,
       question: recall.question,
       state: 'Answered from what you remember.',
+      ...(recall.answer === undefined ? {} : { keepable: true as const }),
       ...(recall.answer === undefined ? {} : {
         answer: Object.freeze({
           label: 'A model wrote this from your own notes. Pico did not check it.',

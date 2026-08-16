@@ -39,6 +39,7 @@ import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform
 import {
   decidePicoCompanionModelProvider,
   askPicoCompanionRecall,
+  keepPicoCompanionRecall,
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
   readPicoCompanionRecalls,
@@ -84,6 +85,8 @@ export interface PicoCompanionShellRuntime {
     carries: string;
   }>;
   readRecalls(): Promise<readonly PicoCompanionRecallView[]>;
+  /** ADR 0116 W5. The person's own write: this answer becomes a memory. */
+  keepRecall(jobId: string): Promise<string>;
   /**
    * ADR 0082 with ADR 0100. Issues the grant that lets this device read one
    * part of its person's memory - signed here, recorded there.
@@ -349,6 +352,18 @@ export async function startPicoCompanionShellRuntime(input: {
             sodium: input.sodium,
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
+        });
+      }),
+      keepRecall: async (jobId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await keepPicoCompanionRecall({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          jobId,
         });
       }),
       grantDomainRead: async ({ privacyDomain }) => await serialized(async () => {

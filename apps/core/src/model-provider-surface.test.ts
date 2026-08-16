@@ -355,6 +355,7 @@ describe('ADR 0152 - the personal half is a person\'s, and the operator is not o
 type PicoLinkSend = (
   operation: 'home.recall.ask'
     | 'home.recall.read'
+    | 'home.recall.keep'
     | 'home.model.reads.read'
     | 'home.model.providers.read'
     | 'home.model.provider.credential.submit'
@@ -987,26 +988,27 @@ describe('ADR 0151 PV1 - the reference has to name something this Home holds', (
   });
 });
 
+/**
+ * A claimed Home, one measured entry, a decision to use it, and a domain this
+ * person may read.
+ */
+async function bootWithDecision(options: { readable?: boolean } = {}): Promise<{
+  send: PicoLinkSend;
+  databasePath: string;
+}> {
+  const setup = await bootWithLinkDevice(options.readable === false ? {} : {
+    readership: { mayRead: (_principal, privacyDomain) => privacyDomain === 'domain-private' },
+  });
+  const decided = await setup.send('home.model.provider.decision.submit', {
+    entryId: 'a-measured-host',
+    providerClass: 'declared_own_host',
+    carries: 'live_turn',
+  });
+  expect(decided.response.outcome).toBe('ok');
+  return { send: setup.send, databasePath: setup.databasePath };
+}
+
 describe('ADR 0116 W1 - a person asks about what their Home remembers', () => {
-  /**
-   * A claimed Home, one measured entry, a decision to use it, and a domain
-   * this person may read.
-   */
-  async function bootWithDecision(options: { readable?: boolean } = {}): Promise<{
-    send: PicoLinkSend;
-    databasePath: string;
-  }> {
-    const setup = await bootWithLinkDevice(options.readable === false ? {} : {
-      readership: { mayRead: (_principal, privacyDomain) => privacyDomain === 'domain-private' },
-    });
-    const decided = await setup.send('home.model.provider.decision.submit', {
-      entryId: 'a-measured-host',
-      providerClass: 'declared_own_host',
-      carries: 'live_turn',
-    });
-    expect(decided.response.outcome).toBe('ok');
-    return { send: setup.send, databasePath: setup.databasePath };
-  }
 
   it('queues a job over the person\'s own notes and says what it was formed from', async () => {
     const setup = await bootWithDecision();
@@ -1147,5 +1149,125 @@ describe('ADR 0116 W1 - a person asks about what their Home remembers', () => {
 
     const read = await setup.send('home.model.reads.read', {});
     expect((read.result as { reads: unknown[] }).reads).toEqual([]);
+  });
+});
+
+describe('ADR 0116 W5 - an answer becomes a memory only when somebody says so', () => {
+  async function askAndAnswer(setup: { send: PicoLinkSend; databasePath: string }, options: {
+    origin?: 'person_present' | 'external_content';
+    answer?: string;
+  } = {}): Promise<string> {
+    const store = await EventStore.open(setup.databasePath, {});
+    store.memory().create({
+      memoryItemId: 'mem_note',
+      privacyDomain: 'domain-private',
+      owner: 'pico-owner',
+      controller: 'pico-owner',
+      contentType: 'text/plain',
+      content: 'Parked on Bergstrasse.',
+      origin: options.origin ?? 'person_present',
+    });
+    store.close();
+
+    const asked = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'Where did I park?',
+    });
+    const jobId = (asked.result as { jobId: string }).jobId;
+
+    const settling = await EventStore.open(setup.databasePath, {});
+    settling.picoModelJobQueue().settle({
+      jobId,
+      outcome: 'answered',
+      result: {
+        values: [{
+          name: 'answer',
+          type: 'text',
+          value: options.answer ?? 'On Bergstrasse.',
+          originClass: 'own_pico',
+        }],
+      },
+      at: '2026-08-16T12:05:00.000Z',
+    });
+    settling.close();
+    return jobId;
+  }
+
+  it('keeps the answer as an item derived from what it read', async () => {
+    const setup = await bootWithDecision();
+    const jobId = await askAndAnswer(setup);
+
+    const kept = await setup.send('home.recall.keep', { jobId });
+    expect(kept.response.outcome).toBe('ok');
+
+    const store = await EventStore.open(setup.databasePath, {});
+    const item = store.memory()
+      .getInDomain((kept.result as { memoryItemId: string }).memoryItemId, 'domain-private');
+    store.close();
+
+    expect(item?.content).toBe('On Bergstrasse.');
+    // ADR 0116 W2. A read over the person's own words is `own_pico`: derived,
+    // and still not the person speaking.
+    expect(item?.origin).toBe('own_pico');
+  });
+
+  it('refuses to keep what has not been answered', async () => {
+    const setup = await bootWithDecision();
+    const asked = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'Where did I park?',
+    });
+
+    const kept = await setup.send('home.recall.keep', {
+      jobId: (asked.result as { jobId: string }).jobId,
+    });
+    expect(kept.result.refusal).toBe('no_answer');
+  });
+
+  it('refuses to keep an answer formed from nothing', async () => {
+    // "I have nothing about that" is worth telling somebody and not worth
+    // keeping: a derivation with no source is an item with nothing to be
+    // wrong about.
+    const setup = await bootWithDecision();
+    const asked = await setup.send('home.recall.ask', {
+      privacyDomain: 'domain-private',
+      question: 'Where did I park?',
+    });
+    const jobId = (asked.result as { jobId: string }).jobId;
+
+    const settling = await EventStore.open(setup.databasePath, {});
+    settling.picoModelJobQueue().settle({
+      jobId,
+      outcome: 'answered',
+      result: {
+        values: [{
+          name: 'answer',
+          type: 'text',
+          value: 'Nothing here says.',
+          originClass: 'own_pico',
+        }],
+      },
+      at: '2026-08-16T12:05:00.000Z',
+    });
+    settling.close();
+
+    expect((await setup.send('home.recall.keep', { jobId })).result.refusal)
+      .toBe('nothing_to_derive_from');
+  });
+
+  it('refuses to keep an answer whose sources are gone', async () => {
+    // ADR 0116 W2 resolves the derivation from the store. A note deleted
+    // between the question and the keep leaves nothing to derive from, and
+    // inventing an origin for it would be the laundering step W2 prevents.
+    const setup = await bootWithDecision();
+    const jobId = await askAndAnswer(setup);
+
+    const deleting = await EventStore.open(setup.databasePath, {});
+    deleting.memory().deleteInDomain('mem_note', 'domain-private');
+    deleting.close();
+
+    const kept = await setup.send('home.recall.keep', { jobId });
+    expect(kept.response.outcome).toBe('invalid_arguments');
+    expect(String(kept.result.refusal)).toContain('Derivation source is deleted');
   });
 });

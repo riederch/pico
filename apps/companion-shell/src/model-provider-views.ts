@@ -144,6 +144,8 @@ export function renderPicoCompanionAnsweredReads(
 export function renderPicoCompanionRecalls(
   root: { list: HTMLElement; section: HTMLElement; document: Document },
   value: unknown,
+  /** ADR 0116 W5. The press *is* the write; nothing persists without it. */
+  keep: (jobId: string) => void,
 ): void {
   const recalls = parsePicoCompanionRecalls(value);
   root.list.replaceChildren();
@@ -174,6 +176,16 @@ export function renderPicoCompanionRecalls(
       // The label first: a person who reads the answer and scrolls away has
       // already been told what it is.
       item.append(label, answer);
+    }
+
+    if (line.keepable === true) {
+      const button = root.document.createElement('button');
+      button.type = 'button';
+      button.textContent = 'Keep this answer';
+      button.addEventListener('click', () => {
+        keep(line.jobId);
+      });
+      item.append(button);
     }
 
     root.list.append(item);

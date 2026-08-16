@@ -485,6 +485,15 @@ export const picoLinkDirectOperations = [
   'home.recall.ask',
   /** ADR 0116 W1. What this person asked, and what came back. */
   'home.recall.read',
+  /**
+   * ADR 0116 W5. Keeps one answer as a memory item, and never before.
+   *
+   * A recall's answer is shown to the person who asked it, because showing is
+   * the delivery. Persisting it is a second act and stays one: what a model
+   * wrote about somebody's notes becomes part of what they remember only when
+   * they say so.
+   */
+  'home.recall.keep',
   'home.model.reads.read',
   /** ADR 0116 W5's explicit write, said from the device the person holds. */
   'home.model.read.keep',
