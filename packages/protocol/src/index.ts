@@ -497,6 +497,17 @@ export const picoLinkDirectOperations = [
   'home.model.reads.read',
   /** ADR 0116 W5's explicit write, said from the device the person holds. */
   'home.model.read.keep',
+  /**
+   * ADR 0126 P2. A presence saying it is here, and what its runtime can do.
+   *
+   * One operation for registering and refreshing, because they are the same
+   * statement. It carries affordances - facts about a runtime - and never a
+   * risk class: a microphone has no risk class, recording with it has one.
+   */
+  'home.presence.announce',
+  'home.presence.read',
+  /** The person's own word that a device of theirs is no longer one. */
+  'home.presence.forget',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];

@@ -170,9 +170,17 @@ statt umgeschrieben. Der Auftrag unten bleibt als Quelle stehen; abgewichen
 wurde nur beim Namen `PresenceCapability`, und das steht in der ADR unter den
 verworfenen Alternativen.
 
-Offen sind jetzt Implementierungs-Gates in der ADR, keine Vorfragen mehr:
-P2 Registry, P3 die Zustandsgrenze samt Umzug des Beobachtungspuffers,
-P4 blockiert am fehlenden Action Runner, P5 Statusnotiz, P6 Abschaltbarkeit.
+Offen sind jetzt Implementierungs-Gates in der ADR, keine Vorfragen mehr.
+**P2 ist am 2026-08-16 implementiert** - Registry, Lease, berechneter
+Verbindungszustand, geschlossenes Affordance-Vokabular und `presence:check` im
+Gate. Offen: **P3** die Zustandsgrenze samt Umzug des Beobachtungspuffers,
+**P6** Abschaltbarkeit; **P4** blockiert weiterhin am fehlenden Action Runner,
+**P5** ist erledigt.
+
+P3 bleibt der Punkt mit der Entscheidung darin: ein Telefon in der Tiefgarage
+hat kein Zuhause, also funktioniert "wo habe ich geparkt" ausgerechnet offline
+nicht. Entweder bekommt eine Praesenz lokalen Puffer plus lokale Ableitung,
+oder die Erfassung bleibt eine Heimnetzfunktion.
 
 ### Urspruenglicher Arbeitsauftrag
 

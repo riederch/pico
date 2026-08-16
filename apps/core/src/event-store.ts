@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { PicoModelProviderConsent, PicoModelProviderRegistry } from './model-provider-registry.js';
 import { PicoModelJobQueue } from './model-job-queue.js';
+import { PicoPresenceRegistry } from './presence-registry.js';
 import {
   picoModuleConsentDrift,
   picoModuleConsentIsCurrent,
@@ -7317,6 +7318,12 @@ export class EventStore {
   public picoModelJobQueue(): PicoModelJobQueue {
     this.ensureOpen();
     return new PicoModelJobQueue(this.db);
+  }
+
+  /** ADR 0126 P2. Which presences of an identity exist and what they offer. */
+  public picoPresenceRegistry(): PicoPresenceRegistry {
+    this.ensureOpen();
+    return new PicoPresenceRegistry(this.db);
   }
 
   /**

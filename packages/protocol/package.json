@@ -67,6 +67,10 @@
       "types": "./dist/link-relay-surface.d.ts",
       "import": "./dist/link-relay-surface.js"
     },
+    "./presence": {
+      "types": "./dist/presence.d.ts",
+      "import": "./dist/presence.js"
+    },
     "./link-relay-operator": {
       "types": "./dist/link-relay-operator.d.ts",
       "import": "./dist/link-relay-operator.js"

@@ -168,6 +168,9 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       // ADR 0116 W5: what is waiting, and the explicit keep that persists it.
       'home.model.reads.read',
       'home.model.read.keep',
+      'home.presence.announce',
+      'home.presence.read',
+      'home.presence.forget',
     ]);
   });
 

@@ -236,10 +236,46 @@ version of a concept, and the versions drift where nobody is looking.
 - **P1 - Terms and boundary recorded (done with this ADR):** identity,
   presence, embodiment and affordance are defined, the two collisions are
   resolved, and the state boundary is written.
-- **P2 - Presence and affordance registry (open):** durable registry,
-  lease or heartbeat, connection state, and a closed affordance vocabulary
-  in `@pico/protocol` with a check that keeps it distinct from ADR 0036
-  capabilities.
+- **P2 - Presence and affordance registry (implemented 2026-08-16):** a
+  durable registry in the Home, a lease, a computed connection state, a closed
+  affordance vocabulary in `@pico/protocol`, and `presence:check` in the gate.
+
+  **The registry stores no connection state**, which is the one shape decision
+  here. A presence that lost power cannot write `disconnected`, so a stored
+  status is a claim that outlives its subject - the Home would go on reporting
+  a dead device as present until something noticed. What is stored is when a
+  presence last announced itself; connectedness is computed against the lease,
+  and silence needs nobody to report it (ADR 0118 O2, one layer down). A
+  `lastSeenAt` in the future earns no credit either: ADR 0120's posture is that
+  a wrong clock costs a presence that looks absent, never one that looks
+  present after it stopped.
+
+  **One operation registers and refreshes**, because they are the same
+  statement - *this presence exists and is running now*. Two would make a
+  runtime decide which it was after a restart, and one that guessed wrong
+  would either fail to register or reset its own history. `registeredAt` is
+  written on insert only, so "since when has this device been mine" survives
+  every restart it makes; affordances are replaced rather than merged, because
+  a presence that lost its camera is making a true statement about now.
+
+  **The affordance vocabulary is a list of bare strings, and that is the
+  gate.** A per-affordance object is where a `riskClass` eventually goes, and
+  it goes there without anybody deciding to - so `check-presence-affordances.mjs`
+  refuses the shape rather than the field, refuses policy vocabulary anywhere
+  in the module, and refuses an announcement that carries an unknown field
+  instead of dropping it. Unknown *capability* names may be ignored (ADR 0036);
+  an unknown *affordance* is a fact the Core would have to plan against without
+  knowing what it means, so it is refused.
+
+  **Nothing plans on a presence type.** The label exists so a person can
+  recognise their own device, and the same check refuses any file outside a
+  visible exemption list that reads it - the branch-on-device-class this ADR
+  exists to prevent. `offering()` takes affordances and returns presences;
+  there is nothing in its signature to branch on.
+
+  What P2 does not do is the half ADR 0126 already calls the hard one:
+  ownership, selection and takeover are P4, and P4 stays blocked on an Action
+  Runner that does not exist.
 - **P3 - The state crossing (open):** promotion from presence-local to
   durable state as an explicit, audited step, with ADR 0129's five places
   answered at the crossing; the SR2 buffer relocates to presence-local and

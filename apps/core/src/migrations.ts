@@ -211,6 +211,20 @@ export const picoModelJobKindMigrationId = '0020_pico_model_job_kind' as const;
 export const picoModelJobRecallContextMigrationId =
   '0021_pico_model_job_recall_context' as const;
 
+/**
+ * ADR 0126 P2. Which presences of this identity exist, and when each was last
+ * heard from.
+ *
+ * **No status column, deliberately.** A presence that lost power cannot write
+ * `disconnected`, so a stored status is a claim that outlives its subject -
+ * the Home would go on saying a dead device is present until something
+ * noticed. What is stored is when it last announced itself; connectedness is
+ * computed from that against a lease, and silence needs nobody to report it
+ * (ADR 0118 O2).
+ */
+export const picoPresenceRegistryMigrationId =
+  '0022_pico_presence_registry' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1489,6 +1503,26 @@ const migrations: readonly MigrationDefinition[] = [
       db.exec(`
         ALTER TABLE pico_model_job_queue
         ADD COLUMN recall_context_json TEXT NULL;
+      `);
+    },
+  },
+  {
+    id: picoPresenceRegistryMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        CREATE TABLE pico_presence (
+          presence_id TEXT NOT NULL,
+          pico_identity_fingerprint_hex TEXT NOT NULL,
+          presence_type TEXT NOT NULL,
+          affordances_json TEXT NOT NULL,
+          registered_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL,
+          PRIMARY KEY (pico_identity_fingerprint_hex, presence_id)
+        );
+
+        CREATE INDEX pico_presence_identity_idx
+          ON pico_presence (pico_identity_fingerprint_hex, last_seen_at DESC);
       `);
     },
   },

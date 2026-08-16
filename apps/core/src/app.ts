@@ -3641,6 +3641,68 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           return { outcome: 'ok', result: { memoryItemId } };
         }
         /**
+         * ADR 0126 P2. A presence announcing itself and what its runtime can
+         * do - one operation for registering and refreshing, because they are
+         * the same statement.
+         *
+         * The identity comes from the signed request rather than the body: a
+         * presence belongs to the identity that spoke, and a field naming one
+         * would be a field somebody could put a different identity in.
+         */
+        case 'home.presence.announce': {
+          if (principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          let announced;
+          try {
+            announced = store.picoPresenceRegistry().announce({
+              picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+              announcement: args,
+              at: new Date().toISOString(),
+            });
+          } catch (error) {
+            // The parser's name travels: an unknown affordance, an unknown
+            // field and a bad id are three different things for a runtime to
+            // fix, and one refusal for all of them would send it guessing.
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'invalid_presence' },
+            };
+          }
+          if (!announced.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: announced.refusal } };
+          }
+          return {
+            outcome: 'ok',
+            result: announced.presence as unknown as Record<string, unknown>,
+          };
+        }
+        /** ADR 0126 P2. The person's own devices, as their Home knows them. */
+        case 'home.presence.read': {
+          if (Object.keys(args).length !== 0 || principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              presences: store.picoPresenceRegistry()
+                .forIdentity(principal.picoIdentityFingerprintHex, Date.now()),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        case 'home.presence.forget': {
+          if (principal === undefined || typeof args.presenceId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const forgotten = store.picoPresenceRegistry().forget({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            presenceId: args.presenceId,
+          });
+          return forgotten
+            ? { outcome: 'ok', result: { forgotten: true } }
+            : { outcome: 'invalid_arguments', result: { refusal: 'not_found' } };
+        }
+        /**
          * ADR 0116 W5. What is waiting for this person, without the answers.
          */
         case 'home.model.reads.read': {
