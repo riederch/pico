@@ -3587,10 +3587,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             // wrong about.
             return { outcome: 'invalid_arguments', result: { refusal: 'nothing_to_derive_from' } };
           }
-          const answer = (kept.values as Array<{ name: string; value: unknown }>)
-            .find((value) => value.name === 'answer')?.value;
+          const valueOf = (name: string): unknown =>
+            (kept.values as Array<{ name: string; value: unknown }>)
+              .find((value) => value.name === name)?.value;
+          const answer = valueOf('answer');
           if (typeof answer !== 'string') {
             return { outcome: 'invalid_arguments', result: { refusal: 'no_answer' } };
+          }
+          if (valueOf('found_in_memory') === false) {
+            /**
+             * ADR 0117 X2's declared value, used. The reader said the material
+             * does not answer the question, so what would be kept is a
+             * sentence about an absence - and stored beside real notes it
+             * reads as a finding.
+             *
+             * The window already declines to offer the button here. That was
+             * not enough: a rule a surface enforces is a rule anything else
+             * reaching this operation walks past, and the surface is the half
+             * a person can replace.
+             */
+            return { outcome: 'invalid_arguments', result: { refusal: 'nothing_was_found' } };
           }
           const memoryItemId = `mem_recall_${randomBytes(16).toString('hex')}`;
           try {

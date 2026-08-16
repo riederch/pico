@@ -339,7 +339,12 @@ patched afterwards.
 
   - **an answer that found nothing is not keepable.** The reader said the
     material does not answer the question; storing that sentence would put
-    an absence into somebody's memory as though it were a finding.
+    an absence into somebody's memory as though it were a finding. The
+    window declined to offer the button and the Home accepted the call
+    anyway - found by running it against a real provider, which kept *"the
+    quoted data does not mention the name of your neighbour"* beside two
+    real notes. A rule a surface enforces is one anything else reaching the
+    operation walks past, and the surface is the half a person can replace.
   - **an answer with no sources is not a derivation.** It would be an item
     with nothing to be wrong about.
   - **a source that has been deleted stops being one.** The row keeps its
@@ -347,6 +352,20 @@ patched afterwards.
     why this had to be a rule rather than a consequence of the content
     being gone. A summary written *after* somebody deleted the note it is
     about would outlive their deletion and look like an ordinary memory.
+
+  **Keeping an answer widens the domain, and that is worth knowing before
+  it happens.** A kept answer is `own_pico`, which is below ADR 0116's
+  instruction threshold - so the next question over that domain carries
+  something that is not the person's own words, and ADR 0151 PV1 asks for a
+  provider that proved who it is. Observed rather than reasoned about: on
+  the measured host, asking worked, keeping worked, and the same question
+  afterwards came back `entry_may_not_carry_these_words`.
+
+  Nothing here is wrong: PV1 chose the conservative reading deliberately
+  and said so. But the consequence is a product one - a Home with an
+  unauthenticated provider can ask about its own notes exactly until it
+  keeps an answer - and it is recorded here rather than left for somebody
+  to hit.
 
   **And the class is corrected where W3 says it must be.** A derivation
   takes the lowest origin among its sources, which over the person's own

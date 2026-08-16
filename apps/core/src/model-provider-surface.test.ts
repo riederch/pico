@@ -1156,6 +1156,7 @@ describe('ADR 0116 W5 - an answer becomes a memory only when somebody says so', 
   async function askAndAnswer(setup: { send: PicoLinkSend; databasePath: string }, options: {
     origin?: 'person_present' | 'external_content';
     answer?: string;
+    found?: boolean;
   } = {}): Promise<string> {
     const store = await EventStore.open(setup.databasePath, {});
     store.memory().create({
@@ -1180,12 +1181,20 @@ describe('ADR 0116 W5 - an answer becomes a memory only when somebody says so', 
       jobId,
       outcome: 'answered',
       result: {
-        values: [{
-          name: 'answer',
-          type: 'text',
-          value: options.answer ?? 'On Bergstrasse.',
-          originClass: 'own_pico',
-        }],
+        values: [
+          {
+            name: 'answer',
+            type: 'text',
+            value: options.answer ?? 'On Bergstrasse.',
+            originClass: 'own_pico',
+          },
+          {
+            name: 'found_in_memory',
+            type: 'boolean',
+            value: options.found ?? true,
+            originClass: 'own_pico',
+          },
+        ],
       },
       at: '2026-08-16T12:05:00.000Z',
     });
@@ -1222,6 +1231,17 @@ describe('ADR 0116 W5 - an answer becomes a memory only when somebody says so', 
       jobId: (asked.result as { jobId: string }).jobId,
     });
     expect(kept.result.refusal).toBe('no_answer');
+  });
+
+  it('refuses to keep an answer the reader says found nothing', async () => {
+    // The window declines to offer the button here, and that was not enough:
+    // a rule a surface enforces is one anything else reaching this operation
+    // walks past - and the surface is the half a person can replace.
+    const setup = await bootWithDecision();
+    const jobId = await askAndAnswer(setup, { found: false });
+
+    expect((await setup.send('home.recall.keep', { jobId })).result.refusal)
+      .toBe('nothing_was_found');
   });
 
   it('refuses to keep an answer formed from nothing', async () => {
