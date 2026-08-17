@@ -185,6 +185,78 @@ for (const documented of new Set(documentedPaths)) {
   }
 }
 
+// --- The closed operation set, which nothing was reading --------------------
+
+/**
+ * ADR 0107. **Remote capability is opt-in per operation** - "adding one is a
+ * decision, not a consequence of adding a route".
+ *
+ * Nothing enforced that. This reader checked the Foundation's HTTP routes both
+ * ways and left `picoLinkDirectOperations` alone, which is the wrong way round:
+ * those routes are the local diagnostic surface ADR 0030 keeps local, and the
+ * operation set is the one that travels - published through the ADR 0107 D4
+ * intake and, since ADR 0149, over somebody else's relay.
+ *
+ * On the day this was written the set held thirty operations and this document
+ * named seven. Twenty-three had been opted into remote capability with nothing
+ * recording the decision. Four of them were added the same week, by an author
+ * who read the ADR's sentence and still did not write them down - which is the
+ * argument for a check rather than a habit.
+ *
+ * Grouping is allowed, because the document already groups: one row may name a
+ * family with `/` between the operations, and the sentence is about the family.
+ */
+const operationsPath = 'packages/protocol/src/index.ts';
+const operationsSource = readFileSync(join(repoRoot, operationsPath), 'utf8');
+const operationBlock = /export const picoLinkDirectOperations = \[([\s\S]*?)\] as const;/u
+  .exec(operationsSource);
+const operations = operationBlock === null
+  ? []
+  : [...operationBlock[1].matchAll(/'([a-z0-9_.-]+)'/gu)].map(([, name]) => name);
+
+if (operations.length === 0) {
+  errors.push(
+    `${operationsPath}: no Link operations found. This reader compares two sides `
+    + 'and one of them just disappeared.',
+  );
+}
+
+export function documentedLinkOperations(document) {
+  const named = new Set();
+  for (const [, row] of document.matchAll(/^\|([^\n]*)\|$/gmu)) {
+    if (!row.includes('pico.link.direct')) {
+      continue;
+    }
+    for (const [, name] of row.matchAll(/`([a-z][a-z0-9_.-]*\.[a-z0-9_.-]+)`/gu)) {
+      if (name !== 'pico.link.direct') {
+        named.add(name);
+      }
+    }
+  }
+  return named;
+}
+
+const documentedOperations = documentedLinkOperations(text);
+
+for (const operation of operations) {
+  if (!documentedOperations.has(operation)) {
+    errors.push(
+      `${path}: the Link operation \`${operation}\` is in the closed set and `
+      + 'appears in no row of this document. ADR 0107 makes remote capability '
+      + 'opt-in per operation; the opt-in is recorded here or nowhere.',
+    );
+  }
+}
+for (const documented of documentedOperations) {
+  if (!operations.includes(documented)) {
+    errors.push(
+      `${path}: \`${documented}\` is documented as a Link operation and is not `
+      + 'in the closed set. A stale row is a compatibility statement about '
+      + 'something that is gone.',
+    );
+  }
+}
+
 // --- Probes: the reader has to be able to fail ------------------------------
 
 const probes = [
@@ -222,6 +294,15 @@ if (documentsRoute('`GET /api/x`', 'GET', '/api/x/y', [])) {
 if (!documentsRoute('', 'POST', '/api/home/reader-custody/items', ['/api/home/reader-custody/'])) {
   errors.push('Self-probe failed: a documented wildcard did not cover its family.');
 }
+if (documentedLinkOperations('| `pico.link.direct` `home.a.b` | Internal | n |').size !== 1) {
+  errors.push('Self-probe failed: a documented Link operation was not read from its row.');
+}
+if (documentedLinkOperations('| `pico.link.direct` `home.a.b` / `home.c.d` | Internal | n |').size !== 2) {
+  errors.push('Self-probe failed: a documented family was read as one operation.');
+}
+if (documentedLinkOperations('| `pico.model.job.v1` | Internal | n |').size !== 0) {
+  errors.push('Self-probe failed: a row that is not a Link operation was read as one.');
+}
 
 for (const probe of probes) {
   const rows = tableRowsUnder(probe.document, probe.heading);
@@ -241,5 +322,6 @@ if (errors.length > 0) {
 console.log(
   `Surface-class check passed (${surfaceRows.length} surfaces, `
   + `${formRows.length} canonical forms, all classed; `
-  + `${registered.length} served routes, each named).`,
+  + `${registered.length} served routes and ${operations.length} Link `
+  + 'operations, each named).',
 );

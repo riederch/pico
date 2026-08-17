@@ -2,6 +2,30 @@
 
 ## Status
 
+Status note, 2026-08-17: **"remote capability is opt-in per operation" now
+has something enforcing it.**
+
+That sentence is this ADR's argument for a closed operation set instead of a
+proxied Foundation API - adding one is a decision, not a consequence of adding
+a route. Nothing checked it. `check-surface-classes.mjs` read the Foundation's
+HTTP routes against `public-surfaces.md` in both directions and left the
+operation set alone, which is the wrong way round: those routes are the local
+diagnostic surface ADR 0030 keeps local, and the operation set is the one that
+travels - through this ADR's D4 intake and, since ADR 0149, over somebody
+else's relay.
+
+On the day the check was extended the set held thirty operations and the
+document named seven. Twenty-three had been opted into remote capability with
+nothing recording the decision, and four of those were added the same week by
+an author who had read this sentence and still did not write them down. That
+is the argument for a check rather than a habit.
+
+The twenty-three are now recorded, grouped by family, each with the reason it
+is remote-capable at all - which for several of them is the whole point: a
+device asking to be recovered is a person whose other device is gone, and a
+presence that had to be on the Home's network to announce would be a presence
+that could not be elsewhere.
+
 Accepted; implemented for the bounded direct slice (D1-D5 done). This is the
 first runtime slice of Pico Link (ADR 0028) and the direct answer to ADR 0105
 B5: an authenticated channel between a person's device and their own Pico Home
