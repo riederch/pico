@@ -39,7 +39,9 @@ of the project, it is.
   Foundation surface (ADR 0104 S3). If you had it switched on, it stays on:
   with nothing passed, Pico asks its own store what it holds, so a Home with
   encrypted content stays encrypted rather than reading a missing setting as
-  "off". You do not have to do anything.
+  "off". You do not have to do anything - and that was tried on this release's
+  own container with a Home that had encryption on, rather than only reasoned
+  about.
 - Does not change the wire contract. `picoProtocolVersion` stays `0.1.7`.
 
 ## Earlier releases, as the `Pico Core` add-on

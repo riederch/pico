@@ -18,6 +18,18 @@ tell an *empty* `options` mapping from a *missing* one, so on the day the tree
 reached S2's goal it reported the goal as a fault. Empty and absent are
 different statements (ADR 0117 X1), including in a YAML reader.
 
+**Verified against the image the same day, because a changelog sentence about
+somebody else's data is worth proving rather than reasoning to.** A database
+carrying `domain_encrypted` content with its decision row deleted - an
+instance from before this gate - was mounted into the 0.2.0 container, which
+carries no `memory_encryption` option and was given no `PICO_MEMORY_ENCRYPTION`
+variable. It came up healthy and wrote `enabled: 1, inherited_from_host: 1` for
+itself: it asked its own store what it holds, which is the whole argument. The
+content stayed `domain_encrypted` and the key store was untouched.
+`memory-encryption-inheritance.test.ts` already held that behaviour without a
+container; what the run adds is that the packaged thing behaves like the
+tested thing.
+
 Accepted; currently violated in two named places. `memory_encryption` is a
 Home Assistant add-on option and `pico_foundation_token` is a Home Assistant
 add-on option, and both are decisions a person makes about their own Pico.
