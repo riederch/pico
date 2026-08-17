@@ -1,4 +1,25 @@
 // Generated from docs/design-system/01_Foundations/tokens/pico.tokens.json; do not edit by hand.
+//
+// ADR 0133 L3. An early materialization, and the four things one states:
+//
+// 1. Why late derivation is not affordable: these are read by an Electron
+//    renderer under a CSP that forbids fetching anything, and by a PDF
+//    generator that runs with no filesystem root it may reach. Neither can
+//    open the token source at the moment it needs a colour, so the flatten
+//    happens at build time or it does not happen.
+// 2. Which direction the drift runs, and why that is the fail-safe one:
+//    towards *stale*. A copy can only lag the source, never lead it, so a
+//    surface renders the palette from last release rather than a colour
+//    nobody chose.
+// 3. Where the drift is corrected: `pnpm design-system:generate` rewrites
+//    every copy from the one source, and `design-system:check` runs the same
+//    generator with `--check` inside `release:verify`, so a lagging copy
+//    fails the release rather than shipping.
+// 4. What a consumer may still assume: that every copy is byte-identical to
+//    the others and to the source at release time - and nothing more. The
+//    file has no identity of its own: it may be regenerated without a
+//    version, and no further derivation may take it as input where the
+//    token source would have served.
 export const picoTokens = {
   "color": {
     "background": {

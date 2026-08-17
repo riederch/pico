@@ -139,10 +139,33 @@ which a reviewer can check and a reader can find.
 - **L2 - Carried into the run rules (done with this ADR):** the invariant
   stands in `AGENTS.md` among the standing product invariants, so it is
   read at the start of a run rather than found by chance in an ADR.
-- **L3 - Existing exceptions audited (open):** `store-row-counter.ts`
-  already carries its four points. Every other early materialization in
-  the tree is unchecked against this form, and an audit would either find
-  the statement or find the place where nobody made one.
+- **L3 - Existing exceptions audited (done 2026-08-17):** it found one
+  place where nobody had made the statement, and the search is worth
+  recording because most of what looks like a cache is not one.
+
+  **The generated design tokens.** Three byte-identical copies live in the
+  tree - `docs/design-system/01_Foundations/tokens/pico.tokens.ts` and one
+  beside each of the two apps that render PICO - and their header said only
+  "do not edit by hand". It now states the four things, written into the
+  generator so every copy carries them: late derivation is unaffordable
+  because an Electron renderer under a CSP that forbids fetching and a PDF
+  generator with no reachable filesystem root cannot open the source when
+  they need a colour; the drift runs towards *stale*, which is fail-safe
+  because a copy can lag the source and never lead it; it is corrected by
+  `design-system:generate` and caught by `design-system:check` inside
+  `release:verify`; and a consumer may assume byte-identity at release time
+  and nothing else - the file has no identity, may be regenerated without a
+  version, and may not feed a further derivation the source could serve.
+
+  **What is deliberately not in scope, so a reviewer can disagree with the
+  judgement rather than guess at it.** The protocol fixtures under
+  `docs/protocol/fixtures/` are not caches: ADR 0034 makes them the
+  authority a runtime is checked against, which is the opposite of a
+  flattened copy. `docs/design-system/manifest.json` is a hash index whose
+  purpose is verification rather than rendering, so it is not a richer
+  representation flattened for a medium. The relay's `openMailboxes` reads
+  as a maintained counter and is not one - it is a subquery, counted on
+  demand. Nothing else in the tree maintains a value it could derive.
 
 ## Consequences
 
