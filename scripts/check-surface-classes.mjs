@@ -221,13 +221,24 @@ if (operations.length === 0) {
   );
 }
 
+/**
+ * Operations named in a row's **first cell**, which is where a surface is
+ * named; the third is prose.
+ *
+ * The first version read the whole row and found `depot.fetch` in a sentence
+ * explaining why an operation needs an approval - an effect name, not an
+ * operation - and reported it as a documented surface that does not exist. A
+ * reader that forces prose to avoid naming things is a reader that makes the
+ * document worse.
+ */
 export function documentedLinkOperations(document) {
   const named = new Set();
   for (const [, row] of document.matchAll(/^\|([^\n]*)\|$/gmu)) {
-    if (!row.includes('pico.link.direct')) {
+    const surface = row.split('|')[0] ?? '';
+    if (!surface.includes('pico.link.direct')) {
       continue;
     }
-    for (const [, name] of row.matchAll(/`([a-z][a-z0-9_.-]*\.[a-z0-9_.-]+)`/gu)) {
+    for (const [, name] of surface.matchAll(/`([a-z][a-z0-9_.-]*\.[a-z0-9_.-]+)`/gu)) {
       if (name !== 'pico.link.direct') {
         named.add(name);
       }
@@ -302,6 +313,9 @@ if (documentedLinkOperations('| `pico.link.direct` `home.a.b` / `home.c.d` | Int
 }
 if (documentedLinkOperations('| `pico.model.job.v1` | Internal | n |').size !== 0) {
   errors.push('Self-probe failed: a row that is not a Link operation was read as one.');
+}
+if (documentedLinkOperations('| `pico.link.direct` `home.a.b` | Internal | needs `x.y` |').size !== 1) {
+  errors.push('Self-probe failed: a name in the prose column was read as an operation.');
 }
 
 for (const probe of probes) {

@@ -25,6 +25,11 @@ const channels = Object.freeze({
   getDepots: 'pico:depots:get',
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
+  fetchDepotsNow: 'pico:depot-fetch:ask',
+  getPendingActions: 'pico:pending-actions:get',
+  resolvePendingAction: 'pico:pending-action:resolve',
+  getModuleConsent: 'pico:module-consent:get',
+  recordModuleConsent: 'pico:module-consent:record',
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
@@ -121,6 +126,24 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     mayFetchUnasked: boolean,
   ): Promise<void> => {
     await ipcRenderer.invoke(channels.decideDepotReach, { remote, mayFetch, mayFetchUnasked });
+  },
+  /**
+   * ADR 0143 DP8. *Fetch now*. Takes nothing: which depots are due is the
+   * Home's to decide, and the presence session is the shell's to assert.
+   */
+  fetchDepotsNow: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.fetchDepotsNow),
+  getPendingActions: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.getPendingActions),
+  resolvePendingAction: async (
+    requestedEventId: string,
+    approved: boolean,
+  ): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.resolvePendingAction, { requestedEventId, approved }),
+  getModuleConsent: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.getModuleConsent),
+  recordModuleConsent: async (identifier: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.recordModuleConsent, identifier);
   },
   getDevices: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDevices),
   switchDevice: async (

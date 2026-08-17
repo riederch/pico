@@ -15,6 +15,16 @@ of the three, which makes it smaller than a module rather than a variant
 of one. "Three module kinds, three trust postures" keeps its text, and
 ADR 0136 consolidates its `provider` against ADR 0036's `provider_id`.
 
+Status note, 2026-08-17: M3's *activation defaults on* met ADR 0139
+AC4's *effects are consented as a module is switched on*, and between
+them a module that was never off was active with nothing agreed to. The
+default is unchanged and right: a Home whose calendar was off would look
+broken. What changed is that the two are now visibly two statements -
+`home.modules.consent.read` shows what an active module declares and
+nobody has answered, and consent is never granted at boot on the
+person's behalf. Switching a module off and on again still restores
+everything, because M3's deactivation drops behaviour and not custody.
+
 Status note, 2026-08-10: M2's probe count is now eighteen. ADR 0140 RL4
 added one - a module may not value-import the decision contract
 `@pico/protocol/pico-rules`, because a module that can construct a

@@ -298,9 +298,12 @@ describe('ADR 0113 - the window is an occasion, not a workplace', () => {
      * sent six reads on every open, four of them for lists a person answering
      * an approval will never look at.
      */
-    expect(picoCompanionViewReads.now).toEqual(['getRecalls', 'getAnsweredReads']);
-    expect(picoCompanionViewReads.settings)
-      .toEqual(['getModelProviders', 'getSuppliers', 'getDepots', 'getDevices', 'getRelays']);
+    expect(picoCompanionViewReads.now)
+      .toEqual(['getRecalls', 'getAnsweredReads', 'getPendingActions']);
+    expect(picoCompanionViewReads.settings).toEqual([
+      'getModelProviders', 'getSuppliers', 'getDepots', 'getDevices', 'getRelays',
+      'getModuleConsent',
+    ]);
     for (const read of picoCompanionViewReads.now) {
       expect(picoCompanionViewReads.settings).not.toContain(read);
     }

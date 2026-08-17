@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -91,6 +92,21 @@ let lastNetworkState: boolean | null = null;
 let quitting = false;
 let productOperationActive = false;
 let pendingApprovalDecision: ((approved: boolean) => void) | null = null;
+
+/**
+ * ADR 0141 RN4. The session a person's answer is given in.
+ *
+ * **Minted with the window and dropped with it**, because that is what the
+ * window *is*: ADR 0113 says it exists only while somebody is interacting, so
+ * its lifetime is the honest span of "a person is here". A session that
+ * survived the window would let a question asked this evening be answered by
+ * whoever opens the laptop tomorrow, which is the standing grant RN4 refuses.
+ *
+ * Never given to the renderer. The renderer names *which* question it is
+ * answering; that a person is present at all is something only the process
+ * that owns the window can say.
+ */
+let presenceSessionId: string | null = null;
 
 app.disableHardwareAcceleration();
 Menu.setApplicationMenu(null);
@@ -672,6 +688,94 @@ function registerIpc(): void {
    * (ADR 0118 O4) - while a switch throws, because somebody pressed it and is
    * waiting to be told whether it took.
    */
+  /**
+   * ADR 0143 DP8 with ADR 0141 RN4. *Fetch now*, and the question it produces.
+   *
+   * The presence session is put in here rather than sent by the renderer: it
+   * says a person is at this window, and a renderer asserting that would be
+   * the window vouching for itself.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.fetchDepotsNow,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (presenceSessionId === null) {
+        // No window, no session, no question. Reached only if a renderer
+        // outlived the window that loaded it.
+        throw new Error('no_presence_session');
+      }
+      return await runtime.askDepotFetch(presenceSessionId);
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.getPendingActions,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null || presenceSessionId === null) {
+        // ADR 0118 O4: nothing waiting reads as nothing waiting. A window that
+        // cannot ask has no questions to show, which is the truth.
+        return [];
+      }
+      try {
+        return await runtime.readPendingActions(presenceSessionId);
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.resolvePendingAction,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (presenceSessionId === null) {
+        throw new Error('no_presence_session');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.requestedEventId !== 'string'
+        || typeof record.approved !== 'boolean') {
+        throw new Error('invalid_pending_action_decision');
+      }
+      return await runtime.resolvePendingAction({
+        requestedEventId: record.requestedEventId,
+        presenceSessionId,
+        approved: record.approved,
+      });
+    },
+  );
+  /** ADR 0139 AC4. What the parts of Pico may do, agreed to one at a time. */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getModuleConsent,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readModuleConsent();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.recordModuleConsent,
+    async (event: IpcMainInvokeEvent, identifier: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof identifier !== 'string') {
+        throw new Error('invalid_module_consent');
+      }
+      await runtime.recordModuleConsent(identifier);
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.getDevices,
     async (event: IpcMainInvokeEvent) => {
@@ -1356,11 +1460,20 @@ function showWindow(): void {
   }
   if (window === null || window.isDestroyed()) {
     window = new BrowserWindow(picoCompanionWindowOptions(preloadPath));
+    presenceSessionId = `presence-${randomUUID()}`;
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', (event) => event.preventDefault());
     window.webContents.on('will-attach-webview', (event) => event.preventDefault());
     window.once('closed', () => {
       window = null;
+      /**
+       * The session ends with the window, and the questions asked in it are
+       * left *unanswered* rather than denied - ADR 0141 RN4's third state.
+       * Nothing is sent to the Home to say so: the Home is already holding
+       * them against a session and against a clock, and a person walking away
+       * from a question did not refuse it.
+       */
+      presenceSessionId = null;
       const deny = pendingApprovalDecision;
       pendingApprovalDecision = null;
       deny?.(false);

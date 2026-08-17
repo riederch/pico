@@ -5,6 +5,8 @@ import { picoModelProviderStates } from '@pico/protocol/model-provider-state';
 import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
+  renderPicoCompanionModuleConsent,
+  renderPicoCompanionPendingApprovals,
   renderPicoCompanionRecalls,
 } from './model-provider-views.js';
 import {
@@ -171,6 +173,8 @@ describe('every view fetches what it shows', () => {
       'renderPicoCompanionSuppliers(',
       'renderPicoCompanionDepots(',
       'renderPicoCompanionRelays(',
+      'renderPicoCompanionModuleConsent(',
+      'renderPicoCompanionPendingApprovals(',
     ]) {
       expect(renderer).toContain(render);
     }
@@ -186,6 +190,8 @@ describe('every view fetches what it shows', () => {
       'refreshDepots();',
       'refreshDevices();',
       'refreshRelays();',
+      'refreshPendingActions();',
+      'refreshModuleConsent();',
     ]) {
       expect(showView).toContain(refresh);
     }
@@ -606,5 +612,132 @@ describe('ADR 0116 W5 - the press is the write', () => {
       children: Array<{ children: Array<Record<string, unknown>> }>;
     }).children[0]!;
     expect(line.children.some((child) => child.tag === 'button')).toBe(false);
+  });
+});
+
+describe('ADR 0139 AC4 - the agreement, where somebody can give it', () => {
+  it('shows the module’s own sentences and a button that agrees', () => {
+    // The sentences are what a person agrees to, so they are shown rather
+    // than counted, and they are the module's rather than this window's.
+    const root = fakeDocument();
+    const agreed: string[] = [];
+    renderPicoCompanionModuleConsent(root, [{
+      identifier: 'depot',
+      drift: { added: ['depot.fetch'], removed: [], changed: [] },
+      declares: [{
+        name: 'depot.fetch',
+        description: 'Fetches a depot at the commit you accepted.',
+        risk: 'external_write',
+      }],
+    }], (identifier) => agreed.push(identifier));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const texts = line.children.map((child) => String(child.textContent));
+    expect(texts).toContain('Fetches a depot at the commit you accepted.');
+    const button = line.children.find((child) => child.tag === 'button')!;
+    expect(button.textContent).toBe('Agree');
+    (button as unknown as { click(): void }).click();
+    expect(agreed).toEqual(['depot']);
+  });
+
+  it('says a changed declaration is a change rather than a new thing', () => {
+    // ADR 0127 M4. Shipping `destructive` under an agreement somebody gave
+    // for `local_write` is the escalation this gate exists for, and being
+    // told "would like to do this" would hide that they already answered.
+    const root = fakeDocument();
+    renderPicoCompanionModuleConsent(root, [{
+      identifier: 'depot',
+      drift: { added: [], removed: [], changed: ['depot.fetch'] },
+      declares: [{ name: 'depot.fetch', description: 'Now also deletes.', risk: 'destructive' }],
+    }], () => {});
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    expect(String(line.children[0]?.textContent)).toContain('different from what you agreed');
+    expect(line.children.find((child) => child.tag === 'button')?.textContent)
+      .toBe('Agree to the change');
+  });
+
+  it('shows nothing when nothing is awaiting an answer', () => {
+    // A section reading "all agreed" would be a permanent fixture reporting
+    // the ordinary case.
+    const root = fakeDocument();
+    renderPicoCompanionModuleConsent(root, [], () => {});
+    expect(root.section.hidden).toBe(true);
+  });
+});
+
+describe('ADR 0141 RN4 - the question, and the two answers it has', () => {
+  it('offers yes and no, and nothing that means walking away', () => {
+    /**
+     * Unanswered is a third state and it is not a button: it is what closing
+     * the window or the clock running out produces. A control for it would
+     * make walking away and declining the same act.
+     */
+    const root = fakeDocument();
+    const acted: Array<{ requestedEventId: string; approved: boolean }> = [];
+    renderPicoCompanionPendingApprovals(root, [{
+      requestedEventId: 'event-1',
+      prompt: 'Fetches a depot at the commit you accepted.',
+      risk: 'external_write',
+      expiresAt: '2026-08-17T12:19:24.143Z',
+    }], (decision) => acted.push(decision));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    expect(buttons.map((button) => button.textContent)).toEqual(['Do it', 'No']);
+    // The sentence is the one the module declared, so it is recognisable as
+    // the thing that was agreed to earlier.
+    expect(line.children.some((child) =>
+      String(child.textContent) === 'Fetches a depot at the commit you accepted.')).toBe(true);
+
+    (buttons[1] as unknown as { click(): void }).click();
+    expect(acted).toEqual([{ requestedEventId: 'event-1', approved: false }]);
+  });
+
+  it('is not there when nothing is waiting', () => {
+    const root = fakeDocument();
+    renderPicoCompanionPendingApprovals(root, [], () => {});
+    expect(root.section.hidden).toBe(true);
+  });
+});
+
+describe('ADR 0141 RN4 - the session belongs to the window, not to the renderer', () => {
+  const preload = readFileSync(join(import.meta.dirname, 'preload.cts'), 'utf8');
+  const renderer = readFileSync(join(import.meta.dirname, 'renderer.ts'), 'utf8');
+  const main = readFileSync(join(import.meta.dirname, 'main.ts'), 'utf8');
+
+  it('never lets the renderer name the session it is answering in', () => {
+    /**
+     * That a person is present is something only the process owning the
+     * window can say. A renderer that carried the session id would be the
+     * window vouching for itself, and a page kept open in a corner would go
+     * on asserting somebody is there.
+     */
+    expect(renderer).not.toContain('presenceSessionId');
+    expect(preload).not.toContain('presenceSessionId');
+    expect(main).toContain('presenceSessionId');
+  });
+
+  it('mints it with the window and drops it when the window closes', () => {
+    // The lifetime is the point: ADR 0113's window exists only while somebody
+    // is interacting, so a session outliving it would let tomorrow's opener
+    // answer tonight's question.
+    const show = /function showWindow[\s\S]*?\n\}/u.exec(main)?.[0] ?? '';
+    expect(show).toContain('presenceSessionId = `presence-${randomUUID()}`');
+    expect(show).toContain('presenceSessionId = null;');
+  });
+
+  it('refuses to ask or answer without one', () => {
+    for (const channel of ['fetchDepotsNow', 'resolvePendingAction']) {
+      const handler = main.slice(main.indexOf(`picoCompanionIpcChannels.${channel}`));
+      const body = handler.slice(0, handler.indexOf('ipcMain.handle', 1));
+      expect(body).toContain('no_presence_session');
+    }
   });
 });

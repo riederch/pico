@@ -38,11 +38,16 @@ import type { PicoCompanionShellNotifications } from './presentation-adapter.js'
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
+  askPicoCompanionDepotFetch,
   attachPicoCompanionDepot,
   decidePicoCompanionDepotReach,
   decidePicoCompanionSupplierReach,
   readPicoCompanionDepots,
+  readPicoCompanionModuleConsent,
+  readPicoCompanionPendingApprovals,
   readPicoCompanionSuppliers,
+  recordPicoCompanionModuleConsent,
+  resolvePicoCompanionApproval,
 } from '@pico/companion/suppliers';
 import {
   announcePicoCompanionPresence,
@@ -137,6 +142,27 @@ export interface PicoCompanionShellRuntime {
     mayFetch: boolean;
     mayFetchUnasked: boolean;
   }): Promise<void>;
+  /**
+   * ADR 0143 DP8 with ADR 0141 RN4. A person asking for a fetch now, what came
+   * back to be answered, and the answer.
+   *
+   * The session travels from the shell rather than being made here: it names
+   * the span a window is open, and this runtime does not own a window.
+   */
+  askDepotFetch(presenceSessionId: string): Promise<{
+    requested: number;
+    blocked?: string;
+    waiting: readonly unknown[];
+  }>;
+  readPendingActions(presenceSessionId: string): Promise<readonly unknown[]>;
+  resolvePendingAction(input: {
+    requestedEventId: string;
+    presenceSessionId: string;
+    approved: boolean;
+  }): Promise<{ outcome: string; ran: boolean; succeeded?: boolean }>;
+  /** ADR 0139 AC4. What the parts of Pico declare they will do, and consent. */
+  readModuleConsent(): Promise<readonly unknown[]>;
+  recordModuleConsent(identifier: string): Promise<void>;
   /** ADR 0126 P2/P6. The person's own devices, as their Home knows them. */
   readDevices(): Promise<readonly unknown[]>;
   switchDevice(input: {
@@ -546,6 +572,65 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           ...decision,
+        });
+      }),
+      askDepotFetch: async (presenceSessionId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await askPicoCompanionDepotFetch({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          presenceSessionId,
+        });
+      }),
+      readPendingActions: async (presenceSessionId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionPendingApprovals({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          presenceSessionId,
+        });
+      }),
+      resolvePendingAction: async (decision) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await resolvePicoCompanionApproval({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...decision,
+        });
+      }),
+      readModuleConsent: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionModuleConsent({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      recordModuleConsent: async (identifier) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await recordPicoCompanionModuleConsent({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          identifier,
         });
       }),
       readDevices: async () => await serialized(async () => {

@@ -63,7 +63,7 @@ interface AppWithSweep {
     endsAtMs: number;
     startedAtMs: number;
     durationMs: number;
-  }): number;
+  }): { requested: number; blocked?: string };
   close(): Promise<void>;
 }
 
@@ -151,7 +151,7 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
 
     const app = await boot(databasePath);
     try {
-      expect(app.picoSweepDepotFetches(false)).toBe(1);
+      expect(app.picoSweepDepotFetches(false).requested).toBe(1);
     } finally {
       await app.close();
     }
@@ -174,9 +174,9 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
 
     const app = await boot(databasePath);
     try {
-      expect(app.picoSweepDepotFetches(false)).toBe(0);
+      expect(app.picoSweepDepotFetches(false).requested).toBe(0);
       // The same depot, the same decision path, one input changed.
-      expect(app.picoSweepDepotFetches(true)).toBe(1);
+      expect(app.picoSweepDepotFetches(true).requested).toBe(1);
     } finally {
       await app.close();
     }
@@ -216,9 +216,9 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
 
     const app = await boot(databasePath);
     try {
-      expect(app.picoSweepDepotFetches(false)).toBe(0);
+      expect(app.picoSweepDepotFetches(false).requested).toBe(0);
       // Not even when a person asks: CO3 was never granted.
-      expect(app.picoSweepDepotFetches(true)).toBe(0);
+      expect(app.picoSweepDepotFetches(true).requested).toBe(0);
     } finally {
       await app.close();
     }
@@ -290,8 +290,16 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
       // request for an effect nobody agreed to exists is not a question with
       // an answer - and a sweep that hit it would take every depot after it
       // down over something no depot could have fixed.
-      expect(app.picoSweepDepotFetches(false)).toBe(0);
-      expect(app.picoSweepDepotFetches(true)).toBe(0);
+      // **And it says which precondition, rather than counting zero.** This
+      // asserted a bare `0` and a live walk found what that hid: `depot`
+      // ships active (ADR 0127 M3), effect consent is written on the
+      // off-to-on transition, and a module that was never off never makes
+      // one - so this branch was every Home's steady state, and *this test*
+      // was the only thing that ever wrote the row it needs.
+      expect(app.picoSweepDepotFetches(false))
+        .toEqual({ requested: 0, blocked: 'effects_not_consented' });
+      expect(app.picoSweepDepotFetches(true))
+        .toEqual({ requested: 0, blocked: 'effects_not_consented' });
     } finally {
       await app.close();
     }
@@ -316,10 +324,10 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
     const app = await boot(databasePath);
     try {
       expect(() => app.picoSweepDepotFetches(false)).not.toThrow();
-      expect(app.picoSweepDepotFetches(false)).toBe(0);
+      expect(app.picoSweepDepotFetches(false).requested).toBe(0);
       // Asking without a presence session is the same answer: RN4's window is
       // what makes a question askable, not the `asked` flag.
-      expect(app.picoSweepDepotFetches(true)).toBe(0);
+      expect(app.picoSweepDepotFetches(true).requested).toBe(0);
     } finally {
       await app.close();
     }
@@ -346,7 +354,7 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
         startedAtMs,
         durationMs: 300_000,
         endsAtMs: startedAtMs + 300_000,
-      })).toBe(1);
+      }).requested).toBe(1);
     } finally {
       await app.close();
     }
@@ -363,7 +371,7 @@ describe('ADR 0143 DP8 depot fetch, wired', () => {
 
     const app = await boot(databasePath);
     try {
-      expect(app.picoSweepDepotFetches(false)).toBe(0);
+      expect(app.picoSweepDepotFetches(false).requested).toBe(0);
     } finally {
       await app.close();
     }

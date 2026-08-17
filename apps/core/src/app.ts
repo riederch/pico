@@ -1,4 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import {
+  PicoPendingActions,
+  maxPicoActionApprovalWindowMs,
+} from './pending-action.js';
 import { crossPicoStateBoundary } from './state-crossing.js';
 import {
   picoPresenceAffordances,
@@ -134,6 +138,7 @@ import { bindPicoModuleEffects } from '@pico/protocol/module';
 import {
   decidePicoAction,
   executePicoAction,
+  resolvePicoActionApproval,
   type PicoActionFactType,
   type PicoEffectCapabilities,
 } from './action-path.js';
@@ -1689,12 +1694,56 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    */
   const declaredModuleEffectNames = picoDeclaredEffectNames(shippedModuleManifests);
 
+  /**
+   * Said once per process, not once per tick. A precondition that has not
+   * changed is not news, and a line per due appointment per tick would bury
+   * the log it is trying to be visible in.
+   */
+  let calendarConsentReported = false;
+
   const timeBoundScheduler = startPicoTimeBoundScheduler({
     store: {
       picoUnannouncedTimeBoundEntries: (limit) => store.picoUnannouncedTimeBoundEntries(limit),
       markPicoTimeBoundEntryAnnounced: (input) => store.markPicoTimeBoundEntryAnnounced(input),
     },
     announce: (entry) => {
+      /**
+       * ADR 0139 AC4 as a standing precondition, read rather than discovered
+       * by failing - the same shape the depot sweep uses, and here for a
+       * reason a live boot found.
+       *
+       * An unconsented effect makes `decidePicoAction` *throw*, and the
+       * scheduler's retry catches every throw and tries again next tick. So
+       * an ordinary Home - where nobody had ever recorded consent, because
+       * consent was only written on an off-to-on transition modules never
+       * make (ADR 0127 M3) - manufactured an exception per due appointment
+       * per tick, forever, and announced nothing. "Being told never is the
+       * one this family exists to prevent" is what the scheduler says, and
+       * it was what happened.
+       *
+       * **It still refuses rather than returning**, and that distinction cost
+       * a second live boot to find. Returning quietly reads to the scheduler
+       * as *announced*, so it marks the entry - and an entry the Home
+       * believes it handled is never tried again, which would turn "not yet
+       * agreed to" into an appointment silently lost for good, even after the
+       * person agrees. Left unannounced, it arrives the moment they do.
+       *
+       * What changed is only the silence: the reason is said once, and the
+       * question is in front of them in settings through
+       * `home.modules.consent.read`.
+       */
+      const calendarConsent = store.picoModuleEffectConsent('calendar');
+      if (!calendarConsent.some((effect) => effect.name === 'calendar.raise-entry')) {
+        if (!calendarConsentReported) {
+          calendarConsentReported = true;
+          app.log.warn(
+            { module: 'calendar', effect: 'calendar.raise-entry' },
+            'Appointments are not being announced: nobody has agreed to this effect yet. '
+            + 'The agreement is offered in the companion, under what the parts of Pico may do.',
+          );
+        }
+        throw new Error('pico_calendar_effect_not_consented');
+      }
       // ADR 0139 AC6. Announcing is reaching a person, and reaching is an
       // effect (user decision, 2026-08-10). So the scheduler stops writing the
       // event itself and becomes a *requester* - untrusted like any other,
@@ -1829,6 +1878,26 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     })
     : undefined;
 
+  /**
+   * ADR 0141 RN4. Questions waiting for the person who was asked.
+   *
+   * Beside the sweep because the sweep is what asks them, and in memory
+   * because a question outliving the session it was asked in is the standing
+   * grant RN4 refuses.
+   */
+  const pendingActions = new PicoPendingActions();
+
+  /**
+   * What a sweep did, and what stopped it before it could do anything.
+   *
+   * A count alone answers "how many" and cannot answer "why none", which are
+   * different questions to a person who just pressed a button.
+   */
+  interface PicoDepotSweepResult {
+    requested: number;
+    blocked?: 'effects_not_consented';
+  }
+
   const sweepPicoDepotFetches = (
     asked: boolean,
     /**
@@ -1841,7 +1910,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       startedAtMs: number;
       durationMs: number;
     },
-  ): number => {
+  ): PicoDepotSweepResult => {
       let requested = 0;
       // ADR 0139 AC4 read once, ahead of the loop, because it is a fact about
       // the module rather than about any one depot.
@@ -1855,7 +1924,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // not discovered by failing.
       const consentedEffects = store.picoModuleEffectConsent('depot');
       if (!consentedEffects.some((effect) => effect.name === 'depot.fetch')) {
-        return 0;
+        /**
+         * **Named rather than counted as nothing to do.**
+         *
+         * This returned a bare `0` and a live walk found what that hid: a
+         * person attached a depot, permitted reaching, pressed *fetch now* -
+         * and got `requested: 0` with no reason, because `depot` ships active
+         * (ADR 0127 M3) and effect consent is only written on the off-to-on
+         * transition, which a module that was never off never makes. Every
+         * depot fetch was unreachable, and every test of one recorded the
+         * consent row itself, so nothing ever noticed.
+         *
+         * ADR 0118 O4: an absence must not render a working thing broken. The
+         * absence here is real and the person can fix it, so it is said.
+         */
+        return { requested: 0, blocked: 'effects_not_consented' };
       }
       for (const attachment of store.picoDepotAttachments()) {
         const intent = picoDepotFetchIntent({
@@ -1918,6 +2001,30 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           emit: emitActionFact,
         });
         requested += 1;
+        if (decided.decision === 'require_approval' && decided.pending !== undefined) {
+          /**
+           * ADR 0141 RN4. The question is kept so the person can answer it.
+           *
+           * Without this the decision was recorded, the `approval.requested`
+           * fact was emitted, and the record it has to be answered against was
+           * dropped on the floor - a question asked into the air.
+           */
+          const held = pendingActions.add({
+            decided,
+            presenceSessionId: decided.pending.presenceSessionId,
+            endsAtMs: decided.pending.endsAtMs,
+            prompt: consentedEffects
+              .find((effect) => effect.name === 'depot.fetch')?.description
+              ?? 'depot.fetch',
+            risk: decided.risk,
+          });
+          if (!held.ok) {
+            // ADR 0119 Q5. The ceiling refuses rather than forgetting an
+            // older question, and the person is left with the questions they
+            // already have rather than a new one that replaced one.
+            continue;
+          }
+        }
         if (decided.decision === 'allow') {
           executePicoAction({ decided, effects: moduleEffects, emit: emitActionFact });
           /**
@@ -1950,7 +2057,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           }
         }
       }
-      return requested;
+      return { requested };
   };
 
   const depotFetchScheduler = startPicoPeriodicTaskScheduler({
@@ -3961,6 +4068,169 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           store.append(depotEvent);
           broadcast(depotEvent);
           return { outcome: 'ok', result: { decided: true } };
+        }
+        /**
+         * ADR 0139 AC4. What each module declares it will do, against what
+         * was agreed to.
+         *
+         * The drift is returned rather than a boolean, in ADR 0127 M4's
+         * posture: somebody being asked is told what moved, not merely that
+         * something did. `declares` carries the sentences themselves, because
+         * a list of effect names is not a thing a person can agree to.
+         */
+        case 'home.modules.consent.read': {
+          if (principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              awaiting: store.picoModulesAwaitingConsent(shippedModuleManifests)
+                .map((entry) => ({
+                  identifier: entry.identifier,
+                  drift: entry.drift,
+                  declares: shippedModuleManifests
+                    .find((manifest) => manifest.identifier === entry.identifier)?.effects ?? [],
+                })),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        /**
+         * ADR 0139 AC4. The person agrees to what one module declares now.
+         *
+         * **What is recorded is the manifest, never what the caller sent.** A
+         * device naming its own effects would be writing the record of what
+         * was agreed from the side that benefits from it; the caller names
+         * which module it is answering about, and the Home reads the sentences
+         * out of the manifest it shipped.
+         *
+         * Activation is untouched by saying so - the module was already on
+         * (ADR 0127 M3), and this is the separate statement that it may act.
+         */
+        case 'home.modules.consent.record': {
+          if (principal === undefined || typeof args.identifier !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const manifest = shippedModuleManifests
+            .find((entry) => entry.identifier === args.identifier);
+          if (manifest === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'unknown_module' } };
+          }
+          if (!store.picoActiveModules().includes(manifest.identifier)) {
+            // Consenting to what an inactive module would do records an
+            // agreement about behaviour that is switched off, which is an
+            // answer to a question nobody is being asked.
+            return { outcome: 'invalid_arguments', result: { refusal: 'module_not_active' } };
+          }
+          store.setPicoModuleActivation({
+            decidedAt: new Date().toISOString(),
+            changes: [{
+              identifier: manifest.identifier,
+              active: true,
+              effects: manifest.effects,
+            }],
+          });
+          const consentEvent = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.module_activation_changed',
+            payload: {
+              // Content-free, and the direction is neither: nothing was
+              // enabled or disabled, an agreement was recorded.
+              consented: [manifest.identifier],
+            },
+          });
+          store.append(consentEvent);
+          broadcast(consentEvent);
+          return { outcome: 'ok', result: { recorded: manifest.effects.length } };
+        }
+        /**
+         * ADR 0143 DP8 with ADR 0141 RN4. A person asking for a fetch now.
+         *
+         * The session comes from the device, which is the only party that
+         * knows a person is in front of it. An invented one buys nothing: only
+         * the same session may answer, and a device can only ever answer its
+         * own question.
+         *
+         * **The window is the device's, and bounded here.** A caller naming an
+         * hour would be naming a standing grant with a number attached, which
+         * is the thing RN4's two clocks exist to stop.
+         */
+        case 'home.depot.fetch.ask': {
+          if (principal === undefined
+            || typeof args.presenceSessionId !== 'string'
+            || args.presenceSessionId.trim() === '') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const startedAtMs = Date.now();
+          const before = pendingActions.size();
+          const swept = sweepPicoDepotFetches(true, {
+            presenceSessionId: args.presenceSessionId,
+            startedAtMs,
+            durationMs: maxPicoActionApprovalWindowMs,
+            endsAtMs: startedAtMs + maxPicoActionApprovalWindowMs,
+          });
+          return {
+            outcome: 'ok',
+            result: {
+              requested: swept.requested,
+              // ADR 0117 X1. Present only when something stood in the way, so
+              // a quiet sweep and a blocked one are not the same answer with a
+              // different number in it.
+              ...(swept.blocked === undefined ? {} : { blocked: swept.blocked }),
+              // What is now waiting for this session, so a device does not
+              // have to ask a second question to learn it asked one.
+              waiting: pendingActions.forSession(args.presenceSessionId),
+              asked: pendingActions.size() - before,
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        /** ADR 0141 RN4. What stands, for the session that was asked. */
+        case 'home.action.approval.read': {
+          if (principal === undefined || typeof args.presenceSessionId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              waiting: pendingActions.forSession(args.presenceSessionId),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        /**
+         * ADR 0141 RN4. The answer, in the session the question was asked in.
+         *
+         * `approved` may be absent, and that is a third state rather than a
+         * missing second: a person who was asleep did not refuse, and the
+         * window expiring is `unanswered`.
+         */
+        case 'home.action.approval.resolve': {
+          if (principal === undefined
+            || typeof args.requestedEventId !== 'string'
+            || typeof args.presenceSessionId !== 'string'
+            || (args.approved !== undefined && typeof args.approved !== 'boolean')) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const taken = pendingActions.take(args.requestedEventId, args.presenceSessionId);
+          if (!taken.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: taken.refusal } };
+          }
+          const resolved = resolvePicoActionApproval({
+            decided: taken.entry.decided,
+            presenceSessionId: args.presenceSessionId,
+            ...(args.approved === undefined ? {} : { approved: args.approved }),
+            nowMs: Date.now(),
+            monotonicNowMs: performance.now(),
+            effects: moduleEffects,
+            emit: emitActionFact,
+          });
+          return {
+            outcome: 'ok',
+            result: {
+              outcome: resolved.outcome,
+              ran: resolved.ran,
+              ...(resolved.succeeded === undefined ? {} : { succeeded: resolved.succeeded }),
+            } as unknown as Record<string, unknown>,
+          };
         }
         case 'home.presence.switch': {
           if (principal === undefined

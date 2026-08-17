@@ -41,6 +41,16 @@
     </p>
     <div id="view-now">
     <!--
+      ADR 0141 RN4. A question the Home is holding, answerable only here and
+      only for as long as this window is open. First in the Now view because it
+      expires while the rest of this page does not.
+    -->
+    <section id="pending-actions" class="providers" hidden>
+      <h2>Waiting for you</h2>
+      <ul id="pending-action-list" class="provider-list"></ul>
+      <p id="pending-action-status" class="detail"></p>
+    </section>
+    <!--
       ADR 0116 W1. The requesting side, where a person asks their own Home
       about their own memory. The domain is typed rather than chosen from a
       list, because this device is not told which domains exist - it learns
@@ -108,6 +118,16 @@
       <h2>Material Pico has been given</h2>
       <ul id="depot-list" class="provider-list"></ul>
     </section>
+    <!--
+      ADR 0139 AC4. What the parts of Pico declare they will do, and the
+      person's agreement. Above the depot list on purpose: without this, the
+      switches below are answers to a question that cannot be reached.
+    -->
+    <section id="module-consent" class="providers" hidden>
+      <h2>What the parts of Pico may do</h2>
+      <ul id="module-consent-list" class="provider-list"></ul>
+      <p id="module-consent-status" class="detail"></p>
+    </section>
     <section id="depot-attach" class="form-card">
       <h2>Give Pico material</h2>
       <label for="depot-remote">Where it lives</label>
@@ -115,6 +135,7 @@
       <label for="depot-commit">The exact revision, in full</label>
       <input id="depot-commit" maxlength="64" autocomplete="off">
       <button id="depot-attach-submit" type="button">This material may be here</button>
+      <button id="depot-fetch-now" type="button">Fetch now</button>
       <p id="depot-status" class="detail"></p>
     </section>
     <!--

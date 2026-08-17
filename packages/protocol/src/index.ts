@@ -552,6 +552,41 @@ export const picoLinkDirectOperations = [
   'home.depots.read',
   'home.depot.attach',
   'home.depot.reach.decide',
+  /**
+   * ADR 0143 DP8 with ADR 0141 RN4. A person asking for a fetch now, and
+   * answering the question that comes back.
+   *
+   * `depot.fetch` is `external_write` - the only effect in this tree that
+   * installs code - so ADR 0140's RL3 floor never resolves it to `allow` from
+   * the risk class alone. Without a recorded rule the decision is
+   * `require_approval`, and RN4 requires that to carry the session presence
+   * was established in. A scheduled sweep has none and does not ask; this is
+   * the other half of *act where a rule allows it, ask where someone is there
+   * to be asked*.
+   */
+  'home.depot.fetch.ask',
+  'home.action.approval.read',
+  'home.action.approval.resolve',
+  /**
+   * ADR 0139 AC4. What a module now declares it will do, and the person's
+   * agreement to it.
+   *
+   * **The half of AC4 that had nowhere to happen.** Effect consent was
+   * recorded only as a module was switched *on*, and ADR 0127 M3 ships modules
+   * on - so a module that was never off never recorded any, and `depot`, whose
+   * one effect installs code, could never fetch at all. A live walk found it
+   * after every test had quietly written the consent row itself.
+   *
+   * Remote-capable in the posture the supplier and depot pairs use: agreeing
+   * that Pico may reach a remote and install what it finds is a person's
+   * decision about their own machine, not administration's (ADR 0087).
+   *
+   * Read and record are two operations because they are two acts. One
+   * operation returning the drift *and* clearing it would make looking at the
+   * question the same as answering it.
+   */
+  'home.modules.consent.read',
+  'home.modules.consent.record',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];

@@ -67,6 +67,59 @@ if (/exposeInMainWorld\([^\n]+ipcRenderer/.test(preload)
   errors.push('apps/companion-shell preload must not expose raw or generic ipcRenderer access.');
 }
 
+/**
+ * The two channel lists, against each other.
+ *
+ * `preload.cts` is CommonJS loaded by Electron before the app's own module
+ * graph exists, so it cannot import `contract.ts` and keeps its own copy of
+ * the names. That makes this the case where a check has to stand in for an
+ * import: two closed lists over one subject drift, and here the drift is
+ * silent - a channel the main process handles and the preload never names is
+ * a surface nobody can reach, and a channel the preload names and nothing
+ * handles is a call that hangs.
+ *
+ * Names *and* values, because either half can drift alone: the same key
+ * pointing at two different strings is the version of this that still reads
+ * correctly in both files.
+ */
+const channelEntries = (source, block) => {
+  const body = new RegExp(`${block}[\\s\\S]*?\\n\\}\\)`, 'u').exec(source)?.[0] ?? '';
+  return new Map([...body.matchAll(/^\s{2}(\w+):\s*'([^']+)',$/gmu)]
+    .map(([, name, value]) => [name, value]));
+};
+const contractPath = join(shellRoot, 'src', 'contract.ts');
+const contractChannels = channelEntries(
+  readFileSync(contractPath, 'utf8'),
+  'picoCompanionIpcChannels = Object\\.freeze\\(\\{',
+);
+const preloadChannels = channelEntries(preload, 'const channels = Object\\.freeze\\(\\{');
+
+if (contractChannels.size === 0 || preloadChannels.size === 0) {
+  errors.push('apps/companion-shell: could not read an IPC channel list to compare.');
+}
+for (const [name, value] of contractChannels) {
+  if (!preloadChannels.has(name)) {
+    errors.push(
+      `apps/companion-shell preload does not name the \`${name}\` channel the contract `
+      + 'declares. A channel the main process handles and the bridge never exposes is a '
+      + 'surface nobody can reach.',
+    );
+  } else if (preloadChannels.get(name) !== value) {
+    errors.push(
+      `apps/companion-shell: channel \`${name}\` is '${value}' in the contract and `
+      + `'${preloadChannels.get(name)}' in the preload.`,
+    );
+  }
+}
+for (const name of preloadChannels.keys()) {
+  if (!contractChannels.has(name)) {
+    errors.push(
+      `apps/companion-shell contract does not declare the \`${name}\` channel the preload `
+      + 'exposes. A call with nothing behind it hangs.',
+    );
+  }
+}
+
 const rendererHtml = readFileSync(join(shellRoot, 'src', 'renderer', 'index.html'), 'utf8');
 for (const requiredDirective of [
   "default-src 'none'",
@@ -212,7 +265,8 @@ if (errors.length > 0) {
 
 console.log(
   'Companion shell-boundary check passed'
-  + ` (tray start reaches ${trayReached.size} modules).`,
+  + ` (tray start reaches ${trayReached.size} modules;`
+  + ` ${contractChannels.size} IPC channels, named identically on both sides).`,
 );
 
 function listSourceFiles(directory) {

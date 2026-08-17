@@ -1,5 +1,6 @@
 import {
   parsePicoCompanionPresentation,
+  picoCompanionFetchBlockedLine,
   picoCompanionFloorAssurance,
   picoCompanionPresentationTakesTheWindow,
   picoCompanionRelayRevocationLine,
@@ -17,6 +18,8 @@ import {
   renderPicoCompanionDevices,
   renderPicoCompanionSuppliers,
   renderPicoCompanionDepots,
+  renderPicoCompanionModuleConsent,
+  renderPicoCompanionPendingApprovals,
 } from './model-provider-views.js';
 
 declare global {
@@ -56,6 +59,18 @@ declare global {
         mayFetch: boolean,
         mayFetchUnasked: boolean,
       ): Promise<void>;
+      fetchDepotsNow(): Promise<{
+        requested: number;
+        blocked?: string;
+        waiting: readonly unknown[];
+      }>;
+      getPendingActions(): Promise<unknown>;
+      resolvePendingAction(
+        requestedEventId: string,
+        approved: boolean,
+      ): Promise<{ outcome: string; ran: boolean; succeeded?: boolean }>;
+      getModuleConsent(): Promise<unknown>;
+      recordModuleConsent(identifier: string): Promise<void>;
       getDevices(): Promise<unknown>;
       switchDevice(
         presenceId: string,
@@ -387,6 +402,106 @@ depotAttachSubmit.addEventListener('click', () => {
     });
 });
 
+/**
+ * ADR 0141 RN4. What the Home is holding for this window's session.
+ *
+ * Refreshed after every act rather than polled: the list changes when a person
+ * asks for something or answers something, and both go through here.
+ */
+const pendingActionSection = requireElement('pending-actions');
+const pendingActionList = requireElement('pending-action-list');
+const pendingActionStatus = requireElement('pending-action-status');
+
+function refreshPendingActions(): void {
+  void window.picoCompanion.getPendingActions()
+    .then((waiting) => {
+      renderPicoCompanionPendingApprovals(
+        { list: pendingActionList, section: pendingActionSection, document },
+        waiting,
+        (decision) => {
+          pendingActionStatus.textContent = decision.approved
+            ? 'Doing it...'
+            : 'Leaving it.';
+          void window.picoCompanion.resolvePendingAction(
+            decision.requestedEventId,
+            decision.approved,
+          ).then((answer) => {
+            // Said as what happened, which is not the same as what was
+            // decided: a person approving something is owed the difference
+            // between "it ran" and "it ran and failed".
+            pendingActionStatus.textContent = !answer.ran
+              ? 'Left alone.'
+              : (answer.succeeded === false
+                ? 'That was allowed, and it did not work.'
+                : 'Done.');
+            refreshPendingActions();
+            refreshDepots();
+          }, (error: unknown) => {
+            pendingActionStatus.textContent = refusalText(error, 'That was not answered.');
+            refreshPendingActions();
+          });
+        },
+      );
+    }, () => {
+      pendingActionSection.hidden = true;
+    });
+}
+
+/** ADR 0139 AC4. What the parts of Pico declare, and the person's agreement. */
+const moduleConsentSection = requireElement('module-consent');
+const moduleConsentList = requireElement('module-consent-list');
+const moduleConsentStatus = requireElement('module-consent-status');
+
+function refreshModuleConsent(): void {
+  void window.picoCompanion.getModuleConsent()
+    .then((awaiting) => {
+      renderPicoCompanionModuleConsent(
+        { list: moduleConsentList, section: moduleConsentSection, document },
+        awaiting,
+        (identifier) => {
+          void window.picoCompanion.recordModuleConsent(identifier).then(() => {
+            moduleConsentStatus.textContent = 'Recorded. Pico may do that now.';
+            refreshModuleConsent();
+          }, (error: unknown) => {
+            moduleConsentStatus.textContent = refusalText(error, 'That was not recorded.');
+          });
+        },
+      );
+    }, () => {
+      moduleConsentSection.hidden = true;
+    });
+}
+
+/**
+ * ADR 0143 DP8. *Fetch now* - and what came back to be answered.
+ *
+ * The question lands in the Now view, so this says where it went. A button
+ * that produced a question somewhere the person is not looking would be a
+ * press that appeared to do nothing.
+ */
+const depotFetchNow = requireButton('depot-fetch-now');
+
+depotFetchNow.addEventListener('click', () => {
+  depotStatus.textContent = 'Asking...';
+  void window.picoCompanion.fetchDepotsNow()
+    .then((asked) => {
+      if (asked.blocked !== undefined) {
+        depotStatus.textContent = picoCompanionFetchBlockedLine(asked.blocked);
+        refreshModuleConsent();
+        return;
+      }
+      depotStatus.textContent = asked.waiting.length > 0
+        ? 'Pico is asking whether it may. Your answer is under Now.'
+        : (asked.requested === 0
+          ? 'Nothing to fetch.'
+          : 'Fetched.');
+      refreshPendingActions();
+      refreshDepots();
+    }, (error: unknown) => {
+      depotStatus.textContent = refusalText(error, 'Nothing was fetched.');
+    });
+});
+
 const deviceSection = requireElement('devices');
 const deviceList = requireElement('device-list');
 const deviceStatus = requireElement('device-status');
@@ -702,9 +817,11 @@ function showView(view: PicoCompanionWindowView): void {
   if (view === 'now') {
     refreshRecalls();
     refreshAnsweredReads();
+    refreshPendingActions();
   } else {
     refreshModelProviders();
     refreshSuppliers();
+    refreshModuleConsent();
     refreshDepots();
     refreshDevices();
     refreshRelays();

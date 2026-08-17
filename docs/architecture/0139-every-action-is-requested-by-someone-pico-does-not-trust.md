@@ -16,6 +16,34 @@ ADR 0010 keeps its text under ADR 0128's record rule and gains a status
 note. Its risk classes and its design rule survive intact; what changes
 is the layering around them.
 
+**AC4 had no author but the tests until 2026-08-17.** Effect consent was
+written in one place, `setPicoModuleActivation`, and only for a module
+crossing from off to on - while ADR 0127 M3 ships every module on. A
+module that was never switched off never made that crossing, so every
+Home's steady state was *active, and agreed to nothing*. `depot`
+declares `depot.fetch`, the one effect in the tree that installs code,
+which made every depot fetch unreachable by anybody.
+
+Reading the code never showed it, because every test of a fetch called
+`setPicoModuleActivation` in its own fixture with a comment saying the
+effects were "what a person would have read". No person could read
+them. A live walk - attach a real repository, permit reaching, press
+*fetch now* - answered `requested: 0` with no reason, and that is what
+found it.
+
+Two things were added rather than one. `home.modules.consent.read` and
+`home.modules.consent.record` give the person the half of AC4 that had
+nowhere to happen; the sweep now names `effects_not_consented` instead
+of returning a silent zero, because ADR 0118 O4's absence must not
+render a working thing broken when the person is the one who can fix
+it. What gets recorded is read from the shipped manifest and never from
+the caller, so the record of what was agreed is not writable by the side
+that benefits from it.
+
+Consent is deliberately **not** granted at boot for a default-on module.
+That would be Pico agreeing on the person's behalf, which is the thing
+AC4 exists to prevent. Active and consented stay two statements.
+
 ## Context
 
 ADR 0010 is from the foundation phase and opens with "Pico will

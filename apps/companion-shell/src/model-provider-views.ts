@@ -14,6 +14,10 @@ import {
   parsePicoCompanionSuppliers,
   picoCompanionDepotLines,
   parsePicoCompanionDepots,
+  picoCompanionModuleConsentLines,
+  parsePicoCompanionModuleConsent,
+  picoCompanionApprovalLines,
+  parsePicoCompanionPendingApprovals,
 } from './contract.js';
 
 /**
@@ -519,6 +523,104 @@ export function renderPicoCompanionDepots(
       item.append(unaskedDetail, unasked);
     }
 
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0139 AC4 - what a part of Pico says it will do, waiting to be agreed to.
+ *
+ * **In settings rather than in the Now view**, which is the split the window
+ * makes: this is a thing somebody came to change, not a thing that interrupted
+ * them. The question it unblocks is next door in the Now view and expires in
+ * two minutes; these two look similar and are not.
+ */
+export function renderPicoCompanionModuleConsent(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (identifier: string) => void,
+): void {
+  const awaiting = parsePicoCompanionModuleConsent(value);
+  // Nothing awaiting is nothing to show. A section reading "all agreed" would
+  // be a permanent fixture reporting the ordinary case.
+  root.section.hidden = awaiting.length === 0;
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionModuleConsentLines(awaiting)) {
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+    item.dataset.module = line.identifier;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+    item.append(headline);
+
+    // One line per effect, in the module's own words - the sentences somebody
+    // is agreeing to, not a count of them.
+    for (const effectLine of line.effectLines) {
+      const detail = root.document.createElement('p');
+      detail.className = 'detail';
+      detail.textContent = effectLine;
+      item.append(detail);
+    }
+
+    const agree = root.document.createElement('button');
+    agree.type = 'button';
+    agree.textContent = line.actionLabel;
+    agree.addEventListener('click', () => act(line.identifier));
+    item.append(agree);
+
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0141 RN4 - a question the Home is holding for the session at this window.
+ *
+ * Two buttons and no third: yes and no are answers, and *unanswered* is what
+ * happens when somebody closes the window or the clock runs out. Offering it
+ * as a button would make walking away and declining the same act.
+ */
+export function renderPicoCompanionPendingApprovals(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (input: { requestedEventId: string; approved: boolean }) => void,
+): void {
+  const waiting = parsePicoCompanionPendingApprovals(value);
+  root.section.hidden = waiting.length === 0;
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionApprovalLines(waiting)) {
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+    item.dataset.requestedEventId = line.requestedEventId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const approve = root.document.createElement('button');
+    approve.type = 'button';
+    approve.textContent = line.approveLabel;
+    approve.addEventListener('click', () => act({
+      requestedEventId: line.requestedEventId,
+      approved: true,
+    }));
+
+    const deny = root.document.createElement('button');
+    deny.type = 'button';
+    deny.textContent = line.denyLabel;
+    deny.addEventListener('click', () => act({
+      requestedEventId: line.requestedEventId,
+      approved: false,
+    }));
+
+    item.append(headline, detail, approve, deny);
     root.list.append(item);
   }
 }

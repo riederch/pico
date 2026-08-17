@@ -9,6 +9,29 @@ Third of three replacing ADR 0010's concept note. ADR 0139 says what an
 action is, ADR 0140 says who decides, this says who acts, what a person
 is asked, and what is left behind.
 
+Status note, 2026-08-17: **RN4's question can now be asked and answered
+by a person, and the session it hangs on is the window's own.**
+
+The decision path produced `require_approval` correctly and the record
+it has to be answered against was dropped on the floor - a question
+asked into the air. `PicoPendingActions` holds those questions in the
+Home's memory rather than a table, because a question outliving the
+session it was asked in is exactly the standing grant RN4 refuses.
+
+The presence session is minted when the companion window is created and
+dropped when it closes, which is the honest span of *a person is here*
+under ADR 0113. It never crosses the renderer bridge: a renderer
+carrying the session id would be the window vouching for itself, and a
+page left open in a corner would go on asserting somebody is there. The
+renderer names which question it is answering; that anybody is present
+at all is the shell's to say.
+
+Closing the window leaves the questions **unanswered** rather than
+denied, and nothing is sent to the Home to say so - the Home is already
+holding them against a session and a clock. The surface offers *yes* and
+*no* and no third button, because walking away and declining must not be
+the same act.
+
 ## Context
 
 ADR 0010's executor constraints are still right and are kept: validate

@@ -28,6 +28,25 @@ floor, not a feature set: it states what may never depend on a model or
 a network, and what everything else must do when one of them is
 missing.
 
+Status note, 2026-08-17: **O1's appointments were never announced on any
+Home, and nothing said so.** Announcing is an effect under ADR 0139 AC6,
+and AC4's consent for `calendar.raise-entry` had never been recorded
+anywhere - it was written only as a module crossed from off to on, which
+ADR 0127 M3's default-on modules never do. An unconsented effect makes
+the decision throw, the scheduler catches every throw as a transient
+failure, and so each due reminder produced an exception per tick,
+forever, announced nothing, and was silent about it. Found by booting a
+Home with a due reminder in it, not by reading.
+
+The precondition is now read ahead of the decision and the reason is
+said once per process, while the entry is deliberately **left
+unannounced rather than skipped**. That distinction is the whole fix and
+it cost a second live boot: a quiet return reads to the scheduler as
+*announced*, so it marks the entry, and a marked entry is never retried
+- which would have turned "not agreed to yet" into an appointment lost
+for good, surviving the person's later agreement. Left unannounced, it
+arrives the moment they agree, with no restart and no second reminder.
+
 ## Context
 
 ADR 0003 already decided that degradation is intentional rather than

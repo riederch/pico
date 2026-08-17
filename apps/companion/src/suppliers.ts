@@ -134,3 +134,152 @@ export async function decidePicoCompanionDepotReach(input: {
     throw new Error(typeof refusal === 'string' ? refusal : `depot_reach_${answer.outcome}`);
   }
 }
+
+/**
+ * ADR 0139 AC4. What a part of Pico says it will do, waiting for a person.
+ *
+ * `declares` carries the sentences rather than the effect names, because the
+ * names are Pico's vocabulary and the sentences are what somebody agrees to.
+ */
+export interface PicoCompanionModuleConsentView {
+  identifier: string;
+  drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
+  declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
+}
+
+export async function readPicoCompanionModuleConsent(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionModuleConsentView[]> {
+  const read = await input.livingDeviceLinkClient.request('home.modules.consent.read', {});
+  if (read.outcome !== 'ok') {
+    throw new Error(`module_consent_read_rejected:${read.outcome}`);
+  }
+  const awaiting = (read.result as { awaiting?: unknown }).awaiting;
+  if (!Array.isArray(awaiting)) {
+    throw new Error('invalid_pico_module_consent_read');
+  }
+  return Object.freeze(awaiting as PicoCompanionModuleConsentView[]);
+}
+
+/**
+ * ADR 0139 AC4. The person agrees to what one module declares.
+ *
+ * Only the identifier travels. The sentences a person read came from the
+ * Home's own manifest and the record is written from that same manifest, so
+ * there is nothing here for this side to get wrong or to overstate.
+ */
+export async function recordPicoCompanionModuleConsent(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  identifier: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.modules.consent.record', {
+    identifier: input.identifier,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `module_consent_${answer.outcome}`);
+  }
+}
+
+/**
+ * ADR 0141 RN4. A question this Home is holding for the session in front of it.
+ *
+ * `expiresAt` is carried rather than a remaining duration, because a duration
+ * computed here would be this device's clock deciding when a question the Home
+ * is holding runs out.
+ */
+export interface PicoCompanionPendingApproval {
+  requestedEventId: string;
+  prompt: string;
+  risk: string;
+  expiresAt: string;
+}
+
+/**
+ * ADR 0143 DP8. A person asking for a fetch now.
+ *
+ * Returns what came back whole, including the standing precondition that
+ * stopped it. A caller that only saw a count could not tell "everything is
+ * already current" from "nobody has agreed this may happen at all", and the
+ * second is the one a person can do something about.
+ */
+export async function askPicoCompanionDepotFetch(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  presenceSessionId: string;
+}): Promise<{
+  requested: number;
+  blocked?: string;
+  waiting: readonly PicoCompanionPendingApproval[];
+}> {
+  const answer = await input.livingDeviceLinkClient.request('home.depot.fetch.ask', {
+    presenceSessionId: input.presenceSessionId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `depot_fetch_ask_${answer.outcome}`);
+  }
+  const result = answer.result as {
+    requested?: unknown;
+    blocked?: unknown;
+    waiting?: unknown;
+  };
+  if (typeof result.requested !== 'number' || !Array.isArray(result.waiting)) {
+    throw new Error('invalid_pico_depot_fetch_ask_result');
+  }
+  return {
+    requested: result.requested,
+    ...(typeof result.blocked === 'string' ? { blocked: result.blocked } : {}),
+    waiting: Object.freeze(result.waiting as PicoCompanionPendingApproval[]),
+  };
+}
+
+/** ADR 0141 RN4. What is still waiting, for the session that was asked. */
+export async function readPicoCompanionPendingApprovals(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  presenceSessionId: string;
+}): Promise<readonly PicoCompanionPendingApproval[]> {
+  const read = await input.livingDeviceLinkClient.request('home.action.approval.read', {
+    presenceSessionId: input.presenceSessionId,
+  });
+  if (read.outcome !== 'ok') {
+    throw new Error(`approval_read_rejected:${read.outcome}`);
+  }
+  const waiting = (read.result as { waiting?: unknown }).waiting;
+  if (!Array.isArray(waiting)) {
+    throw new Error('invalid_pico_approval_read');
+  }
+  return Object.freeze(waiting as PicoCompanionPendingApproval[]);
+}
+
+/**
+ * ADR 0141 RN4. The answer, in the session the question was asked in.
+ *
+ * `approved` is required here even though the Home accepts it absent: an
+ * absent answer is what the *window running out* means, and a device sending
+ * it would be claiming a person went quiet at a moment of its own choosing.
+ */
+export async function resolvePicoCompanionApproval(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  requestedEventId: string;
+  presenceSessionId: string;
+  approved: boolean;
+}): Promise<{ outcome: string; ran: boolean; succeeded?: boolean }> {
+  const answer = await input.livingDeviceLinkClient.request('home.action.approval.resolve', {
+    requestedEventId: input.requestedEventId,
+    presenceSessionId: input.presenceSessionId,
+    approved: input.approved,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `approval_resolve_${answer.outcome}`);
+  }
+  const result = answer.result as { outcome?: unknown; ran?: unknown; succeeded?: unknown };
+  if (typeof result.outcome !== 'string' || typeof result.ran !== 'boolean') {
+    throw new Error('invalid_pico_approval_resolve_result');
+  }
+  return {
+    outcome: result.outcome,
+    ran: result.ran,
+    ...(typeof result.succeeded === 'boolean' ? { succeeded: result.succeeded } : {}),
+  };
+}

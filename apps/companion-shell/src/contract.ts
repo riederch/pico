@@ -30,6 +30,20 @@ export const picoCompanionIpcChannels = Object.freeze({
   getDepots: 'pico:depots:get',
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
+  fetchDepotsNow: 'pico:depot-fetch:ask',
+  /**
+   * ADR 0141 RN4, and deliberately not `decideApproval` above.
+   *
+   * That one answers the Vault about a signature this device is being asked to
+   * make; this one answers the *Home* about an action it is holding against a
+   * presence session. Sharing a channel would put two different questions with
+   * two different clocks and two different answerers behind one name.
+   */
+  getPendingActions: 'pico:pending-actions:get',
+  resolvePendingAction: 'pico:pending-action:resolve',
+  /** ADR 0139 AC4. What the parts of Pico may do, agreed to one at a time. */
+  getModuleConsent: 'pico:module-consent:get',
+  recordModuleConsent: 'pico:module-consent:record',
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
@@ -1146,9 +1160,13 @@ export type PicoCompanionWindowView = typeof picoCompanionWindowViews[number];
 export const picoCompanionViewReads: Readonly<
   Record<PicoCompanionWindowView, readonly string[]>
 > = Object.freeze({
-  now: Object.freeze(['getRecalls', 'getAnsweredReads']),
+  // ADR 0141 RN4's questions are here rather than in settings: they expire in
+  // minutes and they are why somebody is being interrupted.
+  now: Object.freeze(['getRecalls', 'getAnsweredReads', 'getPendingActions']),
   settings: Object.freeze([
     'getModelProviders', 'getSuppliers', 'getDepots', 'getDevices', 'getRelays',
+    // ADR 0139 AC4's agreement is a thing somebody came to change.
+    'getModuleConsent',
   ]),
 });
 
@@ -1317,6 +1335,168 @@ export function picoCompanionDepotLines(
     // decision names. The revision is in the words a person reads.
     identifier: depots[index]!.remote,
   }));
+}
+
+/**
+ * ADR 0139 AC4 - what a part of Pico says it will do, put to the person.
+ *
+ * **The sentences are the module's own, and they are not rewritten here.** A
+ * module's effect description is the text somebody agrees to and the text the
+ * Vault later quotes back when it asks; a second wording in this file would
+ * make the question and the reminder two different questions.
+ *
+ * So this decides only the frame around them: what the list is called, and
+ * what agreeing is called. `drift` is turned into that frame, because *this is
+ * new* and *this changed under an agreement you already gave* are different
+ * things to be told, and the second is the one ADR 0127 M4 says must never
+ * pass silently.
+ */
+export interface PicoCompanionModuleConsentLine {
+  identifier: string;
+  headline: string;
+  /** One line per declared effect, in the module's own words. */
+  effectLines: readonly string[];
+  actionLabel: string;
+}
+
+export function picoCompanionModuleConsentLines(
+  awaiting: ReadonlyArray<{
+    identifier: string;
+    drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
+    declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
+  }>,
+): readonly PicoCompanionModuleConsentLine[] {
+  return Object.freeze(awaiting.map((entry) => {
+    const changed = entry.drift.changed.length > 0;
+    return Object.freeze({
+      identifier: entry.identifier,
+      headline: changed
+        ? `${entry.identifier} now asks for something different from what you agreed to.`
+        : `${entry.identifier} would like to do this.`,
+      effectLines: Object.freeze(entry.declares.map((effect) => effect.description)),
+      actionLabel: changed ? 'Agree to the change' : 'Agree',
+    });
+  }));
+}
+
+/**
+ * ADR 0141 RN4 - a question the Home is holding, in front of the person.
+ *
+ * **In the Now view rather than in settings**, which is the split the window
+ * already makes: this expires in minutes and is the reason somebody is being
+ * interrupted, while agreeing that a module may act at all is a thing they
+ * came to change. The two look similar and belong in different places.
+ *
+ * The prompt is the module's own effect description again, for the reason
+ * above: this is the moment the earlier agreement is being drawn on, and it
+ * has to be recognisable as the same sentence.
+ */
+export interface PicoCompanionApprovalLine {
+  requestedEventId: string;
+  headline: string;
+  detail: string;
+  approveLabel: string;
+  denyLabel: string;
+}
+
+export function picoCompanionApprovalLines(
+  waiting: ReadonlyArray<{ requestedEventId: string; prompt: string; risk: string }>,
+): readonly PicoCompanionApprovalLine[] {
+  return Object.freeze(waiting.map((entry) => Object.freeze({
+    requestedEventId: entry.requestedEventId,
+    headline: 'Pico is waiting for your answer.',
+    detail: entry.prompt,
+    approveLabel: 'Do it',
+    // Never *cancel*: a person closing a question is answering it, and the
+    // word for that is no. Leaving it unanswered is what closing the window
+    // does, and that is a third thing nothing here offers as a button.
+    denyLabel: 'No',
+  })));
+}
+
+export function parsePicoCompanionModuleConsent(value: unknown): ReadonlyArray<{
+  identifier: string;
+  drift: { added: readonly string[]; removed: readonly string[]; changed: readonly string[] };
+  declares: ReadonlyArray<{ name: string; description: string; risk: string }>;
+}> {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_module_consent');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_module_consent_entry');
+    }
+    const record = entry as Record<string, unknown>;
+    const drift = record.drift as Record<string, unknown> | undefined;
+    if (typeof record.identifier !== 'string'
+      || !Array.isArray(record.declares)
+      || !Array.isArray(drift?.added)
+      || !Array.isArray(drift.removed)
+      || !Array.isArray(drift.changed)) {
+      throw new Error('invalid_pico_companion_module_consent_entry');
+    }
+    return Object.freeze({
+      identifier: record.identifier,
+      drift: Object.freeze({
+        added: Object.freeze(drift.added.map(String)),
+        removed: Object.freeze(drift.removed.map(String)),
+        changed: Object.freeze(drift.changed.map(String)),
+      }),
+      declares: Object.freeze(record.declares.map((effect) => {
+        const shape = effect as Record<string, unknown> | null;
+        if (typeof shape?.name !== 'string'
+          || typeof shape.description !== 'string'
+          || typeof shape.risk !== 'string') {
+          throw new Error('invalid_pico_companion_module_effect');
+        }
+        return Object.freeze({
+          name: shape.name,
+          description: shape.description,
+          risk: shape.risk,
+        });
+      })),
+    });
+  }));
+}
+
+export function parsePicoCompanionPendingApprovals(value: unknown): ReadonlyArray<{
+  requestedEventId: string;
+  prompt: string;
+  risk: string;
+  expiresAt: string;
+}> {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_pending_approvals');
+  }
+  return Object.freeze(value.map((entry) => {
+    const record = entry as Record<string, unknown> | null;
+    if (typeof record?.requestedEventId !== 'string'
+      || typeof record.prompt !== 'string'
+      || typeof record.risk !== 'string'
+      || typeof record.expiresAt !== 'string') {
+      throw new Error('invalid_pico_companion_pending_approval');
+    }
+    return Object.freeze({
+      requestedEventId: record.requestedEventId,
+      prompt: record.prompt,
+      risk: record.risk,
+      expiresAt: record.expiresAt,
+    });
+  }));
+}
+
+/**
+ * Why a *fetch now* did nothing, in words rather than a count of zero.
+ *
+ * One reason has a sentence because one reason is a thing a person can fix:
+ * nobody has agreed that this part of Pico may act at all. Anything else the
+ * sweep declined to do is already visible as the depot's own switches.
+ */
+export function picoCompanionFetchBlockedLine(blocked: string): string {
+  return blocked === 'effects_not_consented'
+    ? 'Nothing was fetched: you have not yet agreed that Pico may fetch depots. '
+      + 'That agreement is in settings, under what the parts of Pico may do.'
+    : 'Nothing was fetched.';
 }
 
 export function parsePicoCompanionDepots(value: unknown): readonly PicoCompanionDepot[] {

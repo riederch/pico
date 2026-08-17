@@ -2,6 +2,23 @@
 
 ## Status
 
+Status note, 2026-08-17: **DP8's fetch now runs end to end, and what
+stood in its way was neither of this ADR's own gates.**
+
+A live walk against a real repository - attach, permit reaching, press
+*fetch now*, approve - now puts the pinned working copy on disk. It did
+not before, and the reason sat one layer up: ADR 0139 AC4's effect
+consent had never been recorded for any module, because it is written
+only as a module crosses from off to on and ADR 0127 M3 ships modules
+on. Every gate this ADR specifies was correct and unreachable behind
+one that was not. ADR 0139 carries that finding.
+
+What belongs here is the half this ADR owns: `home.depot.fetch.ask`
+carries the presence session a person's press happens in, a scheduled
+sweep carries none and therefore asks nobody, and the sweep now reports
+which standing precondition stopped it rather than answering with a
+count of zero.
+
 Status note, 2026-08-17: **attaching is reachable from the person's own
 device, and so is the fetch decision that was reachable from nowhere.**
 
