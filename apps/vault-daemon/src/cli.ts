@@ -65,6 +65,30 @@ import {
   initiatePicoHomeDeviceRecovery,
   vetoPicoHomeDeviceRecovery,
 } from './device-recovery-ceremony.js';
+import {
+  picoFoundationRequest as foundationRequest,
+  runPicoClaimHomeCeremony,
+  runPicoDelegateDeviceCeremony,
+  type PicoClaimHomeCeremonyStep,
+} from './claim-home-ceremony.js';
+
+/**
+ * ADR 0130 E2. The ceremony's approval moments, in this caller's medium.
+ *
+ * The sentences were `process.stderr.write` calls inside the ceremony until it
+ * was lifted out so the Pico Client could run the same one. "On the terminal
+ * holding the unlock" is true here and false in a window, which is why the
+ * ceremony announces a moment and each caller writes the words.
+ */
+const announceOnTerminal = (step: PicoClaimHomeCeremonyStep): void => {
+  const lines: Record<PicoClaimHomeCeremonyStep, string> = {
+    device_delegation:
+      'Approve the device delegation on the terminal holding the identity unlock.',
+    home_claim: 'Approve the Home claim on the terminal holding the unlock.',
+    founding_acceptance: 'Claim accepted. Approve the founding acceptance to complete it.',
+  };
+  process.stderr.write(`${lines[step]}\n`);
+};
 import { generatePicoRecoveryCardPdfs } from './recovery-card-pdf.js';
 
 const cliCommands = [
@@ -1213,7 +1237,8 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
             throw new Error(`invalid_delegation_scope:${scope}`);
           }
         }
-        const delegation = await withClient(vaultHomePath, async (client) => await runDelegateDeviceCeremony({
+        const delegation = await withClient(vaultHomePath, async (client) => await runPicoDelegateDeviceCeremony({
+          announce: announceOnTerminal,
           client,
           signerKeyFingerprintHex: requireFlag(invocation.flags, 'fingerprint'),
           subjectSigningKeyFingerprintHex: requireFlag(invocation.flags, 'signing-fingerprint'),
@@ -1443,7 +1468,8 @@ export async function runPicoVaultCli(argv: readonly string[]): Promise<void> {
           ?? requireFlag(invocation.flags, 'link-agreement-fingerprint');
         const firstDeviceDelegationId =
           `delegation_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`;
-        return await runClaimHomeCeremony({
+        return await runPicoClaimHomeCeremony({
+          announce: announceOnTerminal,
           client,
           vaultSodium: sodium as unknown as VaultSodium,
           coreUrl,
@@ -1544,264 +1570,13 @@ if (isMainModule) {
  * log prints them: without it, whatever answers on `--core-url` could hand out
  * its own key and receive a claim sealed to itself.
  */
-async function runClaimHomeCeremony(input: {
-  client: PicoVaultDaemonClient;
-  vaultSodium: VaultSodium;
-  coreUrl: string;
-  linkClient?: PicoLinkDirectClient;
-  moveInCode: string;
-  signerKeyFingerprintHex: string;
-  firstDeviceSigningKeyFingerprintHex: string;
-  firstDeviceKeyAgreementKeyFingerprintHex: string;
-  firstDeviceDelegationId: string;
-  firstDeviceDelegationValidUntil: string;
-  expectedHostSigningKeyFingerprintHex: string;
-  expectedHostKeyAgreementKeyFingerprintHex: string;
-}): Promise<Record<string, unknown>> {
-  const status = await input.client.status();
-  const signer = status.sessions.find(
-    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
-  );
-  if (signer === undefined) {
-    throw new Error('claim_signer_not_unlocked');
-  }
-  if (signer.keyRole !== 'pico_identity') {
-    throw new Error('claim_requires_pico_identity_key');
-  }
-  const setup = await foundationRequest(
-    input.coreUrl,
-    '/api/home/setup',
-    undefined,
-    undefined,
-    input.linkClient,
-  ) as {
-    setupMode: { hostSetupNonceHex: string };
-    host: {
-      signingKeyFingerprintHex: string;
-      keyAgreementKeyFingerprintHex: string;
-      keyAgreementPublicKeyHex: string;
-    };
-  };
-
-  // Trust the person's log, not the endpoint's self-description.
-  if (setup.host.signingKeyFingerprintHex !== input.expectedHostSigningKeyFingerprintHex
-    || setup.host.keyAgreementKeyFingerprintHex !== input.expectedHostKeyAgreementKeyFingerprintHex) {
-    throw new Error('host_key_fingerprint_mismatch');
-  }
-
-  const firstDeviceSigning = status.sessions.find(
-    (session) =>
-      session.keyFingerprintHex === input.firstDeviceSigningKeyFingerprintHex,
-  );
-  if (firstDeviceSigning?.keyRole !== 'device_signing') {
-    throw new Error('claim_device_signing_key_not_unlocked');
-  }
-  const firstDeviceAgreement = status.sessions.find(
-    (session) =>
-      session.keyFingerprintHex === input.firstDeviceKeyAgreementKeyFingerprintHex,
-  );
-  if (firstDeviceAgreement?.keyRole !== 'device_key_agreement') {
-    throw new Error('claim_device_agreement_key_not_unlocked');
-  }
-
-  const firstDeviceDelegation = await runDelegateDeviceCeremony({
-    client: input.client,
-    signerKeyFingerprintHex: signer.keyFingerprintHex,
-    subjectSigningKeyFingerprintHex: firstDeviceSigning.keyFingerprintHex,
-    subjectKeyAgreementKeyFingerprintHex: firstDeviceAgreement.keyFingerprintHex,
-    scopes: ['surface_session', 'decrypt_domain', 'receive_key_envelope'],
-    validFrom: new Date().toISOString(),
-    validUntil: input.firstDeviceDelegationValidUntil,
-    lifecycleOrder: 'seq:0000000000000001',
-    delegationId: input.firstDeviceDelegationId,
-  });
-
-  const claimantIdentityKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'pico_identity',
-    publicKeyHex: signer.publicKeyHex,
-  };
-  const firstDeviceSigningKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'device_signing',
-    publicKeyHex: firstDeviceSigning.publicKeyHex,
-  };
-  const firstDeviceKeyAgreementKeyRecord: PicoIdentityKeyRecordSignatureInput = {
-    suite: picoIdentitySuite,
-    keyRole: 'device_key_agreement',
-    publicKeyHex: firstDeviceAgreement.publicKeyHex,
-  };
-  const claim: PicoHomeClaimSignatureInput = {
-    suite: picoIdentitySuite,
-    claimId: `claim_${Buffer.from(input.vaultSodium.randombytes_buf(16)).toString('hex')}`,
-    hostSigningKeyFingerprintHex: setup.host.signingKeyFingerprintHex,
-    hostKeyAgreementKeyFingerprintHex: setup.host.keyAgreementKeyFingerprintHex,
-    moveInCode: input.moveInCode,
-    claimantIdentityKeyFingerprintHex: signer.keyFingerprintHex,
-    claimantNonceHex: Buffer.from(input.vaultSodium.randombytes_buf(32)).toString('hex'),
-    hostSetupNonceHex: setup.setupMode.hostSetupNonceHex,
-    firstDeviceDelegationId: firstDeviceDelegation.record.delegationId,
-    firstDeviceSigningKeyFingerprintHex: firstDeviceSigning.keyFingerprintHex,
-    firstDeviceKeyAgreementKeyFingerprintHex: firstDeviceAgreement.keyFingerprintHex,
-  };
-
-  process.stderr.write('Approve the Home claim on the terminal holding the unlock.\n');
-  const claimSignature = await input.client.sign({
-    keyFingerprintHex: signer.keyFingerprintHex,
-    label: picoHomeV2SignatureInputLabels.claim,
-    fields: claim as unknown as Record<string, unknown>,
-  });
-  const firstDeviceSignature = await input.client.sign({
-    keyFingerprintHex: firstDeviceSigning.keyFingerprintHex,
-    label: picoHomeV2SignatureInputLabels.claim,
-    fields: claim as unknown as Record<string, unknown>,
-  });
-
-  const sealedClaimPayload = {
-    schema: picoHomeSealedClaimPayloadV2Schema,
-    claim,
-    claimantIdentityKeyRecord,
-    firstDeviceSigningKeyRecord,
-    firstDeviceKeyAgreementKeyRecord,
-    firstDeviceDelegation,
-    firstDeviceRevocations: [],
-    claimantSignatureHex: claimSignature.signatureHex,
-    firstDeviceSignatureHex: firstDeviceSignature.signatureHex,
-  };
-  const sealedClaimPayloadHex = Buffer.from(input.vaultSodium.crypto_box_seal(
-    Uint8Array.from(Buffer.from(JSON.stringify(sealedClaimPayload), 'utf8')),
-    Uint8Array.from(Buffer.from(setup.host.keyAgreementPublicKeyHex, 'hex')),
-  )).toString('hex');
-
-  const pending = await foundationRequest(
-    input.coreUrl,
-    '/api/home/claim',
-    {
-      claimEnvelope: { schema: picoHomeClaimEnvelopeSchema, sealedClaimPayloadHex },
-    },
-    undefined,
-    input.linkClient,
-  ) as { pendingClaim: { founding: PicoHomeFoundingSignatureInput } };
-
-  process.stderr.write('Claim accepted. Approve the founding acceptance to complete it.\n');
-  const foundingSignature = await input.client.sign({
-    keyFingerprintHex: signer.keyFingerprintHex,
-    label: picoHomeV2SignatureInputLabels.founding,
-    fields: pending.pendingClaim.founding as unknown as Record<string, unknown>,
-  });
-
-  return await foundationRequest(
-    input.coreUrl,
-    '/api/home/claim',
-    {
-      foundingAcceptance: {
-        schema: picoHomeFoundingAcceptanceSchema,
-        claimId: claim.claimId,
-        foundingId: pending.pendingClaim.founding.foundingId,
-        claimantFoundingSignatureHex: foundingSignature.signatureHex,
-      },
-    },
-    undefined,
-    input.linkClient,
-  ) as Record<string, unknown>;
-}
 
 /**
  * The Foundation's refusal is authority, not a transport failure (ADR 0103
  * C4): its `error` is surfaced verbatim and nothing is retried, because a
  * retry would either repeat a spent Move-In Code or hide the reason.
  */
-async function foundationRequest(
-  coreUrl: string,
-  path: string,
-  body: Record<string, unknown> | undefined,
-  session?: string,
-  linkClient?: PicoLinkDirectClient,
-): Promise<unknown> {
-  if (linkClient !== undefined) {
-    const linked = await linkFoundationRequest(linkClient, path, body);
-    const statusCode = typeof linked.result.statusCode === 'number'
-      ? linked.result.statusCode
-      : undefined;
-    const result = { ...linked.result };
-    delete result.statusCode;
-    if (linked.outcome !== 'ok'
-      || (statusCode !== undefined && (statusCode < 200 || statusCode >= 300))) {
-      const reason = typeof result.error === 'string' ? result.error : linked.outcome;
-      throw new Error(
-        `foundation_rejected:${statusCode ?? 400}:${reason}`,
-      );
-    }
-    return result;
-  }
 
-  const url = new URL(path, coreUrl.endsWith('/') ? coreUrl : `${coreUrl}/`);
-  const headers: Record<string, string> = session === undefined
-    ? {}
-    : { authorization: `Bearer ${session}` };
-  const response = await fetch(url, body === undefined
-    ? { method: 'GET', headers }
-    : {
-      method: 'POST',
-      headers: { ...headers, 'content-type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-  const text = await response.text();
-  let parsed: unknown;
-  try {
-    parsed = text === '' ? {} : JSON.parse(text);
-  } catch {
-    throw new Error(`foundation_invalid_response:${response.status}`);
-  }
-
-  if (!response.ok) {
-    const reason = (parsed as { error?: unknown }).error;
-    throw new Error(`foundation_rejected:${response.status}:${typeof reason === 'string' ? reason : text}`);
-  }
-
-  return parsed;
-}
-
-async function linkFoundationRequest(
-  client: PicoLinkDirectClient,
-  path: string,
-  body: Record<string, unknown> | undefined,
-): Promise<{ outcome: string; result: Record<string, unknown> }> {
-  if (path === '/api/home/setup' && body === undefined) {
-    return await client.request('home.setup.read', {});
-  }
-  if (path === '/api/home/claim' && body !== undefined) {
-    return await client.request('home.claim.submit', body);
-  }
-  if (path === '/api/system/status' && body === undefined) {
-    const linked = await client.request('home.authority.list', { resource: 'home_state' });
-    if (linked.outcome !== 'ok' || !isRecord(linked.result.claimState)) {
-      return linked;
-    }
-    const { claimState, ...rest } = linked.result;
-    return {
-      outcome: linked.outcome,
-      result: {
-        ...rest,
-        picoHome: { claimState },
-      },
-    };
-  }
-
-  const resources: Record<string, string> = {
-    '/api/home/memberships': 'membership',
-    '/api/home/reader-key-freshness-checkpoints': 'reader_key_freshness_checkpoint',
-    '/api/home/reader-custody/domains': 'reader_custody_domain',
-    '/api/home/reader-custody/reader-grants': 'reader_custody_reader_grant',
-    '/api/home/reader-custody/kek-rotations': 'reader_custody_kek_rotation',
-  };
-  const resource = resources[path];
-  if (resource !== undefined && body !== undefined) {
-    return await client.request('home.authority.submit', { resource, record: body });
-  }
-  throw new Error('operation_not_available_over_link');
-}
 
 function requireFlag(flags: Map<string, string>, name: string): string {
   const value = flags.get(name);
@@ -2452,50 +2227,6 @@ async function runIssueMembershipCeremony(input: {
  * Delegating creates authority - it is what lets a device key act for an
  * identity - so it is not on the ADR 0099 exempt list and costs one approval.
  */
-async function runDelegateDeviceCeremony(input: {
-  client: PicoVaultDaemonClient;
-  signerKeyFingerprintHex: string;
-  subjectSigningKeyFingerprintHex: string;
-  subjectKeyAgreementKeyFingerprintHex: string;
-  scopes: PicoIdentityDelegationScope[];
-  validFrom: string;
-  validUntil: string;
-  lifecycleOrder: string;
-  delegationId?: string;
-}): Promise<{
-  record: PicoIdentityDelegationSignatureInput;
-  signatureHex: string;
-}> {
-  const status = await input.client.status();
-  const signer = status.sessions.find(
-    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
-  );
-  if (signer === undefined || signer.keyRole !== 'pico_identity') {
-    throw new Error('delegation_issuer_not_unlocked');
-  }
-
-  const record: PicoIdentityDelegationSignatureInput = {
-    suite: picoIdentitySuite,
-    delegationId: input.delegationId
-      ?? `delegation_${Buffer.from(sodium.randombytes_buf(16)).toString('hex')}`,
-    issuerIdentityKeyFingerprintHex: signer.keyFingerprintHex,
-    subjectSigningKeyFingerprintHex: input.subjectSigningKeyFingerprintHex,
-    subjectKeyAgreementKeyFingerprintHex: input.subjectKeyAgreementKeyFingerprintHex,
-    scopes: input.scopes,
-    validFrom: input.validFrom,
-    validUntil: input.validUntil,
-    lifecycleOrder: input.lifecycleOrder,
-  };
-
-  process.stderr.write('Approve the device delegation on the terminal holding the identity unlock.\n');
-  const signature = await input.client.sign({
-    keyFingerprintHex: signer.keyFingerprintHex,
-    label: picoIdentitySignatureInputLabels.delegation,
-    fields: record as unknown as Record<string, unknown>,
-  });
-
-  return { record, signatureHex: signature.signatureHex };
-}
 
 /**
  * ADR 0103 Weg A. Opens an identity-bound Foundation session, which is also

@@ -8,6 +8,31 @@ the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
 
+Status note, 2026-08-17: **E2's founding half started, by lifting the one
+ceremony out of the one place it was reachable from.**
+
+`runClaimHomeCeremony` lived inside `cli.ts` and was called by exactly one
+thing: `pico-vault ceremony claim-home`. That made founding the last piece of
+configuration on a command line, against the decision of 2026-08-16 that every
+configuration goes through the Pico Client - and it is what this roadmap means
+when it says a Home can only be founded through `pico-vault` today.
+
+It now lives in `claim-home-ceremony.ts`, unchanged except for the one thing
+that was terminal-shaped: three `process.stderr.write` calls told the person to
+approve *on the terminal holding the unlock*. Those are an `announce` port over
+a closed set of three moments, so each caller writes the sentence in its own
+medium. The CLI's wording is byte-identical to what it was, and the fifteen
+real-process ceremony tests pass unchanged - including the one that founds a
+Home end to end without a private key in the client process.
+
+**What that test's title makes explicit is the shape of the rest.** Key
+creation today is `createPicoVaultKeyfile` called by the CLI, writing keyfiles
+into the vault directory - a local file operation. The companion may not do
+that: the recovery path goes through the daemon's `recoveryBootstrap` request
+precisely so a private key never enters the client process, and founding needs
+its own request family for the same reason. That is the next step, and it is a
+daemon surface rather than a companion one.
+
 ## Context
 
 ADR 0105 fixed the product form - a background service reached through the
