@@ -214,7 +214,15 @@ name belongs.
   something may disagree with it. The parts most likely to be wrong are
   the effect-name grammar and the absence of any severity or
   reversibility, both of which are additions rather than rewrites.
-- **H4 - The integration is a module (implemented):**
+- **H4 - The integration is a module (implemented; nothing feeds it yet):**
+
+  Status note, 2026-08-17: the module, the observation contract and the
+  core's intake all exist and are proven against each other - and
+  `recordPicoConnectorObservations` has no product caller, because nothing
+  in this tree talks to a Home Assistant. The manifest's "this slice
+  reads" describes what the slice *can* do, not what happens today: its
+  reading functions have no caller either. What is missing is a client
+  that fetches entity states, not any of the mechanism below.
   `@pico/module-home-assistant` is a **connector**, and the kind is the
   argument rather than a label. An entity's friendly name is whatever
   somebody typed into their own Home Assistant and a notification body is

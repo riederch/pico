@@ -34,6 +34,22 @@ import { fileURLToPath } from 'node:url';
  * A method reaching its own file's other methods counts as called - a writer
  * invoked from `EventStore.open()` is wired, and excluding its own file
  * reported that as a gap on the first run.
+ *
+ * **What this cannot see is a caller who is themself uncalled.** A store
+ * method reached only from a function nobody calls passes here, because the
+ * question asked is one link deep. `recordPicoConnectorObservations` is the
+ * live example: ADR 0128 H4's connector intake writes to the store, its
+ * writers therefore look wired, and nothing in the tree calls the intake
+ * because nothing talks to a Home Assistant.
+ *
+ * Measured before it was left open: ten exported functions in `apps/core/src`
+ * have no product caller, and eight are mechanisms waiting for a producer that
+ * is deliberately absent - the observation buffer with no mobile runtime, the
+ * supplier content intake with no bridge supplier shipped, the migration
+ * backup with no destructive migration in the chain. A check over them would
+ * need eight argued exemptions on its first day, which is a debt list wearing
+ * a gate's clothes. The two that overstate themselves were corrected in ADR
+ * 0128 instead, which is where a reader meets the claim.
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
