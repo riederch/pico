@@ -241,6 +241,67 @@ for (const number of rowed) {
   }
 }
 
+// --- The matrix's own claims about absence -----------------------------------
+
+/**
+ * Sentences that say a named symbol has no caller, checked against the tree.
+ *
+ * **Written after finding three stale ones in an afternoon.** ADR 0151's row
+ * said `picoModelProviderMayCarry` had no caller "because nothing assembles a
+ * job yet" - jobs had been assembled for weeks and `picoModelJobRefusal` calls
+ * it from two places. ADR 0113's said production profile and keystore-binding
+ * creation remained open; both are written by the shell's first run. And ADR
+ * 0151's status said no scheduler existed, while a model-job sweep runs on its
+ * own interval.
+ *
+ * None of those was a lie when it was written. That is exactly the problem: a
+ * status note is prose about code, and prose does not move when code does, so
+ * the reader most likely to trust it is the one who cannot check.
+ *
+ * **Only the present tense is checked, and only with a named symbol.** "*had*
+ * no caller" is history and often the whole point of a status note - this
+ * repository's notes are mostly about defects that were closed. "*has* no
+ * caller" is a claim about now, and now is checkable.
+ */
+const absenceClaim = /`([A-Za-z][A-Za-z0-9_]*)`[^.|]{0,140}?\b(?:has|have) no caller\b/gu;
+const treeSources = [];
+const collectSources = (directory) => {
+  for (const entry of readdirSync(join(repoRoot, directory), { withFileTypes: true })) {
+    if (notPartOfTheTree(entry.name) || entry.name === 'dist') {
+      continue;
+    }
+    const path = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      collectSources(path);
+    } else if (/\.(ts|mts|cts)$/u.test(entry.name) && !/\.test\.ts$/u.test(entry.name)
+      && !/\/test-[^/]+$/u.test(path)) {
+      treeSources.push(readFileSync(join(repoRoot, path), 'utf8'));
+    }
+  }
+};
+for (const directory of ['apps', 'packages', 'modules']) {
+  collectSources(directory);
+}
+
+let claimsChecked = 0;
+for (const [, symbol] of matrix.matchAll(absenceClaim)) {
+  claimsChecked += 1;
+  const called = new RegExp(`\\.?\\b${symbol}\\s*\\(`, 'gu');
+  // Its own declaration is not a call, so a single occurrence in one file is
+  // the definition and nothing more.
+  const occurrences = treeSources
+    .reduce((total, source) => total + (source.match(called)?.length ?? 0), 0);
+  const declared = new RegExp(`(?:function|public|const)\\s+${symbol}\\b`, 'u')
+    .test(treeSources.join('\n'));
+  if (occurrences > (declared ? 1 : 0)) {
+    errors.push(
+      `${matrixPath}: says \`${symbol}\` has no caller, and the tree calls it. A status note is `
+      + 'prose about code and does not move when the code does - which is how three of these went '
+      + 'stale in one afternoon. Past tense ("had no caller") is history and is not checked.',
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Documentation structure check failed:');
   for (const error of errors) {
@@ -258,5 +319,6 @@ console.log(
     ? 'root files not compared - not a git checkout'
     : `${rootFiles.length} tracked root files`}, `
   + `${named.size} entries named, each real; ${adrNumbers.length} ADRs, `
-  + `${rowed.size} with a row and ${withoutRow.size} deliberately without one).`,
+  + `${rowed.size} with a row and ${withoutRow.size} deliberately without one; `
+  + `${claimsChecked} present-tense absence claims, each still true).`,
 );

@@ -75,6 +75,15 @@ further platforms are further presences rather than further products.
 The superseding of C4 by ADR 0130 E7/E8 is recorded there and unchanged
 here.
 
+Status note, 2026-08-17: the recorded residuum "production profile and
+keystore-binding creation" is closed on the writing side and was stale.
+`commitFirstRun` writes the profile and then the platform unlock, and the shell
+passes a real `safeStorage` port into it; the profile write is proven against
+real processes. What is genuinely unproven is the *binding* write, because the
+real-process test runs without a desktop keyring and asserts the honest
+`platformUnlockBound: false` rather than pretending one is there. C4 - Windows
+and macOS - is unchanged and open.
+
 ## Context
 
 ADR 0105 fixed the product form (background service reached through the
