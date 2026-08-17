@@ -172,6 +172,8 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.presence.read',
       'home.presence.forget',
       'home.presence.switch',
+      'home.suppliers.read',
+      'home.supplier.reach.decide',
     ]);
   });
 

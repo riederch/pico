@@ -3754,6 +3754,85 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * statement from switching each of its affordances - "not this device"
          * keeps meaning that after the device gains a microphone.
          */
+        /**
+         * ADR 0138 CO3/CO4. What is attached, and whether it may reach.
+         *
+         * The list carries no slots, no coverage and no privacy domain - a
+         * person deciding whether something may spend their money needs to
+         * know what it is and what it may do, not how it is wired.
+         */
+        case 'home.suppliers.read': {
+          if (Object.keys(args).length !== 0 || principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              suppliers: store.picoSupplierAttachments().map((attachment) => ({
+                identifier: attachment.identifier,
+                kind: attachment.kind,
+                mayReachOutside: attachment.mayReachOutside,
+                mayReachUnasked: attachment.mayReachUnasked,
+                attachedAt: attachment.attachedAt,
+              })),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        /**
+         * ADR 0138 CO3/CO4. The two decisions, made where the person is.
+         *
+         * **They were unreachable until 2026-08-17.** The columns, the CHECK
+         * that keeps unasked from being granted without asked, and the
+         * content-free event all existed; `setPicoSupplierReach` had no caller
+         * outside its own tests, so both defaults were the only state a Home
+         * could be in. An ADR titled "off until someone says so" had nowhere
+         * for anybody to say so.
+         *
+         * One operation for both, because CO4 depends on CO3: two would let a
+         * client grant the second and then fail the first, and the database
+         * would refuse the pair it was told to write in an order it did not
+         * choose.
+         */
+        case 'home.supplier.reach.decide': {
+          if (principal === undefined
+            || typeof args.identifier !== 'string'
+            || typeof args.mayReachOutside !== 'boolean'
+            || typeof args.mayReachUnasked !== 'boolean') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (store.picoSupplierAttachment(args.identifier) === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_attached' } };
+          }
+          if (args.mayReachUnasked && !args.mayReachOutside) {
+            // Named rather than left to the CHECK, because a person is owed
+            // the reason: unasked traffic is visible to nobody, so it cannot
+            // be the only thing they allowed.
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: 'unasked_needs_reaching' },
+            };
+          }
+          store.setPicoSupplierReach({
+            identifier: args.identifier,
+            mayReachOutside: args.mayReachOutside,
+            mayReachUnasked: args.mayReachUnasked,
+            decidedAt: new Date().toISOString(),
+          });
+          // Content-free, in ADR 0129 SR6's shape: which supplier, and which
+          // way. What it is for is nobody's business but the person's.
+          const reachEvent = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.supplier_attachment_changed',
+            payload: {
+              identifier: args.identifier,
+              mayReachOutside: args.mayReachOutside,
+              mayReachUnasked: args.mayReachUnasked,
+            },
+          });
+          store.append(reachEvent);
+          broadcast(reachEvent);
+          return { outcome: 'ok', result: { decided: true } };
+        }
         case 'home.presence.switch': {
           if (principal === undefined
             || typeof args.presenceId !== 'string'

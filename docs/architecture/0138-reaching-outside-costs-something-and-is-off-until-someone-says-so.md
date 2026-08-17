@@ -2,6 +2,33 @@
 
 ## Status
 
+Status note, 2026-08-17: **the two decisions were unreachable, in the ADR
+whose title is that they exist.**
+
+CO3 and CO4 have read "implemented 2026-08-11" since the day the columns, the
+CHECK and the content-free event landed. `setPicoSupplierReach` had no caller
+outside its own tests and `home.supplier_attachment_changed` was never
+appended by anything, so both defaults were the only state a Home could ever
+be in. *Off until someone says so* had nowhere for anybody to say so.
+
+Found by asking whether a depot attachment surface would be worth building:
+attaching creates no reach by CO3, so the head of that path would have led to
+a middle nobody could pass. The middle is the part that was missing.
+
+`home.suppliers.read` and `home.supplier.reach.decide` close it, from the
+person's own device rather than through host administration - this is about
+spending their money and telling somebody they asked, which ADR 0087 keeps out
+of administration's hands. One operation for both decisions, because CO4
+depends on CO3 and two operations would let a client grant the second and then
+fail the first. The dependency is refused **by name** rather than left to the
+database CHECK: without the refusal the person gets `operation_failed`, and
+"unasked traffic is visible to nobody, so it cannot be the only thing you
+allowed" is a reason they are owed.
+
+The list carries the identifier, the kind and the two answers - not the slots,
+the coverage or the privacy domain. Somebody deciding whether a thing may
+spend their money needs to know what it is, not how it is wired.
+
 Accepted as a constraint on suppliers that reach a system Pico does not
 run. **CO1-CO5 are implemented**
 (2026-08-10 to 2026-08-11), and this ADR is complete apart from the

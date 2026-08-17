@@ -529,6 +529,17 @@ export const picoLinkDirectOperations = [
    * states what it may. One operation would let a runtime send its own switch.
    */
   'home.presence.switch',
+  /**
+   * ADR 0138 CO3/CO4. Whether an attached supplier may reach outside at all,
+   * and whether it may do so unasked.
+   *
+   * Remote-capable because the decision is a person's and the person is on
+   * their own device (ADR 0113): this is about spending their money and
+   * telling somebody they asked, which is not administration's to answer
+   * (ADR 0087).
+   */
+  'home.suppliers.read',
+  'home.supplier.reach.decide',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];
