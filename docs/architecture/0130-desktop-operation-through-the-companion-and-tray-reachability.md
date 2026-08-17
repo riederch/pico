@@ -8,6 +8,34 @@ the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
 
+Status note, 2026-08-18: **E2 is closed. A Home can be founded from the Pico
+Client, and the Client is the only place a person is sent.**
+
+The three named parts are built: `claim-home` through the shell's own handler,
+`open-identity-session` as the product session that both holds the unlocks and
+answers the ceremony's three approvals, and the first production write of the
+profile *and* the Platform Keystore binding.
+
+The binding is the part that would have been missed. Founding wrote the profile
+and stopped, while the recovery first run also sealed the passphrase - so the
+same person would have been asked for it at every start on a Home they founded
+and never on one they restored. Nothing failed; two paths simply disagreed
+about what a device is, which is the shape of defect only a walk finds. Both
+seal now, and the outcome carries `platformUnlockBound` so a keystore that
+cannot seal is said out loud rather than silently costing somebody a passphrase
+per start.
+
+The first-run surface asks the two situations apart before either happens,
+because the wrong one is expensive in one direction: a person who founds when
+they meant to restore has a second identity and no way back to the first. The
+words are the contract's - *"I have a Recovery Card"* and *"This Home is new"* -
+things a person knows about their own situation, rather than *restore* and
+*found*, which are things this codebase knows.
+
+Founding ends on the idle presentation that carries the Recovery Card button
+and a sentence saying to make one next. The two ceremonies stay two; the
+surface leads from the first to the second.
+
 Status note, 2026-08-17: **E2's founding half started, by lifting the one
 ceremony out of the one place it was reachable from.**
 
@@ -260,7 +288,7 @@ Node host beside each of them.
   platform, with stock GNOME (no AppIndicator extension) as the reference
   negative test for the tray; single-instance activation raises the
   existing companion rather than starting a second.
-- **E2 - Founding and binding vertical (open):** `claim-home`,
+- **E2 - Founding and binding vertical (implemented):** `claim-home`,
   `open-identity-session`, and the first production write of the profile
   and Platform Keystore binding, closing the ADR 0113 residual.
 - **E3 - Device lifecycle vertical (open):** delegate, enroll, renew,

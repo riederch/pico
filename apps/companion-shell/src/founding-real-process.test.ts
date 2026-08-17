@@ -2,10 +2,15 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer } from 'node:net';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import sodium from 'libsodium-wrappers-sumo';
 import type { VaultSodium } from '@pico/vault';
+import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
+import {
+  createPicoCompanionAutomaticVaultUnlock,
+} from '@pico/companion/platform-unlock';
+import { connectPicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import {
   foundPicoCompanionHome,
   parsePicoHomeSetupAnnouncement,
@@ -125,6 +130,27 @@ async function startEmptyDaemon(): Promise<string> {
   }
   await waitFor(() => output.includes('\n'), 'daemon_start');
   return join(vaultHomePath, 'run', 'daemon.sock');
+}
+
+/**
+ * A keystore that seals what it is given and nothing else. Refusing an
+ * unexpected plaintext is the assertion: a founding that sealed the move-in
+ * code or a key would pass a test that only checked a file exists.
+ */
+function secretPort(expected: string): PicoCompanionPlatformSecretPort {
+  return {
+    platform: 'linux',
+    selectedBackend: () => 'gnome_libsecret',
+    isEncryptionAvailable: () => true,
+    encryptString: (plainText: string) => {
+      if (plainText !== expected) {
+        throw new Error('unexpected_plaintext');
+      }
+      return new TextEncoder().encode(`sealed:${plainText}`);
+    },
+    decryptString: (encrypted: Uint8Array) =>
+      new TextDecoder().decode(encrypted).replace(/^sealed:/u, ''),
+  };
 }
 
 describe('ADR 0130 E2 - founding from the Client, with no CLI in the walk', () => {
@@ -287,4 +313,88 @@ describe('the line a person copies out of their Home', () => {
     expect(() => parsePicoHomeSetupAnnouncement(line))
       .toThrow('invalid_pico_home_setup_announcement_field:hostSigningKeyFingerprintHex');
   });
+});
+
+describe('a founded device starts the way a restored one does', () => {
+  it('seals the passphrase, so which door a person came through changes nothing', async () => {
+    /**
+     * Founding wrote the profile and stopped, while the recovery first run
+     * also sealed the passphrase - so the same person would have been asked
+     * for it at every start on a Home they founded and never on one they
+     * restored. Nothing failed; the two paths simply disagreed, which is the
+     * kind of gap only a walk finds.
+     */
+    await sodium.ready;
+    const home = await startUnclaimedHome();
+    const profilePath = join(tempDirectory('pico-founding-profile-'), 'profile.json');
+    const passphrase = 'a-passphrase-the-person-chose';
+
+    const socketPath = await startEmptyDaemon();
+    const outcome = await foundPicoCompanionHome({
+      socketPath,
+      profilePath,
+      coreUrl: home.coreUrl,
+      announcement: parsePicoHomeSetupAnnouncement(home.announcementLine),
+      passphrase,
+      sodium: sodium as unknown as VaultSodium,
+      decisions: { decideApproval: async () => true },
+      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+      platformSecrets: secretPort(passphrase),
+    });
+    expect(outcome.platformUnlockBound).toBe(true);
+
+    const unlockPath = join(dirname(profilePath), 'platform-unlock.json');
+    // Sealed, not stored: the file itself does not carry the passphrase.
+    expect(readFileSync(unlockPath, 'utf8')).not.toContain(passphrase);
+
+    /**
+     * Asserted through the thing that uses it rather than by reading the file
+     * back: what a person gets is a Pico that starts without asking, and only
+     * a real daemon can say whether the seal buys that.
+     */
+    const automatic = createPicoCompanionAutomaticVaultUnlock({
+      path: unlockPath,
+      profile: JSON.parse(readFileSync(profilePath, 'utf8')),
+      socketPath,
+      secrets: secretPort(passphrase),
+    });
+    try {
+      await automatic.ensureUnlocked();
+      const client = await connectPicoVaultDaemonClient({ socketPath });
+      try {
+        await client.hello();
+        const status = await client.status();
+        expect(status.sessions.map((session) => session.keyRole).sort())
+          .toContain('device_signing');
+        expect(status.sessions.map((session) => session.keyRole))
+          .toContain('device_key_agreement');
+      } finally {
+        await client.close();
+      }
+    } finally {
+      await automatic.close();
+    }
+  }, 180_000);
+
+  it('says so in the outcome when there is no keystore to seal into', async () => {
+    // The absence is reported rather than hidden, because the window has to
+    // tell a person their Pico will ask for the passphrase every time.
+    await sodium.ready;
+    const home = await startUnclaimedHome();
+    const profilePath = join(tempDirectory('pico-founding-profile-'), 'profile.json');
+
+    const outcome = await foundPicoCompanionHome({
+      socketPath: await startEmptyDaemon(),
+      profilePath,
+      coreUrl: home.coreUrl,
+      announcement: parsePicoHomeSetupAnnouncement(home.announcementLine),
+      passphrase: 'a-passphrase-the-person-chose',
+      sodium: sodium as unknown as VaultSodium,
+      decisions: { decideApproval: async () => true },
+      delegationValidUntil: '2027-01-01T00:00:00.000Z',
+    });
+
+    expect(outcome.platformUnlockBound).toBe(false);
+    expect(existsSync(join(dirname(profilePath), 'platform-unlock.json'))).toBe(false);
+  }, 180_000);
 });

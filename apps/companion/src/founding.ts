@@ -4,7 +4,16 @@ import {
   runPicoClaimHomeCeremony,
   type PicoClaimHomeCeremonyStep,
 } from '@pico/vault-daemon/claim-home-ceremony';
-import { picoCompanionProfileSchema, writePicoCompanionProfile } from './profile.js';
+import {
+  picoCompanionProfileSchema,
+  writePicoCompanionProfile,
+  type PicoCompanionProfile,
+} from './profile.js';
+import {
+  defaultPicoCompanionPlatformUnlockPath,
+  writePicoCompanionPlatformUnlock,
+} from './platform-unlock.js';
+import type { PicoCompanionPlatformSecretPort } from './platform-secrets.js';
 import { openPicoCompanionVaultProductSession } from './vault-product-session.js';
 import type { PicoCompanionApprovalDecisionPort } from './approval-carrier.js';
 
@@ -105,12 +114,29 @@ export interface PicoCompanionFoundingInput {
   decisions: PicoCompanionApprovalDecisionPort;
   /** How long this device's first delegation is good for. */
   delegationValidUntil: string;
+  /**
+   * Where this device's passphrase is sealed so it does not have to be typed
+   * at every start.
+   *
+   * **Optional in the same way and for the same reason as the recovery first
+   * run's**: the profile is what makes the device real and the seal is an
+   * optimisation on top of it, so a keystore that cannot seal costs a person
+   * one typed passphrase per start rather than the founding they just did.
+   *
+   * It is here at all because leaving it out would have made founding the one
+   * way onto a device that asks for its passphrase forever - the same person,
+   * two behaviours, decided by which door they came through.
+   */
+  platformSecrets?: PicoCompanionPlatformSecretPort;
+  platformUnlockPath?: string;
   connect?: typeof connectPicoVaultDaemonClient;
 }
 
 export interface PicoCompanionFoundingOutcome {
   homeId: string;
   identityKeyFingerprintHex: string;
+  /** Whether the passphrase was sealed; recorded rather than assumed. */
+  platformUnlockBound: boolean;
 }
 
 /**
@@ -195,7 +221,7 @@ export async function foundPicoCompanionHome(
       throw new Error('pico_home_did_not_report_a_founding');
     }
 
-    writePicoCompanionProfile(input.profilePath, {
+    const profile: PicoCompanionProfile = {
       schema: picoCompanionProfileSchema,
       coreUrl: input.coreUrl,
       /**
@@ -222,11 +248,25 @@ export async function foundPicoCompanionHome(
         keyAgreementKeyFingerprintHex: bootstrapped.device.keyAgreementKeyFingerprintHex,
         delegationId,
       },
-    });
+    };
+    writePicoCompanionProfile(input.profilePath, profile);
+
+    let platformUnlockBound = false;
+    if (input.platformSecrets !== undefined) {
+      writePicoCompanionPlatformUnlock({
+        path: input.platformUnlockPath
+          ?? defaultPicoCompanionPlatformUnlockPath(input.profilePath),
+        profile,
+        passphrase: input.passphrase,
+        secrets: input.platformSecrets,
+      });
+      platformUnlockBound = true;
+    }
 
     return {
       homeId: claimState.homeId,
       identityKeyFingerprintHex: bootstrapped.identity.keyFingerprintHex,
+      platformUnlockBound,
     };
   } finally {
     await session.close();

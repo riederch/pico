@@ -34,6 +34,8 @@ import {
   parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionRecoveryCardSetupInput,
   parsePicoCompanionPresentation,
+  picoCompanionFoundingStepLine,
+  picoCompanionFoundingDelegationValidUntil,
   picoCompanionIpcChannels,
   type PicoCompanionFirstRunScanSource,
   type PicoCompanionPresentation,
@@ -418,6 +420,33 @@ function registerIpc(): void {
         const source = parsePicoCompanionFirstRunScanSource(value);
         productOperationActive = true;
         await runFirstRun(source);
+      } catch (error) {
+        await presentFirstRunFailure(error);
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  /**
+   * ADR 0130 E2. The other first run: a Home nobody lives in yet.
+   *
+   * **Everything it needs is collected here, not in the window.** The address
+   * is ordinary, but the line a person pastes carries the one-time move-in
+   * code, which is what authorises taking the Home - and ADR 0113 C2 keeps
+   * anything that authorises out of the renderer. So the window chooses the
+   * situation and this process asks for the content, exactly as it does for
+   * the Recovery Card.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.beginFounding,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (productOperationActive || presentation.decision !== 'begin_first_run') {
+        return;
+      }
+      try {
+        productOperationActive = true;
+        await runFounding();
       } catch (error) {
         await presentFirstRunFailure(error);
       } finally {
@@ -1274,6 +1303,91 @@ async function captureSecret(prompt: {
       await presentSecureInput(prompt, count, invalid);
     },
   });
+}
+
+/**
+ * ADR 0130 E2. Founds a Home from this device, with no terminal in it.
+ *
+ * The three things asked for are asked in the order a person has them: the
+ * address of the Home they just started, the line it printed, and a passphrase
+ * they choose now. The line is validated before anything is created, because
+ * a typo in it should cost a retype rather than a vault.
+ */
+async function runFounding(): Promise<void> {
+  if (window === null || window.isDestroyed()) {
+    throw new Error('companion_window_unavailable');
+  }
+  const { foundPicoCompanionHome, parsePicoHomeSetupAnnouncement } =
+    await import('@pico/companion/founding');
+
+  const coreUrl = await captureSecret({
+    title: 'Where is your Pico Home?',
+    instruction: 'Type the address it is reachable at, then press Enter. '
+      + 'For a Home on this machine that is usually http://127.0.0.1:3100.',
+    maximumLength: 2_048,
+    validate: (value: string) => /^https?:\/\/\S+$/u.test(value.trim()),
+  });
+  const announcementLine = await captureSecret({
+    title: 'Paste the line your Home printed when it started',
+    instruction: 'It contains the one-time move-in code and the keys this device will pin '
+      + 'your Home to. Pico checks it against the Home before using it, which is why it '
+      + 'comes from your own log rather than from the Home itself.',
+    maximumLength: 8_192,
+    validate: (value: string) => value.includes('picoHomeMoveInCode'),
+  });
+  // Parsed before a passphrase is asked for, so a mistyped line costs a
+  // retype and not a vault nobody can open.
+  const announcement = parsePicoHomeSetupAnnouncement(announcementLine);
+
+  const passphrase = await captureSecret({
+    title: 'Choose a Vault passphrase',
+    instruction: 'It protects the keys this device is about to make. Nothing can recover '
+      + 'them without it, and Pico never sends it anywhere.',
+    maximumLength: 1_024,
+    validate: (value: string) => value.length > 0,
+  });
+
+  const outcome = await foundPicoCompanionHome({
+    socketPath: defaultPicoVaultDaemonSocketPath(),
+    profilePath: defaultPicoCompanionProfilePath(),
+    coreUrl: coreUrl.trim(),
+    announcement,
+    passphrase,
+    sodium: sodium as never,
+    decisions: approvalDecisionPort,
+    // The same seal a restored device gets, for the same reason: which door a
+    // person came through must not decide whether they type a passphrase at
+    // every start.
+    ...(await firstRunPlatformSecrets()),
+    announce: (step) => {
+      presentationPort.present(parsePicoCompanionPresentation({
+        kind: 'first_run',
+        severity: 'active',
+        symbol: '●',
+        decision: 'none',
+        title: picoCompanionFoundingStepLine(step).title,
+        body: picoCompanionFoundingStepLine(step).body,
+        observedAt: new Date().toISOString(),
+      }));
+    },
+    delegationValidUntil: picoCompanionFoundingDelegationValidUntil(new Date()),
+  });
+
+  presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'idle',
+    severity: 'active',
+    symbol: '●',
+    decision: 'none',
+    title: 'Your Home is yours',
+    body: `This device founded ${outcome.homeId} and moved in. Make a Recovery Card next: `
+      + 'without one, nothing can put your identity on another device.'
+      + (outcome.platformUnlockBound
+        ? ''
+        : ' This system has no usable keystore, so Pico will ask for your Vault '
+          + 'passphrase each time it starts.'),
+    observedAt: new Date().toISOString(),
+  }));
+  await startServiceCore();
 }
 
 async function presentFirstRunOutcome(

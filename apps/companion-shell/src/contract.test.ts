@@ -3,6 +3,10 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { picoPresenceAffordances } from '@pico/protocol/presence';
 import {
+  picoCompanionFirstRunChoiceLines,
+  picoCompanionFoundingStepLine,
+  picoCompanionFoundingDelegationDays,
+  picoCompanionFoundingDelegationValidUntil,
   parsePicoCompanionFirstRunScanSource,
   parsePicoCompanionPresentation,
   parsePicoCompanionRecoveryCardSetupInput,
@@ -440,5 +444,59 @@ describe('ADR 0143 DP1 - a depot asks the same two questions', () => {
   it('refuses a depot row that is missing what a line needs', () => {
     expect(() => parsePicoCompanionDepots([{ remote: 'x' }]))
       .toThrow('invalid_pico_companion_depot');
+  });
+});
+
+describe('ADR 0130 E2 - the two situations a device with no Home can be in', () => {
+  it('offers restoring and founding, and offers restoring first', () => {
+    // Both are offered because both happen; restoring comes first because a
+    // person who already has a Pico is the one for whom the wrong choice
+    // costs an identity they cannot get back to.
+    expect(picoCompanionFirstRunChoiceLines().map((line) => line.choice))
+      .toEqual(['restore', 'found']);
+  });
+
+  it('says what each one does to a Home, not what this codebase calls it', () => {
+    const [restore, found] = picoCompanionFirstRunChoiceLines();
+    expect(restore?.actionLabel).toBe('I have a Recovery Card');
+    expect(found?.actionLabel).toBe('This Home is new');
+    for (const line of picoCompanionFirstRunChoiceLines()) {
+      expect(line.actionLabel.toLowerCase()).not.toContain('restore');
+      expect(line.actionLabel.toLowerCase()).not.toContain('found');
+    }
+  });
+
+  it('warns that restoring runs an objection window and founding takes a Home', () => {
+    // The expensive halves, said before either happens: replacing devices is
+    // stoppable and founding is not.
+    const [restore, found] = picoCompanionFirstRunChoiceLines();
+    expect(restore?.detail).toContain('objection window');
+    expect(found?.detail).toContain('new identity');
+    expect(found?.detail).toContain('one-time code');
+  });
+
+  it('words the ceremony\u2019s three moments for a window, not for a terminal', () => {
+    /**
+     * The CLI says "on the terminal holding the unlock", which is true there
+     * and false here: a person in the Client has no terminal to look at, and
+     * sending them to find one is the defect this function exists to avoid.
+     */
+    const steps = ['device_delegation', 'home_claim', 'founding_acceptance'] as const;
+    const seen = steps.map((step) => picoCompanionFoundingStepLine(step));
+    for (const line of seen) {
+      expect(line.title).not.toBe('');
+      expect(line.body.toLowerCase()).not.toContain('terminal');
+      expect(line.title.toLowerCase()).toContain('approve');
+    }
+    expect(new Set(seen.map((line) => line.title)).size).toBe(3);
+    expect(seen[2]?.body).toContain('last approval');
+  });
+
+  it('pins how long this device\u2019s first delegation is good for', () => {
+    // Not asked, because a first run that opened with "how many days?" asks
+    // somebody to decide a thing they have no way to have an opinion about.
+    expect(picoCompanionFoundingDelegationValidUntil(new Date('2026-01-01T00:00:00.000Z')))
+      .toBe('2027-01-01T00:00:00.000Z');
+    expect(picoCompanionFoundingDelegationDays).toBe(365);
   });
 });

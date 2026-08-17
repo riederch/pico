@@ -14,6 +14,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   submitRecoveryCard: 'pico:recovery-card:submit',
   decideApproval: 'pico:approval:decide',
   beginFirstRun: 'pico:first-run:begin',
+  /** ADR 0130 E2. The other first run: a Home that does not exist yet. */
+  beginFounding: 'pico:founding:begin',
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
   /** ADR 0142 PE2. Point the Home at a host, and watch it be timed. */
@@ -183,6 +185,99 @@ export type PicoCompanionPresentationDecision =
  * the typed fallback through main-process keystroke capture - so the renderer
  * chooses the source and never sees the result.
  */
+/**
+ * ADR 0130 E2 - the two situations a device with no Home can be in.
+ *
+ * **A choice, because they are not the same act and the wrong one is
+ * expensive.** Restoring puts an existing identity on this device and asks a
+ * Home to replace its devices, which runs an objection window. Founding makes
+ * an identity that did not exist and takes an empty Home. A person who founds
+ * when they meant to restore has a second identity and no way back to the
+ * first; the surface has to ask before either happens, not after.
+ *
+ * The words say what each one *does*, not what it is called: "I have a
+ * Recovery Card" and "This Home is new" are things a person knows about their
+ * own situation, while "restore" and "found" are things this codebase knows.
+ */
+export interface PicoCompanionFirstRunChoiceLine {
+  choice: 'restore' | 'found';
+  headline: string;
+  detail: string;
+  actionLabel: string;
+}
+
+export function picoCompanionFirstRunChoiceLines(): readonly PicoCompanionFirstRunChoiceLine[] {
+  return Object.freeze([
+    Object.freeze({
+      choice: 'restore' as const,
+      headline: 'You already have a Pico somewhere.',
+      detail: 'Your Recovery Card puts your identity on this device and asks your Home to '
+        + 'replace your devices with it. Your Home waits out an objection window first, so '
+        + 'any device you still have can stop it.',
+      actionLabel: 'I have a Recovery Card',
+    }),
+    Object.freeze({
+      choice: 'found' as const,
+      headline: 'You just set up a Pico Home and nobody lives in it.',
+      detail: 'Pico makes you a new identity on this device and moves it in. You will need '
+        + 'the address of that Home and the line it printed when it started - it contains '
+        + 'the one-time code and the keys this device pins it to.',
+      actionLabel: 'This Home is new',
+    }),
+  ]);
+}
+
+/**
+ * ADR 0130 E2. What the window says while the ceremony asks for approvals.
+ *
+ * The ceremony announces a moment and each caller writes the sentence; these
+ * are this window's. The CLI's say "on the terminal holding the unlock", which
+ * is true there and false here - and getting that wrong would send a person
+ * looking for a terminal that does not exist.
+ */
+export function picoCompanionFoundingStepLine(
+  step: 'device_delegation' | 'home_claim' | 'founding_acceptance',
+): { title: string; body: string } {
+  switch (step) {
+    case 'device_delegation':
+      return {
+        title: 'Approve this device',
+        body: 'Pico is asking your new identity to vouch for this device. Your Vault will '
+          + 'ask you to confirm it.',
+      };
+    case 'home_claim':
+      return {
+        title: 'Approve moving in',
+        body: 'Pico is asking your Home to let this identity move in, using the one-time '
+          + 'code from the line you pasted.',
+      };
+    default:
+      return {
+        title: 'Approve founding',
+        body: 'Your Home accepted the claim and is waiting for you to sign what it '
+          + 'founded. This is the last approval.',
+      };
+  }
+}
+
+/**
+ * ADR 0104. How long this device's first delegation is good for.
+ *
+ * A pinned product default rather than something a person is asked: a first
+ * run that opened with "how many days?" would be asking somebody to decide a
+ * thing they have no way to have an opinion about yet. A year, because a
+ * delegation that outlives the person's memory of making it is a standing
+ * grant, and one that expires during setup is a device that stops working
+ * before it was used.
+ */
+export const picoCompanionFoundingDelegationDays = 365;
+
+export function picoCompanionFoundingDelegationValidUntil(now: Date): string {
+  const until = new Date(now.getTime());
+  until.setUTCDate(until.getUTCDate() + picoCompanionFoundingDelegationDays);
+  return until.toISOString();
+}
+
 export const picoCompanionFirstRunScanSources = ['camera', 'typed'] as const;
 
 export type PicoCompanionFirstRunScanSource =

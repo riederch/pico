@@ -18,9 +18,11 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { buildPicoCompanionLinuxPackage } from './package-linux.mjs';
 import {
+  rootOwnedPackageProbeEnvironment,
   rootOwnedPackageProbeRequested,
   selectChromiumSandboxProbe,
 } from './chromium-sandbox-probe.mjs';
+import { assertPicoTrayMemoryBudgets } from './tray-memory-budget.mjs';
 
 const temporaryRoots = new Set();
 const rootOwnedTemporaryRoots = new Set();
@@ -157,17 +159,14 @@ const memoryContext = `sandbox ${sandboxProbe.mode}, ${report.processCount} proc
   + `private total ${report.privateBytes}, clean ${report.privateCleanBytes}, `
   + `dirty ${report.privateDirtyBytes}, hugetlb ${report.privateHugetlbBytes}`;
 
-assert(report.proportionalBudgetBytes === 225_000_000
-  && report.proportionalBytes < report.proportionalBudgetBytes,
-`Tray PSS ${report.proportionalBytes} bytes exceeds the strict 225 MB budget `
-  + `(summed RSS ${report.rssBytes}, private ${report.privateBytes}; ${memoryContext}).`);
-assert(report.privateDirtyAndHugetlbBudgetBytes === 110_000_000
-  && report.privateDirtyAndHugetlbBytes < report.privateDirtyAndHugetlbBudgetBytes,
-`Tray private dirty plus hugetlb memory ${report.privateDirtyAndHugetlbBytes} bytes `
-  + 'exceeds the strict 110 MB budget '
-  + `(summed RSS ${report.rssBytes}, PSS ${report.proportionalBytes}; ${memoryContext}).`);
-assert(report.underBudget === true,
-  'Tray memory probe did not pass its own PSS/private budget gates.');
+for (const line of assertPicoTrayMemoryBudgets({
+  report,
+  mode: sandboxProbe.mode,
+  memoryContext,
+  environmentVariable: rootOwnedPackageProbeEnvironment,
+})) {
+  process.stdout.write(`${line}\n`);
+}
 removeTemporaryRoot(extractionRoot);
 removeTemporaryRoot(probeRoot);
 

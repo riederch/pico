@@ -2,6 +2,31 @@
 
 ## Status
 
+Status note, 2026-08-18: **C3's own residual is closed - the assertion now
+knows which mode it is in.**
+
+This ADR left the fix written down and unbuilt: *"in a mode the budget was not
+defined for it should say so and decline to assert the strict limit, rather
+than failing and relying on prose elsewhere to explain that the failure does
+not count. That is a change to the check and belongs to whoever next touches
+C3."* It broke a `release:verify` run on 2026-08-18 with 231.7 MB, and two
+runs of the same binary minutes apart gave 232.2 and 222.7 MB - the budget
+straddled, which is the worst place for a limit to sit.
+
+`scripts/tray-memory-budget.mjs` decides it now. Under the root-owned setuid
+probe the 225 MB PSS limit is strict and unchanged; in any other mode the
+number is printed with the mode, the documented ~17.5 MB difference and the
+environment variable that brings the strict check back. **Nothing is
+loosened:** `Private_Dirty + Private_Hugetlb` is asserted strictly in every
+mode, and it is the class that measures the packed tree rather than the host's
+page sharing - this ADR measured it moving +0.4 MB across a window where PSS
+moved +25.7 MB.
+
+It is a separate file with its own tests because the strict branch runs only
+under sudo, which is to say never on the machine where a regression first
+appears. A gate whose checking half is unreachable locally is how "the gate
+stopped failing" becomes "the gate stopped checking".
+
 Status note, 2026-08-17, decided by the user: **the window is an occasion
 again.**
 

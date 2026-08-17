@@ -9,6 +9,7 @@ const channels = Object.freeze({
   submitRecoveryCard: 'pico:recovery-card:submit',
   decideApproval: 'pico:approval:decide',
   beginFirstRun: 'pico:first-run:begin',
+  beginFounding: 'pico:founding:begin',
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
   askModelProviderMeasurement: 'pico:model-provider-measurement:ask',
@@ -118,6 +119,9 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     await ipcRenderer.invoke(channels.getModelProviderMeasurements),
   forgetMemory: async (memoryItemId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.forgetMemory, memoryItemId);
+  },
+  beginFounding: async (): Promise<void> => {
+    await ipcRenderer.invoke(channels.beginFounding);
   },
   getSuppliers: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getSuppliers),
   decideSupplierReach: async (

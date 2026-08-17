@@ -1,6 +1,7 @@
 import {
   parsePicoCompanionPresentation,
   picoCompanionFetchBlockedLine,
+  picoCompanionFirstRunChoiceLines,
   picoCompanionOwnMachineDeclaration,
   picoCompanionOwnMachineUndeclared,
   picoCompanionFloorAssurance,
@@ -117,6 +118,7 @@ declare global {
       }): Promise<void>;
       decideApproval(approved: boolean): Promise<void>;
       beginFirstRun(source: 'camera' | 'typed'): Promise<void>;
+      beginFounding(): Promise<void>;
       closeWindow(): void;
     }>;
   }
@@ -137,6 +139,8 @@ const submitRecoveryCard = requireButton('submit-recovery-card');
 const approve = requireButton('approve');
 const deny = requireButton('deny');
 const firstRun = requireElement('first-run');
+const firstRunChoices = requireElement('first-run-choices');
+const firstRunRestore = requireElement('first-run-restore');
 const scanCamera = requireButton('scan-camera');
 const scanTyped = requireButton('scan-typed');
 const close = requireButton('close');
@@ -181,6 +185,11 @@ function render(value: unknown): void {
   approve.hidden = state.decision !== 'approve_or_deny';
   deny.hidden = state.decision !== 'approve_or_deny';
   firstRun.hidden = state.decision !== 'begin_first_run';
+  if (firstRun.hidden) {
+    // Back to the choice on the next first run, rather than to whichever half
+    // of it somebody opened last time.
+    firstRunRestore.hidden = true;
+  }
   check.hidden = state.kind === 'recovery_card_setup'
     || state.kind === 'secure_input'
     || state.kind === 'approval'
@@ -232,6 +241,52 @@ const conditionLabels: Record<PicoCompanionCondition['kind'], string> = {
   storage_reserved: 'Storage is running low',
   storage_exhausted: 'Storage is full',
 };
+
+/**
+ * ADR 0130 E2. The choice, rendered once from the contract's words.
+ *
+ * Built here rather than written into the page, because two closed lists over
+ * one subject drift: the page would keep saying "Recovery Card" after the
+ * contract stopped. Only "I have a Recovery Card" opens the scanner - founding
+ * needs nothing from this page, so it goes straight to the main process, which
+ * is where everything that authorises is collected (ADR 0113 C2).
+ */
+function renderFirstRunChoices(): void {
+  for (const line of picoCompanionFirstRunChoiceLines()) {
+    const card = document.createElement('div');
+    card.className = 'provider-line';
+    const headline = document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+    const detail = document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+    const actions = document.createElement('div');
+    actions.className = 'actions';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.id = `first-run-${line.choice}`;
+    button.textContent = line.actionLabel;
+    if (line.choice === 'restore') {
+      button.addEventListener('click', () => {
+        firstRunRestore.hidden = false;
+      });
+    } else {
+      button.className = 'secondary';
+      button.addEventListener('click', () => {
+        button.disabled = true;
+        void window.picoCompanion.beginFounding().finally(() => {
+          button.disabled = false;
+        });
+      });
+    }
+    actions.append(button);
+    card.append(headline, detail, actions);
+    firstRunChoices.append(card);
+  }
+}
+
+renderFirstRunChoices();
 
 async function beginFirstRun(source: 'camera' | 'typed'): Promise<void> {
   scanCamera.disabled = true;

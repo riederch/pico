@@ -132,8 +132,18 @@ Extraktionsverzeichnis wird vor dem normalen Entfernen ueber seinen registrierte
 
 **Der Probe-Modus entscheidet ueber das Budget, und die Differenz ist gross.**
 Ein lokaler Standardlauf misst im `user_namespace`-Modus rund 17,5 MB hoeher als
-der root-eigene Paket-Probe und reisst das PSS-Budget deshalb auch an
-unveraendertem HEAD. Das ist **kein** Befund am Code. Wer eine Budgetabweichung
+der root-eigene Paket-Probe, fuer den das PSS-Budget definiert ist.
+
+Seit 2026-08-18 weiss die Zusicherung das selbst (ADR 0113 C3): im
+`user_namespace`-Modus **meldet** sie die PSS-Zahl und behauptet sie nicht,
+mit dem Hinweis, wie man die strikte Pruefung zurueckholt
+(`PICO_COMPANION_ROOT_OWNED_PACKAGE_PROBE=1`). Vorher riss der lokale Lauf das
+Budget an unveraendertem HEAD - und ein Rot, das ueblicherweise nichts bedeutet,
+ist ein Rot, das niemand mehr liest; genau das ist hier zweimal passiert.
+
+Nicht gelockert wurde nichts: `Private_Dirty + Private_Hugetlb` wird in **jedem**
+Modus strikt gegen 110 MB geprueft, und das ist die Klasse, die den gepackten
+Baum misst statt die Seitenteilung des Wirts. Wer trotzdem eine Abweichung
 sieht, prueft zuerst das `probe`-Feld im Messbericht, bevor er den Importgraphen
 verdaechtigt.
 
