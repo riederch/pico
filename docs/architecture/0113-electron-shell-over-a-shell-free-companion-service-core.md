@@ -84,6 +84,33 @@ real-process test runs without a desktop keyring and asserts the honest
 `platformUnlockBound: false` rather than pretending one is there. C4 - Windows
 and macOS - is unchanged and open.
 
+Status note, 2026-08-17: **the shipped package carried a dangling link for
+days, and the check that said so was written off as an environment problem.**
+
+`package-linux.mjs` kept a hand-written list of six workspace paths.
+`@pico/companion` took a dependency on `@pico/link-relay-client` when ADR
+0149's relay arrived and nothing added it, so pnpm made the symlink inside
+`apps/companion/node_modules` and the packaging never copied the target. The
+`.deb` shipped a link pointing at nothing, and `relay-operator.ts` imports it:
+the relay surface would have failed on an installed package and nowhere else.
+
+`verify:linux` had been reporting exactly this. The failure was shorthanded as
+"needs sudo" and skipped. The sudo part is true of one *measurement mode* - the
+root-owned package probe is opt-in through an environment variable - and
+everything before it, including the link assertion, runs without privileges.
+
+The list is now derived from what the packages declare, in its own module so
+it can be tested. `devDependencies` are deliberately not followed.
+
+And the budget reading that came with the fixed run is **not** a finding, which
+this ADR predicted in bold. Three `user_namespace` runs gave 224.9, 227.2 and
+227.2 MB PSS against the 225 MB limit - overruns of at most 2.24 MB against a
+mode difference the runbook documents as about 17.5 MB, so against the mode the
+budget was defined for this build sits well inside it. `Private_Dirty +
+Private_Hugetlb` stayed at 97.5-98.3 MB against 110 MB, which is the class that
+moves when the application grows. "Four places named it and it was still read
+as a code finding" - nearly five.
+
 ## Context
 
 ADR 0105 fixed the product form (background service reached through the

@@ -16,19 +16,26 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import electronExecutable from 'electron';
+import {
+  picoProductionWorkspaceClosure,
+  readPicoWorkspacePackages,
+} from './workspace-closure.mjs';
 
 const scriptPath = fileURLToPath(import.meta.url);
 const appRoot = join(dirname(scriptPath), '..');
 const repoRoot = join(appRoot, '..', '..');
 const packageJson = JSON.parse(readFileSync(join(appRoot, 'package.json'), 'utf8'));
-const productionWorkspacePaths = [
-  'apps/companion-shell',
-  'apps/companion',
-  'apps/vault-daemon',
-  'packages/identity',
-  'packages/protocol',
-  'packages/vault',
-];
+/**
+ * Every workspace package the shipped app needs, derived from what it declares.
+ *
+ * It was a hand-kept list of six and it was missing one; the reasoning and the
+ * defect it caused live in `workspace-closure.mjs`, which is where they can be
+ * tested.
+ */
+const productionWorkspacePaths = picoProductionWorkspaceClosure(
+  packageJson.name,
+  readPicoWorkspacePackages(repoRoot),
+);
 
 export function buildPicoCompanionLinuxPackage() {
   assertLinuxAmd64();
