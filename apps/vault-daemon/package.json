@@ -14,6 +14,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./claim-home-ceremony": {
+      "types": "./dist/claim-home-ceremony.d.ts",
+      "import": "./dist/claim-home-ceremony.js"
+    },
     "./ceremony-signer": {
       "types": "./dist/ceremony-signer.d.ts",
       "import": "./dist/ceremony-signer.js"

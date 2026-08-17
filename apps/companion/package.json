@@ -14,13 +14,29 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./alarm-carrier": {
+      "types": "./dist/alarm-carrier.d.ts",
+      "import": "./dist/alarm-carrier.js"
+    },
     "./approval-carrier": {
       "types": "./dist/approval-carrier.d.ts",
       "import": "./dist/approval-carrier.js"
     },
-    "./alarm-carrier": {
-      "types": "./dist/alarm-carrier.d.ts",
-      "import": "./dist/alarm-carrier.js"
+    "./domain-read-grant": {
+      "types": "./dist/domain-read-grant.d.ts",
+      "import": "./dist/domain-read-grant.js"
+    },
+    "./first-run": {
+      "types": "./dist/first-run.d.ts",
+      "import": "./dist/first-run.js"
+    },
+    "./first-run-journal": {
+      "types": "./dist/first-run-journal.d.ts",
+      "import": "./dist/first-run-journal.js"
+    },
+    "./founding": {
+      "types": "./dist/founding.d.ts",
+      "import": "./dist/founding.js"
     },
     "./host-repin": {
       "types": "./dist/host-repin.d.ts",
@@ -30,13 +46,9 @@
       "types": "./dist/lifecycle-reader.d.ts",
       "import": "./dist/lifecycle-reader.js"
     },
-    "./storage-reader": {
-      "types": "./dist/storage-reader.d.ts",
-      "import": "./dist/storage-reader.js"
-    },
-    "./notify": {
-      "types": "./dist/notify.d.ts",
-      "import": "./dist/notify.js"
+    "./link-mailbox": {
+      "types": "./dist/link-mailbox.d.ts",
+      "import": "./dist/link-mailbox.js"
     },
     "./link-push-gate": {
       "types": "./dist/link-push-gate.d.ts",
@@ -46,69 +58,61 @@
       "types": "./dist/link-relay-sweep.d.ts",
       "import": "./dist/link-relay-sweep.js"
     },
-    "./platform-secrets": {
-      "types": "./dist/platform-secrets.d.ts",
-      "import": "./dist/platform-secrets.js"
+    "./model-providers": {
+      "types": "./dist/model-providers.d.ts",
+      "import": "./dist/model-providers.js"
     },
-    "./presence": {
-      "types": "./dist/presence.d.ts",
-      "import": "./dist/presence.js"
-    },
-    "./suppliers": {
-      "types": "./dist/suppliers.d.ts",
-      "import": "./dist/suppliers.js"
-    },
-    "./relay-operator": {
-      "types": "./dist/relay-operator.d.ts",
-      "import": "./dist/relay-operator.js"
+    "./notify": {
+      "types": "./dist/notify.d.ts",
+      "import": "./dist/notify.js"
     },
     "./pending-reply": {
       "types": "./dist/pending-reply.d.ts",
       "import": "./dist/pending-reply.js"
     },
-    "./profile": {
-      "types": "./dist/profile.d.ts",
-      "import": "./dist/profile.js"
-    },
-    "./recovery-controller": {
-      "types": "./dist/recovery-controller.d.ts",
-      "import": "./dist/recovery-controller.js"
-    },
-    "./recovery-card": {
-      "types": "./dist/recovery-card.d.ts",
-      "import": "./dist/recovery-card.js"
-    },
-    "./link-mailbox": {
-      "types": "./dist/link-mailbox.d.ts",
-      "import": "./dist/link-mailbox.js"
-    },
-    "./recovery-state": {
-      "types": "./dist/recovery-state.d.ts",
-      "import": "./dist/recovery-state.js"
-    },
-    "./vault-product-session": {
-      "types": "./dist/vault-product-session.d.ts",
-      "import": "./dist/vault-product-session.js"
+    "./platform-secrets": {
+      "types": "./dist/platform-secrets.d.ts",
+      "import": "./dist/platform-secrets.js"
     },
     "./platform-unlock": {
       "types": "./dist/platform-unlock.d.ts",
       "import": "./dist/platform-unlock.js"
     },
-    "./first-run-journal": {
-      "types": "./dist/first-run-journal.d.ts",
-      "import": "./dist/first-run-journal.js"
+    "./presence": {
+      "types": "./dist/presence.d.ts",
+      "import": "./dist/presence.js"
     },
-    "./first-run": {
-      "types": "./dist/first-run.d.ts",
-      "import": "./dist/first-run.js"
+    "./profile": {
+      "types": "./dist/profile.d.ts",
+      "import": "./dist/profile.js"
     },
-    "./domain-read-grant": {
-      "types": "./dist/domain-read-grant.d.ts",
-      "import": "./dist/domain-read-grant.js"
+    "./recovery-card": {
+      "types": "./dist/recovery-card.d.ts",
+      "import": "./dist/recovery-card.js"
     },
-    "./model-providers": {
-      "types": "./dist/model-providers.d.ts",
-      "import": "./dist/model-providers.js"
+    "./recovery-controller": {
+      "types": "./dist/recovery-controller.d.ts",
+      "import": "./dist/recovery-controller.js"
+    },
+    "./recovery-state": {
+      "types": "./dist/recovery-state.d.ts",
+      "import": "./dist/recovery-state.js"
+    },
+    "./relay-operator": {
+      "types": "./dist/relay-operator.d.ts",
+      "import": "./dist/relay-operator.js"
+    },
+    "./storage-reader": {
+      "types": "./dist/storage-reader.d.ts",
+      "import": "./dist/storage-reader.js"
+    },
+    "./suppliers": {
+      "types": "./dist/suppliers.d.ts",
+      "import": "./dist/suppliers.js"
+    },
+    "./vault-product-session": {
+      "types": "./dist/vault-product-session.d.ts",
+      "import": "./dist/vault-product-session.js"
     }
   },
   "scripts": {

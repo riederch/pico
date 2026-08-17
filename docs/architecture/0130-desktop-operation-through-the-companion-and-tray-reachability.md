@@ -47,10 +47,29 @@ half rather than tidiness: a founding request that *could* carry a card payload
 or a PIN would be a second way to start an identity, arriving through the door
 that makes one.
 
-What remains for E2: the companion function that drives bootstrap, unlock and
-ceremony in order, the first-run surface offering founding beside restoring,
-and the question of whether the Recovery Card is issued as part of founding -
-without one, a person who founds a Home can never recover it.
+`foundPicoCompanionHome` now drives the whole thing: bootstrap on a plain
+connection, then the product session that holds the unlocks *and answers the
+approvals* - the arrangement the recovery first run already uses, because a key
+opened by one party and approved by another would be two people holding one
+ceremony - then the ceremony, then the profile.
+
+**The host pins come from a line the person copies out of their Home**, not
+from `/api/home/setup`. Reading them from that endpoint would be asking the
+machine whether it is itself, which is exactly what the ceremony's mismatch
+check exists to prevent. A Home prints the code, both fingerprints and both
+public keys on one line at boot, so the out-of-band check is one paste rather
+than four hex strings a person would copy off the same screen anyway.
+
+Walked against a real Home process and a real vault daemon with no CLI
+anywhere in it: the Home ends up claimed, its setup mode closed, and the
+profile carries the founder's own identity as the acceptor pin - founding being
+the one moment where those are the same fingerprint (ADR 0115 U4).
+
+What remains for E2: the first-run surface offering founding beside restoring,
+and the Recovery Card. Founding and card issuance are two ceremonies and stay
+two - fusing them would be the same mistake as any other second way to do one
+thing - but the surface has to lead from the first to the second, because
+without a card a person who founds a Home can never recover it.
 
 ## Context
 
