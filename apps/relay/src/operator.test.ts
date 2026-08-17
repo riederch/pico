@@ -379,7 +379,6 @@ describe('ADR 0154 RO1/RO7 - the administration surface is not the mailbox surfa
   it('refuses every route without the operator credential', async () => {
     const { relay: opened } = await claimed();
     for (const route of [
-      picoRelayOperatorRoutes.describe,
       picoRelayOperatorRoutes.accountList,
       picoRelayOperatorRoutes.accountCreate,
       picoRelayOperatorRoutes.accountRevoke,

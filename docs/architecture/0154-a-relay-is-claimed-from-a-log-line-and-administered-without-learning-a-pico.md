@@ -50,8 +50,14 @@ Pico Client        POST /operator/claim { claimCode }
                    -> code spent; the log stops offering one
 afterwards         create an account   (the relay generates the credential)
                    revoke an account
-                   change a quota or a capacity ceiling
+                   list what it holds
 ```
+
+A fifth route, `describe`, was written and removed on 2026-08-17 before
+anything called it. `claim` already returns the operator name and
+`accounts/list` already fails when a relay is unreachable, so it answered
+nothing a caller could not already learn - and a route with no consumer is a
+surface somebody has to keep working forever for nobody.
 
 Nothing above learns a Pico. Two bearer credentials and a quota, which is what
 a relay was already allowed to know.

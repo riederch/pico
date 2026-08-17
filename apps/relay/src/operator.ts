@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import type { PicoRelayOperatorRefusal } from '@pico/protocol/link-relay-operator';
 import {
   parsePicoRelayAccountCreateRequest,
   parsePicoRelayAccountRevokeRequest,
@@ -147,13 +148,6 @@ export async function startPicoRelayOperatorListener(options: {
     }
 
     switch (route) {
-      case picoRelayOperatorRoutes.describe:
-        send(response, 200, {
-          operator: options.store.operatorName,
-          claimed: true,
-          accounts: options.store.accountSummaries().length,
-        });
-        return;
       case picoRelayOperatorRoutes.accountList:
         send(response, 200, { accounts: options.store.accountSummaries() });
         return;
@@ -194,7 +188,7 @@ export async function startPicoRelayOperatorListener(options: {
           at: now().toISOString(),
         });
         if (!revoked.ok) {
-          send(response, 409, { refusal: revoked.refusal });
+          refuse(response, 409, revoked.refusal);
           return;
         }
         options.log?.({
@@ -225,7 +219,7 @@ export async function startPicoRelayOperatorListener(options: {
       // ADR 0154. Told apart from a wrong code deliberately: this is a state
       // an operator can see in the log, and a typo is not. Folding them
       // together would send somebody hunting for a code that is sitting spent.
-      send(response, 409, { refusal: 'already_claimed' });
+      refuse(response, 409, 'already_claimed');
       return;
     }
     let parsed;
@@ -236,7 +230,7 @@ export async function startPicoRelayOperatorListener(options: {
       return;
     }
     if (!options.claimCode.consume(parsed.claimCode)) {
-      send(response, 409, { refusal: 'invalid_claim_code' });
+      refuse(response, 409, 'invalid_claim_code');
       return;
     }
     const credential = mintPicoRelayCredential();
@@ -268,6 +262,19 @@ export async function startPicoRelayOperatorListener(options: {
     } catch {
       throw new Error('invalid_pico_relay_operator_json');
     }
+  }
+
+  /**
+   * ADR 0154. A refusal, from the closed list rather than from a literal.
+   *
+   * The list existed and nothing read it, so the names lived in three places:
+   * the protocol, the store's return type and the string typed at each call
+   * site. Two closed lists over one subject drift; three is not better. This
+   * one is the only way a refusal leaves this listener, so the compiler is
+   * what keeps them the same.
+   */
+  function refuse(response: ServerResponse, status: number, refusal: PicoRelayOperatorRefusal): void {
+    send(response, status, { refusal });
   }
 
   function send(response: ServerResponse, status: number, body: unknown): void {

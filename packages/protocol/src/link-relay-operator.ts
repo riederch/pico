@@ -29,14 +29,18 @@ export const picoRelayClaimCodePattern = /^[A-Za-z0-9_-]{32,128}$/u;
 export const picoRelayOperatorHeader = 'x-pico-relay-operator' as const;
 
 /**
- * Five operations, and the first one is the only one that takes no operator
+ * Four operations, and the first one is the only one that takes no operator
  * credential - because before it there is none to take.
+ *
+ * A fifth, `describe`, was written and removed on 2026-08-17 before anything
+ * called it: `claim` already returns the operator name and `accounts/list`
+ * already fails when a relay is unreachable, so it answered nothing a caller
+ * could not already learn. A route with no consumer is a surface somebody has
+ * to keep working forever for nobody.
  */
 export const picoRelayOperatorRoutes = Object.freeze({
   /** Trade the claim code for the operator credential. Once. */
   claim: '/operator/claim',
-  /** What this relay is, for a client that has just connected to it. */
-  describe: '/operator/describe',
   /** Issue an account. The relay generates the credential (RO3). */
   accountCreate: '/operator/accounts/create',
   /** End one. The credential stops working; the row stays (RO5). */
@@ -47,18 +51,6 @@ export const picoRelayOperatorRoutes = Object.freeze({
 
 export type PicoRelayOperatorRoute =
   typeof picoRelayOperatorRoutes[keyof typeof picoRelayOperatorRoutes];
-
-/**
- * ADR 0154 RO6. What an account is bounded by, on both axes.
- *
- * `mailboxQuota` was always the operator's. `maxCapacity` was not: packets per
- * mailbox came from the caller's register request and was stored unchecked, so
- * an account with a quota of one could ask for a mailbox holding a million.
- */
-export interface PicoRelayAccountBounds {
-  mailboxQuota: number;
-  maxCapacity: number;
-}
 
 export interface PicoRelayAccountSummary {
   /**
@@ -93,14 +85,6 @@ export interface PicoRelayRevocation {
   packetsDropped: number;
 }
 
-export interface PicoRelayDescription {
-  /** The hostname senders resolve to reach this relay (ADR 0147 RY3). */
-  operator: string;
-  /** Whether anybody has claimed it yet. */
-  claimed: boolean;
-  accounts: number;
-}
-
 export const maxPicoRelayMailboxQuota = 1_000;
 export const maxPicoRelayAccountCapacity = 10_000;
 /** ADR 0154 RO4. Enough of the digest to point at one row and no more. */
@@ -110,6 +94,13 @@ export interface PicoRelayClaimRequest {
   claimCode: string;
 }
 
+/**
+ * ADR 0154 RO6. What an account is bounded by, on both axes.
+ *
+ * `mailboxQuota` was always the operator's. `maxCapacity` was not: packets per
+ * mailbox came from the caller's register request and was stored unchecked, so
+ * an account with a quota of one could ask for a mailbox holding a million.
+ */
 export interface PicoRelayAccountCreateRequest {
   mailboxQuota: number;
   maxCapacity: number;

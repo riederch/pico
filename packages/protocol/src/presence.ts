@@ -180,17 +180,3 @@ export function isPicoPresenceConnected(
   // present after it stopped.
   return lastSeenMs <= nowMs && nowMs - lastSeenMs < leaseMs;
 }
-
-/**
- * ADR 0126. Whether an action can be performed here - never whether it may.
- *
- * The only function in this file a planner is meant to call, and it takes
- * affordances rather than a presence: handing it the whole record would put
- * `presenceType` within reach of exactly the branch ADR 0126 forbids.
- */
-export function picoPresenceOffers(
-  affordances: readonly PicoPresenceAffordance[],
-  required: readonly PicoPresenceAffordance[],
-): boolean {
-  return required.every((affordance) => affordances.includes(affordance));
-}

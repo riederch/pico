@@ -4,7 +4,6 @@ import {
   picoRelayOperatorHeader,
   picoRelayOperatorRoutes,
   type PicoRelayAccountSummary,
-  type PicoRelayDescription,
   type PicoRelayRevocation,
 } from '@pico/protocol/link-relay-operator';
 
@@ -92,14 +91,6 @@ export class PicoRelayOperatorClient {
       throw new Error('invalid_pico_relay_claim_answer');
     }
     return { ok: true, value: { credential, operator } };
-  }
-
-  /** What this relay is, for a client that has just been pointed at one. */
-  public async describe(credential: string): Promise<PicoRelayOperatorAnswer<PicoRelayDescription>> {
-    const answer = await this.post(picoRelayOperatorRoutes.describe, { credential }, {});
-    return answer.accepted
-      ? { ok: true, value: answer.body as unknown as PicoRelayDescription }
-      : { ok: false, refusal: refusalOf(answer.body) };
   }
 
   /** ADR 0154 RO3. Asks the relay to issue an account and bound it on both axes. */
