@@ -40,6 +40,17 @@ It should be understandable for people who want to know:
 
 It must include all information from `README.md` and add the technical details needed by contributors, reviewers, operators, and future architecture work.
 
+**What it must not do is keep a second copy of a list something else checks.**
+Corrected on 2026-08-17: its endpoint table named nine routes while the Home
+served sixty-one and thirty Link operations, because a hand-kept copy drifts
+and nobody reads two lists to notice. The surfaces live in
+`docs/protocol/public-surfaces.md`, which `surface:check` compares against what
+is served in both directions; this document points at it and adds the framing
+that list does not carry. The repository tree stays, because it is orientation
+rather than a source of truth - and `docs:check` compares it against the
+repository in both directions, after the same review found it missing three
+apps, two packages, three top-level directories and a renamed Dockerfile.
+
 `ReadmeTech.md` must always cover:
 
 - the same project framing as `README.md`
@@ -50,7 +61,7 @@ It must include all information from `README.md` and add the technical details n
 - the same design principles
 - the same links to key documentation
 - the repository structure
-- the current API surface
+- where the current API surface is listed, and the framing that list does not carry
 - the Home Assistant add-on path
 - the concept document map
 - release and update direction

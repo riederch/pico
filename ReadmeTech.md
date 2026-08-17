@@ -278,23 +278,34 @@ Details are documented in:
 ```text
 .
 ├── apps
-│   ├── core              # Fastify backend service
+│   ├── companion         # shell-free companion service core (ADR 0113 C1)
+│   ├── companion-shell   # the Electron shell over it, and the Linux package
+│   ├── core              # Pico Core: the runtime a Pico Home runs
+│   ├── relay             # Pico Relay: a queue with a door on it (ADR 0149)
 │   ├── vault-daemon      # local Pico Vault daemon, CLI, reader-access lease and approval (ADR 0097-0099)
 │   └── web               # foundation diagnostics dashboard
+├── bridges               # supplier definitions a Pico Bridge may attach (ADR 0136)
 ├── docker
-│   └── core.Dockerfile   # Pico Home Core container image
+│   ├── home.Dockerfile   # Pico Home image
+│   └── relay.Dockerfile  # Pico Relay image
 ├── docs
 │   ├── architecture      # architecture decision notes and concept docs
 │   ├── assets            # README/project assets
 │   ├── design-system     # binding Character 3.2.1 references and derived Product Design System
+│   ├── development       # runbooks, briefs and preserved reviewer context
 │   ├── protocol          # protocol compatibility and public surface notes
 │   └── release           # release, versioning and documentation notes
+├── modules               # shipped Pico modules (ADR 0127)
 ├── packages
+│   ├── appearance        # appearance profile and tier vocabulary
 │   ├── identity          # minimal identity signature verification and lifecycle projection runtime
+│   ├── link-relay-client # talking to a relay, from a Pico that must not ship one
 │   ├── protocol          # shared event and payload types
 │   ├── sync              # Lamport clock and version-vector helpers
 │   └── vault             # minimal person-role keyfile runtime
 ├── pico_home             # active Home Assistant add-on metadata
+├── scripts               # the release gates
+├── tools                 # measurement instruments that are not shipped
 ├── repository.yaml       # Home Assistant add-on repository metadata
 ├── README.md             # non-technical project introduction
 ├── ReadmeTech.md         # full technical project documentation
@@ -449,23 +460,19 @@ The current container keeps the platform default user so the Home Assistant `/da
 
 ## Current API surface
 
-| Endpoint | Purpose |
-|---|---|
-| `GET /` | foundation diagnostics dashboard |
-| `GET /health` | service health check |
-| `GET /api/system/version` | service and protocol version information |
-| `GET /api/system/status` | diagnostic service, capability, Pico Home claim-state and database migration status |
-| `GET /api/events` | list stored events |
-| `GET /api/events/tail` | latest foundation events for diagnostics dashboard use |
-| `POST /api/realtime/tickets` | mint a short-lived realtime ticket for `WS /ws` when token mode is enabled |
-| `POST /api/events` | append an event |
-| `WS /ws` | event stream endpoint |
+**The list lives in [`docs/protocol/public-surfaces.md`](docs/protocol/public-surfaces.md), and this section does not repeat it.**
+
+It used to. The table here named nine endpoints while the Home served sixty-one routes and thirty Link operations, because a hand-kept second copy of a list drifts and nobody reads two lists to notice. `scripts/check-surface-classes.mjs` compares that document against what is actually served and against the closed operation set, in both directions; nothing compares it against a README, so a README that carried its own copy would be the unchecked one.
+
+What this section adds instead is the framing the list does not carry:
+
+**There are two surfaces, and only one of them travels.** The Foundation HTTP API is a local diagnostic and administration surface (ADR 0030); the closed Pico Link operation set is what a person's own device reaches over a sealed envelope, and what may travel through a published intake or a relay (ADR 0107, ADR 0149). Remote capability is opt-in per operation, which is why the operation set is closed and why adding to it is a decision recorded in that document.
 
 `GET /api/events/tail` is diagnostics-only. It is not a replica sync protocol and does not provide durable sync cursors.
 
 The current API surface is a foundation API. It is not yet a complete Pico Link or Pico Home Link specification, not a production authentication surface, not a public remote-access API and not a relay protocol.
 
-When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to `/api/system/version`, `/api/system/status`, `/api/events`, `/api/events/tail` and `/api/realtime/tickets`, plus direct `POST /api/events`, require `Authorization: Bearer <token>`. `/health` and the dashboard shell remain open.
+When `PICO_FOUNDATION_TOKEN` is configured, direct HTTP calls to the `/api/...` endpoints require `Authorization: Bearer <token>`. `/health` and the dashboard shell remain open.
 
 For direct `WS /ws` access in token mode, browser clients mint a short-lived, single-use realtime ticket through `POST /api/realtime/tickets` and use only that ticket for the WebSocket upgrade. Non-browser clients may use `Authorization: Bearer <token>` on the upgrade request. The long-lived `PICO_FOUNDATION_TOKEN` must not be placed in a WebSocket URL.
 
