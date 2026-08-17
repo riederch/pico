@@ -22,6 +22,9 @@ const channels = Object.freeze({
   keepRecall: 'pico:recall:keep',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
+  getDepots: 'pico:depots:get',
+  attachDepot: 'pico:depot:attach',
+  decideDepotReach: 'pico:depot-reach:decide',
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
@@ -108,6 +111,16 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
       mayReachOutside,
       mayReachUnasked,
     });
+  },
+  getDepots: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDepots),
+  attachDepot: async (remote: string, commit: string): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.attachDepot, { remote, commit }),
+  decideDepotReach: async (
+    remote: string,
+    mayFetch: boolean,
+    mayFetchUnasked: boolean,
+  ): Promise<void> => {
+    await ipcRenderer.invoke(channels.decideDepotReach, { remote, mayFetch, mayFetchUnasked });
   },
   getDevices: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDevices),
   switchDevice: async (

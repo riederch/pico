@@ -27,6 +27,9 @@ export const picoCompanionIpcChannels = Object.freeze({
   keepRecall: 'pico:recall:keep',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
+  getDepots: 'pico:depots:get',
+  attachDepot: 'pico:depot:attach',
+  decideDepotReach: 'pico:depot-reach:decide',
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
@@ -1144,7 +1147,9 @@ export const picoCompanionViewReads: Readonly<
   Record<PicoCompanionWindowView, readonly string[]>
 > = Object.freeze({
   now: Object.freeze(['getRecalls', 'getAnsweredReads']),
-  settings: Object.freeze(['getModelProviders', 'getSuppliers', 'getDevices', 'getRelays']),
+  settings: Object.freeze([
+    'getModelProviders', 'getSuppliers', 'getDepots', 'getDevices', 'getRelays',
+  ]),
 });
 
 /**
@@ -1276,6 +1281,64 @@ export function parsePicoCompanionSuppliers(value: unknown): readonly PicoCompan
       kind: record.kind,
       mayReachOutside: record.mayReachOutside,
       mayReachUnasked: record.mayReachUnasked,
+    });
+  }));
+}
+
+/**
+ * ADR 0143 DP1 with ADR 0138 CO3/CO4 - a depot, in the same two questions.
+ *
+ * **The same shape as a supplier line, deliberately.** ADR 0136's supplier
+ * holds material and ADR 0143's depot holds what runs, which is a distinction
+ * the tree needs and the money does not: a person is answering *may Pico go
+ * and get this, and unasked?* about both. Two vocabularies for one question
+ * would be two things to learn for no decision it changes.
+ */
+export interface PicoCompanionDepot {
+  remote: string;
+  commit: string;
+  mayFetch: boolean;
+  mayFetchUnasked: boolean;
+}
+
+export function picoCompanionDepotLines(
+  depots: readonly PicoCompanionDepot[],
+): readonly PicoCompanionSupplierLine[] {
+  return picoCompanionSupplierLines(depots.map((depot) => ({
+    // The revision, short: a person recognises a commit by its first
+    // characters or not at all, and the whole thing crowds the line it is on.
+    identifier: `${depot.remote} at ${depot.commit.slice(0, 12)}`,
+    kind: 'depot',
+    mayReachOutside: depot.mayFetch,
+    mayReachUnasked: depot.mayFetchUnasked,
+  }))).map((line, index) => Object.freeze({
+    ...line,
+    // The line's own identity is the remote, because that is what the
+    // decision names. The revision is in the words a person reads.
+    identifier: depots[index]!.remote,
+  }));
+}
+
+export function parsePicoCompanionDepots(value: unknown): readonly PicoCompanionDepot[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_depots');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_depot');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.remote !== 'string'
+      || typeof record.commit !== 'string'
+      || typeof record.mayFetch !== 'boolean'
+      || typeof record.mayFetchUnasked !== 'boolean') {
+      throw new Error('invalid_pico_companion_depot');
+    }
+    return Object.freeze({
+      remote: record.remote,
+      commit: record.commit,
+      mayFetch: record.mayFetch,
+      mayFetchUnasked: record.mayFetchUnasked,
     });
   }));
 }

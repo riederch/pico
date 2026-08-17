@@ -16,6 +16,7 @@ import {
   renderPicoCompanionRelayAccountIssued,
   renderPicoCompanionDevices,
   renderPicoCompanionSuppliers,
+  renderPicoCompanionDepots,
 } from './model-provider-views.js';
 
 declare global {
@@ -47,6 +48,13 @@ declare global {
         identifier: string,
         mayReachOutside: boolean,
         mayReachUnasked: boolean,
+      ): Promise<void>;
+      getDepots(): Promise<unknown>;
+      attachDepot(remote: string, commit: string): Promise<{ remote: string; commit: string }>;
+      decideDepotReach(
+        remote: string,
+        mayFetch: boolean,
+        mayFetchUnasked: boolean,
       ): Promise<void>;
       getDevices(): Promise<unknown>;
       switchDevice(
@@ -318,6 +326,66 @@ function refreshSuppliers(): void {
       supplierSection.hidden = true;
     });
 }
+
+const depotSection = requireElement('depots');
+const depotList = requireElement('depot-list');
+const depotAttach = requireElement('depot-attach');
+const depotRemote = requireInput('depot-remote');
+const depotCommit = requireInput('depot-commit');
+const depotAttachSubmit = requireButton('depot-attach-submit');
+const depotStatus = requireElement('depot-status');
+
+/** ADR 0143 DP1 with ADR 0138 CO3/CO4. Material, and whether Pico may go for it. */
+function refreshDepots(): void {
+  void window.picoCompanion.getDepots()
+    .then((depots) => {
+      renderPicoCompanionDepots(
+        { list: depotList, section: depotSection, document },
+        depots,
+        (decision) => {
+          void window.picoCompanion.decideDepotReach(
+            decision.remote,
+            decision.mayFetch,
+            decision.mayFetchUnasked,
+          ).then(() => {
+            depotStatus.textContent = decision.mayFetch
+              ? (decision.mayFetchUnasked
+                ? 'It may now fetch on its own. You will not see those trips.'
+                : 'It may fetch when you ask.')
+              : 'Pico will not go out for this.';
+            refreshDepots();
+          }, (error: unknown) => {
+            depotStatus.textContent = refusalText(error, 'That was not changed.');
+          });
+        },
+      );
+    }, () => {
+      depotSection.hidden = true;
+    });
+}
+
+depotAttachSubmit.addEventListener('click', () => {
+  const remote = depotRemote.value.trim();
+  const commit = depotCommit.value.trim();
+  if (remote === '' || commit === '') {
+    depotStatus.textContent = 'Name where it lives, and the exact revision.';
+    return;
+  }
+  depotStatus.textContent = 'Recording that this may be here...';
+  void window.picoCompanion.attachDepot(remote, commit)
+    .then((attached) => {
+      // Said as what it did and did not do. Attaching says this material may
+      // be here; going out for it is the next answer, on the line above.
+      depotStatus.textContent = `Recorded at ${attached.commit.slice(0, 12)}. `
+        + 'Pico will not fetch it until you say so.';
+      depotCommit.value = '';
+      refreshDepots();
+    }, (error: unknown) => {
+      // Each refusal names something different: a revision that is not one, a
+      // request to track something, an address this cannot use.
+      depotStatus.textContent = refusalText(error, 'That was not recorded.');
+    });
+});
 
 const deviceSection = requireElement('devices');
 const deviceList = requireElement('device-list');
@@ -637,6 +705,7 @@ function showView(view: PicoCompanionWindowView): void {
   } else {
     refreshModelProviders();
     refreshSuppliers();
+    refreshDepots();
     refreshDevices();
     refreshRelays();
   }

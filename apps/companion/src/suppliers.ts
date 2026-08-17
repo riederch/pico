@@ -61,3 +61,76 @@ export async function decidePicoCompanionSupplierReach(input: {
     throw new Error(typeof refusal === 'string' ? refusal : `supplier_reach_${answer.outcome}`);
   }
 }
+
+/**
+ * ADR 0143 DP1. A depot: where supplier code comes from, pinned at a commit.
+ *
+ * Beside the supplier reader rather than in its own module, because a person
+ * answering "may Pico go and get this, and unasked?" is answering one question
+ * about two kinds of thing. ADR 0136's supplier holds material and ADR 0143's
+ * depot holds what runs - a distinction that matters to the tree and not to
+ * the money.
+ */
+export interface PicoCompanionDepotView {
+  remote: string;
+  commit: string;
+  mayFetch: boolean;
+  mayFetchUnasked: boolean;
+  acceptedAt: string;
+}
+
+export async function readPicoCompanionDepots(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionDepotView[]> {
+  const read = await input.livingDeviceLinkClient.request('home.depots.read', {});
+  if (read.outcome !== 'ok') {
+    throw new Error(`depots_read_rejected:${read.outcome}`);
+  }
+  const depots = (read.result as { depots?: unknown }).depots;
+  if (!Array.isArray(depots)) {
+    throw new Error('invalid_pico_depots_read');
+  }
+  return Object.freeze(depots as PicoCompanionDepotView[]);
+}
+
+/**
+ * ADR 0143 DP1. Says this material may be here, and nothing more.
+ *
+ * The pin travels as the caller wrote it. A client that rebuilt it from named
+ * fields would drop a `branch` on the floor and turn "I want you to track
+ * main" into "you mistyped a commit", which is the one refusal ADR 0143 wants
+ * a person to actually read.
+ */
+export async function attachPicoCompanionDepot(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  pin: Record<string, unknown>;
+}): Promise<{ remote: string; commit: string }> {
+  const answer = await input.livingDeviceLinkClient.request('home.depot.attach', input.pin);
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `depot_attach_${answer.outcome}`);
+  }
+  const result = answer.result as { remote?: unknown; commit?: unknown };
+  if (typeof result.remote !== 'string' || typeof result.commit !== 'string') {
+    throw new Error('invalid_pico_depot_attach_result');
+  }
+  return { remote: result.remote, commit: result.commit };
+}
+
+/** ADR 0138 CO3/CO4 for a depot. Switching fetching off takes unasked with it. */
+export async function decidePicoCompanionDepotReach(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  remote: string;
+  mayFetch: boolean;
+  mayFetchUnasked: boolean;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.depot.reach.decide', {
+    remote: input.remote,
+    mayFetch: input.mayFetch,
+    mayFetchUnasked: input.mayFetch && input.mayFetchUnasked,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `depot_reach_${answer.outcome}`);
+  }
+}

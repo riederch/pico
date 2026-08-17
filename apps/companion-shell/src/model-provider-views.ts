@@ -12,6 +12,8 @@ import {
   parsePicoCompanionDevices,
   picoCompanionSupplierLines,
   parsePicoCompanionSuppliers,
+  picoCompanionDepotLines,
+  parsePicoCompanionDepots,
 } from './contract.js';
 
 /**
@@ -451,6 +453,68 @@ export function renderPicoCompanionSuppliers(
         identifier: line.identifier,
         mayReachOutside: true,
         mayReachUnasked: !supplier.mayReachUnasked,
+      }));
+      item.append(unaskedDetail, unasked);
+    }
+
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0143 DP1 with ADR 0138 CO3/CO4 - depots, in the supplier line's shape.
+ *
+ * The same renderer would have done, and does not, for one reason: a depot's
+ * decision names a remote and a supplier's names an identifier, so folding
+ * them would need a field meaning "whichever of the two this is" - the shape
+ * that makes a caller ask which kind it is holding.
+ */
+export function renderPicoCompanionDepots(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (input: { remote: string; mayFetch: boolean; mayFetchUnasked: boolean }) => void,
+): void {
+  const depots = parsePicoCompanionDepots(value);
+  root.section.hidden = depots.length === 0;
+  root.list.replaceChildren();
+
+  for (const [index, line] of picoCompanionDepotLines(depots).entries()) {
+    const depot = depots[index]!;
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+    item.dataset.remote = depot.remote;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const fetch = root.document.createElement('button');
+    fetch.type = 'button';
+    fetch.textContent = line.reachActionLabel;
+    fetch.addEventListener('click', () => act({
+      remote: depot.remote,
+      mayFetch: !depot.mayFetch,
+      mayFetchUnasked: depot.mayFetch ? false : depot.mayFetchUnasked,
+    }));
+
+    item.append(headline, detail, fetch);
+
+    if (line.unaskedActionLabel !== undefined) {
+      const unaskedDetail = root.document.createElement('p');
+      unaskedDetail.className = 'detail';
+      unaskedDetail.textContent = line.unaskedDetail ?? '';
+
+      const unasked = root.document.createElement('button');
+      unasked.type = 'button';
+      unasked.textContent = line.unaskedActionLabel;
+      unasked.addEventListener('click', () => act({
+        remote: depot.remote,
+        mayFetch: true,
+        mayFetchUnasked: !depot.mayFetchUnasked,
       }));
       item.append(unaskedDetail, unasked);
     }

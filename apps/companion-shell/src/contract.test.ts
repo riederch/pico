@@ -20,6 +20,8 @@ import {
   picoCompanionPresentationTakesTheWindow,
   picoCompanionSupplierLines,
   parsePicoCompanionSuppliers,
+  picoCompanionDepotLines,
+  parsePicoCompanionDepots,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -298,7 +300,7 @@ describe('ADR 0113 - the window is an occasion, not a workplace', () => {
      */
     expect(picoCompanionViewReads.now).toEqual(['getRecalls', 'getAnsweredReads']);
     expect(picoCompanionViewReads.settings)
-      .toEqual(['getModelProviders', 'getSuppliers', 'getDevices', 'getRelays']);
+      .toEqual(['getModelProviders', 'getSuppliers', 'getDepots', 'getDevices', 'getRelays']);
     for (const read of picoCompanionViewReads.now) {
       expect(picoCompanionViewReads.settings).not.toContain(read);
     }
@@ -395,5 +397,45 @@ describe('ADR 0138 CO3/CO4 - the words about money and about who learns', () => 
   it('refuses a supplier row that is missing what a line needs', () => {
     expect(() => parsePicoCompanionSuppliers([{ identifier: 'x' }]))
       .toThrow('invalid_pico_companion_supplier');
+  });
+});
+
+describe('ADR 0143 DP1 - a depot asks the same two questions', () => {
+  const depot = {
+    remote: 'https://example.invalid/corpus.git',
+    commit: 'a'.repeat(40),
+    mayFetch: false,
+    mayFetchUnasked: false,
+  };
+
+  it('names the material by where it lives and which revision', () => {
+    // A person recognises a commit by its first characters or not at all, and
+    // the whole thing crowds the line it is on.
+    const [line] = picoCompanionDepotLines([depot]);
+    expect(line?.headline).toContain('https://example.invalid/corpus.git at aaaaaaaaaaaa');
+    expect(line?.headline).not.toContain('a'.repeat(40));
+  });
+
+  it('is identified by the remote, because that is what the decision names', () => {
+    // The revision is in the words a person reads; the line's identity is what
+    // gets sent back when they press something.
+    expect(picoCompanionDepotLines([depot])[0]?.identifier).toBe(depot.remote);
+  });
+
+  it('asks the two fetch questions in the words a supplier uses', () => {
+    // ADR 0136's supplier holds material and ADR 0143's depot holds what runs
+    // - a distinction the tree needs and the money does not.
+    const [off] = picoCompanionDepotLines([depot]);
+    expect(off?.detail).toContain('nobody learns you asked');
+    expect(off?.unaskedActionLabel).toBeUndefined();
+
+    const [on] = picoCompanionDepotLines([{ ...depot, mayFetch: true }]);
+    expect(on?.detail).toContain('cost money');
+    expect(on?.unaskedDetail).toContain('visible to nobody');
+  });
+
+  it('refuses a depot row that is missing what a line needs', () => {
+    expect(() => parsePicoCompanionDepots([{ remote: 'x' }]))
+      .toThrow('invalid_pico_companion_depot');
   });
 });

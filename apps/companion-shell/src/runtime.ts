@@ -38,7 +38,10 @@ import type { PicoCompanionShellNotifications } from './presentation-adapter.js'
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
+  attachPicoCompanionDepot,
+  decidePicoCompanionDepotReach,
   decidePicoCompanionSupplierReach,
+  readPicoCompanionDepots,
   readPicoCompanionSuppliers,
 } from '@pico/companion/suppliers';
 import {
@@ -125,6 +128,14 @@ export interface PicoCompanionShellRuntime {
     identifier: string;
     mayReachOutside: boolean;
     mayReachUnasked: boolean;
+  }): Promise<void>;
+  /** ADR 0143 DP1. What is pinned, a new pin, and whether Pico may fetch it. */
+  readDepots(): Promise<readonly unknown[]>;
+  attachDepot(pin: Record<string, unknown>): Promise<{ remote: string; commit: string }>;
+  decideDepotReach(input: {
+    remote: string;
+    mayFetch: boolean;
+    mayFetchUnasked: boolean;
   }): Promise<void>;
   /** ADR 0126 P2/P6. The person's own devices, as their Home knows them. */
   readDevices(): Promise<readonly unknown[]>;
@@ -493,6 +504,41 @@ export async function startPicoCompanionShellRuntime(input: {
       decideSupplierReach: async (decision) => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();
         await decidePicoCompanionSupplierReach({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...decision,
+        });
+      }),
+      readDepots: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionDepots({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      attachDepot: async (pin) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await attachPicoCompanionDepot({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          pin,
+        });
+      }),
+      decideDepotReach: async (decision) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await decidePicoCompanionDepotReach({
           livingDeviceLinkClient: await createPicoCompanionLinkClient({
             profile: readPicoCompanionProfile(profilePath),
             daemonClient,

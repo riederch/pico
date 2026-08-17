@@ -3833,6 +3833,135 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           broadcast(reachEvent);
           return { outcome: 'ok', result: { decided: true } };
         }
+        /**
+         * ADR 0143 DP1. What is pinned, and at which commit.
+         *
+         * The commit travels whole rather than shortened: a person deciding
+         * about material is entitled to the revision it is at, and a surface
+         * that wants twelve characters can take them.
+         */
+        case 'home.depots.read': {
+          if (Object.keys(args).length !== 0 || principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          return {
+            outcome: 'ok',
+            result: {
+              depots: store.picoDepotAttachments().map((attachment) => ({
+                remote: attachment.pin.remote,
+                commit: attachment.pin.commit,
+                mayFetch: attachment.mayFetch,
+                mayFetchUnasked: attachment.mayFetchUnasked,
+                acceptedAt: attachment.acceptedAt,
+              })),
+            } as unknown as Record<string, unknown>,
+          };
+        }
+        /**
+         * ADR 0143 DP1. A person says this material may be here, from the
+         * device they are holding.
+         *
+         * **Attaching creates no reach**, which is why the decision below is a
+         * separate operation rather than a field here: saying "this corpus is
+         * mine" and saying "go and get it, unwatched" are two decisions, and
+         * one call doing both would collapse them at the moment a person is
+         * least likely to notice.
+         *
+         * The Foundation route has done this since ADR 0143 and refuses an
+         * operator session, because whose corpus this is is not
+         * administration's to answer (ADR 0087). This is the same refusal seen
+         * from the other side: the person's own device is where the answer
+         * comes from.
+         */
+        case 'home.depot.attach': {
+          if (principal === undefined) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          try {
+            const attached = store.attachPicoDepot({
+              /**
+               * The arguments go to the parser whole rather than being picked
+               * apart here. A handler that built `{ remote, commit }` from
+               * them would silently drop a `branch` and answer as though the
+               * caller had merely mistyped a commit - and ADR 0143 DP1's
+               * refusal exists precisely to tell somebody that tracking a ref
+               * is the thing this cannot do.
+               */
+              pin: args,
+              acceptedAt: new Date().toISOString(),
+              acceptedBy: principal.picoIdentityFingerprintHex,
+            });
+            return {
+              outcome: 'ok',
+              result: {
+                remote: attached.pin.remote,
+                commit: attached.pin.commit,
+                // Said back rather than assumed: a person who attached
+                // something is owed the fact that nothing will be fetched
+                // until they say so.
+                mayFetch: attached.mayFetch,
+                mayFetchUnasked: attached.mayFetchUnasked,
+              } as unknown as Record<string, unknown>,
+            };
+          } catch (error) {
+            /**
+             * The parser's name travels, and one of them is the point of the
+             * gate: a caller naming a branch, a tag or a channel is refused as
+             * `pico_depot_cannot_follow_a_ref` rather than as a shape failure,
+             * because it is not a typo - it is a request for the thing ADR
+             * 0143 DP1 exists to prevent, and it should be told so.
+             */
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: error instanceof Error ? error.message : 'invalid_depot_pin' },
+            };
+          }
+        }
+        /** ADR 0138 CO3/CO4 for a depot: the two decisions, again as two. */
+        case 'home.depot.reach.decide': {
+          if (principal === undefined
+            || typeof args.remote !== 'string'
+            || typeof args.mayFetch !== 'boolean'
+            || typeof args.mayFetchUnasked !== 'boolean') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (args.mayFetchUnasked && !args.mayFetch) {
+            return {
+              outcome: 'invalid_arguments',
+              result: { refusal: 'unasked_needs_fetching' },
+            };
+          }
+          try {
+            store.setPicoDepotReach({
+              remote: args.remote,
+              mayFetch: args.mayFetch,
+              mayFetchUnasked: args.mayFetchUnasked,
+            });
+          } catch (error) {
+            return {
+              outcome: 'invalid_arguments',
+              result: {
+                refusal: error instanceof Error && /not_attached/u.test(error.message)
+                  ? 'not_attached'
+                  : 'invalid_depot_reach',
+              },
+            };
+          }
+          const depotEvent = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.supplier_attachment_changed',
+            // Content-free, and the remote is what identifies a depot. Which
+            // material it holds is nobody's business but the person's.
+            payload: {
+              identifier: args.remote,
+              mayReachOutside: args.mayFetch,
+              mayReachUnasked: args.mayFetchUnasked,
+            },
+          });
+          store.append(depotEvent);
+          broadcast(depotEvent);
+          return { outcome: 'ok', result: { decided: true } };
+        }
         case 'home.presence.switch': {
           if (principal === undefined
             || typeof args.presenceId !== 'string'

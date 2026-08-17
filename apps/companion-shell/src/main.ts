@@ -614,6 +614,57 @@ function registerIpc(): void {
       });
     },
   );
+  /** ADR 0143 DP1. What is pinned, a new pin, and whether Pico may fetch it. */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getDepots,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readDepots();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.attachDepot,
+    async (event: IpcMainInvokeEvent, pin: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof pin !== 'object' || pin === null || Array.isArray(pin)) {
+        throw new Error('invalid_depot_pin');
+      }
+      // Passed on whole. The Home's parser is what tells somebody that asking
+      // for a branch is the thing this cannot do, and a pin picked apart here
+      // would lose the field that says so.
+      return await runtime.attachDepot(pin as Record<string, unknown>);
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.decideDepotReach,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.remote !== 'string'
+        || typeof record.mayFetch !== 'boolean'
+        || typeof record.mayFetchUnasked !== 'boolean') {
+        throw new Error('invalid_depot_reach_decision');
+      }
+      await runtime.decideDepotReach({
+        remote: record.remote,
+        mayFetch: record.mayFetch,
+        mayFetchUnasked: record.mayFetchUnasked,
+      });
+    },
+  );
   /**
    * ADR 0126 P2/P6. The person's devices, and their word about each one.
    *

@@ -2,6 +2,36 @@
 
 ## Status
 
+Status note, 2026-08-17: **attaching is reachable from the person's own
+device, and so is the fetch decision that was reachable from nowhere.**
+
+DP1's Foundation route has attached depots since 2026-08-11 and refuses an
+operator session, because whose corpus this is is not administration's to
+answer (ADR 0087). What it left was a person who could only say so through the
+diagnostic dashboard - and `setPicoDepotReach`, the ADR 0138 CO3/CO4 pair for
+a depot, had no caller at all. An attached depot could never be fetched from
+by anybody.
+
+`home.depots.read`, `home.depot.attach` and `home.depot.reach.decide` close
+both halves over Link. Attaching still creates no reach, which is why the
+third operation exists rather than a field on the second: saying "this corpus
+is mine" and saying "go and get it, unwatched" are two decisions, and one call
+doing both would collapse them where a person is least likely to notice.
+
+**The pin reaches the parser whole**, and that is not a detail. The first
+version of the handler built `{ remote, commit }` from named arguments, which
+silently dropped a `branch` and answered as though the caller had mistyped a
+commit - turning the one refusal this gate wants somebody to read,
+`pico_depot_cannot_follow_a_ref`, into a shape error. A test written for the
+refusal caught it.
+
+In the window, a depot and a supplier ask the same two questions in the same
+words. ADR 0136's supplier holds material and this ADR's depot holds what
+runs, which is a distinction the tree needs and the money does not: a person
+is answering *may Pico go and get this, and unasked?* about both, and two
+vocabularies for one question would be two things to learn for no decision it
+changes.
+
 Accepted as the distribution contract for suppliers: where a Pico Bridge or
 a Pico Library comes from, how it arrives, what pins it and what runtime it
 is given. **DP1-DP7 are implemented and DP8 in its consent half**

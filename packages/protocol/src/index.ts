@@ -540,6 +540,18 @@ export const picoLinkDirectOperations = [
    */
   'home.suppliers.read',
   'home.supplier.reach.decide',
+  /**
+   * ADR 0143 DP1 with ADR 0138 CO3/CO4. What a depot is pinned at, the
+   * person's word that this material may be here, and whether Pico may go and
+   * get it.
+   *
+   * Remote-capable for the reason the supplier pair is: attaching names whose
+   * corpus this is, which the Foundation route already refuses to answer from
+   * an operator session (ADR 0087), and reaching spends the person's money.
+   */
+  'home.depots.read',
+  'home.depot.attach',
+  'home.depot.reach.decide',
 ] as const;
 
 export type PicoLinkDirectOperation = typeof picoLinkDirectOperations[number];

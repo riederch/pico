@@ -99,6 +99,25 @@
       <p id="supplier-status" class="detail"></p>
     </section>
     <!--
+      ADR 0143 DP1. Material pinned at a commit, and the same two fetch
+      questions. There is no field for a branch, a tag or a channel, here or
+      anywhere below - "track main" is not a thing this can express, and the
+      Home says so by name rather than treating it as a typo.
+    -->
+    <section id="depots" class="providers" hidden>
+      <h2>Material Pico has been given</h2>
+      <ul id="depot-list" class="provider-list"></ul>
+    </section>
+    <section id="depot-attach" class="form-card">
+      <h2>Give Pico material</h2>
+      <label for="depot-remote">Where it lives</label>
+      <input id="depot-remote" maxlength="512" autocomplete="off">
+      <label for="depot-commit">The exact revision, in full</label>
+      <input id="depot-commit" maxlength="64" autocomplete="off">
+      <button id="depot-attach-submit" type="button">This material may be here</button>
+      <p id="depot-status" class="detail"></p>
+    </section>
+    <!--
       ADR 0126 P2/P6. The person's own devices, and what each may be used for.
       Hidden when the Home knows of none, which on a device that has just
       announced itself is a moment rather than a state.
