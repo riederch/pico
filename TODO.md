@@ -3,6 +3,44 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
+## Ein Modellanbieter kommt nur per Skript in ein Home - offen
+
+**Gefunden am 2026-08-17, beim Nachgehen der Lieferanten-Kette.**
+
+`PicoModelProviderRegistry.put()` ist der einzige Weg, wie ein
+Modellanbieter-Eintrag entsteht, und hat keinen Aufrufer ausserhalb
+seiner Tests. Jede Route zu Modellanbietern arbeitet an einem bereits
+vorhandenen Eintrag (`:entryId/decision`, `:entryId/narrowing`). Das
+Register ist auf jedem echten Home leer.
+
+Das ist kein versteckter Defekt: `scripts/measure-model-provider.ts`
+sagt es selbst - *"a development tool rather than a product surface ...
+the measurement belongs to the settings flow ADR 0152 shapes and nobody
+has built"*, und *"It writes nothing"*. Das Skript misst einen Host und
+druckt einen Kandidaten-Eintrag, der bereits durch
+`parsePicoModelProviderEntry` gegangen ist.
+
+**Was daran haengt.** Alles, was ein Modell will, endet vorher:
+
+- `pickPicoDepotIntakeEntry` verweigert mit `no_decided_entry`, also
+  werden ADR 0136 BR1s Bibliotheks-Lesevorgaenge nie eingereiht - auch
+  jetzt nicht, wo ein Lieferant angehaengt werden kann.
+- Die Modellanbieter-Liste im Companion ist immer leer, ihr Abschnitt
+  also immer verborgen (ADR 0152).
+- Rueckfragen an die eigene Erinnerung (ADR 0116 W1) haben keinen
+  Anbieter, gegen den sie laufen koennten.
+
+**Was zu entscheiden ist.** Die Messung greift nach aussen und dauert;
+sie ist damit keine Fensteroperation, sondern etwas, das das Home tut,
+waehrend die Person zusieht. Offen ist, wer sie ausloest, woher die
+Adresse kommt (die Person tippt sie, wie beim Depot), und ob ein
+gemessener Eintrag schon eine Entscheidung ist oder erst einen
+Kandidaten erzeugt, ueber den ADR 0152 dann fragt.
+
+**Der CLI-Pfad steht quer zur Entscheidung vom 2026-08-16**, dass jede
+Konfiguration ueber den Pico Client laeuft - so wie es beim Home mit dem
+Move-in-Code und beim Relay mit dem Claim-Code geloest wurde.
+
 ## Auslieferbare Pakete - umgesetzt am 2026-08-16
 
 **Entschieden und gebaut als ADR 0153.** Drei Auslieferungen, benannt nach
