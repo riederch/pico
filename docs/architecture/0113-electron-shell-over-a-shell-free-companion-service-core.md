@@ -40,9 +40,13 @@ obvious reading - drop Electron, save 222 MB - was available to anybody and
 supported by nothing.
 
 `pnpm companion:measure-headless` now weighs the same companion core in plain
-Node, with bare Node as the control. Electron costs 172.0 MB; Pico's own
-JavaScript costs 4.3 MB; `libsodium-wrappers-sumo` costs 15.3 MB, and a
-headless product would still pay 50.7 MB. Idle CPU and wakeups are zero for
+Node, with bare Node as the control. The four PSS medians, so the arithmetic
+below can be checked rather than taken: bare Node idle **31.1 MB**, Node plus
+`libsodium-wrappers-sumo` alone **46.4 MB**, Node with the companion core
+loaded **50.7 MB**, packaged tray over seven processes **222.7 MB**. From
+those: Electron costs 172.0 MB; Pico's own JavaScript costs 4.3 MB;
+`libsodium-wrappers-sumo` costs 15.3 MB - more than three times the rest of
+Pico's code put together - and a headless product would still pay 50.7 MB. Idle CPU and wakeups are zero for
 the core over a five-second window.
 
 Two things follow. **C1 holds under measurement**: the companion core imports
