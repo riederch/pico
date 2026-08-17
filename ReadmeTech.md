@@ -307,11 +307,18 @@ Details are documented in:
 ├── scripts               # the release gates
 ├── tools                 # measurement instruments that are not shipped
 ├── repository.yaml       # Home Assistant add-on repository metadata
+├── offline-floor.json    # the offline floor, declared so it can be checked (ADR 0118 O1)
 ├── README.md             # non-technical project introduction
 ├── ReadmeTech.md         # full technical project documentation
+├── AGENTS.md             # repository-wide rules for coding agents
+├── TODO.md               # open work not yet decided; decisions become ADRs
+├── progress.md           # component-by-component record of development progress
 ├── LICENSE               # source-available non-commercial project license
+├── LICENSE-FAQ.md        # practical explanation of the licensing intent, not a substitute
+├── NOTICE                # the attribution notice the licence requires
 ├── COMMERCIAL.md         # commercial-use permission rules
 ├── TRADEMARK.md          # naming and compatibility claim rules
+├── SECURITY.md           # reporting a vulnerability, and the response to expect
 ├── CONTRIBUTING.md       # contribution and documentation rules
 └── .github/workflows     # CI pipeline
 ```

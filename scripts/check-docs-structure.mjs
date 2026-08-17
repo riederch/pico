@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +22,15 @@ import { fileURLToPath } from 'node:url';
  *
  * Depth one only, deliberately. Naming every file would be a second copy of
  * the tree, which is the failure this exists to catch.
+ *
+ * **The root is the one place files are named too**, added 2026-08-17 after
+ * the question "should we reorganise the root?" turned out to have a better
+ * answer than moving anything. Eleven tracked files sat there unnamed, and
+ * nothing would ever have said so: the directory direction above only looks at
+ * directories, so a file with no directory to belong to was invisible to this
+ * check and to every other one. Keeping the root tidy is worth a few lines
+ * here; rearranging it would have invalidated 846 paths in ADR bodies that
+ * ADR 0128 forbids rewriting.
  *
  * The second subject is `implementation-status.md`, which says it "tracks
  * every numbered ADR file currently present" - and was missing one. That one
@@ -62,6 +72,59 @@ const errors = [];
  */
 function notPartOfTheTree(name) {
   return name.startsWith('.') || name === 'node_modules';
+}
+
+/**
+ * Names a tool chose, at the repository root.
+ *
+ * The same shape of rule as `node_modules` above and for the same reason: a
+ * reader finds `pnpm-lock.yaml` by knowing pnpm, not by reading our map, and
+ * naming it in the tree would spend a line of orientation on something that
+ * needs none. What is left after this are files *we* named, which are found
+ * only by reading the map - so those the tree has to carry.
+ *
+ * Concrete names rather than a pattern, because that is what makes it stable:
+ * these change when the toolchain changes, and a check failing at that moment
+ * is the check working.
+ */
+const toolOwnedRootFiles = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'tsconfig.base.json',
+]);
+
+/**
+ * The repository's own root files, as git knows them.
+ *
+ * **Tracked rather than merely present**, and that distinction is the reason
+ * this shells out at all - the first and only gate that does. A working copy
+ * accumulates local artefacts; this one carries two generated Recovery Card
+ * PDFs, and a file that is ignored exists on one machine, so it cannot leave
+ * anybody else's map incomplete. Reading the directory instead would report
+ * somebody's scratch file as a documentation defect.
+ *
+ * Depth one, and only here. Naming every file in the tree would be a second
+ * copy of it, which is the failure this whole check exists to catch; the root
+ * is the exception because the root is where loose things land, with no
+ * directory to belong to and nothing else looking at them.
+ */
+function trackedRootFiles() {
+  try {
+    return execFileSync('git', ['ls-files', '-z', '--', ':(top)*'], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split('\0')
+      .filter((entry) => entry !== '' && !entry.includes('/'))
+      .filter((entry) => !notPartOfTheTree(entry) && !toolOwnedRootFiles.has(entry));
+  } catch {
+    // Not a git checkout, or no git. Reported in the summary rather than
+    // passed over: a direction that did not run must not read as a direction
+    // that found nothing.
+    return null;
+  }
 }
 
 const block = /## Repository structure\n\n```text\n([\s\S]*?)```/u.exec(text);
@@ -106,6 +169,18 @@ for (const directory of topLevel) {
         + 'does not name it.',
       );
     }
+  }
+}
+
+const rootFiles = trackedRootFiles();
+for (const file of rootFiles ?? []) {
+  if (!named.has(file)) {
+    errors.push(
+      `${path}: \`${file}\` is tracked at the repository root and the repository `
+      + 'structure does not name it. The root is where a file with no directory to '
+      + 'belong to lands, so an unnamed one is invisible to a reader and to every '
+      + 'other check.',
+    );
   }
 }
 
@@ -176,6 +251,12 @@ if (errors.length > 0) {
 
 console.log(
   `Documentation structure check passed (${topLevel.length} top-level directories, `
+  // Said rather than folded into the pass: a direction that could not run is
+  // not a direction that found nothing, and only the summary can tell a reader
+  // which of the two they are looking at.
+  + `${rootFiles === null
+    ? 'root files not compared - not a git checkout'
+    : `${rootFiles.length} tracked root files`}, `
   + `${named.size} entries named, each real; ${adrNumbers.length} ADRs, `
   + `${rowed.size} with a row and ${withoutRow.size} deliberately without one).`,
 );
