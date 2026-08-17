@@ -181,3 +181,30 @@ button:disabled { opacity: .55; cursor: wait; }
   opacity: 0.75;
   margin: 0;
 }
+
+/*
+ * ADR 0113. The two views, and which one is current.
+ *
+ * `data-current` rather than a class, because the renderer writes it from the
+ * view state and a class name would be a second vocabulary for the same fact.
+ */
+.views {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+}
+
+.views button {
+  background: none;
+  border: 1px solid var(--pico-border);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  color: var(--pico-text-secondary);
+  cursor: pointer;
+}
+
+.views button[data-current="true"] {
+  border-color: var(--pico-status-active);
+  color: var(--pico-text-primary);
+  font-weight: 600;
+}

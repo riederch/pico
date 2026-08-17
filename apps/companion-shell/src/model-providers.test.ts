@@ -145,23 +145,61 @@ describe('ADR 0116 W5 - a waiting read says that it waits, not what it found', (
   });
 });
 
-describe('the window asks for both lists when it opens', () => {
-  // A view that exists and is never called is a view nobody sees, which is
-  // how the provider list spent a day: markup, renderer, IPC and no caller.
+describe('every view fetches what it shows', () => {
+  /**
+   * A view that exists and is never called is a view nobody sees, which is
+   * how the provider list spent a day: markup, renderer, IPC and no caller.
+   *
+   * Since 2026-08-17 the window has two views and each fetches only its own
+   * lists (ADR 0113), which makes that failure *easier* rather than harder -
+   * a section can now sit in a view whose refresh forgot it, and look exactly
+   * like a section with nothing in it. So the pairing is asserted.
+   */
   const renderer = readFileSync(
     join(import.meta.dirname, 'renderer.ts'),
     'utf8',
   );
+  // `\}` escaped: an unescaped closing brace is a syntax error under `/u`.
+  const showView = /function showView[\s\S]*?\n\}/u.exec(renderer)?.[0] ?? '';
 
-  it('calls both renderers from one refresh', () => {
-    expect(renderer).toContain('renderPicoCompanionModelProviders(');
-    expect(renderer).toContain('renderPicoCompanionAnsweredReads(');
-    expect(renderer).toContain('refreshModelViews();');
+  it('calls every renderer it has', () => {
+    for (const render of [
+      'renderPicoCompanionModelProviders(',
+      'renderPicoCompanionAnsweredReads(',
+      'renderPicoCompanionRecalls(',
+      'renderPicoCompanionDevices(',
+      'renderPicoCompanionRelays(',
+    ]) {
+      expect(renderer).toContain(render);
+    }
+  });
+
+  it('reaches every refresh from the view switch', () => {
+    // The one place a section can be orphaned now.
+    for (const refresh of [
+      'refreshRecalls();',
+      'refreshAnsweredReads();',
+      'refreshModelProviders();',
+      'refreshDevices();',
+      'refreshRelays();',
+    ]) {
+      expect(showView).toContain(refresh);
+    }
+  });
+
+  it('asks the occasion view for nothing a setting owns', () => {
+    // ADR 0113. The window used to send six reads on every open, four of them
+    // for lists a person answering an approval will never look at.
+    const now = showView.slice(showView.indexOf("if (view === 'now')"), showView.indexOf('} else'));
+    expect(now).toContain('refreshRecalls();');
+    expect(now).not.toContain('refreshDevices();');
+    expect(now).not.toContain('refreshModelProviders();');
+    expect(now).not.toContain('refreshRelays();');
   });
 
   it('asks again after a keep rather than editing the list in place', () => {
     // What is waiting is the Home's answer, not this window's guess about it.
-    expect(renderer).toMatch(/keepAnsweredRead\(jobId\)\.then\(refreshModelViews\)/u);
+    expect(renderer).toMatch(/keepAnsweredRead\(jobId\)\.then\(refreshAnsweredReads\)/u);
   });
 
   it('hides a section it could not load instead of reporting a fault', () => {

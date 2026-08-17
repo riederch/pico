@@ -1112,3 +1112,76 @@ export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanio
     });
   }));
 }
+
+/**
+ * ADR 0113 with ADR 0152 SE1 - what the window is showing, and why it has to
+ * be a question at all.
+ *
+ * **ADR 0113 says a window exists only during an interaction or an active
+ * alarm.** It is an occasion, not a workplace. By 2026-08-17 it had eight
+ * sections, six reads on open and no navigation, in the order they happened to
+ * be built - so somebody opening it because Pico needed an answer scrolled
+ * past relay administration to give one.
+ *
+ * Two views, and the split is the ADR's own: what needs you now, and what you
+ * keep. The window never opens into the second. Settings are somewhere a
+ * person goes; an occasion is something that came to them.
+ */
+export const picoCompanionWindowViews = ['now', 'settings'] as const;
+
+export type PicoCompanionWindowView = typeof picoCompanionWindowViews[number];
+
+/**
+ * What each view has to ask the Home for.
+ *
+ * The reason the split is worth building rather than just drawing: the window
+ * asked for all of it on every open, including the four lists a person looking
+ * at an approval will never read. A view that shows nothing asks nothing.
+ */
+export const picoCompanionViewReads: Readonly<
+  Record<PicoCompanionWindowView, readonly string[]>
+> = Object.freeze({
+  now: Object.freeze(['getRecalls', 'getAnsweredReads']),
+  settings: Object.freeze(['getModelProviders', 'getDevices', 'getRelays']),
+});
+
+/**
+ * ADR 0112/ADR 0113. Whether this presentation takes the window back.
+ *
+ * A person may be halfway through changing a setting when their Vault asks
+ * them to approve something. The approval is the reason this window exists at
+ * all, so it wins - and the rule is a property of the presentation rather than
+ * a judgement in the renderer, so it cannot differ between two places that
+ * both react to one.
+ *
+ * **Only a decision takes the window back, not merely a bad mood.** A warning
+ * about storage or a clock is worth showing and is not worth interrupting
+ * somebody for; something waiting for their answer is.
+ */
+export function picoCompanionPresentationTakesTheWindow(
+  presentation: Pick<PicoCompanionPresentation, 'decision' | 'severity'>,
+): boolean {
+  return presentation.decision !== 'none' || presentation.severity === 'blocked';
+}
+
+export interface PicoCompanionWindowViewLine {
+  view: PicoCompanionWindowView;
+  label: string;
+  /** What a person will find there, so the word is not the only clue. */
+  detail: string;
+}
+
+export function picoCompanionWindowViewLines(): readonly PicoCompanionWindowViewLine[] {
+  return Object.freeze([
+    Object.freeze({
+      view: 'now' as const,
+      label: 'Now',
+      detail: 'What Pico needs from you, and what you asked it.',
+    }),
+    Object.freeze({
+      view: 'settings' as const,
+      label: 'Settings',
+      detail: 'What computes for you, your devices, and anything you run.',
+    }),
+  ]);
+}

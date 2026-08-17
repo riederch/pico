@@ -1,7 +1,10 @@
 import {
   parsePicoCompanionPresentation,
   picoCompanionFloorAssurance,
+  picoCompanionPresentationTakesTheWindow,
   picoCompanionRelayRevocationLine,
+  picoCompanionWindowViewLines,
+  type PicoCompanionWindowView,
   type PicoCompanionCondition,
   type PicoCompanionPresentation,
 } from './contract.js';
@@ -93,9 +96,34 @@ const firstRun = requireElement('first-run');
 const scanCamera = requireButton('scan-camera');
 const scanTyped = requireButton('scan-typed');
 const close = requireButton('close');
+const viewNav = requireElement('views');
+const nowView = requireElement('view-now');
+const settingsView = requireElement('view-settings');
+
+/**
+ * ADR 0113. Which view the window is in.
+ *
+ * Declared here rather than beside the navigation it belongs to, because
+ * `render` reads it - and a `let` used before its declaration works only for
+ * as long as every path to it stays asynchronous, which is not a property to
+ * rest on.
+ */
+let currentView: PicoCompanionWindowView = 'now';
 
 function render(value: unknown): void {
   const state: PicoCompanionPresentation = parsePicoCompanionPresentation(value);
+  /**
+   * ADR 0113. Something that wants an answer takes the window back.
+   *
+   * A person may be halfway through changing a setting when their Vault asks
+   * them to approve something, and the approval is the reason this window
+   * exists at all. Only a decision does this - a warning about storage is
+   * worth showing and not worth interrupting somebody for - and the rule is
+   * the contract's, so nothing here decides it a second way.
+   */
+  if (currentView !== 'now' && picoCompanionPresentationTakesTheWindow(state)) {
+    showView('now');
+  }
   status.dataset.severity = state.severity;
   symbol.textContent = state.symbol;
   title.textContent = state.title;
@@ -475,7 +503,16 @@ recallGrant.addEventListener('click', () => {
     });
 });
 
-function refreshModelViews(): void {
+/**
+ * ADR 0152. What computes for this person - a setting, so it lives in the
+ * settings view and is asked for only when somebody is looking at it.
+ *
+ * Split from the answered reads on 2026-08-17: the two were fetched together
+ * because they were rendered together, and they are not the same kind of
+ * thing. One is a standing decision; the other is something waiting for an
+ * answer now.
+ */
+function refreshModelProviders(): void {
   void window.picoCompanion.getModelProviders()
     .then((providers) => {
       renderPicoCompanionModelProviders(
@@ -499,12 +536,16 @@ function refreshModelViews(): void {
                 providerClass: act.providerClass,
               })
               : window.picoCompanion.revokeModelProvider(act.entryId);
-          void done.then(refreshModelViews, refreshModelViews);
+          void done.then(refreshModelProviders, refreshModelProviders);
         },
       );
     }, () => {
       providerSection.hidden = true;
     });
+}
+
+/** ADR 0116 W5. What a read produced and nobody has kept: something waiting. */
+function refreshAnsweredReads(): void {
   void window.picoCompanion.getAnsweredReads()
     .then((reads) => {
       renderPicoCompanionAnsweredReads(
@@ -514,7 +555,7 @@ function refreshModelViews(): void {
           // The keep is the write ADR 0116 W5 requires, and the list is asked
           // for again afterwards rather than edited in place: what is waiting
           // is the Home's answer, not this window's guess about it.
-          void window.picoCompanion.keepAnsweredRead(jobId).then(refreshModelViews);
+          void window.picoCompanion.keepAnsweredRead(jobId).then(refreshAnsweredReads);
         },
       );
     }, () => {
@@ -522,10 +563,49 @@ function refreshModelViews(): void {
     });
 }
 
-refreshModelViews();
-refreshRecalls();
-refreshDevices();
-refreshRelays();
+/**
+ * ADR 0113. Which view the window is in, and the two rules about it.
+ *
+ * **It never opens into settings.** An occasion came to the person; settings
+ * are somewhere they go. So the initial view is `now`, always.
+ *
+ * **A presentation that wants an answer takes the window back.** Somebody may
+ * be halfway through changing a setting when their Vault asks them to approve
+ * something, and the approval is the reason this window exists at all. The
+ * rule lives in the contract rather than here, so two places reacting to one
+ * presentation cannot disagree about it.
+ */
+function showView(view: PicoCompanionWindowView): void {
+  currentView = view;
+  nowView.hidden = view !== 'now';
+  settingsView.hidden = view !== 'settings';
+  for (const button of viewNav.querySelectorAll('button')) {
+    button.dataset.current = String(button.dataset.view === view);
+  }
+  // Only what is being looked at is asked for. The window used to send six
+  // reads on every open, four of them for lists a person answering an
+  // approval will never see.
+  if (view === 'now') {
+    refreshRecalls();
+    refreshAnsweredReads();
+  } else {
+    refreshModelProviders();
+    refreshDevices();
+    refreshRelays();
+  }
+}
+
+for (const line of picoCompanionWindowViewLines()) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.dataset.view = line.view;
+  button.textContent = line.label;
+  button.title = line.detail;
+  button.addEventListener('click', () => showView(line.view));
+  viewNav.append(button);
+}
+
+showView('now');
 
 function requireElement(id: string): HTMLElement {
   const element = document.getElementById(id);

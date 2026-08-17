@@ -2,6 +2,37 @@
 
 ## Status
 
+Status note, 2026-08-17, decided by the user: **the window is an occasion
+again.**
+
+This ADR says a renderer window exists only during an interaction or an active
+alarm - an occasion, not a workplace. By 2026-08-17 it had grown eight
+sections, six reads on open and no navigation, in the order they happened to
+be built, so somebody opening it because Pico needed an answer scrolled past
+relay administration to give one. Nothing had decided that; it accreted.
+
+Two views now, and the split is this ADR's own sentence: **what needs you now**
+and **what you keep**. The window never opens into the second - an occasion
+came to the person, settings are somewhere they go - and each view asks the
+Home only for its own lists, so an approval no longer costs four reads nobody
+will look at.
+
+**A presentation that wants an answer takes the window back**, and only that: a
+decision interrupts, a warning about storage does not. The rule is a function
+in the contract rather than a judgement in the renderer, so two places
+reacting to one presentation cannot disagree about it.
+
+The memory budget in C3 is unaffected and was checked rather than assumed: it
+measures tray mode with the window destroyed, so sections cost nothing at
+rest.
+
+**The split makes one old failure easier rather than harder**, which the tests
+had to grow to cover. A section can now sit in a view whose refresh forgot it
+and look exactly like a section with nothing in it - the same shape as the
+provider list that once had markup, renderer, IPC and no caller. Every
+refresh is now asserted reachable from the view switch, and the occasion view
+is asserted to fetch nothing a setting owns.
+
 Status note, 2026-08-16: **the memory question is measured, and it does not
 overturn this ADR.** `TODO.md` carried a Linux tray figure of 222.7 MB PSS
 over seven processes with no way to tell what of it was Chromium, so the

@@ -28,20 +28,18 @@
         <p id="floor-assurance" class="floor-assurance" hidden></p>
       </div>
     </section>
+    <!--
+      ADR 0113. Two views, and the window never opens into the second: an
+      occasion came to the person, settings are somewhere they go. The labels
+      are written by `picoCompanionWindowViewLines` like every other string
+      here, so a rule about wording holds in one place.
+    -->
+    <nav id="views" class="views" aria-label="Views"></nav>
     <p id="scope" class="scope" hidden>
       Closing this window does not veto anything. Choose Veto recovery to send
       the authenticated decision from this living device.
     </p>
-    <!--
-      ADR 0152 SE1. The consequence in a sentence, the measurement one line
-      behind it, and never more than one thing to do per provider. Every string
-      here is written by `picoCompanionModelProviderLines` and printed with
-      textContent: a rule about wording only holds if one place decides it.
-    -->
-    <section id="model-providers" class="providers" hidden>
-      <h2>What computes for you</h2>
-      <ul id="provider-list" class="provider-list"></ul>
-    </section>
+    <div id="view-now">
     <!--
       ADR 0116 W1. The requesting side, where a person asks their own Home
       about their own memory. The domain is typed rather than chosen from a
@@ -71,6 +69,23 @@
     <section id="answered-reads" class="providers" hidden>
       <h2>Waiting for you</h2>
       <ul id="read-list" class="provider-list"></ul>
+    </section>
+    </div>
+    <!--
+      ADR 0113. Settings are somewhere a person goes, so this view is never
+      the one a window opens into - and it asks the Home for nothing until
+      somebody is looking at it.
+    -->
+    <div id="view-settings" hidden>
+    <!--
+      ADR 0152 SE1. The consequence in a sentence, the measurement one line
+      behind it, and never more than one thing to do per provider. Every string
+      here is written by `picoCompanionModelProviderLines` and printed with
+      textContent: a rule about wording only holds if one place decides it.
+    -->
+    <section id="model-providers" class="providers" hidden>
+      <h2>What computes for you</h2>
+      <ul id="provider-list" class="provider-list"></ul>
     </section>
     <!--
       ADR 0126 P2/P6. The person's own devices, and what each may be used for.
@@ -109,6 +124,7 @@
       <button id="relay-claim-submit" type="button">Take over this relay</button>
       <p id="relay-claim-status" class="detail"></p>
     </section>
+    </div>
     <section id="recovery-card-form" class="form-card" hidden>
       <label for="pico-name">Pico name</label>
       <input id="pico-name" maxlength="256" autocomplete="off">

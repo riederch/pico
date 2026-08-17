@@ -14,6 +14,10 @@ import {
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceLines,
   parsePicoCompanionDevices,
+  picoCompanionViewReads,
+  picoCompanionWindowViewLines,
+  picoCompanionWindowViews,
+  picoCompanionPresentationTakesTheWindow,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -280,5 +284,58 @@ describe('ADR 0126 P2/P6 - the words for a person\'s own devices', () => {
   it('refuses a device row that is missing what a line needs', () => {
     expect(() => parsePicoCompanionDevices([{ presenceId: 'x' }]))
       .toThrow('invalid_pico_companion_device');
+  });
+});
+
+describe('ADR 0113 - the window is an occasion, not a workplace', () => {
+  it('asks for nothing a view does not show', () => {
+    /**
+     * The reason the split was worth building rather than drawing. The window
+     * sent six reads on every open, four of them for lists a person answering
+     * an approval will never look at.
+     */
+    expect(picoCompanionViewReads.now).toEqual(['getRecalls', 'getAnsweredReads']);
+    expect(picoCompanionViewReads.settings)
+      .toEqual(['getModelProviders', 'getDevices', 'getRelays']);
+    for (const read of picoCompanionViewReads.now) {
+      expect(picoCompanionViewReads.settings).not.toContain(read);
+    }
+  });
+
+  it('lets a decision take the window back, and a bad mood not', () => {
+    // Somebody may be halfway through a setting when their Vault asks them to
+    // approve something, and the approval is why this window exists. A
+    // warning about storage is worth showing and not worth interrupting for.
+    expect(picoCompanionPresentationTakesTheWindow({
+      decision: 'approve_or_deny', severity: 'warning',
+    })).toBe(true);
+    expect(picoCompanionPresentationTakesTheWindow({
+      decision: 'veto_recovery', severity: 'warning',
+    })).toBe(true);
+    expect(picoCompanionPresentationTakesTheWindow({
+      decision: 'none', severity: 'blocked',
+    })).toBe(true);
+    expect(picoCompanionPresentationTakesTheWindow({
+      decision: 'none', severity: 'warning',
+    })).toBe(false);
+    expect(picoCompanionPresentationTakesTheWindow({
+      decision: 'none', severity: 'active',
+    })).toBe(false);
+  });
+
+  it('names both views and says what is behind each', () => {
+    const lines = picoCompanionWindowViewLines();
+    expect(lines.map((line) => line.view)).toEqual([...picoCompanionWindowViews]);
+    // A label alone is a guess; the detail is what makes the choice readable.
+    for (const line of lines) {
+      expect(line.label.length).toBeGreaterThan(0);
+      expect(line.detail.length).toBeGreaterThan(line.label.length);
+    }
+  });
+
+  it('has a read list for every view and no orphan reads', () => {
+    // Two closed lists over one subject drift, so the pair is asserted.
+    expect(Object.keys(picoCompanionViewReads).sort())
+      .toEqual([...picoCompanionWindowViews].sort());
   });
 });
