@@ -251,6 +251,17 @@ naechste Schritte nur nach direkter Repository-Pruefung aktualisieren.
   `b2sum` sind kein portabler Testvertrag und koennen in Sandboxes scheitern.
 - Testlogs duerfen kurzlebige synthetische Setup-/Bootstrap-Werte ausgeben; sie
   sind keine Fixtures oder persistierbaren Beispielwerte.
+- **Die Zeremonie-Tests nicht neben dem Linux-Paketbau laufen lassen.** Sie
+  starten echte Vault-Daemon-Prozesse und leiten Schluessel mit Argon2id ab,
+  das absichtlich speicherhart ist. Neben `companion:release-check`, der
+  Chromium-Prozesse hochzieht, reissen drei davon auf dieser Maschine die
+  20-Sekunden-Grenze; allein laufen dieselben Tests in 1,5-4,6 Sekunden.
+
+  Gemessen statt vermutet: an zwei festgepinnten Kernen - der Form des
+  CI-Runners - bleiben sie bei 1,7-4,6 Sekunden und alle 110 Tests bestehen.
+  Es ist also **keine** Kernknappheit und kein CI-Risiko, sondern
+  Speicherdruck auf einer 16-GB-Maschine, deren `/tmp` im RAM liegt. Die
+  Zeitgrenze ist nicht das Problem und gehoert nicht erhoeht.
 
 Historische erfolgreiche Testlaeufe werden nicht hier protokolliert. Der
 aktuelle Handoff nennt nur den zuletzt direkt verifizierten Gate; Git und CI
