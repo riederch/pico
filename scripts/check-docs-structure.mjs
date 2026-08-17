@@ -241,6 +241,75 @@ for (const number of rowed) {
   }
 }
 
+// --- Second indexes over the ADRs --------------------------------------------
+
+/**
+ * A document that lists ADRs is either pointing at a few or trying to be the
+ * index, and only one of those keeps working.
+ *
+ * **The README was the second index and it stopped at 0102.** Its
+ * documentation map listed seventy-six ADRs, each with a hand-written
+ * description, and everything from 0103 on - fifty-two decisions, including
+ * every one made this month - was simply absent. Nobody noticed, because a
+ * list that is never wrong about what it contains is only wrong about what it
+ * omits. The block was deleted and replaced by a pointer at
+ * `implementation-status.md`, which is checked in both directions above -
+ * exactly what was done to that same file's stale endpoint table.
+ *
+ * The threshold is generous on purpose. `ReadmeTech.md`'s largest topical
+ * group is seven ADRs behind one subject, which is the *useful* form of this
+ * and must keep passing; a document approaching twenty is no longer pointing
+ * at decisions, it is enumerating them, and the enumeration exists elsewhere.
+ */
+const secondIndexThreshold = 20;
+const markdownFiles = [];
+const collectMarkdown = (directory) => {
+  for (const entry of readdirSync(join(repoRoot, directory), { withFileTypes: true })) {
+    if (notPartOfTheTree(entry.name)) {
+      continue;
+    }
+    const here = `${directory}/${entry.name}`;
+    if (entry.isDirectory()) {
+      collectMarkdown(here);
+    } else if (entry.name.endsWith('.md')) {
+      markdownFiles.push(here.replace(/^\.\//u, ''));
+    }
+  }
+};
+for (const entry of readdirSync(repoRoot, { withFileTypes: true })) {
+  if (notPartOfTheTree(entry.name)) {
+    continue;
+  }
+  if (entry.isDirectory()) {
+    collectMarkdown(entry.name);
+  } else if (entry.name.endsWith('.md')) {
+    markdownFiles.push(entry.name);
+  }
+}
+
+for (const file of markdownFiles) {
+  if (file === matrixPath) {
+    continue;
+  }
+  const listed = new Set();
+  for (const line of readFileSync(join(repoRoot, file), 'utf8').split('\n')) {
+    if (!/^\s*[-*]/u.test(line)) {
+      continue;
+    }
+    for (const [, number] of line.matchAll(/docs\/architecture\/(\d{4})-/gu)) {
+      listed.add(number);
+    }
+  }
+  if (listed.size >= secondIndexThreshold) {
+    errors.push(
+      `${file}: lists ${listed.size} architecture decisions. That is an index, and the index is `
+      + `\`${matrixPath}\`, which is checked against the tree in both directions. A second one `
+      + 'drifts silently - this document carried seventy-six and stopped at 0102, missing every '
+      + 'decision made in the following month.',
+    );
+  }
+}
+
 // --- The matrix's own claims about absence -----------------------------------
 
 /**
