@@ -91,6 +91,21 @@ export const foundationEventTypes = [
    */
   'home.supplier_attachment_changed',
   /**
+   * ADR 0142 PE1/PE2. A measurement of one host began, and later how it ended.
+   *
+   * **A pair rather than one record at the end**, because the work takes
+   * minutes and the live view of it is held in memory. A Home that restarts
+   * mid-measurement leaves a start with no finish, which is the honest
+   * statement: the work stopped, it was not quietly completed. One record
+   * written only on success could not say that.
+   *
+   * Content-free in the sense this family means: an identifier, the model, the
+   * reach, the class a person declared and how it ended. No measured number,
+   * because the numbers are the entry and the entry is the registry's - a
+   * second copy here would drift from the one a caller reads.
+   */
+  'home.model_provider_measurement_changed',
+  /**
    * ADR 0122 Y6. The running code changed. Content-free by construction: two
    * version strings and a direction, because an installation that cannot tell
    * it was downgraded cannot notice the one update that matters most.
@@ -157,6 +172,10 @@ export const serverSynthesizedFoundationEventTypes = [
   // decision about their own money and their own disclosure; a client writing
   // it would be granting itself an outbound path.
   'home.supplier_attachment_changed',
+  // ADR 0142 PE2. The Home is what reached the host and timed it, so the record
+  // of what it observed is the Home's to write. A client appending one would be
+  // stating a finding about a machine it never touched.
+  'home.model_provider_measurement_changed',
   // ADR 0122 Y6. The server appends it at boot from its own observation; a
   // client claiming its code changed would be claiming something only the
   // process itself can know.
@@ -452,6 +471,36 @@ export const picoLinkDirectOperations = [
    * is no operation to read one back, and that absence is the design: nothing
    * needs it, so nothing may ask.
    */
+  /**
+   * ADR 0142 PE1/PE2 with ADR 0152. A person points the Home at a host and
+   * asks what it can actually do.
+   *
+   * **The operation that had to exist for any of the rest to.** An entry is
+   * the only thing every model path needs and the only way to make one was
+   * `PicoModelProviderRegistry.put()`, which nothing in the product called -
+   * so the registry was empty on every real Home and a script that "writes
+   * nothing" was the whole story. That script also stands against the decision
+   * that every configuration goes through the Pico Client.
+   *
+   * The ask returns as soon as the work starts, because the work is minutes:
+   * long generations at several context widths, an unload to time a cold load,
+   * and two jobs at once to count lanes. What it produces is an *undecided*
+   * entry carrying `live_turn` - ADR 0151 PV1 keeps the wider allowance
+   * something a credential buys and not something a measurement grants - and
+   * ADR 0152's existing surface is what then asks the person about it.
+   *
+   * **There is no second read.** What is running rides along with
+   * `home.model.providers.read`, because a measurement and the entry it
+   * produces are one subject and a surface polling a dedicated route for
+   * minutes would spend ADR 0119 Q4's stranger budget on bookkeeping - sixty
+   * requests a minute, shared, is what a flood is measured against.
+   *
+   * `providerClass` travels because it is a person's judgement and never a
+   * measurement (ADR 0048): Pico cannot tell from an address whether a machine
+   * stands in somebody's home, and ADR 0152 keeps that declaration in front of
+   * the disclosure rather than behind it.
+   */
+  'home.model.provider.measure.ask',
   'home.model.provider.credential.submit',
   'home.model.provider.decision.submit',
   'home.model.provider.decision.revoke',

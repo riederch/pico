@@ -308,7 +308,14 @@ export interface PicoTestSessionDevice {
   picoIdentityFingerprintHex: string;
 }
 
-function keyRecordFingerprintHex(keyRecord: PicoIdentityKeyRecordSignatureInput): string {
+/**
+ * Exported so a walk can name the person it just authenticated as.
+ *
+ * A live chain test needs the identity a decision was recorded against, and
+ * recomputing the hash beside this one would be a second derivation of the same
+ * fingerprint waiting to disagree with it.
+ */
+export function keyRecordFingerprintHex(keyRecord: PicoIdentityKeyRecordSignatureInput): string {
   return bytesToHex(sodium.crypto_generichash(
     32,
     buildPicoIdentityKeyRecordSignatureInput(keyRecord),

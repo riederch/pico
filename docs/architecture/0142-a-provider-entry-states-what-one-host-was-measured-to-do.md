@@ -229,6 +229,43 @@ sixth class the question is moot - if retrieved memory may go, a quarantined
 excerpt may. For the fifth it stands exactly as written: a hosted API and
 ADR 0117's X4 read job still have no rule that covers them.
 
+Status note, 2026-08-17: **an entry could only be made by a script that
+writes nothing, and now a person can ask for one.**
+
+`PicoModelProviderRegistry.put()` had no caller outside its own tests.
+Every model-provider route operates on an entry that already exists, so
+the registry was empty on every real Home: ADR 0152's provider list hid
+itself permanently, `pickPicoDepotIntakeEntry` refused every library read
+with `no_decided_entry`, and ADR 0116 W1's questions had nothing to run
+against. `scripts/measure-model-provider.ts` says of itself that it is "a
+development tool rather than a product surface" and that "it writes
+nothing" - and a script path stands against the decision that every
+configuration goes through the Pico Client.
+
+`home.model.provider.measure.ask` returns when the work *starts*, because
+measuring is minutes: long generations at several context widths, an
+unload to time a load, and two jobs at once to count lanes. How it went
+rides along with `home.model.providers.read` rather than having a route
+of its own - ADR 0119 Q4's stranger budget is sixty requests a minute
+*shared*, and a surface polling its own route while a card works is what
+that bound is measured against. Live state is held in memory; the durable
+record is a started/settled event pair, so a Home that restarts
+mid-measurement leaves a start with no finish, which says the work
+stopped rather than that it quietly completed.
+
+**Residency stopped being a flag.** `measureColdLoad` exists for the
+script's `--cold`, and leaving it off produced a measurement that ran and
+then refused with `pico_model_provider_measured_no_residency` - correctly,
+because *residency is part of availability* and an entry without a warm-up
+cost is one ADR 0118 O2's threshold cannot be set against. There is one
+right answer from the product.
+
+**PE5 is satisfied the way ADR 0151 narrowed it**, not the way this ADR
+first wrote it: no credential is sent, `answeredWithoutCredential` and
+`refusesAWrongCredential` are recorded as findings, and the entry carries
+`live_turn`. A measurement grants nothing; the wider allowance stays
+something a credential buys through ADR 0152's decision surface.
+
 ## Context
 
 ADR 0048 decided what may leave the device and ADR 0049 decided that a

@@ -47,6 +47,24 @@ accepted rules unless it is written down carefully. It also fixes the home
 of ADR 0104 S3, which has been waiting for a settings surface since
 `memory_encryption` was named as debt.
 
+Status note, 2026-08-17: **the question "which surface hosts it first" is
+answered, and the surface finally has something to host.**
+
+The user decided on 2026-08-16 that every configuration goes through the
+Pico Client, which settles the three candidates this ADR left open. What
+had not been noticed is that SE1-SE6 were all implemented against a list
+that was empty on every real Home: no entry could be created, so the
+provider section hid itself and none of the six gates had ever rendered
+anything outside a test.
+
+The measurement now begins in the companion. ADR 0048's declaration is
+the *precondition* rather than a field with options - a typed address is
+`declared_own_host` or it is nothing, because the other five classes all
+describe runtimes Pico mediates - and it is refused in words rather than
+by a disabled button. A measured entry arrives undecided, which keeps
+this ADR's shape: measuring is a finding, deciding is separate, and the
+surface that asks already existed.
+
 ## Context
 
 ADR 0104 decided that anything a person decides is set in Pico, and named

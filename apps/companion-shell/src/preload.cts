@@ -11,6 +11,8 @@ const channels = Object.freeze({
   beginFirstRun: 'pico:first-run:begin',
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
+  askModelProviderMeasurement: 'pico:model-provider-measurement:ask',
+  getModelProviderMeasurements: 'pico:model-provider-measurements:get',
   decideModelProvider: 'pico:model-provider:decide',
   widenModelProvider: 'pico:model-provider:widen',
   revokeModelProvider: 'pico:model-provider:revoke',
@@ -106,6 +108,10 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   // built there too.
   grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
+  askModelProviderMeasurement: async (reach: string, model: string): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.askModelProviderMeasurement, { reach, model }),
+  getModelProviderMeasurements: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.getModelProviderMeasurements),
   getSuppliers: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getSuppliers),
   decideSupplierReach: async (
     identifier: string,

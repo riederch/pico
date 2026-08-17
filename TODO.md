@@ -3,7 +3,7 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
-## Ein Modellanbieter kommt nur per Skript in ein Home - offen
+## Ein Modellanbieter kommt nur per Skript in ein Home - geschlossen am 2026-08-17
 
 **Gefunden am 2026-08-17, beim Nachgehen der Lieferanten-Kette.**
 
@@ -40,6 +40,22 @@ Kandidaten erzeugt, ueber den ADR 0152 dann fragt.
 **Der CLI-Pfad steht quer zur Entscheidung vom 2026-08-16**, dass jede
 Konfiguration ueber den Pico Client laeuft - so wie es beim Home mit dem
 Move-in-Code und beim Relay mit dem Claim-Code geloest wurde.
+
+**Umgesetzt.** `home.model.provider.measure.ask` misst einen Host, den die
+Person im Companion benennt, und legt einen *unentschiedenen* Eintrag an.
+Die Antwort kommt, wenn die Arbeit beginnt - Messen dauert Minuten. Der
+Verlauf reist mit `home.model.providers.read` mit, weil ADR 0119 Q4s
+Fremden-Budget sechzig Anfragen pro Minute geteilt ist.
+
+ADR 0048s Erklaerung ist Vorbedingung, nicht Auswahlfeld: eine getippte
+Adresse ist `declared_own_host` oder nichts, denn die anderen fuenf Klassen
+beschreiben Laufzeiten, die Pico selbst betreibt. Verweigert wird in Worten,
+nicht durch einen ausgegrauten Knopf.
+
+Die ganze Kette laeuft jetzt live durch, in neun Schritten und nur ueber die
+Oberflaeche: `apps/core/src/whole-chain.test.ts`. Dabei fiel ein fuenfter
+Befund an - der Einsprungpunkt des mitgelieferten Lieferanten wurde ueber
+`process.cwd()` aufgeloest und traf nur, weil das Image `WORKDIR /app` setzt.
 
 ## Auslieferbare Pakete - umgesetzt am 2026-08-16
 

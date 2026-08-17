@@ -93,6 +93,37 @@
       here is written by `picoCompanionModelProviderLines` and printed with
       textContent: a rule about wording only holds if one place decides it.
     -->
+    <!--
+      ADR 0142 PE2. What is being measured right now, above the list of what
+      has been. A person who just pressed "measure" is owed the sight of it
+      happening; the work is minutes and a silent window reads as a hung one.
+    -->
+    <section id="measurements" class="providers" hidden>
+      <h2>Being measured</h2>
+      <ul id="measurement-list" class="provider-list"></ul>
+    </section>
+    <!--
+      ADR 0048 with ADR 0152. The declaration is in front of the form rather
+      than behind it: Pico cannot tell from an address whose machine answers,
+      and a typed address is a machine the person says is theirs or it is
+      nothing Pico has a class for.
+    -->
+    <section id="measure-host" class="form-card">
+      <h2>Let Pico use a machine of yours</h2>
+      <label for="measure-reach">Where it answers, as an address and port</label>
+      <!--
+        No placeholder. `check-companion-boundary` forbids a URL anywhere in
+        this document and is right to: the renderer must not carry an address,
+        even an illustrative one. The label says the shape instead.
+      -->
+      <input id="measure-reach" maxlength="512" autocomplete="off">
+      <label for="measure-model">Which model it should run</label>
+      <input id="measure-model" maxlength="128" autocomplete="off">
+      <label id="measure-own-label" for="measure-own"></label>
+      <input id="measure-own" type="checkbox">
+      <button id="measure-submit" type="button">Measure it</button>
+      <p id="measure-status" class="detail"></p>
+    </section>
     <section id="model-providers" class="providers" hidden>
       <h2>What computes for you</h2>
       <ul id="provider-list" class="provider-list"></ul>

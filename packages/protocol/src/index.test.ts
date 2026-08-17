@@ -160,6 +160,7 @@ describe('Pico protocol types', () => {
       'home.state_crossed',
       'home.rule_decision_changed',
       'home.supplier_attachment_changed',
+      'home.model_provider_measurement_changed',
       // ADR 0122 Y6: the running code changed.
       'home.version_changed',
     ]);
@@ -190,6 +191,7 @@ describe('Pico protocol types', () => {
       'home.state_crossed',
       'home.rule_decision_changed',
       'home.supplier_attachment_changed',
+      'home.model_provider_measurement_changed',
       'home.version_changed',
     ]);
 

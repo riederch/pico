@@ -93,6 +93,85 @@ export async function readPicoCompanionModelProviders(input: {
 }
 
 /**
+ * ADR 0142 PE2. A measurement of one host, while it runs and just after.
+ *
+ * Read from the same answer the provider list comes from rather than from a
+ * route of its own: a measurement and the entry it produces are one subject,
+ * and ADR 0119 Q4's stranger budget is sixty requests a minute *shared* - a
+ * surface polling its own route while a card works for minutes is what that
+ * bound is measured against.
+ */
+export interface PicoCompanionMeasurementView {
+  entryId: string;
+  reach: string;
+  model: string;
+  state: string;
+  startedAt: string;
+  settledAt?: string;
+  refusal?: string;
+  notes?: readonly string[];
+}
+
+export async function readPicoCompanionMeasurements(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+}): Promise<readonly PicoCompanionMeasurementView[]> {
+  const read = await input.livingDeviceLinkClient.request('home.model.providers.read', {});
+  if (read.outcome !== 'ok') {
+    throw new Error(`model_providers_read_rejected:${read.outcome}`);
+  }
+  const measurements = (read.result as { measurements?: unknown }).measurements;
+  if (!Array.isArray(measurements)) {
+    throw new Error('invalid_pico_measurements_read');
+  }
+  return Object.freeze(measurements as PicoCompanionMeasurementView[]);
+}
+
+/**
+ * ADR 0048's sixth class, and the only one a typed address can be.
+ *
+ * **A bare inference host is `declared_own_host` or it is nothing.** The other
+ * five classes describe runtimes Pico itself mediates - the same device, a
+ * Home, a Vault, a Pico endpoint, a cloud connector reached through one - and
+ * none of them is a machine somebody names by address. So the declaration is
+ * not a field with options; it is the precondition, and a person who will not
+ * make it has not chosen a different class but named a machine Pico has no
+ * class for.
+ *
+ * ADR 0152 keeps that declaration in front of the disclosure rather than
+ * behind it, which is why this is a sentence in the surface rather than a
+ * default in the code.
+ */
+export const picoCompanionMeasurableProviderClass = 'declared_own_host';
+
+/**
+ * ADR 0142 PE1/PE2. Points the Home at a host and asks what it can do.
+ *
+ * Returns when the work *starts*. Measuring is minutes on a real card, so the
+ * caller learns the entry identifier and watches the measurement list; a call
+ * that waited would hold a socket open across somebody's whole benchmark.
+ */
+export async function askPicoCompanionModelProviderMeasurement(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  reach: string;
+  model: string;
+}): Promise<{ entryId: string; state: string }> {
+  const answer = await input.livingDeviceLinkClient.request('home.model.provider.measure.ask', {
+    reach: input.reach,
+    model: input.model,
+    providerClass: picoCompanionMeasurableProviderClass,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `measure_ask_${answer.outcome}`);
+  }
+  const result = answer.result as { entryId?: unknown; state?: unknown };
+  if (typeof result.entryId !== 'string' || typeof result.state !== 'string') {
+    throw new Error('invalid_pico_measure_ask_result');
+  }
+  return { entryId: result.entryId, state: result.state };
+}
+
+/**
  * ADR 0118 O4. Whether the model this person decided on is answering.
  *
  * **Only decided entries count.** A measured machine nobody chose is not a

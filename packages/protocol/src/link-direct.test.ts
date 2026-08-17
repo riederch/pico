@@ -154,6 +154,7 @@ describe('Pico Link direct request bytes (ADR 0107 D1)', () => {
       'home.model.providers.read',
       // ADR 0151 PV1: the one operation that carries a secret, from the person
       // who holds it. There is no operation to read one back.
+      'home.model.provider.measure.ask',
       'home.model.provider.credential.submit',
       'home.model.provider.decision.submit',
       'home.model.provider.decision.revoke',

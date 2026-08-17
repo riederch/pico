@@ -16,6 +16,9 @@ export const picoCompanionIpcChannels = Object.freeze({
   beginFirstRun: 'pico:first-run:begin',
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
+  /** ADR 0142 PE2. Point the Home at a host, and watch it be timed. */
+  askModelProviderMeasurement: 'pico:model-provider-measurement:ask',
+  getModelProviderMeasurements: 'pico:model-provider-measurements:get',
   decideModelProvider: 'pico:model-provider:decide',
   widenModelProvider: 'pico:model-provider:widen',
   revokeModelProvider: 'pico:model-provider:revoke',
@@ -1148,6 +1151,121 @@ export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanio
  * keep. The window never opens into the second. Settings are somewhere a
  * person goes; an occasion is something that came to them.
  */
+/**
+ * ADR 0142 PE2 with ADR 0152 - a measurement, said as work rather than a number.
+ *
+ * **What a person needs while it runs is that it is running and roughly how
+ * long that is.** Measuring generates long answers at several context widths,
+ * unloads the model to time a load, and runs two jobs at once - minutes on a
+ * real card - and a surface that showed a spinner with no explanation would
+ * make a person think their Home had hung.
+ *
+ * The measured numbers are deliberately not here. They are the entry's, ADR
+ * 0152 SE1 says the entry states its consequence in words before any figure,
+ * and a second rendering of a throughput on this line would be a second place
+ * for it to drift.
+ */
+export interface PicoCompanionMeasurementLine {
+  entryId: string;
+  headline: string;
+  detail: string;
+}
+
+export function picoCompanionMeasurementLines(
+  measurements: ReadonlyArray<{
+    entryId: string;
+    reach: string;
+    model: string;
+    state: string;
+    refusal?: string;
+    notes?: readonly string[];
+  }>,
+): readonly PicoCompanionMeasurementLine[] {
+  return Object.freeze(measurements.map((entry) => {
+    if (entry.state === 'running') {
+      return Object.freeze({
+        entryId: entry.entryId,
+        headline: `Measuring ${entry.model} at ${entry.reach}.`,
+        detail: 'Pico is timing this machine: how fast it answers, how wide a '
+          + 'question it holds, and how long it takes to wake up. That takes '
+          + 'several minutes and you do not have to wait here.',
+      });
+    }
+    if (entry.state === 'failed') {
+      return Object.freeze({
+        entryId: entry.entryId,
+        headline: `${entry.model} at ${entry.reach} was not measured.`,
+        // The measurement's own words. ADR 0118 O4: a host that could not be
+        // measured is a fact about the host, and flattening every cause into
+        // "failed" would tell somebody nothing they can act on.
+        detail: entry.refusal ?? 'The measurement did not finish.',
+      });
+    }
+    return Object.freeze({
+      entryId: entry.entryId,
+      headline: `${entry.model} at ${entry.reach} was measured.`,
+      // What the measurement wanted said, then what is left to do. Notes carry
+      // things only a measurement can know - ADR 0151 PV5's "this host checks
+      // no credential" among them - and they are the reason this is not just a
+      // green tick.
+      detail: [
+        ...(entry.notes ?? []),
+        'It is in the list below, and nothing uses it until you decide.',
+      ].join(' '),
+    });
+  }));
+}
+
+export function parsePicoCompanionMeasurements(value: unknown): ReadonlyArray<{
+  entryId: string;
+  reach: string;
+  model: string;
+  state: string;
+  refusal?: string;
+  notes?: readonly string[];
+}> {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_measurements');
+  }
+  return Object.freeze(value.map((entry) => {
+    const record = entry as Record<string, unknown> | null;
+    if (typeof record?.entryId !== 'string'
+      || typeof record.reach !== 'string'
+      || typeof record.model !== 'string'
+      || typeof record.state !== 'string') {
+      throw new Error('invalid_pico_companion_measurement');
+    }
+    return Object.freeze({
+      entryId: record.entryId,
+      reach: record.reach,
+      model: record.model,
+      state: record.state,
+      ...(typeof record.refusal === 'string' ? { refusal: record.refusal } : {}),
+      ...(Array.isArray(record.notes)
+        ? { notes: Object.freeze(record.notes.map(String)) }
+        : {}),
+    });
+  }));
+}
+
+/**
+ * ADR 0048 with ADR 0152 - the sentence a person has to agree with before Pico
+ * measures a machine they named.
+ *
+ * Pico cannot tell from an address whether a machine stands in somebody's home,
+ * and the five other provider classes all describe runtimes Pico mediates. So a
+ * typed address is `declared_own_host` or it is nothing, and the declaration is
+ * a precondition rather than a field with options. Refusing in words beats a
+ * disabled button, which invites somebody to wonder what it would have done.
+ */
+export const picoCompanionOwnMachineDeclaration =
+  'This machine is mine, and I am responsible for what it does with what I send it.';
+
+export const picoCompanionOwnMachineUndeclared =
+  'Pico only measures a machine you say is yours. There is no other kind it '
+  + 'knows how to describe: every other sort of provider is one Pico runs '
+  + 'itself, not one you reach by address.';
+
 export const picoCompanionWindowViews = ['now', 'settings'] as const;
 
 export type PicoCompanionWindowView = typeof picoCompanionWindowViews[number];

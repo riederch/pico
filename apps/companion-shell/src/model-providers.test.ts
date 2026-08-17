@@ -6,6 +6,7 @@ import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
   renderPicoCompanionDeclaredSuppliers,
+  renderPicoCompanionMeasurements,
   renderPicoCompanionModuleConsent,
   renderPicoCompanionPendingApprovals,
   renderPicoCompanionRecalls,
@@ -177,6 +178,7 @@ describe('every view fetches what it shows', () => {
       'renderPicoCompanionModuleConsent(',
       'renderPicoCompanionPendingApprovals(',
       'renderPicoCompanionDeclaredSuppliers(',
+      'renderPicoCompanionMeasurements(',
     ]) {
       expect(renderer).toContain(render);
     }
@@ -194,6 +196,7 @@ describe('every view fetches what it shows', () => {
       'refreshRelays();',
       'refreshPendingActions();',
       'refreshModuleConsent();',
+      'refreshMeasurements();',
     ]) {
       expect(showView).toContain(refresh);
     }
@@ -787,5 +790,108 @@ describe('ADR 0143 DP3 - the supplier a depot brought, in front of the person', 
     const root = fakeDocument();
     renderPicoCompanionDeclaredSuppliers(root, [], () => {});
     expect(root.section.hidden).toBe(true);
+  });
+});
+
+describe('ADR 0142 PE2 - a measurement, said as work rather than a number', () => {
+  it('explains what is happening and that nobody has to wait', () => {
+    /**
+     * Minutes of somebody's card working. A spinner with no explanation makes
+     * a person think their Home has hung, which is the failure ADR 0118 O4
+     * names one level up: an absence must not render a working thing broken.
+     */
+    const root = fakeDocument();
+    renderPicoCompanionMeasurements(root, [{
+      entryId: 'a-model:measured',
+      reach: 'http://192.168.1.9:11434',
+      model: 'a-model:measured',
+      state: 'running',
+      startedAt: '2026-08-17T14:00:00.000Z',
+    }]);
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    expect(String(line.children[0]?.textContent)).toContain('192.168.1.9');
+    expect(String(line.children[1]?.textContent)).toContain('several minutes');
+    // Nothing to press: the work is happening, and the decision it leads to is
+    // on the provider line below.
+    expect(line.children.some((child) => child.tag === 'button')).toBe(false);
+  });
+
+  it('gives the measurement’s own reason when it did not finish', () => {
+    // ADR 0118 O4. Flattening every cause into "failed" tells somebody nothing
+    // they can act on - a host that serves a different model is a fixable fact.
+    const root = fakeDocument();
+    renderPicoCompanionMeasurements(root, [{
+      entryId: 'a-model:measured',
+      reach: 'http://192.168.1.9:11434',
+      model: 'a-model:measured',
+      state: 'failed',
+      startedAt: '2026-08-17T14:00:00.000Z',
+      refusal: 'pico_model_provider_model_not_served:a-model:measured',
+    }]);
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    expect(String(line.children[1]?.textContent)).toContain('model_not_served');
+  });
+
+  it('carries what only a measurement could know, and says nothing uses it yet', () => {
+    // ADR 0151 PV5's note is the reason a settled measurement is not a tick.
+    const root = fakeDocument();
+    renderPicoCompanionMeasurements(root, [{
+      entryId: 'a-model:measured',
+      reach: 'http://192.168.1.9:11434',
+      model: 'a-model:measured',
+      state: 'settled',
+      startedAt: '2026-08-17T14:00:00.000Z',
+      notes: ['this host answered a credential that cannot be right.'],
+    }]);
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const detail = String(line.children[1]?.textContent);
+    expect(detail).toContain('credential that cannot be right');
+    expect(detail).toContain('until you decide');
+  });
+
+  it('never renders a measured number on the line', () => {
+    // ADR 0152 SE1. The entry states its consequence in words before any
+    // figure, and a throughput rendered here would be a second place to drift.
+    const root = fakeDocument();
+    renderPicoCompanionMeasurements(root, [{
+      entryId: 'a-model:measured',
+      reach: 'http://192.168.1.9:11434',
+      model: 'a-model:measured',
+      state: 'settled',
+      startedAt: '2026-08-17T14:00:00.000Z',
+    }]);
+    const rendered = JSON.stringify((root.list as unknown as { children: unknown }).children);
+    expect(rendered).not.toContain('tokens per second');
+    expect(rendered).not.toMatch(/\d+ tok/u);
+  });
+});
+
+describe('ADR 0048 - the declaration is a precondition, not a field', () => {
+  const renderer = readFileSync(join(import.meta.dirname, 'renderer.ts'), 'utf8');
+
+  it('refuses in words when the machine was not declared, rather than greying out', () => {
+    /**
+     * Pico cannot tell from an address whether a machine stands in somebody's
+     * home, and the five other provider classes all describe runtimes Pico
+     * mediates - so a typed address is `declared_own_host` or it is nothing.
+     * A disabled button invites somebody to wonder what it would have done.
+     */
+    expect(renderer).toContain('picoCompanionOwnMachineUndeclared');
+    expect(renderer).toContain('!measureOwn.checked');
+    expect(renderer).not.toContain('measureSubmit.disabled');
+  });
+
+  it('never lets the renderer choose the provider class', () => {
+    // What kind of thing somebody's machine is is not a renderer's to send.
+    expect(renderer).not.toContain('declared_own_host');
+    expect(readFileSync(join(import.meta.dirname, 'preload.cts'), 'utf8'))
+      .not.toContain('declared_own_host');
   });
 });

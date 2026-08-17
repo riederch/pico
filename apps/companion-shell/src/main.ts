@@ -596,6 +596,45 @@ function registerIpc(): void {
    * and is waiting to be told whether it took - and this one is about their
    * money.
    */
+  /**
+   * ADR 0142 PE2. The person names a machine and the Home times it.
+   *
+   * The provider class is not in the payload. A typed address is ADR 0048's
+   * `declared_own_host` or it is nothing, and the companion module is where
+   * that is stated once - a renderer sending a class would be choosing what
+   * kind of thing somebody's machine is.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.askModelProviderMeasurement,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.reach !== 'string' || typeof record.model !== 'string') {
+        throw new Error('invalid_model_provider_measurement');
+      }
+      return await runtime.askModelProviderMeasurement({
+        reach: record.reach,
+        model: record.model,
+      });
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.getModelProviderMeasurements,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readModelProviderMeasurements();
+      } catch {
+        return [];
+      }
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.getSuppliers,
     async (event: IpcMainInvokeEvent) => {

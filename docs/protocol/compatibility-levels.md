@@ -87,6 +87,7 @@ home.presence_switch_changed
 home.state_crossed
 home.rule_decision_changed
 home.supplier_attachment_changed
+home.model_provider_measurement_changed
 home.version_changed
 ```
 

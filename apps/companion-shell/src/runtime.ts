@@ -69,8 +69,10 @@ import {
   revokePicoCompanionRelayAccount,
 } from '@pico/companion/relay-operator';
 import {
+  askPicoCompanionModelProviderMeasurement,
   decidePicoCompanionModelProvider,
   askPicoCompanionRecall,
+  readPicoCompanionMeasurements,
   keepPicoCompanionRecall,
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
@@ -109,6 +111,17 @@ export interface PicoCompanionShellRuntime {
     secret: string;
   }): Promise<void>;
   revokeModelProvider(entryId: string): Promise<void>;
+  /**
+   * ADR 0142 PE1/PE2. Points the Home at a host and asks what it can do.
+   *
+   * Returns when the work starts, not when it ends: measuring is minutes of
+   * generation against somebody's card.
+   */
+  askModelProviderMeasurement(input: { reach: string; model: string }): Promise<{
+    entryId: string;
+    state: string;
+  }>;
+  readModelProviderMeasurements(): Promise<readonly unknown[]>;
   /** ADR 0116 W1. Asks about a privacy domain this person may read. */
   askRecall(input: { privacyDomain: string; question: string }): Promise<{
     jobId: string;
@@ -517,6 +530,29 @@ export async function startPicoCompanionShellRuntime(input: {
       readRecalls: async () => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();
         return await readPicoCompanionRecalls({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      askModelProviderMeasurement: async (ask) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await askPicoCompanionModelProviderMeasurement({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...ask,
+        });
+      }),
+      readModelProviderMeasurements: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionMeasurements({
           livingDeviceLinkClient: await createPicoCompanionLinkClient({
             profile: readPicoCompanionProfile(profilePath),
             daemonClient,

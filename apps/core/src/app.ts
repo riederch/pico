@@ -1,5 +1,9 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
+  PicoModelProviderMeasurements,
+  picoModelProviderEntryIdFor,
+} from './model-provider-measurement.js';
+import {
   PicoPendingActions,
   maxPicoActionApprovalWindowMs,
 } from './pending-action.js';
@@ -176,6 +180,11 @@ import type {
   PicoModelProviderAllowance,
   PicoModelProviderClass,
 } from '@pico/protocol/model-provider';
+import { picoModelProviderClasses } from '@pico/protocol/model-provider';
+import {
+  PicoModelProviderMeasurer,
+  picoModelProviderEntryFromMeasurement,
+} from './model-provider-measure.js';
 import { picoModelProviderState } from '@pico/protocol/model-provider-state';
 import {
   maxPicoRecallCandidates,
@@ -1440,6 +1449,24 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const picoDepotLibraryReadQuestion =
     'What is this document about? Answer only from the quoted data.';
 
+/**
+   * Where the shipped library supplier lives, resolved from this module.
+   *
+   * **It was resolved from `process.cwd()`, and that worked by coincidence.**
+   * The image sets `WORKDIR /app` and starts `apps/core/dist/index.js` from
+   * there, so the relative walk happened to land - and a Home started from any
+   * other directory read nothing at all, silently: a missing entry point makes
+   * every path count as *refused*, and the caller was handed `queued: 0` with
+   * no reason. A working directory is the operator's choice; the location of
+   * shipped code is not, so it is derived from where this module actually is.
+   *
+   * Three levels up from `apps/core/{src,dist}`, which is the repository root
+   * in development and `/app` in the image.
+   */
+  const picoShippedLibrarySupplierEntryPoint = join(
+    import.meta.dirname, '..', '..', '..', 'bridges', 'suppliers', 'git-library', 'index.js',
+  );
+
   function depotLibraryPaths(remote: string): readonly string[] {
     const root = depotWorkspace.pathFor(remote);
     if (!existsSync(root)) {
@@ -1474,7 +1501,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // The shipped depot, which ADR 0143 DP6 pins to the release. A depot a
       // person attached brings its own entry point, and that is the version of
       // this line the first external library will need.
-      entryPoint: join(process.cwd(), 'bridges', 'suppliers', 'git-library', 'index.js'),
+      entryPoint: picoShippedLibrarySupplierEntryPoint,
       requestTimeoutMs: 10_000,
     });
     try {
@@ -1602,7 +1629,12 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   const queuePicoDepotLibraryReads = async (input: {
     remote: string;
     picoIdentityFingerprintHex: string;
-  }): Promise<{ queued: number; refusal?: string }> => {
+  }): Promise<{
+    queued: number;
+    absent?: number;
+    refused?: number;
+    refusal?: string;
+  }> => {
     const chosen = pickPicoDepotIntakeEntry(
       store.picoModelProviderConsent()
         .listFor(input.picoIdentityFingerprintHex)
@@ -1617,8 +1649,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     if (suppliers.length === 0) {
       return { queued: 0, refusal: 'no_attached_library_supplier' };
     }
+    if (!existsSync(picoShippedLibrarySupplierEntryPoint)) {
+      // Named rather than discovered as three hundred refused paths. ADR 0118
+      // O4: this is a broken installation, not a corpus with nothing in it.
+      return { queued: 0, refusal: 'shipped_library_supplier_missing' };
+    }
 
     let queued = 0;
+    let absent = 0;
+    let refused = 0;
     for (const supplier of suppliers) {
     const report = await enqueuePicoDepotLibraryReads({
       readExcerpt: async (path) => await depotLibraryExcerpt(input.remote, path),
@@ -1647,8 +1686,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       'Queued library reads after fetch.',
     );
     queued += report.queued;
+    absent += report.absent;
+    refused += report.refused;
     }
-    return { queued };
+    /**
+     * The counts come back, not just the successes. `queued: 0` alone cannot
+     * tell "this corpus had nothing to read" from "every file was refused",
+     * and only the second is something somebody can fix.
+     */
+    return { queued, absent, refused };
   };
 
   app.decorate('picoQueueDepotLibraryReads', queuePicoDepotLibraryReads);
@@ -1939,6 +1985,16 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
    * grant RN4 refuses.
    */
   const pendingActions = new PicoPendingActions();
+
+  /**
+   * ADR 0142 PE2. Measurements in flight, and how the recent ones ended.
+   *
+   * In memory beside `pendingActions` for a different reason: an approval must
+   * not outlive the session it was asked in, while a measurement simply has no
+   * durable state worth keeping - what it produces is a registry entry, and the
+   * registry persists that. The event pair is the durable record of the work.
+   */
+  const modelProviderMeasurements = new PicoModelProviderMeasurements();
 
   /**
    * What a sweep did, and what stopped it before it could do anything.
@@ -4517,6 +4573,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                   needsCredentialToSeeMore: decided?.credentialRef === undefined,
                 };
               }),
+              /**
+               * ADR 0142 PE2. What is being measured, and how the recent ones
+               * ended - here rather than behind its own read.
+               *
+               * A measurement and the entry it produces are one subject, and a
+               * surface that polled a dedicated route while a card worked for
+               * minutes would spend ADR 0119 Q4's stranger budget on
+               * bookkeeping: sixty requests a minute, shared, is the bound a
+               * flood is measured against. Riding along means the settings view
+               * already asking this question learns the answer.
+               */
+              measurements: modelProviderMeasurements.list(),
             } as unknown as Record<string, unknown>,
           };
         }
@@ -4534,6 +4602,115 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * where the identity comes from - there is no argument for it, which
          * is ADR 0148 EX2's construction applied to a second subject.
          */
+        /**
+         * ADR 0142 PE1/PE2 with ADR 0152. The person points the Home at a host.
+         *
+         * **Returns as soon as the work starts.** Measuring is minutes - long
+         * generations at several context widths, an unload to time a cold load,
+         * two jobs at once to count lanes - so a caller that waited would be a
+         * window holding a socket open while somebody's card worked. What comes
+         * back is that it began; `home.model.provider.measurements.read` says
+         * how it went.
+         *
+         * The entry it produces is *undecided* and carries `live_turn`. ADR
+         * 0151 PV1 keeps the wider allowance something a credential buys, and a
+         * measurement grants nothing - ADR 0152's decision surface is what asks.
+         */
+        case 'home.model.provider.measure.ask': {
+          if (principal === undefined
+            || typeof args.reach !== 'string'
+            || typeof args.model !== 'string'
+            || typeof args.providerClass !== 'string'
+            || !picoModelProviderClasses.includes(args.providerClass as never)) {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const reach = args.reach.trim();
+          const model = args.model.trim();
+          if (reach === '' || model === '') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          let entryId: string;
+          try {
+            entryId = picoModelProviderEntryIdFor(model);
+          } catch {
+            return { outcome: 'invalid_arguments', result: { refusal: 'model_has_no_name' } };
+          }
+          const providerClass = args.providerClass as PicoModelProviderClass;
+          const startedAt = new Date().toISOString();
+          const started = modelProviderMeasurements.start({
+            entryId, reach, model, providerClass, at: startedAt,
+          });
+          if (!started.ok) {
+            return { outcome: 'invalid_arguments', result: { refusal: started.refusal } };
+          }
+          const announce = (payload: Record<string, unknown>): void => {
+            const event = factory.create({
+              deviceId: config.deviceId,
+              type: 'home.model_provider_measurement_changed',
+              payload,
+            });
+            store.append(event);
+            broadcast(event);
+          };
+          announce({ entryId, model, reach, providerClass, state: 'running' });
+
+          /**
+           * Not awaited, and the failure path is the reason it is safe: every
+           * outcome lands in the live view and in the log, so a measurement
+           * that throws is a measurement a person can read about rather than an
+           * unhandled rejection.
+           */
+          void (async () => {
+            try {
+              const measurer = new PicoModelProviderMeasurer({
+                reach, model, providerClass, entryId,
+                /**
+                 * ADR 0142's *residency is part of availability*, as a
+                 * requirement rather than a flag.
+                 *
+                 * The option exists for the development script's `--cold`, and
+                 * leaving it off here produced a measurement that ran fine and
+                 * then refused with `pico_model_provider_measured_no_residency`
+                 * - because an entry without a warm-up cost is one ADR 0118
+                 * O2's absence threshold cannot be set against, so the
+                 * conversion will not build it. There is one right answer from
+                 * the product and this is it.
+                 *
+                 * Lane counting needs no flag: it is on unless switched off,
+                 * and an unmeasured provider has one lane by ADR 0142's default
+                 * rather than by omission.
+                 */
+                measureColdLoad: true,
+                log: (line: string) => app.log.info({ entryId, reach }, line),
+              });
+              const report = await measurer.measure();
+              const entry = picoModelProviderEntryFromMeasurement(report, {
+                entryId, providerClass, measuredAt: new Date().toISOString(),
+              });
+              // ADR 0142 PE1. The first caller this has ever had outside a test.
+              store.picoModelProviderRegistry().put(entry, new Date().toISOString());
+              modelProviderMeasurements.settle({
+                entryId, at: new Date().toISOString(), notes: report.notes,
+              });
+              announce({ entryId, model, reach, providerClass, state: 'settled' });
+            } catch (error: unknown) {
+              /**
+               * ADR 0118 O4. A host that could not be measured is a fact about
+               * the host, said in the words the measurement used. Every refusal
+               * `picoModelProviderEntryFromMeasurement` throws is one a person
+               * can act on - a context that spilled, a residency it could not
+               * time - so none of them are flattened into "failed".
+               */
+              const refusal = error instanceof Error ? error.message : 'measurement_failed';
+              modelProviderMeasurements.settle({
+                entryId, at: new Date().toISOString(), refusal,
+              });
+              announce({ entryId, model, reach, providerClass, state: 'failed', refusal });
+            }
+          })();
+
+          return { outcome: 'ok', result: { entryId, state: 'running' } };
+        }
         case 'home.model.provider.credential.submit': {
           if (principal === undefined
             || typeof args.entryId !== 'string'

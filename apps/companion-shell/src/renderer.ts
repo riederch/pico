@@ -1,6 +1,8 @@
 import {
   parsePicoCompanionPresentation,
   picoCompanionFetchBlockedLine,
+  picoCompanionOwnMachineDeclaration,
+  picoCompanionOwnMachineUndeclared,
   picoCompanionFloorAssurance,
   picoCompanionPresentationTakesTheWindow,
   picoCompanionRelayRevocationLine,
@@ -16,6 +18,7 @@ import {
   renderPicoCompanionRelays,
   renderPicoCompanionRelayAccountIssued,
   renderPicoCompanionDevices,
+  renderPicoCompanionMeasurements,
   renderPicoCompanionSuppliers,
   renderPicoCompanionDeclaredSuppliers,
   renderPicoCompanionDepots,
@@ -47,6 +50,11 @@ declare global {
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
+      askModelProviderMeasurement(reach: string, model: string): Promise<{
+        entryId: string;
+        state: string;
+      }>;
+      getModelProviderMeasurements(): Promise<unknown>;
       getSuppliers(): Promise<unknown>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
@@ -305,6 +313,77 @@ const providerSection = requireElement('model-providers');
 const providerList = requireElement('provider-list');
 const readSection = requireElement('answered-reads');
 const readList = requireElement('read-list');
+/**
+ * ADR 0142 PE2. A machine the person names, and the timing of it.
+ *
+ * The declaration is written by the contract rather than by this file, and it
+ * is put into the label at load: a sentence a person has to agree with must
+ * come from the one place every other word here comes from.
+ */
+const measurementSection = requireElement('measurements');
+const measurementList = requireElement('measurement-list');
+const measureReach = requireInput('measure-reach');
+const measureModel = requireInput('measure-model');
+const measureOwn = requireInput('measure-own');
+const measureOwnLabel = requireElement('measure-own-label');
+const measureSubmit = requireButton('measure-submit');
+const measureStatus = requireElement('measure-status');
+
+measureOwnLabel.textContent = picoCompanionOwnMachineDeclaration;
+
+function refreshMeasurements(): void {
+  void window.picoCompanion.getModelProviderMeasurements()
+    .then((measurements) => {
+      renderPicoCompanionMeasurements(
+        { list: measurementList, section: measurementSection, document },
+        measurements,
+      );
+      /**
+       * Asked again only while something is running, and once every five
+       * seconds rather than as fast as it can.
+       *
+       * ADR 0119 Q4's stranger bucket is sixty requests a minute *shared*,
+       * charged before the seal is opened - a window that polled hard would be
+       * indistinguishable from a flood, and would spend the budget its own
+       * Home needs for everything else.
+       */
+      const running = (measurements as Array<{ state?: string }>)
+        .some((entry) => entry.state === 'running');
+      if (running) {
+        setTimeout(refreshMeasurements, 5_000);
+      }
+    }, () => {
+      measurementSection.hidden = true;
+    });
+}
+
+measureSubmit.addEventListener('click', () => {
+  const reach = measureReach.value.trim();
+  const model = measureModel.value.trim();
+  if (reach === '' || model === '') {
+    measureStatus.textContent = 'Name where it answers, and which model to run.';
+    return;
+  }
+  if (!measureOwn.checked) {
+    // Refused in words rather than by a disabled button: a greyed-out control
+    // invites somebody to wonder what it would have done.
+    measureStatus.textContent = picoCompanionOwnMachineUndeclared;
+    return;
+  }
+  measureStatus.textContent = 'Starting...';
+  void window.picoCompanion.askModelProviderMeasurement(reach, model)
+    .then(() => {
+      // Said as what it will and will not do. The measurement produces a
+      // finding; using it is the decision on the list below.
+      measureStatus.textContent = 'Measuring. That takes several minutes, and '
+        + 'nothing uses this machine until you decide it may.';
+      refreshMeasurements();
+      refreshModelProviders();
+    }, (error: unknown) => {
+      measureStatus.textContent = refusalText(error, 'That was not measured.');
+    });
+});
+
 const supplierSection = requireElement('suppliers');
 const supplierList = requireElement('supplier-list');
 const supplierStatus = requireElement('supplier-status');
@@ -854,6 +933,7 @@ function showView(view: PicoCompanionWindowView): void {
     refreshPendingActions();
   } else {
     refreshModelProviders();
+    refreshMeasurements();
     refreshSuppliers();
     refreshModuleConsent();
     refreshDepots();

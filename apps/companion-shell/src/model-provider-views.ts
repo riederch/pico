@@ -1,6 +1,8 @@
 import {
   picoCompanionModelProviderLines,
   parsePicoCompanionModelProviders,
+  picoCompanionMeasurementLines,
+  parsePicoCompanionMeasurements,
   picoCompanionAnsweredReadLines,
   parsePicoCompanionAnsweredReads,
   picoCompanionRecallLines,
@@ -676,6 +678,42 @@ export function renderPicoCompanionDeclaredSuppliers(
     }));
 
     item.append(headline, detail, label, domain, attach);
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0142 PE2 - a measurement in progress, and the ones just finished.
+ *
+ * **No control on the line.** Everything here is either work happening or a
+ * fact about how it ended; the decision it leads to is on the provider line
+ * below, which already exists. A cancel button is deliberately absent: the
+ * measurement is minutes of somebody's own card doing work they asked for, and
+ * a half-measured host would be an entry ADR 0142 would not let Pico write
+ * anyway.
+ */
+export function renderPicoCompanionMeasurements(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+): void {
+  const measurements = parsePicoCompanionMeasurements(value);
+  root.section.hidden = measurements.length === 0;
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionMeasurementLines(measurements)) {
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+    item.dataset.entryId = line.entryId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    item.append(headline, detail);
     root.list.append(item);
   }
 }

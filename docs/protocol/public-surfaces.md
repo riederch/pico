@@ -118,6 +118,7 @@ The following surfaces are visible today but should be treated as foundation-sta
 | `pico.link.direct` `home.time_bound_entries.read` / `home.time_bound_entry.acknowledge` | Internal | ADR 0118 O1. What is due, and the surface confirming the person was told. Only the acknowledgement sets `raised_at`, because the Home cannot observe that a notification was shown. |
 | `pico.link.direct` `home.link.mailbox.exchange` | Internal | ADR 0148 EX5. Two devices hand each other relay addresses. Remote-capable is the point: the exchange is what makes a relay usable at all, and re-exchange is rotation. |
 | `pico.link.direct` `home.model.providers.read` / `home.model.provider.decision.submit` / `home.model.provider.decision.revoke` | Internal | ADR 0152. What computes for this person, their declaration and allowance against it, and the withdrawal. Remote-capable because ADR 0113 puts the decision on the person's own device rather than in the Foundation dashboard, which ADR 0112 calls diagnosis. Revoking keeps the row with a date on it. |
+| `pico.link.direct` `home.model.provider.measure.ask` | Internal | ADR 0142 PE1/PE2 with ADR 0152. The person points the Home at a host and asks what it can actually do; how it went rides along with `home.model.providers.read`, because a measurement and the entry it produces are one subject and a surface polling a dedicated route for minutes would spend ADR 0119 Q4's shared stranger budget on bookkeeping. **The operation every model path needed and nobody had**: `PicoModelProviderRegistry.put()` had no caller outside its tests, so the registry was empty on every real Home - the provider list hid itself, `pickPicoDepotIntakeEntry` refused with `no_decided_entry`, and the only way to produce an entry was a development script that says of itself that it writes nothing. The ask returns when the work starts, because measuring is minutes of generation, an unload to time a cold load and two jobs at once to count lanes. What it produces is an *undecided* entry carrying `live_turn`: ADR 0151 PV1 keeps the wider allowance something a credential buys, so a measurement grants nothing and ADR 0152's decision surface is what asks. `providerClass` travels because it is a person's judgement and never a measurement (ADR 0048). |
 | `pico.link.direct` `home.presence.announce` / `home.presence.read` / `home.presence.forget` / `home.presence.switch` | Internal | ADR 0126 P2/P6. A presence says it is here and what its runtime can do; the person reads their own devices, switches one affordance or a whole device off, and removes a device from the list. Remote-capable by definition - a presence that had to be on the Home's network to announce would be a presence that could not be elsewhere. The announcement carries affordances, which are facts about a runtime, and never a risk class. |
 | `pico.link.direct` `home.suppliers.read` / `home.supplier.reach.decide` | Internal | ADR 0138 CO3/CO4. What is attached, and the two decisions standing between an attached supplier and one reaching out: whether it may reach at all, and whether it may do so unasked. The second cannot be granted without the first, which the database carries as a CHECK rather than leaving to whoever writes next. Remote-capable because attaching says a supplier exists and this says Pico may spend somebody's money on it - a person's answer, from the device they hold, not administration's (ADR 0087). |
 | `pico.link.direct` `home.supplier.attach` | Internal | ADR 0143 DP3 with ADR 0137 IN5. The person names the privacy domain a declared supplier's material lands in, which is what attaches it. **The half of ADR 0136 that had no product path**: a depot could be fetched and its `pico-depot.json` read, and nothing could turn a declared supplier into an attached one - `attachPicoSupplier` had no caller outside its tests, so the supplier list was empty on every real Home and the library reads BR1 exists for could never be queued. Found by fetching a real depot that declares one and reading the answer. Everything recorded comes from the depot's declaration except the domain, which is the single field a depot may not supply and exactly the one `picoDepotSupplierNeedsFromPerson` names. Attaching creates no reach; ADR 0138 CO3/CO4 stays the separate decision beside it. |
@@ -318,6 +319,7 @@ home.presence_switch_changed
 home.state_crossed
 home.rule_decision_changed
 home.supplier_attachment_changed
+home.model_provider_measurement_changed
 home.version_changed
 ```
 
@@ -350,6 +352,7 @@ home.presence_switch_changed
 home.state_crossed
 home.rule_decision_changed
 home.supplier_attachment_changed
+home.model_provider_measurement_changed
 home.version_changed
 ```
 

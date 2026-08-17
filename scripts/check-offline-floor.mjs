@@ -366,6 +366,12 @@ const outwardReachingModules = [
   // floor family that grew a path to it would be a family that phones an
   // operator to answer a question the floor promises to answer alone.
   ['apps/core/src/link-relay-transport.ts', 'calls a relay operator over the network'],
+  // ADR 0142 PE2. The third, and it was reachable from a development script
+  // rather than from the Home until 2026-08-17 - so it sat outside every floor
+  // family by accident rather than by decision. Wiring the measurement into a
+  // Link operation is what makes naming it load-bearing: measuring a host is
+  // several minutes of generation against a machine Pico does not run.
+  ['apps/core/src/model-provider-measure.ts', 'times a model host over the network'],
 ];
 for (const [path, why] of outwardReachingModules) {
   const absolute = join(repoRoot, path);
