@@ -8,7 +8,18 @@ Pico is currently foundation-stage. This document does not make Pico Home, Pico 
 
 This matrix tracks every numbered ADR file currently present under `docs/architecture/`, with extra attention on production-blocking, security-sensitive and compatibility-sensitive decisions.
 
-If older ADR files are added later, they should be added here before their decision status is treated as an implementation claim.
+If older ADR files are added later, they should be added here before their decision status is treated as an implementation claim. `docs:check` compares this matrix against the files in both directions, so a missing row is refused rather than discovered - a matrix that claims to track every ADR and quietly does not is worse than one that claims less.
+
+### Deliberately without a row
+
+A draft that has decided nothing has no implementation status to report, and a
+row saying so would read as a decision somebody made. These are named here so
+their absence is a statement rather than an omission - the difference the
+matrix above cannot make on its own.
+
+| ADR | Why |
+|---|---|
+| [0146](0146-an-outside-agent-is-a-requester-and-answering-it-is-disclosure.md) | Its own status says it: "Draft sketch... Nothing here is accepted and nothing is built... No status matrix row, no `.agent-context.md` entry, no ADR 0128 status note on anything it touches - those follow acceptance, not drafting." |
 
 ## Status categories
 

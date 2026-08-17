@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * The repository tree in `ReadmeTech.md`, checked against the repository.
+ * Documents that claim to enumerate something, checked against the something.
  *
  * **Written after finding two stale hand-kept copies in one file.** That
  * document's endpoint table named nine routes while the Home served
@@ -21,6 +21,26 @@ import { fileURLToPath } from 'node:url';
  *
  * Depth one only, deliberately. Naming every file would be a second copy of
  * the tree, which is the failure this exists to catch.
+ *
+ * The second subject is `implementation-status.md`, which says it "tracks
+ * every numbered ADR file currently present" - and was missing one. That one
+ * turned out to be missing on purpose, which is the interesting part: ADR 0146
+ * is a draft sketch whose own status says it gets no matrix row, because those
+ * follow acceptance rather than drafting.
+ *
+ * **So the exemption is a list here, two commits after an exemption list was
+ * replaced by a rule.** The difference is what the exemption is made of. A
+ * dot-directory is tooling by a property anybody can derive, so deriving it is
+ * right and a list of them drifts. "This ADR is a draft and owes no row" is a
+ * judgement somebody made about one document; judgements get written down
+ * where a reader meets them, which is the matrix itself, with the reason
+ * beside them.
+ *
+ * **What this cannot do is judge the reason.** Moving a real ADR into that
+ * table with a sentence beside it passes, and should: deciding an ADR is a
+ * draft is somebody's call, not a checker's. What the check buys is that the
+ * absence is visible and argued in a document reviewers read, instead of being
+ * a row nobody wrote.
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
@@ -100,6 +120,52 @@ for (const entry of named) {
   }
 }
 
+// --- The ADR matrix against the ADRs ----------------------------------------
+
+const matrixPath = 'docs/architecture/implementation-status.md';
+const matrix = readFileSync(join(repoRoot, matrixPath), 'utf8');
+const adrNumbers = readdirSync(join(repoRoot, 'docs', 'architecture'))
+  .filter((entry) => /^\d{4}-.*\.md$/u.test(entry))
+  .map((entry) => entry.slice(0, 4));
+
+/**
+ * Rows of the matrix, and the deliberate absences named beneath it.
+ *
+ * The exemption section is cut out before the rows are counted, because its
+ * entries are rows too - the first version counted them as tracked ADRs, which
+ * made the exemption satisfy the very check it is an exemption from and
+ * reported 154 of 154 tracked while one was not.
+ */
+const exemptionSection = /### Deliberately without a row\n([\s\S]*?)\n## /u.exec(matrix);
+const rowed = new Set(
+  [...(exemptionSection === null
+    ? matrix
+    : matrix.replace(exemptionSection[0], '')).matchAll(/^\| \[(\d{4})\]/gmu)]
+    .map(([, number]) => number),
+);
+const withoutRow = new Set(
+  [...(exemptionSection?.[1] ?? '').matchAll(/^\| \[(\d{4})\]/gmu)]
+    .map(([, number]) => number),
+);
+
+for (const number of adrNumbers) {
+  if (!rowed.has(number) && !withoutRow.has(number)) {
+    errors.push(
+      `${matrixPath}: ADR ${number} has a file and no row. This matrix says it tracks `
+      + 'every numbered ADR; a draft that owes none is named under "Deliberately '
+      + 'without a row" with its reason, so an absence is a statement rather than '
+      + 'an omission.',
+    );
+  }
+}
+for (const number of rowed) {
+  if (!adrNumbers.includes(number)) {
+    errors.push(
+      `${matrixPath}: a row claims ADR ${number} and no such file exists.`,
+    );
+  }
+}
+
 if (errors.length > 0) {
   console.error('Documentation structure check failed:');
   for (const error of errors) {
@@ -110,5 +176,6 @@ if (errors.length > 0) {
 
 console.log(
   `Documentation structure check passed (${topLevel.length} top-level directories, `
-  + `${named.size} entries named, each real).`,
+  + `${named.size} entries named, each real; ${adrNumbers.length} ADRs, `
+  + `${rowed.size} with a row and ${withoutRow.size} deliberately without one).`,
 );
