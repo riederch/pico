@@ -3578,6 +3578,28 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           if (principal === undefined || typeof args.jobId !== 'string') {
             return { outcome: 'invalid_arguments', result: {} };
           }
+          /**
+           * ADR 0126 P3. Which of this person's devices released it.
+           *
+           * **Claimed by the device and checked against the registry**, not
+           * taken on trust. A device can only ever name one of its own
+           * identity's presences, because the request is already authenticated
+           * as that identity and the lookup is scoped to it - so the worst a
+           * lying client achieves is misattributing to a sibling device it
+           * already knows about. That residual is smaller than the one it
+           * replaces, which was a record that never said where anything came
+           * from.
+           *
+           * Absent when the device did not name one, and absent when it named
+           * a presence this identity does not have. Inventing a value would
+           * put a device in an audit trail that never said it was there.
+           */
+          const releasedBy = typeof args.presenceId === 'string'
+            && store.picoPresenceRegistry()
+              .forIdentity(principal.picoIdentityFingerprintHex, Date.now())
+              .some((presence) => presence.presenceId === args.presenceId)
+            ? args.presenceId
+            : undefined;
           const kept = store.picoModelJobQueue().recallKeptView(args.jobId);
           if (kept === undefined
             || kept.picoIdentityFingerprintHex !== principal.picoIdentityFingerprintHex) {
@@ -3638,6 +3660,7 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             const crossed = crossPicoStateBoundary({
               store,
               kind: 'recall_answer',
+              ...(releasedBy === undefined ? {} : { presenceId: releasedBy }),
               privacyDomain: kept.privacyDomain,
               owner: `pico:identity:${principal.picoIdentityFingerprintHex}`,
               controller: `pico:identity:${principal.picoIdentityFingerprintHex}`,

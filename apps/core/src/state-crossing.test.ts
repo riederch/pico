@@ -115,3 +115,30 @@ describe('ADR 0126 P3 - promoting is recording', () => {
     expect(store.memory().getInDomain(memoryItemId, 'domain-private')).toBeUndefined();
   });
 });
+
+describe('ADR 0126 P3 - who released it, checked rather than believed', () => {
+  it('records a presence this identity has, and drops one it does not', async () => {
+    /**
+     * A device can only ever name one of its own identity's presences: the
+     * request is authenticated as that identity and the lookup is scoped to
+     * it. Inventing a value would put a device in an audit trail that never
+     * said it was there, so an unknown name is dropped rather than recorded.
+     */
+    const store = await opened();
+    store.picoPresenceRegistry().announce({
+      picoIdentityFingerprintHex: 'a'.repeat(64),
+      announcement: {
+        schema: 'pico.presence.v1',
+        presenceId: 'device-known01',
+        presenceType: 'desktop_companion',
+        affordances: ['display'],
+      },
+      at: '2026-08-17T09:00:00.000Z',
+    });
+    const known = store.picoPresenceRegistry()
+      .forIdentity('a'.repeat(64), Date.parse('2026-08-17T09:00:01.000Z'));
+    expect(known.map((presence) => presence.presenceId)).toEqual(['device-known01']);
+    expect(store.picoPresenceRegistry()
+      .forIdentity('b'.repeat(64), Date.parse('2026-08-17T09:00:01.000Z'))).toEqual([]);
+  });
+});

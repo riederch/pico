@@ -325,6 +325,18 @@ version of a concept, and the versions drift where nobody is looking.
   arriving as a store error, because "your Home is full" and "that crossing
   was malformed" are different things to be told.
 
+  **The record says which presence since 2026-08-17, and that was found by
+  running it.** A live pass against a real provider showed the crossing record
+  with no `presenceId` on every keep - the field ADR 0126 asks for, never
+  filled, because the caller never named one. It does now, and the Home
+  **checks the name against its own registry** rather than believing it. A
+  device can only ever name one of its own identity's presences, since the
+  request is authenticated as that identity and the lookup is scoped to it, so
+  the worst a lying client achieves is misattributing to a sibling device it
+  already knows about. A name this identity does not have is dropped rather
+  than recorded: inventing a value would put a device in an audit trail that
+  never said it was there.
+
   **The buffer relocation is deliberately not done**, decided by the user on
   2026-08-16 after the measurement below. `appendPicoObservations` has no
   caller outside tests - no route, no module and no device writes an

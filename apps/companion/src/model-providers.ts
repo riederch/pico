@@ -375,9 +375,19 @@ export async function readPicoCompanionRecalls(input: {
 export async function keepPicoCompanionRecall(input: {
   livingDeviceLinkClient: PicoLinkDirectClient;
   jobId: string;
+  /**
+   * ADR 0126 P3. Which presence is releasing this into durable memory.
+   *
+   * Named by this device and checked by the Home against its own registry, so
+   * the crossing record can say where something came from. Optional because a
+   * device that has not announced itself has no honest answer, and inventing
+   * one would put a presence in an audit trail that never said it was there.
+   */
+  presenceId?: string;
 }): Promise<string> {
   const kept = await input.livingDeviceLinkClient.request('home.recall.keep', {
     jobId: input.jobId,
+    ...(input.presenceId === undefined ? {} : { presenceId: input.presenceId }),
   });
   if (kept.outcome !== 'ok') {
     const refusal = (kept.result as { refusal?: unknown }).refusal;

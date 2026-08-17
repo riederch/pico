@@ -39,6 +39,7 @@ import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
   announcePicoCompanionPresence,
+  picoCompanionPresenceId,
   forgetPicoCompanionDevice,
   readPicoCompanionDevices,
   switchPicoCompanionDevice,
@@ -596,6 +597,9 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           jobId,
+          // ADR 0126 P3. This device announced itself as a presence; saying so
+          // is what lets the crossing record name where the answer came from.
+          presenceId: picoCompanionPresenceId(readPicoCompanionProfile(profilePath)),
         });
       }),
       grantDomainRead: async ({ privacyDomain }) => await serialized(async () => {

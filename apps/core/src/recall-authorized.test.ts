@@ -9,6 +9,7 @@ import {
   picoIdentitySuite,
 } from '@pico/protocol';
 import { parsePicoModelProviderEntry } from '@pico/protocol/model-provider';
+import { picoPresenceSchema } from '@pico/protocol/presence';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
@@ -243,8 +244,21 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
      * same domain needed a provider with a credential - so a person who used
      * their Home once could not use it twice. This is that follow-up.
      */
-    expect((await send('home.recall.keep', { jobId: recalls[0]?.jobId })).response.outcome)
-      .toBe('ok');
+    /**
+     * ADR 0126 P3. The keep names the presence releasing it, and the Home
+     * checks the name against its own registry rather than believing it.
+     */
+    expect((await send('home.presence.announce', {
+      schema: picoPresenceSchema,
+      presenceId: 'device-keeper01',
+      presenceType: 'desktop_companion',
+      affordances: ['display'],
+    })).response.outcome).toBe('ok');
+
+    expect((await send('home.recall.keep', {
+      jobId: recalls[0]?.jobId,
+      presenceId: 'device-keeper01',
+    })).response.outcome).toBe('ok');
 
     /**
      * ADR 0126 P3. The crossing left a record, which it did not before.
@@ -262,6 +276,7 @@ describe('ADR 0116 W1 with ADR 0082 - the way a person actually reads their memo
     expect(crossed).toHaveLength(1);
     expect(crossed[0]?.payload.kind).toBe('recall_answer');
     expect(crossed[0]?.payload.privacyDomain).toBe('domain-private');
+    expect(crossed[0]?.payload.presenceId).toBe('device-keeper01');
     expect(JSON.stringify(crossed[0]?.payload)).not.toContain('Bergstrasse');
 
     const again = await send('home.recall.ask', {
