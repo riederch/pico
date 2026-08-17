@@ -17,6 +17,8 @@ import {
   type PicoVaultDaemonCeremonyIssueRecoveryCardResult,
   type PicoVaultDaemonCeremonyRotateDomainRequest,
   type PicoVaultDaemonCeremonyRotateDomainResult,
+  type PicoVaultDaemonFoundingBootstrapRequest,
+  type PicoVaultDaemonFoundingBootstrapResult,
   type PicoVaultDaemonRecoveryBootstrapRequest,
   type PicoVaultDaemonRecoveryBootstrapResult,
   type PicoVaultDaemonHelloResult,
@@ -62,6 +64,10 @@ export interface PicoVaultDaemonClient {
   recoveryBootstrap(
     input: Omit<PicoVaultDaemonRecoveryBootstrapRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonRecoveryBootstrapResult>;
+  /** ADR 0130 E2. The founding twin: a fresh identity and this device's keys. */
+  foundingBootstrap(
+    input: Omit<PicoVaultDaemonFoundingBootstrapRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonFoundingBootstrapResult>;
   close(): Promise<void>;
 }
 
@@ -202,6 +208,10 @@ export async function connectPicoVaultDaemonClient(
         picoVaultDaemonRequestFamilies.ceremonyIssueRecoveryCard,
       ...ceremonyInput,
     }) as unknown as PicoVaultDaemonCeremonyIssueRecoveryCardResult,
+    foundingBootstrap: async (bootstrapInput) => await request({
+      family: picoVaultDaemonRequestFamilies.foundingBootstrap,
+      ...bootstrapInput,
+    }) as unknown as PicoVaultDaemonFoundingBootstrapResult,
     recoveryBootstrap: async (bootstrapInput) => await request({
       family: picoVaultDaemonRequestFamilies.recoveryBootstrap,
       ...bootstrapInput,

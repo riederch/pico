@@ -25,13 +25,32 @@ medium. The CLI's wording is byte-identical to what it was, and the fifteen
 real-process ceremony tests pass unchanged - including the one that founds a
 Home end to end without a private key in the client process.
 
-**What that test's title makes explicit is the shape of the rest.** Key
-creation today is `createPicoVaultKeyfile` called by the CLI, writing keyfiles
-into the vault directory - a local file operation. The companion may not do
-that: the recovery path goes through the daemon's `recoveryBootstrap` request
-precisely so a private key never enters the client process, and founding needs
-its own request family for the same reason. That is the next step, and it is a
-daemon surface rather than a companion one.
+**What that test's title makes explicit is the shape of the rest**, and the
+next step took it. Key creation was `createPicoVaultKeyfile` called by the CLI,
+writing keyfiles into the vault directory - a local file operation the
+companion may not do, because the recovery path goes through the daemon's
+`recoveryBootstrap` request precisely so a private key never enters the client
+process.
+
+Founding now has its twin: `pico.vault.daemon.founding.bootstrap.v1` makes the
+identity and this device's two keys under one passphrase and answers with
+fingerprints and public halves only. The difference from the recovery twin is
+where the identity comes from - a card restores one, this makes one - and
+nothing else, deliberately: a founding that wrote keyfiles differently would be
+a second way for a vault to exist. It refuses a vault that already holds keys,
+because one vault with two roots has no way to say which one a signature
+belongs to, and it removes what it wrote if any step fails, because a half
+vault is worse than none.
+
+The request shape is closed by `assertExactKeys`, and that is the load-bearing
+half rather than tidiness: a founding request that *could* carry a card payload
+or a PIN would be a second way to start an identity, arriving through the door
+that makes one.
+
+What remains for E2: the companion function that drives bootstrap, unlock and
+ceremony in order, the first-run surface offering founding beside restoring,
+and the question of whether the Recovery Card is issued as part of founding -
+without one, a person who founds a Home can never recover it.
 
 ## Context
 

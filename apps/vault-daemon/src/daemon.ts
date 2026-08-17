@@ -509,6 +509,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleRecoveryBootstrap(socket, request);
         return;
       }
+      case picoVaultDaemonRequestFamilies.foundingBootstrap: {
+        this.#handleFoundingBootstrap(socket, request);
+        return;
+      }
       case picoVaultDaemonRequestFamilies.lock: {
         // Locking is never privileged and stays coarse on purpose: any
         // connection may end every session at once as a safety valve.
@@ -1516,6 +1520,92 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         ? messageOf(error)
         : 'recovery_bootstrap_failed';
       this.#audit('recovery_bootstrap', { outcome: 'error', reason });
+      this.#respondError(socket, request.requestId, reason);
+    }
+  }
+
+  /**
+   * ADR 0130 E2. The founding twin of {@link #handleRecoveryBootstrap}.
+   *
+   * **Same fresh-vault rule, and it is not tidiness.** A second identity in
+   * one vault would give this device two roots and no way to say which one a
+   * signature belongs to; the recovery twin refuses for the same reason, and
+   * refusing here keeps "one vault, one identity" a property of the daemon
+   * rather than a habit of its callers.
+   *
+   * The only difference from the twin is where the identity comes from: a
+   * Recovery Card restores one, and this makes one. Everything after that -
+   * the two device keys, the write, the cleanup on failure, the audit line -
+   * is deliberately identical, because a founding that wrote keyfiles
+   * differently from a restore would be a second way for a vault to exist.
+   */
+  #handleFoundingBootstrap(
+    socket: Socket,
+    request: Extract<PicoVaultDaemonRequest, {
+      family: typeof picoVaultDaemonRequestFamilies.foundingBootstrap;
+    }>,
+  ): void {
+    if (this.#unlockedSessions.size !== 0
+      || readdirSync(this.keyfilesPath).length !== 0) {
+      this.#respondError(socket, request.requestId, 'founding_bootstrap_requires_fresh_vault');
+      return;
+    }
+
+    const paths: string[] = [];
+    try {
+      const identity = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'pico_identity',
+        passphrase: request.passphrase,
+      });
+      const signing = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'device_signing',
+        passphrase: request.passphrase,
+      });
+      const agreement = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'device_key_agreement',
+        passphrase: request.passphrase,
+      });
+      for (const [role, created] of [
+        ['pico_identity', identity],
+        ['device_signing', signing],
+        ['device_key_agreement', agreement],
+      ] as const) {
+        const path = join(
+          this.keyfilesPath,
+          `${role}-${created.keyFingerprintHex}.json`,
+        );
+        writePicoVaultKeyfile(path, created.keyfile);
+        paths.push(path);
+      }
+      this.#audit('founding_bootstrap', {
+        outcome: 'ok',
+        identityKeyFingerprintHex: identity.keyFingerprintHex,
+        targetDeviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
+        targetDeviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+      });
+      this.#respondOk(socket, request.requestId, {
+        identity: {
+          keyFingerprintHex: identity.keyFingerprintHex,
+          publicKeyHex: identity.publicKeyHex,
+        },
+        device: {
+          signingKeyFingerprintHex: signing.keyFingerprintHex,
+          signingPublicKeyHex: signing.publicKeyHex,
+          keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+          keyAgreementPublicKeyHex: agreement.publicKeyHex,
+          delegationId: request.targetDelegationId,
+        },
+      });
+    } catch (error) {
+      // A half-written vault is worse than none: the next attempt would meet
+      // its own leftovers and refuse as "not fresh".
+      for (const path of paths) {
+        rmSync(path, { force: true });
+      }
+      const reason = snakeCaseReasonPattern.test(messageOf(error))
+        ? messageOf(error)
+        : 'founding_bootstrap_failed';
+      this.#audit('founding_bootstrap', { outcome: 'error', reason });
       this.#respondError(socket, request.requestId, reason);
     }
   }

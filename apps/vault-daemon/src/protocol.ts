@@ -39,6 +39,17 @@ export const picoVaultDaemonRequestFamilies = {
   ceremonyCreateReaderGrant: 'pico.vault.daemon.ceremony.create-reader-grant.v1',
   ceremonyIssueRecoveryCard: 'pico.vault.daemon.ceremony.issue-recovery-card.v1',
   recoveryBootstrap: 'pico.vault.daemon.recovery.bootstrap.v1',
+  /**
+   * ADR 0130 E2. The three keys a first device needs, made where they stay.
+   *
+   * The founding twin of `recoveryBootstrap`, and it exists for that request's
+   * reason rather than for symmetry: a client that created keyfiles itself
+   * would hold a private key, and "founds a Home without a private key in the
+   * client process" is a property the ceremony tests assert by name. The
+   * difference between the two is what starts the identity - a Recovery Card
+   * restores one, this makes one - and nothing else.
+   */
+  foundingBootstrap: 'pico.vault.daemon.founding.bootstrap.v1',
 } as const;
 
 /**
@@ -325,6 +336,35 @@ export interface PicoVaultDaemonRecoveryBootstrapResult {
   };
 }
 
+/**
+ * ADR 0130 E2. Makes a fresh identity and this device's keys, under one
+ * passphrase.
+ *
+ * No card and no PIN, which is the whole difference from the recovery twin:
+ * there is nothing to restore from, because this is the first device of an
+ * identity that does not exist yet.
+ */
+export interface PicoVaultDaemonFoundingBootstrapRequest {
+  family: typeof picoVaultDaemonRequestFamilies.foundingBootstrap;
+  requestId: string;
+  passphrase: string;
+  targetDelegationId: string;
+}
+
+export interface PicoVaultDaemonFoundingBootstrapResult {
+  identity: {
+    keyFingerprintHex: string;
+    publicKeyHex: string;
+  };
+  device: {
+    signingKeyFingerprintHex: string;
+    signingPublicKeyHex: string;
+    keyAgreementKeyFingerprintHex: string;
+    keyAgreementPublicKeyHex: string;
+    delegationId: string;
+  };
+}
+
 export interface PicoVaultDaemonApprovalWaitRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalWait;
   requestId: string;
@@ -366,7 +406,8 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyRotateDomainRequest
   | PicoVaultDaemonCeremonyCreateReaderGrantRequest
   | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
-  | PicoVaultDaemonRecoveryBootstrapRequest;
+  | PicoVaultDaemonRecoveryBootstrapRequest
+  | PicoVaultDaemonFoundingBootstrapRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -613,6 +654,35 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         keyRole: keyRole as PicoVaultPersonKeyRole,
         keyFingerprintHex,
         passphrase,
+      };
+    }
+    case picoVaultDaemonRequestFamilies.foundingBootstrap: {
+      /**
+       * ADR 0130 E2. The recovery twin's checks, minus what founding has no
+       * source for.
+       *
+       * `assertExactKeys` is the load-bearing half: a request that could carry
+       * a card payload or a PIN would be a second way to start an identity,
+       * arriving through the door that makes one. Founding has exactly two
+       * inputs, and anything else is refused before the daemon looks at it.
+       */
+      assertExactKeys(parsed, ['family', 'requestId', 'passphrase', 'targetDelegationId']);
+      const passphrase = parsed.passphrase;
+      if (typeof passphrase !== 'string'
+        || passphrase.length === 0
+        || passphrase.length > MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS) {
+        throw new Error('invalid_request');
+      }
+      const targetDelegationId = parsed.targetDelegationId;
+      if (typeof targetDelegationId !== 'string'
+        || !/^[A-Za-z0-9._:/+-]{1,1024}$/u.test(targetDelegationId)) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.foundingBootstrap,
+        requestId,
+        passphrase,
+        targetDelegationId,
       };
     }
     case picoVaultDaemonRequestFamilies.recoveryBootstrap: {
