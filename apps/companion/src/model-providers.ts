@@ -509,3 +509,24 @@ export async function forgetPicoCompanionMemory(input: {
     throw new Error(typeof refusal === 'string' ? refusal : `memory_forget_${answer.outcome}`);
   }
 }
+
+/**
+ * ADR 0142 PE1. Forgets a measured machine, and every decision about it.
+ *
+ * The decisions go with it on the Home's side rather than being revoked one
+ * by one: an entry identifier is derived from the model name, so a later
+ * measurement of the same model would otherwise inherit an old answer about a
+ * different finding.
+ */
+export async function forgetPicoCompanionModelProvider(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  entryId: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.model.provider.forget', {
+    entryId: input.entryId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `provider_forget_${answer.outcome}`);
+  }
+}

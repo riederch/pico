@@ -22,6 +22,47 @@ export interface PicoCompanionSupplierView {
 }
 
 /**
+ * ADR 0136 with ADR 0129 SR6. Stops a supplier, and forgets nothing.
+ *
+ * **What was derived stays.** A person taking a library back is taking back
+ * the library, not what Pico read out of it - those are ordinary memory items
+ * under ordinary custody. A supplier the depot still declares is offered
+ * again afterwards, because this took back the answer rather than the question.
+ */
+export async function detachPicoCompanionSupplier(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  identifier: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.supplier.detach', {
+    identifier: input.identifier,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `supplier_detach_${answer.outcome}`);
+  }
+}
+
+/**
+ * ADR 0143 DP8. Takes back "this material may be here", and the files with it.
+ *
+ * The working copy goes on the Home's side, immediately rather than at the
+ * next boot sweep: until then it is executable code on disk that no attachment
+ * stands behind.
+ */
+export async function detachPicoCompanionDepot(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  remote: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.depot.detach', {
+    remote: input.remote,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `depot_detach_${answer.outcome}`);
+  }
+}
+
+/**
  * ADR 0143 DP3. A supplier a fetched depot brings, which nobody has accepted.
  *
  * `needs` comes from the Home rather than being known here, because what a

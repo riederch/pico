@@ -62,6 +62,8 @@ export function renderPicoCompanionModelProviders(
     entryId: string;
     providerClass: string;
   }) => void,
+  /** ADR 0142 PE1. The other axis: a machine they no longer have. */
+  forget?: (entryId: string) => void,
 ): void {
   const providers = parsePicoCompanionModelProviders(value);
   root.section.hidden = providers.length === 0;
@@ -103,6 +105,21 @@ export function renderPicoCompanionModelProviders(
     });
 
     item.append(headline, detail, measured, button);
+
+    /**
+     * The other axis, last. ADR 0152 SE2's "never more than one thing to
+     * press" is about the decision - what this machine may see - and offering
+     * two of those at once is what asks a person to work out which applies.
+     * Forgetting the machine ends what the decision is about.
+     */
+    if (forget !== undefined) {
+      const forgetButton = root.document.createElement('button');
+      forgetButton.type = 'button';
+      forgetButton.textContent = line.forgetActionLabel;
+      forgetButton.addEventListener('click', () => forget(line.entryId));
+      item.append(forgetButton);
+    }
+
     root.list.append(item);
   }
 }
@@ -434,6 +451,8 @@ export function renderPicoCompanionSuppliers(
     mayReachOutside: boolean;
     mayReachUnasked: boolean;
   }) => void,
+  /** ADR 0136. Ends the attachment. Never a switch, and always last. */
+  remove?: (identifier: string) => void,
 ): void {
   const suppliers = parsePicoCompanionSuppliers(value);
   root.section.hidden = suppliers.length === 0;
@@ -483,6 +502,20 @@ export function renderPicoCompanionSuppliers(
       item.append(unaskedDetail, unasked);
     }
 
+    /**
+     * Last, and after the reach controls rather than among them. Those are
+     * settings that go on being decided; this ends the thing they are about,
+     * and a control that ends something sitting between two that adjust it
+     * would be pressed by somebody meaning to adjust.
+     */
+    if (remove !== undefined) {
+      const button = root.document.createElement('button');
+      button.type = 'button';
+      button.textContent = line.removeActionLabel;
+      button.addEventListener('click', () => remove(line.identifier));
+      item.append(button);
+    }
+
     root.list.append(item);
   }
 }
@@ -499,6 +532,8 @@ export function renderPicoCompanionDepots(
   root: { list: HTMLElement; section: HTMLElement; document: Document },
   value: unknown,
   act: (input: { remote: string; mayFetch: boolean; mayFetchUnasked: boolean }) => void,
+  /** ADR 0143 DP8. Ends the attachment, and the working copy with it. */
+  remove?: (remote: string) => void,
 ): void {
   const depots = parsePicoCompanionDepots(value);
   root.section.hidden = depots.length === 0;
@@ -543,6 +578,14 @@ export function renderPicoCompanionDepots(
         mayFetchUnasked: !depot.mayFetchUnasked,
       }));
       item.append(unaskedDetail, unasked);
+    }
+
+    if (remove !== undefined) {
+      const button = root.document.createElement('button');
+      button.type = 'button';
+      button.textContent = line.removeActionLabel;
+      button.addEventListener('click', () => remove(depot.remote));
+      item.append(button);
     }
 
     root.list.append(item);

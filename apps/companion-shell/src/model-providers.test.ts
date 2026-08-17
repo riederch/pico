@@ -6,6 +6,8 @@ import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
   renderPicoCompanionDeclaredSuppliers,
+  renderPicoCompanionSuppliers,
+  renderPicoCompanionDepots,
   renderPicoCompanionMeasurements,
   renderPicoCompanionModuleConsent,
   renderPicoCompanionPendingApprovals,
@@ -947,5 +949,108 @@ describe('ADR 0071 - the line that made a memory is the line that unmakes it', (
     }).children[0]!;
     const buttons = line.children.filter((child) => child.tag === 'button');
     expect(buttons.map((button) => button.textContent)).toEqual(['Keep this answer']);
+  });
+});
+
+describe('everything a person added, taken back - and never mistaken for a setting', () => {
+  it('puts the supplier removal last, after the controls that adjust it', () => {
+    /**
+     * The reach switches go on being decided; this ends the thing they are
+     * about. A control that ends something sitting between two that adjust it
+     * would be pressed by somebody meaning to adjust - so it is last, and it
+     * says `Remove` rather than `Delete` because what Pico derived under the
+     * attachment stays where it is.
+     */
+    const root = fakeDocument();
+    const removed: string[] = [];
+    renderPicoCompanionSuppliers(root, [{
+      identifier: 'git-library',
+      kind: 'library',
+      mayReachOutside: true,
+      mayReachUnasked: false,
+      attachedAt: '2026-08-17T10:00:00.000Z',
+    }], () => {}, (identifier) => removed.push(identifier));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    /**
+     * **Exactly one, and last.** Asserting only that the last one says
+     * `Remove` passed a planted second copy placed between the two reach
+     * controls - which is the arrangement this rule exists to prevent, and it
+     * still ended with a correct-looking button.
+     */
+    const removals = buttons.filter((button) => button.textContent === 'Remove');
+    expect(removals).toHaveLength(1);
+    expect(buttons[buttons.length - 1]).toBe(removals[0]);
+    expect(String(buttons[buttons.length - 1]?.textContent).toLowerCase())
+      .not.toContain('delete');
+
+    (buttons[buttons.length - 1] as unknown as { click(): void }).click();
+    expect(removed).toEqual(['git-library']);
+  });
+
+  it('removes a depot by its remote, which is what the decision names', () => {
+    const root = fakeDocument();
+    const removed: string[] = [];
+    renderPicoCompanionDepots(root, [{
+      remote: 'file:///srv/depots/notes',
+      commit: 'a'.repeat(40),
+      mayFetch: true,
+      mayFetchUnasked: false,
+    }], () => {}, (remote) => removed.push(remote));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    (buttons[buttons.length - 1] as unknown as { click(): void }).click();
+    // The remote, not the shortened label the line shows a person.
+    expect(removed).toEqual(['file:///srv/depots/notes']);
+  });
+
+  it('offers to forget a machine beside the decision, not instead of it', () => {
+    /**
+     * ADR 0152 SE2's "never more than one thing to press" is about the
+     * decision axis - what this machine may see. Forgetting the machine ends
+     * what the decision is about, so it is a second control rather than a
+     * fourth `action`.
+     */
+    const root = fakeDocument();
+    const forgotten: string[] = [];
+    renderPicoCompanionModelProviders(
+      root,
+      [provider({ entryId: 'a-model:measured' })],
+      () => {},
+      (entryId) => forgotten.push(entryId),
+    );
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[1]?.textContent).toBe('Forget this machine');
+
+    (buttons[1] as unknown as { click(): void }).click();
+    expect(forgotten).toEqual(['a-model:measured']);
+  });
+
+  it('shows no removal control when the caller offers none', () => {
+    // The control is the caller's to provide, so a surface that cannot remove
+    // does not render a button that would do nothing.
+    const root = fakeDocument();
+    renderPicoCompanionSuppliers(root, [{
+      identifier: 'git-library',
+      kind: 'library',
+      mayReachOutside: false,
+      mayReachUnasked: false,
+      attachedAt: '2026-08-17T10:00:00.000Z',
+    }], () => {});
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    expect(line.children.filter((child) => child.tag === 'button')).toHaveLength(1);
   });
 });

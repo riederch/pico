@@ -708,6 +708,50 @@ function registerIpc(): void {
       });
     },
   );
+  /**
+   * Everything a person added, taken back. One shape three times: the
+   * identifier, and nothing else - what each removal reaches is the Home's to
+   * decide, not this window's to describe.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.detachSupplier,
+    async (event: IpcMainInvokeEvent, identifier: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof identifier !== 'string') {
+        throw new Error('invalid_supplier_identifier');
+      }
+      await runtime.detachSupplier(identifier);
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.detachDepot,
+    async (event: IpcMainInvokeEvent, remote: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof remote !== 'string') {
+        throw new Error('invalid_depot_remote');
+      }
+      await runtime.detachDepot(remote);
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.forgetModelProvider,
+    async (event: IpcMainInvokeEvent, entryId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof entryId !== 'string') {
+        throw new Error('invalid_model_provider_entry');
+      }
+      await runtime.forgetModelProvider(entryId);
+    },
+  );
   /** ADR 0143 DP1. What is pinned, a new pin, and whether Pico may fetch it. */
   ipcMain.handle(
     picoCompanionIpcChannels.getDepots,

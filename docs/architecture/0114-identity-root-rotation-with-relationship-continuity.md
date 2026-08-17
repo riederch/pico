@@ -16,6 +16,16 @@ relationship the person had. Both decisions taken here were made
 explicitly by the user on 2026-08-01: rotation grants eligibility and
 issuers re-issue, and this block implements the canonical form.
 
+Status note, 2026-08-17: T4's open person-side ceremony is now *checked* open
+rather than merely stated. `home.identity.rotation.submit` and
+`home.identity.rotation.veto` are answered by the Home and named by nothing
+else - no companion path, and the vault daemon offers `rotate-domain` and
+`rotate-host-key` but no identity-root rotation. A new gate
+(`reach:check`) would report both as unreachable surfaces; they are argued in
+its exemption list instead, quoting this ADR. So the deferral stays a
+statement somebody made rather than a gap nobody noticed, and closing T4 will
+retire the exemption rather than leave it.
+
 ## Context
 
 ADR 0033 required that identity replacement "preserve relationship

@@ -34,6 +34,9 @@ export const picoCompanionIpcChannels = Object.freeze({
   decideSupplierReach: 'pico:supplier-reach:decide',
   /** ADR 0137 IN5. The one field a depot may not supply, from the person. */
   attachSupplier: 'pico:supplier:attach',
+  detachSupplier: 'pico:supplier:detach',
+  detachDepot: 'pico:depot:detach',
+  forgetModelProvider: 'pico:model-provider:forget',
   getDepots: 'pico:depots:get',
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
@@ -509,6 +512,17 @@ export interface PicoCompanionModelProviderLine {
   /** What the person can do next, which is never more than one thing. */
   action: 'decide' | 'widen' | 'revoke';
   /**
+   * ADR 0142 PE1. A machine they no longer have, forgotten.
+   *
+   * **Beside `action` rather than inside it**, and the two rules do not
+   * disagree: `action` is the decision axis - what this machine may see - and
+   * offering two of those at once is what asks a person to work out which
+   * applies. This is the other axis, and it ends the thing the decision is
+   * about. `Forget` rather than `Remove` because there is nothing on disk to
+   * remove; what goes is a measurement and every answer given about it.
+   */
+  forgetActionLabel: string;
+  /**
    * ADR 0152 SE2. The words on the button, chosen here like every other word.
    *
    * A control labelled from the renderer would be the one sentence in this
@@ -568,6 +582,7 @@ export function picoCompanionModelProviderLines(
         // The consequence, not the mechanism: what the person is agreeing to
         // is what this machine will see.
         actionLabel: 'Let it see this conversation',
+        forgetActionLabel: 'Forget this machine',
         providerClass: provider.providerClass,
       });
     }
@@ -583,6 +598,7 @@ export function picoCompanionModelProviderLines(
           + (stateDetail === undefined ? '' : ` ${stateDetail}`),
         action: 'widen' as const,
         actionLabel: 'Add a credential and let it see what Pico remembers',
+        forgetActionLabel: 'Forget this machine',
         providerClass: provider.providerClass,
       });
     }
@@ -594,6 +610,7 @@ export function picoCompanionModelProviderLines(
       }`,
       action: 'revoke' as const,
       actionLabel: 'Withdraw',
+      forgetActionLabel: 'Forget this machine',
       providerClass: provider.providerClass,
     });
   }));
@@ -1399,11 +1416,21 @@ export interface PicoCompanionSupplierLine {
    */
   unaskedActionLabel?: string;
   unaskedDetail?: string;
+  /**
+   * **Everything a person added, taken back.**
+   *
+   * Last on the line and never a switch: the two above are settings that go
+   * on being decided, while this ends the thing they are about. The word is
+   * `Remove` rather than `Delete` because what goes is the attachment, and
+   * what Pico derived under it stays where it is (ADR 0136 with ADR 0129 SR6).
+   */
+  removeActionLabel: string;
 }
 
 export function picoCompanionSupplierLines(
   suppliers: readonly PicoCompanionSupplier[],
 ): readonly PicoCompanionSupplierLine[] {
+  const removeActionLabel = 'Remove';
   return Object.freeze(suppliers.map((supplier) => {
     if (!supplier.mayReachOutside) {
       return Object.freeze({
@@ -1414,6 +1441,7 @@ export function picoCompanionSupplierLines(
         detail: 'Pico does not go out for this. Nothing it holds costs you '
           + 'anything, and nobody learns you asked.',
         reachActionLabel: 'Let Pico fetch this when you ask',
+        removeActionLabel,
       });
     }
     return Object.freeze({
@@ -1434,6 +1462,7 @@ export function picoCompanionSupplierLines(
           + 'what makes this a separate answer from the one above.'
         : 'A question you asked and that cost something is visible to you. A '
           + 'trip nobody asked for is visible to nobody.',
+      removeActionLabel,
     });
   }));
 }

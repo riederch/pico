@@ -42,6 +42,8 @@ import {
   attachPicoCompanionDepot,
   attachPicoCompanionSupplier,
   decidePicoCompanionDepotReach,
+  detachPicoCompanionDepot,
+  detachPicoCompanionSupplier,
   decidePicoCompanionSupplierReach,
   readPicoCompanionDepots,
   readPicoCompanionModuleConsent,
@@ -71,6 +73,7 @@ import {
 import {
   askPicoCompanionModelProviderMeasurement,
   decidePicoCompanionModelProvider,
+  forgetPicoCompanionModelProvider,
   askPicoCompanionRecall,
   readPicoCompanionMeasurements,
   forgetPicoCompanionMemory,
@@ -154,6 +157,12 @@ export interface PicoCompanionShellRuntime {
     identifier: string;
     privacyDomain: string;
   }>;
+  /** ADR 0136. Stops a supplier, and leaves what was derived from it. */
+  detachSupplier(identifier: string): Promise<void>;
+  /** ADR 0143 DP8. Takes back an attachment, and the working copy with it. */
+  detachDepot(remote: string): Promise<void>;
+  /** ADR 0142 PE1. Forgets a measured machine, decisions and all. */
+  forgetModelProvider(entryId: string): Promise<void>;
   decideSupplierReach(input: {
     identifier: string;
     mayReachOutside: boolean;
@@ -609,6 +618,42 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           ...attachment,
+        });
+      }),
+      detachSupplier: async (identifier) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await detachPicoCompanionSupplier({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          identifier,
+        });
+      }),
+      detachDepot: async (remote) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await detachPicoCompanionDepot({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          remote,
+        });
+      }),
+      forgetModelProvider: async (entryId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await forgetPicoCompanionModelProvider({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          entryId,
         });
       }),
       readDepots: async () => await serialized(async () => {

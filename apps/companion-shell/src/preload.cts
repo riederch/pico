@@ -26,6 +26,9 @@ const channels = Object.freeze({
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
   attachSupplier: 'pico:supplier:attach',
+  detachSupplier: 'pico:supplier:detach',
+  detachDepot: 'pico:depot:detach',
+  forgetModelProvider: 'pico:model-provider:forget',
   getDepots: 'pico:depots:get',
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
@@ -130,6 +133,15 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   },
   attachSupplier: async (identifier: string, privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.attachSupplier, { identifier, privacyDomain }),
+  detachSupplier: async (identifier: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.detachSupplier, identifier);
+  },
+  detachDepot: async (remote: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.detachDepot, remote);
+  },
+  forgetModelProvider: async (entryId: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.forgetModelProvider, entryId);
+  },
   getDepots: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDepots),
   attachDepot: async (remote: string, commit: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.attachDepot, { remote, commit }),

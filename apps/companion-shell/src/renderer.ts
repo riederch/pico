@@ -57,6 +57,9 @@ declare global {
       }>;
       getModelProviderMeasurements(): Promise<unknown>;
       getSuppliers(): Promise<unknown>;
+      detachSupplier(identifier: string): Promise<void>;
+      detachDepot(remote: string): Promise<void>;
+      forgetModelProvider(entryId: string): Promise<void>;
       attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
         identifier: string,
@@ -450,6 +453,17 @@ function refreshSuppliers(): void {
             supplierStatus.textContent = refusalText(error, 'That was not changed.');
           });
         },
+        (identifier) => {
+          // Said as what stays, not only as what went: a person removing a
+          // library is owed the fact that what Pico read out of it is theirs.
+          void window.picoCompanion.detachSupplier(identifier).then(() => {
+            supplierStatus.textContent = 'Removed. What Pico read out of it is '
+              + 'still part of what you remember.';
+            refreshSuppliers();
+          }, (error: unknown) => {
+            supplierStatus.textContent = refusalText(error, 'That was not removed.');
+          });
+        },
       );
     }, () => {
       supplierSection.hidden = true;
@@ -485,6 +499,17 @@ function refreshDepots(): void {
             refreshDepots();
           }, (error: unknown) => {
             depotStatus.textContent = refusalText(error, 'That was not changed.');
+          });
+        },
+        (remote) => {
+          void window.picoCompanion.detachDepot(remote).then(() => {
+            // The files go with it, and saying so is the point: a person
+            // removing a depot is removing code from their machine.
+            depotStatus.textContent = 'Removed, and its files are off this machine.';
+            refreshDepots();
+            refreshSuppliers();
+          }, (error: unknown) => {
+            depotStatus.textContent = refusalText(error, 'That was not removed.');
           });
         },
       );
@@ -895,6 +920,12 @@ function refreshModelProviders(): void {
               })
               : window.picoCompanion.revokeModelProvider(act.entryId);
           void done.then(refreshModelProviders, refreshModelProviders);
+        },
+        (entryId) => {
+          // The measurement goes with it, so the list is asked for again
+          // rather than edited: what is there is the Home's answer.
+          void window.picoCompanion.forgetModelProvider(entryId)
+            .then(refreshModelProviders, refreshModelProviders);
         },
       );
     }, () => {
