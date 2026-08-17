@@ -66,6 +66,32 @@ is absent.
 Amends ADR 0142 PE5 and the conditions of ADR 0048's sixth provider class.
 Both carry a status note pointing here.
 
+Status note, 2026-08-17: **"what is still absent is a scheduler" is no longer
+true, and the whole path was walked to prove it.** A model-job sweep runs on
+its own interval, so an enqueued job is dispatched without anybody asking
+twice.
+
+The walk: a person asks their own Home about their own memory, the sweep
+dispatches, the provider answers, they keep the answer and then take it back.
+Everything over Link as a signed request from a claimed device, against a real
+HTTP host that answers the declared shape.
+
+**PV1 is what decides whether that walk finishes**, and both halves are now
+held by one test. A note the person's own Pico recorded travels on
+`live_turn`, so no credential and therefore no TLS stands between them and an
+answer about their own parking space. The same question over a note nobody
+labelled is refused as `entry_may_not_carry_these_words`, and widening the
+entry to carry it is refused again as
+`pico_model_provider_credential_on_unprotected_transport` - PV5 holding the
+line one step later. So the refusal a person meets is about their *material*,
+and the fix is a provider they can prove rather than a setting they can turn
+off.
+
+That second refusal is worth stating as a deployment consequence: on the
+measured-host story ADR 0142 tells - bind the runtime to loopback, put an
+authenticating reverse proxy in front - the proxy has to speak TLS before Pico
+will recall over anything but the person's own notes.
+
 ## Context
 
 ADR 0142 measured the only provider that exists: a LAN host running Ollama,

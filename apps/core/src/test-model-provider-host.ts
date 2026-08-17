@@ -51,6 +51,21 @@ export interface PicoFakeModelHostOptions {
   spillsAboveContextTokens?: number;
   /** Another model already holding the accelerator when measuring starts. */
   residentIntruder?: string;
+  /**
+   * What a generation answers with, when the request carries a `format`.
+   *
+   * A measurement never reads the words - it times them - so this host said
+   * nothing for a long time and that was enough. Dispatching a real job is the
+   * other half: the runtime sends the declared shape as a JSON Schema and
+   * reads the reply against it, so a host that answered nothing made every job
+   * fail as `answer_was_not_the_declared_shape`.
+   *
+   * Filled from the schema rather than from a fixture, so one host answers a
+   * recall and a library read without knowing what either is: every required
+   * property gets a value of its declared type. `text` overrides what the
+   * string ones say, which is the only thing a test usually cares about.
+   */
+  text?: string;
 }
 
 export interface PicoFakeModelHost {
@@ -151,6 +166,35 @@ export async function startPicoFakeModelHost(
       if (sent.prompt === undefined) {
         resident.delete(requestedModel);
         send({});
+        return;
+      }
+
+      /**
+       * A job rather than a measurement: the runtime asks for a shape, so the
+       * answer is built from that shape.
+       */
+      const format = sent.format as
+        { properties?: Record<string, { type?: string }>; required?: string[] } | undefined;
+      if (format !== undefined) {
+        const answer: Record<string, unknown> = {};
+        for (const name of format.required ?? []) {
+          const declared = format.properties?.[name]?.type;
+          answer[name] = declared === 'boolean'
+            ? true
+            : (declared === 'number' || declared === 'integer'
+              ? 1
+              : options.text ?? 'Answered by a host that exists only in a test.');
+        }
+        resident.set(requestedModel, sizeVram);
+        send({
+          response: JSON.stringify(answer),
+          load_duration: 0,
+          prompt_eval_count: options.promptEvalCount ?? 128,
+          prompt_eval_duration: options.promptEvalDurationNs ?? 500_000_000,
+          eval_count: options.evalCount ?? 128,
+          eval_duration: options.evalDurationNs ?? 2_000_000_000,
+          total_duration: 2_500_000_000,
+        });
         return;
       }
 

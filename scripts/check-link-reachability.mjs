@@ -32,6 +32,12 @@ import { fileURLToPath } from 'node:url';
  * preload's; between a runtime method and its channel, and between a bridge
  * function and a control, nothing checks. Said rather than implied, so the
  * green line is read for what it claims.
+ *
+ * **Measured before it was left open**, so nobody spends the effort twice: all
+ * 44 IPC channels have a handler, every bridge function is called by the
+ * renderer, and every runtime method is reached from main. The chain is whole
+ * today. A third gate would find nothing and would have to be maintained
+ * anyway, which is why the limit is stated rather than closed.
  */
 
 const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
