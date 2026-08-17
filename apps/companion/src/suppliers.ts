@@ -21,18 +21,74 @@ export interface PicoCompanionSupplierView {
   attachedAt: string;
 }
 
+/**
+ * ADR 0143 DP3. A supplier a fetched depot brings, which nobody has accepted.
+ *
+ * `needs` comes from the Home rather than being known here, because what a
+ * depot may not supply is the Home's rule and a second copy of it on this side
+ * would be a second thing to keep true.
+ */
+export interface PicoCompanionDeclaredSupplierView {
+  identifier: string;
+  kind: string;
+  remote: string;
+  needs: readonly string[];
+}
+
+/**
+ * ADR 0138 CO3/CO4 with ADR 0143 DP3. Both halves, in one read.
+ *
+ * **Declared and attached are two states, not one absence** (ADR 0117 X1).
+ * This returned only the attached ones, and there was no way to make one - so
+ * the answer was the empty list on every real Home and the window's section
+ * hid itself while a depot's suppliers sat on disk.
+ */
 export async function readPicoCompanionSuppliers(input: {
   livingDeviceLinkClient: PicoLinkDirectClient;
-}): Promise<readonly PicoCompanionSupplierView[]> {
+}): Promise<{
+  suppliers: readonly PicoCompanionSupplierView[];
+  declared: readonly PicoCompanionDeclaredSupplierView[];
+}> {
   const read = await input.livingDeviceLinkClient.request('home.suppliers.read', {});
   if (read.outcome !== 'ok') {
     throw new Error(`suppliers_read_rejected:${read.outcome}`);
   }
-  const suppliers = (read.result as { suppliers?: unknown }).suppliers;
-  if (!Array.isArray(suppliers)) {
+  const result = read.result as { suppliers?: unknown; declared?: unknown };
+  if (!Array.isArray(result.suppliers) || !Array.isArray(result.declared)) {
     throw new Error('invalid_pico_suppliers_read');
   }
-  return Object.freeze(suppliers as PicoCompanionSupplierView[]);
+  return {
+    suppliers: Object.freeze(result.suppliers as PicoCompanionSupplierView[]),
+    declared: Object.freeze(result.declared as PicoCompanionDeclaredSupplierView[]),
+  };
+}
+
+/**
+ * ADR 0143 DP3 with ADR 0137 IN5. The person says where this supplier's
+ * material belongs, which is what attaches it.
+ *
+ * Only the identifier and the domain travel. Everything else was declared by
+ * the depot and is read there, so there is nothing here for this side to
+ * overstate.
+ */
+export async function attachPicoCompanionSupplier(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  identifier: string;
+  privacyDomain: string;
+}): Promise<{ identifier: string; privacyDomain: string }> {
+  const answer = await input.livingDeviceLinkClient.request('home.supplier.attach', {
+    identifier: input.identifier,
+    privacyDomain: input.privacyDomain,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `supplier_attach_${answer.outcome}`);
+  }
+  const result = answer.result as { identifier?: unknown; privacyDomain?: unknown };
+  if (typeof result.identifier !== 'string' || typeof result.privacyDomain !== 'string') {
+    throw new Error('invalid_pico_supplier_attach_result');
+  }
+  return { identifier: result.identifier, privacyDomain: result.privacyDomain };
 }
 
 /**

@@ -2,6 +2,23 @@
 
 ## Status
 
+Status note, 2026-08-17: **DP3's declared suppliers reached nobody, and
+`picoDepotSupplierNeedsFromPerson` had no caller at all.**
+
+The value existed so the gap would be a value rather than a comment -
+"the missing piece is exactly the one a depot may not supply" - and
+nothing ever read it, which made it a comment with a return type. A
+fetched depot's declarations were parsed only to look for *attached*
+suppliers, so a depot that brought one showed the person nothing.
+
+`home.suppliers.read` now answers with two lists rather than one:
+attached, and declared-with-what-it-still-needs. Declared and attached
+are two states, not one absence (ADR 0117 X1) - "this depot brings a
+library and nobody has said where its material belongs" is a sentence
+somebody can act on, and an empty list is not. A declaration is read off
+the working copy, so a depot attached and never fetched declares nothing,
+which is correct: nobody has looked at it yet.
+
 Status note, 2026-08-17: **DP8's fetch now runs end to end, and what
 stood in its way was neither of this ADR's own gates.**
 

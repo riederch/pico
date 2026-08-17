@@ -17,6 +17,7 @@ import {
   renderPicoCompanionRelayAccountIssued,
   renderPicoCompanionDevices,
   renderPicoCompanionSuppliers,
+  renderPicoCompanionDeclaredSuppliers,
   renderPicoCompanionDepots,
   renderPicoCompanionModuleConsent,
   renderPicoCompanionPendingApprovals,
@@ -47,6 +48,7 @@ declare global {
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
       getSuppliers(): Promise<unknown>;
+      attachSupplier(identifier: string, privacyDomain: string): Promise<unknown>;
       decideSupplierReach(
         identifier: string,
         mayReachOutside: boolean,
@@ -306,6 +308,9 @@ const readList = requireElement('read-list');
 const supplierSection = requireElement('suppliers');
 const supplierList = requireElement('supplier-list');
 const supplierStatus = requireElement('supplier-status');
+const declaredSupplierSection = requireElement('declared-suppliers');
+const declaredSupplierList = requireElement('declared-supplier-list');
+const declaredSupplierStatus = requireElement('declared-supplier-status');
 
 /**
  * ADR 0138 CO3/CO4. What Pico may fetch, and what that costs.
@@ -316,10 +321,39 @@ const supplierStatus = requireElement('supplier-status');
  */
 function refreshSuppliers(): void {
   void window.picoCompanion.getSuppliers()
-    .then((suppliers) => {
+    .then((read) => {
+      const both = read as { suppliers: unknown; declared: unknown };
+      /**
+       * ADR 0143 DP3. What a depot brought and nobody has accepted, above the
+       * attached ones - a decision waiting on somebody reads before a list of
+       * decisions already made.
+       */
+      renderPicoCompanionDeclaredSuppliers(
+        { list: declaredSupplierList, section: declaredSupplierSection, document },
+        both.declared,
+        (attachment) => {
+          if (attachment.privacyDomain === '') {
+            declaredSupplierStatus.textContent =
+              'Name the part of your memory this belongs to.';
+            return;
+          }
+          void window.picoCompanion.attachSupplier(
+            attachment.identifier,
+            attachment.privacyDomain,
+          ).then(() => {
+            // Said as what it did and did not do, like the depot line above.
+            declaredSupplierStatus.textContent =
+              `${attachment.identifier} now belongs to ${attachment.privacyDomain}. `
+              + 'Pico will not go out for it until you say so.';
+            refreshSuppliers();
+          }, (error: unknown) => {
+            declaredSupplierStatus.textContent = refusalText(error, 'That was not attached.');
+          });
+        },
+      );
       renderPicoCompanionSuppliers(
         { list: supplierList, section: supplierSection, document },
-        suppliers,
+        both.suppliers,
         (decision) => {
           void window.picoCompanion.decideSupplierReach(
             decision.identifier,

@@ -40,6 +40,7 @@ import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-s
 import {
   askPicoCompanionDepotFetch,
   attachPicoCompanionDepot,
+  attachPicoCompanionSupplier,
   decidePicoCompanionDepotReach,
   decidePicoCompanionSupplierReach,
   readPicoCompanionDepots,
@@ -127,8 +128,16 @@ export interface PicoCompanionShellRuntime {
     privacyDomain: string;
     status: string;
   }>;
-  /** ADR 0138 CO3/CO4. What is attached, and whether it may reach. */
-  readSuppliers(): Promise<readonly unknown[]>;
+  /**
+   * ADR 0138 CO3/CO4 with ADR 0143 DP3. What is attached, what a fetched depot
+   * declares and nobody has accepted, and whether either may reach.
+   */
+  readSuppliers(): Promise<{ suppliers: readonly unknown[]; declared: readonly unknown[] }>;
+  /** ADR 0137 IN5. The person names where a declared supplier's material goes. */
+  attachSupplier(input: { identifier: string; privacyDomain: string }): Promise<{
+    identifier: string;
+    privacyDomain: string;
+  }>;
   decideSupplierReach(input: {
     identifier: string;
     mayReachOutside: boolean;
@@ -537,6 +546,18 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           ...decision,
+        });
+      }),
+      attachSupplier: async (attachment) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await attachPicoCompanionSupplier({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...attachment,
         });
       }),
       readDepots: async () => await serialized(async () => {

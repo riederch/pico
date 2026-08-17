@@ -541,6 +541,23 @@ export const picoLinkDirectOperations = [
   'home.suppliers.read',
   'home.supplier.reach.decide',
   /**
+   * ADR 0143 DP3 with ADR 0137 IN5. The person says where a declared
+   * supplier's material belongs, which is what attaches it.
+   *
+   * **The half of ADR 0136 that had no product path.** A depot could be
+   * fetched and its `pico-depot.json` read, and nothing could turn a declared
+   * supplier into an attached one: `attachPicoSupplier` had no caller outside
+   * its tests and `picoDepotSupplierNeedsFromPerson` had none at all. So the
+   * supplier list was empty on every real Home, its window section hid itself,
+   * and the library reads ADR 0136 BR1 exists for could never be queued.
+   *
+   * Remote-capable for the reason the pair above it is: naming the space
+   * somebody's material lands in is theirs to answer, not administration's
+   * (ADR 0087). Attaching still creates no reach - that stays the separate
+   * decision beside it.
+   */
+  'home.supplier.attach',
+  /**
    * ADR 0143 DP1 with ADR 0138 CO3/CO4. What a depot is pinned at, the
    * person's word that this material may be here, and whether Pico may go and
    * get it.

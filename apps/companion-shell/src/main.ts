@@ -600,13 +600,16 @@ function registerIpc(): void {
     picoCompanionIpcChannels.getSuppliers,
     async (event: IpcMainInvokeEvent) => {
       assertRendererSender(event);
+      // Both halves, or neither. An empty array here would parse as "no
+      // suppliers at all" rather than as "the Home could not be asked".
+      const nothing = { suppliers: [], declared: [] };
       if (runtime === null) {
-        return [];
+        return nothing;
       }
       try {
         return await runtime.readSuppliers();
       } catch {
-        return [];
+        return nothing;
       }
     },
   );
@@ -627,6 +630,28 @@ function registerIpc(): void {
         identifier: record.identifier,
         mayReachOutside: record.mayReachOutside,
         mayReachUnasked: record.mayReachUnasked,
+      });
+    },
+  );
+  /**
+   * ADR 0137 IN5. The person names the space a declared supplier's material
+   * lands in, which is what attaches it.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.attachSupplier,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.identifier !== 'string'
+        || typeof record.privacyDomain !== 'string') {
+        throw new Error('invalid_supplier_attachment');
+      }
+      return await runtime.attachSupplier({
+        identifier: record.identifier,
+        privacyDomain: record.privacyDomain,
       });
     },
   );

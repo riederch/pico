@@ -5,6 +5,7 @@ import { picoModelProviderStates } from '@pico/protocol/model-provider-state';
 import {
   renderPicoCompanionAnsweredReads,
   renderPicoCompanionModelProviders,
+  renderPicoCompanionDeclaredSuppliers,
   renderPicoCompanionModuleConsent,
   renderPicoCompanionPendingApprovals,
   renderPicoCompanionRecalls,
@@ -175,6 +176,7 @@ describe('every view fetches what it shows', () => {
       'renderPicoCompanionRelays(',
       'renderPicoCompanionModuleConsent(',
       'renderPicoCompanionPendingApprovals(',
+      'renderPicoCompanionDeclaredSuppliers(',
     ]) {
       expect(renderer).toContain(render);
     }
@@ -370,6 +372,9 @@ function fakeDocument(): { document: Document; list: HTMLElement; section: HTMLE
       className: '',
       textContent: '',
       type: '',
+      value: '',
+      maxLength: 0,
+      autocomplete: '',
       dataset: {} as Record<string, string>,
       hidden: false,
       append: (...nodes: unknown[]) => { children.push(...nodes); },
@@ -739,5 +744,48 @@ describe('ADR 0141 RN4 - the session belongs to the window, not to the renderer'
       const body = handler.slice(0, handler.indexOf('ipcMain.handle', 1));
       expect(body).toContain('no_presence_session');
     }
+  });
+});
+
+describe('ADR 0143 DP3 - the supplier a depot brought, in front of the person', () => {
+  it('asks for the one thing the depot could not say, and names the depot', () => {
+    /**
+     * A person agreeing to a space for somebody else's code is owed the name
+     * of whose code it is - and the question is *where its material belongs*,
+     * which is a name they choose rather than a yes or a no.
+     */
+    const root = fakeDocument();
+    const acted: Array<{ identifier: string; privacyDomain: string }> = [];
+    renderPicoCompanionDeclaredSuppliers(root, [{
+      identifier: 'git-library',
+      kind: 'library',
+      remote: 'file:///srv/depots/notes',
+      needs: ['privacyDomain'],
+    }], (attachment) => acted.push(attachment));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    expect(String(line.children[0]?.textContent)).toContain('file:///srv/depots/notes');
+    // Said as what it will do with the space, not as what it is: "library" is
+    // Pico's word for a shape, and the person is deciding about their memory.
+    expect(String(line.children[1]?.textContent)).toContain('your memory');
+    const input = line.children.find((child) => child.tag === 'input')!;
+    const button = line.children.find((child) => child.tag === 'button')!;
+    // Never "enable" or "allow": ADR 0138 CO3 keeps whether Pico may go out
+    // for it a separate answer, and this line must not look like that one.
+    expect(String(button.textContent).toLowerCase()).not.toContain('allow');
+    expect(String(button.textContent).toLowerCase()).not.toContain('enable');
+
+    (input as unknown as { value: string }).value = '  knowledge  ';
+    (button as unknown as { click(): void }).click();
+    // Read at the press and trimmed, so a stray space is not a new domain.
+    expect(acted).toEqual([{ identifier: 'git-library', privacyDomain: 'knowledge' }]);
+  });
+
+  it('shows nothing when a depot brought nothing to decide', () => {
+    const root = fakeDocument();
+    renderPicoCompanionDeclaredSuppliers(root, [], () => {});
+    expect(root.section.hidden).toBe(true);
   });
 });

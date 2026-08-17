@@ -22,6 +22,7 @@ const channels = Object.freeze({
   keepRecall: 'pico:recall:keep',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
+  attachSupplier: 'pico:supplier:attach',
   getDepots: 'pico:depots:get',
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
@@ -117,6 +118,8 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
       mayReachUnasked,
     });
   },
+  attachSupplier: async (identifier: string, privacyDomain: string): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.attachSupplier, { identifier, privacyDomain }),
   getDepots: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDepots),
   attachDepot: async (remote: string, commit: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.attachDepot, { remote, commit }),

@@ -103,6 +103,16 @@
       money is visible to the person who asked and a background trip is
       visible to nobody.
     -->
+    <!--
+      ADR 0143 DP3. What a fetched depot brought and nobody has accepted yet.
+      Above the attached list on purpose: a decision waiting on somebody reads
+      before a list of decisions already made.
+    -->
+    <section id="declared-suppliers" class="providers" hidden>
+      <h2>Waiting for a place in your memory</h2>
+      <ul id="declared-supplier-list" class="provider-list"></ul>
+      <p id="declared-supplier-status" class="detail"></p>
+    </section>
     <section id="suppliers" class="providers" hidden>
       <h2>What Pico may fetch</h2>
       <ul id="supplier-list" class="provider-list"></ul>

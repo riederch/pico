@@ -151,6 +151,7 @@ import {
 } from '@pico/protocol/depot';
 import {
   parsePicoDepotManifest,
+  picoDepotSupplierNeedsFromPerson,
   type PicoDepotManifest,
 } from '@pico/protocol/depot-manifest';
 import { startPicoPeriodicTaskScheduler } from './periodic-task-scheduler.js';
@@ -1544,6 +1545,58 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           ? []
           : [{ identifier: supplier.identifier, privacyDomain: attached.privacyDomain }];
       }));
+  }
+
+  /**
+   * ADR 0143 DP3 with ADR 0137 IN5. Every supplier a fetched depot declares,
+   * whether or not anybody has attached it.
+   *
+   * **The declared side had no reader at all until 2026-08-17.** A depot could
+   * be attached, permitted and fetched, its `pico-depot.json` landed on disk
+   * naming a library supplier - and `home.suppliers.read` answered with the
+   * empty list, because it listed only *attachments* and nothing in the
+   * product could make one. `attachPicoSupplier` had no caller outside its own
+   * tests, `picoDepotSupplierNeedsFromPerson` had none at all, and the window's
+   * supplier section hid itself on every real Home. A live walk found it: the
+   * material was on disk and the person was shown nothing.
+   *
+   * Declared and attached are two states rather than one absence (ADR 0117
+   * X1). "This depot brings a library and nobody has said where its material
+   * belongs" is a sentence a person can act on; an empty list is not.
+   */
+  function depotDeclaredSuppliers(): ReadonlyArray<{
+    remote: string;
+    declaration: PicoDepotManifest['suppliers'][number];
+  }> {
+    const declared: Array<{
+      remote: string;
+      declaration: PicoDepotManifest['suppliers'][number];
+    }> = [];
+    for (const attachment of store.picoDepotAttachments()) {
+      const manifestPath = join(
+        depotWorkspace.pathFor(attachment.pin.remote),
+        'pico-depot.json',
+      );
+      if (!existsSync(manifestPath)) {
+        // Attached but never fetched, or fetched and the manifest is not
+        // there. Neither is a declaration.
+        continue;
+      }
+      try {
+        const manifest = parsePicoDepotManifest(
+          JSON.parse(readFileSync(manifestPath, 'utf8')),
+        );
+        for (const declaration of manifest.suppliers) {
+          declared.push({ remote: attachment.pin.remote, declaration });
+        }
+      } catch {
+        // Same posture as `depotLibrarySuppliers`: a manifest that does not
+        // parse is one Pico will not act on, and it will not half-read it
+        // either.
+        continue;
+      }
+    }
+    return Object.freeze(declared);
   }
 
   const queuePicoDepotLibraryReads = async (input: {
@@ -3882,8 +3935,91 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
                 mayReachUnasked: attachment.mayReachUnasked,
                 attachedAt: attachment.attachedAt,
               })),
+              /**
+               * ADR 0143 DP3. What a fetched depot brings and nobody has
+               * accepted yet, with the one thing it cannot supply itself.
+               *
+               * `slots` and `coverage` stay off this list for the same reason
+               * they are off the one above: what a supplier is wired to is not
+               * what a person deciding where its material belongs needs to
+               * read.
+               */
+              declared: depotDeclaredSuppliers()
+                .filter(({ declaration }) =>
+                  store.picoSupplierAttachment(declaration.identifier) === undefined)
+                .map(({ remote, declaration }) => ({
+                  identifier: declaration.identifier,
+                  kind: declaration.kind,
+                  remote,
+                  needs: picoDepotSupplierNeedsFromPerson(),
+                })),
             } as unknown as Record<string, unknown>,
           };
+        }
+        /**
+         * ADR 0143 DP3 with ADR 0137 IN5. The person says where a declared
+         * supplier's material belongs, which is what attaches it.
+         *
+         * **What is recorded comes from the depot's declaration**, never from
+         * the caller, in the idiom `home.modules.consent.record` uses: a
+         * device naming its own slots and coverage would be writing the
+         * capabilities it is about to be granted. The caller names which
+         * supplier it is answering about and supplies the single field a depot
+         * may not supply - exactly the one
+         * `picoDepotSupplierNeedsFromPerson` names, which until now was a
+         * value nothing read.
+         *
+         * Attaching creates no reach. ADR 0138 CO3/CO4 stays a separate
+         * decision on `home.supplier.reach.decide`, and the row is written
+         * with both switches off.
+         */
+        case 'home.supplier.attach': {
+          if (principal === undefined
+            || typeof args.identifier !== 'string'
+            || typeof args.privacyDomain !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const found = depotDeclaredSuppliers()
+            .find(({ declaration }) => declaration.identifier === args.identifier);
+          if (found === undefined) {
+            // Named rather than generic: a person who mistyped, and a person
+            // whose depot has not been fetched yet, are told different things
+            // by this answer and the depot list beside it.
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_declared' } };
+          }
+          try {
+            const attached = store.attachPicoSupplier({
+              manifest: {
+                identifier: found.declaration.identifier,
+                kind: found.declaration.kind,
+                slots: found.declaration.slots,
+                coverage: found.declaration.coverage,
+                // The person's word, and the only field that is theirs.
+                privacyDomain: args.privacyDomain,
+              },
+              attachedAt: new Date().toISOString(),
+            });
+            const attachEvent = factory.create({
+              deviceId: config.deviceId,
+              type: 'home.supplier_attachment_changed',
+              payload: {
+                identifier: attached.identifier,
+                mayReachOutside: false,
+                mayReachUnasked: false,
+              },
+            });
+            store.append(attachEvent);
+            broadcast(attachEvent);
+            return {
+              outcome: 'ok',
+              result: { identifier: attached.identifier, privacyDomain: attached.privacyDomain },
+            };
+          } catch (error: unknown) {
+            // The parser's refusal and the ceiling's refusal both arrive here
+            // and both are things a person can act on, so both are named.
+            const reason = error instanceof Error ? error.message : 'supplier_attach_failed';
+            return { outcome: 'invalid_arguments', result: { refusal: reason } };
+          }
         }
         /**
          * ADR 0138 CO3/CO4. The two decisions, made where the person is.

@@ -12,6 +12,8 @@ import {
   parsePicoCompanionDevices,
   picoCompanionSupplierLines,
   parsePicoCompanionSuppliers,
+  picoCompanionDeclaredSupplierLines,
+  parsePicoCompanionDeclaredSuppliers,
   picoCompanionDepotLines,
   parsePicoCompanionDepots,
   picoCompanionModuleConsentLines,
@@ -621,6 +623,59 @@ export function renderPicoCompanionPendingApprovals(
     }));
 
     item.append(headline, detail, approve, deny);
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0143 DP3 - what a fetched depot brought, with the one answer it needs.
+ *
+ * A field and a button rather than a switch, because the answer is a name the
+ * person chooses rather than a yes or a no. The field is read at the moment
+ * the button is pressed, so a person who types and then changes their mind has
+ * changed nothing.
+ */
+export function renderPicoCompanionDeclaredSuppliers(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (input: { identifier: string; privacyDomain: string }) => void,
+): void {
+  const declared = parsePicoCompanionDeclaredSuppliers(value);
+  // Nothing declared is nothing to answer. A section saying "no suppliers are
+  // waiting" would be a permanent fixture reporting the ordinary case.
+  root.section.hidden = declared.length === 0;
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionDeclaredSupplierLines(declared)) {
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+    item.dataset.identifier = line.identifier;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const label = root.document.createElement('label');
+    label.textContent = line.domainLabel;
+
+    const domain = root.document.createElement('input');
+    domain.type = 'text';
+    domain.maxLength = 64;
+    domain.autocomplete = 'off';
+
+    const attach = root.document.createElement('button');
+    attach.type = 'button';
+    attach.textContent = line.actionLabel;
+    attach.addEventListener('click', () => act({
+      identifier: line.identifier,
+      privacyDomain: domain.value.trim(),
+    }));
+
+    item.append(headline, detail, label, domain, attach);
     root.list.append(item);
   }
 }

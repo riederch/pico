@@ -27,6 +27,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   keepRecall: 'pico:recall:keep',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
+  /** ADR 0137 IN5. The one field a depot may not supply, from the person. */
+  attachSupplier: 'pico:supplier:attach',
   getDepots: 'pico:depots:get',
   attachDepot: 'pico:depot:attach',
   decideDepotReach: 'pico:depot-reach:decide',
@@ -1275,6 +1277,76 @@ export function picoCompanionSupplierLines(
           + 'what makes this a separate answer from the one above.'
         : 'A question you asked and that cost something is visible to you. A '
           + 'trip nobody asked for is visible to nobody.',
+    });
+  }));
+}
+
+/**
+ * ADR 0143 DP3 - a supplier a depot brought, waiting for one answer.
+ *
+ * **The question is where its material belongs, and that is the whole line.**
+ * A depot declares what a supplier is and what it fills; the one thing it may
+ * not declare is the space its material lands in, because that decides who can
+ * later read it and what a deletion reaches. So the line asks exactly that and
+ * nothing else, and it says which depot it came from - a person agreeing to a
+ * space for somebody else's code is owed the name of whose code it is.
+ */
+export interface PicoCompanionDeclaredSupplierLine {
+  identifier: string;
+  headline: string;
+  detail: string;
+  domainLabel: string;
+  actionLabel: string;
+}
+
+export function picoCompanionDeclaredSupplierLines(
+  declared: ReadonlyArray<{
+    identifier: string;
+    kind: string;
+    remote: string;
+    needs: readonly string[];
+  }>,
+): readonly PicoCompanionDeclaredSupplierLine[] {
+  return Object.freeze(declared.map((entry) => Object.freeze({
+    identifier: entry.identifier,
+    headline: `${entry.identifier} came with ${entry.remote}.`,
+    detail: entry.kind === 'library'
+      // Said as what it will do with the space, not as what it is. "Library"
+      // is Pico's word for a shape; the person is deciding about their memory.
+      ? 'It reads material and puts what it finds into your memory. '
+        + 'Name the part of your memory that should hold it.'
+      : `It fills a ${entry.kind} slot. Name the part of your memory it belongs to.`,
+    domainLabel: 'Where its material belongs',
+    // Never *enable* or *allow*: attaching says where something goes, and ADR
+    // 0138 CO3 keeps whether Pico may go out for it a separate answer.
+    actionLabel: entry.needs.includes('privacyDomain')
+      ? 'Put it here'
+      : 'Attach',
+  })));
+}
+
+export function parsePicoCompanionDeclaredSuppliers(value: unknown): ReadonlyArray<{
+  identifier: string;
+  kind: string;
+  remote: string;
+  needs: readonly string[];
+}> {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_declared_suppliers');
+  }
+  return Object.freeze(value.map((entry) => {
+    const record = entry as Record<string, unknown> | null;
+    if (typeof record?.identifier !== 'string'
+      || typeof record.kind !== 'string'
+      || typeof record.remote !== 'string'
+      || !Array.isArray(record.needs)) {
+      throw new Error('invalid_pico_companion_declared_supplier');
+    }
+    return Object.freeze({
+      identifier: record.identifier,
+      kind: record.kind,
+      remote: record.remote,
+      needs: Object.freeze(record.needs.map(String)),
     });
   }));
 }

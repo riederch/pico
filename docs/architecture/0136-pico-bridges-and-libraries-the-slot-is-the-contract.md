@@ -30,6 +30,24 @@ comes from and what it may say on arrival**. It does not decide what Pico
 does with it: Pico Rules, the Action Runner and the Action Catalog stay
 above everything here, and none of them exists yet.
 
+Status note, 2026-08-17: **an attached supplier was a state no Home could
+reach.** `attachPicoSupplier` had no caller outside its own tests, so
+`home.suppliers.read` answered with the empty list everywhere, the
+companion's supplier section hid itself, and BR1's library reads could
+never be queued - `depotLibrarySuppliers` filters on attachments and
+there were none to filter. A depot could be fetched, its
+`pico-depot.json` landed on disk naming a library supplier, and the
+person was shown nothing.
+
+Found by fetching a real depot that declares one and reading the answer,
+which is how the two findings before it were found. `home.supplier.attach`
+closes it: the declaration supplies everything except the privacy domain,
+which is the single field ADR 0143 DP3 says a depot may not supply and
+the person now gives. Everything recorded comes from the declaration
+rather than from the caller, so a device cannot write the capabilities it
+is about to be granted. Attaching still creates no reach - ADR 0138
+CO3/CO4 stays the separate decision beside it.
+
 ## Context
 
 Issue #4 asks for a VesselTracking module reaching the VesselFinder AIS
