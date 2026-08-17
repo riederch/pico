@@ -7,6 +7,32 @@ configuration through the Pico Client.** ADR 0153 left relay account
 provisioning open and named three shapes; this closes it with a fourth that
 none of them was, and it is the one the tree already had.
 
+Status note, 2026-08-17: **the relay was walked as a process, and `main.ts`
+had no test until it was.**
+
+Every other file here was exercised against a real listener on a real port,
+which covers the routes and not the assembly: reading the configuration,
+refusing without an operator hostname, opening three listeners, minting the
+claim code at boot, printing it where an operator will find it, and shutting
+down on a signal. That is the deliverable, and it was the one part nothing
+ran.
+
+The walk found no defect. Claiming works and the code is single-use; an
+account credential is handed back once and the list does not carry it;
+delivery is accepted with no credential at all while collection needs one;
+acknowledging removes what collecting left; revocation reports
+`mailboxesEnded` and `packetsDropped`, which is the observation RO5 exists for
+because nothing else can see it; the unauthenticated bucket refuses the
+eleventh attempt in a minute; SIGTERM shuts the process down cleanly.
+
+Two things the attempt to falsify it taught, both worth keeping. A relay that
+starts without `PICO_RELAY_OPERATOR` **does** say so - on stdout, as a
+`relay_startup_failed` line, because one JSON stream is this file's design and
+a failure on a second stream would be the one line missing from the record an
+operator reads. And the account list cannot leak a credential even when a
+route tries to: the store keys accounts by digest and never holds one, so the
+guarantee is structural rather than tested.
+
 ## Context
 
 ADR 0153 shipped a relay that runs, holds, forwards and expires packets, and
