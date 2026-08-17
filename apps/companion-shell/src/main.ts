@@ -574,6 +574,47 @@ function registerIpc(): void {
     },
   );
   /**
+   * ADR 0138 CO3/CO4. What is attached, and whether it may reach out.
+   *
+   * The read fails quietly; the decision throws, because a person pressed it
+   * and is waiting to be told whether it took - and this one is about their
+   * money.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getSuppliers,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        return [];
+      }
+      try {
+        return await runtime.readSuppliers();
+      } catch {
+        return [];
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.decideSupplierReach,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      if (typeof record?.identifier !== 'string'
+        || typeof record.mayReachOutside !== 'boolean'
+        || typeof record.mayReachUnasked !== 'boolean') {
+        throw new Error('invalid_supplier_reach_decision');
+      }
+      await runtime.decideSupplierReach({
+        identifier: record.identifier,
+        mayReachOutside: record.mayReachOutside,
+        mayReachUnasked: record.mayReachUnasked,
+      });
+    },
+  );
+  /**
    * ADR 0126 P2/P6. The person's devices, and their word about each one.
    *
    * The read fails quietly - not knowing which devices you have is an absence

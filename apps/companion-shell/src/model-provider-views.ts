@@ -10,6 +10,8 @@ import {
   parsePicoCompanionRelays,
   picoCompanionDeviceLines,
   parsePicoCompanionDevices,
+  picoCompanionSupplierLines,
+  parsePicoCompanionSuppliers,
 } from './contract.js';
 
 /**
@@ -385,6 +387,74 @@ export function renderPicoCompanionDevices(
     forget.addEventListener('click', () => act({ action: 'forget', presenceId: line.presenceId }));
 
     item.append(headline, detail, offers, deviceToggle, forget);
+    root.list.append(item);
+  }
+}
+
+/**
+ * ADR 0138 CO3/CO4 on the device - two switches, and never one.
+ *
+ * The unasked control is absent while reaching is off rather than disabled: a
+ * greyed-out switch invites somebody to wonder what it would have done, and
+ * CO4 cannot be granted without CO3 at all.
+ */
+export function renderPicoCompanionSuppliers(
+  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  value: unknown,
+  act: (input: {
+    identifier: string;
+    mayReachOutside: boolean;
+    mayReachUnasked: boolean;
+  }) => void,
+): void {
+  const suppliers = parsePicoCompanionSuppliers(value);
+  root.section.hidden = suppliers.length === 0;
+  root.list.replaceChildren();
+
+  for (const [index, line] of picoCompanionSupplierLines(suppliers).entries()) {
+    const supplier = suppliers[index]!;
+    const item = root.document.createElement('li');
+    item.className = 'supplier-line';
+    item.dataset.identifier = line.identifier;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    const reach = root.document.createElement('button');
+    reach.type = 'button';
+    reach.textContent = line.reachActionLabel;
+    reach.addEventListener('click', () => act({
+      identifier: line.identifier,
+      mayReachOutside: !supplier.mayReachOutside,
+      // Turning reaching off takes the unasked permission with it: somebody
+      // switching off "may fetch" has plainly not meant "but keep doing it
+      // unprompted".
+      mayReachUnasked: supplier.mayReachOutside ? false : supplier.mayReachUnasked,
+    }));
+
+    item.append(headline, detail, reach);
+
+    if (line.unaskedActionLabel !== undefined) {
+      const unaskedDetail = root.document.createElement('p');
+      unaskedDetail.className = 'detail';
+      unaskedDetail.textContent = line.unaskedDetail ?? '';
+
+      const unasked = root.document.createElement('button');
+      unasked.type = 'button';
+      unasked.textContent = line.unaskedActionLabel;
+      unasked.addEventListener('click', () => act({
+        identifier: line.identifier,
+        mayReachOutside: true,
+        mayReachUnasked: !supplier.mayReachUnasked,
+      }));
+      item.append(unaskedDetail, unasked);
+    }
+
     root.list.append(item);
   }
 }

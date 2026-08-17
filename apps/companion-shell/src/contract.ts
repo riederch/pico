@@ -25,6 +25,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  getSuppliers: 'pico:suppliers:get',
+  decideSupplierReach: 'pico:supplier-reach:decide',
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
@@ -1142,7 +1144,7 @@ export const picoCompanionViewReads: Readonly<
   Record<PicoCompanionWindowView, readonly string[]>
 > = Object.freeze({
   now: Object.freeze(['getRecalls', 'getAnsweredReads']),
-  settings: Object.freeze(['getModelProviders', 'getDevices', 'getRelays']),
+  settings: Object.freeze(['getModelProviders', 'getSuppliers', 'getDevices', 'getRelays']),
 });
 
 /**
@@ -1184,4 +1186,96 @@ export function picoCompanionWindowViewLines(): readonly PicoCompanionWindowView
       detail: 'What computes for you, your devices, and anything you run.',
     }),
   ]);
+}
+
+/**
+ * ADR 0138 CO3/CO4 - what an attached supplier may do, in words about money
+ * and about who learns you asked.
+ *
+ * **The ADR's own sentence is the one this surface has to carry**, because it
+ * is the reason the two switches are two: *an answered question that cost
+ * money is visible to the person who asked, and a background sweep is visible
+ * to nobody.* A single "allow this supplier" control would hide exactly that
+ * difference behind the word allow.
+ */
+export interface PicoCompanionSupplier {
+  identifier: string;
+  kind: string;
+  mayReachOutside: boolean;
+  mayReachUnasked: boolean;
+}
+
+export interface PicoCompanionSupplierLine {
+  identifier: string;
+  headline: string;
+  detail: string;
+  reachActionLabel: string;
+  /**
+   * Absent while reaching is off - not a disabled control, because CO4 cannot
+   * be granted without CO3 and a greyed-out switch invites somebody to wonder
+   * what it would have done.
+   */
+  unaskedActionLabel?: string;
+  unaskedDetail?: string;
+}
+
+export function picoCompanionSupplierLines(
+  suppliers: readonly PicoCompanionSupplier[],
+): readonly PicoCompanionSupplierLine[] {
+  return Object.freeze(suppliers.map((supplier) => {
+    if (!supplier.mayReachOutside) {
+      return Object.freeze({
+        identifier: supplier.identifier,
+        headline: `${supplier.identifier} is attached and reaches nothing`,
+        // Not "it is off". Attached says this material may be here; it does
+        // not say Pico may go and get it.
+        detail: 'Pico does not go out for this. Nothing it holds costs you '
+          + 'anything, and nobody learns you asked.',
+        reachActionLabel: 'Let Pico fetch this when you ask',
+      });
+    }
+    return Object.freeze({
+      identifier: supplier.identifier,
+      headline: supplier.mayReachUnasked
+        ? `${supplier.identifier} may fetch, and may do so on its own`
+        : `${supplier.identifier} may fetch when you ask`,
+      detail: 'Going out may cost money, and whoever answers learns that '
+        + 'somebody asked.',
+      reachActionLabel: 'Stop fetching this',
+      unaskedActionLabel: supplier.mayReachUnasked
+        ? 'Only when I ask'
+        : 'Let it fetch without being asked',
+      // ADR 0138 CO4's reason for being a second decision rather than a wider
+      // first one, said where the person decides it.
+      unaskedDetail: supplier.mayReachUnasked
+        ? 'It fetches in the background. You will not see those trips, which is '
+          + 'what makes this a separate answer from the one above.'
+        : 'A question you asked and that cost something is visible to you. A '
+          + 'trip nobody asked for is visible to nobody.',
+    });
+  }));
+}
+
+export function parsePicoCompanionSuppliers(value: unknown): readonly PicoCompanionSupplier[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_suppliers');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_supplier');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.identifier !== 'string'
+      || typeof record.kind !== 'string'
+      || typeof record.mayReachOutside !== 'boolean'
+      || typeof record.mayReachUnasked !== 'boolean') {
+      throw new Error('invalid_pico_companion_supplier');
+    }
+    return Object.freeze({
+      identifier: record.identifier,
+      kind: record.kind,
+      mayReachOutside: record.mayReachOutside,
+      mayReachUnasked: record.mayReachUnasked,
+    });
+  }));
 }

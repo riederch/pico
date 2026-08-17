@@ -18,6 +18,8 @@ import {
   picoCompanionWindowViewLines,
   picoCompanionWindowViews,
   picoCompanionPresentationTakesTheWindow,
+  picoCompanionSupplierLines,
+  parsePicoCompanionSuppliers,
 } from './contract.js';
 
 describe('companion renderer presentation contract', () => {
@@ -296,7 +298,7 @@ describe('ADR 0113 - the window is an occasion, not a workplace', () => {
      */
     expect(picoCompanionViewReads.now).toEqual(['getRecalls', 'getAnsweredReads']);
     expect(picoCompanionViewReads.settings)
-      .toEqual(['getModelProviders', 'getDevices', 'getRelays']);
+      .toEqual(['getModelProviders', 'getSuppliers', 'getDevices', 'getRelays']);
     for (const read of picoCompanionViewReads.now) {
       expect(picoCompanionViewReads.settings).not.toContain(read);
     }
@@ -337,5 +339,61 @@ describe('ADR 0113 - the window is an occasion, not a workplace', () => {
     // Two closed lists over one subject drift, so the pair is asserted.
     expect(Object.keys(picoCompanionViewReads).sort())
       .toEqual([...picoCompanionWindowViews].sort());
+  });
+});
+
+describe('ADR 0138 CO3/CO4 - the words about money and about who learns', () => {
+  const supplier = {
+    identifier: 'a-library',
+    kind: 'library',
+    mayReachOutside: false,
+    mayReachUnasked: false,
+  };
+
+  it('says an attached supplier that reaches nothing is not broken', () => {
+    // Attached says this material may be here; it does not say Pico may go
+    // and get it.
+    const [line] = picoCompanionSupplierLines([supplier]);
+    expect(line?.headline).toBe('a-library is attached and reaches nothing');
+    expect(line?.detail).toContain('Nothing it holds costs you anything');
+    expect(line?.detail).toContain('nobody learns you asked');
+  });
+
+  it('offers no unasked switch while reaching is off', () => {
+    // CO4 cannot be granted without CO3 at all, and a greyed-out control
+    // invites somebody to wonder what it would have done.
+    expect(picoCompanionSupplierLines([supplier])[0]?.unaskedActionLabel).toBeUndefined();
+    expect(picoCompanionSupplierLines([{ ...supplier, mayReachOutside: true }])[0]
+      ?.unaskedActionLabel).toBe('Let it fetch without being asked');
+  });
+
+  it('carries the reason the second decision is a second decision', () => {
+    /**
+     * ADR 0138 CO4's own sentence, and the one this surface exists to say: an
+     * answered question that cost money is visible to the person who asked,
+     * and a background sweep is visible to nobody. A single "allow" control
+     * would hide exactly that difference behind one word.
+     */
+    const [off] = picoCompanionSupplierLines([{ ...supplier, mayReachOutside: true }]);
+    expect(off?.unaskedDetail).toContain('visible to you');
+    expect(off?.unaskedDetail).toContain('visible to nobody');
+
+    const [on] = picoCompanionSupplierLines([
+      { ...supplier, mayReachOutside: true, mayReachUnasked: true },
+    ]);
+    expect(on?.headline).toContain('may do so on its own');
+    expect(on?.unaskedDetail).toContain('You will not see those trips');
+    expect(on?.unaskedActionLabel).toBe('Only when I ask');
+  });
+
+  it('says going out costs something, once it may', () => {
+    const [line] = picoCompanionSupplierLines([{ ...supplier, mayReachOutside: true }]);
+    expect(line?.detail).toContain('cost money');
+    expect(line?.detail).toContain('learns that somebody asked');
+  });
+
+  it('refuses a supplier row that is missing what a line needs', () => {
+    expect(() => parsePicoCompanionSuppliers([{ identifier: 'x' }]))
+      .toThrow('invalid_pico_companion_supplier');
   });
 });

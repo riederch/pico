@@ -88,6 +88,17 @@
       <ul id="provider-list" class="provider-list"></ul>
     </section>
     <!--
+      ADR 0138 CO3/CO4. Attaching says material may be here; this says Pico
+      may go and get it. Two switches, because an answered question that cost
+      money is visible to the person who asked and a background trip is
+      visible to nobody.
+    -->
+    <section id="suppliers" class="providers" hidden>
+      <h2>What Pico may fetch</h2>
+      <ul id="supplier-list" class="provider-list"></ul>
+      <p id="supplier-status" class="detail"></p>
+    </section>
+    <!--
       ADR 0126 P2/P6. The person's own devices, and what each may be used for.
       Hidden when the Home knows of none, which on a device that has just
       announced itself is a moment rather than a state.

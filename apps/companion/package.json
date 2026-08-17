@@ -54,6 +54,10 @@
       "types": "./dist/presence.d.ts",
       "import": "./dist/presence.js"
     },
+    "./suppliers": {
+      "types": "./dist/suppliers.d.ts",
+      "import": "./dist/suppliers.js"
+    },
     "./relay-operator": {
       "types": "./dist/relay-operator.d.ts",
       "import": "./dist/relay-operator.js"

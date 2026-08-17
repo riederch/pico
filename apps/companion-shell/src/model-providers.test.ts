@@ -168,6 +168,7 @@ describe('every view fetches what it shows', () => {
       'renderPicoCompanionAnsweredReads(',
       'renderPicoCompanionRecalls(',
       'renderPicoCompanionDevices(',
+      'renderPicoCompanionSuppliers(',
       'renderPicoCompanionRelays(',
     ]) {
       expect(renderer).toContain(render);
@@ -180,6 +181,7 @@ describe('every view fetches what it shows', () => {
       'refreshRecalls();',
       'refreshAnsweredReads();',
       'refreshModelProviders();',
+      'refreshSuppliers();',
       'refreshDevices();',
       'refreshRelays();',
     ]) {
@@ -193,6 +195,7 @@ describe('every view fetches what it shows', () => {
     const now = showView.slice(showView.indexOf("if (view === 'now')"), showView.indexOf('} else'));
     expect(now).toContain('refreshRecalls();');
     expect(now).not.toContain('refreshDevices();');
+    expect(now).not.toContain('refreshSuppliers();');
     expect(now).not.toContain('refreshModelProviders();');
     expect(now).not.toContain('refreshRelays();');
   });

@@ -20,6 +20,8 @@ const channels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  getSuppliers: 'pico:suppliers:get',
+  decideSupplierReach: 'pico:supplier-reach:decide',
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
@@ -95,6 +97,18 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   // built there too.
   grantDomainRead: async (privacyDomain: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.grantDomainRead, privacyDomain),
+  getSuppliers: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getSuppliers),
+  decideSupplierReach: async (
+    identifier: string,
+    mayReachOutside: boolean,
+    mayReachUnasked: boolean,
+  ): Promise<void> => {
+    await ipcRenderer.invoke(channels.decideSupplierReach, {
+      identifier,
+      mayReachOutside,
+      mayReachUnasked,
+    });
+  },
   getDevices: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getDevices),
   switchDevice: async (
     presenceId: string,

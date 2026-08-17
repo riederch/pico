@@ -38,6 +38,10 @@ import type { PicoCompanionShellNotifications } from './presentation-adapter.js'
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import {
+  decidePicoCompanionSupplierReach,
+  readPicoCompanionSuppliers,
+} from '@pico/companion/suppliers';
+import {
   announcePicoCompanionPresence,
   picoCompanionPresenceId,
   forgetPicoCompanionDevice,
@@ -115,6 +119,13 @@ export interface PicoCompanionShellRuntime {
     privacyDomain: string;
     status: string;
   }>;
+  /** ADR 0138 CO3/CO4. What is attached, and whether it may reach. */
+  readSuppliers(): Promise<readonly unknown[]>;
+  decideSupplierReach(input: {
+    identifier: string;
+    mayReachOutside: boolean;
+    mayReachUnasked: boolean;
+  }): Promise<void>;
   /** ADR 0126 P2/P6. The person's own devices, as their Home knows them. */
   readDevices(): Promise<readonly unknown[]>;
   switchDevice(input: {
@@ -466,6 +477,29 @@ export async function startPicoCompanionShellRuntime(input: {
             sodium: input.sodium,
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
+        });
+      }),
+      readSuppliers: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        return await readPicoCompanionSuppliers({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      decideSupplierReach: async (decision) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await decidePicoCompanionSupplierReach({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          ...decision,
         });
       }),
       readDevices: async () => await serialized(async () => {

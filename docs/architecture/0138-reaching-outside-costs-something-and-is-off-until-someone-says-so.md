@@ -29,6 +29,20 @@ The list carries the identifier, the kind and the two answers - not the slots,
 the coverage or the privacy domain. Somebody deciding whether a thing may
 spend their money needs to know what it is, not how it is wired.
 
+**The companion window carries it the same day**, because an operation nobody
+can reach is where this gate started. Two controls and never one: a single
+"allow this supplier" would hide the difference the two decisions exist for.
+The unasked control is *absent* while reaching is off rather than disabled -
+CO4 cannot be granted without CO3 at all, and a greyed-out switch invites
+somebody to wonder what it would have done.
+
+CO4's own sentence is the one the surface says, where the person decides it:
+*a question you asked and that cost something is visible to you; a trip nobody
+asked for is visible to nobody.* And switching reaching off takes the unasked
+permission with it in the companion rather than only in the database, because
+somebody switching off "may fetch" has plainly not meant "but keep doing it
+unprompted" - the caller does not get to send that combination by forgetting.
+
 Accepted as a constraint on suppliers that reach a system Pico does not
 run. **CO1-CO5 are implemented**
 (2026-08-10 to 2026-08-11), and this ADR is complete apart from the

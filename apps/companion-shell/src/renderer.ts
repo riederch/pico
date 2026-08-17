@@ -15,6 +15,7 @@ import {
   renderPicoCompanionRelays,
   renderPicoCompanionRelayAccountIssued,
   renderPicoCompanionDevices,
+  renderPicoCompanionSuppliers,
 } from './model-provider-views.js';
 
 declare global {
@@ -41,6 +42,12 @@ declare global {
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
+      getSuppliers(): Promise<unknown>;
+      decideSupplierReach(
+        identifier: string,
+        mayReachOutside: boolean,
+        mayReachUnasked: boolean,
+      ): Promise<void>;
       getDevices(): Promise<unknown>;
       switchDevice(
         presenceId: string,
@@ -273,6 +280,45 @@ const providerSection = requireElement('model-providers');
 const providerList = requireElement('provider-list');
 const readSection = requireElement('answered-reads');
 const readList = requireElement('read-list');
+const supplierSection = requireElement('suppliers');
+const supplierList = requireElement('supplier-list');
+const supplierStatus = requireElement('supplier-status');
+
+/**
+ * ADR 0138 CO3/CO4. What Pico may fetch, and what that costs.
+ *
+ * Fails quietly like its neighbours (ADR 0118 O4). What a person pressed
+ * always answers - this one decides about their money, so a silent failure
+ * would be the worst kind.
+ */
+function refreshSuppliers(): void {
+  void window.picoCompanion.getSuppliers()
+    .then((suppliers) => {
+      renderPicoCompanionSuppliers(
+        { list: supplierList, section: supplierSection, document },
+        suppliers,
+        (decision) => {
+          void window.picoCompanion.decideSupplierReach(
+            decision.identifier,
+            decision.mayReachOutside,
+            decision.mayReachUnasked,
+          ).then(() => {
+            supplierStatus.textContent = decision.mayReachOutside
+              ? (decision.mayReachUnasked
+                ? 'It may now fetch on its own. You will not see those trips.'
+                : 'It may fetch when you ask.')
+              : 'Pico will not go out for this.';
+            refreshSuppliers();
+          }, (error: unknown) => {
+            supplierStatus.textContent = refusalText(error, 'That was not changed.');
+          });
+        },
+      );
+    }, () => {
+      supplierSection.hidden = true;
+    });
+}
+
 const deviceSection = requireElement('devices');
 const deviceList = requireElement('device-list');
 const deviceStatus = requireElement('device-status');
@@ -590,6 +636,7 @@ function showView(view: PicoCompanionWindowView): void {
     refreshAnsweredReads();
   } else {
     refreshModelProviders();
+    refreshSuppliers();
     refreshDevices();
     refreshRelays();
   }
