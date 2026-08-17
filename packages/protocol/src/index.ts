@@ -501,6 +501,14 @@ export const picoLinkDirectOperations = [
    * the disclosure rather than behind it.
    */
   'home.model.provider.measure.ask',
+  /**
+   * ADR 0142 PE1. Forgets a measured machine, and every decision about it.
+   *
+   * The decisions go with it rather than being revoked one by one: an entry id
+   * is derived from the model name, so a later measurement of the same model
+   * would otherwise inherit somebody's old answer about a different finding.
+   */
+  'home.model.provider.forget',
   'home.model.provider.credential.submit',
   'home.model.provider.decision.submit',
   'home.model.provider.decision.revoke',
@@ -607,6 +615,17 @@ export const picoLinkDirectOperations = [
    */
   'home.supplier.attach',
   /**
+   * ADR 0136 with ADR 0129 SR6. Stopping is not forgetting.
+   *
+   * Detaching a supplier ends the derivation and deletes nothing: what Pico
+   * derived from a library is an ordinary memory item under ordinary custody,
+   * and what it never owned was the library. The pair with `attach` exists
+   * because everything a person can add they must be able to take back - and
+   * for a week they could not, which is what a check over store writers now
+   * catches rather than a person noticing.
+   */
+  'home.supplier.detach',
+  /**
    * ADR 0143 DP1 with ADR 0138 CO3/CO4. What a depot is pinned at, the
    * person's word that this material may be here, and whether Pico may go and
    * get it.
@@ -618,6 +637,18 @@ export const picoLinkDirectOperations = [
   'home.depots.read',
   'home.depot.attach',
   'home.depot.reach.decide',
+  /**
+   * ADR 0143 DP8. Takes back "this material may be here", and the files with
+   * it.
+   *
+   * The row decides and the filesystem is brought to it: leaving a working
+   * copy behind would be executable code on disk that no attachment stands
+   * behind, which is what a supplier process would be pointed at. Deleted
+   * rather than shredded, because the contents came from a public remote at a
+   * commit anyone can fetch and claiming unrecoverable erasure of that would
+   * be a guarantee about the wrong thing.
+   */
+  'home.depot.detach',
   /**
    * ADR 0143 DP8 with ADR 0141 RN4. A person asking for a fetch now, and
    * answering the question that comes back.

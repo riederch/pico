@@ -85,6 +85,13 @@ This was drafted as 0142 and renumbered. ADR 0142 was cut the same day for
 the model provider entry, and reusing the number would have pointed two
 different contracts at one identifier.
 
+Status note, 2026-08-17: **DP8's detach reached the row and not the files.**
+`detachPicoDepot` had no caller, and the workspace's own detach - written for
+exactly this - had none either. `home.depot.detach` does both, row first in
+ADR 0070's tombstone posture, because until the boot-time orphan sweep runs a
+leftover working copy is executable code on disk that no attachment stands
+behind, which is what a supplier process is pointed at.
+
 ## Context
 
 ADR 0136 says what a supplier is, ADR 0137 what happens when there are

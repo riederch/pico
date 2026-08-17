@@ -378,6 +378,23 @@ export class PicoModelProviderConsent {
    * 14th" and "this person was never asked" are different facts and a surface
    * that showed them alike would be inventing one of them.
    */
+  /**
+   * ADR 0142 PE1. Drops every decision about an entry, for everyone.
+   *
+   * **Not `revoke` repeated, and the difference is load-bearing.** Revoking
+   * keeps the row with its date, so "withdrew" stays distinguishable from
+   * "never asked" - which is right while the entry still exists. When the
+   * entry itself is forgotten there is nothing left for that distinction to
+   * be about, and leaving the rows would be worse than useless: an entry id
+   * is derived from the model name, so measuring the same model again would
+   * hand a fresh finding somebody's year-old "yes".
+   */
+  public forget(entryId: string): void {
+    this.db
+      .prepare('DELETE FROM pico_model_provider_consent WHERE entry_id = ?')
+      .run(entryId);
+  }
+
   public revoke(entryId: string, picoIdentityFingerprintHex: string, at: string): void {
     this.db.prepare(`
       UPDATE pico_model_provider_consent SET revoked_at = ?

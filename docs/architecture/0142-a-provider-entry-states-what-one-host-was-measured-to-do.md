@@ -266,6 +266,15 @@ first wrote it: no credential is sent, `answeredWithoutCredential` and
 `live_turn`. A measurement grants nothing; the wider allowance stays
 something a credential buys through ADR 0152's decision surface.
 
+Status note, 2026-08-17: **forgetting a measured machine takes its decisions
+with it.** `PicoModelProviderRegistry.remove` had no caller;
+`home.model.provider.forget` is it. The decisions go rather than being
+revoked, and that is not tidiness: revoking keeps the row so "withdrew" stays
+distinguishable from "never asked", which is right while the entry exists -
+and an entry id is derived from the model name, so a later measurement of the
+same model would otherwise inherit somebody's old answer about a different
+finding.
+
 ## Context
 
 ADR 0048 decided what may leave the device and ADR 0049 decided that a

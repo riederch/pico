@@ -57,6 +57,25 @@ Oberflaeche: `apps/core/src/whole-chain.test.ts`. Dabei fiel ein fuenfter
 Befund an - der Einsprungpunkt des mitgelieferten Lieferanten wurde ueber
 `process.cwd()` aufgeloest und traf nur, weil das Image `WORKDIR /app` setzt.
 
+## Eine Person kann kein einzelnes Erinnerungsstueck loeschen - offen
+
+**Gefunden am 2026-08-17 vom neuen `store:check`.**
+
+`MemoryStore.deleteInDomain` hat keinen Aufrufer ausserhalb der Tests. Die
+beiden Enden gibt es: die Aufbewahrung loescht nach Richtlinie
+(`enforceTombstone`, ADR 0074), und ein Domaenen-Schredder nimmt alles
+(ADR 0071/0072). Die Mitte fehlt - "loesch genau das hier".
+
+**Was fehlt, ist eine Oberflaeche, nicht die Methode.** Nichts im Companion
+listet die Erinnerungen einer Person auf; es gibt die Rueckfrage-Antworten
+(ADR 0116 W5) und die Modell-Lesevorgaenge, aber keine Ansicht, aus der
+heraus man ein einzelnes Stueck loeschen koennte. Zu entscheiden ist also
+zuerst, *woraus* geloescht wird - und das ist eine Produktfrage.
+
+Bis dahin steht die Methode als begruendete Ausnahme in
+`scripts/check-store-writers.mjs`, damit die Abwesenheit sichtbar bleibt,
+statt eine tote Methode zu sein, die niemand bemerkt.
+
 ## Auslieferbare Pakete - umgesetzt am 2026-08-16
 
 **Entschieden und gebaut als ADR 0153.** Drei Auslieferungen, benannt nach

@@ -268,6 +268,7 @@ import {
   verifyIdentitySessionProof,
   type IdentitySessionProof,
 } from './identity-session.js';
+import { picoLinkPushLedgerHorizonMs } from './link-push-floor.js';
 import { shredDomainWithAudit } from './domain-shred.js';
 import { defaultWebRootPath, type CoreConfig } from './config.js';
 import {
@@ -1333,6 +1334,22 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
       // once it is written down.
       store.observeRecoveryAnchor();
       checkClockDivergence();
+      /**
+       * ADR 0150 PU5. The push ledger, kept to its horizon.
+       *
+       * **It had no caller at all**, so every push a Home ever made stayed on
+       * record for the life of the installation - a table that only grows, in
+       * a family whose whole point is not keeping what nobody needs. Here
+       * rather than on its own timer: this tick already exists for exactly
+       * this kind of forgetting, and a second interval would be a second thing
+       * to stop on close.
+       */
+      const prunedPushes = store.prunePicoLinkPushLedger(
+        new Date(Date.now() - picoLinkPushLedgerHorizonMs).toISOString(),
+      );
+      if (prunedPushes > 0) {
+        app.log.info({ prunedPushes }, 'push ledger pruned to its horizon');
+      }
       const result = retentionSweeper.sweep();
       if (result.refusedImplausibleClock === true) {
         // N5: recorded as a fact, never a silent skip and never a quiet
@@ -4133,6 +4150,35 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           return { outcome: 'ok', result: { decided: true } };
         }
         /**
+         * ADR 0136 with ADR 0129 SR6. Stopping is not forgetting.
+         *
+         * **Nothing derived is touched.** What Pico read out of a library is
+         * an ordinary memory item under ordinary custody, and it stays exactly
+         * where it is - the thing being taken back is the library, which Pico
+         * never owned.
+         */
+        case 'home.supplier.detach': {
+          if (principal === undefined || typeof args.identifier !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (store.picoSupplierAttachment(args.identifier) === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_attached' } };
+          }
+          store.detachPicoSupplier(args.identifier);
+          const detachedEvent = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.supplier_attachment_changed',
+            payload: {
+              identifier: args.identifier,
+              mayReachOutside: false,
+              mayReachUnasked: false,
+            },
+          });
+          store.append(detachedEvent);
+          broadcast(detachedEvent);
+          return { outcome: 'ok', result: { detached: true } };
+        }
+        /**
          * ADR 0143 DP1. What is pinned, and at which commit.
          *
          * The commit travels whole rather than shortened: a person deciding
@@ -4347,6 +4393,38 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
          * hour would be naming a standing grant with a number attached, which
          * is the thing RN4's two clocks exist to stop.
          */
+        case 'home.depot.detach': {
+          if (principal === undefined || typeof args.remote !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          if (store.picoDepotAttachment(args.remote) === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_attached' } };
+          }
+          /**
+           * ADR 0143 DP8. **The row first, then the files.** ADR 0070's
+           * tombstone posture: the attachment record decides and the
+           * filesystem is brought to it, so an interruption leaves a directory
+           * with no attachment behind it rather than an attachment pointing at
+           * nothing - and the boot-time orphan sweep already knows how to
+           * clear the first. Done now rather than left to that sweep, because
+           * until it runs there is executable code on disk that no attachment
+           * stands behind, which is what a supplier process is pointed at.
+           */
+          store.detachPicoDepot(args.remote);
+          depotWorkspace.detach(args.remote);
+          const depotDetached = factory.create({
+            deviceId: config.deviceId,
+            type: 'home.supplier_attachment_changed',
+            payload: {
+              identifier: args.remote,
+              mayReachOutside: false,
+              mayReachUnasked: false,
+            },
+          });
+          store.append(depotDetached);
+          broadcast(depotDetached);
+          return { outcome: 'ok', result: { detached: true } };
+        }
         case 'home.depot.fetch.ask': {
           if (principal === undefined
             || typeof args.presenceSessionId !== 'string'
@@ -4710,6 +4788,29 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           })();
 
           return { outcome: 'ok', result: { entryId, state: 'running' } };
+        }
+        /**
+         * ADR 0142 PE1. Forgets a measured machine, and every decision about
+         * it.
+         *
+         * **The decisions go rather than being revoked.** Revoking keeps the
+         * row so "withdrew" stays distinguishable from "never asked", which is
+         * right while the entry exists; once it does not, there is nothing for
+         * that distinction to be about, and an entry id derived from the model
+         * name means a later measurement of the same model would inherit
+         * somebody's old answer about a different finding.
+         */
+        case 'home.model.provider.forget': {
+          if (principal === undefined || typeof args.entryId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const registry = store.picoModelProviderRegistry();
+          if (registry.get(args.entryId) === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_measured' } };
+          }
+          store.picoModelProviderConsent().forget(args.entryId);
+          registry.remove(args.entryId);
+          return { outcome: 'ok', result: { forgotten: true } };
         }
         case 'home.model.provider.credential.submit': {
           if (principal === undefined

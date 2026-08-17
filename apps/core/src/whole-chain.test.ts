@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
-import { startPicoFakeModelHost, type PicoFakeModelHost } from './model-provider-measure-host.js';
+import { startPicoFakeModelHost, type PicoFakeModelHost } from './test-model-provider-host.js';
 import {
   keyRecordFingerprintHex,
   openPicoHomeWithDevice,

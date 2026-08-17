@@ -28,6 +28,22 @@
 export const minPicoLinkPushIntervalMs = 5 * 60 * 1_000;
 
 /**
+ * ADR 0150 PU5. How far back the ledger has to remember, and no further.
+ *
+ * The ledger exists to answer one question - *have I already pushed this
+ * device about this event?* - and `minPicoLinkPushIntervalMs` is how long an
+ * answer stays interesting. A row older than that cannot change any decision;
+ * keeping it only means the table grows for the life of the Home.
+ *
+ * A day rather than five minutes, because the floor is not the only reader: a
+ * person looking at why their phone woke last night is asking about the same
+ * rows, and a horizon set to the exact width of the decision would leave
+ * nothing to look at. Wide enough to explain yesterday, narrow enough that the
+ * ledger is not a log.
+ */
+export const picoLinkPushLedgerHorizonMs = 24 * 60 * 60 * 1_000;
+
+/**
  * ADR 0150 PU5. What a Home may push about.
  *
  * A closed list, and short on purpose: a push is for what the poll would

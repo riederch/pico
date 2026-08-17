@@ -48,6 +48,15 @@ rather than from the caller, so a device cannot write the capabilities it
 is about to be granted. Attaching still creates no reach - ADR 0138
 CO3/CO4 stays the separate decision beside it.
 
+Status note, 2026-08-17: **detaching had no caller either.** The pair with
+attaching closes on the same day it was found, by a check rather than by
+somebody noticing: `detachPicoSupplier` existed, was tested and was
+unreachable. `home.supplier.detach` ends the derivation and touches nothing
+that was derived - what Pico read out of a library is an ordinary memory item
+under ordinary custody, and the library is the only thing it never owned. A
+detached supplier the depot still declares is offered again, because detaching
+took back the answer rather than the question.
+
 ## Context
 
 Issue #4 asks for a VesselTracking module reaching the VesselFinder AIS

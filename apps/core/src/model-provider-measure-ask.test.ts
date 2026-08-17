@@ -5,7 +5,7 @@ import { Writable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from './app.js';
 import { EventStore } from './event-store.js';
-import { startPicoFakeModelHost, type PicoFakeModelHost } from './model-provider-measure-host.js';
+import { startPicoFakeModelHost, type PicoFakeModelHost } from './test-model-provider-host.js';
 import { openPicoHomeWithDevice, sendPicoLinkDirectRequest } from './test-claimed-home.js';
 
 /**
