@@ -357,8 +357,26 @@ function resolveFoundationAccessMode(options: {
       return { mode: 'direct-token' };
     }
 
+    /**
+     * ADR 0041 with ADR 0118 O4. **The choices, not only the variable.**
+     *
+     * The refusal below this one - an access mode nobody declares - has always
+     * listed what is allowed. This one did not, so the person who set nothing
+     * got less help than the person who set something wrong: a container that
+     * exits naming a variable and no value leaves them to find the answer in a
+     * document they have not opened yet. Found by running the image the way
+     * `README.md` says it can be run.
+     *
+     * Each mode gets the clause a person needs to choose between them, because
+     * the names alone do not say which one their deployment is.
+     */
     throw new Error(
-      'PICO_FOUNDATION_ACCESS_MODE must be set when PICO_HOST is not loopback and PICO_FOUNDATION_TOKEN is not configured.',
+      'PICO_FOUNDATION_ACCESS_MODE must be set when PICO_HOST is not loopback '
+      + 'and PICO_FOUNDATION_TOKEN is not configured. Choose one: '
+      + 'loopback-dev (bind PICO_HOST to 127.0.0.1 and reach it from this host only), '
+      + 'direct-token (publish the port and set PICO_FOUNDATION_TOKEN), or '
+      + 'trusted-proxy (a reverse proxy or Home Assistant ingress in front, '
+      + 'which the Home Assistant add-on sets for you).',
     );
   }
 

@@ -21,6 +21,31 @@ Accepted and implemented for Foundation access-mode parsing, startup validation,
 > update failure under ADR 0122. Text below keeps the name it was written
 > with.
 
+Status note, 2026-08-17: **the refusal names the choices now, because the
+container was run the way the README says it can be.**
+
+The image sets `PICO_HOST=0.0.0.0` and no access mode, so a plain
+`podman run` exits at boot - correctly, since binding to every interface
+without a token is exactly the decision this ADR refuses to make for
+somebody. What was wrong is what the exit said. The neighbouring refusal, an
+access mode nobody declares, has always listed what is allowed; this one named
+only the variable, so the operator who set *nothing* got less help than the
+one who set something *wrong*, and the answer sat in a document they had not
+opened yet.
+
+Each mode now arrives with the clause that tells them which is theirs:
+loopback-dev binds to 127.0.0.1 and is reachable from that host only,
+direct-token publishes the port and wants `PICO_FOUNDATION_TOKEN`, and
+trusted-proxy expects a reverse proxy or Home Assistant ingress in front -
+which the add-on host adapter sets on their behalf.
+
+The rest of that walk found nothing to change. The container binds 0.0.0.0
+despite Fastify's log line naming one address, a restart keeps the same host
+identity from the volume, the static token reaches `foundation-diagnostic` and
+stops there, and an unclaimed Home that restarts mints a move-in code that
+replaces the previous one rather than adding to it - `MoveInCode` holds one
+digest in memory, so the earlier code dies with the process that printed it.
+
 ## Context
 
 ADR 0030 defines the current Foundation HTTP and WebSocket surface as trusted-local diagnostics and foundation plumbing.

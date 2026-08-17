@@ -88,10 +88,32 @@ describe('Core config', () => {
     expect(config.foundationAccessMode).toBe('direct-token');
   });
 
-  it('rejects non-loopback access without a token or explicit mode', () => {
-    expect(() => loadConfig({ PICO_HOST: '0.0.0.0' })).toThrow(
-      'PICO_FOUNDATION_ACCESS_MODE must be set when PICO_HOST is not loopback and PICO_FOUNDATION_TOKEN is not configured.',
-    );
+  it('rejects non-loopback access without a token or explicit mode, and offers the choices', () => {
+    /**
+     * ADR 0118 O4. **Every mode by name, and what each one means.** The
+     * refusal below - an access mode nobody declares - always listed what is
+     * allowed, so the person who set nothing used to get less help than the
+     * person who set something wrong. Found by running the container image the
+     * way `README.md` says it can be run: it exits naming a variable, and the
+     * value it wants is in a document the operator has not opened yet.
+     */
+    const refusal = (() => {
+      try {
+        loadConfig({ PICO_HOST: '0.0.0.0' });
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+      throw new Error('non_loopback_without_a_mode_was_accepted');
+    })();
+
+    expect(refusal).toContain('PICO_FOUNDATION_ACCESS_MODE must be set');
+    for (const mode of ['loopback-dev', 'direct-token', 'trusted-proxy']) {
+      expect(refusal, mode).toContain(mode);
+    }
+    // Not just the names: which deployment each one is for.
+    expect(refusal).toContain('127.0.0.1');
+    expect(refusal).toContain('PICO_FOUNDATION_TOKEN');
+    expect(refusal).toContain('Home Assistant');
   });
 
   it('rejects invalid foundation access modes and names both sets', () => {
