@@ -895,3 +895,57 @@ describe('ADR 0048 - the declaration is a precondition, not a field', () => {
       .not.toContain('declared_own_host');
   });
 });
+
+describe('ADR 0071 - the line that made a memory is the line that unmakes it', () => {
+  it('offers to forget once kept, and never beside the keep control', () => {
+    /**
+     * An answer is kept or it is not, so exactly one control is on a line.
+     * Two would ask a person to work out which applies to the state in front
+     * of them - and the word is *forget* rather than *delete*, because what
+     * goes is one sentence out of their memory.
+     */
+    const root = fakeDocument();
+    const forgotten: string[] = [];
+    renderPicoCompanionRecalls(root, [{
+      jobId: 'job_kept',
+      question: 'where did I park?',
+      askedAt: '2026-08-17T10:00:00.000Z',
+      settledAt: '2026-08-17T10:00:05.000Z',
+      outcome: 'answered',
+      foundInMemory: true,
+      answer: 'Bergstrasse, bay 114.',
+      keptAs: { memoryItemId: 'mem_recall_0001', privacyDomain: 'domain-private' },
+    }], () => {}, (memoryItemId) => forgotten.push(memoryItemId));
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toBe('Forget this');
+    // The state says what is true now, so the control reads as an undo.
+    expect(String(line.children[1]?.textContent)).toContain('kept');
+
+    (buttons[0] as unknown as { click(): void }).click();
+    expect(forgotten).toEqual(['mem_recall_0001']);
+  });
+
+  it('offers to keep while nothing was kept, and nothing to forget', () => {
+    const root = fakeDocument();
+    renderPicoCompanionRecalls(root, [{
+      jobId: 'job_unkept',
+      question: 'where did I park?',
+      askedAt: '2026-08-17T10:00:00.000Z',
+      settledAt: '2026-08-17T10:00:05.000Z',
+      outcome: 'answered',
+      foundInMemory: true,
+      answer: 'Bergstrasse, bay 114.',
+    }], () => {}, () => {});
+
+    const line = (root.list as unknown as {
+      children: Array<{ children: Array<Record<string, unknown>> }>;
+    }).children[0]!;
+    const buttons = line.children.filter((child) => child.tag === 'button');
+    expect(buttons.map((button) => button.textContent)).toEqual(['Keep this answer']);
+  });
+});

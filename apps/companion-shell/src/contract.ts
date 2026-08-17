@@ -28,6 +28,8 @@ export const picoCompanionIpcChannels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  /** ADR 0071. One memory item, unmade by the person who made it. */
+  forgetMemory: 'pico:memory:forget',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
   /** ADR 0137 IN5. The one field a depot may not supply, from the person. */
@@ -655,6 +657,7 @@ export interface PicoCompanionRecall {
   outcome?: string;
   answer?: string;
   foundInMemory?: boolean;
+  keptAs?: { memoryItemId: string; privacyDomain: string };
 }
 
 export interface PicoCompanionRecallLine {
@@ -664,6 +667,15 @@ export interface PicoCompanionRecallLine {
   state: string;
   /** ADR 0116 W5. Present only when there is an answer to keep. */
   keepable?: true;
+  /**
+   * ADR 0071. Present only when there is a memory to take back.
+   *
+   * **Never beside `keepable`**, and that is the whole shape: an answer is
+   * either kept or not, so a line offers exactly one of the two. Two controls
+   * on one line would ask a person to work out which of them applies to the
+   * state they are looking at.
+   */
+  forgettable?: { memoryItemId: string; label: string };
   /**
    * ADR 0117 X5. The answer, and never without its label.
    *
@@ -711,8 +723,22 @@ export function picoCompanionRecallLines(
     return Object.freeze({
       jobId: recall.jobId,
       question: recall.question,
-      state: 'Answered from what you remember.',
-      ...(recall.answer === undefined ? {} : { keepable: true as const }),
+      state: recall.keptAs === undefined
+        ? 'Answered from what you remember.'
+        // Said as what is true now rather than as what happened: the sentence
+        // is in their memory, which is the thing the control below undoes.
+        : 'Answered from what you remember, and kept.',
+      ...(recall.answer === undefined || recall.keptAs !== undefined
+        ? {}
+        : { keepable: true as const }),
+      ...(recall.keptAs === undefined ? {} : {
+        forgettable: Object.freeze({
+          memoryItemId: recall.keptAs.memoryItemId,
+          // Never *delete*: what goes is one sentence out of their memory, and
+          // the word for that is the one a person would use about a memory.
+          label: 'Forget this',
+        }),
+      }),
       ...(recall.answer === undefined ? {} : {
         answer: Object.freeze({
           label: 'A model wrote this from your own notes. Pico did not check it.',
@@ -747,6 +773,19 @@ export function parsePicoCompanionRecalls(value: unknown): readonly PicoCompanio
       ...(typeof record.foundInMemory === 'boolean'
         ? { foundInMemory: record.foundInMemory }
         : {}),
+      ...(((): Record<string, unknown> => {
+        const kept = record.keptAs as Record<string, unknown> | undefined;
+        // Both halves or neither: a memory item without its domain is not
+        // something this window can offer to take back.
+        return typeof kept?.memoryItemId === 'string' && typeof kept.privacyDomain === 'string'
+          ? {
+            keptAs: Object.freeze({
+              memoryItemId: kept.memoryItemId,
+              privacyDomain: kept.privacyDomain,
+            }),
+          }
+          : {};
+      })()),
     });
   }));
 }

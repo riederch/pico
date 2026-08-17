@@ -333,13 +333,25 @@ export class PicoModelJobQueue {
     settledAt?: string;
     outcome?: string;
     values?: unknown;
+    /**
+     * ADR 0071. What this answer became when the person kept it.
+     *
+     * Absent means they have not kept it - which is a different statement from
+     * having kept and then forgotten it, because forgetting deletes the item
+     * and leaves this naming a thing that is gone. Both fields travel: a
+     * deletion needs the domain too, and reading it back off the memory item
+     * would mean already knowing where to look.
+     */
+    keptAs?: { memoryItemId: string; privacyDomain: string };
   }> {
     // Unsettled ones are in the list on purpose. A question that vanished
     // until an answer existed would leave a person who just asked looking at
     // nothing, unable to tell a slow provider from a lost question.
     const rows = this.db.prepare(`
       SELECT job_id AS jobId, job_json AS jobJson, enqueued_at AS askedAt,
-             settled_at AS settledAt, outcome, result_json AS resultJson
+             settled_at AS settledAt, outcome, result_json AS resultJson,
+             kept_memory_item_id AS keptMemoryItemId,
+             kept_privacy_domain AS keptPrivacyDomain
       FROM pico_model_job_queue
       WHERE pico_identity_fingerprint_hex = ?
         AND kind = 'recall'
@@ -351,6 +363,8 @@ export class PicoModelJobQueue {
       settledAt: string | null;
       outcome: string | null;
       resultJson: string | null;
+      keptMemoryItemId: string | null;
+      keptPrivacyDomain: string | null;
     }>;
     return Object.freeze(rows.map((row) => {
       const job = JSON.parse(row.jobJson) as {
@@ -372,8 +386,59 @@ export class PicoModelJobQueue {
         ...(row.settledAt === null ? {} : { settledAt: row.settledAt }),
         ...(row.outcome === null ? {} : { outcome: row.outcome }),
         ...(output === undefined ? {} : { values: output }),
+        ...(row.keptMemoryItemId === null || row.keptPrivacyDomain === null
+          ? {}
+          : {
+            keptAs: Object.freeze({
+              memoryItemId: row.keptMemoryItemId,
+              privacyDomain: row.keptPrivacyDomain,
+            }),
+          }),
       });
     }));
+  }
+
+  /**
+   * ADR 0071 with ADR 0116 W5. Records what a kept answer became.
+   *
+   * **Written where the keep happens, not derived later.** The memory item is
+   * minted at keep time and its identifier was handed back once and kept by
+   * nobody, so a day later there was no way to name the thing again - which is
+   * why a person could make a memory and never unmake one.
+   *
+   * Clearing it is the other half: forgetting deletes the item, and a row
+   * still naming it would offer to delete something that is gone.
+   */
+  public markKept(input: {
+    jobId: string;
+    memoryItemId: string | null;
+    privacyDomain: string | null;
+  }): void {
+    this.db
+      .prepare(`
+        UPDATE pico_model_job_queue
+        SET kept_memory_item_id = ?, kept_privacy_domain = ?
+        WHERE job_id = ?
+      `)
+      .run(input.memoryItemId, input.privacyDomain, input.jobId);
+  }
+
+  /** ADR 0071. Which job, if any, holds this memory item for this person. */
+  public jobKeepingMemoryItem(input: {
+    picoIdentityFingerprintHex: string;
+    memoryItemId: string;
+  }): { jobId: string; privacyDomain: string } | undefined {
+    const row = this.db
+      .prepare(`
+        SELECT job_id AS jobId, kept_privacy_domain AS privacyDomain
+        FROM pico_model_job_queue
+        WHERE pico_identity_fingerprint_hex = ? AND kept_memory_item_id = ?
+      `)
+      .get(input.picoIdentityFingerprintHex, input.memoryItemId) as
+        { jobId: string; privacyDomain: string | null } | undefined;
+    return row === undefined || row.privacyDomain === null
+      ? undefined
+      : { jobId: row.jobId, privacyDomain: row.privacyDomain };
   }
 
   /**

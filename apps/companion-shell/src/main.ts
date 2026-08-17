@@ -635,6 +635,20 @@ function registerIpc(): void {
       }
     },
   );
+  /** ADR 0071. One memory item, unmade by the person who made it. */
+  ipcMain.handle(
+    picoCompanionIpcChannels.forgetMemory,
+    async (event: IpcMainInvokeEvent, memoryItemId: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (typeof memoryItemId !== 'string') {
+        throw new Error('invalid_memory_item');
+      }
+      await runtime.forgetMemory(memoryItemId);
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.getSuppliers,
     async (event: IpcMainInvokeEvent) => {

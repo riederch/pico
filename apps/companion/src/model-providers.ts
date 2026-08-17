@@ -357,6 +357,13 @@ export interface PicoCompanionRecallView {
   answer?: string;
   /** ADR 0117 X2. Whether the material contained an answer at all. */
   foundInMemory?: boolean;
+  /**
+   * ADR 0071. What this answer became when the person kept it.
+   *
+   * Absent means there is nothing to take back - not kept, or kept and since
+   * forgotten, which are the same statement to a surface offering to forget.
+   */
+  keptAs?: { memoryItemId: string; privacyDomain: string };
 }
 
 /**
@@ -481,4 +488,24 @@ export async function keepPicoCompanionRecall(input: {
     throw new Error('invalid_pico_recall_keep_result');
   }
   return memoryItemId;
+}
+
+/**
+ * ADR 0071 with ADR 0116 W5. Unmakes a memory the person made by keeping.
+ *
+ * Only the item travels. The domain is not the caller's to name - the Home has
+ * it on the row that records the keep, and taking it from here would let a
+ * client go looking in a domain by guessing.
+ */
+export async function forgetPicoCompanionMemory(input: {
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  memoryItemId: string;
+}): Promise<void> {
+  const answer = await input.livingDeviceLinkClient.request('home.memory.forget', {
+    memoryItemId: input.memoryItemId,
+  });
+  if (answer.outcome !== 'ok') {
+    const refusal = (answer.result as { refusal?: unknown }).refusal;
+    throw new Error(typeof refusal === 'string' ? refusal : `memory_forget_${answer.outcome}`);
+  }
 }

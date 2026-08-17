@@ -57,7 +57,7 @@ Oberflaeche: `apps/core/src/whole-chain.test.ts`. Dabei fiel ein fuenfter
 Befund an - der Einsprungpunkt des mitgelieferten Lieferanten wurde ueber
 `process.cwd()` aufgeloest und traf nur, weil das Image `WORKDIR /app` setzt.
 
-## Eine Person kann kein einzelnes Erinnerungsstueck loeschen - offen
+## Eine Person kann kein einzelnes Erinnerungsstueck loeschen - geschlossen am 2026-08-17
 
 **Gefunden am 2026-08-17 vom neuen `store:check`.**
 
@@ -72,9 +72,14 @@ listet die Erinnerungen einer Person auf; es gibt die Rueckfrage-Antworten
 heraus man ein einzelnes Stueck loeschen koennte. Zu entscheiden ist also
 zuerst, *woraus* geloescht wird - und das ist eine Produktfrage.
 
-Bis dahin steht die Methode als begruendete Ausnahme in
-`scripts/check-store-writers.mjs`, damit die Abwesenheit sichtbar bleibt,
-statt eine tote Methode zu sein, die niemand bemerkt.
+**Entschieden und gebaut.** Geloescht wird aus dem, was die Person behalten
+hat - auf der Zeile, auf der sie es behalten hat. Kein Blaettern ueber die
+Erinnerung, also auch keine Inventarflaeche (ADR 0077 C4): das Stueck wird
+ueber den Job erreicht, der es haelt, begrenzt auf die fragende Identitaet,
+und ein vorhandenes fremdes Stueck wird genauso abgelehnt wie ein erfundenes.
+
+`home.memory.forget`, Migration `0024_pico_model_job_kept_memory`, und im
+Fenster genau ein Knopf je Zeile: behalten *oder* vergessen, nie beides.
 
 ## Auslieferbare Pakete - umgesetzt am 2026-08-16
 

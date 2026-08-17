@@ -3797,6 +3797,61 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           };
         }
         /**
+         * ADR 0071 with ADR 0116 W5. One memory item, unmade by the person who
+         * made it.
+         *
+         * **Only what they kept, and only theirs.** The item is found through
+         * the job that holds it, scoped to the requesting identity, which is
+         * what keeps this from becoming a way to name any memory item and see
+         * whether it exists - ADR 0077 C4's rule that a refusal must not be an
+         * inventory. The domain comes off that row rather than from the
+         * caller, so a caller cannot go looking in a domain by guessing.
+         *
+         * Deleting nulls the content and drops the key envelope; the
+         * `memory.tombstone` event is what makes it survive a restore, because
+         * ADR 0070's reconcile re-applies recorded deletions at boot. Without
+         * the event a backup could resurrect the sentence somebody deleted.
+         *
+         * The job keeps its answer. What was taken back is the memory, not the
+         * record that an answer was once given - and the line then offers to
+         * keep it again, which is the honest state: they have one and did not
+         * keep it.
+         */
+        case 'home.memory.forget': {
+          if (principal === undefined || typeof args.memoryItemId !== 'string') {
+            return { outcome: 'invalid_arguments', result: {} };
+          }
+          const holding = store.picoModelJobQueue().jobKeepingMemoryItem({
+            picoIdentityFingerprintHex: principal.picoIdentityFingerprintHex,
+            memoryItemId: args.memoryItemId,
+          });
+          if (holding === undefined) {
+            return { outcome: 'invalid_arguments', result: { refusal: 'not_kept_by_you' } };
+          }
+          const removed = store.memory()
+            .deleteInDomain(args.memoryItemId, holding.privacyDomain);
+          if (removed !== 'deleted') {
+            return { outcome: 'invalid_arguments', result: { refusal: removed } };
+          }
+          const tombstone = factory.create({
+            deviceId: config.deviceId,
+            type: 'memory.tombstone',
+            payload: {
+              memoryItemId: args.memoryItemId,
+              privacyDomain: holding.privacyDomain,
+              reason: 'forgotten_by_person',
+            },
+          });
+          store.append(tombstone);
+          broadcast(tombstone);
+          store.picoModelJobQueue().markKept({
+            jobId: holding.jobId,
+            memoryItemId: null,
+            privacyDomain: null,
+          });
+          return { outcome: 'ok', result: { forgotten: true } };
+        }
+        /**
          * ADR 0116 W5. One answer becomes a memory item, because a person said
          * so.
          *
@@ -3916,6 +3971,18 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
             if (!crossed.ok) {
               return { outcome: 'invalid_arguments', result: { refusal: crossed.refusal } };
             }
+            /**
+             * ADR 0071. The job now names what it became, so it can be undone.
+             *
+             * Written here rather than derived later: the identifier was minted
+             * a few lines up and handed back once, and nothing kept it - which
+             * is why a person could make a memory and never unmake one.
+             */
+            store.picoModelJobQueue().markKept({
+              jobId: args.jobId,
+              memoryItemId,
+              privacyDomain: kept.privacyDomain,
+            });
           } catch (error) {
             return {
               outcome: 'invalid_arguments',

@@ -50,6 +50,7 @@ declare global {
       getRecalls(): Promise<unknown>;
       grantDomainRead(privacyDomain: string): Promise<{ privacyDomain: string; status: string }>;
       keepRecall(jobId: string): Promise<void>;
+      forgetMemory(memoryItemId: string): Promise<void>;
       askModelProviderMeasurement(reach: string, model: string): Promise<{
         entryId: string;
         state: string;
@@ -787,6 +788,21 @@ function refreshRecalls(): void {
             recallStatus.textContent = error instanceof Error
               ? error.message.replace(/^Error: /u, '')
               : 'That answer was not kept.';
+          });
+        },
+        (memoryItemId) => {
+          /**
+           * ADR 0071. The press *is* the deletion, on the line that made the
+           * memory. Said as what is now true rather than as what was done: a
+           * person who forgets something wants to know it is gone, not that a
+           * request succeeded.
+           */
+          void window.picoCompanion.forgetMemory(memoryItemId).then(() => {
+            recallStatus.textContent =
+              'Forgotten. That sentence is no longer part of what you remember.';
+            refreshRecalls();
+          }, (error: unknown) => {
+            recallStatus.textContent = refusalText(error, 'That was not forgotten.');
           });
         },
       );

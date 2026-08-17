@@ -563,6 +563,19 @@ export const picoLinkDirectOperations = [
    * they say so.
    */
   'home.recall.keep',
+  /**
+   * ADR 0071 with ADR 0116 W5. One memory item, unmade by the person who made
+   * it.
+   *
+   * **The half of deletion that had no surface.** A retention policy deletes by
+   * age and a domain shred takes everything; deleting one thing had no path at
+   * all, which a check over store writers found as `MemoryStore.deleteInDomain`
+   * having no caller. The person deletes what they kept, from the line where
+   * they kept it - the item is found through the job holding it, scoped to the
+   * requesting identity, so this cannot become a way to name any memory item
+   * and learn whether it exists (ADR 0077 C4).
+   */
+  'home.memory.forget',
   'home.model.reads.read',
   /** ADR 0116 W5's explicit write, said from the device the person holds. */
   'home.model.read.keep',

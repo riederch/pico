@@ -63,14 +63,6 @@ const withoutAProductCaller = [
     + 'and there is no condensation pass because there are no readings - the '
     + 'same absent producer, one step downstream.',
   ],
-  [
-    'deleteInDomain',
-    'ADR 0071. A person deleting one memory item has no surface to do it '
-    + 'from: nothing in the companion lists their memory. Retention deletes '
-    + 'by policy and a domain shred takes everything, so the two ends exist '
-    + 'and the middle does not. Recorded in TODO.md; the missing piece is a '
-    + 'surface, not this method.',
-  ],
 ];
 
 const errors = [];

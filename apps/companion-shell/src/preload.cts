@@ -22,6 +22,7 @@ const channels = Object.freeze({
   getRecalls: 'pico:recalls:get',
   grantDomainRead: 'pico:domain-read-grant:issue',
   keepRecall: 'pico:recall:keep',
+  forgetMemory: 'pico:memory:forget',
   getSuppliers: 'pico:suppliers:get',
   decideSupplierReach: 'pico:supplier-reach:decide',
   attachSupplier: 'pico:supplier:attach',
@@ -112,6 +113,9 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     await ipcRenderer.invoke(channels.askModelProviderMeasurement, { reach, model }),
   getModelProviderMeasurements: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getModelProviderMeasurements),
+  forgetMemory: async (memoryItemId: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.forgetMemory, memoryItemId);
+  },
   getSuppliers: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getSuppliers),
   decideSupplierReach: async (
     identifier: string,

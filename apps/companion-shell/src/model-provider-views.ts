@@ -163,6 +163,8 @@ export function renderPicoCompanionRecalls(
   value: unknown,
   /** ADR 0116 W5. The press *is* the write; nothing persists without it. */
   keep: (jobId: string) => void,
+  /** ADR 0071. The press *is* the deletion, on the line that made the memory. */
+  forget?: (memoryItemId: string) => void,
 ): void {
   const recalls = parsePicoCompanionRecalls(value);
   root.list.replaceChildren();
@@ -201,6 +203,22 @@ export function renderPicoCompanionRecalls(
       button.textContent = 'Keep this answer';
       button.addEventListener('click', () => {
         keep(line.jobId);
+      });
+      item.append(button);
+    }
+
+    /**
+     * ADR 0071. Never beside the keep control - an answer is kept or it is
+     * not, so exactly one of the two is on a line. Two would ask a person to
+     * work out which applies to the state in front of them.
+     */
+    if (line.forgettable !== undefined && forget !== undefined) {
+      const button = root.document.createElement('button');
+      button.type = 'button';
+      button.textContent = line.forgettable.label;
+      const forgettable = line.forgettable;
+      button.addEventListener('click', () => {
+        forget(forgettable.memoryItemId);
       });
       item.append(button);
     }

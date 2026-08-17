@@ -73,6 +73,7 @@ import {
   decidePicoCompanionModelProvider,
   askPicoCompanionRecall,
   readPicoCompanionMeasurements,
+  forgetPicoCompanionMemory,
   keepPicoCompanionRecall,
   readPicoCompanionModelProviders,
   readPicoCompanionModelReachability,
@@ -132,6 +133,8 @@ export interface PicoCompanionShellRuntime {
   readRecalls(): Promise<readonly PicoCompanionRecallView[]>;
   /** ADR 0116 W5. The person's own write: this answer becomes a memory. */
   keepRecall(jobId: string): Promise<string>;
+  /** ADR 0071. The person's own unwrite: that memory stops being one. */
+  forgetMemory(memoryItemId: string): Promise<void>;
   /**
    * ADR 0082 with ADR 0100. Issues the grant that lets this device read one
    * part of its person's memory - signed here, recorded there.
@@ -559,6 +562,18 @@ export async function startPicoCompanionShellRuntime(input: {
             sodium: input.sodium,
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
+        });
+      }),
+      forgetMemory: async (memoryItemId) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        await forgetPicoCompanionMemory({
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile: readPicoCompanionProfile(profilePath),
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          memoryItemId,
         });
       }),
       readSuppliers: async () => await serialized(async () => {

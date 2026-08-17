@@ -243,6 +243,25 @@ export const picoPresenceRegistryMigrationId =
 export const picoPresenceSwitchMigrationId =
   '0023_pico_presence_switch' as const;
 
+/**
+ * ADR 0071 with ADR 0116 W5. What a kept answer became, so it can be undone.
+ *
+ * **A person could make a memory and never unmake one.** `home.recall.keep`
+ * and `home.model.read.keep` each mint a memory item and hand its identifier
+ * back once; nothing recorded which job it came from, so a day later there was
+ * no way to name the thing again. The two ends of deletion existed - a
+ * retention policy deletes by age, a domain shred takes everything - and the
+ * middle had no surface, which `store:check` surfaced as `deleteInDomain`
+ * having no caller.
+ *
+ * On the job row rather than in a table of its own, because it is one fact
+ * about one job: *this answer is now that memory*. Null until somebody keeps.
+ * The domain travels with it, because deleting needs both and reading the
+ * domain back out of the memory item would mean already knowing where to look.
+ */
+export const picoModelJobKeptMemoryMigrationId =
+  '0024_pico_model_job_kept_memory' as const;
+
 // Pico has no deployed database yet, so the development chain is folded into
 // one final-schema baseline rather than carried as steps out of states nothing
 // is in. This is the second such fold: the first collapsed 0001-0020, and this
@@ -1563,6 +1582,19 @@ const migrations: readonly MigrationDefinition[] = [
           ON pico_presence_switch (
             pico_identity_fingerprint_hex, presence_id, IFNULL(affordance, '')
           );
+      `);
+    },
+  },
+  {
+    id: picoModelJobKeptMemoryMigrationId,
+    requiresBackup: false,
+    up(db) {
+      db.exec(`
+        ALTER TABLE pico_model_job_queue
+        ADD COLUMN kept_memory_item_id TEXT NULL;
+
+        ALTER TABLE pico_model_job_queue
+        ADD COLUMN kept_privacy_domain TEXT NULL;
       `);
     },
   },

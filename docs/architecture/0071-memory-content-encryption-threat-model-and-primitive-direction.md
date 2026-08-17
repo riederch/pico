@@ -4,6 +4,31 @@
 
 Accepted as the documented threat model and cryptographic direction for memory-store content at rest. It answers the ADR 0016 threat-model questions for this surface and decides the primitive suite in the dedicated, maximally reviewed step ADR 0070 required. The security-relevance gate below is now met (AD vectors ADR 0073, key storage ADR 0072, round-trip/shred fixtures), and the suite is **implemented** as an off-by-default encrypt-on-write runtime (`PICO_MEMORY_ENCRYPTION`); the single-host scope stands and multi-device/sharing/passphrase work remains future.
 
+Status note, 2026-08-17: **deleting one thing had no path at all, and now it
+has one.** A retention policy deleted by age and a domain shred took
+everything; between them, `MemoryStore.deleteInDomain` had no caller outside
+its own tests, which `store:check` found the day it was written.
+
+The user chose where it happens: from what a person kept, on the line where
+they kept it, rather than from a browser over their memory. So the model job
+now records what its answer became - the identifier was minted at keep time,
+handed back once and kept by nobody, which is why a day later there was no way
+to name the thing again.
+
+`home.memory.forget` reaches the item through the job holding it, scoped to the
+asking identity. That is ADR 0077 C4 rather than convenience: naming an
+arbitrary memory item and being told whether it exists would make this a probe
+over somebody's memory, so an item that exists and one that never did are
+refused identically. The domain comes off that row rather than from the caller,
+so nobody can go looking in a domain by guessing.
+
+Deleting nulls the content and drops the key envelope; the `memory.tombstone`
+event is what makes it durable, because ADR 0070's reconcile re-applies
+recorded deletions at boot. Both steps, in that order: `tombstone` refuses an
+item that was not deleted first, so the event alone would record a deletion
+that never happened. The job keeps its answer and offers to keep it again -
+what was taken back is the memory, not the record that an answer was given.
+
 ## Context
 
 ADR 0016 forbids project-specific cryptography, allows reviewed building blocks (naming libsodium as an allowed direction) and requires a documented threat model before the exact choice.
