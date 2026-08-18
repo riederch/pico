@@ -70,7 +70,7 @@ aus dem Client gruenden (E2) und der Client ist ohne Tray erreichbar (E1).
 Geraet. Ohne Enrollment-Flaeche bedeutet "Android dazunehmen" wieder ein
 Terminal, und damit waere Phase 4 von Phase 1 abgeschnitten.
 
-- **E3 Device-Lifecycle (halb erledigt 2026-08-18)** - delegate, enroll,
+- **E3 Device-Lifecycle (erledigt 2026-08-18)** - delegate, enroll,
   renew, revoke, inspect, jeweils unter ADR-0099-Approval und
   ADR-0106-Rendering. *Inspect und Revoke stehen*: die Liste, welchen Geraeten
   das Home noch antwortet, und das Beenden einer Berechtigung - gegen ein
@@ -79,12 +79,16 @@ Terminal, und damit waere Phase 4 von Phase 1 abgeschnitten.
   Endpunkt im Takt ab und behaelt drei Felder daraus. Die Zeilen verbinden sich
   mit ADR 0126s Praesenzen ueber die Id, die beide Seiten aus dem
   Device-Signing-Key ableiten - eine Geraeteliste mit zwei Fakten statt zweier
-  Listen ueber dasselbe Subjekt. **Offen bleibt Enrollment**, und zwar aus
-  einem echten Grund: der Ziel-Vault gegensigniert eine vier Minuten gueltige
-  Aktivierung mit seinem eigenen Schluessel, das ist ein Zwei-Geraete-Austausch
-  und damit eine Produktentscheidung. Renew des *eigenen* Geraets ist der
-  Ein-Geraete-Fall darin und wartet auf denselben Block, damit die Flaeche
-  einmal entworfen wird. *Opus 5 + xhigh.*
+  Listen ueber dasselbe Subjekt. **Enrollment steht seit demselben Tag**: der
+  Nutzer hat den Austausch entschieden - Kamera und Code wie bei der Recovery
+  Card -, und drei Codes sind das Minimum, das die Zeremonie zulaesst
+  (Identitaetswurzel signiert die Delegation, das Zielgeraet gegensigniert eine
+  vier Minuten gueltige Aktivierung ueber deren Digest, der Sponsor reicht
+  ein). Das neue Geraet schreibt sein Profil nicht auf die eigene Signatur hin,
+  sondern wartet, bis das Home es als eines der seinen beantwortet. Flaechen auf
+  beiden Seiten: eine dritte Erstlauf-Wahl, die ausdruecklich keine Art von
+  Wiederherstellen ist, und "Add another device" in den Einstellungen.
+  *Opus 5 + xhigh.*
 - **E4 Home-Kontinuitaet und Membership** - `rotate-host-key`,
   `issue-membership`. *Opus 5 + xhigh.*
 - **E5 Domains und Readership** - create/rotate domain, grant reader, publish

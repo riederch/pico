@@ -16,6 +16,17 @@ export const picoCompanionIpcChannels = Object.freeze({
   beginFirstRun: 'pico:first-run:begin',
   /** ADR 0130 E2. The other first run: a Home that does not exist yet. */
   beginFounding: 'pico:founding:begin',
+  /**
+   * ADR 0130 E3. The third first run, and the settings-side half of it.
+   *
+   * Two channels because they are two devices: `joinFromDevice` runs on the
+   * machine that has nothing yet, `beginEnrolment` on the one that already
+   * holds the identity key. Neither carries a code - both walk the person
+   * through the codes in the main process, where everything that authorises
+   * is collected (ADR 0113 C2).
+   */
+  joinFromDevice: 'pico:enrolment:join',
+  beginEnrolment: 'pico:enrolment:begin',
   closeWindow: 'pico:window:close',
   getModelProviders: 'pico:model-providers:get',
   /** ADR 0142 PE2. Point the Home at a host, and watch it be timed. */
@@ -97,7 +108,8 @@ export type PicoCompanionPresentationKind =
    * them.
    */
   | 'time_bound_entry_due'
-  | 'service_error';
+  | 'service_error'
+  | 'device_code';
 
 export type PicoCompanionPresentationSeverity = 'active' | 'warning' | 'blocked';
 
@@ -209,7 +221,7 @@ export type PicoCompanionPresentationDecision =
  * own situation, while "restore" and "found" are things this codebase knows.
  */
 export interface PicoCompanionFirstRunChoiceLine {
-  choice: 'restore' | 'found';
+  choice: 'restore' | 'found' | 'join';
   headline: string;
   detail: string;
   actionLabel: string;
@@ -232,6 +244,24 @@ export function picoCompanionFirstRunChoiceLines(): readonly PicoCompanionFirstR
         + 'the address of that Home and the line it printed when it started - it contains '
         + 'the one-time code and the keys this device pins it to.',
       actionLabel: 'This Home is new',
+    }),
+    /**
+     * ADR 0130 E3. The third thing that is true of a device with nothing on
+     * it, and the most common one after the first: the person already has a
+     * Pico, on a machine that is working, and wants this one too.
+     *
+     * Kept apart from the Recovery Card on purpose. Restoring *replaces* every
+     * device with this one and runs an objection window; joining adds one and
+     * leaves the others alone. A person who restored when they meant to join
+     * would have cut off the device they are holding in their other hand.
+     */
+    Object.freeze({
+      choice: 'join' as const,
+      headline: 'You have a Pico on another device, and it still works.',
+      detail: 'That device gives this one its own keys and tells your Home about it. '
+        + 'Nothing else changes: every device you already have keeps working. You will '
+        + 'hold the two screens up to each other three times.',
+      actionLabel: 'Add this device from another one',
     }),
   ]);
 }
@@ -279,6 +309,103 @@ export function picoCompanionFoundingStepLine(
  * grant, and one that expires during setup is a device that stops working
  * before it was used.
  */
+/**
+ * ADR 0130 E3. What the window says at each of the six times two devices are
+ * held up to each other, and the two that end it.
+ *
+ * **The words never name the ceremony.** A person is holding two screens: what
+ * they need to know is which one to look at, what the thing they are showing
+ * says about them, and whether anything has happened yet. "Delegation",
+ * "activation" and "evidence" are true and would tell them nothing they can
+ * act on - the codebase already has those words in the records.
+ *
+ * The steps are split by device rather than by order, because each device only
+ * ever sees its own four: a sponsor never shows an offer and a joining device
+ * never reads one.
+ */
+export type PicoCompanionEnrolmentStep =
+  | 'read_offer'
+  | 'show_grant'
+  | 'read_acceptance'
+  | 'added'
+  | 'show_offer'
+  | 'read_grant'
+  | 'show_acceptance'
+  | 'waiting'
+  | 'joined';
+
+export function picoCompanionEnrolmentStepLine(
+  step: PicoCompanionEnrolmentStep,
+): { title: string; body: string } {
+  switch (step) {
+    case 'read_offer':
+      return {
+        title: 'Read the code the other device is showing',
+        body: 'Hold it up to this device\u2019s camera, or type the code in. Nothing reaches '
+          + 'your Home until you approve what it asks for.',
+      };
+    case 'show_grant':
+      return {
+        title: 'Hold this up to the device you are adding',
+        body: 'It says which Home that device is joining and which keys it will be known '
+          + 'by. It is good for four minutes, and it is no use to anybody else.',
+      };
+    case 'read_acceptance':
+      return {
+        title: 'Now read the code it shows back',
+        body: 'The other device answered with its own key. This device carries that answer '
+          + 'to your Home.',
+      };
+    case 'added':
+      return {
+        title: 'That device is yours now',
+        body: 'Your Home answers to it as well. Nothing else changed - every device you '
+          + 'already had keeps working.',
+      };
+    case 'show_offer':
+      return {
+        title: 'Show this to the device you already have',
+        body: 'It says which keys this device just made for itself. That is all it says, '
+          + 'and none of it is a secret.',
+      };
+    case 'read_grant':
+      return {
+        title: 'Read the code your other device shows',
+        body: 'This device checks that the code is really about itself before it signs '
+          + 'anything, and it will not sign one meant for a different machine.',
+      };
+    case 'show_acceptance':
+      return {
+        title: 'Show this back',
+        body: 'This device signed with the key it just made. Your other device carries it '
+          + 'to your Home.',
+      };
+    case 'waiting':
+      return {
+        title: 'Waiting for your Home',
+        body: 'This device is not yours until your Home says so, so it is asking. If this '
+          + 'stays here, the other device has not sent it yet.',
+      };
+    case 'joined':
+    default:
+      return {
+        title: 'This device is yours',
+        body: 'Your Home answers to it now, and every device you already had keeps '
+          + 'working.',
+      };
+  }
+}
+
+/**
+ * ADR 0104, as ADR 0130 E2 pinned it for the first device: the same year for
+ * every later one. A person adding a laptop is not in a position to have an
+ * opinion about how long its authority should last, and two different answers
+ * for the first and second device would be two rules to remember.
+ */
+export function picoCompanionEnrolmentValidUntil(now: Date): string {
+  return picoCompanionFoundingDelegationValidUntil(now);
+}
+
 export const picoCompanionFoundingDelegationDays = 365;
 
 export function picoCompanionFoundingDelegationValidUntil(now: Date): string {
@@ -311,7 +438,26 @@ export interface PicoCompanionPresentation {
    * what the floor can do.
    */
   conditions: readonly PicoCompanionCondition[];
+  /**
+   * ADR 0130 E3. Present only on `device_code`: what this device is holding
+   * up for another one to read.
+   *
+   * The matrix travels rather than the drawing, because a QR encoder in the
+   * page would be a second implementation of the thing a camera has to agree
+   * with - and the text travels beside it, because a camera that will not
+   * focus is not a reason to be stuck.
+   */
+  code?: PicoCompanionDeviceCode;
   observedAt: string;
+}
+
+export interface PicoCompanionDeviceCode {
+  text: string;
+  qr: {
+    size: number;
+    /** Row-major, one entry per module: dark is `true`. */
+    modules: readonly boolean[];
+  };
 }
 
 const kinds = new Set<PicoCompanionPresentationKind>([
@@ -331,6 +477,8 @@ const kinds = new Set<PicoCompanionPresentationKind>([
   'clock_divergence',
   'time_bound_entry_due',
   'service_error',
+  /** ADR 0130 E3. A code this device is showing to another one. */
+  'device_code',
 ]);
 const severities = new Set<PicoCompanionPresentationSeverity>([
   'active',
@@ -418,7 +566,9 @@ export function parsePicoCompanionPresentation(value: unknown): PicoCompanionPre
   // `conditions` is accepted but not required, so every existing construction
   // site stays valid and simply carries none. The parsed result always has the
   // array, so a consumer never has to distinguish absent from empty.
-  if (Object.keys(record).some((key) => key !== 'conditions' && !expected.has(key))
+  if (Object.keys(record).some(
+    (key) => key !== 'conditions' && key !== 'code' && !expected.has(key),
+  )
     || [...expected].some((key) => !(key in record))) {
     throw new Error('invalid_companion_presentation_shape');
   }
@@ -439,10 +589,66 @@ export function parsePicoCompanionPresentation(value: unknown): PicoCompanionPre
     throw new Error('invalid_companion_presentation_time');
   }
   const conditions = parseConditions(record.conditions);
+  const code = parseDeviceCode(record.code, record.kind as PicoCompanionPresentationKind);
   return Object.freeze({
     ...record,
     conditions,
+    ...(code === undefined ? {} : { code }),
   }) as unknown as PicoCompanionPresentation;
+}
+
+/**
+ * ADR 0130 E3. A code belongs to the one kind that is about showing a code.
+ *
+ * Tied to the kind rather than accepted anywhere, because a matrix riding
+ * along on an alarm or an approval would be a second thing the window has to
+ * decide how to draw, and nobody declared what that means.
+ */
+function parseDeviceCode(
+  value: unknown,
+  kind: PicoCompanionPresentationKind,
+): PicoCompanionDeviceCode | undefined {
+  if (value === undefined) {
+    if (kind === 'device_code') {
+      throw new Error('invalid_companion_presentation_code');
+    }
+    return undefined;
+  }
+  /**
+   * Two kinds may carry one, and they are the two that are about a code:
+   * showing it, and taking the answer while it is still on screen. A person
+   * pasting the other device's answer must not have had the thing they are
+   * answering taken off the display to make room for the prompt.
+   */
+  if ((kind !== 'device_code' && kind !== 'secure_input')
+    || typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('invalid_companion_presentation_code');
+  }
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (keys.length !== 2 || keys[0] !== 'qr' || keys[1] !== 'text') {
+    throw new Error('invalid_companion_presentation_code');
+  }
+  if (typeof record.text !== 'string' || record.text.length === 0
+    || record.text.length > 8_192) {
+    throw new Error('invalid_companion_presentation_code');
+  }
+  const qr = record.qr as { size?: unknown; modules?: unknown } | null;
+  if (typeof qr !== 'object' || qr === null
+    || typeof qr.size !== 'number' || !Number.isInteger(qr.size)
+    || qr.size < 21 || qr.size > 177
+    || !Array.isArray(qr.modules)
+    || qr.modules.length !== qr.size * qr.size
+    || qr.modules.some((module) => typeof module !== 'boolean')) {
+    throw new Error('invalid_companion_presentation_code');
+  }
+  return Object.freeze({
+    text: record.text,
+    qr: Object.freeze({
+      size: qr.size,
+      modules: Object.freeze([...qr.modules as boolean[]]),
+    }),
+  });
 }
 
 const conditionKinds = new Set<PicoCompanionConditionKind>(picoCompanionConditionKinds);

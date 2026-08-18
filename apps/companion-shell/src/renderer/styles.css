@@ -208,3 +208,29 @@ button:disabled { opacity: .55; cursor: wait; }
   color: var(--pico-text-primary);
   font-weight: 600;
 }
+
+/*
+  ADR 0130 E3. A code held up to another device.
+
+  The canvas carries one pixel per module and is scaled by the browser with
+  smoothing off, so the modules stay square edges rather than becoming a grey
+  blur - a blurred QR is a QR a camera argues with. The width is capped so a
+  version-27 code still fits a window somebody opened for an approval.
+*/
+.device-code-canvas {
+  width: min(20rem, 100%);
+  height: auto;
+  image-rendering: pixelated;
+  padding: 0;
+  margin-top: 0.75rem;
+}
+
+.device-code-text {
+  font-family: var(--pico-font-family-mono, monospace);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  word-break: break-all;
+  user-select: all;
+  opacity: 0.75;
+  margin-top: 0.5rem;
+}

@@ -2,13 +2,44 @@
 
 ## Status
 
-Accepted as a product-surface and platform-order decision; E1, E2 and E6
-implemented, E3 partially (inspect and revoke), E4-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
+Accepted as a product-surface and platform-order decision; E1, E2, E3 and E6
+implemented, E4-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
 the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
 
-Status note, 2026-08-18: **E3 is half a vertical, and the half is the
+Status note, 2026-08-18: **the other half - a second device joins over
+camera and code, which is what the user chose.**
+
+Three codes, and the ceremony is what says three: the identity root signs
+the delegation, the target co-signs a four-minute activation binding the
+digest of that evidence, and the sponsor submits. Offer, grant, acceptance
+is therefore the shortest exchange that exists, not a chosen one. What
+crosses is two public keys, one activation to sign and one signature; the
+trust pins ride along because a pin learned from the endpoint it checks is
+not a pin (ADR 0115 U4), and a person watching two of their own screens is
+what makes this out-of-band.
+
+The ceremony grew a **target signer port** rather than a second daemon
+client: it used to take a `targetClient`, which meant the target vault had
+to be reachable from the sponsor's process - true for the tool and false
+for every real second device. Two defects fell out. It read the identity
+session and the lifecycle head concurrently, which answers
+`client_request_in_flight` on a device where root and sponsor are one
+vault; the tool had two sockets and never noticed. And a canonical label
+written out by hand was wrong by one character, which is a signature over
+the wrong bytes.
+
+The grant did not fit as JSON. Fifteen 32-byte values spelled as hex is
+about 1,900 bytes: a version-37 QR at correction L, and **no fit at all at
+M**, the level this tree prints a Recovery Card at. As a length-prefixed
+element list it is 1,079 characters and version 27 at M.
+
+The new device writes no profile on the strength of its own signature: it
+waits until the Home answers it as one of its own, and the read that proves
+it is refused until the sponsor's submission lands.
+
+Status note, 2026-08-18: **E3's first half, and the half is the
 half a person is in when something goes wrong.**
 
 Inspect and revoke are product surfaces now. The read turned out to be
@@ -33,11 +64,11 @@ which question went unanswered. On the row that ends the last line into a
 Home, a `0` invented by this process would be the scariest possible way to
 be wrong.
 
-Delegate, enroll and renew stay open because enrolment is genuinely a
-two-device ceremony - the target vault co-signs a four-minute activation
-with its own key - and that exchange is a product decision this gate does
-not carry. Renewing *this* device is the single-device case inside it and
-waits for the same block, so that the surface is designed once.
+Delegate, enroll and renew were left for the next block because enrolment
+is genuinely a two-device ceremony - the target vault co-signs a
+four-minute activation with its own key - and that exchange was a product
+decision this gate did not carry. The user decided it the same day: camera
+and code, like the Recovery Card.
 
 Status note, 2026-08-18: **E1 is closed, and the tray is now measured rather
 than assumed.**
@@ -368,11 +399,12 @@ Node host beside each of them.
 - **E2 - Founding and binding vertical (implemented):** `claim-home`,
   `open-identity-session`, and the first production write of the profile
   and Platform Keystore binding, closing the ADR 0113 residual.
-- **E3 - Device lifecycle vertical (partially implemented):** delegate,
-  enroll, renew, revoke, inspect - each under ADR 0099 approval and ADR 0106
-  rendering. Inspect and revoke are product surfaces since 2026-08-18;
-  delegate, enroll and renew are not, and the reason is in the status note
-  above rather than in this line.
+- **E3 - Device lifecycle vertical (implemented):** delegate, enroll, renew,
+  revoke, inspect - each under ADR 0099 approval and ADR 0106 rendering.
+  Inspect, revoke and enrolment are product surfaces since 2026-08-18;
+  delegate is the primitive inside enrolment rather than a surface of its
+  own, and renewing a device is the same exchange with the same three codes,
+  which the status notes above record.
 - **E4 - Home continuity and membership vertical (open):**
   `rotate-host-key` and `issue-membership` as product surfaces.
 - **E5 - Domain and readership vertical (open):** create/rotate domain,

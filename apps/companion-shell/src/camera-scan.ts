@@ -40,6 +40,14 @@ export interface PicoCompanionCameraScanOptions {
   command?: string;
   spawn?: PicoCompanionCameraScanSpawn;
   signal?: AbortSignal;
+  /**
+   * ADR 0130 E3. Which code this scan is looking for.
+   *
+   * The decoder emits whatever it sees, and the filter is what keeps a
+   * poster on the wall behind the person out of the ceremony. Defaults to the
+   * Recovery Card, so the ADR 0112 path reads exactly as before.
+   */
+  prefix?: string;
 }
 
 /**
@@ -50,6 +58,7 @@ export interface PicoCompanionCameraScanOptions {
 export async function scanPicoRecoveryCardWithCamera(
   options: PicoCompanionCameraScanOptions = {},
 ): Promise<string> {
+  const prefix = options.prefix ?? picoRecoveryCardScanPrefix;
   const spawnProcess = options.spawn ?? nodeSpawn;
   const command = options.command ?? picoCompanionCameraScanCommand;
   const device = options.device ?? '/dev/video0';
@@ -103,7 +112,7 @@ export async function scanPicoRecoveryCardWithCamera(
         fail('camera_scan_output_too_large');
         return;
       }
-      const candidate = firstTransportLine(buffered);
+      const candidate = firstTransportLine(buffered, prefix);
       if (candidate !== null) {
         finish(candidate);
       }
@@ -112,7 +121,7 @@ export async function scanPicoRecoveryCardWithCamera(
     child.once('close', () => {
       // A candidate may arrive in the same tick as the exit; only a genuinely
       // empty result is a failure.
-      const candidate = firstTransportLine(buffered);
+      const candidate = firstTransportLine(buffered, prefix);
       if (candidate === null) {
         fail('camera_scan_no_card');
       } else {
@@ -128,10 +137,10 @@ export async function scanPicoRecoveryCardWithCamera(
  */
 const maxBufferedChars = 64 * 1_024;
 
-function firstTransportLine(buffered: string): string | null {
+function firstTransportLine(buffered: string, prefix: string): string | null {
   for (const line of buffered.split('\n')) {
     const candidate = line.endsWith('\r') ? line.slice(0, -1) : line;
-    if (candidate.startsWith(picoRecoveryCardScanPrefix)) {
+    if (candidate.startsWith(prefix)) {
       return candidate;
     }
   }

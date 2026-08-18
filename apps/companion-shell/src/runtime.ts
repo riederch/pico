@@ -221,6 +221,22 @@ export interface PicoCompanionShellRuntime {
    * and this one throws rather than answering "none".
    */
   readDeviceAuthority(): Promise<PicoCompanionDeviceAuthorityView>;
+  /**
+   * ADR 0130 E3. Adds a device the person is holding up to this one.
+   *
+   * `exchange` is where the person is: it is handed the code to show and
+   * resolves with the code the other device shows back. It stays a function
+   * rather than two calls because the ceremony is one call - a four-minute
+   * activation that is built, signed elsewhere and submitted here.
+   */
+  enrolDevice(input: {
+    offerCode: string;
+    validUntil: string;
+    exchange: (grantCode: string) => Promise<string>;
+  }): Promise<{
+    delegationId: string;
+    targetSigningKeyFingerprintHex: string;
+  }>;
   revokeDeviceAuthority(input: {
     targetDelegationId: string;
     reason: PicoCompanionDeviceRevocationReason;
@@ -825,6 +841,25 @@ export async function startPicoCompanionShellRuntime(input: {
             sodium: input.sodium,
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
+        });
+      }),
+      enrolDevice: async ({ offerCode, validUntil, exchange }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { enrolPicoCompanionDevice } = await import('@pico/companion/enrolment');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await enrolPicoCompanionDevice({
+          profile,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          offerCode,
+          validUntil,
+          exchange,
         });
       }),
       revokeDeviceAuthority: async ({ targetDelegationId, reason }) => await serialized(async () => {

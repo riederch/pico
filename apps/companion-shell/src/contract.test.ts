@@ -28,6 +28,8 @@ import {
   picoCompanionDeviceAuthoritySummary,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionDeviceRevocationReasonLines,
+  picoCompanionEnrolmentStepLine,
+  picoCompanionEnrolmentValidUntil,
   parsePicoCompanionDeviceAuthority,
   type PicoCompanionDeviceAuthorityView,
   picoCompanionViewReads,
@@ -460,12 +462,16 @@ describe('ADR 0143 DP1 - a depot asks the same two questions', () => {
 });
 
 describe('ADR 0130 E2 - the two situations a device with no Home can be in', () => {
-  it('offers restoring and founding, and offers restoring first', () => {
-    // Both are offered because both happen; restoring comes first because a
-    // person who already has a Pico is the one for whom the wrong choice
-    // costs an identity they cannot get back to.
-    expect(picoCompanionFirstRunChoiceLines().map((line) => line.choice))
-      .toEqual(['restore', 'found']);
+  it('offers restoring first, whatever else it offers', () => {
+    // Every situation that happens is offered; restoring comes first because
+    // a person who already has a Pico is the one for whom the wrong choice
+    // costs an identity they cannot get back to. ADR 0130 E3 added joining as
+    // a third - the assertion is the order and the distinctness, not a count
+    // that has to be edited every time a real situation is admitted.
+    const choices = picoCompanionFirstRunChoiceLines().map((line) => line.choice);
+    expect(choices[0]).toBe('restore');
+    expect(new Set(choices).size).toBe(choices.length);
+    expect(choices).toContain('found');
   });
 
   it('says what each one does to a Home, not what this codebase calls it', () => {
@@ -686,5 +692,86 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     // unanswered, and never that there is no authority.
     expect(picoCompanionDeviceAuthorityUnavailable).toContain('could not ask');
     expect(picoCompanionDeviceAuthorityUnavailable).not.toContain('no ');
+  });
+});
+
+describe('ADR 0130 E3 - the words two devices are held up by', () => {
+  const steps = [
+    'read_offer', 'show_grant', 'read_acceptance', 'added',
+    'show_offer', 'read_grant', 'show_acceptance', 'waiting', 'joined',
+  ] as const;
+
+  it('says which screen to look at, and never what the record is called', () => {
+    const lines = steps.map((step) => picoCompanionEnrolmentStepLine(step));
+    for (const line of lines) {
+      expect(line.title).not.toBe('');
+      expect(line.body).not.toBe('');
+      for (const word of ['delegation', 'activation', 'evidence', 'ceremony', 'QR']) {
+        expect(`${line.title} ${line.body}`.toLowerCase()).not.toContain(word.toLowerCase());
+      }
+    }
+    // Nine moments, nine sentences: a repeated title is a person who cannot
+    // tell whether anything happened.
+    expect(new Set(lines.map((line) => line.title)).size).toBe(steps.length);
+  });
+
+  it('tells showing apart from reading, in the first words of each', () => {
+    expect(picoCompanionEnrolmentStepLine('show_offer').title).toMatch(/^Show/u);
+    expect(picoCompanionEnrolmentStepLine('show_acceptance').title).toMatch(/^Show/u);
+    expect(picoCompanionEnrolmentStepLine('read_offer').title).toMatch(/^Read/u);
+    expect(picoCompanionEnrolmentStepLine('read_grant').title).toMatch(/^Read/u);
+    // And the two that end it say what is true afterwards rather than "done".
+    expect(picoCompanionEnrolmentStepLine('added').body).toContain('keeps working');
+    expect(picoCompanionEnrolmentStepLine('joined').body).toContain('keeps working');
+  });
+
+  it('offers joining as a third thing, not as a kind of restoring', () => {
+    /**
+     * The distinction the surface exists to make. Restoring replaces every
+     * device with this one and runs an objection window; joining adds one and
+     * leaves the others alone. A person who picked the wrong one would have
+     * cut off the machine in their other hand.
+     */
+    const lines = picoCompanionFirstRunChoiceLines();
+    expect(lines.map((line) => line.choice)).toEqual(['restore', 'found', 'join']);
+    const join = lines[2]!;
+    expect(join.detail).toContain('every device you already have keeps working');
+    expect(join.actionLabel.toLowerCase()).not.toContain('recovery');
+    expect(join.actionLabel.toLowerCase()).not.toContain('found');
+    expect(new Set(lines.map((line) => line.actionLabel)).size).toBe(3);
+  });
+
+  it('pins a later device to the same year as the first one', () => {
+    expect(picoCompanionEnrolmentValidUntil(new Date('2026-01-01T00:00:00.000Z')))
+      .toBe('2027-01-01T00:00:00.000Z');
+  });
+
+  it('carries a code only on the two kinds that are about a code', () => {
+    const qr = { size: 21, modules: Array.from({ length: 441 }, () => false) };
+    const base = {
+      severity: 'active' as const,
+      symbol: '\u25cf' as const,
+      decision: 'none' as const,
+      title: 'Hold this up',
+      body: 'The other device reads it.',
+      observedAt: '2026-08-18T10:00:00.000Z',
+    };
+    expect(parsePicoCompanionPresentation({
+      ...base, kind: 'device_code', code: { text: 'pico-device-offer-v1:AAAA', qr },
+    }).code?.qr.size).toBe(21);
+    // A matrix riding along on an alarm would be a second thing to draw that
+    // nobody declared the meaning of.
+    expect(() => parsePicoCompanionPresentation({
+      ...base, kind: 'idle', code: { text: 'pico-device-offer-v1:AAAA', qr },
+    })).toThrow('invalid_companion_presentation_code');
+    // And the kind that is about a code must carry one.
+    expect(() => parsePicoCompanionPresentation({ ...base, kind: 'device_code' }))
+      .toThrow('invalid_companion_presentation_code');
+    // A matrix whose modules do not fill it is not a code.
+    expect(() => parsePicoCompanionPresentation({
+      ...base,
+      kind: 'device_code',
+      code: { text: 'pico-device-offer-v1:AAAA', qr: { size: 21, modules: [true] } },
+    })).toThrow('invalid_companion_presentation_code');
   });
 });

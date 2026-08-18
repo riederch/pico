@@ -219,6 +219,21 @@ describe('every view fetches what it shows', () => {
     expect(refresh).toContain('picoCompanionDeviceAuthorityEndedLine(');
   });
 
+  it('reaches both halves of adding a device from the page', () => {
+    /**
+     * ADR 0130 E3. Two buttons, two devices: one page starts the join on the
+     * machine that has nothing, the other starts the enrolment on the machine
+     * that holds the identity key. Both hand off immediately - what they must
+     * not do is collect a code themselves (ADR 0113 C2).
+     */
+    expect(renderer).toContain('joinFromDevice(source)');
+    expect(renderer).toContain('beginEnrolment(source)');
+    expect(renderer).toContain('renderDeviceCode(state)');
+    // The choice list is a closed switch, not an else: a third situation that
+    // fell through to founding would make a second identity.
+    expect(renderer).toContain("line.choice === 'join'");
+  });
+
   it('asks the occasion view for nothing a setting owns', () => {
     // ADR 0113. The window used to send six reads on every open, four of them
     // for lists a person answering an approval will never look at.

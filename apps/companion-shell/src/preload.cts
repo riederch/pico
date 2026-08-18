@@ -41,6 +41,8 @@ const channels = Object.freeze({
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
+  joinFromDevice: 'pico:enrolment:join',
+  beginEnrolment: 'pico:enrolment:begin',
   getDeviceAuthority: 'pico:device-authority:get',
   endDeviceAuthority: 'pico:device-authority:end',
   getRelays: 'pico:relays:get',
@@ -186,6 +188,12 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
   },
   forgetDevice: async (presenceId: string): Promise<void> => {
     await ipcRenderer.invoke(channels.forgetDevice, presenceId);
+  },
+  joinFromDevice: async (source: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.joinFromDevice, source);
+  },
+  beginEnrolment: async (source: string): Promise<void> => {
+    await ipcRenderer.invoke(channels.beginEnrolment, source);
   },
   getDeviceAuthority: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getDeviceAuthority),

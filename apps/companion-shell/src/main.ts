@@ -39,7 +39,11 @@ import {
   picoCompanionFoundingDelegationValidUntil,
   picoCompanionIpcChannels,
   picoCompanionDeviceRevocationReasonLines,
+  picoCompanionEnrolmentStepLine,
+  picoCompanionEnrolmentValidUntil,
+  type PicoCompanionEnrolmentStep,
   type PicoCompanionFirstRunScanSource,
+  type PicoCompanionDeviceCode,
   type PicoCompanionPresentation,
 } from './contract.js';
 import { startPicoCompanionNetworkRegainMonitor } from './network-monitor.js';
@@ -642,6 +646,55 @@ function registerIpc(): void {
         await runFounding();
       } catch (error) {
         await presentFirstRunFailure(error);
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  /**
+   * ADR 0130 E3. The third first run: a Home that exists, on a device that is
+   * not in it yet.
+   *
+   * Same rule as the two above - the window picks the situation and whether
+   * the camera or the keyboard reads the codes, and every code, key and
+   * passphrase is handled here.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.joinFromDevice,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (productOperationActive || presentation.decision !== 'begin_first_run') {
+        return;
+      }
+      try {
+        const source = parsePicoCompanionFirstRunScanSource(value);
+        productOperationActive = true;
+        await runJoinFromDevice(source);
+      } catch (error) {
+        await presentFirstRunFailure(error);
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  /**
+   * The sponsor's half, from settings rather than from first run: this device
+   * already has a Home, and is adding another device to it.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.beginEnrolment,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_in_progress');
+      }
+      const source = parsePicoCompanionFirstRunScanSource(value);
+      try {
+        productOperationActive = true;
+        await runEnrolment(source, runtime);
       } finally {
         productOperationActive = false;
       }
@@ -1529,6 +1582,8 @@ async function captureSecret(prompt: {
   instruction: string;
   maximumLength: number;
   validate: (value: string) => boolean;
+  /** ADR 0130 E3. A code that stays visible while this is answered. */
+  code?: PicoCompanionDeviceCode;
 }): Promise<string> {
   if (window === null || window.isDestroyed()) {
     throw new Error('companion_window_unavailable');
@@ -1624,6 +1679,178 @@ async function runFounding(): Promise<void> {
           + 'passphrase each time it starts.'),
     observedAt: new Date().toISOString(),
   }));
+  await startServiceCore();
+}
+
+/**
+ * ADR 0130 E3. The two halves of adding a device, from whichever side this
+ * machine is on.
+ *
+ * Both are walked here rather than in the window for ADR 0113 C2's reason:
+ * the codes carry an activation this device signs and the pins it will trust
+ * a Home by, and nothing that authorises reaches the renderer. The window
+ * chose the situation and whether the camera or the keyboard reads.
+ */
+async function readDeviceCode(
+  step: PicoCompanionEnrolmentStep,
+  prefix: string,
+  source: PicoCompanionFirstRunScanSource,
+  showing?: PicoCompanionDeviceCode,
+): Promise<string> {
+  const line = picoCompanionEnrolmentStepLine(step);
+  if (source === 'camera') {
+    await presentationPort.present(parsePicoCompanionPresentation({
+      kind: showing === undefined ? 'secure_input' : 'device_code',
+      severity: 'warning',
+      symbol: '!',
+      decision: 'none',
+      title: line.title,
+      body: `${line.body} The code is decoded outside this page and never reaches it.`,
+      ...(showing === undefined ? {} : { code: showing }),
+      observedAt: new Date().toISOString(),
+    }));
+    const { scanPicoRecoveryCardWithCamera } = await import('./camera-scan.js');
+    return await scanPicoRecoveryCardWithCamera({ prefix });
+  }
+  return await captureSecret({
+    title: line.title,
+    instruction: `${line.body} Paste it, or use a scanner, then press Enter.`,
+    maximumLength: 8_192,
+    validate: (value: string) => value.startsWith(prefix),
+    ...(showing === undefined ? {} : { code: showing }),
+  });
+}
+
+async function presentDeviceCode(
+  step: PicoCompanionEnrolmentStep,
+  code: PicoCompanionDeviceCode,
+): Promise<void> {
+  const line = picoCompanionEnrolmentStepLine(step);
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'device_code',
+    severity: 'active',
+    symbol: '●',
+    decision: 'none',
+    title: line.title,
+    body: line.body,
+    code,
+    observedAt: new Date().toISOString(),
+  }));
+}
+
+async function presentEnrolmentStep(step: PicoCompanionEnrolmentStep): Promise<void> {
+  const line = picoCompanionEnrolmentStepLine(step);
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: step === 'joined' ? 'idle' : 'first_run',
+    severity: 'active',
+    symbol: '●',
+    decision: 'none',
+    title: line.title,
+    body: line.body,
+    observedAt: new Date().toISOString(),
+  }));
+}
+
+/** The device that already has the Home: it reads, signs, and submits. */
+async function runEnrolment(
+  source: PicoCompanionFirstRunScanSource,
+  service: PicoCompanionShellRuntime,
+): Promise<void> {
+  const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
+  const offerCode = await readDeviceCode(
+    'read_offer',
+    'pico-device-offer-v1:',
+    source,
+  );
+  const enrolled = await service.enrolDevice({
+    offerCode,
+    validUntil: picoCompanionEnrolmentValidUntil(new Date()),
+    exchange: async (grantCode: string) => {
+      const shown = picoCompanionDeviceCode(grantCode);
+      await presentDeviceCode('show_grant', shown);
+      /**
+       * The grant stays on screen while the answer is read. On the camera
+       * path the other device is reading it at that moment; on the typed one
+       * the person still needs it in front of them.
+       */
+      return await readDeviceCode(
+        'read_acceptance',
+        'pico-device-acceptance-v1:',
+        source,
+        shown,
+      );
+    },
+  });
+  const line = picoCompanionEnrolmentStepLine('added');
+  await presentationPort.present(parsePicoCompanionPresentation({
+    kind: 'idle',
+    severity: 'active',
+    symbol: '●',
+    decision: 'none',
+    title: line.title,
+    body: `${line.body} It is known by ${
+      enrolled.targetSigningKeyFingerprintHex.slice(0, 12)
+    }, which is what that device showed you.`,
+    observedAt: new Date().toISOString(),
+  }));
+}
+
+/** The device that has nothing: it makes keys, signs, and waits to be let in. */
+async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promise<void> {
+  const [{ acceptPicoCompanionEnrolment, offerPicoCompanionEnrolment }, { picoCompanionDeviceCode }] =
+    await Promise.all([
+      import('@pico/companion/enrolment'),
+      import('./enrolment-code.js'),
+    ]);
+
+  const passphrase = await captureSecret({
+    title: 'Choose a Vault passphrase for this device',
+    instruction: 'It protects the keys this device is about to make for itself. Your other '
+      + 'device keeps its own; nothing can recover either without its passphrase.',
+    maximumLength: 1_024,
+    validate: (value: string) => value.length > 0,
+  });
+
+  const offer = await offerPicoCompanionEnrolment({
+    socketPath: defaultPicoVaultDaemonSocketPath(),
+    passphrase,
+  });
+  const shownOffer = picoCompanionDeviceCode(offer.offerCode);
+  await presentDeviceCode('show_offer', shownOffer);
+  const grantCode = await readDeviceCode(
+    'read_grant',
+    'pico-device-grant-v1:',
+    source,
+    shownOffer,
+  );
+
+  const accepted = await acceptPicoCompanionEnrolment({
+    socketPath: defaultPicoVaultDaemonSocketPath(),
+    passphrase,
+    grantCode,
+    profilePath: defaultPicoCompanionProfilePath(),
+    sodium: sodium as never,
+    decisions: approvalDecisionPort,
+    device: offer.device,
+    ...(await firstRunPlatformSecrets()),
+  });
+  await presentDeviceCode(
+    'show_acceptance',
+    picoCompanionDeviceCode(accepted.acceptanceCode),
+  );
+
+  /**
+   * The wait, and it is the person's too: the other device has to carry the
+   * answer to the Home before this one is anybody. `confirm` ends when the
+   * Home says so, and the profile is written then and not before.
+   */
+  const waiting = presentEnrolmentStep('waiting');
+  try {
+    await accepted.confirm();
+  } finally {
+    await waiting;
+  }
+  await presentEnrolmentStep('joined');
   await startServiceCore();
 }
 
@@ -1835,7 +2062,7 @@ const approvalDecisionPort: PicoCompanionApprovalDecisionPort = {
 };
 
 async function presentSecureInput(
-  prompt: { title: string; instruction: string },
+  prompt: { title: string; instruction: string; code?: PicoCompanionDeviceCode },
   count: number,
   invalid: boolean,
 ): Promise<void> {
@@ -1846,6 +2073,9 @@ async function presentSecureInput(
     decision: 'none',
     title: prompt.title,
     body: `${prompt.instruction} ${count} character${count === 1 ? '' : 's'} entered${invalid ? '; the value is not valid yet' : ''}. The page receives neither keystrokes nor value.`,
+    // ADR 0130 E3. Kept on screen while the answer is typed: the code this
+    // device is showing is what the other device is answering.
+    ...(prompt.code === undefined ? {} : { code: prompt.code }),
     observedAt: new Date().toISOString(),
   }));
 }

@@ -127,6 +127,8 @@ declare global {
       decideApproval(approved: boolean): Promise<void>;
       beginFirstRun(source: 'camera' | 'typed'): Promise<void>;
       beginFounding(): Promise<void>;
+      joinFromDevice(source: string): Promise<void>;
+      beginEnrolment(source: string): Promise<void>;
       closeWindow(): void;
     }>;
   }
@@ -138,6 +140,12 @@ const title = requireElement('title');
 const body = requireElement('body');
 const scope = requireElement('scope');
 const conditions = requireElement('conditions');
+const firstRunJoin = requireElement('first-run-join');
+const joinCamera = requireButton('join-camera');
+const joinTyped = requireButton('join-typed');
+const deviceCode = requireElement('device-code');
+const deviceCodeText = requireElement('device-code-text');
+const deviceCodeCanvas = requireCanvas('device-code-canvas');
 const floorAssurance = requireElement('floor-assurance');
 const check = requireButton('check');
 const veto = requireButton('veto');
@@ -185,6 +193,7 @@ function render(value: unknown): void {
   title.textContent = state.title;
   body.textContent = state.body;
   renderConditions(state);
+  renderDeviceCode(state);
   scope.hidden = state.kind !== 'pending_recovery';
   veto.hidden = state.decision !== 'veto_recovery';
   recoveryCard.hidden = state.kind !== 'idle'
@@ -197,12 +206,52 @@ function render(value: unknown): void {
     // Back to the choice on the next first run, rather than to whichever half
     // of it somebody opened last time.
     firstRunRestore.hidden = true;
+    firstRunJoin.hidden = true;
   }
   check.hidden = state.kind === 'recovery_card_setup'
     || state.kind === 'secure_input'
     || state.kind === 'approval'
     || state.kind === 'first_run'
     || state.kind === 'starting';
+}
+
+/**
+ * ADR 0130 E3. The code this device is holding up for another one.
+ *
+ * Drawn from the matrix the main process sent, not encoded here: a second
+ * encoder in the page is a second thing the camera has to agree with. The
+ * text sits under it because a camera that will not focus is not a reason to
+ * be stuck - a person can carry the line across by hand instead.
+ */
+function renderDeviceCode(state: PicoCompanionPresentation): void {
+  const code = state.code;
+  deviceCode.hidden = code === undefined;
+  if (code === undefined) {
+    deviceCodeText.textContent = '';
+    return;
+  }
+  const context = deviceCodeCanvas.getContext('2d');
+  const quiet = 4;
+  const side = code.qr.size + quiet * 2;
+  deviceCodeCanvas.width = side;
+  deviceCodeCanvas.height = side;
+  if (context !== null) {
+    /**
+     * Black on white, and deliberately not a design token: this is read by a
+     * camera rather than by a person, and a QR drawn in the window's own
+     * colours is a QR that stops scanning the moment somebody switches to a
+     * dark theme.
+     */
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, side, side);
+    context.fillStyle = '#000000';
+    for (const [index, module] of code.qr.modules.entries()) {
+      if (module) {
+        context.fillRect(quiet + (index % code.qr.size), quiet + Math.floor(index / code.qr.size), 1, 1);
+      }
+    }
+  }
+  deviceCodeText.textContent = code.text;
 }
 
 /**
@@ -275,9 +324,21 @@ function renderFirstRunChoices(): void {
     button.type = 'button';
     button.id = `first-run-${line.choice}`;
     button.textContent = line.actionLabel;
+    /**
+     * A closed switch rather than an else: the third choice arrived in
+     * ADR 0130 E3, and an `else` would have sent it to founding - which makes
+     * a second identity, the one thing this page exists to keep apart.
+     */
     if (line.choice === 'restore') {
       button.addEventListener('click', () => {
         firstRunRestore.hidden = false;
+        firstRunJoin.hidden = true;
+      });
+    } else if (line.choice === 'join') {
+      button.className = 'secondary';
+      button.addEventListener('click', () => {
+        firstRunJoin.hidden = false;
+        firstRunRestore.hidden = true;
       });
     } else {
       button.className = 'secondary';
@@ -354,6 +415,22 @@ veto.addEventListener('click', async () => {
 });
 scanCamera.addEventListener('click', () => void beginFirstRun('camera'));
 scanTyped.addEventListener('click', () => void beginFirstRun('typed'));
+/**
+ * ADR 0130 E3. Both halves of adding a device leave this page immediately:
+ * the codes carry an activation and the pins a Home is trusted by, and
+ * ADR 0113 C2 keeps everything that authorises in the main process.
+ */
+for (const [button, source] of [
+  [joinCamera, 'camera'],
+  [joinTyped, 'typed'],
+] as const) {
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    void window.picoCompanion.joinFromDevice(source).finally(() => {
+      button.disabled = false;
+    });
+  });
+}
 close.addEventListener('click', () => window.picoCompanion.closeWindow());
 const unsubscribe = window.picoCompanion.onPresentationChanged(render);
 window.addEventListener('beforeunload', unsubscribe, { once: true });
@@ -708,6 +785,10 @@ const deviceSection = requireElement('devices');
 const deviceList = requireElement('device-list');
 const deviceStatus = requireElement('device-status');
 const deviceAuthoritySummary = requireElement('device-authority-summary');
+const deviceAdd = requireButton('device-add');
+const deviceAddHow = requireElement('device-add-how');
+const deviceAddCamera = requireButton('device-add-camera');
+const deviceAddTyped = requireButton('device-add-typed');
 
 /**
  * ADR 0126 P2/P6 with ADR 0130 E3. The person's devices, their word about
@@ -789,6 +870,26 @@ function refreshDevices(): void {
     }, () => {
       deviceSection.hidden = true;
     });
+}
+
+deviceAdd.addEventListener('click', () => {
+  deviceAddHow.hidden = false;
+});
+for (const [button, source] of [
+  [deviceAddCamera, 'camera'],
+  [deviceAddTyped, 'typed'],
+] as const) {
+  button.addEventListener('click', () => {
+    button.disabled = true;
+    deviceAddHow.hidden = true;
+    void window.picoCompanion.beginEnrolment(source).then(() => {
+      refreshDevices();
+    }, (error: unknown) => {
+      deviceStatus.textContent = refusalText(error, 'No device was added.');
+    }).finally(() => {
+      button.disabled = false;
+    });
+  });
 }
 
 const relaySection = requireElement('relays');
@@ -1117,6 +1218,14 @@ function requireButton(id: string): HTMLButtonElement {
   const element = requireElement(id);
   if (!(element instanceof HTMLButtonElement)) {
     throw new Error(`invalid_renderer_button:${id}`);
+  }
+  return element;
+}
+
+function requireCanvas(id: string): HTMLCanvasElement {
+  const element = requireElement(id);
+  if (!(element instanceof HTMLCanvasElement)) {
+    throw new Error(`invalid_renderer_canvas:${id}`);
   }
   return element;
 }
