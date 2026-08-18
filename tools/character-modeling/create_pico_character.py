@@ -4,6 +4,17 @@ import os
 from mathutils import Matrix, Vector
 
 
+# material() writes 4.x Principled sockets ("Transmission Weight", "Coat
+# Weight") and surface_render_method (4.2+); on an older Blender those fail
+# as a KeyError deep inside the build, so the floor is stated once here.
+if bpy.app.version < (4, 2, 0):
+    raise RuntimeError(
+        "create_pico_character.py needs Blender 4.2 or newer, found "
+        + ".".join(str(part) for part in bpy.app.version)
+        + "; see tools/character-modeling/README.md"
+    )
+
+
 OUTPUT_DIR = "/tmp/pico-character-core-v0"
 BLEND_PATH = os.path.join(OUTPUT_DIR, "pico-character-core-v0.blend")
 GLB_PATH = os.path.join(OUTPUT_DIR, "pico-character-core-v0.glb")

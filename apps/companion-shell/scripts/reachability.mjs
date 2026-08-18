@@ -46,7 +46,11 @@ export function readPicoCompanionDoors(facts) {
   const doors = [];
 
   doors.push(facts.statusNotifierHost === true
-    ? { door: 'tray', available: true, reason: 'a StatusNotifierItem host owns the name' }
+    ? {
+      door: 'tray',
+      available: true,
+      reason: 'the StatusNotifierWatcher reports a registered host',
+    }
     : {
       door: 'tray',
       available: false,
@@ -59,6 +63,15 @@ export function readPicoCompanionDoors(facts) {
       door: 'desktop_entry',
       available: false,
       reason: 'the package installs no desktop entry',
+    });
+  } else if (typeof facts.desktopEntryExecutable !== 'string'
+    || typeof facts.singletonExecutable !== 'string') {
+    // Two unmeasured facts compare equal, which is how an unverified chain
+    // would read as a working door. An unmeasured fact is a closed one.
+    doors.push({
+      door: 'desktop_entry',
+      available: false,
+      reason: 'the executable chain from the entry to the lock holder was never measured',
     });
   } else if (facts.desktopEntryExecutable !== facts.singletonExecutable) {
     // The subtle failure: an entry that launches something else starts a
@@ -178,13 +191,18 @@ export function picoDesktopEntryExec(contents) {
 }
 
 /**
- * The binary a packaged launcher hands control to.
+ * The binary a packaged launcher hands control to, path and all.
  *
  * The installed `Exec` is a shell script - ADR 0123 Z3 needs a place to drop
  * the core-dump limits before Electron starts - so the entry names the
  * launcher and the running process is something else. Comparing the entry to
  * the process directly would compare two names that are correctly different,
  * which is the sort of check that passes forever without looking at anything.
+ *
+ * The target keeps its directory. Reduced to a basename, a launcher that
+ * hardcoded `/opt/pico-companion/pico-companion-bin` would still match a probe
+ * that ran the extraction copy - the path-insensitive comparison the module
+ * comment above refuses, reintroduced one function later.
  */
 export function picoLauncherExecTarget(contents) {
   for (const rawLine of contents.split('\n')) {
@@ -194,8 +212,7 @@ export function picoLauncherExecTarget(contents) {
     }
     const [command] = line.slice('exec '.length).trim().split(/\s+/u);
     const unquoted = command.replace(/^"|"$/gu, '');
-    const name = unquoted.split('/').at(-1);
-    return name === undefined || name === '' ? null : name;
+    return unquoted === '' ? null : unquoted;
   }
   return null;
 }

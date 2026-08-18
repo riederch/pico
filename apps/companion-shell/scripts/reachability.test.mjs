@@ -87,6 +87,20 @@ describe('the doors a session actually offers', () => {
       expect(entry.available).toBe(false);
     }
   });
+
+  it('closes the desktop entry when the executable chain was never measured', () => {
+    /**
+     * Two unmeasured facts compare equal. Without the type check, an installed
+     * entry plus a raised second launch would open the door with nobody having
+     * verified that the entry reaches the lock-holding binary at all.
+     */
+    const closed = doors({
+      desktopEntryExecutable: undefined,
+      singletonExecutable: undefined,
+    }).find((entry) => entry.door === 'desktop_entry');
+    expect(closed?.available).toBe(false);
+    expect(closed?.reason).toContain('never measured');
+  });
 });
 
 describe('what ADR 0130 E1 lets ship', () => {
@@ -166,15 +180,17 @@ describe('the binary the packaged launcher hands control to', () => {
     '',
   ].join('\n');
 
-  it('reads the target past the shell quoting and the install variable', () => {
-    expect(picoLauncherExecTarget(launcher)).toBe('pico-companion-bin');
+  it('reads the target past the shell quoting, directory included', () => {
+    // The directory is the point: a basename would call a hardcoded stale
+    // install path a match for the packaged binary.
+    expect(picoLauncherExecTarget(launcher)).toBe('$pico_install_dir/pico-companion-bin');
   });
 
   it('takes the first exec, which is the one that replaces the shell', () => {
     // Anything after it is unreachable, so reading a later line would name a
     // binary that never runs.
     expect(picoLauncherExecTarget(`${launcher}exec /usr/bin/false\n`))
-      .toBe('pico-companion-bin');
+      .toBe('$pico_install_dir/pico-companion-bin');
   });
 
   it('returns nothing for a launcher that execs nothing', () => {

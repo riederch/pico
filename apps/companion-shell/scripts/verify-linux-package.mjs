@@ -118,7 +118,9 @@ const probeArgs = [
 let command = executable;
 let args = probeArgs;
 if (process.env.DISPLAY === undefined && process.env.WAYLAND_DISPLAY === undefined) {
-  assert(run('which', ['xvfb-run']).stdout.trim() !== '',
+  // `which` exits 1 for a missing tool; without accepting that, run() throws
+  // its generic error first and this message is dead code.
+  assert(run('which', ['xvfb-run'], {}, 'pipe', undefined, [0, 1]).stdout.trim() !== '',
     'A display or xvfb-run is required for the Linux tray release measurement.');
   command = 'xvfb-run';
   args = ['-a', executable, ...probeArgs];
@@ -220,13 +222,24 @@ assert(existsSync(installedLauncher),
 const launcherTarget = picoLauncherExecTarget(readFileSync(installedLauncher, 'utf8'));
 assert(launcherTarget !== null,
   `The installed launcher ${entryCommand} execs nothing.`);
-// Both sides expressed as installed paths: the probe ran out of a temporary
-// extraction directory, and its own directory is the one it would hold a lock
-// against after a real install.
-const desktopEntryExecutable = join(dirname(entryCommand), launcherTarget);
-const singletonExecutable = join(
-  dirname(entryCommand), basename(String(reachabilityProbe.executable)),
-);
+/**
+ * Both sides expressed as full installed paths, directories included. The
+ * launcher resolves its own directory at run time (`pico_install_dir=${0%/*}`),
+ * which after a real install is the entry's; the probe ran out of a temporary
+ * extraction, so its executable is translated by stripping that root - and a
+ * probe raised from outside the extraction is refused there. Reduced to
+ * basenames, this chain would certify a launcher that hardcoded a stale
+ * system-wide binary: reachability.mjs names that mistake - a path-insensitive
+ * test calls /usr/local/bin/pico-companion a match for
+ * /opt/pico-companion/pico-companion.
+ */
+const desktopEntryExecutable = launcherTarget.startsWith('$pico_install_dir/')
+  ? join(dirname(entryCommand), launcherTarget.slice('$pico_install_dir/'.length))
+  : launcherTarget;
+assert(desktopEntryExecutable.startsWith('/'),
+  `The installed launcher execs ${launcherTarget}, which resolves to no absolute `
+  + 'installed path.');
+const singletonExecutable = installedSingletonExecutable(reachabilityProbe);
 assert(desktopEntryExecutable === singletonExecutable,
   `The desktop entry reaches ${desktopEntryExecutable} while the companion that holds `
   + `the single-instance lock is ${singletonExecutable}: launching the entry would `
@@ -255,33 +268,55 @@ assert(reachabilityProbe.notificationsSupported === true,
  * nobody watches and reports success, which is exactly why reachability is
  * measured at the session and not from inside the process.
  */
-if (existsSync('/usr/bin/dbus-run-session') || existsSync('/bin/dbus-run-session')) {
-  const withoutHost = temporaryRoot('pico-companion-nohost-');
-  const negative = runReachabilityProbe(withoutHost, ['dbus-run-session', '--']);
-  assert(negative.secondLaunchRaisedTheFirst === true,
-    'On a session with no tray host, launching the companion a second time did not '
-    + 'raise the running one - which would leave stock GNOME with no door at all.');
-  assert(negative.notificationOpensTheWindow === true,
-    'On a session with no tray host, the notification does not open the window.');
-  process.stdout.write('ADR 0130 E1: on a bus that hosts no tray, the desktop entry '
-    + 'and the notification still open the window.\n');
-  removeTemporaryRoot(withoutHost);
-} else {
-  process.stdout.write('ADR 0130 E1: dbus-run-session is absent, so the no-tray-host '
-    + 'negative test did not run.\n');
-}
+// Required like xvfb-run above rather than skipped when absent: a release
+// gate that silently downgrades its one GNOME-shaped assertion to a stdout
+// line stops running it forever on the machine that lost the tool. Found
+// through PATH, because /usr/bin is not where every distribution keeps it.
+assert(run('which', ['dbus-run-session'], {}, 'pipe', undefined, [0, 1]).stdout.trim() !== '',
+  'dbus-run-session is required for the ADR 0130 E1 no-tray-host negative test.');
+const withoutHost = temporaryRoot('pico-companion-nohost-');
+const negative = runReachabilityProbe(withoutHost, ['dbus-run-session', '--']);
+assert(negative.secondLaunchRaisedTheFirst === true,
+  'On a session with no tray host, launching the companion a second time did not '
+  + 'raise the running one - which would leave stock GNOME with no door at all.');
+assert(negative.notificationOpensTheWindow === true,
+  'On a session with no tray host, the notification does not open the window.');
+/**
+ * The shipping rule itself, run against the desktop this test constructs.
+ * Stock GNOME is "no tray host, and the shell owns org.freedesktop.
+ * Notifications": the private bus provides the absence and the product facts
+ * were measured under it; the daemon is the one constructed fact, because
+ * dbus-run-session's bare bus hosts nothing and GNOME does. Without this,
+ * ADR 0130 E1's two-door contract was only ever machine-checked against a
+ * developer session with every door open.
+ */
+const gnomeShapedDoors = readPicoCompanionDoors({
+  statusNotifierHost: false,
+  desktopEntryInstalled,
+  desktopEntryExecutable,
+  singletonExecutable: installedSingletonExecutable(negative),
+  secondLaunchRaisedTheFirst: negative.secondLaunchRaisedTheFirst,
+  notificationDaemon: true,
+  notificationsSupported: negative.notificationsSupported,
+  notificationOpensTheWindow: negative.notificationOpensTheWindow,
+});
+const shipsWithoutTray = assertPicoCompanionReachability(gnomeShapedDoors);
+process.stdout.write('ADR 0130 E1: with no tray host, the package still ships through '
+  + `${shipsWithoutTray.join(' and ')}.\n`);
+removeTemporaryRoot(withoutHost);
 
 const sessionBus = dbusNameOwners([
   'org.kde.StatusNotifierWatcher',
   'org.freedesktop.Notifications',
 ]);
 if (sessionBus === null) {
-  process.stdout.write('ADR 0130 E1: no session bus reachable, so which doors this '
-    + 'desktop hosts was not measured. The product-side facts above were asserted; '
+  process.stdout.write('ADR 0130 E1: no graphical desktop session here, so which doors '
+    + 'a desktop hosts was not measured. The product-side facts above were asserted; '
     + 'run this on a desktop session to check the two-door contract.\n');
 } else {
   const doors = readPicoCompanionDoors({
-    statusNotifierHost: sessionBus['org.kde.StatusNotifierWatcher'],
+    statusNotifierHost: sessionBus['org.kde.StatusNotifierWatcher'] === true
+      && statusNotifierHostRegistered(),
     desktopEntryInstalled,
     desktopEntryExecutable,
     singletonExecutable,
@@ -312,7 +347,7 @@ function runReachabilityProbe(root, prefix = []) {
   let probeCommand = executable;
   let probeArgs = probeArguments;
   if (process.env.DISPLAY === undefined && process.env.WAYLAND_DISPLAY === undefined) {
-    assert(run('which', ['xvfb-run']).stdout.trim() !== '',
+    assert(run('which', ['xvfb-run'], {}, 'pipe', undefined, [0, 1]).stdout.trim() !== '',
       'A display or xvfb-run is required for the ADR 0130 E1 reachability probe.');
     probeCommand = 'xvfb-run';
     probeArgs = ['-a', executable, ...probeArguments];
@@ -339,6 +374,13 @@ function runReachabilityProbe(root, prefix = []) {
       XDG_CACHE_HOME: join(root, 'cache'),
       XDG_CONFIG_HOME: join(root, 'config'),
     }, ['ignore', output, output], 120_000);
+  } catch (error) {
+    // With file-descriptor stdio, run() has no stdout or stderr to quote; the
+    // evidence is in the output file, which the exit cleanup deletes with the
+    // temporary root. Quoted here or lost.
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new Error(`${reason}\nReachability probe output (tail):\n${
+      reachabilityOutputTail(outputPath)}`);
   } finally {
     closeSync(output);
   }
@@ -354,18 +396,53 @@ function runReachabilityProbe(root, prefix = []) {
   return parsed;
 }
 
+function reachabilityOutputTail(path) {
+  try {
+    return readFileSync(path, 'utf8').slice(-4_000) || '(the probe wrote nothing)';
+  } catch {
+    return '(no probe output file was written)';
+  }
+}
+
 /**
- * Which of these bus names somebody owns, or `null` when there is no bus to
- * ask - a headless build machine, which is a different thing from a desktop
- * that hosts nothing.
+ * The probe's lock-holding executable, translated into installed-path space.
  *
- * `gdbus` then `busctl`, because neither is guaranteed and the answer is worth
- * a second attempt. A missing tool is also `null`: an unmeasured name must not
- * read as an absent one, or a build box without glib would report every
- * desktop as broken.
+ * The probe runs out of a temporary extraction, so the path it reports starts
+ * there; after a real install the same file lives at that path with the root
+ * stripped. A probe raised by anything outside this extraction - a stale
+ * system-wide companion, say - is refused rather than translated, because its
+ * doors would have been measured on last month's binary.
+ */
+function installedSingletonExecutable(report) {
+  const executablePath = String(report.executable);
+  const prefix = `${extractionRoot}${sep}`;
+  assert(executablePath.startsWith(prefix),
+    `The companion holding the single-instance lock ran from ${executablePath}, `
+    + 'which is outside the extracted package under test.');
+  return `/${relative(extractionRoot, executablePath)}`;
+}
+
+/**
+ * Which of these bus names somebody owns, or `null` when there is no desktop
+ * session to ask - a headless build machine, which is a different thing from
+ * a desktop that hosts nothing.
+ *
+ * Two ways to be headless, and both are `null`. No graphical session:
+ * systemd's dbus-user-session exports a bus address over plain ssh, where "no
+ * tray host and no notification daemon" is the machine's normal state rather
+ * than a broken desktop, so the address alone proves nothing. And a bus that
+ * does not answer: the tools exit 1 for a dead socket exactly as they do for
+ * an unowned name, so only their error text separates "nobody owns it" from
+ * "nobody answered" - anything but the named no-owner error stays unmeasured.
+ *
+ * `gdbus` then `busctl`, because neither is guaranteed and the answer is
+ * worth a second attempt. A missing tool is also `null`: an unmeasured name
+ * must not read as an absent one, or a build box without glib would report
+ * every desktop as broken.
  */
 function dbusNameOwners(names) {
-  if (process.env.DBUS_SESSION_BUS_ADDRESS === undefined) {
+  if (process.env.DBUS_SESSION_BUS_ADDRESS === undefined
+    || (process.env.DISPLAY === undefined && process.env.WAYLAND_DISPLAY === undefined)) {
     return null;
   }
   const ask = (name) => {
@@ -374,15 +451,29 @@ function dbusNameOwners(names) {
       '--object-path', '/org/freedesktop/DBus',
       '--method', 'org.freedesktop.DBus.GetNameOwner', name,
     ], { encoding: 'utf8', timeout: 10_000 });
-    if (viaGdbus.error === undefined && (viaGdbus.status === 0 || viaGdbus.status === 1)) {
-      return viaGdbus.status === 0;
+    if (viaGdbus.error === undefined) {
+      if (viaGdbus.status === 0) {
+        return true;
+      }
+      if (viaGdbus.status === 1
+        && viaGdbus.stderr.includes('org.freedesktop.DBus.Error.NameHasNoOwner')) {
+        return false;
+      }
     }
     const viaBusctl = spawnSync('busctl', ['--user', 'status', name], {
       encoding: 'utf8',
       timeout: 10_000,
     });
-    if (viaBusctl.error === undefined && (viaBusctl.status === 0 || viaBusctl.status === 1)) {
-      return viaBusctl.status === 0;
+    if (viaBusctl.error === undefined) {
+      if (viaBusctl.status === 0) {
+        return true;
+      }
+      // ENXIO is busctl's "the name resolved to nobody"; connection failures
+      // word themselves differently and must stay unmeasured.
+      if (viaBusctl.status === 1
+        && viaBusctl.stderr.includes('Failed to get credentials')) {
+        return false;
+      }
     }
     return undefined;
   };
@@ -395,6 +486,37 @@ function dbusNameOwners(names) {
     owners[name] = owned;
   }
   return owners;
+}
+
+/**
+ * Whether the watcher has a host, which is not whether a watcher exists.
+ *
+ * The StatusNotifier protocol splits them: panels register as hosts with the
+ * watcher, and the watcher exposes `IsStatusNotifierHostRegistered` precisely
+ * because it can outlive every panel. A leftover watcher after a crashed
+ * panel still owns the name while an icon would render nowhere, so ownership
+ * alone is not the fact the tray door needs. An unreadable property counts as
+ * no host - an unmeasured fact is a closed door.
+ */
+function statusNotifierHostRegistered() {
+  const viaGdbus = spawnSync('gdbus', [
+    'call', '--session', '--dest', 'org.kde.StatusNotifierWatcher',
+    '--object-path', '/StatusNotifierWatcher',
+    '--method', 'org.freedesktop.DBus.Properties.Get',
+    'org.kde.StatusNotifierWatcher', 'IsStatusNotifierHostRegistered',
+  ], { encoding: 'utf8', timeout: 10_000 });
+  if (viaGdbus.error === undefined && viaGdbus.status === 0) {
+    return viaGdbus.stdout.includes('true');
+  }
+  const viaBusctl = spawnSync('busctl', [
+    '--user', 'get-property', 'org.kde.StatusNotifierWatcher',
+    '/StatusNotifierWatcher', 'org.kde.StatusNotifierWatcher',
+    'IsStatusNotifierHostRegistered',
+  ], { encoding: 'utf8', timeout: 10_000 });
+  if (viaBusctl.error === undefined && viaBusctl.status === 0) {
+    return viaBusctl.stdout.includes('true');
+  }
+  return false;
 }
 
 function fileNames(root) {

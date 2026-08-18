@@ -47,11 +47,16 @@ aus dem Client gruenden (E2) und der Client ist ohne Tray erreichbar (E1).
 
 - **E6 Produktpfad-Check (erledigt)** - ein Repo-Skript, das fehlschlaegt, wenn
   produktbezogene Doku eine Person durch `pico-vault` schickt. Haengt an nichts.
-- **E1 Erreichbarkeit (erledigt 2026-08-18)** - drei Tueren am gepackten `.deb`
-  bewiesen: Desktop-Eintrag (ueber die Launcher-Kette bis zum Prozess mit dem
-  Single-Instance-Lock), zweiter Start, Notification. Der Referenz-Negativtest
-  ist gebaut statt abgewartet: `dbus-run-session` gibt einen privaten Bus, der
-  nichts besitzt - dieselbe Abwesenheit wie stock GNOME.
+- **E1 Erreichbarkeit (erledigt 2026-08-18)** - die produktseitigen Tuer-Fakten
+  am gepackten `.deb` bewiesen: der Desktop-Eintrag fuehrt ueber die
+  Launcher-Kette zum Prozess mit dem Single-Instance-Lock und ein zweiter
+  Start hebt den ersten, die Notification traegt eine Aktion, die das Fenster
+  oeffnet. Die Tray-Tuer ist prozessseitig prinzipiell nicht beweisbar -
+  Electron nimmt ein Icon auch auf einem Bus ohne Host an - und wird auf der
+  Session gemessen. Der Referenz-Negativtest ist gebaut statt abgewartet:
+  `dbus-run-session` gibt einen privaten Bus, der nichts besitzt - dieselbe
+  Abwesenheit wie stock GNOME -, und die Zwei-Tueren-Regel laeuft gegen genau
+  diese Gestalt.
 - **E2 Founding und Bindung (erledigt 2026-08-18)** - `claim-home`,
   `open-identity-session` und der erste Produktionsschreibvorgang von Profil und
   Keystore-Bindung. Schliesst das ADR-0113-Residuum, dass diese Bindung in

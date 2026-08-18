@@ -168,9 +168,13 @@ if (!app.requestSingleInstanceLock()) {
     // Tray process remains alive; windows are interaction/alarm surfaces only.
   });
   app.whenReady().then(start).catch((error: unknown) => {
-    if (trayMemoryProbe) {
+    if (trayMemoryProbe || reachabilityProbe) {
+      // Both probes are driven by a verifier that waits on their report. An
+      // error surface here would leave the process alive and the verifier
+      // blocked for its full timeout, with the actual exception never told.
       const reason = error instanceof Error ? error.message : 'unknown_probe_error';
-      process.stderr.write(`Pico tray memory probe failed: ${reason}\n`);
+      const name = trayMemoryProbe ? 'tray memory' : 'reachability';
+      process.stderr.write(`Pico ${name} probe failed: ${reason}\n`);
       tray?.destroy();
       app.exit(2);
       return;
@@ -337,15 +341,31 @@ async function runReachabilityProbe(): Promise<void> {
    * Observed, never helped. Raising the window belongs to the handler the
    * product registers, and a probe that called `showWindow` here would keep
    * passing on a build that had lost it - proving the probe rather than the
-   * door. The half second is for that handler to run, not for Electron.
+   * door. The product's handler runs first - it registered first - so by the
+   * time this listener fires, the window it created either exists or the door
+   * is not wired. It shows itself only once the renderer has loaded, which
+   * takes as long as it takes: waited for on the window's own `show` event
+   * under the one 15s ceiling, because a fixed grace period read a slow
+   * renderer load as a missing door.
    */
   const raised = new Promise<boolean>((resolve) => {
     const timer = setTimeout(() => resolve(false), 15_000);
     app.once('second-instance', () => {
-      setTimeout(() => {
+      const opened = currentWindow();
+      if (opened === null || opened.isDestroyed()) {
+        clearTimeout(timer);
+        resolve(false);
+        return;
+      }
+      if (opened.isVisible()) {
         clearTimeout(timer);
         resolve(true);
-      }, 500);
+        return;
+      }
+      opened.once('show', () => {
+        clearTimeout(timer);
+        resolve(true);
+      });
     });
   });
   process.stdout.write('Pico reachability probe: launching a second copy.\n');
@@ -354,14 +374,22 @@ async function runReachabilityProbe(): Promise<void> {
    * Waited for rather than detached. The second copy quits the moment it finds
    * the lock held, and a probe that returned while it was still starting left
    * a process writing into the extraction directory the verifier was deleting
-   * - which surfaced as `ENOTEMPTY` and reads like a packaging fault.
+   * - which surfaced as `ENOTEMPTY` and reads like a packaging fault. A copy
+   * still running at the deadline is killed for the same reason: abandoning it
+   * reopens exactly that race. And a spawn that fails emits `error`, which
+   * without a listener would kill the probe before any report.
    */
   const secondExited = new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 15_000);
-    second.once('exit', () => {
-      clearTimeout(timer);
+    const deadline = setTimeout(() => {
+      second.kill('SIGKILL');
+      setTimeout(resolve, 1_000);
+    }, 15_000);
+    const settled = () => {
+      clearTimeout(deadline);
       resolve();
-    });
+    };
+    second.once('exit', settled);
+    second.once('error', settled);
   });
   const delivered = await raised;
   const opened = currentWindow();
@@ -376,7 +404,7 @@ async function runReachabilityProbe(): Promise<void> {
    * to prove, and what belongs to this process is that the action leads
    * somewhere.
    */
-  window?.destroy();
+  await destroyAfterLoadSettles(currentWindow());
   window = null;
   const notification = buildNotification(parsePicoCompanionPresentation({
     kind: 'idle',
@@ -396,7 +424,7 @@ async function runReachabilityProbe(): Promise<void> {
 
   // Closed before the report, so the exit does not race a renderer still
   // loading its page.
-  afterClick?.destroy();
+  await destroyAfterLoadSettles(afterClick);
   window = null;
   process.stdout.write(`${JSON.stringify({
     schema: 'pico.companion.reachability.v1',
@@ -409,6 +437,32 @@ async function runReachabilityProbe(): Promise<void> {
   })}\n`);
   tray?.destroy();
   app.exit(0);
+}
+
+/**
+ * A window is destroyed only once its page load has settled. Destroying one
+ * mid-load rejects the `loadFile` behind it, and `app.exit` with a renderer
+ * still being brought up has hung Electron's teardown here - which reads as
+ * a probe that never answered, on a machine busy enough to lose the race.
+ */
+async function destroyAfterLoadSettles(target: BrowserWindow | null): Promise<void> {
+  if (target === null || target.isDestroyed()) {
+    return;
+  }
+  if (target.webContents.isLoading()) {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, 10_000);
+      const settled = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+      target.webContents.once('did-finish-load', settled);
+      target.webContents.once('did-fail-load', settled);
+    });
+  }
+  if (!target.isDestroyed()) {
+    target.destroy();
+  }
 }
 
 async function runTrayMemoryProbe(): Promise<void> {
@@ -1855,6 +1909,9 @@ function showWindow(): void {
     void window.loadFile(rendererPath).then(() => {
       window?.show();
       window?.focus();
+    }).catch(() => {
+      // A window closed while its page was still loading rejects the load;
+      // there is nobody left to show anything to.
     });
     return;
   }
