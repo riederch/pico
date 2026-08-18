@@ -53,6 +53,20 @@ function valueImportsOf(source) {
     if (typeOnly.test(preceding)) {
       continue;
     }
+    /**
+     * No module specifier contains whitespace, and English does.
+     *
+     * The pattern reads a file as text, which is what makes it cheap and
+     * proof against every syntax TypeScript grows. It also reads prose: a
+     * comment ending "...could not follow the chain from" and a sentence
+     * saying `tell "they moved out" from "we had a problem"` both parse as
+     * `from '...'` and were both reported as imports of nothing. Skipping
+     * whitespace hides no real import and stops the check from being a
+     * constraint on how sentences may end.
+     */
+    if (/\s/u.test(match[1])) {
+      continue;
+    }
     specifiers.push(match[1]);
   }
   return specifiers;

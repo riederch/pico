@@ -39,6 +39,8 @@ import {
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
   picoCompanionHostRotationWarning,
+  picoCompanionMembershipEndedLine,
+  picoCompanionMembershipEndingLines,
   parsePicoCompanionHomeMembers,
   parsePicoCompanionDeviceAuthority,
   type PicoCompanionDeviceAuthorityView,
@@ -789,6 +791,7 @@ describe('ADR 0130 E3 - the words two devices are held up by', () => {
 describe('ADR 0130 E4 - the Home itself', () => {
   const member = (over: Partial<{
     membershipId: string;
+    credentialId: string | null;
     picoIdentityFingerprintHex: string;
     role: string;
     status: string;
@@ -796,6 +799,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
     isThisIdentity: boolean;
   }> = {}) => ({
     membershipId: 'member:home_1:ab',
+    credentialId: `membership_${'a'.repeat(32)}`,
     picoIdentityFingerprintHex: 'ab'.repeat(32),
     role: 'home_member',
     status: 'active',
@@ -841,7 +845,7 @@ describe('ADR 0130 E4 - the Home itself', () => {
 
   it('says who lives here in what that means, not in credential fields', () => {
     const lines = picoCompanionHomeMemberLines([
-      member({ isThisIdentity: true, role: 'home_host', validUntil: null }),
+      member({ isThisIdentity: true, role: 'home_host', validUntil: null, credentialId: null }),
       member(),
       member({ status: 'revoked' }),
       member({ validUntil: null }),
@@ -857,17 +861,49 @@ describe('ADR 0130 E4 - the Home itself', () => {
 
   it('counts the others, and says so when there are none', () => {
     expect(picoCompanionHomeMembersSummary([
-      member({ isThisIdentity: true, validUntil: null }),
+      member({ isThisIdentity: true, validUntil: null, credentialId: null }),
     ])).toContain('Yours alone');
     expect(picoCompanionHomeMembersSummary([
-      member({ isThisIdentity: true, validUntil: null }),
+      member({ isThisIdentity: true, validUntil: null, credentialId: null }),
       member(),
     ])).toBe('One other Pico may use this Home.');
     // A revoked row is not one of them.
     expect(picoCompanionHomeMembersSummary([
-      member({ isThisIdentity: true, validUntil: null }),
+      member({ isThisIdentity: true, validUntil: null, credentialId: null }),
       member({ status: 'revoked' }),
     ])).toContain('Yours alone');
+  });
+
+  it('offers ending only on the rows something can end', () => {
+    const lines = picoCompanionHomeMemberLines([
+      member({ isThisIdentity: true, role: 'home_host', validUntil: null, credentialId: null }),
+      member(),
+      member({ status: 'revoked' }),
+    ]);
+    /**
+     * The founder's row is the founding record, so there is nothing to end -
+     * and a Home whose owner removed themselves would answer to nobody. A row
+     * that has already ended gets no second control either.
+     */
+    expect(lines.map((line) => line.endLabel !== null)).toEqual([false, true, false]);
+    expect(lines[1]?.credentialId).toBe(`membership_${'a'.repeat(32)}`);
+  });
+
+  it('asks why a membership ends, in two acts that are not the same', () => {
+    const endings = picoCompanionMembershipEndingLines();
+    expect(endings.map((line) => line.ending)).toEqual(['removed', 'security']);
+    for (const line of endings) {
+      // The vocabulary's words are the record's, not the person's.
+      expect(line.label.toLowerCase()).not.toContain('revok');
+      expect(line.label.toLowerCase()).not.toContain('evict');
+    }
+    // And the answer says which one it was, because the Home keeps that.
+    expect(picoCompanionMembershipEndedLine({ status: 'evicted' }))
+      .toContain('security matter');
+    expect(picoCompanionMembershipEndedLine({ status: 'revoked' }))
+      .toContain('Nothing was sent to them');
+    expect(picoCompanionMembershipEndedLine({ status: 'revoked' }))
+      .not.toBe(picoCompanionMembershipEndedLine({ status: 'evicted' }));
   });
 
   it('tells the person that nothing reached the Pico they admitted', () => {

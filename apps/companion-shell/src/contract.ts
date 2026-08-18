@@ -85,6 +85,7 @@ export const picoCompanionIpcChannels = Object.freeze({
    */
   getHomeMembers: 'pico:home-members:get',
   admitHomeMember: 'pico:home-member:admit',
+  endHomeMembership: 'pico:home-member:end',
   rotateHostKeys: 'pico:home-host-keys:rotate',
   getRelays: 'pico:relays:get',
   claimRelay: 'pico:relay:claim',
@@ -1795,10 +1796,6 @@ export function picoCompanionHostRotationLine(rotated: {
       // The rotation happened either way - the Home decided that - and what
       // is missing is this device's proof of it, which is a different thing
       // to do next than a failed rotation.
-      // Not "could not follow the chain from" + "where it stands": a string
-      // that ends in `from ` reads as an import specifier to
-      // `check-browser-modules.mjs`, whose pattern is deliberately crude
-      // because the failure it catches is a renderer that loads nothing.
       : 'Your Home rotated, and this device could not follow the chain from where '
         + 'it stands. Nothing here changed. Check that you are on the same '
         + `network and open this again. ${picoCompanionHostRotationWarning}`,
@@ -1807,6 +1804,8 @@ export function picoCompanionHostRotationLine(rotated: {
 
 export interface PicoCompanionHomeMember {
   membershipId: string;
+  /** `null` on the founder's row, which comes from the founding record. */
+  credentialId: string | null;
   picoIdentityFingerprintHex: string;
   role: string;
   status: string;
@@ -1816,8 +1815,52 @@ export interface PicoCompanionHomeMember {
 
 export interface PicoCompanionHomeMemberLine {
   membershipId: string;
+  /** What a statement that ends this row has to name; `null` if none can. */
+  credentialId: string | null;
   headline: string;
   detail: string;
+  /**
+   * Absent on the two rows nothing can end: the founder's own place, which is
+   * the founding record, and a membership that has already ended.
+   */
+  endLabel: string | null;
+}
+
+/**
+ * The two ways a membership ends, and they are not the same act.
+ *
+ * Removing somebody is a decision about who lives here. A security review is
+ * a decision about a key that may be in the wrong hands, and the Home records
+ * which one it was - a person reading the list later can tell "they moved
+ * out" from "we had a problem".
+ */
+export interface PicoCompanionMembershipEndingLine {
+  ending: 'removed' | 'security';
+  label: string;
+}
+
+export function picoCompanionMembershipEndingLines(
+): readonly PicoCompanionMembershipEndingLine[] {
+  return Object.freeze([
+    Object.freeze({
+      ending: 'removed' as const,
+      label: 'They should not live here any more',
+    }),
+    Object.freeze({
+      ending: 'security' as const,
+      label: 'Something is wrong with their Pico',
+    }),
+  ]);
+}
+
+export function picoCompanionMembershipEndedLine(ended: {
+  status: string;
+}): string {
+  return ended.status === 'evicted'
+    ? 'Ended as a security matter. That Pico cannot use this Home any more, and the '
+      + 'Home keeps the record of why.'
+    : 'Ended. That Pico cannot use this Home any more. Nothing was sent to them - '
+      + 'they will find out when they next try.';
 }
 
 /**
@@ -1833,10 +1876,16 @@ export function picoCompanionHomeMemberLines(
 ): readonly PicoCompanionHomeMemberLine[] {
   return Object.freeze(members.map((member) => Object.freeze({
     membershipId: member.membershipId,
+    credentialId: member.credentialId,
     headline: member.isThisIdentity
       ? 'You'
       : `Another Pico (${member.picoIdentityFingerprintHex.slice(0, 12)})`,
     detail: picoCompanionHomeMemberDetail(member),
+    endLabel: member.credentialId !== null
+      && member.status === 'active'
+      && !member.isThisIdentity
+      ? 'They should not live here'
+      : null,
   })));
 }
 
@@ -1897,6 +1946,7 @@ export function parsePicoCompanionHomeMembers(
     }
     const record = entry as Record<string, unknown>;
     if (typeof record.membershipId !== 'string'
+      || (record.credentialId !== null && typeof record.credentialId !== 'string')
       || typeof record.picoIdentityFingerprintHex !== 'string'
       || typeof record.role !== 'string'
       || typeof record.status !== 'string'
@@ -1906,6 +1956,7 @@ export function parsePicoCompanionHomeMembers(
     }
     return Object.freeze({
       membershipId: record.membershipId,
+      credentialId: record.credentialId as string | null,
       picoIdentityFingerprintHex: record.picoIdentityFingerprintHex,
       role: record.role,
       status: record.status,

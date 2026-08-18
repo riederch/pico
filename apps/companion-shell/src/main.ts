@@ -43,6 +43,7 @@ import {
   picoCompanionEnrolmentValidUntil,
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
+  picoCompanionMembershipEndingLines,
   type PicoCompanionEnrolmentStep,
   type PicoCompanionFirstRunScanSource,
   type PicoCompanionDeviceCode,
@@ -1311,6 +1312,28 @@ function registerIpc(): void {
       } finally {
         productOperationActive = false;
       }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.endHomeMembership,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      const ending = picoCompanionMembershipEndingLines()
+        .find((line) => line.ending === record?.ending);
+      if (typeof record?.credentialId !== 'string'
+        || typeof record.picoIdentityFingerprintHex !== 'string'
+        || ending === undefined) {
+        throw new Error('invalid_home_membership_ending');
+      }
+      return await runtime.endHomeMembership({
+        credentialId: record.credentialId,
+        picoIdentityFingerprintHex: record.picoIdentityFingerprintHex,
+        ending: ending.ending,
+      });
     },
   );
   ipcMain.handle(

@@ -10,6 +10,7 @@ import {
   picoCompanionDeviceAuthorityEndedLine,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionHomeMemberAdmittedLine,
+  picoCompanionMembershipEndedLine,
   picoCompanionHostRotationReasonLines,
   picoCompanionHostRotationWarning,
   picoCompanionWindowViewLines,
@@ -105,6 +106,11 @@ declare global {
         picoIdentityFingerprintHex: string;
         validUntil: string;
       }>;
+      endHomeMembership(
+        credentialId: string,
+        picoIdentityFingerprintHex: string,
+        ending: string,
+      ): Promise<{ credentialId: string; status: string }>;
       rotateHostKeys(reason: string): Promise<unknown>;
       getDeviceAuthority(): Promise<unknown>;
       endDeviceAuthority(delegationId: string, reason: string): Promise<{
@@ -820,6 +826,18 @@ function refreshHomeMembers(): void {
         document,
       },
       members,
+      (ending) => {
+        void window.picoCompanion.endHomeMembership(
+          ending.credentialId,
+          ending.picoIdentityFingerprintHex,
+          ending.ending,
+        ).then((ended) => {
+          homeStatus.textContent = picoCompanionMembershipEndedLine(ended);
+          refreshHomeMembers();
+        }, (error: unknown) => {
+          homeStatus.textContent = refusalText(error, 'That Pico still lives here.');
+        });
+      },
     );
   }, () => {
     homeSection.hidden = true;

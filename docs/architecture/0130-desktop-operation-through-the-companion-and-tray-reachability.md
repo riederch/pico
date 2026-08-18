@@ -8,6 +8,45 @@ the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
 
+Status note, 2026-08-18: **E5 was measured before it was built, and the
+measurement said not to build it yet.**
+
+Three facts, in ascending order of how much they decide:
+
+The owner has to keep their own records. `create-domain` returns a signed
+domain record, and `rotate-domain` and `grant-reader` take it back as input
+along with every rotation and grant lifecycle record - the tool reads them
+from files. A product path would need a custody store on the device first.
+
+Nothing in the product writes reader-custody content. A memory domain
+carries a custody class, the default is `host_custody`, and the ordinary
+store path *refuses* reader-custody items by name ("use the opaque
+reader-custody package path"). Nobody calls that path outside tests.
+
+Neither does anything read it: share envelopes and freshness checkpoints
+exist as Foundation routes, and no companion ever issues or receives one.
+ADR 0086's own status row says it: reader transport remains open.
+
+So the four ceremonies would move into the Client and give a person controls
+whose consequence they cannot observe - the mirror image of the defect these
+gates exist to find, and worse than a documented gap. E5 stays open with
+this measurement attached, and its subject - a writer path - is the work
+that would make it worth having.
+
+**What the same measurement found and was worth building: ending a
+membership.** E4 made a person able to let somebody in; nothing anywhere
+could let them out - not this Client, not the CLI's eighteen subcommands,
+and `home.authority.submit` carried the credential but not the statement
+that ends it. It is one now, in two acts the Home keeps apart: somebody who
+should not live here any more, and a Pico something is wrong with. Nothing
+is deleted - the Home keeps every statement and projects the latest one, so
+a member who was removed can be told apart from one who was never admitted.
+
+The lifecycle order taught the test a lesson: with one statement the Home
+has nothing to compare, so *any* order passes. It decides between statements
+about the same credential, so the test now writes three and checks that an
+older one landing later changes nothing.
+
 Status note, 2026-08-18: **E4 - the Home itself, from the device that
 decides about it.**
 
@@ -446,8 +485,12 @@ Node host beside each of them.
   `rotate-host-key` and `issue-membership` as product surfaces, with the
   reading half that turned out to be missing: over Link a Home Host Pico
   could admit somebody and then not see who was in.
-- **E5 - Domain and readership vertical (open):** create/rotate domain,
-  grant reader, publish checkpoint.
+- **E5 - Domain and readership vertical (open, and measured):** create/rotate
+  domain, grant reader, publish checkpoint. Measured on 2026-08-18 before
+  building: nothing in the product writes reader-custody content, so these
+  four would be controls whose effect nobody can observe. What the same
+  measurement found missing *and* observable - ending a membership - was
+  built instead. The status note above carries the argument.
 - **E6 - Product-path check (implemented):** `scripts/check-product-path.mjs`
   runs in `release:verify` over nine enumerated product-facing documents and
   fails when one routes a person through `pico-vault`. It draws the line

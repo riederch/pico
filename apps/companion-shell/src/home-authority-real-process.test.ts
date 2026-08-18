@@ -8,6 +8,7 @@ import sodium from 'libsodium-wrappers-sumo';
 import type { VaultSodium } from '@pico/vault';
 import { picoFoundationRequest } from '@pico/vault-daemon/claim-home-ceremony';
 import {
+  endPicoCompanionMembership,
   issuePicoCompanionMembership,
   readPicoCompanionHomeMembers,
   rotatePicoCompanionHostKeys,
@@ -299,6 +300,128 @@ describe('ADR 0130 E4 - the Home’s own keys, and who else lives in it', () => 
     expect(admitted?.role).toBe('home_member');
     expect(admitted?.status).toBe('active');
     expect(admitted?.validUntil).toBe('2027-01-01T00:00:00.000Z');
+  }, 300_000);
+
+  it('ends a membership, and the Home says so afterwards', async () => {
+    /**
+     * ADR 0130 E5's first finding, and the reason it came before the domains:
+     * there was no ceremony for this anywhere - not here, not among the
+     * CLI's eighteen subcommands - and over Link there was not even a path.
+     * Somebody could be let in from a person's own device and not let out.
+     *
+     * Nothing is deleted. The Home keeps every statement and projects the
+     * latest one, which is what lets a member who was removed be told apart
+     * from one who was never admitted.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    const profile = readPicoCompanionProfile(profilePath);
+    const linkClient = await createPicoCompanionLinkClient({
+      profile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+    const subject = 'cd'.repeat(32);
+
+    const membership = await issuePicoCompanionMembership({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      subjectPicoIdentityFingerprintHex: subject,
+      validUntil: '2027-01-01T00:00:00.000Z',
+    });
+    const admitted = (await readPicoCompanionHomeMembers({
+      profile,
+      livingDeviceLinkClient: linkClient,
+    })).find((entry) => entry.picoIdentityFingerprintHex === subject);
+    expect(admitted?.status).toBe('active');
+    // The credential the statement has to name, which is not the row id.
+    expect(admitted?.credentialId).toBe(membership.credentialId);
+
+    const ended = await endPicoCompanionMembership({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      credentialId: admitted!.credentialId!,
+      subjectPicoIdentityFingerprintHex: subject,
+      ending: 'removed',
+    });
+    expect(ended.status).toBe('revoked');
+
+    const after = await readPicoCompanionHomeMembers({
+      profile,
+      livingDeviceLinkClient: linkClient,
+    });
+    const removed = after.find((entry) => entry.picoIdentityFingerprintHex === subject);
+    // Still a row, and that is the point: gone is not the same as never here.
+    expect(removed?.status).toBe('revoked');
+    expect(after.find((entry) => entry.isThisIdentity)?.status).toBe('active');
+
+    /**
+     * **What the lifecycle order is for**, and the first version of this test
+     * did not touch it: with one statement the Home has nothing to compare,
+     * so any order at all would have passed. It decides between statements
+     * about the same credential - so a second one rises above the first, and
+     * a third carrying an older order changes nothing however late it lands.
+     */
+    const second = new Date(Date.now() + 60_000);
+    await endPicoCompanionMembership({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      credentialId: admitted!.credentialId!,
+      subjectPicoIdentityFingerprintHex: subject,
+      ending: 'security',
+      now: () => second,
+    });
+    expect((await readPicoCompanionHomeMembers({ profile, livingDeviceLinkClient: linkClient }))
+      .find((entry) => entry.picoIdentityFingerprintHex === subject)?.status).toBe('evicted');
+
+    await endPicoCompanionMembership({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      credentialId: admitted!.credentialId!,
+      subjectPicoIdentityFingerprintHex: subject,
+      ending: 'removed',
+      now: () => new Date(second.getTime() - 30_000),
+    });
+    expect((await readPicoCompanionHomeMembers({ profile, livingDeviceLinkClient: linkClient }))
+      .find((entry) => entry.picoIdentityFingerprintHex === subject)?.status).toBe('evicted');
+  }, 300_000);
+
+  it('refuses to end the Home\u2019s own place in itself', async () => {
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    const profile = readPicoCompanionProfile(profilePath);
+    const linkClient = await createPicoCompanionLinkClient({
+      profile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+    const members = await readPicoCompanionHomeMembers({
+      profile,
+      livingDeviceLinkClient: linkClient,
+    });
+    /**
+     * The founder's row comes from the founding record rather than from a
+     * credential, so there is nothing to end - and a Home whose owner removed
+     * themselves would answer to nobody.
+     */
+    expect(members.find((entry) => entry.isThisIdentity)?.credentialId).toBeNull();
+    await expect(endPicoCompanionMembership({
+      profile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: linkClient,
+      sodium: sodium as unknown as VaultSodium,
+      credentialId: 'membership_00000000000000000000000000000000',
+      subjectPicoIdentityFingerprintHex: profile.identity.keyFingerprintHex,
+      ending: 'removed',
+    })).rejects.toThrow('subject_is_this_identity');
   }, 300_000);
 
   it('refuses to make this identity a member of its own Home', async () => {

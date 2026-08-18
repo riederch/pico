@@ -1,10 +1,13 @@
 import type {
   PicoHomeContinuityReasonCategory,
+  PicoHomeMembershipLifecycleReasonCategory,
   PicoHomeMembershipScope,
+  PicoHomeMembershipStatus,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import {
+  endPicoHomeMembership,
   issuePicoHomeMembership,
   rotatePicoHomeHostKeys,
 } from '@pico/vault-daemon/home-authority-ceremony';
@@ -122,8 +125,12 @@ export async function rotatePicoCompanionHostKeys(input: {
 }
 
 export interface PicoCompanionHomeMember {
-  /** ADR 0080's row id, which is what a later lifecycle record names. */
   membershipId: string;
+  /**
+   * The credential this row was projected from, and the id a statement that
+   * ends it has to name. The row id is the Home's; this one is the record's.
+   */
+  credentialId: string | null;
   picoIdentityFingerprintHex: string;
   role: string;
   status: string;
@@ -162,6 +169,7 @@ export async function readPicoCompanionHomeMembers(input: {
   return Object.freeze(rows.map((entry) => {
     const row = entry as Record<string, unknown>;
     if (typeof row.membershipId !== 'string'
+      || (row.sourceRef !== null && typeof row.sourceRef !== 'string')
       || typeof row.picoIdentityFingerprintHex !== 'string'
       || typeof row.role !== 'string'
       || typeof row.status !== 'string'
@@ -170,6 +178,13 @@ export async function readPicoCompanionHomeMembers(input: {
     }
     return Object.freeze({
       membershipId: row.membershipId,
+      /**
+       * `null` for the founder, whose row comes from the founding record and
+       * not from a credential - which is also why there is nothing to end.
+       */
+      credentialId: row.source === 'membership_credential'
+        ? row.sourceRef as string
+        : null,
       picoIdentityFingerprintHex: row.picoIdentityFingerprintHex,
       role: row.role,
       status: row.status,
@@ -249,5 +264,84 @@ export async function issuePicoCompanionMembership(input: {
     credentialId: issued.issuerStatement.membership.credentialId,
     subjectPicoIdentityFingerprintHex: input.subjectPicoIdentityFingerprintHex,
     validUntil: input.validUntil,
+  });
+}
+
+/**
+ * ADR 0080 with ADR 0130 E5's finding. Ends a membership this Home issued.
+ *
+ * **Two reasons, and they are not the same act.** Removing somebody is a
+ * decision about who lives here; a security review is a decision about a key
+ * that may be in the wrong hands, and the Home records which one it was. The
+ * other four categories in the vocabulary belong to the machinery - an invite
+ * accepted or expired, a host reset, a re-issue - and none of them is a
+ * sentence a person says.
+ *
+ * Nothing is deleted: the Home keeps every statement and projects the latest
+ * one, so a member who was removed can be told apart from one who was never
+ * admitted.
+ */
+export const picoCompanionMembershipEndings = Object.freeze({
+  removed: { status: 'revoked', reason: 'member_removed' },
+  security: { status: 'evicted', reason: 'security_review' },
+} as const satisfies Readonly<Record<string, {
+  status: PicoHomeMembershipStatus;
+  reason: PicoHomeMembershipLifecycleReasonCategory;
+}>>);
+
+export type PicoCompanionMembershipEnding = keyof typeof picoCompanionMembershipEndings;
+
+export async function endPicoCompanionMembership(input: {
+  profile: PicoCompanionProfile;
+  daemonClient: PicoVaultDaemonClient;
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  sodium: VaultSodium;
+  credentialId: string;
+  subjectPicoIdentityFingerprintHex: string;
+  ending: PicoCompanionMembershipEnding;
+  now?: () => Date;
+}): Promise<{ credentialId: string; status: PicoHomeMembershipStatus }> {
+  const ending = picoCompanionMembershipEndings[input.ending];
+  if (ending === undefined) {
+    throw new Error('invalid_pico_companion_membership_ending');
+  }
+  if (input.subjectPicoIdentityFingerprintHex
+    === input.profile.identity.keyFingerprintHex) {
+    // The founder's row is the founding record; there is no credential to end,
+    // and a Home whose owner removed themselves would answer to nobody.
+    throw new Error('pico_companion_membership_subject_is_this_identity');
+  }
+
+  const now = (input.now ?? (() => new Date()))();
+  await endPicoHomeMembership({
+    client: input.daemonClient,
+    sodium: input.sodium,
+    coreUrl: input.profile.coreUrl,
+    linkClient: input.livingDeviceLinkClient,
+    signerKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    homeId: await readPicoCompanionHomeId({
+      livingDeviceLinkClient: input.livingDeviceLinkClient,
+    }),
+    credentialId: input.credentialId,
+    subjectPicoIdentityFingerprintHex: input.subjectPicoIdentityFingerprintHex,
+    status: ending.status,
+    reasonCategory: ending.reason,
+    changedAt: now.toISOString(),
+    /**
+     * ADR 0082's trick, for ADR 0080's records: milliseconds as the order.
+     *
+     * **What the order decides is which of two statements about the same
+     * credential the Home projects** - it does not have to outrank the
+     * credential, which lives in another table and is not compared with it.
+     * A first statement wins by being the only one; a later correction has to
+     * rise above it, and a device that kept its own counter would be keeping
+     * a second record of something the clock already orders.
+     */
+    lifecycleOrder: `seq:${String(now.getTime()).padStart(16, '0')}`,
+  });
+
+  return Object.freeze({
+    credentialId: input.credentialId,
+    status: ending.status,
   });
 }

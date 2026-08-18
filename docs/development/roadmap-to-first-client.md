@@ -100,8 +100,18 @@ Terminal, und damit waere Phase 4 von Phase 1 abgeschnitten.
   **nur schreibbar** - wer jemanden aufnehmen konnte, konnte nicht sehen, wer
   drin ist. Sichtbar geworden und nicht in diesem Gate: eine Mitgliedschaft zu
   beenden gibt es nirgends, auch nicht im Werkzeug. *Opus 5 + xhigh.*
-- **E5 Domains und Readership** - create/rotate domain, grant reader, publish
-  checkpoint. *Opus 5 + xhigh.*
+- **E5 Domains und Readership (gemessen, bewusst nicht gebaut)** -
+  create/rotate domain, grant reader, publish checkpoint. Am 2026-08-18 vor
+  dem Bauen gemessen: **nichts im Produkt schreibt Reader-Custody-Inhalt** -
+  der gewoehnliche Speicherweg lehnt ihn namentlich ab, den Paketweg ruft
+  ausserhalb von Tests niemand auf - und kein Companion stellt je ein Share
+  Envelope aus oder empfaengt eines. Die vier Zeremonien waeren damit
+  Bedienelemente, deren Wirkung niemand beobachten kann. Ausserdem muesste
+  zuerst ein Custody-Speicher auf das Geraet: der signierte Domain-Record und
+  jede Rotation sind Eingaben, die das Werkzeug aus Dateien liest. **Das
+  Subjekt fehlt, nicht die Verdrahtung** - was E5 lohnend macht, ist ein
+  Schreibweg. Stattdessen gebaut wurde, was derselbe Gang als sichtbar
+  fehlend gefunden hat: **eine Mitgliedschaft beenden**. *Opus 5 + xhigh.*
 
 E4 und E5 duerfen nach hinten rutschen oder neben Phase 4 laufen; E3 nicht.
 

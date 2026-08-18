@@ -353,6 +353,10 @@ export async function picoLinkFoundationRequest(
 
   const resources: Record<string, string> = {
     '/api/home/memberships': 'membership',
+    // ADR 0130 E5's finding: the statement that ends a membership had no Link
+    // path, so somebody could be let in from a person's own device and not
+    // let out from it.
+    '/api/home/membership-lifecycle': 'membership_lifecycle',
     '/api/home/reader-key-freshness-checkpoints': 'reader_key_freshness_checkpoint',
     '/api/home/reader-custody/domains': 'reader_custody_domain',
     '/api/home/reader-custody/reader-grants': 'reader_custody_reader_grant',

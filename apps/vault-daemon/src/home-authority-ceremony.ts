@@ -1,12 +1,16 @@
 import {
   picoHomeContinuityRecordSchema,
   picoHomeMembershipCredentialSchema,
+  picoHomeMembershipLifecycleRecordSchema,
   picoHomeSignatureInputLabels,
   picoIdentitySuite,
   type PicoHomeContinuityReasonCategory,
   type PicoHomeContinuitySignatureInput,
+  type PicoHomeMembershipLifecycleReasonCategory,
+  type PicoHomeMembershipLifecycleSignatureInput,
   type PicoHomeMembershipRole,
   type PicoHomeMembershipScope,
+  type PicoHomeMembershipStatus,
   type PicoHomeMembershipSignatureInput,
   type PicoIdentityKeyRecordSignatureInput,
 } from '@pico/protocol';
@@ -189,3 +193,79 @@ export async function issuePicoHomeMembership(input: {
   return { accepted, issuerStatement };
 }
 
+/**
+ * ADR 0080's other half: the statement that ends a membership.
+ *
+ * The Home keeps every statement and projects the latest one by lifecycle
+ * order, so ending is not a deletion - it is a later sentence about the same
+ * credential, signed by the same authority that issued it. That is why a
+ * revoked member can be told apart from one who was never admitted.
+ *
+ * There was no ceremony for this anywhere: not here, not in the CLI's
+ * eighteen subcommands. A Home Host Pico could let somebody in and not let
+ * them out.
+ */
+export async function endPicoHomeMembership(input: {
+  client: PicoVaultDaemonClient;
+  sodium: VaultSodium;
+  coreUrl: string;
+  session?: string;
+  linkClient?: PicoLinkDirectClient;
+  signerKeyFingerprintHex: string;
+  homeId: string;
+  credentialId: string;
+  subjectPicoIdentityFingerprintHex: string;
+  status: PicoHomeMembershipStatus;
+  reasonCategory: PicoHomeMembershipLifecycleReasonCategory;
+  changedAt: string;
+  lifecycleOrder: string;
+}): Promise<Record<string, unknown>> {
+  const status = await input.client.status();
+  const signer = status.sessions.find(
+    (session) => session.keyFingerprintHex === input.signerKeyFingerprintHex,
+  );
+  if (signer === undefined || signer.keyRole !== 'pico_identity') {
+    throw new Error('membership_issuer_not_unlocked');
+  }
+
+  const lifecycle: PicoHomeMembershipLifecycleSignatureInput = {
+    suite: picoIdentitySuite,
+    lifecycleId: `membership_lifecycle_${bytesToHex(input.sodium.randombytes_buf(16))}`,
+    homeId: input.homeId,
+    credentialId: input.credentialId,
+    issuerPicoIdentityFingerprintHex: signer.keyFingerprintHex,
+    subjectPicoIdentityFingerprintHex: input.subjectPicoIdentityFingerprintHex,
+    status: input.status,
+    reasonCategory: input.reasonCategory,
+    changedAt: input.changedAt,
+    lifecycleOrder: input.lifecycleOrder,
+  };
+
+  const signature = await input.client.sign({
+    keyFingerprintHex: signer.keyFingerprintHex,
+    label: picoHomeSignatureInputLabels.membershipLifecycle,
+    fields: lifecycle as unknown as Record<string, unknown>,
+  });
+
+  const record = {
+    schema: picoHomeMembershipLifecycleRecordSchema,
+    lifecycle,
+    issuerIdentityKeyRecord: {
+      suite: picoIdentitySuite,
+      keyRole: 'pico_identity',
+      publicKeyHex: signer.publicKeyHex,
+    },
+    issuerSignatureHex: signature.signatureHex,
+    createdAt: input.changedAt,
+  };
+
+  const accepted = await foundationRequest(
+    input.coreUrl,
+    '/api/home/membership-lifecycle',
+    record,
+    input.session,
+    input.linkClient,
+  ) as Record<string, unknown>;
+
+  return { accepted, record };
+}

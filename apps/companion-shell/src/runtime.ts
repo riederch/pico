@@ -70,6 +70,7 @@ import type {
   PicoCompanionHomeMember,
   PicoCompanionHostRotation,
   PicoCompanionHostRotationReason,
+  PicoCompanionMembershipEnding,
 } from '@pico/companion/home-authority';
 import { picoPresenceLeaseMs } from '@pico/protocol/presence';
 import {
@@ -269,6 +270,11 @@ export interface PicoCompanionShellRuntime {
     picoIdentityFingerprintHex: string;
     validUntil: string;
   }>;
+  endHomeMembership(input: {
+    credentialId: string;
+    picoIdentityFingerprintHex: string;
+    ending: PicoCompanionMembershipEnding;
+  }): Promise<{ credentialId: string; status: string }>;
   rotateHostKeys(input: {
     reason: PicoCompanionHostRotationReason;
   }): Promise<PicoCompanionHostRotation>;
@@ -943,6 +949,25 @@ export async function startPicoCompanionShellRuntime(input: {
           picoIdentityFingerprintHex: issued.subjectPicoIdentityFingerprintHex,
           validUntil: issued.validUntil,
         };
+      }),
+      endHomeMembership: async (ending) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { endPicoCompanionMembership } = await import('@pico/companion/home-authority');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await endPicoCompanionMembership({
+          profile,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          credentialId: ending.credentialId,
+          subjectPicoIdentityFingerprintHex: ending.picoIdentityFingerprintHex,
+          ending: ending.ending,
+        });
       }),
       rotateHostKeys: async ({ reason }) => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();

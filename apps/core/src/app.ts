@@ -3419,6 +3419,43 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     return { statusCode: 202, body: { accepted: true } };
   }
 
+  /**
+   * ADR 0080's lifecycle statement, shared by the Foundation route and the
+   * Link relay.
+   *
+   * It was the route's own body until ADR 0130 E5 went looking for how a
+   * person ends a membership from their own device and found there was no
+   * way: `home.authority.submit` carried the credential and not the statement
+   * that ends it. One implementation, two doors - a second copy behind the
+   * Link path would be a second set of rules about who may remove somebody.
+   */
+  function recordHomeMembershipLifecycle(body: unknown): FoundationOperationResult {
+    const record = (body ?? {}) as PicoHomeMembershipLifecycleRecord;
+    const recorded = store.recordPicoHomeMembershipLifecycle({ sodium, record });
+
+    if (!recorded.ok) {
+      return {
+        statusCode: membershipFailureStatus(recorded.reason),
+        body: { error: recorded.reason },
+      };
+    }
+
+    appendServerEvent('home.membership_changed', {
+      credentialId: recorded.membership.sourceRef,
+      lifecycleId: record.lifecycle?.lifecycleId ?? '',
+      subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
+      status: recorded.membership.status,
+    });
+    if (recorded.membership.status !== 'active') {
+      reconcileShareEnvelopes();
+    }
+
+    return {
+      statusCode: 200,
+      body: { membership: recorded.membership as unknown as Record<string, unknown> },
+    };
+  }
+
   function recordReaderCustodyDomain(body: unknown): FoundationOperationResult {
     const result = readerCustody.recordDomain(body as PicoReaderCustodyDomainRecord);
     if (!result.ok) {
@@ -3477,6 +3514,14 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     switch (args.resource) {
       case 'membership':
         return recordHomeMembership(args.record);
+      /**
+       * ADR 0130 E5's first finding: a membership could be given from a
+       * person's own device and never ended from one. The Foundation route
+       * has existed since ADR 0080; over Link there was no way to reach it,
+       * so somebody could be let in and not let out.
+       */
+      case 'membership_lifecycle':
+        return recordHomeMembershipLifecycle(args.record);
       case 'reader_key_freshness_checkpoint':
         return publishReaderKeyFreshnessCheckpoint(args.record);
       case 'reader_custody_domain':
@@ -6019,24 +6064,8 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
   });
 
   app.post('/api/home/membership-lifecycle', async (request, reply) => {
-    const record = (request.body ?? {}) as PicoHomeMembershipLifecycleRecord;
-    const recorded = store.recordPicoHomeMembershipLifecycle({ sodium, record });
-
-    if (!recorded.ok) {
-      return sendNoStore(reply.code(membershipFailureStatus(recorded.reason)), { error: recorded.reason });
-    }
-
-    appendServerEvent('home.membership_changed', {
-      credentialId: recorded.membership.sourceRef,
-      lifecycleId: record.lifecycle?.lifecycleId ?? '',
-      subjectPicoIdentityFingerprintHex: recorded.membership.picoIdentityFingerprintHex,
-      status: recorded.membership.status,
-    });
-    if (recorded.membership.status !== 'active') {
-      reconcileShareEnvelopes();
-    }
-
-    return sendNoStore(reply, { membership: recorded.membership });
+    const result = recordHomeMembershipLifecycle(request.body);
+    return sendNoStore(reply.code(result.statusCode), result.body);
   });
 
   app.get('/api/home/domain-read-grants', async (_request, reply) => {

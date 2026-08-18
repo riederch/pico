@@ -13,6 +13,8 @@ import {
   picoCompanionDeviceLines,
   picoCompanionHomeMemberLines,
   picoCompanionHomeMembersSummary,
+  picoCompanionMembershipEndingLines,
+  type PicoCompanionMembershipEndingLine,
   parsePicoCompanionHomeMembers,
   picoCompanionDeviceAuthorityLines,
   picoCompanionDeviceAuthoritySummary,
@@ -585,13 +587,23 @@ function deviceAuthorityBlock(
 export function renderPicoCompanionHomeMembers(
   root: { list: HTMLElement; section: HTMLElement; summary: HTMLElement; document: Document },
   value: unknown,
+  /**
+   * ADR 0130 E5. Ends one, and the reason is asked with the control rather
+   * than after it: "they moved out" and "something is wrong with their Pico"
+   * are two different records, and the Home keeps which one it was.
+   */
+  end?: (input: {
+    credentialId: string;
+    picoIdentityFingerprintHex: string;
+    ending: PicoCompanionMembershipEndingLine['ending'];
+  }) => void,
 ): void {
   const members = parsePicoCompanionHomeMembers(value);
   root.section.hidden = false;
   root.summary.textContent = picoCompanionHomeMembersSummary(members);
   root.list.replaceChildren();
 
-  for (const line of picoCompanionHomeMemberLines(members)) {
+  for (const [index, line] of picoCompanionHomeMemberLines(members).entries()) {
     const item = root.document.createElement('li');
     item.className = 'provider-line';
     item.dataset.membershipId = line.membershipId;
@@ -605,6 +617,37 @@ export function renderPicoCompanionHomeMembers(
     detail.textContent = line.detail;
 
     item.append(headline, detail);
+
+    const member = members[index]!;
+    if (line.endLabel !== null && line.credentialId !== null && end !== undefined) {
+      const reasons = root.document.createElement('div');
+      reasons.className = 'device-authority-reasons';
+      reasons.hidden = true;
+      for (const ending of picoCompanionMembershipEndingLines()) {
+        const choice = root.document.createElement('button');
+        choice.type = 'button';
+        choice.dataset.ending = ending.ending;
+        choice.textContent = ending.label;
+        choice.addEventListener('click', () => end({
+          credentialId: line.credentialId!,
+          picoIdentityFingerprintHex: member.picoIdentityFingerprintHex,
+          ending: ending.ending,
+        }));
+        reasons.append(choice);
+      }
+
+      const endButton = root.document.createElement('button');
+      endButton.type = 'button';
+      endButton.className = 'quiet';
+      endButton.dataset.endMembership = line.credentialId;
+      endButton.textContent = line.endLabel;
+      endButton.addEventListener('click', () => {
+        reasons.hidden = false;
+        endButton.hidden = true;
+      });
+      item.append(endButton, reasons);
+    }
+
     root.list.append(item);
   }
 }
