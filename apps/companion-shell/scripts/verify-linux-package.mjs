@@ -251,8 +251,25 @@ assert(reachabilityProbe.notificationOpensTheWindow === true,
   'The notification the companion raises does not open its window. A notification '
   + 'without an action is an announcement, and on a desktop with no tray host it is '
   + 'the difference between reachable and not.');
-assert(reachabilityProbe.notificationsSupported === true,
-  'The packaged runtime reports notifications as unsupported.');
+/**
+ * **Declared, not measured.** `Notification.isSupported()` answers a question
+ * about the *host* - whether libnotify is there to load - and this gate
+ * builds a package. It was asserted directly and passed on the machine it was
+ * written on, then failed on a CI runner where nothing installs the runtime
+ * dependencies: the lifecycle probe unpacks into a temporary root with
+ * `dpkg --root`, which resolves nothing on purpose.
+ *
+ * What the package owes is the dependency, and that is checkable anywhere.
+ * Whether a given desktop can then show a notification is weighed by the
+ * two-door rule below, where every other host fact is weighed.
+ */
+const declaredDependencies = run('dpkg-deb', ['--field', artifact, 'Depends']).stdout;
+assert(/(^|[\s,])libnotify4([\s,|]|$)/u.test(declaredDependencies),
+  'The package does not depend on libnotify4, so an install can leave the '
+  + `notification door shut on a desktop that would host it: ${declaredDependencies.trim()}`);
+process.stdout.write(`ADR 0130 E1: the packaged runtime reports notifications ${
+  reachabilityProbe.notificationsSupported === true ? 'supported' : 'unsupported'
+} on this host, which is a fact about the host and not about the package.\n`);
 
 /**
  * ADR 0130 E1's reference negative test, constructed rather than waited for.
@@ -297,7 +314,14 @@ const gnomeShapedDoors = readPicoCompanionDoors({
   singletonExecutable: installedSingletonExecutable(negative),
   secondLaunchRaisedTheFirst: negative.secondLaunchRaisedTheFirst,
   notificationDaemon: true,
-  notificationsSupported: negative.notificationsSupported,
+  /**
+   * Constructed with the daemon, and for the same reason: stock GNOME has
+   * libnotify and a notification service, and this test asks what the package
+   * ships on *that* desktop. A build machine without libnotify is not the
+   * desktop under test - measuring it here would make the GNOME-shaped
+   * assertion depend on which packages the runner happens to carry.
+   */
+  notificationsSupported: true,
   notificationOpensTheWindow: negative.notificationOpensTheWindow,
 });
 const shipsWithoutTray = assertPicoCompanionReachability(gnomeShapedDoors);
@@ -305,14 +329,33 @@ process.stdout.write('ADR 0130 E1: with no tray host, the package still ships th
   + `${shipsWithoutTray.join(' and ')}.\n`);
 removeTemporaryRoot(withoutHost);
 
-const sessionBus = dbusNameOwners([
-  'org.kde.StatusNotifierWatcher',
-  'org.freedesktop.Notifications',
-]);
+/**
+ * ADR 0130 E1's two-door rule against the desktop this actually runs on -
+ * and only when there is one.
+ *
+ * A desktop session names itself: every environment sets
+ * `XDG_CURRENT_DESKTOP`, and a build machine running an X server under
+ * `xvfb-run` does not. Without that test the rule would be applied to a
+ * runner whose bus was autolaunched by the first `gdbus` call and owns
+ * nothing - a machine with no tray host, no notification daemon and no
+ * person, which fails the contract for a reason that says nothing about the
+ * package. A gate that is expected to fail where it is run is a gate people
+ * learn to explain away (ADR 0113 C3 records what that costs).
+ */
+const namedDesktop = (process.env.XDG_CURRENT_DESKTOP ?? '').trim() !== '';
+const sessionBus = namedDesktop
+  ? dbusNameOwners([
+    'org.kde.StatusNotifierWatcher',
+    'org.freedesktop.Notifications',
+  ])
+  : null;
 if (sessionBus === null) {
-  process.stdout.write('ADR 0130 E1: no graphical desktop session here, so which doors '
-    + 'a desktop hosts was not measured. The product-side facts above were asserted; '
-    + 'run this on a desktop session to check the two-door contract.\n');
+  process.stdout.write(`ADR 0130 E1: ${namedDesktop
+    ? 'no session bus answered here'
+    : 'no desktop session names itself here'}, so which doors a desktop hosts was `
+    + 'not measured. The product-side facts above were asserted, and the '
+    + 'GNOME-shaped negative test ran; run this on a desktop session to check the '
+    + 'two-door contract against a real one.\n');
 } else {
   const doors = readPicoCompanionDoors({
     statusNotifierHost: sessionBus['org.kde.StatusNotifierWatcher'] === true
