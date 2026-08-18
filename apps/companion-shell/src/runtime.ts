@@ -258,6 +258,25 @@ export interface PicoCompanionShellRuntime {
     replacedDelegationId: string;
     validUntil: string;
   }>;
+  /**
+   * ADR 0130 E3 renewal across two devices, from whichever side this one is
+   * on. The sponsor reads the other device's code and renews; the device
+   * being renewed shows its code, takes the grant and waits for its Home.
+   */
+  renewDeviceOverCodes(input: {
+    offerCode: string;
+    validUntil: string;
+    exchange: (grantCode: string) => Promise<string>;
+  }): Promise<{
+    delegationId: string;
+    replacedDelegationId: string;
+    targetSigningKeyFingerprintHex: string;
+  }>;
+  offerOwnRenewal(): Promise<{ offerCode: string }>;
+  acceptOwnRenewal(grantCode: string): Promise<{
+    acceptanceCode: string;
+    confirm: () => Promise<{ delegationId: string }>;
+  }>;
   revokeDeviceAuthority(input: {
     targetDelegationId: string;
     reason: PicoCompanionDeviceRevocationReason;
@@ -923,6 +942,61 @@ export async function startPicoCompanionShellRuntime(input: {
           sodium: input.sodium,
           validUntil: picoCompanionFoundingDelegationValidUntil(new Date()),
         });
+      }),
+      renewDeviceOverCodes: async ({ offerCode, validUntil, exchange }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { renewPicoCompanionDeviceOverCodes } = await import('@pico/companion/enrolment');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await renewPicoCompanionDeviceOverCodes({
+          profile,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          offerCode,
+          validUntil,
+          exchange,
+        });
+      }),
+      offerOwnRenewal: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { offerPicoCompanionRenewal } = await import('@pico/companion/enrolment');
+        return await offerPicoCompanionRenewal({
+          profile: readPicoCompanionProfile(profilePath),
+          daemonClient,
+        });
+      }),
+      acceptOwnRenewal: async (grantCode) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { acceptPicoCompanionEnrolment, offerPicoCompanionRenewal } =
+          await import('@pico/companion/enrolment');
+        const profile = readPicoCompanionProfile(profilePath);
+        const offer = await offerPicoCompanionRenewal({ profile, daemonClient });
+        const accepted = await acceptPicoCompanionEnrolment({
+          // Unused on this path: the session is this runtime's, already open
+          // and already holding the keys the signature needs.
+          socketPath: '',
+          passphrase: '',
+          openSession: {
+            consumerClient: daemonClient,
+            close: async () => undefined,
+          },
+          grantCode,
+          profilePath,
+          sodium: input.sodium,
+          device: offer.device,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+        });
+        return {
+          acceptanceCode: accepted.acceptanceCode,
+          confirm: async () => ({
+            delegationId: (await accepted.confirm()).device.delegationId,
+          }),
+        };
       }),
       revokeDeviceAuthority: async ({ targetDelegationId, reason }) => await serialized(async () => {
         await input.automaticVaultUnlock?.ensureUnlocked();

@@ -9,6 +9,7 @@ import {
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceAuthorityEndedLine,
   picoCompanionDeviceAuthorityRenewedLine,
+  picoCompanionEnrolmentStepLine,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionHomeMemberAdmittedLine,
   picoCompanionMembershipEndedLine,
@@ -119,6 +120,8 @@ declare global {
         replacedDelegationId: string;
         validUntil: string;
       }>;
+      renewOtherDevice(source: string): Promise<void>;
+      renewFromOtherDevice(source: string): Promise<void>;
       endDeviceAuthority(delegationId: string, reason: string): Promise<{
         delegationId: string;
         endedThisDevice: boolean;
@@ -892,6 +895,8 @@ const deviceStatus = requireElement('device-status');
 const deviceAuthoritySummary = requireElement('device-authority-summary');
 const deviceAdd = requireButton('device-add');
 const deviceAddHow = requireElement('device-add-how');
+const deviceRenewOther = requireButton('device-renew-other');
+const deviceAddHint = requireElement('device-add-hint');
 const deviceAddCamera = requireButton('device-add-camera');
 const deviceAddTyped = requireButton('device-add-typed');
 
@@ -974,6 +979,7 @@ function refreshDevices(): void {
             );
           });
         },
+        () => openDeviceCodePanel('renew-mine'),
       );
       if (authority === undefined) {
         deviceAuthoritySummary.textContent = picoCompanionDeviceAuthorityUnavailable;
@@ -988,9 +994,28 @@ function refreshDevices(): void {
     });
 }
 
-deviceAdd.addEventListener('click', () => {
+/**
+ * ADR 0130 E3. One panel for the three walks that are the same three codes.
+ *
+ * The intent decides which one runs and which sentence the panel carries -
+ * adding and renewing somebody else's device start with reading their code,
+ * and renewing this one starts with showing ours. Three panels saying nearly
+ * the same thing would be three places for that sentence to drift.
+ */
+type PicoCompanionDeviceCodeIntent = 'add' | 'renew-other' | 'renew-mine';
+let deviceCodeIntent: PicoCompanionDeviceCodeIntent = 'add';
+
+function openDeviceCodePanel(intent: PicoCompanionDeviceCodeIntent): void {
+  deviceCodeIntent = intent;
+  deviceAddHow.dataset.intent = intent;
+  deviceAddHint.textContent = picoCompanionEnrolmentStepLine(
+    intent === 'renew-mine' ? 'show_offer' : 'read_offer',
+  ).body;
   deviceAddHow.hidden = false;
-});
+}
+
+deviceAdd.addEventListener('click', () => openDeviceCodePanel('add'));
+deviceRenewOther.addEventListener('click', () => openDeviceCodePanel('renew-other'));
 for (const [button, source] of [
   [deviceAddCamera, 'camera'],
   [deviceAddTyped, 'typed'],
@@ -998,10 +1023,19 @@ for (const [button, source] of [
   button.addEventListener('click', () => {
     button.disabled = true;
     deviceAddHow.hidden = true;
-    void window.picoCompanion.beginEnrolment(source).then(() => {
+    const intent = deviceCodeIntent;
+    const walked = intent === 'renew-mine'
+      ? window.picoCompanion.renewFromOtherDevice(source)
+      : intent === 'renew-other'
+        ? window.picoCompanion.renewOtherDevice(source)
+        : window.picoCompanion.beginEnrolment(source);
+    void walked.then(() => {
       refreshDevices();
     }, (error: unknown) => {
-      deviceStatus.textContent = refusalText(error, 'No device was added.');
+      deviceStatus.textContent = refusalText(
+        error,
+        intent === 'add' ? 'No device was added.' : 'Nothing was renewed.',
+      );
     }).finally(() => {
       button.disabled = false;
     });

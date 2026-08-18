@@ -82,6 +82,13 @@ export const picoCompanionIpcChannels = Object.freeze({
   /** ADR 0104. Another year for the device the person is holding. */
   renewDeviceAuthority: 'pico:device-authority:renew',
   /**
+   * ADR 0130 E3. The two-device renewal, from whichever side. `renewOther`
+   * runs on the device holding the identity key, `renewFromOtherDevice` on
+   * the one asking to keep working.
+   */
+  renewOtherDevice: 'pico:device-authority:renew-other',
+  renewFromOtherDevice: 'pico:device-authority:renew-mine',
+  /**
    * ADR 0130 E4. The Home rather than a device: who else lives in it, and the
    * keys it is known by.
    */
@@ -342,7 +349,9 @@ export type PicoCompanionEnrolmentStep =
   | 'read_grant'
   | 'show_acceptance'
   | 'waiting'
-  | 'joined';
+  | 'joined'
+  | 'renewed'
+  | 'kept';
 
 export function picoCompanionEnrolmentStepLine(
   step: PicoCompanionEnrolmentStep,
@@ -395,6 +404,18 @@ export function picoCompanionEnrolmentStepLine(
         title: 'Waiting for your Home',
         body: 'This device is not yours until your Home says so, so it is asking. If this '
           + 'stays here, the other device has not sent it yet.',
+      };
+    case 'renewed':
+      return {
+        title: 'That device keeps working',
+        body: 'Its authority runs for another year, and the one it had before is '
+          + 'retired. Nothing else changed.',
+      };
+    case 'kept':
+      return {
+        title: 'This device keeps working',
+        body: 'Your Home answers to it for another year. It is the same device with '
+          + 'the same keys; only the authority over them is new.',
       };
     case 'joined':
     default:
@@ -1559,6 +1580,12 @@ export interface PicoCompanionDeviceAuthorityLine {
   expiryWarning: string | null;
   /** Absent where renewal cannot be done from here. */
   renewLabel: string | null;
+  /**
+   * ADR 0130 E3. The other renewal: this device is not the one holding the
+   * identity key, so it asks the device that added it - the same three codes
+   * the enrolment used, in the same order.
+   */
+  renewFromOtherDeviceLabel: string | null;
   /** Absent when this row cannot be ended from here. */
   endLabel: string | null;
   /**
@@ -1642,6 +1669,11 @@ export function picoCompanionDeviceAuthorityLines(
       renewLabel: endable && device.isThisDevice
         ? 'Keep it working for another year'
         : null,
+      renewFromOtherDeviceLabel: !view.mayEndAuthority
+        && device.isThisDevice
+        && device.status === 'active'
+        ? 'Keep this device working, with your other one'
+        : null,
       endLabel: endable ? "End this device's authority" : null,
       endWarning: !endable
         ? null
@@ -1685,8 +1717,11 @@ function picoCompanionDeviceAuthorityExpiry(
     // Said rather than left as a control that is not there. The ceremony
     // needs the other device's own key, and holding two screens up to each
     // other for a renewal is not built yet.
-    : `That is ${when}, and renewing it has to happen with that device in front of `
-      + 'you. This window cannot do that yet.';
+    // Both devices have to be in the same room for this, and that is the whole
+    // instruction: the other one signs with its own key, which is what makes
+    // it that device's authority rather than a claim about it.
+    : `That is ${when}. Renewing it means holding the two screens up to each `
+      + 'other again, the way it was added.';
 }
 
 function picoCompanionDeviceAuthorityDetail(device: PicoCompanionDeviceAuthority): string {

@@ -234,6 +234,9 @@ describe('every view fetches what it shows', () => {
     // ADR 0130 E5's first finding: a member can be let out from the same page
     // that let them in.
     expect(renderer).toContain('renewDeviceAuthority()');
+    // ADR 0130 E3. Both halves of the two-device renewal, from one panel.
+    expect(renderer).toContain('renewOtherDevice(source)');
+    expect(renderer).toContain('renewFromOtherDevice(source)');
     expect(renderer).toContain('endHomeMembership(');
     expect(renderer).toContain('picoCompanionMembershipEndedLine(ended)');
     // The choice list is a closed switch, not an else: a third situation that

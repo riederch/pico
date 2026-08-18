@@ -227,10 +227,15 @@
       -->
       <div class="actions">
         <button id="device-add" type="button">Add another device</button>
+        <!--
+          ADR 0130 E3. The only path that keeps a second device working: one
+          whose year ran out can never be enrolled again, and cannot make new
+          keys without being wiped.
+        -->
+        <button id="device-renew-other" class="secondary" type="button">Renew another device</button>
       </div>
       <div id="device-add-how" hidden>
-        <p class="detail">The other device shows a code first. Pico reads it here,
-          answers with one of its own, and reads the answer back.</p>
+        <p id="device-add-hint" class="detail"></p>
         <div class="actions">
           <button id="device-add-camera" type="button">Read with camera</button>
           <button id="device-add-typed" class="secondary" type="button">Scanner or typing</button>

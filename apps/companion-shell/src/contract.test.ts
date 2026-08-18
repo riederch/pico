@@ -624,7 +624,7 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     expect(soon[0]?.expiryWarning).toContain('cannot renew itself');
     // Another device is a different answer, and it is said rather than left
     // as a control that is missing: the ceremony needs that device's own key.
-    expect(soon[1]?.expiryWarning).toContain('in front of');
+    expect(soon[1]?.expiryWarning).toContain('two screens');
     expect(soon[1]?.renewLabel).toBeNull();
     // A year away is not a warning.
     expect(soon[2]?.expiryWarning).toBeNull();
@@ -638,6 +638,38 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     expect(picoCompanionDeviceAuthorityLines(view([
       { delegationId: 'a', status: 'revoked' },
     ]))[0]?.expiryWarning).toBeNull();
+  });
+
+  it('offers the other renewal exactly where this device cannot renew itself', () => {
+    /**
+     * ADR 0130 E3. The device holding the identity key renews itself; one
+     * that does not has to ask the device that added it, over the same three
+     * codes. Measured against a running Home, that is the only path that
+     * keeps such a device working - one whose year ran out can never be
+     * enrolled again, and cannot make new keys without being wiped.
+     */
+    const delegated = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+      { delegationId: 'b', status: 'active' },
+    ], false));
+    expect(delegated[0]?.renewFromOtherDeviceLabel).toContain('your other one');
+    expect(delegated[0]?.renewLabel).toBeNull();
+    // Never on somebody else's row: that device asks for itself.
+    expect(delegated[1]?.renewFromOtherDeviceLabel).toBeNull();
+
+    // And never where this device can simply renew itself.
+    const founder = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+    ]));
+    expect(founder[0]?.renewFromOtherDeviceLabel).toBeNull();
+    expect(founder[0]?.renewLabel).not.toBeNull();
+
+    // The warning on another device now names the walk instead of a gap.
+    const soon = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'b', status: 'active', validUntil: '2027-01-10T00:00:00.000Z' },
+    ]), new Date('2027-01-01T00:00:00.000Z'));
+    expect(soon[0]?.expiryWarning).toContain('holding the two screens up');
+    expect(soon[0]?.expiryWarning).not.toContain('cannot do that yet');
   });
 
   it('offers renewal only where it can be done', () => {

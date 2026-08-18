@@ -1260,6 +1260,50 @@ function registerIpc(): void {
       }
     },
   );
+  /**
+   * ADR 0130 E3. The two-device renewal, and the only path that keeps a
+   * second device working: measured against a running Home, a device whose
+   * year ran out can never be enrolled again and cannot make new keys without
+   * being wiped.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.renewOtherDevice,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_in_progress');
+      }
+      const source = parsePicoCompanionFirstRunScanSource(value);
+      try {
+        productOperationActive = true;
+        await runRenewOtherDevice(source, runtime);
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.renewFromOtherDevice,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_in_progress');
+      }
+      const source = parsePicoCompanionFirstRunScanSource(value);
+      try {
+        productOperationActive = true;
+        await runRenewFromOtherDevice(source, runtime);
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
   ipcMain.handle(
     picoCompanionIpcChannels.endDeviceAuthority,
     async (event: IpcMainInvokeEvent, request: unknown) => {
@@ -1917,6 +1961,65 @@ async function runEnrolment(
     }, which is what that device showed you.`,
     observedAt: new Date().toISOString(),
   }));
+}
+
+/**
+ * ADR 0130 E3 renewal, from the device holding the identity key. Same three
+ * codes as an enrolment; what differs is what the Home is asked for.
+ */
+async function runRenewOtherDevice(
+  source: PicoCompanionFirstRunScanSource,
+  service: PicoCompanionShellRuntime,
+): Promise<void> {
+  const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
+  const offerCode = await readDeviceCode('read_offer', 'pico-device-offer-v1:', source);
+  await service.renewDeviceOverCodes({
+    offerCode,
+    validUntil: picoCompanionEnrolmentValidUntil(new Date()),
+    exchange: async (grantCode: string) => {
+      const shown = picoCompanionDeviceCode(grantCode);
+      await presentDeviceCode('show_grant', shown);
+      return await readDeviceCode(
+        'read_acceptance',
+        'pico-device-acceptance-v1:',
+        source,
+        shown,
+      );
+    },
+  });
+  await presentEnrolmentStep('renewed');
+}
+
+/**
+ * And from the device asking to keep working. It has keys, a profile and an
+ * open vault, so nothing is made here: it shows the keys it already has.
+ */
+async function runRenewFromOtherDevice(
+  source: PicoCompanionFirstRunScanSource,
+  service: PicoCompanionShellRuntime,
+): Promise<void> {
+  const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
+  const offer = await service.offerOwnRenewal();
+  const shownOffer = picoCompanionDeviceCode(offer.offerCode);
+  await presentDeviceCode('show_offer', shownOffer);
+  const grantCode = await readDeviceCode(
+    'read_grant',
+    'pico-device-grant-v1:',
+    source,
+    shownOffer,
+  );
+  const accepted = await service.acceptOwnRenewal(grantCode);
+  await presentDeviceCode(
+    'show_acceptance',
+    picoCompanionDeviceCode(accepted.acceptanceCode),
+  );
+  const waiting = presentEnrolmentStep('waiting');
+  try {
+    await accepted.confirm();
+  } finally {
+    await waiting;
+  }
+  await presentEnrolmentStep('kept');
 }
 
 /** The device that has nothing: it makes keys, signs, and waits to be let in. */

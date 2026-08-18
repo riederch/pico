@@ -404,6 +404,8 @@ export function renderPicoCompanionDevices(
   authority?: unknown,
   /** ADR 0104. Another year for this device; absent where it cannot be done. */
   renew?: () => void,
+  /** ADR 0130 E3. The same year, asked of the device that added this one. */
+  renewFromOther?: () => void,
 ): void {
   const devices = parsePicoCompanionDevices(value);
   const view = authority === undefined
@@ -479,7 +481,7 @@ export function renderPicoCompanionDevices(
     const authorityLine = unplaced.get(line.presenceId);
     if (authorityLine !== undefined) {
       unplaced.delete(line.presenceId);
-      item.append(deviceAuthorityBlock(root.document, authorityLine, act, renew));
+      item.append(deviceAuthorityBlock(root.document, authorityLine, act, renew, renewFromOther));
     }
     root.list.append(item);
   }
@@ -502,7 +504,7 @@ export function renderPicoCompanionDevices(
     detail.className = 'detail';
     detail.textContent = 'It has not said what it can do here.';
 
-    item.append(headline, detail, deviceAuthorityBlock(root.document, line, act, renew));
+    item.append(headline, detail, deviceAuthorityBlock(root.document, line, act, renew, renewFromOther));
     root.list.append(item);
   }
 }
@@ -525,6 +527,7 @@ function deviceAuthorityBlock(
     reason: PicoCompanionDeviceRevocationReasonLine['reason'];
   }) => void,
   renew?: () => void,
+  renewFromOther?: () => void,
 ): HTMLElement {
   const block = document.createElement('div');
   block.className = 'device-authority';
@@ -555,6 +558,21 @@ function deviceAuthorityBlock(
     renewButton.textContent = line.renewLabel;
     renewButton.addEventListener('click', () => renew());
     block.append(renewButton);
+  }
+
+  /**
+   * ADR 0130 E3. The other renewal, on the device that holds no identity key:
+   * it asks the device that added it, over the same three codes. Measured
+   * against a running Home, this is the only path that keeps such a device
+   * working - one whose year ran out can never be enrolled again.
+   */
+  if (line.renewFromOtherDeviceLabel !== null && renewFromOther !== undefined) {
+    const askButton = document.createElement('button');
+    askButton.type = 'button';
+    askButton.dataset.renewFromOther = line.delegationId;
+    askButton.textContent = line.renewFromOtherDeviceLabel;
+    askButton.addEventListener('click', () => renewFromOther());
+    block.append(askButton);
   }
 
   if (line.endLabel === null) {

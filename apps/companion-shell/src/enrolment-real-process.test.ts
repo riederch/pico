@@ -14,6 +14,7 @@ import {
   acceptPicoCompanionEnrolment,
   enrolPicoCompanionDevice,
   offerPicoCompanionEnrolment,
+  renewPicoCompanionDeviceOverCodes,
 } from '@pico/companion/enrolment';
 import {
   foundPicoCompanionHome,
@@ -370,6 +371,150 @@ describe('ADR 0130 E3 - a second device over camera and code', () => {
     expect(view.devices.find((device) => device.isThisDevice)?.delegationId)
       .toBe(targetProfile.device.delegationId);
     expect(view.mayEndAuthority).toBe(false);
+  }, 300_000);
+
+  it('renews the other device over the same three codes', async () => {
+    /**
+     * Measured against a running Home before this was built: a second device
+     * whose year runs out cannot be enrolled again *ever* - the `enroll`
+     * transition refuses a target whose keys the Home has known under this
+     * identity, before or after a revocation - and it cannot make new keys
+     * without its vault being wiped. The Recovery Card needs a fresh vault
+     * too and replaces the whole device set behind a 48-hour window. So this
+     * is the only path that keeps a second device working, and it has to
+     * happen while its authority is still active.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await sponsorDevice();
+    const sponsorProfile = readPicoCompanionProfile(profilePath);
+    const targetSocketPath = await startEmptyDaemon('target');
+    const targetProfilePath = join(tempDirectory('pico-enrol-target-'), 'profile.json');
+
+    const sponsorLink = async () => await createPicoCompanionLinkClient({
+      profile: sponsorProfile,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+
+    /** The exchange, which is the person carrying two screens. */
+    const carry = async (
+      offer: Awaited<ReturnType<typeof offerPicoCompanionEnrolment>>,
+      grantCode: string,
+    ) => await acceptPicoCompanionEnrolment({
+      socketPath: targetSocketPath,
+      passphrase: targetPassphrase,
+      grantCode,
+      profilePath: targetProfilePath,
+      sodium: sodium as unknown as VaultSodium,
+      decisions: { decideApproval: async () => true },
+      device: offer.device,
+    });
+
+    const first = await offerPicoCompanionEnrolment({
+      socketPath: targetSocketPath,
+      passphrase: targetPassphrase,
+    });
+    let accepted: Awaited<ReturnType<typeof acceptPicoCompanionEnrolment>> | null = null;
+    const enrolled = await enrolPicoCompanionDevice({
+      profile: sponsorProfile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: await sponsorLink(),
+      sodium: sodium as unknown as VaultSodium,
+      offerCode: first.offerCode,
+      validUntil: '2027-01-01T00:00:00.000Z',
+      exchange: async (grantCode) => {
+        accepted = await carry(first, grantCode);
+        return accepted.acceptanceCode;
+      },
+    });
+    const joined = await accepted!.confirm();
+    expect(joined.device.delegationId).toBe(enrolled.delegationId);
+
+    /**
+     * A year later, in one step: the same device shows its code again - its
+     * vault holds exactly the two device keys, so the offer is the same keys
+     * rather than new ones - and the sponsor renews instead of enrolling.
+     */
+    const again = await offerPicoCompanionEnrolment({
+      socketPath: targetSocketPath,
+      passphrase: targetPassphrase,
+    });
+    expect(again.device.signingKeyFingerprintHex)
+      .toBe(first.device.signingKeyFingerprintHex);
+
+    let renewedAccept: Awaited<ReturnType<typeof acceptPicoCompanionEnrolment>> | null = null;
+    const renewed = await renewPicoCompanionDeviceOverCodes({
+      profile: sponsorProfile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: await sponsorLink(),
+      sodium: sodium as unknown as VaultSodium,
+      offerCode: again.offerCode,
+      validUntil: '2028-01-01T00:00:00.000Z',
+      exchange: async (grantCode) => {
+        renewedAccept = await carry(again, grantCode);
+        return renewedAccept.acceptanceCode;
+      },
+    });
+    expect(renewed.replacedDelegationId).toBe(enrolled.delegationId);
+    expect(renewed.delegationId).not.toBe(enrolled.delegationId);
+
+    // The other device follows the Home rather than its own signature, the
+    // same as on its first day.
+    const renewedProfile = await renewedAccept!.confirm();
+    expect(renewedProfile.device.delegationId).toBe(renewed.delegationId);
+    expect(renewedProfile.device.signingKeyFingerprintHex)
+      .toBe(joined.device.signingKeyFingerprintHex);
+
+    const view = await readPicoCompanionDeviceAuthority({
+      profile: sponsorProfile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: await sponsorLink(),
+    });
+    const active = view.devices.filter((device) => device.status === 'active');
+    expect(active).toHaveLength(2);
+    expect(active.map((device) => device.delegationId)).toContain(renewed.delegationId);
+    expect(view.devices.find(
+      (device) => device.delegationId === enrolled.delegationId,
+    )?.status).toBe('revoked');
+    expect(active.find((device) => device.delegationId === renewed.delegationId)?.validUntil)
+      .toBe('2028-01-01T00:00:00.000Z');
+  }, 300_000);
+
+  it('refuses to renew a device the Home has no active authority for', async () => {
+    /**
+     * The two cases that end the same way for a person: a device the Home
+     * never knew, and one whose year already ran out. Neither is "try
+     * again" - that device has to be reset and added as a new one - so the
+     * refusal is one sentence rather than the ceremony's.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await sponsorDevice();
+    const sponsorProfile = readPicoCompanionProfile(profilePath);
+    const strangerSocketPath = await startEmptyDaemon('stranger');
+    const stranger = await offerPicoCompanionEnrolment({
+      socketPath: strangerSocketPath,
+      passphrase: targetPassphrase,
+    });
+
+    let asked = 0;
+    await expect(renewPicoCompanionDeviceOverCodes({
+      profile: sponsorProfile,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: await createPicoCompanionLinkClient({
+        profile: sponsorProfile,
+        daemonClient: session.consumerClient,
+        sodium: sodium as unknown as VaultSodium,
+      }),
+      sodium: sodium as unknown as VaultSodium,
+      offerCode: stranger.offerCode,
+      validUntil: '2028-01-01T00:00:00.000Z',
+      exchange: async () => {
+        asked += 1;
+        return '';
+      },
+    })).rejects.toThrow('no_active_authority');
+    // And the other device was never asked to sign anything.
+    expect(asked).toBe(0);
   }, 300_000);
 
   it('refuses an answer to a question it did not ask', async () => {

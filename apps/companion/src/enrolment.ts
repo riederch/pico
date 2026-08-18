@@ -20,6 +20,7 @@ import {
 import {
   enrollPicoHomeDevice,
   readPicoHomeDeviceLifecycle,
+  renewPicoHomeDevice,
 } from '@pico/vault-daemon/device-lifecycle-ceremony';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 import type { PicoCompanionApprovalDecisionPort } from './approval-carrier.js';
@@ -34,7 +35,10 @@ import {
   type PicoCompanionProfile,
 } from './profile.js';
 import { createPicoCompanionLinkClient } from './recovery-controller.js';
-import { openPicoCompanionVaultProductSession } from './vault-product-session.js';
+import {
+  openPicoCompanionVaultProductSession,
+  type PicoCompanionVaultProductSession,
+} from './vault-product-session.js';
 
 /**
  * ADR 0130 E3 - a second device, from the Client, over camera and code.
@@ -112,49 +116,8 @@ export async function enrolPicoCompanionDevice(input: {
     sponsorLinkClient: input.livingDeviceLinkClient,
     sodium: input.sodium,
     identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-    sponsor: {
-      identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
-      identityPublicKeyHex: input.profile.identity.publicKeyHex,
-      deviceSigningKeyFingerprintHex: input.profile.device.signingKeyFingerprintHex,
-      deviceKeyAgreementKeyFingerprintHex: input.profile.device.keyAgreementKeyFingerprintHex,
-      delegationId: input.profile.device.delegationId,
-    },
-    target: {
-      signing: {
-        keyRole: 'device_signing',
-        keyFingerprintHex: offer.device.signingKeyFingerprintHex,
-        publicKeyHex: offer.device.signingPublicKeyHex,
-      },
-      keyAgreement: {
-        keyRole: 'device_key_agreement',
-        keyFingerprintHex: offer.device.keyAgreementKeyFingerprintHex,
-        publicKeyHex: offer.device.keyAgreementPublicKeyHex,
-      },
-      signActivation: async (activation) => {
-        const grantCode = buildPicoDeviceEnrolmentGrant({
-          activation,
-          home: {
-            coreUrl: input.profile.coreUrl,
-            homeHostPicoIdentityFingerprintHex:
-              input.profile.home.homeHostPicoIdentityFingerprintHex,
-            host: { ...input.profile.host },
-            identity: { ...input.profile.identity },
-          },
-        });
-        const acceptance = parsePicoDeviceEnrolmentAcceptance(
-          await input.exchange(grantCode),
-        );
-        if (acceptance.activationId !== activation.activationId) {
-          /**
-           * An answer to a different question. It happens when somebody shows
-           * a code from an earlier attempt, and accepting it would submit a
-           * signature over bytes this ceremony never built.
-           */
-          throw new Error('pico_companion_enrolment_acceptance_is_for_another_activation');
-        }
-        return acceptance.targetSignatureHex;
-      },
-    },
+    sponsor: sponsorOf(input.profile),
+    target: targetSignerOverCodes(input.profile, offer.device, input.exchange),
     scopes: [...picoCompanionEnrolmentScopes],
     validUntil: input.validUntil,
   });
@@ -164,6 +127,155 @@ export async function enrolPicoCompanionDevice(input: {
     targetSigningKeyFingerprintHex:
       result.submission.evidence.targetDeviceSigningKeyFingerprintHex,
   });
+}
+
+/**
+ * ADR 0109 renewal for a device that is not this one - the only path that does
+ * not end in a reset.
+ *
+ * **Measured against a running Home before this was built:** a device whose
+ * year ran out cannot be enrolled again *ever* - the `enroll` transition
+ * refuses a target whose device keys the Home has known under this identity,
+ * before or after a revocation - and it cannot make new keys without its
+ * vault being wiped. The Recovery Card is not the escape either: it needs a
+ * fresh vault too and replaces the whole device set behind a 48-hour
+ * objection window. So this is the one way to keep a second device working,
+ * and it has to happen while its authority is still active.
+ *
+ * The exchange is the enrolment's, code for code. What differs is what the
+ * Home is asked for: the activation carries `action: 'renew'`, the delegation
+ * it replaces is the one the target already holds, and the same transition
+ * revokes it.
+ */
+export async function renewPicoCompanionDeviceOverCodes(input: {
+  profile: PicoCompanionProfile;
+  daemonClient: PicoVaultDaemonClient;
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  sodium: VaultSodium;
+  offerCode: string;
+  validUntil: string;
+  exchange: (grantCode: string) => Promise<string>;
+}): Promise<{
+  delegationId: string;
+  replacedDelegationId: string;
+  targetSigningKeyFingerprintHex: string;
+}> {
+  const offer = parsePicoDeviceEnrolmentOffer(input.offerCode);
+  if (offer.device.signingKeyFingerprintHex
+    === input.profile.device.signingKeyFingerprintHex) {
+    // This device renews itself without any of this (ADR 0104): root and
+    // target are one vault, and holding a screen up to itself is not a step.
+    throw new Error('pico_companion_enrolment_offer_is_this_device');
+  }
+
+  /**
+   * Which delegation is being replaced is read from the Home, not asked of
+   * the person: they are holding a device, not an id. It is matched on the
+   * keys the offer carries, which is the same thing the ceremony will check
+   * again before it signs anything.
+   */
+  const view = await readPicoHomeDeviceLifecycle(input.livingDeviceLinkClient, {
+    identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    sponsor: sponsorOf(input.profile),
+  });
+  const replaced = view.devices.find(
+    (device) => device.deviceSigningKeyFingerprintHex
+      === offer.device.signingKeyFingerprintHex
+      && device.status === 'active',
+  );
+  if (replaced === undefined) {
+    /**
+     * Either the Home never knew this device, or its year already ran out.
+     * Both end here rather than at the ceremony, because the answer for the
+     * person is the same and it is not "try again": that device has to be
+     * reset and added as a new one.
+     */
+    throw new Error('pico_companion_renewal_target_has_no_active_authority');
+  }
+
+  const result = await renewPicoHomeDevice({
+    rootClient: input.daemonClient,
+    sponsorLinkClient: input.livingDeviceLinkClient,
+    sodium: input.sodium,
+    identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    sponsor: sponsorOf(input.profile),
+    target: targetSignerOverCodes(input.profile, offer.device, input.exchange),
+    replacedDelegationId: replaced.delegationId,
+    scopes: [...picoCompanionEnrolmentScopes],
+    validUntil: input.validUntil,
+  });
+
+  return Object.freeze({
+    delegationId: result.submission.evidence.targetDelegationId,
+    replacedDelegationId: replaced.delegationId,
+    targetSigningKeyFingerprintHex:
+      result.submission.evidence.targetDeviceSigningKeyFingerprintHex,
+  });
+}
+
+function sponsorOf(profile: PicoCompanionProfile): {
+  identityKeyFingerprintHex: string;
+  identityPublicKeyHex: string;
+  deviceSigningKeyFingerprintHex: string;
+  deviceKeyAgreementKeyFingerprintHex: string;
+  delegationId: string;
+} {
+  return {
+    identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
+    identityPublicKeyHex: profile.identity.publicKeyHex,
+    deviceSigningKeyFingerprintHex: profile.device.signingKeyFingerprintHex,
+    deviceKeyAgreementKeyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
+    delegationId: profile.device.delegationId,
+  };
+}
+
+/**
+ * The target of a ceremony, across the person carrying two screens.
+ *
+ * One builder for enrolment and renewal, because the grant they hand over and
+ * the acceptance they take back are the same bytes in the same order - the
+ * only difference is inside the activation the ceremony built. Two copies
+ * would be two places for the binding between question and answer to drift.
+ */
+function targetSignerOverCodes(
+  profile: PicoCompanionProfile,
+  device: PicoCompanionEnrolmentOffer['device'],
+  exchange: (grantCode: string) => Promise<string>,
+): Parameters<typeof enrollPicoHomeDevice>[0]['target'] {
+  return {
+    signing: {
+      keyRole: 'device_signing',
+      keyFingerprintHex: device.signingKeyFingerprintHex,
+      publicKeyHex: device.signingPublicKeyHex,
+    },
+    keyAgreement: {
+      keyRole: 'device_key_agreement',
+      keyFingerprintHex: device.keyAgreementKeyFingerprintHex,
+      publicKeyHex: device.keyAgreementPublicKeyHex,
+    },
+    signActivation: async (activation) => {
+      const grantCode = buildPicoDeviceEnrolmentGrant({
+        activation,
+        home: {
+          coreUrl: profile.coreUrl,
+          homeHostPicoIdentityFingerprintHex:
+            profile.home.homeHostPicoIdentityFingerprintHex,
+          host: { ...profile.host },
+          identity: { ...profile.identity },
+        },
+      });
+      const acceptance = parsePicoDeviceEnrolmentAcceptance(await exchange(grantCode));
+      if (acceptance.activationId !== activation.activationId) {
+        /**
+         * An answer to a different question. It happens when somebody shows a
+         * code from an earlier attempt, and accepting it would submit a
+         * signature over bytes this ceremony never built.
+         */
+        throw new Error('pico_companion_enrolment_acceptance_is_for_another_activation');
+      }
+      return acceptance.targetSignatureHex;
+    },
+  };
 }
 
 /**
@@ -234,6 +346,44 @@ export async function offerPicoCompanionEnrolment(input: {
   }
 }
 
+/**
+ * ADR 0130 E3 renewal, from the device being renewed.
+ *
+ * It already has keys, a profile and an unlocked vault, so nothing is
+ * bootstrapped: the offer is built from what the daemon publishes for the
+ * exact keys the profile names. A device that made new keys here would be
+ * asking to join as a stranger, which is the thing the Home refuses for ever.
+ */
+export async function offerPicoCompanionRenewal(input: {
+  profile: PicoCompanionProfile;
+  daemonClient: PicoVaultDaemonClient;
+}): Promise<PicoCompanionEnrolmentOffer> {
+  const status = await input.daemonClient.status();
+  const signing = status.sessions.find(
+    (session) => session.keyRole === 'device_signing'
+      && session.keyFingerprintHex === input.profile.device.signingKeyFingerprintHex,
+  );
+  const agreement = status.sessions.find(
+    (session) => session.keyRole === 'device_key_agreement'
+      && session.keyFingerprintHex === input.profile.device.keyAgreementKeyFingerprintHex,
+  );
+  if (signing === undefined || agreement === undefined) {
+    // The public keys live inside the encrypted keyfiles, so this needs the
+    // vault open - which on a running device it is.
+    throw new Error('pico_companion_renewal_keys_are_locked');
+  }
+  const device = {
+    signingKeyFingerprintHex: signing.keyFingerprintHex,
+    signingPublicKeyHex: signing.publicKeyHex,
+    keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+    keyAgreementPublicKeyHex: agreement.publicKeyHex,
+  };
+  return Object.freeze({
+    offerCode: buildPicoDeviceEnrolmentOffer(device),
+    device,
+  });
+}
+
 export interface PicoCompanionEnrolmentAcceptance {
   acceptanceCode: string;
   grant: PicoDeviceEnrolmentGrant;
@@ -260,9 +410,22 @@ export async function acceptPicoCompanionEnrolment(input: {
   socketPath: string;
   passphrase: string;
   grantCode: string;
+  /**
+   * ADR 0130 E3 renewal. A device that is already running has its keys
+   * unlocked and its own daemon connection; asking for the passphrase again
+   * would be asking a person for something their keystore has been holding
+   * for them since they signed in. When this is given, the session is the
+   * caller's and is not closed here.
+   */
+  openSession?: PicoCompanionVaultProductSession;
   profilePath: string;
   sodium: VaultSodium;
-  decisions: PicoCompanionApprovalDecisionPort;
+  /**
+   * Who answers the approval this signature raises. Required when this opens
+   * the session; meaningless when `openSession` is given, because whoever
+   * opened that one is already answering for it.
+   */
+  decisions?: PicoCompanionApprovalDecisionPort;
   device: PicoCompanionEnrolmentOffer['device'];
   platformSecrets?: PicoCompanionPlatformSecretPort;
   platformUnlockPath?: string;
@@ -274,7 +437,11 @@ export async function acceptPicoCompanionEnrolment(input: {
   const grant = parsePicoDeviceEnrolmentGrant(input.grantCode);
   assertPicoDeviceEnrolmentGrantIsFor(grant, input.device, now());
 
-  const session = await openPicoCompanionVaultProductSession({
+  const ownSession = input.openSession === undefined;
+  if (ownSession && input.decisions === undefined) {
+    throw new Error('pico_companion_enrolment_needs_an_approver');
+  }
+  const session = input.openSession ?? await openPicoCompanionVaultProductSession({
     socketPath: input.socketPath,
     unlock: [
       {
@@ -288,9 +455,14 @@ export async function acceptPicoCompanionEnrolment(input: {
         passphrase: input.passphrase,
       },
     ],
-    decisions: input.decisions,
+    decisions: input.decisions!,
     ...(input.connect === undefined ? {} : { connect: input.connect }),
   });
+  const closeIfOurs = async (): Promise<void> => {
+    if (ownSession) {
+      await session.close();
+    }
+  };
 
   try {
     const signed = await session.consumerClient.sign({
@@ -360,7 +532,7 @@ export async function acceptPicoCompanionEnrolment(input: {
         // real to everything else here, and it must not exist before the Home
         // has agreed.
         writePicoCompanionProfile(input.profilePath, profile);
-        if (input.platformSecrets !== undefined) {
+        if (input.platformSecrets !== undefined && ownSession) {
           writePicoCompanionPlatformUnlock({
             path: input.platformUnlockPath
               ?? defaultPicoCompanionPlatformUnlockPath(input.profilePath),
@@ -369,15 +541,15 @@ export async function acceptPicoCompanionEnrolment(input: {
             secrets: input.platformSecrets,
           });
         }
-        await session.close();
+        await closeIfOurs();
         return profile;
       },
       close: async () => {
-        await session.close();
+        await closeIfOurs();
       },
     });
   } catch (error) {
-    await session.close();
+    await closeIfOurs();
     throw error;
   }
 }

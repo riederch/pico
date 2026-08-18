@@ -34,8 +34,21 @@ So the only way back for a second device that lapsed is to wipe its vault
 and add it as a new device. That is survivable - a delegated device holds no
 identity - but it is a reset, and nobody is told it is coming. **Renewing
 another device over the same three codes is therefore not a convenience; it
-is the only path that does not end in a reset**, and the warning this block
-added is the only thing standing in front of that cliff.
+is the only path that does not end in a reset.**
+
+Built the same day. The exchange is the enrolment's, code for code - one
+builder makes the grant and binds the acceptance for both, because the only
+difference is inside the activation the ceremony built. Which delegation is
+replaced is read from the Home by matching the keys the offer carries: a
+person is holding a device, not an id. A device the Home has no active
+authority for is refused before anybody is asked to sign, in what it means -
+without that, the person meets `renewal_target_is_not_active`, which is true
+about a record and useless about their laptop.
+
+The device being renewed signs with the vault it already has open, so it is
+not asked for a passphrase its keystore has been holding since sign-in, and
+its profile is rewritten from the Home's answer rather than from its own
+signature - the same rule its first day was held to.
 
 Status note, 2026-08-18: **renewal, because ADR 0104's year would otherwise
 end every device on a date the window shows.**
@@ -529,10 +542,9 @@ Node host beside each of them.
   and Platform Keystore binding, closing the ADR 0113 residual.
 - **E3 - Device lifecycle vertical (implemented):** delegate, enroll, renew,
   revoke, inspect - each under ADR 0099 approval and ADR 0106 rendering.
-  Inspect, revoke, enrolment and renewal of the device a person is holding
-  are product surfaces since 2026-08-18. Delegate is the primitive inside
-  enrolment rather than a surface of its own; renewing *another* device is
-  the same three codes with `action: 'renew'` and is not built.
+  Inspect, revoke, enrolment and renewal - of this device and of another one
+  over the same three codes - are product surfaces since 2026-08-18. Delegate
+  is the primitive inside enrolment rather than a surface of its own.
 - **E4 - Home continuity and membership vertical (implemented):**
   `rotate-host-key` and `issue-membership` as product surfaces, with the
   reading half that turned out to be missing: over Link a Home Host Pico
