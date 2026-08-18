@@ -84,7 +84,15 @@ describe('ADR 0130 E3 - the codes two devices show each other', () => {
 
   it('validates the activation with the builder the signature is taken over', () => {
     const code = buildPicoDeviceEnrolmentGrant({ activation, home });
-    expect(parsePicoDeviceEnrolmentGrant(code).activation).toEqual(activation);
+    const parsed = parsePicoDeviceEnrolmentGrant(code);
+    expect(parsed.activation).toEqual(activation);
+    /**
+     * The whole grant back, field for field. The format is a fixed element
+     * order with a flatten on one side and an unflatten on the other, and a
+     * round trip is the only thing that proves those two agree - a field read
+     * into the wrong slot would still parse, and would sign the wrong bytes.
+     */
+    expect(parsed.home).toEqual(home);
     // One definition of a valid activation, not a second one here.
     expect(() => buildPicoDeviceEnrolmentGrant({
       activation: { ...activation, expiresAt: activation.createdAt },
@@ -175,16 +183,21 @@ describe('ADR 0130 E3 - the codes two devices show each other', () => {
      * reads one of those, so this is measured against the same ceiling rather
      * than against a hope.
      */
-    const code = buildPicoDeviceEnrolmentGrant({ activation, home });
-    // Measured, not hoped: 2,536 characters, which is a dense QR and still
-    // well inside the 4,096 canonical bytes a Recovery Card is allowed - and
-    // a camera already reads one of those. The bound is a tripwire for a
-    // field that doubles it, not a guess at what fits.
-    expect(code.length).toBeLessThan(3_000);
-    expect(buildPicoDeviceEnrolmentOffer(device).length).toBeLessThan(700);
+    /**
+     * Measured, and the measurement is why this format is bytes rather than
+     * JSON. As JSON the grant was 2,536 characters: a version-37 QR at error
+     * correction L, and it did not fit at level M at all - the level the
+     * Recovery Card is printed at. As elements it is 1,079 characters, which
+     * is version 27 at M, and the same content.
+     *
+     * The bounds are tripwires for a field that doubles one of these, not
+     * guesses at what a camera can read.
+     */
+    expect(buildPicoDeviceEnrolmentGrant({ activation, home }).length).toBeLessThan(1_400);
+    expect(buildPicoDeviceEnrolmentOffer(device).length).toBeLessThan(300);
     expect(buildPicoDeviceEnrolmentAcceptance({
       activationId: activation.activationId,
       targetSignatureHex: 'ab'.repeat(64),
-    }).length).toBeLessThan(400);
+    }).length).toBeLessThan(250);
   });
 });

@@ -85,3 +85,79 @@ export function decodeBase64Url(body: string, charsetReason: string): Uint8Array
   }
   return bytes.subarray(0, written);
 }
+
+/**
+ * A length-prefixed element list, which is how this tree already carries a
+ * payload a camera has to read (the Recovery Card does the same).
+ *
+ * **JSON was the first version and it did not fit.** A grant is fifteen
+ * 32-byte values and a handful of short strings; spelled as hex inside JSON
+ * that is about 1,900 bytes, which is a version-37 QR at error correction L -
+ * and it does not fit at level M at all, which is the level the Recovery Card
+ * is printed at. The same content as bytes is about half that, and half is
+ * the difference between a code a camera reads and one it argues with.
+ */
+const MAX_ELEMENT_BYTES = 4_096;
+
+export function encodeCanonicalElements(elements: readonly Uint8Array[]): Uint8Array {
+  let total = 0;
+  for (const element of elements) {
+    if (element.byteLength > MAX_ELEMENT_BYTES) {
+      throw new Error('canonical_element_too_large');
+    }
+    total += 4 + element.byteLength;
+  }
+  const output = new Uint8Array(total);
+  const view = new DataView(output.buffer);
+  let offset = 0;
+  for (const element of elements) {
+    view.setUint32(offset, element.byteLength, false);
+    output.set(element, offset + 4);
+    offset += 4 + element.byteLength;
+  }
+  return output;
+}
+
+export function decodeCanonicalElements(
+  input: Uint8Array,
+  expectedElements: number,
+  reason: string,
+): Uint8Array[] {
+  const elements: Uint8Array[] = [];
+  const view = new DataView(input.buffer, input.byteOffset, input.byteLength);
+  let offset = 0;
+  while (offset < input.byteLength) {
+    if (elements.length >= expectedElements || offset + 4 > input.byteLength) {
+      throw new Error(reason);
+    }
+    const length = view.getUint32(offset, false);
+    if (length > MAX_ELEMENT_BYTES || offset + 4 + length > input.byteLength) {
+      throw new Error(reason);
+    }
+    elements.push(input.subarray(offset + 4, offset + 4 + length));
+    offset += 4 + length;
+  }
+  if (elements.length !== expectedElements) {
+    throw new Error(reason);
+  }
+  return elements;
+}
+
+export function picoHexToBytes(value: string, reason: string): Uint8Array {
+  if (typeof value !== 'string' || value.length % 2 !== 0 || !/^[0-9a-f]*$/u.test(value)) {
+    throw new Error(reason);
+  }
+  const bytes = new Uint8Array(value.length / 2);
+  for (let index = 0; index < bytes.byteLength; index += 1) {
+    bytes[index] = Number.parseInt(value.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+export function picoBytesToHex(bytes: Uint8Array): string {
+  let output = '';
+  for (const byte of bytes) {
+    output += byte.toString(16).padStart(2, '0');
+  }
+  return output;
+}

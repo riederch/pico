@@ -3,10 +3,13 @@ import {
   type PicoHomeDeviceActivationSignatureInput,
 } from './index.js';
 import {
-  canonicalJson,
   decodeBase64Url,
+  decodeCanonicalElements,
   encodeBase64Url,
+  encodeCanonicalElements,
   picoBase64UrlPattern,
+  picoBytesToHex,
+  picoHexToBytes,
 } from './canonical-transport.js';
 
 /**
@@ -107,53 +110,78 @@ export interface PicoDeviceEnrolmentAcceptance {
 export function buildPicoDeviceEnrolmentOffer(
   device: PicoDeviceEnrolmentDeviceKeys,
 ): string {
-  const offer: PicoDeviceEnrolmentOffer = {
-    schema: picoDeviceEnrolmentOfferSchema,
-    device: assertDeviceKeys(device),
-  };
-  return encode(picoDeviceEnrolmentOfferPrefix, offer);
+  const values: Record<string, string> = {};
+  flatten(assertDeviceKeys(device), '', values);
+  return encode(
+    picoDeviceEnrolmentOfferPrefix,
+    offerFields,
+    values,
+    'invalid_pico_device_enrolment_offer_keys',
+  );
 }
 
 export function parsePicoDeviceEnrolmentOffer(transport: string): PicoDeviceEnrolmentOffer {
-  const record = decode(transport, picoDeviceEnrolmentOfferPrefix, 'offer');
-  assertExactKeys(record, ['schema', 'device'], 'offer');
-  if (record.schema !== picoDeviceEnrolmentOfferSchema) {
-    throw new Error('invalid_pico_device_enrolment_offer_schema');
-  }
+  const values = decode(transport, picoDeviceEnrolmentOfferPrefix, offerFields, 'offer');
   return Object.freeze({
     schema: picoDeviceEnrolmentOfferSchema,
-    device: assertDeviceKeys(record.device as PicoDeviceEnrolmentDeviceKeys),
+    device: assertDeviceKeys(unflatten(values) as unknown as PicoDeviceEnrolmentDeviceKeys),
   });
 }
 
 export function buildPicoDeviceEnrolmentGrant(
   grant: Omit<PicoDeviceEnrolmentGrant, 'schema'>,
 ): string {
-  return encode(picoDeviceEnrolmentGrantPrefix, assertGrant({
-    schema: picoDeviceEnrolmentGrantSchema,
-    ...grant,
-  }));
+  const checked = assertGrant({ schema: picoDeviceEnrolmentGrantSchema, ...grant });
+  const values: Record<string, string> = {};
+  flatten({ activation: checked.activation, home: checked.home }, '', values);
+  return encode(
+    picoDeviceEnrolmentGrantPrefix,
+    grantFields,
+    values,
+    'invalid_pico_device_enrolment_grant_fields',
+  );
 }
 
 export function parsePicoDeviceEnrolmentGrant(transport: string): PicoDeviceEnrolmentGrant {
-  const record = decode(transport, picoDeviceEnrolmentGrantPrefix, 'grant');
-  return assertGrant(record as unknown as PicoDeviceEnrolmentGrant);
+  const values = decode(transport, picoDeviceEnrolmentGrantPrefix, grantFields, 'grant');
+  return assertGrant({
+    schema: picoDeviceEnrolmentGrantSchema,
+    ...unflatten(values),
+  } as unknown as PicoDeviceEnrolmentGrant);
 }
 
 export function buildPicoDeviceEnrolmentAcceptance(
   acceptance: Omit<PicoDeviceEnrolmentAcceptance, 'schema'>,
 ): string {
-  return encode(picoDeviceEnrolmentAcceptancePrefix, assertAcceptance({
+  const checked = assertAcceptance({
     schema: picoDeviceEnrolmentAcceptanceSchema,
     ...acceptance,
-  }));
+  });
+  return encode(
+    picoDeviceEnrolmentAcceptancePrefix,
+    acceptanceFields,
+    {
+      activationId: checked.activationId,
+      targetSignatureHex: checked.targetSignatureHex,
+    },
+    'invalid_pico_device_enrolment_acceptance_signature',
+  );
 }
 
 export function parsePicoDeviceEnrolmentAcceptance(
   transport: string,
 ): PicoDeviceEnrolmentAcceptance {
-  const record = decode(transport, picoDeviceEnrolmentAcceptancePrefix, 'acceptance');
-  return assertAcceptance(record as unknown as PicoDeviceEnrolmentAcceptance);
+  const values = decode(
+    transport,
+    picoDeviceEnrolmentAcceptancePrefix,
+    acceptanceFields,
+    'acceptance',
+  );
+  return assertAcceptance({
+    schema: picoDeviceEnrolmentAcceptanceSchema,
+    activationId: values.activationId!,
+    targetSignatureHex: values.targetSignatureHex!,
+  });
 }
 
 /**
@@ -194,40 +222,139 @@ export function assertPicoDeviceEnrolmentGrantIsFor(
   }
 }
 
-function encode(prefix: string, payload: unknown): string {
-  const bytes = new TextEncoder().encode(canonicalJson(payload));
+type ElementKind = 'hex' | 'text';
+
+/**
+ * The field order **is** the format, and it is written once per code.
+ *
+ * Build and parse both read this list, so the two cannot drift into a code
+ * one side writes and the other reads as something else - the failure that
+ * would otherwise show up as a signature nobody can explain.
+ */
+const offerFields: readonly (readonly [string, ElementKind])[] = [
+  ['signingKeyFingerprintHex', 'hex'],
+  ['signingPublicKeyHex', 'hex'],
+  ['keyAgreementKeyFingerprintHex', 'hex'],
+  ['keyAgreementPublicKeyHex', 'hex'],
+];
+
+const grantFields: readonly (readonly [string, ElementKind])[] = [
+  ['activation.suite', 'text'],
+  ['activation.activationId', 'text'],
+  ['activation.action', 'text'],
+  ['activation.homeId', 'text'],
+  ['activation.hostSigningKeyFingerprintHex', 'hex'],
+  ['activation.picoIdentityFingerprintHex', 'hex'],
+  ['activation.sponsorDelegationId', 'text'],
+  ['activation.sponsorDeviceSigningKeyFingerprintHex', 'hex'],
+  ['activation.sponsorDeviceKeyAgreementKeyFingerprintHex', 'hex'],
+  ['activation.targetDelegationId', 'text'],
+  ['activation.targetDeviceSigningKeyFingerprintHex', 'hex'],
+  ['activation.targetDeviceKeyAgreementKeyFingerprintHex', 'hex'],
+  ['activation.lifecycleEvidenceDigestHex', 'hex'],
+  ['activation.observedLifecycleOrder', 'text'],
+  ['activation.createdAt', 'text'],
+  ['activation.expiresAt', 'text'],
+  ['home.coreUrl', 'text'],
+  ['home.homeHostPicoIdentityFingerprintHex', 'hex'],
+  ['home.host.signingPublicKeyHex', 'hex'],
+  ['home.host.signingKeyFingerprintHex', 'hex'],
+  ['home.host.keyAgreementPublicKeyHex', 'hex'],
+  ['home.host.keyAgreementKeyFingerprintHex', 'hex'],
+  ['home.identity.keyFingerprintHex', 'hex'],
+  ['home.identity.publicKeyHex', 'hex'],
+];
+
+const acceptanceFields: readonly (readonly [string, ElementKind])[] = [
+  ['activationId', 'text'],
+  ['targetSignatureHex', 'hex'],
+];
+
+const textEncoder = new TextEncoder();
+
+function encode(
+  prefix: string,
+  fields: readonly (readonly [string, ElementKind])[],
+  values: Record<string, string>,
+  reason: string,
+): string {
+  const elements = fields.map(([key, kind]) => {
+    const value = values[key];
+    if (typeof value !== 'string') {
+      throw new Error(reason);
+    }
+    return kind === 'text' ? textEncoder.encode(value) : picoHexToBytes(value, reason);
+  });
+  const bytes = encodeCanonicalElements(elements);
   if (bytes.byteLength > maxPicoDeviceEnrolmentBytes) {
     throw new Error('pico_device_enrolment_code_too_large');
   }
   return `${prefix}${encodeBase64Url(bytes)}`;
 }
 
-function decode(transport: string, prefix: string, kind: string): Record<string, unknown> {
+function decode(
+  transport: string,
+  prefix: string,
+  fields: readonly (readonly [string, ElementKind])[],
+  kind: string,
+): Record<string, string> {
   if (typeof transport !== 'string' || !transport.startsWith(prefix)) {
     throw new Error(`invalid_pico_device_enrolment_${kind}_prefix`);
   }
+  const reason = `invalid_pico_device_enrolment_${kind}_body`;
   const body = transport.slice(prefix.length);
-  if (body.length === 0 || body.length % 4 === 1
-    || !picoBase64UrlPattern.test(body)) {
-    throw new Error(`invalid_pico_device_enrolment_${kind}_body`);
+  if (body.length === 0 || body.length % 4 === 1 || !picoBase64UrlPattern.test(body)) {
+    throw new Error(reason);
   }
-  const bytes = decodeBase64Url(body, `invalid_pico_device_enrolment_${kind}_body`);
-  if (bytes.byteLength > maxPicoDeviceEnrolmentBytes
-    || encodeBase64Url(bytes) !== body) {
+  const bytes = decodeBase64Url(body, reason);
+  if (bytes.byteLength > maxPicoDeviceEnrolmentBytes || encodeBase64Url(bytes) !== body) {
     // A second spelling of the same bytes is refused for the Recovery Card's
     // reason: two codes that mean one thing is one code too many.
-    throw new Error(`invalid_pico_device_enrolment_${kind}_body`);
+    throw new Error(reason);
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-  } catch {
-    throw new Error(`invalid_pico_device_enrolment_${kind}_body`);
+  const elements = decodeCanonicalElements(bytes, fields.length, reason);
+  const values: Record<string, string> = {};
+  for (const [index, [key, elementKind]] of fields.entries()) {
+    const element = elements[index]!;
+    if (elementKind === 'text') {
+      try {
+        values[key] = new TextDecoder('utf-8', { fatal: true }).decode(element);
+      } catch {
+        throw new Error(reason);
+      }
+    } else {
+      values[key] = picoBytesToHex(element);
+    }
   }
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new Error(`invalid_pico_device_enrolment_${kind}_body`);
+  return values;
+}
+
+function flatten(value: unknown, prefix: string, into: Record<string, string>): void {
+  if (typeof value !== 'object' || value === null) {
+    return;
   }
-  return parsed as Record<string, unknown>;
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    const path = prefix === '' ? key : `${prefix}.${key}`;
+    if (typeof entry === 'object' && entry !== null) {
+      flatten(entry, path, into);
+    } else if (typeof entry === 'string') {
+      into[path] = entry;
+    }
+  }
+}
+
+function unflatten(values: Record<string, string>): Record<string, unknown> {
+  const output: Record<string, unknown> = {};
+  for (const [path, value] of Object.entries(values)) {
+    const parts = path.split('.');
+    let cursor = output;
+    for (const part of parts.slice(0, -1)) {
+      cursor[part] ??= {};
+      cursor = cursor[part] as Record<string, unknown>;
+    }
+    cursor[parts[parts.length - 1]!] = value;
+  }
+  return output;
 }
 
 function assertExactKeys(
