@@ -40,10 +40,20 @@ and sockets. `PICO_TERMUX_APK=/path/to.apk` skips the download.
 
 ## Status
 
-2026-08-18: host baseline green (see the ADR 0131 status note for numbers).
-The on-device half is unrun: this development host cannot boot the Android
-emulator at all - emulator 36.3.10 *and* 37.2.5 SIGSEGV in their host
-renderer/scene path on Fedora 44 / kernel 7.1.8, in every GPU mode, with
-coredumps on record - so the runner waits for a real device or another host.
-The emulator numbers would have been weak evidence anyway: an x86_64 guest's
-argon2id timing says nothing about a phone.
+2026-08-18: **green on real hardware.** Samsung SM-A556B (Galaxy A55),
+Android 16, arm64, Termux Node v24: sodium ready 37 ms, keyfile create
+1218 ms / open 1011 ms at the vault's argon2id `moderate` profile, daemon on
+a pathname AF_UNIX socket, founding bootstrap 3.0 s, the whole ADR 0099
+approval loop with the signature verified against the canonical bytes, IPC
+round trip 0.877 ms mean. Host baseline (x86_64, Node 22) for comparison:
+create 833 ms / open 582 ms, IPC 0.36 ms.
+
+Termux Node is a *proxy* runtime - same kernel, filesystem, Bionic and V8
+family as the embedded runtime the product will use, but not that runtime.
+A1's remaining distance: the same run under nodejs-mobile in an APK, and the
+fixture suites (which need a dev-deps stage, not this `--prod` one).
+
+The Android emulator is not an option on this development host: 36.3.10 and
+37.2.5 both SIGSEGV in their host renderer/scene path on Fedora 44 / kernel
+7.1.8, in every GPU mode, coredumps on record. The runner targets whatever
+`adb` sees instead, which is the better evidence anyway.

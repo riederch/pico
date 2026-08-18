@@ -2,6 +2,28 @@
 
 ## Status
 
+Status note, 2026-08-18 (later): **the primitive path is green on real
+hardware.** Samsung SM-A556B (Galaxy A55), Android 16, arm64, kernel
+6.1.157-android14, via `tools/android-runtime-probe/run-on-device.sh` and a
+Termux-provided Node 24 as proxy runtime: sodium (WASM) ready in 37 ms,
+keyfile create 1218 ms / open 1011 ms at the vault's own argon2id `moderate`
+profile - an unlock on this phone is a one-second pause, not a failure -
+0600 keyfile modes held on the device filesystem, the ADR 0097 daemon
+listening on a pathname AF_UNIX socket in app-private storage, the founding
+bootstrap in 3.0 s, the whole ADR 0099 approval loop with the approved
+signature verified against the canonical bytes, and 0.877 ms mean per IPC
+round trip - the measured price of the custody split, per signing call, on
+the phone itself. What this is not: the embedded runtime. Termux Node
+shares the kernel, filesystem, Bionic and V8 family with nodejs-mobile but
+is not it, so A1 closes only when the same run and the fixture suites are
+green under the embedded runtime in an APK. Getting the stage onto the
+device taught three lessons the runner now encodes: a failing command
+substitution under `set -eo pipefail` ends a script with no message; a
+semicolon in `adb shell`'s unquoted middle layer splits there, running half
+a command outside `run-as`; and SELinux refuses hardlink creation under
+`run-as`, so pnpm's hardlinked store travels as copies while the symlink
+topology - which strict resolution depends on - stays intact.
+
 Status note, 2026-08-18: **the A2 fork is decided - a separate custody
 process - and the runtime direction with it.** Decided by the user, on the
 evidence this day produced: the closure measurement (62 modules, six Node

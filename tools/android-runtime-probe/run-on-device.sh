@@ -2,21 +2,21 @@
 # ADR 0131 A1 - runs probe.mjs on whatever Android device adb sees.
 #
 # A real phone over USB is the evidence this gate wants; an emulator only
-# answers the functional half (argon2id timings on an x86_64 guest say
-# nothing about a phone). Either way the run is: stage the shell-free core
-# with `pnpm deploy`, put a Node onto the device through the Termux *debug*
-# build - debuggable is what makes `run-as` work, so nothing here roots or
-# types into a UI - and execute the probe under the device's own filesystem
-# and sockets.
+# answers the functional half. The run: stage the shell-free core with
+# `pnpm deploy`, put a Node onto the device through the Termux *debug* build
+# (debuggable is what makes `run-as` work - nothing is rooted, no UI is
+# scripted), push the stage, execute the probe under the device's own
+# filesystem and sockets.
 #
-# What this script deliberately is not: a gate. It is run by hand, against
-# hardware this repository cannot assume, and its output is evidence to be
-# recorded - the same posture as the memory measurement scripts.
+# Deliberately not a gate: run by hand against hardware this repository
+# cannot assume, output recorded as evidence - the same posture as the
+# memory measurement scripts.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../.." && pwd)"
 stage="${PICO_PROBE_STAGE:-$(mktemp -d)/probe-stage}"
+work="$(dirname "$stage")"
 termux_apk="${PICO_TERMUX_APK:-}"
 
 die() { echo "$*" >&2; exit 1; }
@@ -28,12 +28,15 @@ echo "== staging the shell-free core (pnpm deploy)"
 rm -rf "$stage"
 (cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion deploy --prod "$stage")
 cp "$here/probe.mjs" "$stage/"
-tar -C "$(dirname "$stage")" -chf "$(dirname "$stage")/probe-stage.tar" "$(basename "$stage")"
+# Symlinks stay symlinks - the strict pnpm layout carries its transitive
+# resolution through their topology, and Termux's home holds them fine.
+# Hardlinks become copies, because SELinux refuses link() under run-as.
+tar -C "$work" -c --hard-dereference -f "$work/probe-stage.tar" "$(basename "$stage")"
 
-if ! adb shell pm list packages 2>/dev/null | grep -q '^package:com.termux$'; then
+if ! adb shell pm list packages 2>/dev/null | grep -q '^package:com.termux'; then
   if [ -z "$termux_apk" ]; then
     echo "== fetching the Termux debug build (debuggable, so run-as works)"
-    termux_apk="$(dirname "$stage")/termux-debug.apk"
+    termux_apk="$work/termux-debug.apk"
     url="$(curl -s https://api.github.com/repos/termux/termux-app/releases/latest \
       | grep -o 'https://[^"]*debug_universal\.apk' | head -1)"
     [ -n "$url" ] && curl -sL -o "$termux_apk" "$url" \
@@ -44,28 +47,45 @@ if ! adb shell pm list packages 2>/dev/null | grep -q '^package:com.termux$'; th
 fi
 
 echo "== waiting for the Termux bootstrap"
-adb shell am start -n com.termux/com.termux.app.TermuxActivity > /dev/null
+adb shell am start -n com.termux/com.termux.app.TermuxActivity > /dev/null 2>&1 || true
+count=0
 for _ in $(seq 1 60); do
-  count="$(adb shell run-as com.termux ls files/usr/bin 2>/dev/null | wc -l)"
-  [ "$count" -gt 10 ] && break
+  # `|| true`, because before the first launch finishes `run-as` exits
+  # non-zero - and under `set -eo pipefail` a failing command substitution
+  # in an assignment ends the script with no message at all. It did.
+  count="$(adb shell run-as com.termux ls files/usr/bin 2>/dev/null | wc -l || true)"
+  [ "${count:-0}" -gt 10 ] && break
   sleep 2
 done
-[ "$count" -gt 10 ] || die "Termux bootstrap did not appear (run-as failed?)"
+[ "${count:-0}" -gt 10 ] || die "Termux bootstrap did not appear (run-as failed?)"
 
-tenv='PREFIX=/data/data/com.termux/files/usr; HOME=/data/data/com.termux/files/home; PATH=$PREFIX/bin:$PATH; LD_LIBRARY_PATH=$PREFIX/lib; TMPDIR=$PREFIX/tmp; export PREFIX HOME PATH LD_LIBRARY_PATH TMPDIR;'
+# One env script on the device instead of quoting across three shells: the
+# host shell, the device shell `adb shell` hands its joined arguments to, and
+# the sh under run-as. A semicolon in the unquoted middle layer splits there,
+# which is how `pkg` once ran outside the Termux environment entirely.
+cat > "$work/pico-probe-env.sh" <<'ENV'
+#!/system/bin/sh
+PREFIX=/data/data/com.termux/files/usr
+HOME=/data/data/com.termux/files/home
+PATH=$PREFIX/bin:$PATH
+LD_LIBRARY_PATH=$PREFIX/lib
+TMPDIR=$PREFIX/tmp
+export PREFIX HOME PATH LD_LIBRARY_PATH TMPDIR
+exec "$@"
+ENV
+adb push "$work/pico-probe-env.sh" /data/local/tmp/pico-probe-env.sh > /dev/null
+termux() { adb shell "run-as com.termux sh /data/local/tmp/pico-probe-env.sh $*"; }
 
-if ! adb shell run-as com.termux sh -c "$tenv node --version" > /dev/null 2>&1; then
+if ! termux node --version > /dev/null 2>&1; then
   echo "== installing Node inside Termux (device network)"
-  adb shell run-as com.termux sh -c "$tenv yes | pkg install nodejs-lts" \
+  termux "sh -c 'yes | pkg install -y nodejs-lts'" \
     || die "pkg install nodejs-lts failed - check the device's network"
 fi
-echo "== node on device: $(adb shell run-as com.termux sh -c "$tenv node --version" | tr -d '\r')"
+echo "== node on device: $(termux node --version | tr -d '\r')"
 
 echo "== pushing the staged core"
-adb push "$(dirname "$stage")/probe-stage.tar" /data/local/tmp/probe-stage.tar > /dev/null
-adb shell run-as com.termux sh -c \
-  'cd files/home && rm -rf probe-stage && /system/bin/tar -xf /data/local/tmp/probe-stage.tar'
+adb push "$work/probe-stage.tar" /data/local/tmp/probe-stage.tar > /dev/null
+termux "sh -c 'cd \$HOME && rm -rf probe-stage && /system/bin/tar -xf /data/local/tmp/probe-stage.tar'"
 
 echo "== running the probe"
-adb shell run-as com.termux sh -c \
-  "$tenv cd \$HOME/probe-stage && node probe.mjs" | tee "$(dirname "$stage")/probe-device.log"
+termux "sh -c 'cd \$HOME/probe-stage && node probe.mjs'" | tee "$work/probe-device.log"
