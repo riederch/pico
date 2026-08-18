@@ -2,6 +2,24 @@
 
 ## Status
 
+Status note, 2026-08-18: **the A2 fork is decided - a separate custody
+process - and the runtime direction with it.** Decided by the user, on the
+evidence this day produced: the closure measurement (62 modules, six Node
+built-ins, WASM libsodium, nothing native) leaves an embedded Node runtime
+(nodejs-mobile) as the only candidate that hosts the shell-free core without
+rebuilding either the API layer or the crypto; that runtime hosts one Node
+instance per process and Android hosts processes per app freely, so the
+question this gate said A2 turns on - "whether that runtime can be hosted
+twice in one app" - is answered yes. The split's price is measured, not
+guessed: 0.36 ms per signing IPC round trip on the host baseline, plus a
+second instance's base memory, to be re-measured on hardware. What it buys is
+unlocked key material in a different address space from the process that
+parses model output and supplier content - the desktop boundary's own
+argument, on the more exposed device. A1 itself stays open until the fixture
+suites are green on a real device; the probe and its runner exist
+(`tools/android-runtime-probe/`).
+
+
 Status note, 2026-08-11: ADR 0136 gained an input for the open question
 this ADR frames as "what does a full client on Android have to say out
 loud". A library may be declared **essential**, meaning every Pico Vault
