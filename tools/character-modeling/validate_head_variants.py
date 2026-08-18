@@ -249,6 +249,9 @@ fitting_width = TAIL["pico_module_fitting_width"]
 fitting_thickness = TAIL["pico_module_fitting_thickness"]
 assert fitting_thickness < fitting_width * 0.42, (fitting_thickness, fitting_width)
 assert 0.20 < fitting_width < 0.34, fitting_width
+# the plate is a circle: both of its in-plane axes are equal
+assert TAIL["pico_module_fitting_is_circular"] is True
+assert abs(fitting.scale.x - fitting.scale.z) < 0.0005, tuple(fitting.scale)
 assert fitting.data.materials[0].name == "PICO_ZONE_shell"
 fitting_points = world_vertices(fitting)
 fitting_distances = [head_signed_distance(point) for point in fitting_points]
@@ -293,18 +296,20 @@ tip_spread = max(
 )
 assert 0.0 < tip_spread < 0.09, tip_spread
 
-# 11  broad at the fitting and through the arc, tapering towards the tip
+# 11  gathered at the fitting, broad through the arc, tapering to the tip
 band_width = TAIL["pico_module_band_width"]
 assert 0.19 < band_width < 0.30, band_width
 root_width = TAIL["pico_module_root_width"]
 arc_width = TAIL["pico_module_arc_width"]
 tip_width = TAIL["pico_module_tip_width"]
-# full width at the fitting and through the arc, then a controlled taper
-assert abs(arc_width - root_width) < 0.001, (root_width, arc_width)
-assert tip_width < root_width * 0.75, (root_width, tip_width)
-assert tip_width > root_width * 0.30, (root_width, tip_width)
+# A ponytail is held together where it leaves its tie and opens out after it.
+assert root_width < arc_width * 0.72, (root_width, arc_width)
+assert root_width > arc_width * 0.25, (root_width, arc_width)
+assert abs(arc_width - band_width) < 0.001, (arc_width, band_width)
+assert tip_width < arc_width * 0.75, (arc_width, tip_width)
+assert tip_width > arc_width * 0.30, (arc_width, tip_width)
 # and the shell really closes down to that width instead of ending full width
-assert tip_spread < root_width * 0.80, (tip_spread, root_width)
+assert tip_spread < arc_width * 0.80, (tip_spread, arc_width)
 
 # 12  a gentle but visible roll, one guide curve only
 twist_degrees = TAIL["pico_module_twist_degrees"]

@@ -148,6 +148,30 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
+### Face cut, ponytail and hands after the third review
+
+- The head is **cut off** at the front with a plane rather than softly
+  flattened, so the face is a genuinely flat area with the display set into
+  it. A plane cut needs no feather at all: outside the cut the shell is
+  already behind the plane, so those vertices are left alone and the rim falls
+  out as the natural intersection curve. Both face patches are therefore built
+  flat and measured off the cut, not off the round shell they no longer
+  follow.
+- The tail fitting is a circle. One radius drives both of its in-plane axes,
+  so `rootSpread` cannot stretch it back into an oval.
+- The hair leaves that plate **gathered**, the way a ponytail leaves its tie,
+  and opens out to full width over the first fifth of its length. It stays one
+  closed light guide throughout: ADR 0125 rules out a group of separate
+  strands, so the ponytail reading comes from the width profile, not from
+  splitting the band.
+- The hands are one piece, as on the concept board. `hand_shell` builds a
+  single closed mitten whose fingers are grooves and whose thumb is a lobe of
+  the same shell; its palm is cupped rather than a sphere, because a sphere
+  reads as a knob and a real hand is a shell with a hollow in it. Which way
+  the thumb lobe falls is derived from the frame against a world direction:
+  the two hands' palms face different ways, and a hand-picked sign got the
+  left thumb pointing outward.
+
 ### Head, chest and ears after the second review
 
 - The display is set into the helmet by one inset shared by the dark face and

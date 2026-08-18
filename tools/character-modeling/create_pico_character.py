@@ -811,51 +811,23 @@ def apply_dish(obj, centre, radius, depth):
     return obj
 
 
-def flatten_head_face_area(
-    obj, centre_y, radius_x, radius_y, support_profile,
-    offset, bulge, flattening, rim, clearance, margin=0.17,
-):
-    """Flatten the head shell across the display footprint and a little past it.
+def truncate_head_front(obj, cut_z):
+    """Cut the front off the head with a plane, the way a face is milled flat.
 
-    The display is set into the helmet, so the shell has to recede where it
-    sits; left fully round it simply pokes through the middle of the face.
-
-    The recess deliberately reaches past the frame's own rim. Stopped exactly
-    at the rim, shell and frame meet tangentially, and because neither mesh's
-    edges follow the other's outline that contact renders as a staircase. Held
-    `clearance` behind the frame all the way out and released only afterwards,
-    the two never touch and the seam reads as a clean panel gap.
+    A feathered flattening leaves the shell curved and merely pushed back, so
+    the display still sits on a dome. A plane cut gives a genuinely flat face
+    area, and its boundary needs no feather at all: outside the cut the shell
+    is already behind the plane, so those vertices are simply left alone and
+    the rim falls out as the natural intersection curve.
     """
     mesh = obj.data
     moved = 0
     for vertex in mesh.vertices:
-        x, y, z = vertex.co
-        if z <= 0.0:
-            continue
-        # the shared helper clamps at 1.0; here the region past the rim matters
-        normalized = (
-            (abs(x) / max(radius_x, 0.0001)) ** 2.4
-            + (abs(y - centre_y) / max(radius_y, 0.0001)) ** 2.4
-        ) ** (1.0 / 2.4)
-        if normalized >= 1.0 + margin:
-            continue
-        if normalized <= 1.0:
-            target = visor_surface_z(
-                x, y, centre_y, radius_x, radius_y, support_profile,
-                offset, bulge, flattening, rim,
-            ) - clearance
-        else:
-            release = (normalized - 1.0) / margin
-            release = release * release * (3.0 - 2.0 * release)
-            target = (
-                support_surface_z(support_profile, x, y)
-                - clearance * (1.0 - release)
-            )
-        if target < z:
-            vertex.co.z = target
+        if vertex.co.z > cut_z:
+            vertex.co.z = cut_z
             moved += 1
     mesh.update()
-    print(f"PICO_HEAD_FACE_FLATTENED_VERTICES={moved}")
+    print(f"PICO_HEAD_FRONT_CUT_VERTICES={moved}")
     return obj
 
 
@@ -1090,6 +1062,99 @@ def empty(name, location):
     return obj
 
 
+def hand_shell(
+    name, wrist, tip, palm_normal, half_width, half_thickness, mat, zone,
+    thumb_toward=(1.0, 0.0, 0.0), palm_hollow=0.62, thumb_lobe=0.42,
+    groove=0.46, along=34, around=48,
+):
+    """One closed, hollow-palmed hand: a mitten, not a ball with digits on it.
+
+    The concept hand is a single piece. Its fingers are grooves in one shell,
+    its palm is cupped, and it has no separate palm sphere: a sphere reads as a
+    knob, and a real hand is a shell with a hollow in it.
+    """
+    wrist = Vector(wrist)
+    forward = Vector(tip) - wrist
+    length = forward.length
+    forward.normalize()
+    axis_palm = Vector(palm_normal)
+    axis_palm = (axis_palm - forward * axis_palm.dot(forward)).normalized()
+    axis_side = forward.cross(axis_palm).normalized()
+    # Which way the thumb lobe falls follows from the frame, and the frame
+    # differs between the two hands because their palms face different ways.
+    # Deriving the side from a world direction keeps the thumb pointing at the
+    # body whatever the palm does; hand-picking a sign got the left one wrong.
+    thumb_side = 1.0 if axis_side.dot(Vector(thumb_toward)) >= 0.0 else -1.0
+
+    vertices = []
+    for ring in range(along + 1):
+        u = ring / along
+        centre = wrist + forward * (length * u)
+        # narrow at the wrist, widest across the knuckles, closing at the tip
+        width = half_width * (0.40 + 0.60 * math.sin(math.pi * min(1.0, 0.20 + u * 0.70)))
+        thick = half_thickness * (0.80 + 0.20 * math.sin(math.pi * min(1.0, u)))
+        if u > 0.86:
+            closing = (u - 0.86) / 0.14
+            taper = math.sqrt(max(0.0, 1.0 - closing * closing))
+            width *= max(0.03, taper)
+            thick *= max(0.03, taper)
+        # the thumb is a lobe of the same shell, not a stuck-on digit
+        thumb = thumb_lobe * math.exp(-(((u - 0.30) / 0.17) ** 2))
+        # the finger grooves only exist over the finger half
+        finger = min(1.0, max(0.0, (u - 0.46) / 0.24))
+        finger = finger * finger * (3.0 - 2.0 * finger)
+        if u > 0.86:
+            finger *= max(0.0, 1.0 - (u - 0.86) / 0.14) ** 0.8
+        for segment in range(around):
+            angle = 2.0 * math.pi * segment / around
+            cosine, sine = math.cos(angle), math.sin(angle)
+            # a flattened superellipse: a hand is not round in section
+            across = math.copysign(abs(cosine) ** (2.0 / 2.6), cosine)
+            depth = math.copysign(abs(sine) ** (2.0 / 2.6), sine)
+            local_width = width * (1.0 + thumb * max(0.0, across * thumb_side))
+            groove_factor = 0.5 - 0.5 * math.cos(3.0 * math.pi * across)
+            local_thick = thick * (1.0 - groove * finger * groove_factor)
+            point = centre + axis_side * (local_width * across) + axis_palm * (local_thick * depth)
+            # cup the palm: the palm-facing half is drawn back into the shell
+            hollow = (
+                palm_hollow * half_thickness
+                * math.exp(-(((u - 0.42) / 0.26) ** 2))
+                * math.exp(-((across / 0.85) ** 2))
+                * max(0.0, depth)
+            )
+            vertices.append(tuple(point - axis_palm * hollow))
+
+    faces = []
+    for ring in range(along):
+        current = ring * around
+        following = current + around
+        for segment in range(around):
+            nxt = (segment + 1) % around
+            faces.append((
+                current + segment, current + nxt,
+                following + nxt, following + segment,
+            ))
+    first_centre = len(vertices)
+    vertices.append(tuple(wrist))
+    last_centre = len(vertices)
+    vertices.append(tuple(wrist + forward * length))
+    last = along * around
+    for segment in range(around):
+        nxt = (segment + 1) % around
+        faces.append((first_centre, nxt, segment))
+        faces.append((last_centre, last + segment, last + nxt))
+
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    MODEL.objects.link(obj)
+    obj.parent = ROOT
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    return obj
+
+
 def make_arm(side):
     sign = -1.0 if side == "L" else 1.0
     if side == "L":
@@ -1130,48 +1195,19 @@ def make_arm(side):
         f"Trim.Wrist.{side}", wrist, (0.036, 0.039, 0.036),
         TRIM, "trim", segments=64, rings=40,
     )
-    uv_sphere(
-        f"Trim.Hand.{side}", palm, (0.072, 0.092, 0.067),
-        TRIM, "trim", segments=64, rings=40,
+    # One piece, as on the concept board: the fingers are grooves in a single
+    # shell and the palm is cupped. The palm faces inward and forward on the
+    # left, so the concept's exposed dark palm still reads.
+    palm_normal = (
+        (0.34, 0.0, 0.94) if side == "L" else (-0.62, 0.0, -0.78)
     )
-    # The concept deliberately shows two different readings: the left hand
-    # exposes its dark palm, while the right hand turns its light shell back
-    # toward the viewer.
-    if side == "R":
-        uv_sphere(
-            f"Shell.HandBack.{side}",
-            (palm.x, palm.y + 0.012, palm.z + 0.057),
-            (0.060, 0.068, 0.017),
-            SHELL, "shell", segments=64, rings=40,
-        )
-    finger_offsets = (-0.038, 0.0, 0.038)
-    for index, offset in enumerate(finger_offsets, start=1):
-        length_adjustment = 0.010 if offset == 0.0 else 0.0
-        finger_start = (
-            sign * (abs(palm.x) + offset),
-            palm.y - 0.044,
-            palm.z + 0.052,
-        )
-        finger_joint = (
-            sign * (abs(palm.x) + offset * 1.10),
-            palm.y - 0.078 - length_adjustment * 0.45,
-            palm.z + 0.064,
-        )
-        finger_end = (
-            sign * (abs(palm.x) + offset * 1.22),
-            palm.y - 0.116 - length_adjustment,
-            palm.z + 0.050,
-        )
-        curved_tapered_digit(
-            f"Trim.Finger{index}.{side}", finger_start, finger_joint, finger_end,
-            0.021, 0.015, TRIM, "trim",
-        )
-    thumb_start = (sign * (abs(palm.x) - 0.054), palm.y - 0.004, palm.z + 0.048)
-    thumb_joint = (sign * (abs(palm.x) - 0.080), palm.y - 0.030, palm.z + 0.066)
-    thumb_end = (sign * (abs(palm.x) - 0.094), palm.y - 0.064, palm.z + 0.052)
-    curved_tapered_digit(
-        f"Trim.Thumb.{side}", thumb_start, thumb_joint, thumb_end,
-        0.021, 0.014, TRIM, "trim",
+    hand_shell(
+        f"Trim.Hand.{side}",
+        wrist - (palm - wrist).normalized() * 0.012,
+        (palm.x + sign * 0.008, palm.y - 0.158, palm.z + 0.026),
+        palm_normal,
+        0.074, 0.036, TRIM, "trim",
+        thumb_toward=(-sign, 0.0, 0.30),
     )
 
 
@@ -1289,6 +1325,14 @@ def head_recipe_amounts(geometry):
     }
 
 
+# Where the hair leaves the plate it is held together, as a ponytail is by its
+# tie: it starts at this fraction of the full band width and opens out over
+# this fraction of its length. It stays one closed light guide throughout --
+# ADR 0125 rules out a group of separate strands.
+GATHER_WIDTH = 0.46
+GATHER_LENGTH = 0.20
+
+
 def rear_ribbon_guide(support_profile, amounts):
     """The single source of the rear-ribbon fitting, guide curve and frames.
 
@@ -1315,8 +1359,11 @@ def rear_ribbon_guide(support_profile, amounts):
     # The plate sits on the centre line of the crown; `side` still shifts it,
     # but no longer off a constant lateral offset the concept does not have.
     fitting_x = side_amount * 0.055
-    fitting_half_length = 0.075 + root_spread * 0.42
-    fitting_half_width = 0.082 + root_spread * 0.44
+    # The plate is a circle. One radius drives both of its in-plane axes, so
+    # `rootSpread` can never stretch it back into an oval.
+    fitting_radius = 0.080 + root_spread * 0.43
+    fitting_half_length = fitting_radius
+    fitting_half_width = fitting_radius
     fitting_half_thickness = 0.028 + root_spread * 0.115
     # A rear-flowing ribbon roots on the rear half of the crown. `anchor`
     # still slides the plate, but within that half: rooted further forward the
@@ -1462,10 +1509,14 @@ def rear_ribbon_guide(support_profile, amounts):
     twist_degrees = 150.0 + 44.0 * twist_amount
 
     def width_envelope(amount):
-        # Broad at the fitting and through the whole top arc, then a
-        # controlled taper towards the rounded tip.
+        # A ponytail is gathered where it leaves its fitting and only opens
+        # out afterwards. Full width from the top arc on, then a controlled
+        # taper towards the rounded tip.
+        gather = GATHER_WIDTH + (1.0 - GATHER_WIDTH) * min(
+            1.0, (amount / GATHER_LENGTH) ** 0.75
+        )
         late = max(0.0, (amount - 0.42) / 0.58)
-        return 1.0 - 0.58 * taper_amount * late ** 1.20
+        return gather * (1.0 - 0.58 * taper_amount * late ** 1.20)
 
     steps = max(96, segments * 20)
     frames = ribbon_transport_frames(
@@ -1481,6 +1532,7 @@ def rear_ribbon_guide(support_profile, amounts):
         # surface point instead is what keeps the plate low but visible.
         "fitting_centre": crown_point(fitting_x, fitting_z),
         "fitting_normal": fitting_normal,
+        "fitting_radius": fitting_radius,
         "fitting_half_width": fitting_half_width,
         "fitting_half_thickness": fitting_half_thickness,
         "embed": embed,
@@ -1747,8 +1799,8 @@ def make_procedural_head_variant(
             - guide["fitting_normal"] * guide["fitting_half_thickness"] * 0.42,
             guide["fitting_normal"],
             fitting_along,
-            guide["fitting_half_width"] * 0.92,
-            fitting_along.length * 0.52,
+            guide["fitting_radius"] * 0.92,
+            guide["fitting_radius"] * 0.92,
             guide["fitting_half_thickness"] * 0.72,
             TRIM,
             "trim",
@@ -1763,8 +1815,8 @@ def make_procedural_head_variant(
             fitting_centre,
             guide["fitting_normal"],
             fitting_along,
-            guide["fitting_half_width"],
-            fitting_along.length * 0.56,
+            guide["fitting_radius"],
+            guide["fitting_radius"],
             guide["fitting_half_thickness"],
             SHELL,
             "trim",
@@ -1849,6 +1901,7 @@ def make_procedural_head_variant(
         target["pico_module_root_width"] = (
             ribbon_base_width * width_envelope(0.0) * 2.0
         )
+        target["pico_module_fitting_is_circular"] = True
         target["pico_module_arc_width"] = (
             ribbon_base_width * width_envelope(0.30) * 2.0
         )
@@ -2243,43 +2296,35 @@ HEAD_SHELL = revolved_mesh("Shell.Head", head_profile, SHELL, "shell", interpola
 FACE_CENTRE_Y = -0.035
 FACE_RADIUS_X = 0.347
 FACE_RADIUS_Y = 0.253
-# The display and its frame move back into the helmet together. One inset
-# keeps them a single assembly: shifting them apart would open a step between
-# the dark face and its trim.
-# The display sits deep enough to read as set into the helmet. A straight
-# offset alone tops out near 0.02, where the round shell starts to break
-# through the middle of the face, so the shell is flattened across the display
-# footprint instead of the display being kept shallow.
-FACE_INSET = 0.030
-FACE_SHELL_CLEARANCE = 0.005
 FACE_FRAME_RADIUS_X = 0.360
 FACE_FRAME_RADIUS_Y = 0.263
 FACE_FRAME_BULGE = 0.007
-FACE_FRAME_FLATTENING = 0.40
-FACE_OFFSET = 0.010 - FACE_INSET
+# The head is cut off at the front with a plane, and the display assembly sits
+# in that cut. The cut reaches a little past the frame, so the face is a flat
+# area with the display set into it rather than a dome with a panel on top.
+# Both patches are therefore built flat (`flattening = 1.0`) and measured off
+# the cut, not off the round shell they no longer follow.
+HEAD_CENTRE_DEPTH = support_surface_z(head_profile, 0.0, FACE_CENTRE_Y)
+HEAD_CUT_MARGIN = 1.05
+HEAD_CUT_Z = support_surface_z(
+    head_profile, FACE_FRAME_RADIUS_X * HEAD_CUT_MARGIN, FACE_CENTRE_Y,
+)
+FACE_FRAME_FLATTENING = 1.0
+FACE_FRAME_OFFSET = HEAD_CUT_Z - HEAD_CENTRE_DEPTH + 0.004
+FACE_OFFSET = FACE_FRAME_OFFSET + 0.005
 FACE_BULGE = 0.009
-# The head reads as a helmet, not a ball, when the face area is noticeably
-# flatter than the shell around it.
-FACE_FLATTENING = 0.46
-# The frame returns to the plain shell across its outer rim, so the face has a
-# rounded transition instead of the hard edge the first proposal cut.
-FACE_FRAME_RIM = 0.44
-FACE_FRAME_OFFSET = 0.005 - FACE_INSET
+FACE_FLATTENING = 1.0
 superellipse_patch(
     "Trim.VisorFrame", FACE_CENTRE_Y, FACE_FRAME_RADIUS_X, FACE_FRAME_RADIUS_Y,
     head_profile, FACE_FRAME_OFFSET, FACE_FRAME_BULGE, FACE_FRAME_FLATTENING,
-    TRIM, "trim", rim=FACE_FRAME_RIM,
+    TRIM, "trim",
 )
 superellipse_patch(
     "FaceDisplay.Visor", FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, head_profile,
     FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
     FACE, "face_display",
 )
-flatten_head_face_area(
-    HEAD_SHELL, FACE_CENTRE_Y, FACE_FRAME_RADIUS_X, FACE_FRAME_RADIUS_Y,
-    head_profile, FACE_FRAME_OFFSET, FACE_FRAME_BULGE, FACE_FRAME_FLATTENING,
-    FACE_FRAME_RIM, FACE_SHELL_CLEARANCE,
-)
+truncate_head_front(HEAD_SHELL, HEAD_CUT_Z)
 
 # A real neck remains visible between head and torso. It is trim, not a status
 # emitter, so state colour cannot silently recolour the character structure.
