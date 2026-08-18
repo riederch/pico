@@ -8,6 +8,35 @@ the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
 
+Status note, 2026-08-18: **what a second device costs if its year runs
+out - measured, because the Home and the Recovery Card look like they
+already cover it and they do not.**
+
+- **Renewal** wants the replaced delegation *active*
+  (`event-store.ts`: `replaced?.status !== 'active'` is an
+  `invalid_transition`), so it stops being possible on the day, and it is
+  not built for another device at all.
+- **Enrolling the same device again is refused for ever.** The `enroll`
+  transition refuses a target whose device keys the Home has *ever* known
+  under that identity - not "has an active delegation", known at all. Tried
+  against a running Home: refused. Tried again after revoking it first:
+  refused.
+- **The device cannot make new keys either** without being wiped: the
+  bootstrap needs a fresh vault, and the resume path deliberately re-offers
+  the keys it already has, so an interrupted enrolment can finish.
+- **The Recovery Card is the wrong tool and says so in its own rules.** It
+  needs a fresh vault too, it restores the *identity root* onto that device,
+  and it asks the Home to replace the whole device set behind a 48-hour
+  objection window. Using it to fix one expired phone costs every other
+  device and two days.
+
+So the only way back for a second device that lapsed is to wipe its vault
+and add it as a new device. That is survivable - a delegated device holds no
+identity - but it is a reset, and nobody is told it is coming. **Renewing
+another device over the same three codes is therefore not a convenience; it
+is the only path that does not end in a reset**, and the warning this block
+added is the only thing standing in front of that cliff.
+
 Status note, 2026-08-18: **renewal, because ADR 0104's year would otherwise
 end every device on a date the window shows.**
 
