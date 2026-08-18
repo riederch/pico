@@ -30,6 +30,13 @@ Nothing here is a production Character asset:
   manifest contract: one linked core library, 28 stubs in manifest order,
   antenna/hair exclusivity, one status material across the whole status group,
   context colour outside the status group and clothing as an overlay.
+- `export_demo_viewer.py` writes a self-contained WebGL demo viewer to
+  `/tmp/pico-demo-viewer`, using `demo-viewer/viewer-template.html` as its
+  page. The viewer shows the authored core, switches each part group on and
+  off, keeps the three head identities mutually exclusive and recolours the
+  whole `status_emitters` zone at once. Its geometry is decimated to a
+  triangle budget and travels inside the page, so it is a picture of the
+  checkpoint and never a second source for it.
 - `render_inspection.py` produces the reference, front, side, rear, top and
   bottom inspection views from an opened checkpoint.
 - `validate_head_variants.py` checks the authored head mount, geometry bounds

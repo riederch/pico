@@ -1,0 +1,827 @@
+<meta charset="utf-8">
+<title>Pico Bauteilprüfstand</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground: #eef2f7;
+    --stage: #0a121d;
+    --surface: #ffffff;
+    --surface-sunk: #e6ecf4;
+    --line: #cdd8e6;
+    --line-soft: #dee6f0;
+    --ink: #14202f;
+    --ink-dim: #4a5d74;
+    --muted: #6b7f96;
+    --status: #1976c9;
+    --status-soft: #d3e7fa;
+    --personal: #6f5cc9;
+    --personal-soft: #e2ddf7;
+    --warn: #8a6412;
+    --warn-soft: #f7ecd3;
+    --focus: #1976c9;
+
+    --step--1: 0.78rem;
+    --step-0: 0.92rem;
+    --step-1: 1.06rem;
+    --step-2: 1.35rem;
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #070d16;
+      --stage: #070d16;
+      --surface: #0e1725;
+      --surface-sunk: #0a1220;
+      --line: #1e2c3f;
+      --line-soft: #172333;
+      --ink: #dbe6f2;
+      --ink-dim: #a3b5ca;
+      --muted: #7f93aa;
+      --status: #3aa7ff;
+      --status-soft: #10293f;
+      --personal: #8a7ae0;
+      --personal-soft: #211d3a;
+      --warn: #d6a13a;
+      --warn-soft: #2b2312;
+      --focus: #3aa7ff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #070d16;
+    --stage: #070d16;
+    --surface: #0e1725;
+    --surface-sunk: #0a1220;
+    --line: #1e2c3f;
+    --line-soft: #172333;
+    --ink: #dbe6f2;
+    --ink-dim: #a3b5ca;
+    --muted: #7f93aa;
+    --status: #3aa7ff;
+    --status-soft: #10293f;
+    --personal: #8a7ae0;
+    --personal-soft: #211d3a;
+    --warn: #d6a13a;
+    --warn-soft: #2b2312;
+    --focus: #3aa7ff;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; font-weight: 600; }
+
+  .shell {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: clamp(16px, 3vw, 32px);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  header { display: flex; flex-direction: column; gap: 6px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  h1 { font-size: var(--step-2); letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--ink-dim); max-width: 62ch; }
+
+  .notice {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 10px 14px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--warn);
+    background: var(--warn-soft);
+    color: var(--ink);
+    font-size: var(--step--1);
+  }
+  .notice b { font-weight: 600; }
+
+  .instrument {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 18px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .instrument { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .stage {
+    position: relative;
+    border: 1px solid var(--line);
+    background: var(--stage);
+    overflow: hidden;
+    aspect-ratio: 4 / 3;
+  }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  canvas:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+  .stage-hint {
+    position: absolute;
+    left: 12px;
+    bottom: 10px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    color: #7f93aa;
+    pointer-events: none;
+  }
+  .stage-actions {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    display: flex;
+    gap: 6px;
+  }
+
+  button {
+    font: inherit;
+    font-size: var(--step--1);
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--status); color: var(--status); }
+  button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .stage-actions button { background: rgba(14, 23, 37, 0.82); color: #dbe6f2; border-color: #1e2c3f; }
+  .stage-actions button:hover { color: #3aa7ff; border-color: #3aa7ff; }
+
+  .rail { display: flex; flex-direction: column; gap: 14px; }
+  .panel { border: 1px solid var(--line); background: var(--surface); }
+  .panel > h2 {
+    font-size: var(--step--1);
+    font-family: var(--mono);
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line-soft);
+    font-weight: 500;
+  }
+  .panel-body { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    padding: 8px 8px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    text-align: left;
+    background: none;
+    width: 100%;
+  }
+  .row:hover { background: var(--surface-sunk); border-color: var(--line-soft); color: inherit; }
+  .row:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+  .row[aria-pressed="false"] .row-name,
+  .row[aria-checked="false"] .row-name { color: var(--muted); }
+  .row-name { font-size: var(--step-0); line-height: 1.25; }
+  .row-hint { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .row-count {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mark {
+    width: 16px; height: 16px;
+    border: 1px solid var(--line);
+    background: var(--surface-sunk);
+    display: grid; place-items: center;
+  }
+  .row[aria-pressed="true"] .mark::after,
+  .row[aria-checked="true"] .mark::after {
+    content: "";
+    width: 8px; height: 8px;
+    background: var(--swatch, var(--status));
+  }
+  .radio .mark { border-radius: 50%; }
+  .radio .mark::after { border-radius: 50%; }
+
+  .swatches { display: flex; gap: 6px; padding: 8px 10px 12px; flex-wrap: wrap; }
+  .swatch {
+    width: 30px; height: 22px;
+    border: 1px solid var(--line);
+    padding: 0;
+    cursor: pointer;
+  }
+  .swatch[aria-pressed="true"] { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .swatch-note { padding: 0 14px 12px; font-size: 0.74rem; color: var(--muted); }
+
+  .readout {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 1px;
+    background: var(--line-soft);
+    border: 1px solid var(--line);
+  }
+  .cell { background: var(--surface); padding: 10px 14px; }
+  .cell dt {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .cell dd {
+    margin: 3px 0 0;
+    font-family: var(--mono);
+    font-size: var(--step-1);
+    font-variant-numeric: tabular-nums;
+  }
+
+  footer { color: var(--muted); font-size: var(--step--1); max-width: 74ch; }
+  footer code { font-family: var(--mono); font-size: 0.95em; color: var(--ink-dim); }
+  .fail { padding: 24px; color: var(--warn); font-family: var(--mono); font-size: var(--step--1); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="shell">
+  <header>
+    <span class="eyebrow">Character Core v0 &middot; Prüfstand</span>
+    <h1>Pico, in seine Bauteile zerlegt</h1>
+    <p>
+      Der autorisierte Core aus dem Blender-Checkpoint. Ziehen dreht, Rad zoomt.
+      Rechts lässt sich jede Bauteilgruppe einzeln zu- und abschalten — die
+      Kopfidentität als Auswahl, weil sich die drei gegenseitig ausschließen.
+    </p>
+  </header>
+
+  <p class="notice">
+    <b>Diagnostisch, nicht freigegeben.</b>
+    <span>
+      Dezimierte Ansicht eines unfreigegebenen Autorenstands. Kein Produkt-Asset,
+      keine Laufzeit, keine Character-Freigabe.
+    </span>
+  </p>
+
+  <div class="instrument">
+    <div class="stage">
+      <canvas id="stage" tabindex="0" aria-label="Dreidimensionale Ansicht von Pico"></canvas>
+      <div class="stage-actions">
+        <button type="button" id="reset">Ansicht zurück</button>
+        <button type="button" id="all">Alles zeigen</button>
+      </div>
+      <span class="stage-hint">ziehen: drehen &middot; rad: zoom</span>
+    </div>
+
+    <div class="rail">
+      <section class="panel">
+        <h2>Bauteilgruppen</h2>
+        <div class="panel-body" id="components"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Kopfidentität</h2>
+        <div class="panel-body" id="heads" role="radiogroup" aria-label="Kopfidentität"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Statusfarbe</h2>
+        <div class="swatches" id="statusColours"></div>
+        <p class="swatch-note">
+          Setzt alle Flächen der Zone <code>status_emitters</code> gemeinsam.
+          Eine Statusgruppe zeigt immer genau eine Farbe.
+        </p>
+      </section>
+    </div>
+  </div>
+
+  <dl class="readout">
+    <div class="cell"><dt>Sichtbare Teile</dt><dd id="mParts">–</dd></div>
+    <div class="cell"><dt>Dreiecke</dt><dd id="mTris">–</dd></div>
+    <div class="cell"><dt>Kopfidentität</dt><dd id="mHead">–</dd></div>
+    <div class="cell"><dt>Höhe (Einheiten)</dt><dd id="mHeight">–</dd></div>
+  </dl>
+
+  <footer id="foot"></footer>
+</div>
+
+<script id="model" type="application/json">__PICO_MODEL_DATA__</script>
+<script>
+(function () {
+  "use strict";
+
+  var MODEL = JSON.parse(document.getElementById("model").textContent);
+  var canvas = document.getElementById("stage");
+  var gl = canvas.getContext("webgl", { antialias: true, alpha: false });
+
+  function fail(message) {
+    canvas.parentNode.innerHTML = '<p class="fail">' + message + "</p>";
+  }
+  if (!gl) {
+    fail("Dieser Browser stellt kein WebGL bereit, deshalb bleibt die Ansicht leer.");
+    return;
+  }
+
+  /* ---- model buffers ------------------------------------------------- */
+
+  function decode(base64) {
+    var binary = atob(base64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  }
+
+  var raw = decode(MODEL.buffer);
+  var STATUS_ZONE = "status_emitters";
+
+  var parts = MODEL.parts.map(function (record) {
+    var positions = new Float32Array(raw.buffer, raw.byteOffset + record.positionOffset, record.vertexCount * 3);
+    var normals = new Int8Array(raw.buffer, raw.byteOffset + record.normalOffset, record.vertexCount * 4);
+    var indices = new Uint16Array(raw.buffer, raw.byteOffset + record.indexOffset, record.indexCount);
+
+    var position = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, position);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    var normal = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, normal);
+    gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+    var index = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+    var centre = [0, 0, 0];
+    for (var i = 0; i < positions.length; i += 3) {
+      centre[0] += positions[i]; centre[1] += positions[i + 1]; centre[2] += positions[i + 2];
+    }
+    var count = positions.length / 3;
+    centre = [centre[0] / count, centre[1] / count, centre[2] / count];
+
+    return {
+      name: record.name,
+      component: record.component,
+      zone: record.surface.zone,
+      material: record.surface.material,
+      colour: record.surface.colour.slice(),
+      baseColour: record.surface.colour.slice(),
+      emissive: record.surface.emissive,
+      alpha: record.surface.alpha,
+      roughness: record.surface.roughness,
+      metallic: record.surface.metallic,
+      triangles: record.indexCount / 3,
+      indexCount: record.indexCount,
+      position: position,
+      normal: normal,
+      index: index,
+      centre: centre
+    };
+  });
+
+  /* ---- shader -------------------------------------------------------- */
+
+  var VERTEX = [
+    "attribute vec3 aPosition;",
+    "attribute vec4 aNormal;",
+    "uniform mat4 uProjection;",
+    "uniform mat4 uView;",
+    "varying vec3 vNormal;",
+    "varying vec3 vWorld;",
+    "void main() {",
+    "  vNormal = normalize(aNormal.xyz);",
+    "  vWorld = aPosition;",
+    "  gl_Position = uProjection * uView * vec4(aPosition, 1.0);",
+    "}"
+  ].join("\n");
+
+  var FRAGMENT = [
+    "precision mediump float;",
+    "varying vec3 vNormal;",
+    "varying vec3 vWorld;",
+    "uniform vec3 uColour;",
+    "uniform vec3 uEye;",
+    "uniform float uEmissive;",
+    "uniform float uAlpha;",
+    "uniform float uRoughness;",
+    "uniform float uMetallic;",
+    "void main() {",
+    "  vec3 n = normalize(vNormal);",
+    "  vec3 v = normalize(uEye - vWorld);",
+    "  if (dot(n, v) < 0.0) n = -n;",
+    "  float fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0);",
+    "  vec3 colour;",
+    "  if (uEmissive > 0.5) {",
+    "    colour = uColour * (1.25 + 0.9 * fresnel);",
+    "  } else {",
+    /* three lights standing in for the authored key / fill / rim rig */
+    "    vec3 key = normalize(vec3(0.55, 0.72, 0.62));",
+    "    vec3 fill = normalize(vec3(-0.72, 0.18, 0.48));",
+    "    vec3 rim = normalize(vec3(0.20, 0.34, -0.86));",
+    "    float kd = max(dot(n, key), 0.0);",
+    "    float fd = max(dot(n, fill), 0.0);",
+    "    float rd = max(dot(n, rim), 0.0);",
+    "    vec3 light = vec3(1.00, 0.94, 0.88) * kd * 1.05",
+    "               + vec3(0.36, 0.54, 0.92) * fd * 0.55",
+    "               + vec3(0.24, 0.48, 0.95) * rd * 0.45;",
+    "    float ambient = 0.16 + 0.10 * (0.5 + 0.5 * n.y);",
+    "    float shine = mix(64.0, 8.0, clamp(uRoughness * 2.2, 0.0, 1.0));",
+    "    vec3 h = normalize(key + v);",
+    "    float spec = pow(max(dot(n, h), 0.0), shine) * (0.35 + 0.55 * uMetallic);",
+    "    colour = uColour * (light + ambient) + vec3(spec) * mix(vec3(1.0), uColour, uMetallic);",
+    "    colour += uColour * fresnel * 0.30;",
+    "  }",
+    "  colour = pow(max(colour, vec3(0.0)), vec3(1.0 / 2.2));",
+    "  gl_FragColor = vec4(colour, uAlpha);",
+    "}"
+  ].join("\n");
+
+  function compile(type, source) {
+    var shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(shader));
+    }
+    return shader;
+  }
+
+  var program = gl.createProgram();
+  try {
+    gl.attachShader(program, compile(gl.VERTEX_SHADER, VERTEX));
+    gl.attachShader(program, compile(gl.FRAGMENT_SHADER, FRAGMENT));
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(gl.getProgramInfoLog(program));
+    }
+  } catch (error) {
+    fail("Die Ansicht liess sich nicht aufbauen: " + error.message);
+    return;
+  }
+  gl.useProgram(program);
+
+  var loc = {
+    position: gl.getAttribLocation(program, "aPosition"),
+    normal: gl.getAttribLocation(program, "aNormal"),
+    projection: gl.getUniformLocation(program, "uProjection"),
+    view: gl.getUniformLocation(program, "uView"),
+    colour: gl.getUniformLocation(program, "uColour"),
+    eye: gl.getUniformLocation(program, "uEye"),
+    emissive: gl.getUniformLocation(program, "uEmissive"),
+    alpha: gl.getUniformLocation(program, "uAlpha"),
+    roughness: gl.getUniformLocation(program, "uRoughness"),
+    metallic: gl.getUniformLocation(program, "uMetallic")
+  };
+
+  /* ---- maths --------------------------------------------------------- */
+
+  function perspective(fov, aspect, near, far) {
+    var f = 1.0 / Math.tan(fov / 2);
+    return [
+      f / aspect, 0, 0, 0,
+      0, f, 0, 0,
+      0, 0, (far + near) / (near - far), -1,
+      0, 0, (2 * far * near) / (near - far), 0
+    ];
+  }
+
+  function lookAt(eye, target, up) {
+    function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+    function cross(a, b) {
+      return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    }
+    function norm(a) {
+      var l = Math.hypot(a[0], a[1], a[2]) || 1;
+      return [a[0] / l, a[1] / l, a[2] / l];
+    }
+    function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    var z = norm(sub(eye, target));
+    var x = norm(cross(up, z));
+    var y = cross(z, x);
+    return [
+      x[0], y[0], z[0], 0,
+      x[1], y[1], z[1], 0,
+      x[2], y[2], z[2], 0,
+      -dot(x, eye), -dot(y, eye), -dot(z, eye), 1
+    ];
+  }
+
+  /* ---- camera -------------------------------------------------------- */
+
+  var bounds = MODEL.bounds;
+  var target = [
+    (bounds.min[0] + bounds.max[0]) / 2,
+    (bounds.min[1] + bounds.max[1]) / 2,
+    (bounds.min[2] + bounds.max[2]) / 2
+  ];
+  var span = Math.max(
+    bounds.max[0] - bounds.min[0],
+    bounds.max[1] - bounds.min[1],
+    bounds.max[2] - bounds.min[2]
+  );
+  var HOME = { yaw: 0.42, pitch: 0.16, distance: span * 2.05 };
+  var camera = { yaw: HOME.yaw, pitch: HOME.pitch, distance: HOME.distance };
+
+  function eyePosition() {
+    var cp = Math.cos(camera.pitch);
+    return [
+      target[0] + camera.distance * cp * Math.sin(camera.yaw),
+      target[1] + camera.distance * Math.sin(camera.pitch),
+      target[2] + camera.distance * cp * Math.cos(camera.yaw)
+    ];
+  }
+
+  var dragging = false;
+  var lastX = 0;
+  var lastY = 0;
+
+  canvas.addEventListener("pointerdown", function (event) {
+    dragging = true;
+    lastX = event.clientX;
+    lastY = event.clientY;
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener("pointermove", function (event) {
+    if (!dragging) return;
+    camera.yaw -= (event.clientX - lastX) * 0.008;
+    camera.pitch = Math.max(-1.25, Math.min(1.25, camera.pitch + (event.clientY - lastY) * 0.006));
+    lastX = event.clientX;
+    lastY = event.clientY;
+    draw();
+  });
+  function stopDrag(event) {
+    dragging = false;
+    if (event.pointerId !== undefined && canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+  }
+  canvas.addEventListener("pointerup", stopDrag);
+  canvas.addEventListener("pointercancel", stopDrag);
+  canvas.addEventListener("wheel", function (event) {
+    event.preventDefault();
+    camera.distance = Math.max(span * 0.85, Math.min(span * 5, camera.distance * (1 + event.deltaY * 0.0012)));
+    draw();
+  }, { passive: false });
+  canvas.addEventListener("keydown", function (event) {
+    var step = 0.12;
+    if (event.key === "ArrowLeft") camera.yaw -= step;
+    else if (event.key === "ArrowRight") camera.yaw += step;
+    else if (event.key === "ArrowUp") camera.pitch = Math.min(1.25, camera.pitch + step);
+    else if (event.key === "ArrowDown") camera.pitch = Math.max(-1.25, camera.pitch - step);
+    else if (event.key === "+" || event.key === "=") camera.distance = Math.max(span * 0.85, camera.distance * 0.92);
+    else if (event.key === "-") camera.distance = Math.min(span * 5, camera.distance * 1.08);
+    else return;
+    event.preventDefault();
+    draw();
+  });
+
+  /* ---- state --------------------------------------------------------- */
+
+  var HEAD = MODEL.headComponents;
+  var visible = {};
+  MODEL.components.forEach(function (component) {
+    visible[component.id] = HEAD.indexOf(component.id) === -1;
+  });
+  var head = "head_antenna";
+  visible[head] = true;
+
+  var STATUS_COLOURS = [
+    { id: "working", label: "Arbeitend (normal)", rgb: [0.0, 0.30, 0.60] },
+    { id: "thinking", label: "Denkend", rgb: [0.26, 0.12, 0.62] },
+    { id: "warning", label: "Achtung", rgb: [0.72, 0.36, 0.02] },
+    { id: "blocked", label: "Blockiert", rgb: [0.62, 0.06, 0.06] },
+    { id: "success", label: "Erfolg", rgb: [0.05, 0.52, 0.20] }
+  ];
+  var statusColour = STATUS_COLOURS[0];
+
+  function applyStatusColour() {
+    parts.forEach(function (part) {
+      if (part.zone === STATUS_ZONE) part.colour = statusColour.rgb.slice();
+      else part.colour = part.baseColour.slice();
+    });
+  }
+
+  function partVisible(part) {
+    return visible[part.component] === true;
+  }
+
+  /* ---- drawing ------------------------------------------------------- */
+
+  function resize() {
+    var ratio = Math.min(window.devicePixelRatio || 1, 2);
+    var width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+    var height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+  }
+
+  function stageColour() {
+    var value = getComputedStyle(document.documentElement).getPropertyValue("--stage").trim();
+    var hex = value.replace("#", "");
+    if (hex.length !== 6) return [0.027, 0.051, 0.086];
+    return [0, 1, 2].map(function (i) {
+      var channel = parseInt(hex.substr(i * 2, 2), 16) / 255;
+      return Math.pow(channel, 2.2);
+    });
+  }
+
+  function draw() {
+    resize();
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    var ground = stageColour();
+    gl.clearColor(ground[0], ground[1], ground[2], 1);
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
+    gl.cullFace(gl.BACK);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var eye = eyePosition();
+    gl.uniformMatrix4fv(loc.projection, false,
+      perspective(0.62, canvas.width / canvas.height, span * 0.05, span * 12));
+    gl.uniformMatrix4fv(loc.view, false, lookAt(eye, target, [0, 1, 0]));
+    gl.uniform3fv(loc.eye, eye);
+
+    var shown = parts.filter(partVisible);
+    var opaque = shown.filter(function (part) { return part.alpha >= 0.999; });
+    var blended = shown.filter(function (part) { return part.alpha < 0.999; });
+    blended.sort(function (a, b) {
+      function distance(part) {
+        return Math.hypot(part.centre[0] - eye[0], part.centre[1] - eye[1], part.centre[2] - eye[2]);
+      }
+      return distance(b) - distance(a);
+    });
+
+    gl.disable(gl.BLEND);
+    gl.depthMask(true);
+    opaque.forEach(drawPart);
+
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.depthMask(false);
+    blended.forEach(drawPart);
+    gl.depthMask(true);
+    gl.disable(gl.BLEND);
+  }
+
+  function drawPart(part) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, part.position);
+    gl.enableVertexAttribArray(loc.position);
+    gl.vertexAttribPointer(loc.position, 3, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, part.normal);
+    gl.enableVertexAttribArray(loc.normal);
+    gl.vertexAttribPointer(loc.normal, 4, gl.BYTE, true, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, part.index);
+    gl.uniform3fv(loc.colour, part.colour);
+    gl.uniform1f(loc.emissive, part.emissive ? 1 : 0);
+    gl.uniform1f(loc.alpha, part.alpha);
+    gl.uniform1f(loc.roughness, part.roughness);
+    gl.uniform1f(loc.metallic, part.metallic);
+    gl.drawElements(gl.TRIANGLES, part.indexCount, gl.UNSIGNED_SHORT, 0);
+  }
+
+  /* ---- interface ----------------------------------------------------- */
+
+  function countFor(id) {
+    return parts.reduce(function (total, part) {
+      return part.component === id ? total + 1 : total;
+    }, 0);
+  }
+
+  function swatchFor(id) {
+    if (id === "status" || id === "face") return "var(--status)";
+    if (HEAD.indexOf(id) !== -1) return "var(--personal)";
+    return "var(--ink-dim)";
+  }
+
+  var componentHost = document.getElementById("components");
+  var headHost = document.getElementById("heads");
+  var rows = {};
+
+  MODEL.components.forEach(function (component) {
+    var isHead = HEAD.indexOf(component.id) !== -1;
+    var row = document.createElement("button");
+    row.type = "button";
+    row.className = "row" + (isHead ? " radio" : "");
+    row.style.setProperty("--swatch", swatchFor(component.id));
+    if (isHead) {
+      row.setAttribute("role", "radio");
+      row.setAttribute("aria-checked", String(component.id === head));
+    } else {
+      row.setAttribute("aria-pressed", String(visible[component.id]));
+    }
+    row.innerHTML =
+      '<span class="mark" aria-hidden="true"></span>' +
+      '<span class="row-name">' + component.label +
+      '<span class="row-hint">' + component.hint + "</span></span>" +
+      '<span class="row-count">' + countFor(component.id) + "</span>";
+    row.addEventListener("click", function () {
+      if (isHead) {
+        head = component.id;
+        HEAD.forEach(function (id) { visible[id] = id === head; });
+      } else {
+        visible[component.id] = !visible[component.id];
+      }
+      sync();
+    });
+    rows[component.id] = row;
+    (isHead ? headHost : componentHost).appendChild(row);
+  });
+
+  var swatchHost = document.getElementById("statusColours");
+  var swatchButtons = STATUS_COLOURS.map(function (entry) {
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "swatch";
+    button.title = entry.label;
+    button.setAttribute("aria-label", "Statusfarbe " + entry.label);
+    button.setAttribute("aria-pressed", String(entry.id === statusColour.id));
+    button.style.background = "rgb(" + entry.rgb.map(function (channel) {
+      return Math.round(Math.pow(channel, 1 / 2.2) * 255);
+    }).join(",") + ")";
+    button.addEventListener("click", function () {
+      statusColour = entry;
+      applyStatusColour();
+      sync();
+    });
+    swatchHost.appendChild(button);
+    return { entry: entry, button: button };
+  });
+
+  document.getElementById("reset").addEventListener("click", function () {
+    camera.yaw = HOME.yaw;
+    camera.pitch = HOME.pitch;
+    camera.distance = HOME.distance;
+    draw();
+  });
+  document.getElementById("all").addEventListener("click", function () {
+    MODEL.components.forEach(function (component) {
+      if (HEAD.indexOf(component.id) === -1) visible[component.id] = true;
+    });
+    sync();
+  });
+
+  function sync() {
+    MODEL.components.forEach(function (component) {
+      var row = rows[component.id];
+      if (HEAD.indexOf(component.id) !== -1) {
+        row.setAttribute("aria-checked", String(component.id === head));
+      } else {
+        row.setAttribute("aria-pressed", String(visible[component.id]));
+      }
+    });
+    swatchButtons.forEach(function (item) {
+      item.button.setAttribute("aria-pressed", String(item.entry.id === statusColour.id));
+    });
+
+    var shown = parts.filter(partVisible);
+    document.getElementById("mParts").textContent = shown.length + " / " + parts.length;
+    document.getElementById("mTris").textContent =
+      shown.reduce(function (total, part) { return total + part.triangles; }, 0).toLocaleString("de-DE");
+    var label = MODEL.components.filter(function (component) { return component.id === head; })[0];
+    document.getElementById("mHead").textContent = label ? label.label.replace("Kopf: ", "") : "–";
+
+    var low = Infinity;
+    var high = -Infinity;
+    shown.forEach(function (part) {
+      low = Math.min(low, part.centre[1]);
+      high = Math.max(high, part.centre[1]);
+    });
+    document.getElementById("mHeight").textContent =
+      shown.length ? (bounds.max[1] - bounds.min[1]).toFixed(3) : "–";
+    draw();
+  }
+
+  document.getElementById("foot").innerHTML =
+    "Quelle: <code>" + MODEL.source + "</code> &middot; " +
+    parts.length + " Teile, auf " +
+    parts.reduce(function (total, part) { return total + part.triangles; }, 0).toLocaleString("de-DE") +
+    " Dreiecke dezimiert. Die Materialzonen, die exklusive Kopfidentität und die " +
+    "gemeinsame Statusgruppe sind die Regeln des Character-Standards — diese Seite " +
+    "führt sie vor, sie erklärt sie nicht neu.";
+
+  window.addEventListener("resize", draw);
+  if (window.matchMedia) {
+    var scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    if (scheme.addEventListener) scheme.addEventListener("change", draw);
+  }
+
+  applyStatusColour();
+  sync();
+})();
+</script>
