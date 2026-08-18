@@ -26,6 +26,10 @@
       "types": "./dist/client.d.ts",
       "import": "./dist/client.js"
     },
+    "./home-authority-ceremony": {
+      "types": "./dist/home-authority-ceremony.d.ts",
+      "import": "./dist/home-authority-ceremony.js"
+    },
     "./device-lifecycle-ceremony": {
       "types": "./dist/device-lifecycle-ceremony.d.ts",
       "import": "./dist/device-lifecycle-ceremony.js"

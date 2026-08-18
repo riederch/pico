@@ -2,11 +2,48 @@
 
 ## Status
 
-Accepted as a product-surface and platform-order decision; E1, E2, E3 and E6
-implemented, E4-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
+Accepted as a product-surface and platform-order decision; E1, E2, E3, E4 and
+E6 implemented, E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
 the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
+
+Status note, 2026-08-18: **E4 - the Home itself, from the device that
+decides about it.**
+
+Both ceremonies lived inside `cli.ts` behind sixteen flags each, so they
+moved out to `home-authority-ceremony.ts` unchanged; the terminal sentences
+stayed with the tool, because what a rotation costs is said by whoever is
+asking rather than by the ceremony.
+
+**A rotation ends with a re-pin, immediately.** ADR 0115 U4 already had the
+walk; what was missing is that the device which asked for the rotation is
+standing right there, and leaving it pinned to a key its own Home retired
+makes the next ordinary read look like an attack. The new fingerprint is
+read out of the verified chain rather than out of the submission's answer -
+a device believing the reply it just received would be trusting the
+endpoint to describe its own rotation. The proof that this is a rotation
+and not a record about one is the other half of the test: the old pins stop
+answering, shown against the same call succeeding before it.
+
+**Memberships were write-only over Link.** `home.authority.submit` carried
+`membership`, and `home.authority.list` knew `home_state` and
+`reader_custody_domains` and not memberships - so the Home Host Pico could
+admit somebody from their own device and had no way to see who was in. A
+surface that cannot check its own work is the same defect this gate exists
+to find, so the resource was added, held to the test the write is held to.
+
+Two things the walk found in the Home's own answers: the founder's
+membership carries `validUntil: null`, which is a fact rather than a gap and
+now reads as *your place in it does not end*; and a membership issued for
+the founder's own identity is refused by the Home as
+`home_host_membership_is_not_reissued`, which is a true sentence about a
+record and a useless one to a person - so the Client refuses it first, in
+what it means.
+
+Not in this gate and now visible: **ending a membership has no ceremony
+anywhere**, not in the tool either. A person can be let in and cannot be
+let out.
 
 Status note, 2026-08-18: **the other half - a second device joins over
 camera and code, which is what the user chose.**
@@ -405,8 +442,10 @@ Node host beside each of them.
   delegate is the primitive inside enrolment rather than a surface of its
   own, and renewing a device is the same exchange with the same three codes,
   which the status notes above record.
-- **E4 - Home continuity and membership vertical (open):**
-  `rotate-host-key` and `issue-membership` as product surfaces.
+- **E4 - Home continuity and membership vertical (implemented):**
+  `rotate-host-key` and `issue-membership` as product surfaces, with the
+  reading half that turned out to be missing: over Link a Home Host Pico
+  could admit somebody and then not see who was in.
 - **E5 - Domain and readership vertical (open):** create/rotate domain,
   grant reader, publish checkpoint.
 - **E6 - Product-path check (implemented):** `scripts/check-product-path.mjs`

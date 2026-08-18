@@ -344,6 +344,13 @@ export async function picoLinkFoundationRequest(
     };
   }
 
+  // ADR 0130 E4. The read half of the one resource a Home Host Pico issues
+  // from their own device: admitting somebody without being able to see who
+  // is in is a surface that cannot check its own work.
+  if (path === '/api/home/memberships' && body === undefined) {
+    return await client.request('home.authority.list', { resource: 'memberships' });
+  }
+
   const resources: Record<string, string> = {
     '/api/home/memberships': 'membership',
     '/api/home/reader-key-freshness-checkpoints': 'reader_key_freshness_checkpoint',

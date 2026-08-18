@@ -3512,6 +3512,21 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           statusCode: 200,
           body: { domains: readerCustody.domains() },
         };
+      /**
+       * ADR 0130 E4. Who lives here, to the one identity that decides it.
+       *
+       * The Foundation has answered this since ADR 0080; over Link it was
+       * write-only, so a Home Host Pico could admit somebody from their own
+       * device and then had no way to see who was in. The caller is already
+       * held to being the current Home Host Pico by the case above, which is
+       * the same test the Foundation route's `home-authority-relay` class
+       * applies - this adds a reader, not an authority.
+       */
+      case 'memberships':
+        return {
+          statusCode: 200,
+          body: { memberships: store.picoHomeMemberships() as unknown as Record<string, unknown>[] },
+        };
       default:
         return { statusCode: 400, body: { error: 'unknown_authority_resource' } };
     }

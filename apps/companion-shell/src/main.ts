@@ -41,6 +41,8 @@ import {
   picoCompanionDeviceRevocationReasonLines,
   picoCompanionEnrolmentStepLine,
   picoCompanionEnrolmentValidUntil,
+  picoCompanionHostRotationLine,
+  picoCompanionHostRotationReasonLines,
   type PicoCompanionEnrolmentStep,
   type PicoCompanionFirstRunScanSource,
   type PicoCompanionDeviceCode,
@@ -1262,6 +1264,87 @@ function registerIpc(): void {
         targetDelegationId: record.delegationId,
         reason: reason.reason,
       });
+    },
+  );
+  /**
+   * ADR 0130 E4. The Home itself, from the device that decides about it.
+   *
+   * The fingerprint of the Pico being admitted is collected here rather than
+   * in the window - not because it is secret (it is the opposite: it is what
+   * somebody reads out to you) but because everything that ends in a
+   * signature is collected in this process (ADR 0113 C2), and this one ends
+   * in the identity root signing a membership.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getHomeMembers,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      return await runtime.readHomeMembers();
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.admitHomeMember,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_in_progress');
+      }
+      try {
+        productOperationActive = true;
+        const picoIdentityFingerprintHex = await captureSecret({
+          title: 'Which Pico may live here?',
+          instruction: 'Paste the identity fingerprint the other person reads out of their '
+            + 'own Pico. It is public, it names nobody, and they do not have to agree to '
+            + 'anything - a membership is given rather than accepted.',
+          maximumLength: 128,
+          validate: (value: string) => /^[0-9a-f]{64}$/u.test(value.trim()),
+        });
+        return await runtime.admitHomeMember({
+          picoIdentityFingerprintHex: picoIdentityFingerprintHex.trim(),
+        });
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.rotateHostKeys,
+    async (event: IpcMainInvokeEvent, value: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const reason = picoCompanionHostRotationReasonLines()
+        .find((line) => line.reason === value);
+      if (reason === undefined) {
+        throw new Error('invalid_host_rotation_reason');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_in_progress');
+      }
+      try {
+        productOperationActive = true;
+        const rotated = await runtime.rotateHostKeys({ reason: reason.reason });
+        const line = picoCompanionHostRotationLine(rotated);
+        await presentationPort.present(parsePicoCompanionPresentation({
+          kind: 'host_keys_rotated',
+          severity: rotated.repinned ? 'active' : 'warning',
+          symbol: rotated.repinned ? '\u25cf' : '!',
+          decision: 'none',
+          title: line.title,
+          body: line.body,
+          observedAt: new Date().toISOString(),
+        }));
+        return rotated;
+      } finally {
+        productOperationActive = false;
+      }
     },
   );
   /**

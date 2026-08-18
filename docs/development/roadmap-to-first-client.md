@@ -89,8 +89,17 @@ Terminal, und damit waere Phase 4 von Phase 1 abgeschnitten.
   beiden Seiten: eine dritte Erstlauf-Wahl, die ausdruecklich keine Art von
   Wiederherstellen ist, und "Add another device" in den Einstellungen.
   *Opus 5 + xhigh.*
-- **E4 Home-Kontinuitaet und Membership** - `rotate-host-key`,
-  `issue-membership`. *Opus 5 + xhigh.*
+- **E4 Home-Kontinuitaet und Membership (erledigt 2026-08-18)** -
+  `rotate-host-key` und `issue-membership` als Produktflaechen. Die Rotation
+  endet sofort mit dem ADR-0115-U4-Repin: das Geraet, das sie ausgeloest hat,
+  steht daneben, und auf einem vom eigenen Home zurueckgezogenen Schluessel
+  sitzenzubleiben laesst den naechsten gewoehnlichen Read wie einen Angriff
+  aussehen. Bewiesen ist, dass es eine Rotation ist und kein Protokolleintrag
+  darueber: die alten Pins antworten danach nicht mehr, gemessen gegen
+  denselben Aufruf davor. Nebenbefund: Mitgliedschaften waren ueber Link
+  **nur schreibbar** - wer jemanden aufnehmen konnte, konnte nicht sehen, wer
+  drin ist. Sichtbar geworden und nicht in diesem Gate: eine Mitgliedschaft zu
+  beenden gibt es nirgends, auch nicht im Werkzeug. *Opus 5 + xhigh.*
 - **E5 Domains und Readership** - create/rotate domain, grant reader, publish
   checkpoint. *Opus 5 + xhigh.*
 

@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { picoPresenceAffordances } from '@pico/protocol/presence';
-import { picoIdentityRevocationReasonCategories } from '@pico/protocol';
+import {
+  picoHomeContinuityReasonCategories,
+  picoIdentityRevocationReasonCategories,
+} from '@pico/protocol';
 import {
   picoCompanionDeviceRevocationReasons,
   picoCompanionMachineOnlyRevocationReasons,
@@ -30,6 +33,13 @@ import {
   picoCompanionDeviceRevocationReasonLines,
   picoCompanionEnrolmentStepLine,
   picoCompanionEnrolmentValidUntil,
+  picoCompanionHomeMemberAdmittedLine,
+  picoCompanionHomeMemberLines,
+  picoCompanionHomeMembersSummary,
+  picoCompanionHostRotationLine,
+  picoCompanionHostRotationReasonLines,
+  picoCompanionHostRotationWarning,
+  parsePicoCompanionHomeMembers,
   parsePicoCompanionDeviceAuthority,
   type PicoCompanionDeviceAuthorityView,
   picoCompanionViewReads,
@@ -773,5 +783,116 @@ describe('ADR 0130 E3 - the words two devices are held up by', () => {
       kind: 'device_code',
       code: { text: 'pico-device-offer-v1:AAAA', qr: { size: 21, modules: [true] } },
     })).toThrow('invalid_companion_presentation_code');
+  });
+});
+
+describe('ADR 0130 E4 - the Home itself', () => {
+  const member = (over: Partial<{
+    membershipId: string;
+    picoIdentityFingerprintHex: string;
+    role: string;
+    status: string;
+    validUntil: string | null;
+    isThisIdentity: boolean;
+  }> = {}) => ({
+    membershipId: 'member:home_1:ab',
+    picoIdentityFingerprintHex: 'ab'.repeat(32),
+    role: 'home_member',
+    status: 'active',
+    validUntil: '2027-01-01T00:00:00.000Z',
+    isThisIdentity: false,
+    ...over,
+  });
+
+  it('offers every reason a Home\u2019s keys change, because all three are a person\u2019s', () => {
+    /**
+     * Unlike the revocation categories, none of ADR 0114's continuity reasons
+     * belongs to machinery: new keys, a Home that moved, and a Home restored
+     * from a backup are three situations somebody knows they are in.
+     */
+    expect(picoCompanionHostRotationReasonLines().map((line) => line.reason))
+      .toEqual([...picoHomeContinuityReasonCategories]);
+    for (const line of picoCompanionHostRotationReasonLines()) {
+      expect(line.label).not.toContain('_');
+      expect(line.label.toLowerCase()).not.toContain('host key');
+    }
+  });
+
+  it('says what a rotation costs before it happens, and names the card', () => {
+    expect(picoCompanionHostRotationWarning).toContain('Recovery Card');
+    expect(picoCompanionHostRotationWarning).toContain('stops working');
+    // And afterwards, in both outcomes, because a rotation this device could
+    // not follow is not a rotation that did not happen.
+    const followed = picoCompanionHostRotationLine({
+      hostSigningKeyFingerprintHex: 'cd'.repeat(32),
+      retiredHostSigningKeyFingerprintHex: 'ef'.repeat(32),
+      repinned: true,
+    });
+    expect(followed.body).toContain('cdcdcdcdcdcd');
+    expect(followed.body).toContain('Recovery Card');
+    const stranded = picoCompanionHostRotationLine({
+      hostSigningKeyFingerprintHex: 'ef'.repeat(32),
+      retiredHostSigningKeyFingerprintHex: 'ef'.repeat(32),
+      repinned: false,
+    });
+    expect(stranded.body).toContain('could not follow');
+    expect(stranded.body).not.toContain('did not');
+  });
+
+  it('says who lives here in what that means, not in credential fields', () => {
+    const lines = picoCompanionHomeMemberLines([
+      member({ isThisIdentity: true, role: 'home_host', validUntil: null }),
+      member(),
+      member({ status: 'revoked' }),
+      member({ validUntil: null }),
+    ]);
+    expect(lines[0]?.headline).toBe('You');
+    expect(lines[0]?.detail).toContain('does not end');
+    expect(lines[1]?.headline).toContain('Another Pico (ababababab');
+    expect(lines[1]?.detail).toBe('Lives here until 2027-01-01.');
+    // Five of the six statuses mean the same thing to somebody reading a list.
+    expect(lines[2]?.detail).toContain('No longer lives here');
+    expect(lines[3]?.detail).toContain('no end date');
+  });
+
+  it('counts the others, and says so when there are none', () => {
+    expect(picoCompanionHomeMembersSummary([
+      member({ isThisIdentity: true, validUntil: null }),
+    ])).toContain('Yours alone');
+    expect(picoCompanionHomeMembersSummary([
+      member({ isThisIdentity: true, validUntil: null }),
+      member(),
+    ])).toBe('One other Pico may use this Home.');
+    // A revoked row is not one of them.
+    expect(picoCompanionHomeMembersSummary([
+      member({ isThisIdentity: true, validUntil: null }),
+      member({ status: 'revoked' }),
+    ])).toContain('Yours alone');
+  });
+
+  it('tells the person that nothing reached the Pico they admitted', () => {
+    /**
+     * A membership is given, not accepted: the subject signs nothing and
+     * learns nothing from this. Somebody who was not told would wait for a
+     * confirmation that is never coming.
+     */
+    const line = picoCompanionHomeMemberAdmittedLine({
+      picoIdentityFingerprintHex: 'ab'.repeat(32),
+      validUntil: '2027-01-01T00:00:00.000Z',
+    });
+    expect(line).toContain('Nothing was sent to them');
+    expect(line).toContain('tell them yourself');
+    expect(line).toContain('2027-01-01');
+  });
+
+  it('reads a Home\u2019s own place in itself as endless, not as missing', () => {
+    // ADR 0117 X1 the other way round: `null` here is a fact the Home states,
+    // and a parser that refused it would refuse every founded Home.
+    expect(parsePicoCompanionHomeMembers([member({ validUntil: null })])[0]?.validUntil)
+      .toBeNull();
+    expect(() => parsePicoCompanionHomeMembers([{ ...member(), validUntil: 7 }]))
+      .toThrow('invalid_pico_companion_home_member');
+    expect(() => parsePicoCompanionHomeMembers({}))
+      .toThrow('invalid_pico_companion_home_members');
   });
 });

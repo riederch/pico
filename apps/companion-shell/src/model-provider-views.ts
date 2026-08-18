@@ -11,6 +11,9 @@ import {
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
   picoCompanionDeviceLines,
+  picoCompanionHomeMemberLines,
+  picoCompanionHomeMembersSummary,
+  parsePicoCompanionHomeMembers,
   picoCompanionDeviceAuthorityLines,
   picoCompanionDeviceAuthoritySummary,
   picoCompanionDeviceRevocationReasonLines,
@@ -569,6 +572,41 @@ function deviceAuthorityBlock(
 
   block.append(end, reasons);
   return block;
+}
+
+/**
+ * ADR 0130 E4. Who lives in this Home.
+ *
+ * A list with no controls on its rows, and that is the state of the gate
+ * rather than a design: ADR 0130 E4 names issuing a membership, and ending
+ * one has no ceremony anywhere yet - not in the tool either. A row with a
+ * button that cannot work would be worse than a row without one.
+ */
+export function renderPicoCompanionHomeMembers(
+  root: { list: HTMLElement; section: HTMLElement; summary: HTMLElement; document: Document },
+  value: unknown,
+): void {
+  const members = parsePicoCompanionHomeMembers(value);
+  root.section.hidden = false;
+  root.summary.textContent = picoCompanionHomeMembersSummary(members);
+  root.list.replaceChildren();
+
+  for (const line of picoCompanionHomeMemberLines(members)) {
+    const item = root.document.createElement('li');
+    item.className = 'provider-line';
+    item.dataset.membershipId = line.membershipId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = line.detail;
+
+    item.append(headline, detail);
+    root.list.append(item);
+  }
 }
 
 /**

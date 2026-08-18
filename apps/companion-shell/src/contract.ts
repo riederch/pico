@@ -79,6 +79,13 @@ export const picoCompanionIpcChannels = Object.freeze({
    */
   getDeviceAuthority: 'pico:device-authority:get',
   endDeviceAuthority: 'pico:device-authority:end',
+  /**
+   * ADR 0130 E4. The Home rather than a device: who else lives in it, and the
+   * keys it is known by.
+   */
+  getHomeMembers: 'pico:home-members:get',
+  admitHomeMember: 'pico:home-member:admit',
+  rotateHostKeys: 'pico:home-host-keys:rotate',
   getRelays: 'pico:relays:get',
   claimRelay: 'pico:relay:claim',
   createRelayAccount: 'pico:relay-account:create',
@@ -1728,6 +1735,184 @@ export function parsePicoCompanionDeviceAuthority(
       });
     })),
   });
+}
+
+/**
+ * ADR 0130 E4 - the Home itself: which keys it is known by, and who else
+ * lives in it.
+ *
+ * Two things a person decides about a place rather than about a device, and
+ * both were reachable only through sixteen flags each. The words here are
+ * about the place: "your Home" is what the person has, and the host key is a
+ * fact about it they only ever meet through a consequence.
+ */
+export interface PicoCompanionHostRotationReasonLine {
+  reason: 'host_key_rotated' | 'host_migrated' | 'host_restored';
+  label: string;
+}
+
+export function picoCompanionHostRotationReasonLines(
+): readonly PicoCompanionHostRotationReasonLine[] {
+  return Object.freeze([
+    Object.freeze({
+      reason: 'host_key_rotated' as const,
+      label: 'I want it to have new keys',
+    }),
+    Object.freeze({
+      reason: 'host_migrated' as const,
+      label: 'It moved to another machine',
+    }),
+    Object.freeze({
+      reason: 'host_restored' as const,
+      label: 'It was restored from a backup',
+    }),
+  ]);
+}
+
+/**
+ * What changing a Home's keys costs, said before it happens.
+ *
+ * The Recovery Card is the one that matters: a card printed under the old
+ * keys cannot put an identity back, because the pins it carries name a Home
+ * that no longer answers under them. ADR 0106's approval statement says the
+ * same thing from the signed bytes; this is the sentence that gets somebody
+ * to the decision in the first place.
+ */
+export const picoCompanionHostRotationWarning =
+  'Every Recovery Card you have printed stops working. Print a new one right '
+  + 'after this - without one, nothing can put your identity on another device.';
+
+export function picoCompanionHostRotationLine(rotated: {
+  hostSigningKeyFingerprintHex: string;
+  retiredHostSigningKeyFingerprintHex: string;
+  repinned: boolean;
+}): { title: string; body: string } {
+  return {
+    title: 'Your Home has new keys',
+    body: rotated.repinned
+      ? `It answers as ${rotated.hostSigningKeyFingerprintHex.slice(0, 12)} now, and this `
+        + `device followed it there. ${picoCompanionHostRotationWarning}`
+      // The rotation happened either way - the Home decided that - and what
+      // is missing is this device's proof of it, which is a different thing
+      // to do next than a failed rotation.
+      // Not "could not follow the chain from" + "where it stands": a string
+      // that ends in `from ` reads as an import specifier to
+      // `check-browser-modules.mjs`, whose pattern is deliberately crude
+      // because the failure it catches is a renderer that loads nothing.
+      : 'Your Home rotated, and this device could not follow the chain from where '
+        + 'it stands. Nothing here changed. Check that you are on the same '
+        + `network and open this again. ${picoCompanionHostRotationWarning}`,
+  };
+}
+
+export interface PicoCompanionHomeMember {
+  membershipId: string;
+  picoIdentityFingerprintHex: string;
+  role: string;
+  status: string;
+  validUntil: string | null;
+  isThisIdentity: boolean;
+}
+
+export interface PicoCompanionHomeMemberLine {
+  membershipId: string;
+  headline: string;
+  detail: string;
+}
+
+/**
+ * One row per Pico that may live here, in what that means rather than in
+ * credential fields.
+ *
+ * A fingerprint is the only name any of them has - a membership carries no
+ * person, by design - so it is shown short, as the label somebody compares
+ * against what the other person reads out.
+ */
+export function picoCompanionHomeMemberLines(
+  members: readonly PicoCompanionHomeMember[],
+): readonly PicoCompanionHomeMemberLine[] {
+  return Object.freeze(members.map((member) => Object.freeze({
+    membershipId: member.membershipId,
+    headline: member.isThisIdentity
+      ? 'You'
+      : `Another Pico (${member.picoIdentityFingerprintHex.slice(0, 12)})`,
+    detail: picoCompanionHomeMemberDetail(member),
+  })));
+}
+
+function picoCompanionHomeMemberDetail(member: PicoCompanionHomeMember): string {
+  if (member.status !== 'active') {
+    // Said as what is true now. The vocabulary has six statuses and five of
+    // them mean the same thing to somebody looking at a list: not any more.
+    return `No longer lives here (${member.status}).`;
+  }
+  if (member.validUntil === null) {
+    return member.isThisIdentity
+      ? 'This is your Home. Your place in it does not end.'
+      : 'Lives here, with no end date.';
+  }
+  return `Lives here until ${member.validUntil.slice(0, 10)}.`;
+}
+
+export function picoCompanionHomeMembersSummary(
+  members: readonly PicoCompanionHomeMember[],
+): string {
+  const others = members.filter(
+    (member) => member.status === 'active' && !member.isThisIdentity,
+  ).length;
+  if (others === 0) {
+    return 'Yours alone. No other Pico may use this Home.';
+  }
+  return others === 1
+    ? 'One other Pico may use this Home.'
+    : `${others} other Picos may use this Home.`;
+}
+
+/**
+ * What a person is told after admitting somebody, and it is deliberately
+ * about what the other side still has to do.
+ *
+ * A membership is given rather than claimed: the subject signs nothing and
+ * learns nothing from this. Somebody who was not told that would wait for a
+ * confirmation that is never coming.
+ */
+export function picoCompanionHomeMemberAdmittedLine(member: {
+  picoIdentityFingerprintHex: string;
+  validUntil: string;
+}): string {
+  return `Admitted ${member.picoIdentityFingerprintHex.slice(0, 12)} until `
+    + `${member.validUntil.slice(0, 10)}. Nothing was sent to them - a membership is `
+    + 'given, not accepted, so tell them yourself that they can point their Pico here.';
+}
+
+export function parsePicoCompanionHomeMembers(
+  value: unknown,
+): readonly PicoCompanionHomeMember[] {
+  if (!Array.isArray(value)) {
+    throw new Error('invalid_pico_companion_home_members');
+  }
+  return Object.freeze(value.map((entry) => {
+    if (typeof entry !== 'object' || entry === null) {
+      throw new Error('invalid_pico_companion_home_member');
+    }
+    const record = entry as Record<string, unknown>;
+    if (typeof record.membershipId !== 'string'
+      || typeof record.picoIdentityFingerprintHex !== 'string'
+      || typeof record.role !== 'string'
+      || typeof record.status !== 'string'
+      || typeof record.isThisIdentity !== 'boolean'
+      || (record.validUntil !== null && typeof record.validUntil !== 'string')) {
+      throw new Error('invalid_pico_companion_home_member');
+    }
+    return Object.freeze({
+      membershipId: record.membershipId,
+      picoIdentityFingerprintHex: record.picoIdentityFingerprintHex,
+      role: record.role,
+      status: record.status,
+      validUntil: record.validUntil as string | null,
+      isThisIdentity: record.isThisIdentity,
+    });
+  }));
 }
 
 /**

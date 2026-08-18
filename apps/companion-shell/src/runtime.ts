@@ -66,6 +66,11 @@ import {
   type PicoCompanionDeviceAuthorityView,
   type PicoCompanionDeviceRevocationReason,
 } from '@pico/companion/device-lifecycle';
+import type {
+  PicoCompanionHomeMember,
+  PicoCompanionHostRotation,
+  PicoCompanionHostRotationReason,
+} from '@pico/companion/home-authority';
 import { picoPresenceLeaseMs } from '@pico/protocol/presence';
 import {
   claimPicoCompanionRelay,
@@ -95,7 +100,10 @@ import {
   type PicoCompanionAnsweredReadView,
   type PicoCompanionModelProviderView,
 } from '@pico/companion/model-providers';
-import { picoCompanionModelProviderCredentialRef } from './contract.js';
+import {
+  picoCompanionFoundingDelegationValidUntil,
+  picoCompanionModelProviderCredentialRef,
+} from './contract.js';
 
 export interface PicoCompanionShellRuntime {
   checkNow(): Promise<PicoCompanionAlarmCheck>;
@@ -247,6 +255,23 @@ export interface PicoCompanionShellRuntime {
      * its own authority does to it. */
     activeDevicesLeft: number | null;
   }>;
+  /**
+   * ADR 0130 E4. The Home itself: who else lives in it, admitting one more,
+   * and the keys it is known by.
+   *
+   * All three throw. Not knowing who lives in your Home is not an absence a
+   * window may render as "nobody" - that is a sentence about a place, and the
+   * person acting on it would be acting on a wrong one.
+   */
+  readHomeMembers(): Promise<readonly PicoCompanionHomeMember[]>;
+  admitHomeMember(input: { picoIdentityFingerprintHex: string }): Promise<{
+    credentialId: string;
+    picoIdentityFingerprintHex: string;
+    validUntil: string;
+  }>;
+  rotateHostKeys(input: {
+    reason: PicoCompanionHostRotationReason;
+  }): Promise<PicoCompanionHostRotation>;
   /**
    * ADR 0154. Relays this person operates - a different hat from having a
    * Pico, and one this device holds the only credential for.
@@ -877,6 +902,65 @@ export async function startPicoCompanionShellRuntime(input: {
           sodium: input.sodium,
           targetDelegationId,
           reason,
+        });
+      }),
+      readHomeMembers: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { readPicoCompanionHomeMembers } = await import('@pico/companion/home-authority');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await readPicoCompanionHomeMembers({
+          profile,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      admitHomeMember: async ({ picoIdentityFingerprintHex }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { issuePicoCompanionMembership } = await import('@pico/companion/home-authority');
+        const profile = readPicoCompanionProfile(profilePath);
+        const issued = await issuePicoCompanionMembership({
+          profile,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          subjectPicoIdentityFingerprintHex: picoIdentityFingerprintHex,
+          // ADR 0104's year, the same one a device's authority gets: a person
+          // admitting somebody is not in a position to have an opinion about
+          // how long, and two different answers would be two rules.
+          validUntil: picoCompanionFoundingDelegationValidUntil(new Date()),
+        });
+        return {
+          credentialId: issued.credentialId,
+          picoIdentityFingerprintHex: issued.subjectPicoIdentityFingerprintHex,
+          validUntil: issued.validUntil,
+        };
+      }),
+      rotateHostKeys: async ({ reason }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { rotatePicoCompanionHostKeys } = await import('@pico/companion/home-authority');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await rotatePicoCompanionHostKeys({
+          profile,
+          profilePath,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          reason,
+          ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
         });
       }),
       readRelays: async () => await serialized(async () => {

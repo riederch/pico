@@ -194,6 +194,25 @@
       Hidden when the Home knows of none, which on a device that has just
       announced itself is a moment rather than a state.
     -->
+    <!--
+      ADR 0130 E4. The Home rather than a device: who else may use it, and the
+      keys it is known by. Above the devices, because it is the larger subject
+      - a device belongs to a person, a Home is the place.
+    -->
+    <section id="home" class="providers" hidden>
+      <h2>Your Home</h2>
+      <p id="home-members-summary" class="detail"></p>
+      <ul id="home-member-list" class="provider-list"></ul>
+      <div class="actions">
+        <button id="home-admit" type="button">Let another Pico live here</button>
+        <button id="home-rotate" class="secondary" type="button">Change your Home's keys</button>
+      </div>
+      <div id="home-rotate-how" hidden>
+        <p id="home-rotate-warning" class="detail"></p>
+        <div id="home-rotate-reasons" class="actions"></div>
+      </div>
+      <p id="home-status" class="detail"></p>
+    </section>
     <section id="devices" class="providers" hidden>
       <h2>Your devices</h2>
       <!--

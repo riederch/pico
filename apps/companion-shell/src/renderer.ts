@@ -9,6 +9,9 @@ import {
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceAuthorityEndedLine,
   picoCompanionDeviceAuthorityUnavailable,
+  picoCompanionHomeMemberAdmittedLine,
+  picoCompanionHostRotationReasonLines,
+  picoCompanionHostRotationWarning,
   picoCompanionWindowViewLines,
   type PicoCompanionWindowView,
   type PicoCompanionCondition,
@@ -21,6 +24,7 @@ import {
   renderPicoCompanionRelays,
   renderPicoCompanionRelayAccountIssued,
   renderPicoCompanionDevices,
+  renderPicoCompanionHomeMembers,
   renderPicoCompanionMeasurements,
   renderPicoCompanionSuppliers,
   renderPicoCompanionDeclaredSuppliers,
@@ -95,6 +99,13 @@ declare global {
         enabled: boolean,
       ): Promise<void>;
       forgetDevice(presenceId: string): Promise<void>;
+      getHomeMembers(): Promise<unknown>;
+      admitHomeMember(): Promise<{
+        credentialId: string;
+        picoIdentityFingerprintHex: string;
+        validUntil: string;
+      }>;
+      rotateHostKeys(reason: string): Promise<unknown>;
       getDeviceAuthority(): Promise<unknown>;
       endDeviceAuthority(delegationId: string, reason: string): Promise<{
         delegationId: string;
@@ -781,6 +792,76 @@ depotFetchNow.addEventListener('click', () => {
     });
 });
 
+const homeSection = requireElement('home');
+const homeMemberList = requireElement('home-member-list');
+const homeMembersSummary = requireElement('home-members-summary');
+const homeStatus = requireElement('home-status');
+const homeAdmit = requireButton('home-admit');
+const homeRotate = requireButton('home-rotate');
+const homeRotateHow = requireElement('home-rotate-how');
+const homeRotateWarning = requireElement('home-rotate-warning');
+const homeRotateReasons = requireElement('home-rotate-reasons');
+
+/**
+ * ADR 0130 E4. Who lives in this Home, and the keys it is known by.
+ *
+ * The read throws rather than answering empty, and the section stays hidden
+ * when it does: "nobody else lives here" is a sentence about a place, and a
+ * window that said it because a read failed would be telling somebody
+ * something false about their own Home.
+ */
+function refreshHomeMembers(): void {
+  void window.picoCompanion.getHomeMembers().then((members) => {
+    renderPicoCompanionHomeMembers(
+      {
+        list: homeMemberList,
+        section: homeSection,
+        summary: homeMembersSummary,
+        document,
+      },
+      members,
+    );
+  }, () => {
+    homeSection.hidden = true;
+  });
+}
+
+homeAdmit.addEventListener('click', () => {
+  homeAdmit.disabled = true;
+  void window.picoCompanion.admitHomeMember().then((admitted) => {
+    homeStatus.textContent = picoCompanionHomeMemberAdmittedLine(admitted);
+    refreshHomeMembers();
+  }, (error: unknown) => {
+    homeStatus.textContent = refusalText(error, 'Nobody was admitted.');
+  }).finally(() => {
+    homeAdmit.disabled = false;
+  });
+});
+
+homeRotate.addEventListener('click', () => {
+  homeRotateWarning.textContent = picoCompanionHostRotationWarning;
+  homeRotateReasons.replaceChildren();
+  for (const line of picoCompanionHostRotationReasonLines()) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.reason = line.reason;
+    button.textContent = line.label;
+    button.addEventListener('click', () => {
+      homeRotateHow.hidden = true;
+      homeStatus.textContent = '';
+      void window.picoCompanion.rotateHostKeys(line.reason).then(() => {
+        // What happened is a presentation, not a line in this section: a Home
+        // that changed its keys is a state of the whole window.
+        refreshHomeMembers();
+      }, (error: unknown) => {
+        homeStatus.textContent = refusalText(error, 'Your Home still has the same keys.');
+      });
+    });
+    homeRotateReasons.append(button);
+  }
+  homeRotateHow.hidden = false;
+});
+
 const deviceSection = requireElement('devices');
 const deviceList = requireElement('device-list');
 const deviceStatus = requireElement('device-status');
@@ -1189,6 +1270,7 @@ function showView(view: PicoCompanionWindowView): void {
     refreshSuppliers();
     refreshModuleConsent();
     refreshDepots();
+    refreshHomeMembers();
     refreshDevices();
     refreshRelays();
   }

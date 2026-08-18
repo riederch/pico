@@ -46,6 +46,10 @@
       "types": "./dist/founding.d.ts",
       "import": "./dist/founding.js"
     },
+    "./home-authority": {
+      "types": "./dist/home-authority.d.ts",
+      "import": "./dist/home-authority.js"
+    },
     "./host-repin": {
       "types": "./dist/host-repin.d.ts",
       "import": "./dist/host-repin.js"
