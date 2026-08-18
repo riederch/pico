@@ -2,11 +2,57 @@
 
 ## Status
 
-Accepted as a product-surface and platform-order decision; E6 implemented,
-E1-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
+Accepted as a product-surface and platform-order decision; E1, E2 and E6
+implemented, E3-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
 the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
+
+Status note, 2026-08-18: **E1 is closed, and the tray is now measured rather
+than assumed.**
+
+Three doors, each proven against the packaged `.deb` in
+`scripts/verify-linux-package.mjs`:
+
+- the **desktop entry**, followed through rather than compared. The entry names
+  a launcher script - ADR 0123 Z3 drops the core-dump limits there before
+  Electron starts - so the entry and the running process carry names that are
+  correctly different, and asserting them equal would have been a check that
+  passes forever without looking at anything. The chain checked is entry ->
+  installed launcher -> the binary it execs -> the process holding the
+  single-instance lock. It replaced a substring test that also accepted
+  `Exec=...pico-companion-anything`.
+- the **second launch**, which is a real second copy of the packaged binary.
+  The probe only *observes*: raising the window is the product's handler's job,
+  and a probe that called `showWindow` itself would keep passing on a build
+  that had lost it.
+- the **notification**, driven through the same function the product uses, with
+  the click emitted rather than delivered. A daemon's delivery belongs to the
+  session; what belongs to this process is that the action leads somewhere.
+
+**The reference negative test is constructed, not waited for.** GNOME has
+shipped with no StatusNotifierItem host since 3.26, and nobody here runs GNOME -
+this was written on KDE, which hosts one, so all three doors were open and any
+arrangement would have passed by accident. `dbus-run-session` gives a private
+bus that owns nothing, which is the same absence from the companion's side. On
+it, the desktop entry and the notification still open the window.
+
+The tray is deliberately **not** asserted absent there: Electron accepts an icon
+on a bus nobody watches and reports success. That is the whole reason
+reachability is a property of the session rather than of the code that asks for
+it - and it is why `assertPicoCompanionReachability` refuses two doors when one
+of them is the tray, which would count as two here and be one on GNOME.
+
+Where a session bus can be reached, the E1 contract is asserted against it;
+where it cannot, the product-side facts are still asserted and the rest is
+reported. That split is ADR 0113 C3's lesson applied a second time.
+
+One cost worth recording: the negative run appeared to hang for three minutes.
+A private bus activates `xdg-desktop-portal` on demand, the activated service
+inherits the verifier's descriptors and outlives the companion, and a piped
+`spawnSync` therefore keeps reading an open write end long after the probe has
+answered. It arrives as `ETIMEDOUT` and reads exactly like a companion that
+hung. The probe's output goes through a file now.
 
 Status note, 2026-08-18: **E2 is closed. A Home can be founded from the Pico
 Client, and the Client is the only place a person is sent.**
@@ -284,7 +330,7 @@ Node host beside each of them.
 
 ## Gates
 
-- **E1 - Reachability contract (open):** at least two proven doors per
+- **E1 - Reachability contract (implemented for Linux):** at least two proven doors per
   platform, with stock GNOME (no AppIndicator extension) as the reference
   negative test for the tray; single-instance activation raises the
   existing companion rather than starting a second.

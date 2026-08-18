@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -69,6 +70,7 @@ const assetPath = join(import.meta.dirname, 'assets');
 const trayPssBudgetBytes = 225_000_000;
 const trayPrivateDirtyAndHugetlbBudgetBytes = 110_000_000;
 const trayMemoryProbe = process.env.PICO_COMPANION_RELEASE_PROBE === 'tray-memory-v2';
+const reachabilityProbe = process.env.PICO_COMPANION_RELEASE_PROBE === 'reachability-v1';
 
 let presentation: PicoCompanionPresentation = parsePicoCompanionPresentation({
   kind: 'starting',
@@ -123,19 +125,37 @@ const presentationPort: PicoCompanionPresentationPort = {
     );
   },
   notify(state) {
-    const current = parsePicoCompanionPresentation(state);
-    const notification = new Notification({
-      title: current.title,
-      body: current.body,
-      urgency: 'critical',
-      timeoutType: 'never',
-      silent: false,
-    });
-    notification.on('click', () => showWindow());
+    const notification = buildNotification(parsePicoCompanionPresentation(state));
     notification.show();
     showWindow();
   },
 };
+
+/**
+ * ADR 0130 E1. The notification is a door, so the thing that opens it is
+ * named rather than written inline.
+ *
+ * A notification with no action is an announcement: it tells somebody Pico
+ * needs them and gives them nowhere to go, which on a desktop with no tray
+ * host is the difference between reachable and not. The probe drives this
+ * same function, because a door proven on a copy of the code is not proven.
+ */
+/** The window as it is now, not as the last assignment left it. */
+function currentWindow(): BrowserWindow | null {
+  return window;
+}
+
+function buildNotification(state: PicoCompanionPresentation): Notification {
+  const notification = new Notification({
+    title: state.title,
+    body: state.body,
+    urgency: 'critical',
+    timeoutType: 'never',
+    silent: false,
+  });
+  notification.on('click', () => showWindow());
+  return notification;
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -162,6 +182,10 @@ if (!app.requestSingleInstanceLock()) {
 async function start(): Promise<void> {
   if (trayMemoryProbe) {
     await runTrayMemoryProbe();
+    return;
+  }
+  if (reachabilityProbe) {
+    await runReachabilityProbe();
     return;
   }
   lockDownRendererSession();
@@ -271,6 +295,120 @@ async function startServiceCore(): Promise<void> {
   } catch (error) {
     presentServiceError(error);
   }
+}
+
+/**
+ * ADR 0130 E1. Measures the doors from inside a packaged companion.
+ *
+ * **In-process facts only.** Whether a session hosts a tray or a notification
+ * daemon is a question about the bus, and the verifier asks it there; what
+ * only this process can answer is whether *its* doors are wired - that the
+ * second launch of this executable raised this window instead of starting a
+ * second companion, and that the notification it raises carries an action
+ * that opens that window.
+ *
+ * The second launch is real. A test that asserted `app.on('second-instance')`
+ * is registered would pass on a build whose desktop entry launches a different
+ * binary, which is the failure that looks like success: two companions, each
+ * holding half the state, and a window on screen so nothing reads as broken.
+ */
+async function runReachabilityProbe(): Promise<void> {
+  /**
+   * The same two steps a real start does before any window exists. A probe
+   * that opened a window without them would raise one the renderer cannot
+   * talk to, and then measure that as a working door.
+   */
+  lockDownRendererSession();
+  registerIpc();
+  process.stdout.write('Pico reachability probe: ipc ready.\n');
+  let trayCreated = false;
+  try {
+    createTray();
+    trayCreated = true;
+  } catch {
+    // A desktop with no host does not usually throw - it accepts an icon and
+    // shows it to nobody - but a refusal here is still an absent door rather
+    // than a failed probe.
+    trayCreated = false;
+  }
+
+  process.stdout.write('Pico reachability probe: tray step done.\n');
+  /**
+   * Observed, never helped. Raising the window belongs to the handler the
+   * product registers, and a probe that called `showWindow` here would keep
+   * passing on a build that had lost it - proving the probe rather than the
+   * door. The half second is for that handler to run, not for Electron.
+   */
+  const raised = new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => resolve(false), 15_000);
+    app.once('second-instance', () => {
+      setTimeout(() => {
+        clearTimeout(timer);
+        resolve(true);
+      }, 500);
+    });
+  });
+  process.stdout.write('Pico reachability probe: launching a second copy.\n');
+  const second = spawn(process.execPath, process.argv.slice(1), { stdio: 'ignore' });
+  /**
+   * Waited for rather than detached. The second copy quits the moment it finds
+   * the lock held, and a probe that returned while it was still starting left
+   * a process writing into the extraction directory the verifier was deleting
+   * - which surfaced as `ENOTEMPTY` and reads like a packaging fault.
+   */
+  const secondExited = new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 15_000);
+    second.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+  const delivered = await raised;
+  const opened = currentWindow();
+  const secondLaunchRaisedTheFirst = delivered
+    && opened !== null && !opened.isDestroyed() && opened.isVisible();
+  await secondExited;
+  process.stdout.write('Pico reachability probe: second copy exited.\n');
+
+  /**
+   * The notification door, driven through the function the product uses. The
+   * click is emitted rather than clicked: a daemon's delivery is the session's
+   * to prove, and what belongs to this process is that the action leads
+   * somewhere.
+   */
+  window?.destroy();
+  window = null;
+  const notification = buildNotification(parsePicoCompanionPresentation({
+    kind: 'idle',
+    severity: 'active',
+    symbol: '●',
+    decision: 'none',
+    title: 'Pico reachability probe',
+    body: 'Raised by the ADR 0130 E1 probe and not by anything that needs you.',
+    observedAt: new Date().toISOString(),
+  }));
+  process.stdout.write('Pico reachability probe: notification built.\n');
+  notification.emit('click');
+  // Read back through a call: the assignment happens inside the handler, and
+  // a direct read here is narrowed to the `null` two statements above.
+  const afterClick = currentWindow();
+  const notificationOpensTheWindow = afterClick !== null && !afterClick.isDestroyed();
+
+  // Closed before the report, so the exit does not race a renderer still
+  // loading its page.
+  afterClick?.destroy();
+  window = null;
+  process.stdout.write(`${JSON.stringify({
+    schema: 'pico.companion.reachability.v1',
+    packaged: app.isPackaged,
+    executable: process.execPath,
+    trayCreated,
+    secondLaunchRaisedTheFirst,
+    notificationsSupported: Notification.isSupported(),
+    notificationOpensTheWindow,
+  })}\n`);
+  tray?.destroy();
+  app.exit(0);
 }
 
 async function runTrayMemoryProbe(): Promise<void> {

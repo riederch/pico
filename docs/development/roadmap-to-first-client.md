@@ -42,19 +42,22 @@ Ein Block. **Opus 5 + high.**
 
 ## Phase 1 - Linux ohne Terminal installierbar
 
-Erst ab dem Ende dieser Phase ist das Wort "Client" ehrlich: heute laesst sich
-ein Home nur ueber `pico-vault` gruenden.
+Seit 2026-08-18 ist das Wort "Client" fuer Linux ehrlich: ein Home laesst sich
+aus dem Client gruenden (E2) und der Client ist ohne Tray erreichbar (E1).
 
-- **E6 Produktpfad-Check** - ein Repo-Skript, das fehlschlaegt, wenn
+- **E6 Produktpfad-Check (erledigt)** - ein Repo-Skript, das fehlschlaegt, wenn
   produktbezogene Doku eine Person durch `pico-vault` schickt. Haengt an nichts.
-  *Sonnet 5 + high.*
-- **E1 Erreichbarkeit** - zwei bewiesene Tueren pro Plattform,
-  Single-Instance-Aktivierung, stock GNOME ohne AppIndicator-Extension als
-  Referenz-Negativtest. *Opus 5 + high.*
-- **E2 Founding und Bindung** - `claim-home`, `open-identity-session` und der
-  erste Produktionsschreibvorgang von Profil und Keystore-Bindung. Schliesst das
-  ADR-0113-Residuum, dass diese Bindung in Produktion niemand schreibt.
-  *Opus 5 + xhigh.*
+- **E1 Erreichbarkeit (erledigt 2026-08-18)** - drei Tueren am gepackten `.deb`
+  bewiesen: Desktop-Eintrag (ueber die Launcher-Kette bis zum Prozess mit dem
+  Single-Instance-Lock), zweiter Start, Notification. Der Referenz-Negativtest
+  ist gebaut statt abgewartet: `dbus-run-session` gibt einen privaten Bus, der
+  nichts besitzt - dieselbe Abwesenheit wie stock GNOME.
+- **E2 Founding und Bindung (erledigt 2026-08-18)** - `claim-home`,
+  `open-identity-session` und der erste Produktionsschreibvorgang von Profil und
+  Keystore-Bindung. Schliesst das ADR-0113-Residuum, dass diese Bindung in
+  Produktion niemand schreibt. Die Bindung war die Luecke: Gruenden schrieb nur
+  das Profil, Wiederherstellen siegelte zusaetzlich - dieselbe Person waere je
+  nach Tuer bei jedem Start nach der Passphrase gefragt worden oder nie.
 
 ## Phase 2 - Linux betreibbar
 

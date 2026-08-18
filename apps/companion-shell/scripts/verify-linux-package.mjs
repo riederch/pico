@@ -3,7 +3,9 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  closeSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   realpathSync,
@@ -23,6 +25,12 @@ import {
   selectChromiumSandboxProbe,
 } from './chromium-sandbox-probe.mjs';
 import { assertPicoTrayMemoryBudgets } from './tray-memory-budget.mjs';
+import {
+  assertPicoCompanionReachability,
+  picoDesktopEntryExec,
+  picoLauncherExecTarget,
+  readPicoCompanionDoors,
+} from './reachability.mjs';
 
 const temporaryRoots = new Set();
 const rootOwnedTemporaryRoots = new Set();
@@ -75,8 +83,11 @@ assert(!launcher.includes('--no-sandbox')
   && !desktopEntry.includes('--no-sandbox')
   && !autostartEntry.includes('--no-sandbox'),
 'Production launch surfaces must never disable Chromium sandboxing.');
-assert(desktopEntry.includes('Exec=/opt/pico-companion/pico-companion'),
-  'Desktop entry does not launch the packaged executable.');
+// The entry's `Exec` is checked below, where ADR 0130 E1 follows it through
+// the installed launcher to the process that holds the single-instance lock.
+// A substring test here would also accept `Exec=...pico-companion-something`,
+// and two checks over one subject drift until the weaker one is the only one
+// anybody reads.
 assert(autostartEntry.includes('X-GNOME-Autostart-enabled=true'),
   'XDG autostart entry is not enabled.');
 assert(!desktopEntry.includes('\nIcon='),
@@ -167,8 +178,224 @@ for (const line of assertPicoTrayMemoryBudgets({
 })) {
   process.stdout.write(`${line}\n`);
 }
+/**
+ * ADR 0130 E1. The doors, measured where they either exist or do not.
+ *
+ * **The tray is one door and on stock GNOME it is not there at all**, so a
+ * companion that is only reachable through it is invisible to most Linux users
+ * while looking healthy from inside its own process. What is asserted here in
+ * every environment are the product's own facts - the installed entry names
+ * the executable that holds the single-instance lock, launching it twice
+ * raises the first, and the notification carries an action that opens the
+ * window. What depends on the session is asserted when there is a session to
+ * ask, and reported otherwise, for the reason ADR 0113 C3 records one screen
+ * above: a gate that is red for the environment trains its reader to shrug.
+ */
+const reachabilityRoot = temporaryRoot('pico-companion-reach-');
+const reachabilityProbe = runReachabilityProbe(reachabilityRoot);
+const desktopEntryPath = join(
+  extractionRoot, 'usr', 'share', 'applications', 'pico-companion.desktop',
+);
+const desktopEntryInstalled = existsSync(desktopEntryPath);
+assert(desktopEntryInstalled,
+  'The package installs no desktop entry, so the launcher door does not exist.');
+
+/**
+ * Followed rather than compared. The entry names a launcher script, because
+ * ADR 0123 Z3 needs somewhere to drop the core-dump limits before Electron
+ * starts, so the entry and the running process carry names that are correctly
+ * different. Asserting them equal would have been a check that passes forever
+ * without looking at anything; the chain that matters is entry -> installed
+ * launcher -> the binary it execs -> the process that holds the lock.
+ */
+const entryCommand = picoDesktopEntryExec(readFileSync(desktopEntryPath, 'utf8'));
+assert(entryCommand === '/opt/pico-companion/pico-companion',
+  `The desktop entry runs ${entryCommand} rather than the installed launcher `
+  + '/opt/pico-companion/pico-companion. ADR 0123 Z3 drops the core-dump limits in '
+  + 'that script, so an entry that reaches Electron another way is a launch path '
+  + 'that can write a core file holding the vault.');
+const installedLauncher = join(installRoot, basename(entryCommand));
+assert(existsSync(installedLauncher),
+  `The desktop entry runs ${entryCommand}, which this package does not install.`);
+const launcherTarget = picoLauncherExecTarget(readFileSync(installedLauncher, 'utf8'));
+assert(launcherTarget !== null,
+  `The installed launcher ${entryCommand} execs nothing.`);
+// Both sides expressed as installed paths: the probe ran out of a temporary
+// extraction directory, and its own directory is the one it would hold a lock
+// against after a real install.
+const desktopEntryExecutable = join(dirname(entryCommand), launcherTarget);
+const singletonExecutable = join(
+  dirname(entryCommand), basename(String(reachabilityProbe.executable)),
+);
+assert(desktopEntryExecutable === singletonExecutable,
+  `The desktop entry reaches ${desktopEntryExecutable} while the companion that holds `
+  + `the single-instance lock is ${singletonExecutable}: launching the entry would `
+  + 'start a second companion rather than raise the first.');
+assert(reachabilityProbe.secondLaunchRaisedTheFirst === true,
+  'Launching the packaged companion a second time did not raise the running one: '
+  + 'the desktop entry is not a door, it is a way to start a second companion.');
+assert(reachabilityProbe.notificationOpensTheWindow === true,
+  'The notification the companion raises does not open its window. A notification '
+  + 'without an action is an announcement, and on a desktop with no tray host it is '
+  + 'the difference between reachable and not.');
+assert(reachabilityProbe.notificationsSupported === true,
+  'The packaged runtime reports notifications as unsupported.');
+
+/**
+ * ADR 0130 E1's reference negative test, constructed rather than waited for.
+ *
+ * GNOME has shipped with no StatusNotifierItem host since 3.26, so the tray
+ * door is absent on the largest Linux desktop. Nobody here runs GNOME - this
+ * was written on KDE, which hosts one - and a contract that is only ever
+ * checked where it holds is not checked. `dbus-run-session` gives a private
+ * bus that owns nothing, which is the same absence from the companion's side.
+ *
+ * What must survive it are the two doors that do not need a tray host. The
+ * tray itself is *not* asserted absent: Electron accepts an icon on a bus
+ * nobody watches and reports success, which is exactly why reachability is
+ * measured at the session and not from inside the process.
+ */
+if (existsSync('/usr/bin/dbus-run-session') || existsSync('/bin/dbus-run-session')) {
+  const withoutHost = temporaryRoot('pico-companion-nohost-');
+  const negative = runReachabilityProbe(withoutHost, ['dbus-run-session', '--']);
+  assert(negative.secondLaunchRaisedTheFirst === true,
+    'On a session with no tray host, launching the companion a second time did not '
+    + 'raise the running one - which would leave stock GNOME with no door at all.');
+  assert(negative.notificationOpensTheWindow === true,
+    'On a session with no tray host, the notification does not open the window.');
+  process.stdout.write('ADR 0130 E1: on a bus that hosts no tray, the desktop entry '
+    + 'and the notification still open the window.\n');
+  removeTemporaryRoot(withoutHost);
+} else {
+  process.stdout.write('ADR 0130 E1: dbus-run-session is absent, so the no-tray-host '
+    + 'negative test did not run.\n');
+}
+
+const sessionBus = dbusNameOwners([
+  'org.kde.StatusNotifierWatcher',
+  'org.freedesktop.Notifications',
+]);
+if (sessionBus === null) {
+  process.stdout.write('ADR 0130 E1: no session bus reachable, so which doors this '
+    + 'desktop hosts was not measured. The product-side facts above were asserted; '
+    + 'run this on a desktop session to check the two-door contract.\n');
+} else {
+  const doors = readPicoCompanionDoors({
+    statusNotifierHost: sessionBus['org.kde.StatusNotifierWatcher'],
+    desktopEntryInstalled,
+    desktopEntryExecutable,
+    singletonExecutable,
+    secondLaunchRaisedTheFirst: reachabilityProbe.secondLaunchRaisedTheFirst,
+    notificationDaemon: sessionBus['org.freedesktop.Notifications'],
+    notificationsSupported: reachabilityProbe.notificationsSupported,
+    notificationOpensTheWindow: reachabilityProbe.notificationOpensTheWindow,
+  });
+  const open = assertPicoCompanionReachability(doors);
+  process.stdout.write(`ADR 0130 E1: reachable through ${open.join(', ')} on this `
+    + `session (${process.env.XDG_CURRENT_DESKTOP ?? 'unnamed desktop'}).\n`);
+}
+
+removeTemporaryRoot(reachabilityRoot);
 removeTemporaryRoot(extractionRoot);
 removeTemporaryRoot(probeRoot);
+
+/**
+ * The packaged companion, asked what its own doors do. It spawns a second copy
+ * of itself, so the executable path here is the installed one and not a
+ * development build.
+ */
+function runReachabilityProbe(root, prefix = []) {
+  const probeArguments = [
+    ...sandboxProbe.arguments,
+    `--user-data-dir=${join(root, 'user-data')}`,
+  ];
+  let probeCommand = executable;
+  let probeArgs = probeArguments;
+  if (process.env.DISPLAY === undefined && process.env.WAYLAND_DISPLAY === undefined) {
+    assert(run('which', ['xvfb-run']).stdout.trim() !== '',
+      'A display or xvfb-run is required for the ADR 0130 E1 reachability probe.');
+    probeCommand = 'xvfb-run';
+    probeArgs = ['-a', executable, ...probeArguments];
+  }
+  if (prefix.length > 0) {
+    probeArgs = [...prefix.slice(1), probeCommand, ...probeArgs];
+    probeCommand = prefix[0];
+  }
+  /**
+   * Collected through a file rather than a pipe, and that is not a style
+   * choice. A private bus activates `xdg-desktop-portal` on demand; the
+   * activated service inherits this process's descriptors and outlives the
+   * companion, so a piped `spawnSync` keeps reading an open write end long
+   * after the probe has answered - which arrives as `ETIMEDOUT` and reads
+   * exactly like a companion that hung. It cost two hours here.
+   */
+  const outputPath = join(root, 'probe-output.txt');
+  mkdirSync(root, { recursive: true });
+  const output = openSync(outputPath, 'w');
+  try {
+    run(probeCommand, probeArgs, {
+      ...sandboxProbe.environment,
+      PICO_COMPANION_RELEASE_PROBE: 'reachability-v1',
+      XDG_CACHE_HOME: join(root, 'cache'),
+      XDG_CONFIG_HOME: join(root, 'config'),
+    }, ['ignore', output, output], 120_000);
+  } finally {
+    closeSync(output);
+  }
+  const written = readFileSync(outputPath, 'utf8');
+  const line = written.split('\n').find((candidate) => (
+    candidate.includes('"schema":"pico.companion.reachability.v1"')
+  ));
+  assert(line !== undefined,
+    `The reachability probe emitted no report: ${written}`);
+  const parsed = JSON.parse(line);
+  assert(parsed.packaged === true,
+    'The reachability probe did not run as a packaged Electron app.');
+  return parsed;
+}
+
+/**
+ * Which of these bus names somebody owns, or `null` when there is no bus to
+ * ask - a headless build machine, which is a different thing from a desktop
+ * that hosts nothing.
+ *
+ * `gdbus` then `busctl`, because neither is guaranteed and the answer is worth
+ * a second attempt. A missing tool is also `null`: an unmeasured name must not
+ * read as an absent one, or a build box without glib would report every
+ * desktop as broken.
+ */
+function dbusNameOwners(names) {
+  if (process.env.DBUS_SESSION_BUS_ADDRESS === undefined) {
+    return null;
+  }
+  const ask = (name) => {
+    const viaGdbus = spawnSync('gdbus', [
+      'call', '--session', '--dest', 'org.freedesktop.DBus',
+      '--object-path', '/org/freedesktop/DBus',
+      '--method', 'org.freedesktop.DBus.GetNameOwner', name,
+    ], { encoding: 'utf8', timeout: 10_000 });
+    if (viaGdbus.error === undefined && (viaGdbus.status === 0 || viaGdbus.status === 1)) {
+      return viaGdbus.status === 0;
+    }
+    const viaBusctl = spawnSync('busctl', ['--user', 'status', name], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    if (viaBusctl.error === undefined && (viaBusctl.status === 0 || viaBusctl.status === 1)) {
+      return viaBusctl.status === 0;
+    }
+    return undefined;
+  };
+  const owners = {};
+  for (const name of names) {
+    const owned = ask(name);
+    if (owned === undefined) {
+      return null;
+    }
+    owners[name] = owned;
+  }
+  return owners;
+}
 
 function fileNames(root) {
   const names = [];

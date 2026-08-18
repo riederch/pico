@@ -35,8 +35,10 @@ const repoRoot = join(fileURLToPath(new URL('..', import.meta.url)));
  *   true rather than more current (ADR 0128).
  * - `AGENTS.md`, `.agent-context.md`, `TODO.md`, `progress.md` address agents
  *   and maintainers, and `progress.md` in particular *must* be able to state
- *   that founding currently requires the CLI - that gap is exactly what it
- *   exists to report.
+ *   which ceremonies still require the CLI - that gap is exactly what it exists
+ *   to report. Founding was the example here until ADR 0130 E2 closed it on
+ *   2026-08-18; the exemption stands because the reporting need does, not
+ *   because that particular gap does.
  * - `docs/development/**` is the runbook and the briefs: the tool's home.
  * - `docs/release/**` is maintainer procedure, not a person using Pico.
  * - `docs/protocol/**` specifies wire contracts and instructs nobody.
