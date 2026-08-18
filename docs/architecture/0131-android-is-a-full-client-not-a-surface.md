@@ -272,9 +272,34 @@ local-first product's most security-critical moment.
 
 ## Gates
 
-- **A1 - Runtime and primitive path (open):** the JavaScript runtime that
-  hosts the shell-free core on Android, and the reviewed libsodium build
-  behind it, with the existing fixture suites passing on-device.
+- **A1 - Runtime and primitive path (open, and measured 2026-08-18):** the
+  JavaScript runtime that hosts the shell-free core on Android, and the
+  reviewed libsodium build behind it, with the existing fixture suites
+  passing on-device.
+
+  **What the core actually asks of a runtime was measured before choosing
+  one**, by walking `apps/companion`'s static import graph: 62 modules, and
+  six Node built-ins. `node:fs`, `node:path` and `node:os` for the
+  device-local files - profile, first-run journal, recovery state, relay
+  operators, mailbox, platform unlock. `node:net` for the *client* end of
+  the daemon socket, which is A2's question in one import. `node:crypto`
+  in one module, `node:buffer` in one, and `node:child_process` in exactly
+  one - `notify.ts`, the desktop notification command, which is a platform
+  adapter anywhere else.
+
+  Outside the standard library it reaches `libsodium-wrappers-sumo` and
+  `@scure/bip39`, both portable, and `pdf-lib` with `qrcode` only through
+  the Recovery Card generator. **No native module is in that closure** - in
+  particular no `better-sqlite3`: a client holds files and a socket, not a
+  database.
+
+  The walk also found the closure carrying the vault CLI, the daemon
+  *server* and `reader-access` - which needs `node:worker_threads`, the
+  built-in least likely to exist on a mobile runtime - because two modules
+  imported the `@pico/vault-daemon` barrel to open a socket. Narrowed, and
+  `check-companion-boundary.mjs` now walks the shell-free core the way it
+  already walked the tray, so the next wide import is a named error rather
+  than weight discovered on a phone.
 - **A2 - Process and authority boundary (open):** separate custody process
   over an app-private AF_UNIX socket, or an in-process seam over the same
   request families; decided with A1, with the ADR 0099 approval binding

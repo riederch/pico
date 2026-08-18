@@ -10,10 +10,15 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
+// The narrow subpath, not the barrel: ADR 0131 A1 measured the client's
+// closure and found the barrel dragging the CLI, the daemon *server* and
+// `reader-access` - which needs `node:worker_threads` - into everything that
+// only wanted to open a socket. Same finding ADR 0136 recorded for the tray,
+// one package further in.
 import {
   connectPicoVaultDaemonClient,
   type PicoVaultDaemonClient,
-} from '@pico/vault-daemon';
+} from '@pico/vault-daemon/client';
 import {
   picoCompanionLinuxKeystoreBackends,
   requirePicoCompanionKeystoreBackend,

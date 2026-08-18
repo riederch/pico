@@ -4,11 +4,13 @@ import {
   type PicoHomeDeviceRecoveryPendingView,
 } from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
+// Narrow subpaths for the same reason `recovery-controller.ts` uses them: the
+// barrel carries the CLI and the daemon server, and a first run needs neither.
 import {
   connectPicoVaultDaemonClient,
-  initiatePicoHomeDeviceRecovery,
   type PicoVaultDaemonClient,
-} from '@pico/vault-daemon';
+} from '@pico/vault-daemon/client';
+import { initiatePicoHomeDeviceRecovery } from '@pico/vault-daemon/device-recovery-ceremony';
 import { refreshPicoHomeHostPins } from '@pico/vault-daemon/host-pin-refresh';
 import type {
   PicoCompanionApprovalDecisionPort,

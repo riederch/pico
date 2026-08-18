@@ -246,6 +246,67 @@ while (trayQueue.length > 0) {
   }
 }
 
+/**
+ * ADR 0131 A1. What the shell-free core would have to carry onto a phone.
+ *
+ * The tray walk above asks what an Electron main process starts with. This
+ * one asks a different question with the same technique: what does
+ * `apps/companion` itself reach, since that is the code an Android runtime
+ * would host. Measured on 2026-08-18, it reached the vault CLI, the daemon
+ * *server* and `reader-access` - the last of which needs
+ * `node:worker_threads`, the built-in least likely to exist on a mobile JS
+ * runtime - because two modules imported the `@pico/vault-daemon` barrel to
+ * open a socket.
+ *
+ * Forbidding them here rather than remembering: the same import will look
+ * harmless again the next time somebody needs one symbol from that package.
+ */
+const clientForbidden = [
+  {
+    file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'cli.ts'),
+    why: 'the vault CLI, which is a tool rather than part of any client (ADR 0105)',
+  },
+  {
+    file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'daemon.ts'),
+    why: 'the daemon server, which a client talks to rather than contains',
+  },
+  {
+    file: join(repoRoot, 'apps', 'vault-daemon', 'src', 'reader-access.ts'),
+    why: 'the reader-access worker, which reaches node:worker_threads',
+  },
+];
+
+const clientReached = new Set();
+const clientQueue = listSourceFiles(join(repoRoot, 'apps', 'companion', 'src'))
+  .filter((file) => !file.endsWith('.test.ts'));
+while (clientQueue.length > 0) {
+  const file = clientQueue.pop();
+  if (clientReached.has(file)) {
+    continue;
+  }
+  clientReached.add(file);
+  const source = readFileSync(file, 'utf8');
+  for (const match of source.matchAll(/(?:^|[^\w$])(?:from\s+|require\s*\(\s*)['"]([^'"]+)['"]/g)) {
+    const preceding = source.slice(0, match.index + match[0].length - match[1].length - 2);
+    if (typeOnly.test(preceding)) {
+      continue;
+    }
+    const resolved = resolveTrayImport(match[1], file);
+    if (resolved !== null) {
+      clientQueue.push(resolved);
+    }
+  }
+}
+
+for (const { file, why } of clientForbidden) {
+  if (clientReached.has(file)) {
+    errors.push(
+      `apps/companion must not statically reach ${relative(repoRoot, file)} (${why}); `
+      + 'import a narrow subpath from @pico/vault-daemon.',
+    );
+  }
+}
+
 for (const { file, why } of trayForbidden) {
   if (trayReached.has(file)) {
     errors.push(
@@ -265,7 +326,8 @@ if (errors.length > 0) {
 
 console.log(
   'Companion shell-boundary check passed'
-  + ` (tray start reaches ${trayReached.size} modules;`
+  + ` (tray start reaches ${trayReached.size} modules,`
+  + ` the shell-free core ${clientReached.size};`
   + ` ${contractChannels.size} IPC channels, named identically on both sides).`,
 );
 
