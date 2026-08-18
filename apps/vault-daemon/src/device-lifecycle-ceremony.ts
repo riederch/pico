@@ -68,10 +68,63 @@ interface LifecycleCeremonyBaseInput {
   now?: () => Date;
 }
 
+/**
+ * ADR 0109 D3's target side, as a port rather than as a second daemon client.
+ *
+ * The target has to co-sign the Home activation with its own device key, and
+ * that key never leaves the vault holding it. Where that vault is, is
+ * transport: on this machine for the tool, and across a camera for a device
+ * a person is holding up to another (ADR 0130 E3). The ceremony must not know
+ * the difference - the signature is the same proof either way, and a ceremony
+ * that could tell would eventually treat one of them as the lesser one.
+ */
+export interface PicoHomeDeviceTargetSigner {
+  /** The exact keys the delegation will name, as the target's vault publishes them. */
+  signing: PicoVaultDaemonUnlockedSessionDescriptor;
+  keyAgreement: PicoVaultDaemonUnlockedSessionDescriptor;
+  signActivation(
+    activation: PicoHomeDeviceActivationSignatureInput,
+  ): Promise<string>;
+}
+
+/**
+ * The signer for a target vault this process can reach, which is what the
+ * tool has and what the enrolment tests drive.
+ */
+export async function picoHomeDeviceTargetSignerFromVault(
+  client: PicoVaultDaemonClient,
+  input: {
+    signingKeyFingerprintHex: string;
+    keyAgreementKeyFingerprintHex: string;
+  },
+): Promise<PicoHomeDeviceTargetSigner> {
+  const status = await client.status();
+  const signing = requireSession(
+    status.sessions,
+    input.signingKeyFingerprintHex,
+    'device_signing',
+    'target_signing_key_not_unlocked',
+  );
+  const keyAgreement = requireSession(
+    status.sessions,
+    input.keyAgreementKeyFingerprintHex,
+    'device_key_agreement',
+    'target_agreement_key_not_unlocked',
+  );
+  return {
+    signing,
+    keyAgreement,
+    signActivation: async (activation) => await signWithExactKey(client, {
+      keyFingerprintHex: signing.keyFingerprintHex,
+      keyRole: 'device_signing',
+      label: picoHomeDeviceLifecycleCanonicalLabels.activation,
+      fields: activation as unknown as Record<string, unknown>,
+    }),
+  };
+}
+
 interface AuthorityCreationInput extends LifecycleCeremonyBaseInput {
-  targetClient: PicoVaultDaemonClient;
-  targetSigningKeyFingerprintHex: string;
-  targetKeyAgreementKeyFingerprintHex: string;
+  target: PicoHomeDeviceTargetSigner;
   scopes: PicoIdentityDelegationScope[];
   validFrom?: string;
   validUntil: string;
@@ -311,24 +364,36 @@ async function authorityCreationContext(input: AuthorityCreationInput): Promise<
   view: PicoHomeDeviceLifecycleView;
 }> {
   const now = (input.now ?? (() => new Date()))();
-  const [identity, targetStatus, view] = await Promise.all([
-    identitySession(input.rootClient, input.identityKeyFingerprintHex),
-    input.targetClient.status(),
-    readLifecycle(input.sponsorLinkClient, input),
-  ]);
-  const targetSigning = requireSession(
-    targetStatus.sessions,
-    input.targetSigningKeyFingerprintHex,
-    'device_signing',
-    'target_signing_key_not_unlocked',
-  );
-  const targetAgreement = requireSession(
-    targetStatus.sessions,
-    input.targetKeyAgreementKeyFingerprintHex,
-    'device_key_agreement',
-    'target_agreement_key_not_unlocked',
-  );
-  return { now, identity, targetSigning, targetAgreement, view };
+  /**
+   * Sequential, and that is a requirement rather than a style choice. These
+   * two talk to the vault - one asks it for the identity session, the other
+   * signs a Link request - and a device where the root and the sponsor are
+   * the same vault answers the second one with `client_request_in_flight`.
+   * The tool has two connections and never noticed; a product device has one
+   * (ADR 0130 E3), and a ceremony that only works when the caller happens to
+   * hold two sockets is a ceremony with an undocumented requirement.
+   */
+  const identity = await identitySession(input.rootClient, input.identityKeyFingerprintHex);
+  const view = await readLifecycle(input.sponsorLinkClient, input);
+  /**
+   * The roles are checked here rather than trusted from the port. A signer
+   * built across a transport carries whatever the other end said it carries,
+   * and a delegation naming a key-agreement key as a signing key would be a
+   * device the Home can never hear from.
+   */
+  if (input.target.signing.keyRole !== 'device_signing') {
+    throw new Error('target_signing_key_not_unlocked');
+  }
+  if (input.target.keyAgreement.keyRole !== 'device_key_agreement') {
+    throw new Error('target_agreement_key_not_unlocked');
+  }
+  return {
+    now,
+    identity,
+    targetSigning: input.target.signing,
+    targetAgreement: input.target.keyAgreement,
+    view,
+  };
 }
 
 async function activateAndSubmit(
@@ -361,12 +426,16 @@ async function activateAndSubmit(
     createdAt: context.now.toISOString(),
     expiresAt: new Date(context.now.getTime() + TARGET_ACTIVATION_LIFETIME_MS).toISOString(),
   };
-  const targetSignatureHex = await signWithExactKey(input.targetClient, {
-    keyFingerprintHex: context.targetSigning.keyFingerprintHex,
-    keyRole: 'device_signing',
-    label: picoHomeDeviceLifecycleCanonicalLabels.activation,
-    fields: activation as unknown as Record<string, unknown>,
-  });
+  const targetSignatureHex = await input.target.signActivation(activation);
+  /**
+   * Checked here as well as inside a vault-backed signer, because this is the
+   * boundary a transport sits behind: what comes back over one is a string
+   * somebody else produced, and the Home would refuse it later with a message
+   * about bytes rather than about the device that did not answer properly.
+   */
+  if (!/^[0-9a-f]{128}$/u.test(targetSignatureHex)) {
+    throw new Error('target_activation_signature_malformed');
+  }
   const submission: PicoHomeDeviceLifecycleSubmission = {
     schema: picoHomeDeviceLifecycleSubmissionSchema,
     evidence,

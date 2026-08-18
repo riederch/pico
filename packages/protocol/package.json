@@ -31,6 +31,10 @@
       "types": "./dist/confidence.d.ts",
       "import": "./dist/confidence.js"
     },
+    "./device-enrolment": {
+      "types": "./dist/device-enrolment.d.ts",
+      "import": "./dist/device-enrolment.js"
+    },
     "./depot": {
       "types": "./dist/depot.d.ts",
       "import": "./dist/depot.js"

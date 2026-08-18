@@ -30,6 +30,10 @@
       "types": "./dist/domain-read-grant.d.ts",
       "import": "./dist/domain-read-grant.js"
     },
+    "./enrolment": {
+      "types": "./dist/enrolment.d.ts",
+      "import": "./dist/enrolment.js"
+    },
     "./first-run": {
       "types": "./dist/first-run.d.ts",
       "import": "./dist/first-run.js"

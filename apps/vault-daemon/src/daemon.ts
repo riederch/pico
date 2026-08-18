@@ -513,6 +513,10 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         this.#handleFoundingBootstrap(socket, request);
         return;
       }
+      case picoVaultDaemonRequestFamilies.deviceBootstrap: {
+        this.#handleDeviceBootstrap(socket, request);
+        return;
+      }
       case picoVaultDaemonRequestFamilies.lock: {
         // Locking is never privileged and stays coarse on purpose: any
         // connection may end every session at once as a safety valve.
@@ -1606,6 +1610,73 @@ class PicoVaultDaemonRuntime implements PicoVaultDaemon {
         ? messageOf(error)
         : 'founding_bootstrap_failed';
       this.#audit('founding_bootstrap', { outcome: 'error', reason });
+      this.#respondError(socket, request.requestId, reason);
+    }
+  }
+
+  /**
+   * ADR 0130 E3. `#handleFoundingBootstrap` without the identity key.
+   *
+   * Same freshness rule and the same cleanup, because the same thing goes
+   * wrong halfway: a vault holding one of two keyfiles would meet its own
+   * leftovers on the next attempt and refuse as "not fresh". What differs is
+   * what a later device is - two device keys and no root - and that is the
+   * one thing this must not be able to drift on.
+   */
+  #handleDeviceBootstrap(
+    socket: Socket,
+    request: Extract<PicoVaultDaemonRequest, {
+      family: typeof picoVaultDaemonRequestFamilies.deviceBootstrap;
+    }>,
+  ): void {
+    if (this.#unlockedSessions.size !== 0
+      || readdirSync(this.keyfilesPath).length !== 0) {
+      this.#respondError(socket, request.requestId, 'device_bootstrap_requires_fresh_vault');
+      return;
+    }
+
+    const paths: string[] = [];
+    try {
+      const signing = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'device_signing',
+        passphrase: request.passphrase,
+      });
+      const agreement = createPicoVaultKeyfile(this.#sodium, {
+        keyRole: 'device_key_agreement',
+        passphrase: request.passphrase,
+      });
+      for (const [role, created] of [
+        ['device_signing', signing],
+        ['device_key_agreement', agreement],
+      ] as const) {
+        const path = join(
+          this.keyfilesPath,
+          `${role}-${created.keyFingerprintHex}.json`,
+        );
+        writePicoVaultKeyfile(path, created.keyfile);
+        paths.push(path);
+      }
+      this.#audit('device_bootstrap', {
+        outcome: 'ok',
+        targetDeviceSigningKeyFingerprintHex: signing.keyFingerprintHex,
+        targetDeviceKeyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+      });
+      this.#respondOk(socket, request.requestId, {
+        device: {
+          signingKeyFingerprintHex: signing.keyFingerprintHex,
+          signingPublicKeyHex: signing.publicKeyHex,
+          keyAgreementKeyFingerprintHex: agreement.keyFingerprintHex,
+          keyAgreementPublicKeyHex: agreement.publicKeyHex,
+        },
+      });
+    } catch (error) {
+      for (const path of paths) {
+        rmSync(path, { force: true });
+      }
+      const reason = snakeCaseReasonPattern.test(messageOf(error))
+        ? messageOf(error)
+        : 'device_bootstrap_failed';
+      this.#audit('device_bootstrap', { outcome: 'error', reason });
       this.#respondError(socket, request.requestId, reason);
     }
   }

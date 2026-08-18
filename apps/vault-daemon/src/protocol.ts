@@ -50,6 +50,16 @@ export const picoVaultDaemonRequestFamilies = {
    * restores one, this makes one - and nothing else.
    */
   foundingBootstrap: 'pico.vault.daemon.founding.bootstrap.v1',
+  /**
+   * ADR 0130 E3. The two keys a *later* device needs, made where they stay.
+   *
+   * The enrolment twin of `foundingBootstrap`, and the whole difference is
+   * the key it does not make. A device joining an identity that already
+   * exists gets device keys and a delegation; the identity root stays on the
+   * device that holds it, and a bootstrap that made a second one here would
+   * be making a second person.
+   */
+  deviceBootstrap: 'pico.vault.daemon.device.bootstrap.v1',
 } as const;
 
 /**
@@ -365,6 +375,26 @@ export interface PicoVaultDaemonFoundingBootstrapResult {
   };
 }
 
+export interface PicoVaultDaemonDeviceBootstrapRequest {
+  family: typeof picoVaultDaemonRequestFamilies.deviceBootstrap;
+  requestId: string;
+  passphrase: string;
+}
+
+/**
+ * No `delegationId`: a later device does not name its own authority. The
+ * sponsor's identity root mints that id when it signs the delegation, which
+ * is the difference between joining an identity and starting one.
+ */
+export interface PicoVaultDaemonDeviceBootstrapResult {
+  device: {
+    signingKeyFingerprintHex: string;
+    signingPublicKeyHex: string;
+    keyAgreementKeyFingerprintHex: string;
+    keyAgreementPublicKeyHex: string;
+  };
+}
+
 export interface PicoVaultDaemonApprovalWaitRequest {
   family: typeof picoVaultDaemonRequestFamilies.approvalWait;
   requestId: string;
@@ -407,7 +437,8 @@ export type PicoVaultDaemonRequest =
   | PicoVaultDaemonCeremonyCreateReaderGrantRequest
   | PicoVaultDaemonCeremonyIssueRecoveryCardRequest
   | PicoVaultDaemonRecoveryBootstrapRequest
-  | PicoVaultDaemonFoundingBootstrapRequest;
+  | PicoVaultDaemonFoundingBootstrapRequest
+  | PicoVaultDaemonDeviceBootstrapRequest;
 
 export interface PicoVaultDaemonKeyfileDescriptor {
   keyRole: PicoVaultPersonKeyRole;
@@ -683,6 +714,26 @@ export function parsePicoVaultDaemonRequest(frame: Buffer): PicoVaultDaemonReque
         requestId,
         passphrase,
         targetDelegationId,
+      };
+    }
+    case picoVaultDaemonRequestFamilies.deviceBootstrap: {
+      /**
+       * ADR 0130 E3. One input, and `assertExactKeys` is again the
+       * load-bearing half: a request that could also carry a card payload or
+       * a delegation id would be a second door into starting an identity or
+       * naming an authority, and this door does neither.
+       */
+      assertExactKeys(parsed, ['family', 'requestId', 'passphrase']);
+      const passphrase = parsed.passphrase;
+      if (typeof passphrase !== 'string'
+        || passphrase.length === 0
+        || passphrase.length > MAX_PICO_VAULT_DAEMON_PASSPHRASE_CHARS) {
+        throw new Error('invalid_request');
+      }
+      return {
+        family: picoVaultDaemonRequestFamilies.deviceBootstrap,
+        requestId,
+        passphrase,
       };
     }
     case picoVaultDaemonRequestFamilies.recoveryBootstrap: {

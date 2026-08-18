@@ -17,6 +17,8 @@ import {
   type PicoVaultDaemonCeremonyIssueRecoveryCardResult,
   type PicoVaultDaemonCeremonyRotateDomainRequest,
   type PicoVaultDaemonCeremonyRotateDomainResult,
+  type PicoVaultDaemonDeviceBootstrapRequest,
+  type PicoVaultDaemonDeviceBootstrapResult,
   type PicoVaultDaemonFoundingBootstrapRequest,
   type PicoVaultDaemonFoundingBootstrapResult,
   type PicoVaultDaemonRecoveryBootstrapRequest,
@@ -68,6 +70,10 @@ export interface PicoVaultDaemonClient {
   foundingBootstrap(
     input: Omit<PicoVaultDaemonFoundingBootstrapRequest, 'family' | 'requestId'>,
   ): Promise<PicoVaultDaemonFoundingBootstrapResult>;
+  /** ADR 0130 E3. Device keys for a vault joining an identity that exists. */
+  deviceBootstrap(
+    input: Omit<PicoVaultDaemonDeviceBootstrapRequest, 'family' | 'requestId'>,
+  ): Promise<PicoVaultDaemonDeviceBootstrapResult>;
   close(): Promise<void>;
 }
 
@@ -216,6 +222,10 @@ export async function connectPicoVaultDaemonClient(
       family: picoVaultDaemonRequestFamilies.recoveryBootstrap,
       ...bootstrapInput,
     }) as unknown as PicoVaultDaemonRecoveryBootstrapResult,
+    deviceBootstrap: async (bootstrapInput) => await request({
+      family: picoVaultDaemonRequestFamilies.deviceBootstrap,
+      ...bootstrapInput,
+    }) as unknown as PicoVaultDaemonDeviceBootstrapResult,
     close: async () => {
       if (closed) {
         return;

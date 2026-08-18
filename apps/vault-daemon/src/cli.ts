@@ -56,6 +56,7 @@ import {
 import { refreshPicoHomeHostPins } from './host-pin-refresh.js';
 import {
   enrollPicoHomeDevice,
+  picoHomeDeviceTargetSignerFromVault,
   readPicoHomeDeviceLifecycle,
   renewPicoHomeDevice,
   revokePicoHomeDevice,
@@ -782,15 +783,19 @@ async function runDeviceLifecycleCli(
       return await withClient(targetVaultHomePath, async (targetClient) => {
         const common = {
           rootClient,
-          targetClient,
+          // ADR 0130 E3. The tool's target vault is on this machine, so its
+          // signer is built from the client it already opened; the same
+          // ceremony takes one built across a camera.
+          target: await picoHomeDeviceTargetSignerFromVault(targetClient, {
+            signingKeyFingerprintHex:
+              requireFlag(flags, 'target-signing-fingerprint'),
+            keyAgreementKeyFingerprintHex:
+              requireFlag(flags, 'target-agreement-fingerprint'),
+          }),
           sponsorLinkClient,
           sodium: vaultSodium,
           identityKeyFingerprintHex,
           sponsor: sponsorWithIdentity,
-          targetSigningKeyFingerprintHex:
-            requireFlag(flags, 'target-signing-fingerprint'),
-          targetKeyAgreementKeyFingerprintHex:
-            requireFlag(flags, 'target-agreement-fingerprint'),
           scopes: lifecycleScopes(flags),
           ...(flags.has('valid-from')
             ? { validFrom: requireFlag(flags, 'valid-from') }
