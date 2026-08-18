@@ -525,6 +525,7 @@ def oriented_ellipsoid_between(
 
 def leaf_blade(
     name, base, control, tip, width, thickness, mat, zone, target, parent,
+    width_reference=(1.0, 0.0, 0.0),
 ):
     """Create one broad pointed lamella, closed and smooth on both sides."""
     base = Vector(base)
@@ -543,7 +544,7 @@ def leaf_blade(
             2.0 * inverse * (control - base)
             + 2.0 * progress * (tip - control)
         ).normalized()
-        width_axis = Vector((1.0, 0.0, 0.0))
+        width_axis = Vector(width_reference)
         width_axis = width_axis - tangent * width_axis.dot(tangent)
         if width_axis.length < 0.001:
             width_axis = Vector((0.0, 0.0, 1.0))
@@ -581,6 +582,99 @@ def leaf_blade(
     for segment in range(around):
         nxt = (segment + 1) % around
         faces.append((tip_index, last + segment, last + nxt))
+
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    target.objects.link(obj)
+    parent_preserve_world(obj, parent)
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    return obj
+
+
+def continuous_tube_path(name, points, radius, mat, zone, target, parent):
+    """Create one connected mechanical spine through an arbitrary path."""
+    curve = bpy.data.curves.new(f"{name}.Curve", "CURVE")
+    curve.dimensions = "3D"
+    curve.resolution_u = 5
+    curve.bevel_depth = radius
+    curve.bevel_resolution = 5
+    curve.resolution_v = 2
+    curve.fill_mode = "FULL"
+    spline = curve.splines.new("BEZIER")
+    spline.bezier_points.add(len(points) - 1)
+    for point, value in zip(spline.bezier_points, points):
+        point.co = Vector(value)
+        point.handle_left_type = "AUTO"
+        point.handle_right_type = "AUTO"
+    obj = bpy.data.objects.new(name, curve)
+    target.objects.link(obj)
+    parent_preserve_world(obj, parent)
+    curve.materials.append(mat)
+    obj["pico_material_zone"] = zone
+    return obj
+
+
+def ribbon_segment_mesh(
+    name, curve_point, start_amount, end_amount, width_start, width_end,
+    thickness, mat, zone, target, parent,
+):
+    """Create one broad, softly joined segment of a continuous rear ribbon."""
+    along = 14
+    around = 20
+    vertices = []
+    faces = []
+    for ring in range(along + 1):
+        progress = ring / along
+        amount = start_amount * (1.0 - progress) + end_amount * progress
+        centre = curve_point(amount)
+        before = curve_point(max(0.0, amount - 0.002))
+        after = curve_point(min(1.0, amount + 0.002))
+        tangent = (after - before).normalized()
+        width_axis = Vector((0.0, 1.0, 0.0))
+        width_axis = width_axis - tangent * width_axis.dot(tangent)
+        if width_axis.length < 0.001:
+            width_axis = Vector((0.0, 0.0, 1.0))
+            width_axis = width_axis - tangent * width_axis.dot(tangent)
+        width_axis.normalize()
+        thickness_axis = tangent.cross(width_axis).normalized()
+        width = width_start * (1.0 - progress) + width_end * progress
+        # Adjacent segments overlap. Retaining most of the end width produces
+        # the concept's continuous band while the small bulge keeps the eight
+        # PAS segments visually readable.
+        envelope = 0.86 + 0.14 * math.sin(math.pi * progress)
+        half_width = width * envelope
+        half_thickness = thickness * envelope
+        for segment in range(around):
+            angle = 2.0 * math.pi * segment / around
+            offset = (
+                width_axis * (half_width * math.cos(angle))
+                + thickness_axis * (half_thickness * math.sin(angle))
+            )
+            vertices.append(tuple(centre + offset))
+
+    for ring in range(along):
+        current = ring * around
+        following = current + around
+        for segment in range(around):
+            nxt = (segment + 1) % around
+            faces.append((
+                current + segment,
+                current + nxt,
+                following + nxt,
+                following + segment,
+            ))
+    first_centre = len(vertices)
+    vertices.append(tuple(curve_point(start_amount)))
+    last_centre = len(vertices)
+    vertices.append(tuple(curve_point(end_amount)))
+    last = along * around
+    for segment in range(around):
+        nxt = (segment + 1) % around
+        faces.append((first_centre, nxt, segment))
+        faces.append((last_centre, last + segment, last + nxt))
 
     mesh = bpy.data.meshes.new(f"{name}.Mesh")
     mesh.from_pydata(vertices, [], faces)
@@ -820,13 +914,17 @@ def preview_face(support_profile):
 
 
 def head_module_material(name, hue, chroma, translucency):
-    saturation = 0.45 + 0.45 * (chroma / 255.0)
-    value = 0.18 + 0.24 * (1.0 - translucency / 255.0)
+    # The concept uses a bright translucent light-guide shell, not a dark
+    # saturated plastic. Personal hue remains visible, but always in the
+    # pale technical corridor that still reads as part of PICO.
+    chroma_amount = chroma / 255.0
+    saturation = min(0.95, 0.22 + 0.90 * chroma_amount ** 1.5)
+    value = 0.52 + 0.20 * (1.0 - translucency / 255.0)
     rgb = colorsys.hsv_to_rgb((hue % 360) / 360.0, saturation, value)
     return material(
         f"PICO_ZONE_head_module.{name}", rgb,
-        metallic=0.04,
-        roughness=0.38 + 0.12 * (translucency / 255.0),
+        metallic=0.08,
+        roughness=0.24 + 0.12 * (translucency / 255.0),
     )
 
 
@@ -865,98 +963,221 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
     curl_amount = geometry["curl"] / 127.0
     width_amount = geometry["width"] / 255.0
     taper_amount = geometry["taper"] / 255.0
-    crown_amount = geometry["crownBias"] / 96.0
     root_spread = 0.060 + 0.075 * (geometry["rootSpread"] - 48) / 144.0
-
-    # Character coordinates are authoritative here: +Y up and +Z toward the
-    # viewer. Positive PAS sweep therefore travels toward -Z (the rear).
-    start = Vector((
-        side_amount * 0.030,
-        mount.location.y + 0.004,
-        0.070 - anchor_amount * 0.090,
-    ))
-    total_lift = 0.120 + lift_amount * 0.180 + max(crown_amount, 0.0) * 0.025
-    rear_sweep = 0.035 + max(sweep_amount, -0.25) * 0.210 + length_amount * 0.075
-    lateral = side_amount * (0.070 + length_amount * 0.090)
-    control = Vector((
-        start.x + lateral * 0.42,
-        start.y + total_lift * (0.58 + 0.10 * max(crown_amount, 0.0)),
-        start.z - rear_sweep * 0.30,
-    ))
-    end = Vector((
-        start.x + lateral + curl_amount * 0.035,
-        start.y + total_lift - abs(curl_amount) * 0.020,
-        start.z - rear_sweep - curl_amount * 0.025,
-    ))
-
-    def curve_point(amount):
-        inverse = 1.0 - amount
-        return inverse * inverse * start + 2.0 * inverse * amount * control + amount * amount * end
-
     segments = geometry["segments"]
-    root_points = []
-    for index in range(segments):
-        amount = 0.5 if segments == 1 else index / (segments - 1)
-        centred = amount - 0.5
-        root_z = start.z - centred * root_spread * 0.34
-        root_x = start.x + centred * root_spread * 1.08 + lateral * amount * 0.24
-        crown_radius = math.sqrt(root_x * root_x + root_z * root_z)
-        root_y = 0.402 - crown_radius * 0.43
-        base = Vector((root_x, root_y, root_z))
-        root_points.append(base)
-        tip_amount = 0.42 + 0.58 * amount
-        tip = curve_point(tip_amount)
-        fan_width = root_spread * (0.78 + 0.38 * lift_amount)
-        tip += Vector((
-            centred * fan_width + lateral * 0.16,
-            -abs(centred) * total_lift * (0.12 + 0.14 * lift_amount),
-            centred * rear_sweep * 0.18,
+
+    def cubic_point(start, control_a, control_b, end, amount):
+        inverse = 1.0 - amount
+        return (
+            inverse ** 3 * start
+            + 3.0 * inverse ** 2 * amount * control_a
+            + 3.0 * inverse * amount ** 2 * control_b
+            + amount ** 3 * end
+        )
+
+    # The long PAS recipe is the concept's rear ribbon: one dark root and one
+    # continuous spine carry overlapping translucent segments around a broad
+    # loop. It is not a ponytail made from independent strands.
+    long_rear_ribbon = geometry["length"] >= 176 and geometry["sweep"] >= 80
+    if long_rear_ribbon:
+        root = Vector((
+            0.025 + side_amount * 0.060,
+            mount.location.y + 0.023,
+            0.040 - anchor_amount * 0.150,
         ))
-        blade_control = (base + tip) * 0.5 + Vector((
-            centred * fan_width * 0.18 + lateral * 0.10,
-            0.025 + total_lift * 0.08,
-            -rear_sweep * 0.08,
+        reach = 0.400 + length_amount * 0.300
+        height = 0.105 + lift_amount * 0.100
+        lateral = 0.130 + abs(side_amount) * 0.180
+        lateral *= 1.0 if side_amount >= 0.0 else -1.0
+        arch = root + Vector((lateral * 0.62, height * 0.98, -reach * 0.60))
+        end = root + Vector((
+            lateral * 1.65,
+            -height * 1.55,
+            -reach * (0.88 - max(curl_amount, 0.0) * 0.06),
         ))
-        blade_width = (0.046 + width_amount * 0.052) * (1.0 - taper_amount * amount * 0.46)
-        blade_thickness = max(0.012, blade_width * 0.19)
-        leaf_blade(
-            f"HeadModule.{name}.Lamella.{index + 1:02d}",
-            base,
-            blade_control,
-            tip,
-            blade_width,
-            blade_thickness,
-            module_mat,
-            "head_module",
+        first_controls = (
+            root + Vector((lateral * 0.18, height * 0.62, -reach * 0.10)),
+            root + Vector((lateral * 0.42, height * 1.12, -reach * 0.40)),
+        )
+        second_controls = (
+            root + Vector((lateral * 0.82, height * 0.76, -reach * 0.86)),
+            root + Vector((lateral * 1.82, -height * 1.80, -reach * 1.08)),
+        )
+
+        def curve_point(amount):
+            if amount <= 0.5:
+                return cubic_point(
+                    root,
+                    first_controls[0],
+                    first_controls[1],
+                    arch,
+                    amount * 2.0,
+                )
+            return cubic_point(
+                arch,
+                second_controls[0],
+                second_controls[1],
+                end,
+                (amount - 0.5) * 2.0,
+            )
+
+        # The mechanical spine sits behind the translucent ribbon as in the
+        # concept, rather than splitting its visible face down the middle.
+        spine_points = [
+            curve_point(index / 32.0) + Vector((-0.026, 0.0, 0.0))
+            for index in range(33)
+        ]
+        continuous_tube_path(
+            f"HeadModule.{name}.InnerCarrier",
+            spine_points,
+            0.024 + width_amount * 0.012,
+            TRIM,
+            "trim",
+            target,
+            mount,
+        )
+        collar_end = curve_point(0.10)
+        oriented_ellipsoid_between(
+            f"HeadModule.{name}.RootCollar",
+            root,
+            collar_end,
+            0.036,
+            0.017,
+            TRIM,
+            "trim",
             target,
             mount,
         )
 
-    root_front = root_points[0]
-    root_back = root_points[-1]
-    root_middle = (root_front + root_back) * 0.5 + Vector((0.0, 0.018, 0.0))
-    carrier_radius = 0.016 + width_amount * 0.012
-    curved_tapered_digit(
-        f"HeadModule.{name}.InnerCarrier",
-        root_front,
-        root_middle,
-        root_back,
-        carrier_radius,
-        carrier_radius * 0.92,
-        module_mat,
-        "head_module",
-        target=target,
-        parent=mount,
-    )
+        for index in range(segments):
+            start_amount = max(0.0, index / segments - 0.018)
+            end_amount = min(1.0, (index + 1) / segments + 0.028)
+            progress = index / max(segments - 1, 1)
+            next_progress = min(1.0, (index + 1) / max(segments - 1, 1))
+            blade_width = (0.070 + width_amount * 0.050) * (
+                1.0 - taper_amount * progress * 0.42
+            )
+            next_width = (0.070 + width_amount * 0.050) * (
+                1.0 - taper_amount * next_progress * 0.42
+            )
+            blade_thickness = max(0.014, blade_width * 0.22)
+            ribbon_segment_mesh(
+                f"HeadModule.{name}.Lamella.{index + 1:02d}",
+                curve_point,
+                start_amount,
+                end_amount,
+                blade_width,
+                next_width,
+                blade_thickness,
+                module_mat,
+                "head_module",
+                target,
+                mount,
+            )
 
-    accent_start = curve_point(0.66)
-    accent_end = curve_point(0.82)
-    accent = oriented_ellipsoid_between(
+        accent_start = curve_point(0.54) + Vector((0.018, 0.0, 0.0))
+        accent_end = curve_point(0.69) + Vector((0.018, 0.0, 0.0))
+    else:
+        # Compact recipes become the three-to-four broad crown blades visible
+        # in the expression concept. Their roots follow the front/rear crown
+        # arc; they do not fan sideways like leaves or read as horns.
+        start = Vector((
+            side_amount * 0.030,
+            mount.location.y + 0.004,
+            0.070 - anchor_amount * 0.090,
+        ))
+        total_lift = 0.130 + lift_amount * 0.170
+        rear_lean = (
+            0.060
+            + max(sweep_amount, -0.25) * 0.100
+            + length_amount * 0.120
+            + lift_amount * 0.100
+        )
+        root_points = []
+        blade_records = []
+        for index in range(segments):
+            amount = 0.5 if segments == 1 else index / (segments - 1)
+            centred = amount - 0.5
+            root_x = start.x + centred * root_spread * 0.50
+            root_z = start.z - centred * root_spread * 2.40
+            crown_radius = math.sqrt(root_x * root_x + root_z * root_z)
+            root_y = 0.420 - crown_radius * 0.24
+            base = Vector((root_x, root_y, root_z))
+            root_points.append(base)
+            peak = max(0.0, 1.0 - abs(centred - 0.12) * 1.55)
+            blade_height = total_lift * (0.54 + 0.46 * peak)
+            lean = rear_lean * (0.58 + 0.42 * peak)
+            tip = base + Vector((
+                side_amount * 0.018 + centred * 0.050,
+                blade_height,
+                -lean * (0.25 + 0.75 * peak) + centred * 0.045,
+            ))
+            blade_control = base + Vector((
+                side_amount * 0.010 + centred * 0.025,
+                blade_height * 0.53,
+                -lean * 0.12 + centred * 0.018,
+            ))
+            blade_width = (
+                0.070 + width_amount * 0.050
+            ) * (0.80 + 0.20 * peak)
+            blade_thickness = max(0.011, blade_width * 0.20)
+            leaf_blade(
+                f"HeadModule.{name}.Lamella.{index + 1:02d}",
+                base,
+                blade_control,
+                tip,
+                blade_width,
+                blade_thickness,
+                module_mat,
+                "head_module",
+                target,
+                mount,
+                width_reference=(0.0, 0.0, 1.0),
+            )
+            blade_records.append((blade_height, blade_control, tip, blade_thickness))
+
+        root_front = root_points[0]
+        root_back = root_points[-1]
+        root_middle = (root_front + root_back) * 0.5 + Vector((0.0, 0.012, 0.0))
+        carrier_radius = 0.012 + width_amount * 0.007
+        curved_tapered_digit(
+            f"HeadModule.{name}.InnerCarrier",
+            root_front,
+            root_middle,
+            root_back,
+            carrier_radius,
+            carrier_radius * 0.92,
+            TRIM,
+            "trim",
+            target=target,
+            parent=mount,
+        )
+        oriented_ellipsoid_between(
+            f"HeadModule.{name}.RootCollar",
+            root_front,
+            root_back,
+            0.018,
+            0.008,
+            TRIM,
+            "trim",
+            target,
+            mount,
+        )
+        _, accent_control, accent_tip, accent_offset = max(
+            blade_records,
+            key=lambda record: record[0],
+        )
+        accent_start = accent_control * 0.62 + accent_tip * 0.38
+        accent_end = accent_control * 0.30 + accent_tip * 0.70
+        accent_start += Vector((accent_offset * 1.05, 0.0, 0.0))
+        accent_end += Vector((accent_offset * 1.05, 0.0, 0.0))
+
+    oriented_ellipsoid_between(
         f"Status.HeadAccent.{name}",
         accent_start,
         accent_end,
-        0.014,
-        0.007,
+        0.009,
+        0.004,
         STATUS,
         "status_emitters",
         target,
@@ -1006,7 +1227,7 @@ def install_head_identity_selector(mount):
         max=2,
         description=(
             "Exclusive head identity: 0 standard antenna, "
-            "1 procedural hair, 2 procedural comb"
+            "1 concept crown crest, 2 concept rear ribbon"
         ),
     )
     identity_sources = (
@@ -1288,21 +1509,6 @@ HEAD_VARIANT_COLLECTIONS = {
 HEAD_IDENTITY_CARRIERS = {}
 make_procedural_head_variant(
     "Hair",
-    "head-short-rear-flow",
-    {
-        "geometry": {
-            "anchor": 82, "side": 0, "length": 120, "lift": 80,
-            "sweep": 70, "curl": 6, "width": 118, "taper": 204,
-            "twist": 4, "segments": 5, "partOffset": 0,
-            "partDepth": 0, "crownBias": 62, "rootSpread": 126,
-        },
-        "material": {"hue": 210, "chroma": 220, "translucency": 40},
-    },
-    HEAD_HAIR,
-    mount,
-)
-make_procedural_head_variant(
-    "Comb",
     "head-raised-crown",
     {
         "geometry": {
@@ -1311,7 +1517,22 @@ make_procedural_head_variant(
             "twist": 4, "segments": 4, "partOffset": 0,
             "partDepth": 0, "crownBias": 0, "rootSpread": 126,
         },
-        "material": {"hue": 278, "chroma": 220, "translucency": 45},
+        "material": {"hue": 198, "chroma": 138, "translucency": 168},
+    },
+    HEAD_HAIR,
+    mount,
+)
+make_procedural_head_variant(
+    "Comb",
+    "head-long-neon-tail",
+    {
+        "geometry": {
+            "anchor": 208, "side": 18, "length": 230, "lift": 188,
+            "sweep": 110, "curl": 72, "width": 112, "taper": 216,
+            "twist": -20, "segments": 8, "partOffset": -34,
+            "partDepth": 82, "crownBias": 62, "rootSpread": 146,
+        },
+        "material": {"hue": 286, "chroma": 156, "translucency": 184},
     },
     HEAD_COMB,
     mount,

@@ -29,12 +29,13 @@ Select `PICO_MOUNT_head_module` in Blender and edit the custom property
 `pico_head_identity_index`:
 
 - `0`: standard antenna
-- `1`: procedural hair sweep
-- `2`: procedural comb/crown
+- `1`: concept crown crest (`head-raised-crown`)
+- `2`: concept rear ribbon (`head-long-neon-tail`)
 
-Exactly one carrier is visible. Hair and comb are recipes of the same proposed
-procedural generator, not separate fixed accessory standards. Each replaces
-the antenna and carries one status accent.
+Exactly one carrier is visible. Crest and rear ribbon are recipes of the same
+proposed procedural generator, not separate fixed accessory standards. Each
+replaces the antenna and carries one status accent. Their diagnostic geometry
+is calibrated against `docs/assets/pico-design-concept.png`.
 
 ## Rebuild and validate
 

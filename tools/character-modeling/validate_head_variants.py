@@ -59,10 +59,34 @@ print(
     f"bounds_min={antenna_minimum} bounds_max={antenna_maximum}"
 )
 
-for identity_index, collection_name in enumerate((
-    "HEAD_VARIANT_procedural_hair",
-    "HEAD_VARIANT_procedural_comb",
-), start=1):
+variant_expectations = (
+    (
+        "HEAD_VARIANT_procedural_hair",
+        "head-raised-crown",
+        lambda minimum, maximum: (
+            minimum[1] > 0.30
+            and maximum[1] > 0.60
+            and minimum[2] < -0.06
+            and max(abs(minimum[0]), abs(maximum[0])) < 0.40
+        ),
+    ),
+    (
+        "HEAD_VARIANT_procedural_comb",
+        "head-long-neon-tail",
+        lambda minimum, maximum: (
+            minimum[1] > 0.00
+            and minimum[2] < -0.65
+            and maximum[0] > 0.32
+            and maximum[1] > 0.60
+            and max(abs(minimum[0]), abs(maximum[0])) < 0.50
+        ),
+    ),
+)
+for identity_index, (
+    collection_name,
+    expected_vector,
+    concept_envelope,
+) in enumerate(variant_expectations, start=1):
     mount["pico_head_identity_index"] = identity_index
     mount.update_tag(refresh={"OBJECT"})
     bpy.context.view_layer.update()
@@ -73,18 +97,19 @@ for identity_index, collection_name in enumerate((
     assert collection["pico_status"] == "diagnostic"
     assert collection["pico_generator_id"] == "pico.appearance.head-generator"
     assert collection["pico_generator_version"] == 2
+    assert collection["pico_vector_name"] == expected_vector
     assert collection["pico_head_identity"] == "procedural_neon_hair"
     assert sum("InnerCarrier" in name for name in names) == 1
+    assert sum("RootCollar" in name for name in names) == 1
     assert sum("Status.HeadAccent" in name for name in names) == 1
     assert not any("Antenna" in name for name in names)
-    assert set(zones) == {"head_module", "status_emitters"}
+    assert set(zones) == {"head_module", "trim", "status_emitters"}
     minimum, maximum = world_bounds(objects)
     print(
         f"PICO_HEAD_VARIANT={collection_name} "
         f"objects={len(objects)} bounds_min={minimum} bounds_max={maximum}"
     )
-    assert minimum[1] > 0.30
-    assert max(abs(minimum[0]), abs(maximum[0])) < 0.40
+    assert concept_envelope(minimum, maximum)
 
 carriers = {
     0: antenna_carrier,
