@@ -416,8 +416,10 @@ exposed port cannot lock the operator out of their own relay. Neither bound is
 what protects the credentials - a 128-bit bearer already ends that argument -
 they bound the work an exposed port can be made to do.
 
-**A fresh relay holds no accounts and refuses every registration** as
-`unknown_account`, saying so once in its boot log.
+**A relay holds no accounts until you issue one** and refuses every
+registration as `unknown_account` until then. It says so once in the boot log
+of a relay that has been claimed; before the claim the boot log is about the
+claim instead, because that is what stands between it and being useful.
 
 **If the operator credential is lost**, create `/data/operator-reset` beside
 the database and restart. The relay forgets its operator and mints a new claim

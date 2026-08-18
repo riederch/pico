@@ -46,17 +46,27 @@ afterEach(async () => {
 /** A port nobody else in this suite uses, derived from the worker id. */
 const basePort = 14_200 + (Number(process.env.VITEST_WORKER_ID ?? '1') * 10);
 
-interface RunningRelay {
-  claimCode: string;
+interface StartedRelay {
   mailboxPort: number;
   healthPort: number;
   operatorPort: number;
   lines: () => readonly Record<string, unknown>[];
+  /** The first line carrying this event, or a failure holding the whole log. */
+  waitFor: (event: string) => Promise<Record<string, unknown>>;
+  /** SIGTERM and wait, so the next process can have these ports and database. */
+  stop: () => Promise<void>;
 }
 
-async function startRelay(overrides: Record<string, string> = {}): Promise<RunningRelay> {
-  const dir = mkdtempSync(join(tmpdir(), 'pico-relay-process-'));
-  dirs.push(dir);
+interface RunningRelay extends StartedRelay {
+  claimCode: string;
+}
+
+/**
+ * A relay against a database path the caller chooses, so a test can start a
+ * second process against the first one's database - which is the only way to
+ * observe what a relay says about itself on a boot that is not its first.
+ */
+function spawnRelay(databasePath: string, overrides: Record<string, string> = {}): StartedRelay {
   const mailboxPort = basePort;
   const healthPort = basePort + 1;
   const operatorPort = basePort + 2;
@@ -69,7 +79,7 @@ async function startRelay(overrides: Record<string, string> = {}): Promise<Runni
       PICO_RELAY_PORT: String(mailboxPort),
       PICO_RELAY_HEALTH_PORT: String(healthPort),
       PICO_RELAY_OPERATOR_PORT: String(operatorPort),
-      PICO_RELAY_DATABASE_PATH: join(dir, 'relay.sqlite'),
+      PICO_RELAY_DATABASE_PATH: databasePath,
       ...overrides,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -90,20 +100,43 @@ async function startRelay(overrides: Record<string, string> = {}): Promise<Runni
     }
   });
 
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const claimed = lines.find((line) => typeof line.claimCode === 'string');
-    if (claimed !== undefined) {
-      return {
-        claimCode: claimed.claimCode as string,
-        mailboxPort,
-        healthPort,
-        operatorPort,
-        lines: () => lines,
-      };
-    }
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`relay_never_announced_a_claim_code: ${JSON.stringify(lines)}`);
+  return {
+    mailboxPort,
+    healthPort,
+    operatorPort,
+    lines: () => lines,
+    waitFor: async (event: string): Promise<Record<string, unknown>> => {
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        const found = lines.find((line) => line.event === event);
+        if (found !== undefined) {
+          return found;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      // The log rather than the event name alone: a relay that logged
+      // something else says what it did instead, which is the finding.
+      throw new Error(`relay never logged ${event}: ${JSON.stringify(lines)}`);
+    },
+    stop: async (): Promise<void> => {
+      const index = started.indexOf(child);
+      if (index >= 0) {
+        started.splice(index, 1);
+      }
+      child.kill('SIGTERM');
+      await new Promise((resolve) => {
+        child.once('exit', resolve);
+        setTimeout(resolve, 5_000);
+      });
+    },
+  };
+}
+
+async function startRelay(overrides: Record<string, string> = {}): Promise<RunningRelay> {
+  const dir = mkdtempSync(join(tmpdir(), 'pico-relay-process-'));
+  dirs.push(dir);
+  const relay = spawnRelay(join(dir, 'relay.sqlite'), overrides);
+  const unclaimed = await relay.waitFor('relay_unclaimed');
+  return { ...relay, claimCode: unclaimed.claimCode as string };
 }
 
 const post = async (port: number, path: string, body: unknown, headers: Record<string, string> = {}) => {
@@ -236,6 +269,46 @@ describe('the relay process an operator installs', () => {
     // The credential stops working, and the mailbox is not theirs any more.
     expect((await post(relay.mailboxPort, '/relay/collect', { mailbox },
       { 'x-pico-relay-account': accountCredential })).body.refusal).toBe('mailbox_not_yours');
+  }, 60_000);
+
+  it('says it holds no accounts only once somebody has claimed it', async () => {
+    /**
+     * ADR 0153 PK7 after ADR 0154. **A relay has two empty states, and they
+     * are not the same sentence.**
+     *
+     * PK7 asks that a relay with no accounts say so rather than look broken.
+     * ADR 0154 then put a claim in front of provisioning, so the boot log of a
+     * relay nobody has claimed says *that* instead - accounts are not what
+     * stands between it and being useful yet. The unprovisioned line moved to
+     * the boot after the claim, and nothing ran that boot: the container smoke
+     * test in CI was grepping the first one for it, which is a check that
+     * could not pass and read as a broken image for two days.
+     */
+    const dir = mkdtempSync(join(tmpdir(), 'pico-relay-claimed-'));
+    dirs.push(dir);
+    const databasePath = join(dir, 'relay.sqlite');
+
+    const first = spawnRelay(databasePath);
+    const unclaimed = await first.waitFor('relay_unclaimed');
+    expect(first.lines().map((line) => line.event)).not.toContain('relay_accounts_unprovisioned');
+    expect((await post(first.operatorPort, '/operator/claim', {
+      claimCode: unclaimed.claimCode as string,
+    })).status).toBe(200);
+    await first.stop();
+
+    const second = spawnRelay(databasePath);
+    const message = String((await second.waitFor('relay_accounts_unprovisioned')).message);
+    // Named as the door names it, because that is what the operator will see
+    // in the refusal they are trying to explain.
+    expect(message).toContain('unknown_account');
+
+    /**
+     * And no second claim code. The check costs one line and it is the one
+     * that would catch a database the container never actually kept: a relay
+     * that forgot the claim would mint another key to itself here, in a log.
+     */
+    expect(second.lines().map((line) => line.event)).not.toContain('relay_unclaimed');
+    await second.stop();
   }, 60_000);
 
   it('spends the unauthenticated budget before the operator’s', async () => {

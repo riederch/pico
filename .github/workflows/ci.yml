@@ -346,57 +346,132 @@ jobs:
           platforms: linux/amd64
           tags: pico-relay:amd64-test
 
-      # ADR 0153 PK2/PK3/PK7. What a deliverable owes: it refuses to start
-      # unconfigured, it answers a health check on its own port, the public
-      # port stays a surface with no map of itself, and an unprovisioned relay
-      # says so instead of looking broken.
+      # ADR 0153 PK2/PK3/PK7 with ADR 0154 RO2/RO7. What a deliverable owes:
+      # it refuses to start unconfigured, it answers a health check on its own
+      # port, the public port stays a surface with no map of itself, and it
+      # says which empty state it is in - nobody has claimed it, then claimed
+      # and holding no accounts - rather than looking broken in either.
       - name: Smoke-test the relay container
         run: |
           set -euo pipefail
 
+          # Not `--rm`: the container is restarted below, and one cleanup path
+          # for every exit is easier to keep true than five.
+          trap 'docker rm --force pico-relay-smoke >/dev/null 2>&1 || true' EXIT
+          logs=/tmp/relay-log.txt
+
+          # Every check names its own failure. The one that broke last was a
+          # bare `grep -q` under `set -e`, which ended the job with no line in
+          # it at all - and a red with nothing in it reads as a broken image.
+          die() {
+            echo "$1" >&2
+            docker logs pico-relay-smoke || true
+            exit 1
+          }
+
           # PK2: no operator, no relay. A guessed hostname would issue
           # addresses pointing at somebody else's machine.
-          if docker run --rm --name pico-relay-unconfigured pico-relay:amd64-test; then
-            echo "relay started without PICO_RELAY_OPERATOR" >&2
+          #
+          # And the refusal has to be that one. A name still in use, a missing
+          # image or a container the kernel killed all exit non-zero too, and
+          # a check that reads any of them as "it refused correctly" is a
+          # check that passes hardest when the least is working.
+          if docker run --rm --name pico-relay-unconfigured pico-relay:amd64-test >"$logs" 2>&1; then
+            cat "$logs"
+            echo "the relay started without PICO_RELAY_OPERATOR" >&2
             exit 1
           fi
+          grep -q PICO_RELAY_OPERATOR "$logs" || {
+            cat "$logs"
+            echo "the relay did not start, but not over the operator hostname it refuses to guess" >&2
+            exit 1
+          }
 
-          docker run --rm -d --name pico-relay-smoke \
+          docker run -d --name pico-relay-smoke \
             -p 3200:3200 \
             -e PICO_RELAY_OPERATOR=relay.ci.invalid \
             pico-relay:amd64-test
 
-          ok=0
-          for i in $(seq 1 30); do
-            # PK3: the health port is not published, so the check runs inside
-            # the container - which is the deployment shape it is built for.
-            if docker exec pico-relay-smoke node -e "fetch('http://127.0.0.1:3201/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1)).catch(()=>process.exit(1))"; then
-              ok=1
-              break
-            fi
-            sleep 1
-          done
-          if [ "$ok" != "1" ]; then
-            docker logs pico-relay-smoke || true
-            docker stop pico-relay-smoke || true
-            exit 1
-          fi
+          # PK3: the health port is not published, so the check runs inside
+          # the container - which is the deployment shape it is built for.
+          healthy() {
+            for _ in $(seq 1 30); do
+              if docker exec pico-relay-smoke node -e "fetch('http://127.0.0.1:3201/health').then(r=>r.json()).then(b=>process.exit(b.status==='ok'?0:1)).catch(()=>process.exit(1))"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+          healthy || die "the relay never answered its own health port"
 
           # PK3 again, from the outside: the public port must answer a health
           # probe exactly as it answers any unknown route.
           unknown=$(curl -sS -o /tmp/relay-unknown.txt -w '%{http_code}' http://127.0.0.1:3200/nothing-here)
           health=$(curl -sS -o /tmp/relay-health.txt -w '%{http_code}' http://127.0.0.1:3200/health)
           if [ "$unknown" != "$health" ] || ! cmp -s /tmp/relay-unknown.txt /tmp/relay-health.txt; then
-            echo "the public port tells a health probe apart from an unknown route" >&2
-            docker logs pico-relay-smoke || true
-            docker stop pico-relay-smoke || true
-            exit 1
+            die "the public port tells a health probe apart from an unknown route"
           fi
 
-          # PK7: unprovisioned, and saying so rather than looking broken.
-          docker logs pico-relay-smoke 2>&1 | grep -q relay_accounts_unprovisioned
+          # A boot log line, waited for rather than sampled: the health port
+          # opens before the boot log is written, so reading the log the
+          # moment health answers is a race.
+          #
+          # And read through a file, never as `docker logs | grep -q`, which
+          # is what the old check did. Under `pipefail` that pipeline reports
+          # a failure for a line that is there: `grep -q` exits at the first
+          # match, `docker logs` takes SIGPIPE writing what is left, and the
+          # shell sees 141. Measured while writing this: match on the last
+          # line, it passes; anything after the match, and it said not-found
+          # 40 times out of 40. A check that works until the log grows.
+          said() {
+            for _ in $(seq 1 30); do
+              docker logs pico-relay-smoke >"$logs" 2>&1
+              if grep -q "$1" "$logs"; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
 
-          docker stop pico-relay-smoke
+          # ADR 0154 RO2. Nobody has claimed this relay, and its log is the
+          # channel a container has for saying so: whoever can read it can
+          # already stop the process.
+          said '"event":"relay_unclaimed"' \
+            || die "a relay nobody has claimed said nothing about it"
+          claim=$(grep -o '"claimCode":"[^"]*"' "$logs" | tail -1 | cut -d'"' -f4 || true)
+          [ -n "$claim" ] || die "a relay nobody has claimed printed no claim code"
+
+          # RO7. The administration port is on loopback, so the claim is made
+          # from inside the container - the shape an operator reaches through a
+          # transport they chose, rather than a fourth published port.
+          docker exec pico-relay-smoke node -e "
+            fetch('http://127.0.0.1:3202/operator/claim', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ claimCode: process.argv[1] }),
+            }).then((r) => r.json()).then((body) => {
+              if (typeof body.credential !== 'string') { throw new Error(JSON.stringify(body)); }
+            }).catch((error) => { console.error(String(error)); process.exit(1); });
+          " "$claim" || die "the code the log printed did not claim the relay"
+
+          # PK7 on the boot that can say it. A relay nobody has claimed talks
+          # about the claim instead, because accounts are not yet what stands
+          # between it and being useful. The restart is also the only check
+          # that the database survived one: a relay that had forgotten the
+          # claim would mint a second code here, into a log.
+          docker restart pico-relay-smoke >/dev/null
+          healthy || die "the relay did not come back from a restart"
+          said relay_accounts_unprovisioned \
+            || die "a claimed relay holding no accounts did not say so"
+          codes=$(grep -c '"event":"relay_unclaimed"' "$logs" || true)
+          [ "$codes" = "1" ] || die "the claim did not survive the restart ($codes claim codes)"
+
+          # A green step that says what it proved, because the next person to
+          # read this job will be reading it in a hurry.
+          echo "ADR 0153 PK2/PK3: refuses to start unconfigured, answers health on its own port, and gives an unknown route the answer it gives /health."
+          echo "ADR 0154 RO2/RO7 with PK7: claimed over loopback with the code from its own log; the claim survived a restart, and it then says it holds no accounts."
 
       - name: Build local arm64 smoke-test image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
