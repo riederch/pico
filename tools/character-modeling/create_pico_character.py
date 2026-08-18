@@ -259,7 +259,7 @@ def superellipse_distance(x, y, centre_y, radius_x, radius_y, exponent=2.4):
 
 def visor_surface_z(
     x, y, centre_y, radius_x, radius_y, support_profile,
-    offset, bulge, flattening, rim=0.0, sink=0.0,
+    offset, bulge, flattening, rim=0.0,
 ):
     # A blend toward the centre plane gives the display its own shallow
     # curvature instead of copying the much rounder helmet one-to-one.
@@ -269,18 +269,17 @@ def visor_surface_z(
     distance = superellipse_distance(x, y, centre_y, radius_x, radius_y)
     surface = base + offset + bulge * (1.0 - distance ** 2.2)
     if rim > 0.0:
-        # Across the outer rim the patch runs back past the plain shell and
-        # ends slightly inside it. That is what the concept shows: the helmet
-        # closes over the display, so the face has no visible cut edge.
+        # Across the outer rim the patch returns to the plain shell, so the
+        # face meets the head tangentially instead of standing on a hard edge.
         blend = min(1.0, max(0.0, (distance - (1.0 - rim)) / rim))
         blend = blend * blend * (3.0 - 2.0 * blend)
-        surface = surface * (1.0 - blend) + (supported - sink) * blend
+        surface = surface * (1.0 - blend) + supported * blend
     return surface
 
 
 def superellipse_patch(
     name, centre_y, radius_x, radius_y, support_profile,
-    offset, bulge, flattening, mat, zone, rim=0.0, sink=0.0,
+    offset, bulge, flattening, mat, zone, rim=0.0,
 ):
     # A smooth, deliberately authored visor surface. Concentric superellipse
     # rings produce the rounded-rectangle outline of the concept without
@@ -293,7 +292,7 @@ def superellipse_patch(
         centre_y,
         visor_surface_z(
             0.0, centre_y, centre_y, radius_x, radius_y, support_profile,
-            offset, bulge, flattening, rim, sink,
+            offset, bulge, flattening, rim,
         ),
     )]
     faces = []
@@ -309,7 +308,7 @@ def superellipse_patch(
             )
             z = visor_surface_z(
                 x, y, centre_y, radius_x, radius_y, support_profile,
-                offset, bulge, flattening, rim, sink,
+                offset, bulge, flattening, rim,
             )
             vertices.append((x, y, z))
     for segment in range(around):
@@ -349,7 +348,7 @@ def conforming_marker_patch(
         return visor_surface_z(
             x, y,
             FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
-            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING, FACE_RIM, FACE_SINK,
+            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
         ) + 0.0025
 
     vertices = [(marker_x, marker_y, depth(marker_x, marker_y))]
@@ -456,6 +455,32 @@ def cylinder(name, location, radius, depth, rotation, mat, zone, target=None):
     smooth(obj)
     bevel = obj.modifiers.new("EdgeSoftening", "BEVEL")
     bevel.width = min(radius * 0.12, depth * 0.18)
+    bevel.segments = 3
+    return obj
+
+
+def frustum(
+    name, location, radius_inner, radius_outer, depth, rotation, mat, zone,
+    target=None,
+):
+    """A truncated cone: same placement as `cylinder`, but able to flare."""
+    bpy.ops.mesh.primitive_cone_add(
+        vertices=96,
+        radius1=radius_inner,
+        radius2=radius_outer,
+        depth=depth,
+        location=location,
+        rotation=rotation,
+    )
+    obj = bpy.context.object
+    obj.name = name
+    move_to_collection(obj, target or MODEL)
+    if target is None or target == MODEL:
+        obj.parent = ROOT
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    bevel = obj.modifiers.new("EdgeSoftening", "BEVEL")
+    bevel.width = min(min(radius_inner, radius_outer) * 0.12, depth * 0.18)
     bevel.segments = 3
     return obj
 
@@ -783,6 +808,54 @@ def apply_dish(obj, centre, radius, depth):
             continue
         vertex.co -= outward.normalized() * amount
     mesh.update()
+    return obj
+
+
+def flatten_head_face_area(
+    obj, centre_y, radius_x, radius_y, support_profile,
+    offset, bulge, flattening, rim, clearance, margin=0.17,
+):
+    """Flatten the head shell across the display footprint and a little past it.
+
+    The display is set into the helmet, so the shell has to recede where it
+    sits; left fully round it simply pokes through the middle of the face.
+
+    The recess deliberately reaches past the frame's own rim. Stopped exactly
+    at the rim, shell and frame meet tangentially, and because neither mesh's
+    edges follow the other's outline that contact renders as a staircase. Held
+    `clearance` behind the frame all the way out and released only afterwards,
+    the two never touch and the seam reads as a clean panel gap.
+    """
+    mesh = obj.data
+    moved = 0
+    for vertex in mesh.vertices:
+        x, y, z = vertex.co
+        if z <= 0.0:
+            continue
+        # the shared helper clamps at 1.0; here the region past the rim matters
+        normalized = (
+            (abs(x) / max(radius_x, 0.0001)) ** 2.4
+            + (abs(y - centre_y) / max(radius_y, 0.0001)) ** 2.4
+        ) ** (1.0 / 2.4)
+        if normalized >= 1.0 + margin:
+            continue
+        if normalized <= 1.0:
+            target = visor_surface_z(
+                x, y, centre_y, radius_x, radius_y, support_profile,
+                offset, bulge, flattening, rim,
+            ) - clearance
+        else:
+            release = (normalized - 1.0) / margin
+            release = release * release * (3.0 - 2.0 * release)
+            target = (
+                support_surface_z(support_profile, x, y)
+                - clearance * (1.0 - release)
+            )
+        if target < z:
+            vertex.co.z = target
+            moved += 1
+    mesh.update()
+    print(f"PICO_HEAD_FACE_FLATTENED_VERTICES={moved}")
     return obj
 
 
@@ -1126,7 +1199,7 @@ def preview_face(support_profile):
         z = visor_surface_z(
             x, y,
             FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
-            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING, FACE_RIM, FACE_SINK,
+            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
         ) + 0.0035
         point.co = (x, y, z, 1.0)
     mouth = bpy.data.objects.new("PREVIEW.Status.Mouth", curve)
@@ -2162,7 +2235,7 @@ head_profile = sample_bezier_segments([
         (-0.395, 0.200, 0.180),
     ),
 ], steps=48)
-revolved_mesh("Shell.Head", head_profile, SHELL, "shell", interpolate=False)
+HEAD_SHELL = revolved_mesh("Shell.Head", head_profile, SHELL, "shell", interpolate=False)
 
 # The larger trim patch forms the visible visor frame. The dark face keeps a
 # shallower curvature than the helmet so expressions read as lying on a
@@ -2170,27 +2243,42 @@ revolved_mesh("Shell.Head", head_profile, SHELL, "shell", interpolate=False)
 FACE_CENTRE_Y = -0.035
 FACE_RADIUS_X = 0.347
 FACE_RADIUS_Y = 0.253
-# The display sits back in the helmet: at its centre it stays just proud of
-# the shell, and towards its rim it runs past the shell and ends inside it, so
-# the helmet closes over the face exactly as the concept board shows.
-FACE_OFFSET = -0.004
+# The display and its frame move back into the helmet together. One inset
+# keeps them a single assembly: shifting them apart would open a step between
+# the dark face and its trim.
+# The display sits deep enough to read as set into the helmet. A straight
+# offset alone tops out near 0.02, where the round shell starts to break
+# through the middle of the face, so the shell is flattened across the display
+# footprint instead of the display being kept shallow.
+FACE_INSET = 0.030
+FACE_SHELL_CLEARANCE = 0.005
+FACE_FRAME_RADIUS_X = 0.360
+FACE_FRAME_RADIUS_Y = 0.263
+FACE_FRAME_BULGE = 0.007
+FACE_FRAME_FLATTENING = 0.40
+FACE_OFFSET = 0.010 - FACE_INSET
 FACE_BULGE = 0.009
 # The head reads as a helmet, not a ball, when the face area is noticeably
 # flatter than the shell around it.
 FACE_FLATTENING = 0.46
-FACE_RIM = 0.34
-FACE_SINK = 0.016
+# The frame returns to the plain shell across its outer rim, so the face has a
+# rounded transition instead of the hard edge the first proposal cut.
 FACE_FRAME_RIM = 0.44
-FACE_FRAME_SINK = 0.020
+FACE_FRAME_OFFSET = 0.005 - FACE_INSET
 superellipse_patch(
-    "Trim.VisorFrame", -0.035, 0.360, 0.263, head_profile,
-    -0.008, 0.007, 0.40,
-    TRIM, "trim", rim=FACE_FRAME_RIM, sink=FACE_FRAME_SINK,
+    "Trim.VisorFrame", FACE_CENTRE_Y, FACE_FRAME_RADIUS_X, FACE_FRAME_RADIUS_Y,
+    head_profile, FACE_FRAME_OFFSET, FACE_FRAME_BULGE, FACE_FRAME_FLATTENING,
+    TRIM, "trim", rim=FACE_FRAME_RIM,
 )
 superellipse_patch(
     "FaceDisplay.Visor", FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, head_profile,
     FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
-    FACE, "face_display", rim=FACE_RIM, sink=FACE_SINK,
+    FACE, "face_display",
+)
+flatten_head_face_area(
+    HEAD_SHELL, FACE_CENTRE_Y, FACE_FRAME_RADIUS_X, FACE_FRAME_RADIUS_Y,
+    head_profile, FACE_FRAME_OFFSET, FACE_FRAME_BULGE, FACE_FRAME_FLATTENING,
+    FACE_FRAME_RIM, FACE_SHELL_CLEARANCE,
 )
 
 # A real neck remains visible between head and torso. It is trim, not a status
@@ -2224,13 +2312,16 @@ surface_seam("Trim.TorsoSeam.Lower", torso_profile, -0.833, -1.055, TRIM, "trim"
 
 # Head side modules are components, not a widened head silhouette.
 for side, sign in (("L", -1.0), ("R", 1.0)):
-    cylinder(
+    # The modules widen slightly towards their outer cap. Rotating by
+    # `sign * 90` around Y puts the cone's second radius on the outward side
+    # for both ears, so one description serves left and right.
+    frustum(
         f"Trim.HeadSideModule.{side}", (sign * 0.465, -0.075, 0.0),
-        0.125, 0.070, (0.0, math.pi / 2.0, 0.0), TRIM, "trim",
+        0.112, 0.132, 0.070, (0.0, sign * math.pi / 2.0, 0.0), TRIM, "trim",
     )
     cylinder(
         f"Status.HeadSideCap.{side}", (sign * 0.503, -0.075, 0.0),
-        0.088, 0.025, (0.0, math.pi / 2.0, 0.0), STATUS, "status_emitters",
+        0.092, 0.025, (0.0, math.pi / 2.0, 0.0), STATUS, "status_emitters",
     )
 
 # Chest core: dark housing plus one member of the unified status group.
@@ -2264,12 +2355,28 @@ conforming_ring(
     CHEST_BEZEL_MINOR * 0.55, torso_profile,
     STATUS, "status_emitters", MODEL, ROOT, dish=CHEST_DISH,
 )
+# The core is tilted to lie almost parallel with its own bezel. The belly
+# falls away towards the waist, so the ring around the core is not in a plane
+# facing straight forward; a disc that does face straight forward reads as
+# tipped up against it. The angle is measured off the same dished surface the
+# ring is placed on, so the two cannot disagree.
+def _chest_ring_surface(offset_y):
+    y = CHEST_Y + offset_y
+    z = support_surface_z(torso_profile, 0.0, y)
+    return z - dish_amount((0.0, y, z), *CHEST_DISH)
+
+
+CHEST_TILT = math.atan2(
+    _chest_ring_surface(CHEST_BEZEL_RADIUS) - _chest_ring_surface(-CHEST_BEZEL_RADIUS),
+    2.0 * CHEST_BEZEL_RADIUS,
+)
 cylinder(
     "Status.ChestCore",
     (0.0, CHEST_Y, chest_surface - CHEST_CORE_DEPTH * 0.5),
-    CHEST_CORE_RADIUS, CHEST_CORE_DEPTH, (0.0, 0.0, 0.0),
+    CHEST_CORE_RADIUS, CHEST_CORE_DEPTH, (CHEST_TILT, 0.0, 0.0),
     STATUS, "status_emitters",
 )
+print(f"PICO_CHEST_CORE_TILT_DEGREES={math.degrees(CHEST_TILT):.2f}")
 
 make_arm("L")
 make_arm("R")

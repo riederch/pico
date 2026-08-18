@@ -148,12 +148,32 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
-After the owner's first review the head and body were corrected further:
+### Head, chest and ears after the second review
 
-- The display sits back in the helmet. `visor_surface_z` takes a `sink`, so
-  across its outer rim the patch runs past the shell and ends inside it. The
-  helmet closes over the face and there is no cut edge, as on the concept
-  board.
+- The display is set into the helmet by one inset shared by the dark face and
+  its trim frame, so the two stay a single assembly. A straight offset alone
+  tops out near `0.02`: past that the round shell breaks through the middle of
+  the face. `flatten_head_face_area` therefore flattens the shell across the
+  frame's footprint, and the display sits at `0.030`.
+- That recess deliberately reaches past the frame's own rim. Stopped exactly
+  at the rim, shell and frame meet tangentially, and because neither mesh's
+  edges follow the other's outline that contact renders as a visible
+  staircase. Held behind the frame all the way out and released only
+  afterwards, the two never touch.
+- The chest core is tilted to lie almost parallel with its own bezel. The
+  angle is measured off the same dished surface the ring is placed on, so the
+  two cannot disagree; for the authored body that is 5.5 degrees.
+- The head side modules widen towards their outer cap. `frustum` places a
+  truncated cone the way `cylinder` places a cylinder, and rotating by
+  `sign * 90` degrees around Y puts the second radius outward for both ears,
+  so one description serves left and right.
+
+### After the owner's first review
+
+The head and body were corrected as follows. A first attempt at the display
+ended its rim *inside* the shell so the helmet closed over the face; the owner
+rejected it, and the section above describes what replaced it.
+
 - The tail fitting lies on the crown's centre line, further back, and the hair
   leaves it at its **centre** rather than at its rear edge, so the plate sits
   around the root instead of in front of it.
