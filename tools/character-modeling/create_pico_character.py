@@ -260,14 +260,25 @@ def superellipse_distance(x, y, centre_y, radius_x, radius_y, exponent=2.4):
 def visor_surface_z(
     x, y, centre_y, radius_x, radius_y, support_profile,
     offset, bulge, flattening, rim=0.0,
+    dome_radius_x=None, dome_radius_y=None,
 ):
     # A blend toward the centre plane gives the display its own shallow
     # curvature instead of copying the much rounder helmet one-to-one.
+    #
+    # The dome is measured on its own radii, separately from the outline. The
+    # display and its frame then share one dome and differ only in where they
+    # are cut off, so the display cannot rise through its own frame the way it
+    # would if each domed over its own, differently sized outline.
     supported = support_surface_z(support_profile, x, y)
     centre_depth = support_surface_z(support_profile, 0.0, centre_y)
     base = supported * (1.0 - flattening) + centre_depth * flattening
     distance = superellipse_distance(x, y, centre_y, radius_x, radius_y)
-    surface = base + offset + bulge * (1.0 - distance ** 2.2)
+    dome = superellipse_distance(
+        x, y, centre_y,
+        dome_radius_x if dome_radius_x is not None else radius_x,
+        dome_radius_y if dome_radius_y is not None else radius_y,
+    )
+    surface = base + offset + bulge * (1.0 - dome ** 2.2)
     if rim > 0.0:
         # Across the outer rim the patch returns to the plain shell, so the
         # face meets the head tangentially instead of standing on a hard edge.
@@ -280,6 +291,7 @@ def visor_surface_z(
 def superellipse_patch(
     name, centre_y, radius_x, radius_y, support_profile,
     offset, bulge, flattening, mat, zone, rim=0.0,
+    dome_radius_x=None, dome_radius_y=None,
 ):
     # A smooth, deliberately authored visor surface. Concentric superellipse
     # rings produce the rounded-rectangle outline of the concept without
@@ -292,7 +304,7 @@ def superellipse_patch(
         centre_y,
         visor_surface_z(
             0.0, centre_y, centre_y, radius_x, radius_y, support_profile,
-            offset, bulge, flattening, rim,
+            offset, bulge, flattening, rim, dome_radius_x, dome_radius_y,
         ),
     )]
     faces = []
@@ -308,7 +320,7 @@ def superellipse_patch(
             )
             z = visor_surface_z(
                 x, y, centre_y, radius_x, radius_y, support_profile,
-                offset, bulge, flattening, rim,
+                offset, bulge, flattening, rim, dome_radius_x, dome_radius_y,
             )
             vertices.append((x, y, z))
     for segment in range(around):
@@ -349,6 +361,7 @@ def conforming_marker_patch(
             x, y,
             FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
             FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
+            dome_radius_x=FACE_DOME_RADIUS_X, dome_radius_y=FACE_DOME_RADIUS_Y,
         ) + 0.0025
 
     vertices = [(marker_x, marker_y, depth(marker_x, marker_y))]
@@ -1062,71 +1075,13 @@ def empty(name, location):
     return obj
 
 
-def hand_shell(
-    name, wrist, tip, palm_normal, half_width, half_thickness, mat, zone,
-    thumb_toward=(1.0, 0.0, 0.0), palm_hollow=0.62, thumb_lobe=0.42,
-    groove=0.46, along=34, around=48,
-):
-    """One closed, hollow-palmed hand: a mitten, not a ball with digits on it.
-
-    The concept hand is a single piece. Its fingers are grooves in one shell,
-    its palm is cupped, and it has no separate palm sphere: a sphere reads as a
-    knob, and a real hand is a shell with a hollow in it.
-    """
-    wrist = Vector(wrist)
-    forward = Vector(tip) - wrist
-    length = forward.length
-    forward.normalize()
-    axis_palm = Vector(palm_normal)
-    axis_palm = (axis_palm - forward * axis_palm.dot(forward)).normalized()
-    axis_side = forward.cross(axis_palm).normalized()
-    # Which way the thumb lobe falls follows from the frame, and the frame
-    # differs between the two hands because their palms face different ways.
-    # Deriving the side from a world direction keeps the thumb pointing at the
-    # body whatever the palm does; hand-picking a sign got the left one wrong.
-    thumb_side = 1.0 if axis_side.dot(Vector(thumb_toward)) >= 0.0 else -1.0
-
-    vertices = []
-    for ring in range(along + 1):
-        u = ring / along
-        centre = wrist + forward * (length * u)
-        # narrow at the wrist, widest across the knuckles, closing at the tip
-        width = half_width * (0.40 + 0.60 * math.sin(math.pi * min(1.0, 0.20 + u * 0.70)))
-        thick = half_thickness * (0.80 + 0.20 * math.sin(math.pi * min(1.0, u)))
-        if u > 0.86:
-            closing = (u - 0.86) / 0.14
-            taper = math.sqrt(max(0.0, 1.0 - closing * closing))
-            width *= max(0.03, taper)
-            thick *= max(0.03, taper)
-        # the thumb is a lobe of the same shell, not a stuck-on digit
-        thumb = thumb_lobe * math.exp(-(((u - 0.30) / 0.17) ** 2))
-        # the finger grooves only exist over the finger half
-        finger = min(1.0, max(0.0, (u - 0.46) / 0.24))
-        finger = finger * finger * (3.0 - 2.0 * finger)
-        if u > 0.86:
-            finger *= max(0.0, 1.0 - (u - 0.86) / 0.14) ** 0.8
-        for segment in range(around):
-            angle = 2.0 * math.pi * segment / around
-            cosine, sine = math.cos(angle), math.sin(angle)
-            # a flattened superellipse: a hand is not round in section
-            across = math.copysign(abs(cosine) ** (2.0 / 2.6), cosine)
-            depth = math.copysign(abs(sine) ** (2.0 / 2.6), sine)
-            local_width = width * (1.0 + thumb * max(0.0, across * thumb_side))
-            groove_factor = 0.5 - 0.5 * math.cos(3.0 * math.pi * across)
-            local_thick = thick * (1.0 - groove * finger * groove_factor)
-            point = centre + axis_side * (local_width * across) + axis_palm * (local_thick * depth)
-            # cup the palm: the palm-facing half is drawn back into the shell
-            hollow = (
-                palm_hollow * half_thickness
-                * math.exp(-(((u - 0.42) / 0.26) ** 2))
-                * math.exp(-((across / 0.85) ** 2))
-                * max(0.0, depth)
-            )
-            vertices.append(tuple(point - axis_palm * hollow))
-
-    faces = []
-    for ring in range(along):
-        current = ring * around
+def _loft(vertices, faces, rings, around, cap_start=True, cap_end=True):
+    """Stitch a list of vertex rings into a closed tube inside a shared mesh."""
+    base = len(vertices)
+    for ring in rings:
+        vertices.extend(ring)
+    for index in range(len(rings) - 1):
+        current = base + index * around
         following = current + around
         for segment in range(around):
             nxt = (segment + 1) % around
@@ -1134,15 +1089,163 @@ def hand_shell(
                 current + segment, current + nxt,
                 following + nxt, following + segment,
             ))
-    first_centre = len(vertices)
-    vertices.append(tuple(wrist))
-    last_centre = len(vertices)
-    vertices.append(tuple(wrist + forward * length))
-    last = along * around
-    for segment in range(around):
-        nxt = (segment + 1) % around
-        faces.append((first_centre, nxt, segment))
-        faces.append((last_centre, last + segment, last + nxt))
+    if cap_start:
+        centre = len(vertices)
+        vertices.append(tuple(
+            sum((Vector(point) for point in rings[0]), Vector()) / around
+        ))
+        for segment in range(around):
+            faces.append((centre, base + (segment + 1) % around, base + segment))
+    if cap_end:
+        centre = len(vertices)
+        last = base + (len(rings) - 1) * around
+        vertices.append(tuple(
+            sum((Vector(point) for point in rings[-1]), Vector()) / around
+        ))
+        for segment in range(around):
+            faces.append((centre, last + segment, last + (segment + 1) % around))
+
+
+def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
+    """Rings along one rounded, tapering finger following a quadratic curve."""
+    base, control, tip = Vector(base), Vector(control), Vector(tip)
+    rings = []
+    for index in range(along + 1):
+        amount = index / along
+        inverse = 1.0 - amount
+        centre = (
+            inverse * inverse * base
+            + 2.0 * inverse * amount * control
+            + amount * amount * tip
+        )
+        tangent = (
+            2.0 * inverse * (control - base) + 2.0 * amount * (tip - control)
+        ).normalized()
+        side = tangent.cross(Vector((0.0, 0.0, 1.0)))
+        if side.length < 0.001:
+            side = tangent.cross(Vector((0.0, 1.0, 0.0)))
+        side.normalize()
+        up = tangent.cross(side).normalized()
+        radius = radius_base + (radius_tip - radius_base) * amount
+        # a rounded fingertip rather than a cut-off stub
+        if amount > 0.80:
+            closing = (amount - 0.80) / 0.20
+            radius *= max(0.06, math.sqrt(max(0.0, 1.0 - closing * closing)))
+        rings.append([
+            tuple(
+                centre
+                + side * (radius * math.cos(2.0 * math.pi * s / around))
+                + up * (radius * math.sin(2.0 * math.pi * s / around))
+            )
+            for s in range(around)
+        ])
+    return rings
+
+
+def hand_shell(
+    name, wrist, knuckles, palm_normal, half_width, half_thickness, mat, zone,
+    thumb_toward=(1.0, 0.0, 0.0), finger_length=0.100, palm_hollow=0.55,
+    around=26, along=16,
+):
+    """One hand: a cupped palm carrying three fingers and a thumb.
+
+    The concept hand is a single piece with four clearly separated, rounded
+    digits, not a mitten and not a ball with sticks on it. Palm and digits are
+    therefore built into one mesh and one object: they overlap where a hand's
+    knuckles are, so the result reads as one form while each digit still tells
+    itself apart.
+
+    The palm is cupped rather than solid. A sphere reads as a knob; a real
+    hand is a shell with a hollow in it.
+    """
+    wrist = Vector(wrist)
+    knuckles = Vector(knuckles)
+    forward = (knuckles - wrist)
+    palm_length = forward.length
+    forward.normalize()
+    axis_palm = Vector(palm_normal)
+    axis_palm = (axis_palm - forward * axis_palm.dot(forward)).normalized()
+    axis_side = forward.cross(axis_palm).normalized()
+    if axis_side.dot(Vector(thumb_toward)) < 0.0:
+        # Which way the thumb falls follows from the frame, and the frame
+        # differs between the hands because their palms face different ways.
+        axis_side = -axis_side
+
+    vertices = []
+    faces = []
+
+    # --- the palm -------------------------------------------------------
+    rings = []
+    for index in range(along + 1):
+        u = index / along
+        centre = wrist + forward * (palm_length * u)
+        width = half_width * (0.74 + 0.26 * math.sin(math.pi * min(1.0, 0.34 + u * 0.58)))
+        thick = half_thickness * (0.88 + 0.12 * math.sin(math.pi * min(1.0, 0.24 + u * 0.72)))
+        ring = []
+        for segment in range(around):
+            angle = 2.0 * math.pi * segment / around
+            across = math.copysign(abs(math.cos(angle)) ** (2.0 / 2.6), math.cos(angle))
+            depth = math.copysign(abs(math.sin(angle)) ** (2.0 / 2.6), math.sin(angle))
+            point = centre + axis_side * (width * across) + axis_palm * (thick * depth)
+            hollow = (
+                palm_hollow * half_thickness
+                * math.exp(-(((u - 0.50) / 0.26) ** 2))
+                * math.exp(-((across / 0.90) ** 2))
+                * max(0.0, depth)
+            )
+            ring.append(tuple(point - axis_palm * hollow))
+        rings.append(ring)
+    _loft(vertices, faces, rings, around)
+
+    # --- three fingers off the knuckle line ------------------------------
+    digit_radius = half_width * 0.31
+    for offset in (-0.54, 0.0, 0.54):
+        length = finger_length * (1.0 if offset == 0.0 else 0.88)
+        start = (
+            knuckles
+            + axis_side * (half_width * offset)
+            - forward * (palm_length * 0.34)
+            - axis_palm * (half_thickness * 0.20)
+        )
+        control = start + forward * (length * 0.66) - axis_palm * (length * 0.04)
+        end = (
+            start
+            + forward * (length * 0.84)
+            - axis_palm * (length * 0.52)
+            + axis_side * (half_width * offset * 0.26)
+        )
+        _loft(
+            vertices, faces,
+            _digit_rings(start, control, end, digit_radius, digit_radius * 0.86, around),
+            around,
+        )
+
+    # --- one thumb off the side of the palm ------------------------------
+    thumb_length = finger_length * 0.74
+    thumb_base = (
+        wrist
+        + forward * (palm_length * 0.46)
+        + axis_side * (half_width * 0.42)
+    )
+    thumb_control = (
+        thumb_base
+        + axis_side * (thumb_length * 0.46)
+        + forward * (thumb_length * 0.30)
+    )
+    thumb_end = (
+        thumb_base
+        + axis_side * (thumb_length * 0.52)
+        + forward * (thumb_length * 0.86)
+        - axis_palm * (thumb_length * 0.20)
+    )
+    _loft(
+        vertices, faces,
+        _digit_rings(
+            thumb_base, thumb_control, thumb_end,
+            digit_radius * 1.04, digit_radius * 0.88, around,
+        ),
+        around,
+    )
 
     mesh = bpy.data.meshes.new(f"{name}.Mesh")
     mesh.from_pydata(vertices, [], faces)
@@ -1201,13 +1304,15 @@ def make_arm(side):
     palm_normal = (
         (0.34, 0.0, 0.94) if side == "L" else (-0.62, 0.0, -0.78)
     )
+    hand_direction = (palm - wrist).normalized()
     hand_shell(
         f"Trim.Hand.{side}",
-        wrist - (palm - wrist).normalized() * 0.012,
-        (palm.x + sign * 0.008, palm.y - 0.158, palm.z + 0.026),
+        wrist - hand_direction * 0.014,
+        wrist + hand_direction * 0.086,
         palm_normal,
-        0.074, 0.036, TRIM, "trim",
+        0.068, 0.030, TRIM, "trim",
         thumb_toward=(-sign, 0.0, 0.30),
+        finger_length=0.104,
     )
 
 
@@ -1236,6 +1341,7 @@ def preview_face(support_profile):
             x, y,
             FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
             FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
+            dome_radius_x=FACE_DOME_RADIUS_X, dome_radius_y=FACE_DOME_RADIUS_Y,
         ) + 0.0035
         point.co = (x, y, z, 1.0)
     mouth = bpy.data.objects.new("PREVIEW.Status.Mouth", curve)
@@ -2274,16 +2380,20 @@ if face_shader is not None and "Specular IOR Level" in face_shader.inputs:
 
 # Tangent-led curves form the single continuous dome and rounded lower helmet
 # visible in the concept. The measured widest section remains exactly 1.0.
+# The two segments meet at the head's widest, deepest section. Their control
+# points are collinear across that join, so the profile has a continuous
+# tangent there: with the depth slope flipping sign the back of the head
+# carried a visible crease.
 head_profile = sample_bezier_segments([
     (
         (0.395, 0.005, 0.020),
         (0.395, 0.240, 0.180),
-        (0.170, 0.480, 0.400),
+        (0.170, 0.480, 0.432),
         (-0.062, 0.500, 0.432),
     ),
     (
         (-0.062, 0.500, 0.432),
-        (-0.140, 0.510, 0.430),
+        (-0.1404, 0.5068, 0.432),
         (-0.300, 0.380, 0.320),
         (-0.395, 0.200, 0.180),
     ),
@@ -2298,7 +2408,13 @@ FACE_RADIUS_X = 0.347
 FACE_RADIUS_Y = 0.253
 FACE_FRAME_RADIUS_X = 0.360
 FACE_FRAME_RADIUS_Y = 0.263
-FACE_FRAME_BULGE = 0.007
+# The display keeps the curvature it had before the head was cut. That
+# curvature used to come from the patch partly following the round shell;
+# with the shell cut away it has to be an explicit dome instead. Its sag from
+# centre to the display's rim matches the earlier surface.
+FACE_DOME_RADIUS_X = 0.360
+FACE_DOME_RADIUS_Y = 0.263
+FACE_FRAME_BULGE = 0.080
 # The head is cut off at the front with a plane, and the display assembly sits
 # in that cut. The cut reaches a little past the frame, so the face is a flat
 # area with the display set into it rather than a dome with a panel on top.
@@ -2312,34 +2428,36 @@ HEAD_CUT_Z = support_surface_z(
 FACE_FRAME_FLATTENING = 1.0
 FACE_FRAME_OFFSET = HEAD_CUT_Z - HEAD_CENTRE_DEPTH + 0.004
 FACE_OFFSET = FACE_FRAME_OFFSET + 0.005
-FACE_BULGE = 0.009
+FACE_BULGE = FACE_FRAME_BULGE
 FACE_FLATTENING = 1.0
 superellipse_patch(
     "Trim.VisorFrame", FACE_CENTRE_Y, FACE_FRAME_RADIUS_X, FACE_FRAME_RADIUS_Y,
     head_profile, FACE_FRAME_OFFSET, FACE_FRAME_BULGE, FACE_FRAME_FLATTENING,
     TRIM, "trim",
+    dome_radius_x=FACE_DOME_RADIUS_X, dome_radius_y=FACE_DOME_RADIUS_Y,
 )
 superellipse_patch(
     "FaceDisplay.Visor", FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, head_profile,
     FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
     FACE, "face_display",
+    dome_radius_x=FACE_DOME_RADIUS_X, dome_radius_y=FACE_DOME_RADIUS_Y,
 )
 truncate_head_front(HEAD_SHELL, HEAD_CUT_Z)
 
 # A real neck remains visible between head and torso. It is trim, not a status
 # emitter, so state colour cannot silently recolour the character structure.
 cylinder(
-    "Trim.Neck", (0.0, -0.390, 0.0), 0.225, 0.090,
+    "Trim.Neck", (0.0, -0.398, 0.0), 0.196, 0.124,
     (math.pi / 2.0, 0.0, 0.0), TRIM, "trim",
 )
 torus(
-    "Status.NeckUnderside", (0.0, -0.392, 0.0), 0.170, 0.008,
+    "Status.NeckUnderside", (0.0, -0.402, 0.0), 0.148, 0.008,
     STATUS, "status_emitters",
 )
 
 torso_profile = sample_bezier_segments([
     (
-        (-0.390, 0.2700, 0.160),
+        (-0.412, 0.2480, 0.148),
         (-0.400, 0.3400, 0.250),
         (-0.500, 0.3800, 0.300),
         (-0.610, 0.3800, 0.310),
@@ -2357,12 +2475,12 @@ surface_seam("Trim.TorsoSeam.Lower", torso_profile, -0.833, -1.055, TRIM, "trim"
 
 # Head side modules are components, not a widened head silhouette.
 for side, sign in (("L", -1.0), ("R", 1.0)):
-    # The modules widen slightly towards their outer cap. Rotating by
-    # `sign * 90` around Y puts the cone's second radius on the outward side
-    # for both ears, so one description serves left and right.
+    # The modules taper towards their outer cap. Rotating by `sign * 90`
+    # around Y puts the cone's second radius on the outward side for both
+    # ears, so one description serves left and right.
     frustum(
         f"Trim.HeadSideModule.{side}", (sign * 0.465, -0.075, 0.0),
-        0.112, 0.132, 0.070, (0.0, sign * math.pi / 2.0, 0.0), TRIM, "trim",
+        0.132, 0.112, 0.070, (0.0, sign * math.pi / 2.0, 0.0), TRIM, "trim",
     )
     cylinder(
         f"Status.HeadSideCap.{side}", (sign * 0.503, -0.075, 0.0),

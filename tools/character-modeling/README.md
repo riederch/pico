@@ -148,6 +148,29 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
+### Curvature, ears, hands, head and neck after the fourth review
+
+- The display keeps the curvature it had before the head was cut. That
+  curvature used to come from the patch partly following the round shell;
+  with the shell cut away it is an explicit dome instead. The dome is measured
+  on its own radii, separately from the outline, so the display and its frame
+  share one dome and differ only in where they are cut off — otherwise the
+  display rises through its own frame, because each would dome over its own,
+  differently sized outline.
+- The head side modules taper towards their outer cap rather than flaring.
+- The hands are rebuilt from the concept board: a cupped palm carrying three
+  fingers and a thumb, all in one mesh and one object. The board shows four
+  clearly separated rounded digits, not a mitten; palm and digits therefore
+  overlap where a hand's knuckles are, so the result reads as one form while
+  each digit still tells itself apart. The digit roots sit deep enough inside
+  the palm that their end caps never surface through the cupped palm face.
+- The back of the head runs round. The two profile segments meet at the head's
+  widest, deepest section, and their control points are now collinear across
+  that join: with the depth slope flipping sign there the back carried a
+  visible crease.
+- The neck is longer and slimmer, and the torso starts lower and narrower so
+  the added length is actually seen rather than hidden inside the body.
+
 ### Face cut, ponytail and hands after the third review
 
 - The head is **cut off** at the front with a plane rather than softly
