@@ -83,18 +83,35 @@ hair style comes second, and every remaining requirement follows afterwards.
   checkpoint.
 - `validate_feature_drafts.py` checks inventory order, diagnostic labels, the
   flat first root plate, status/context separation and clothing boundaries.
-- `TODO.md` is the refinement checklist. A low-quality draft does not close
-  any item there.
+- `feature-stub-manifest-v0.json` carries the same 28 slugs in the same order
+  as the machine-readable contract of the stub set below. The stub validator
+  compares that manifest against the table above; the two cannot drift apart
+  without a failing check.
+- `TODO.md` is the refinement checklist. Neither a low-quality draft nor a
+  stub closes any item there.
 
 The separate checkpoint is deliberate. Nothing on these boards may silently
 enter `pico-character-core-v0.blend`, the normative-candidate GLB or a product
 surface merely because a primitive exists.
 
+## Feature stub set
+
+The implementation contract for turning every group into an individually
+addressable stub is
+[`character-feature-stub-set.md`](../../docs/development/briefs/character-feature-stub-set.md).
+It is implemented: `prototype/pico-character-feature-stubs-v0.blend` holds all
+28 groups as separately selectable stubs of the agreed kind - geometry,
+core reference, material state, display state, pose, presentation or motion -
+built on one linked `PICO_CHARACTER_CORE`. These draft boards remain the visual
+sketch, keep their own checkpoint and were not renamed into that stub set.
+
+Both files stay `pico_character_approved = false`. The drafts prove the
+inventory; the stubs prove assignment and the hard boundaries. Neither proves
+quality, and no group has been refined yet.
+
 ## Next milestone
 
-The complete implementation contract for turning every group into an
-individually addressable stub is
-[`character-feature-stub-set.md`](../../docs/development/briefs/character-feature-stub-set.md).
-It preserves this order, distinguishes geometry from state/presentation stubs
-and requires one shared Character Core source. These draft boards remain the
-visual sketch and are not renamed into that later stub set.
+Detail refinement, in the order the owner fixed: `hair_style_3_concept_tail`
+first, `hair_style_2_raised_crown` second, the remaining groups afterwards.
+Each block works against its own section in `TODO.md`; the stub set is the
+starting geometry, not an argument that a checklist item is done.
