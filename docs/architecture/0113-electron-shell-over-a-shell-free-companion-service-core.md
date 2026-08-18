@@ -2,6 +2,39 @@
 
 ## Status
 
+Status note, 2026-08-18: **Electron 44 was measured before it exists as a
+release, and the risk the roadmap flagged is not there.**
+
+The pin cannot move yet - the registry carries `latest` 43.4.0 and `beta`
+44.0.0-beta.5, and the check demands `pin === latestStableVersion` - so the
+2026-08-25 date holds. What could be done a week early is the part that would
+turn the bump into a multi-day problem: C3's memory budget, whose reserve this
+ADR records as narrow.
+
+`44.0.0-beta.5`, packaged and probed on the same host in the same
+`user_namespace` mode as the 43.4.0 reading of the same day:
+
+| | 43.4.0 | 44.0.0-beta.5 |
+|---|---|---|
+| `Private_Dirty + Private_Hugetlb` | 100,339,712 | **99,635,200** |
+| PSS | 209,254,400 | 212,859,904 |
+| processes | 7 | 7 |
+
+The class that is asserted in *every* probe mode did not grow - it fell by
+0.7 MB - and `verify:linux` exited 0 on the beta with packaging, Debian
+lifecycle, the sandbox probe and the strict private budget all passing. PSS
+rose 3.6 MB, which is inside the band this ADR already records as movement
+between the private classes rather than growth, and is not asserted in that
+mode anyway.
+
+Two things the trial itself taught. `package-linux.mjs` refuses to build from
+a distribution that does not match the reviewed version, so the trial had to
+set the review record to the beta - which is the gate working: a package is
+built from the runtime somebody reviewed, and a trial has to say so out loud.
+And a beta is not the release: this says the bump is probably cheap, not that
+it is done.
+
+
 Status note, 2026-08-18: **C3's own residual is closed - the assertion now
 knows which mode it is in.**
 

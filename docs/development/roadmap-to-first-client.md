@@ -38,6 +38,18 @@ erzwingt dann Electron 44, und ein Bump macht die ADR-0113-C3-Flaeche wieder
 auf: Paketierung, Sandbox-Probe und Speicherbudget sind neu nachzuweisen. Bei
 818.752 Byte protokollierter Reserve ist ein Chromium-Sprung ein reales Risiko.
 
+**Am 2026-08-18 vorab gemessen, und das Risiko ist nicht da.** Der Pin laesst
+sich nicht bewegen (Registry: `latest` 43.4.0, `beta` 44.0.0-beta.5), aber der
+teure Teil liess sich vorziehen: `44.0.0-beta.5` gepackt und im selben
+`user_namespace`-Modus auf demselben Host gemessen ergibt
+`Private_Dirty + Private_Hugetlb` **99.635.200** gegen 100.339.712 bei 43.4.0 -
+also *gefallen*, bei einem Budget von 110.000.000. PSS steigt um 3,6 MB, was in
+dem Band liegt, das ADR 0113 als Spaltenwechsel statt Wachstum protokolliert.
+`verify:linux` lief auf der Beta mit Exit 0 durch, inklusive Paketierung,
+Debian-Lebenszyklus, Sandbox-Probe und dem strikten Private-Budget. Eine Beta
+ist nicht das Release - die Aussage ist "wahrscheinlich billig", nicht
+"erledigt".
+
 Ein Block. **Opus 5 + high.**
 
 ## Phase 1 - Linux ohne Terminal installierbar
