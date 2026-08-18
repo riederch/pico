@@ -148,6 +148,29 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
+After the owner's first review the head and body were corrected further:
+
+- The display sits back in the helmet. `visor_surface_z` takes a `sink`, so
+  across its outer rim the patch runs past the shell and ends inside it. The
+  helmet closes over the face and there is no cut edge, as on the concept
+  board.
+- The tail fitting lies on the crown's centre line, further back, and the hair
+  leaves it at its **centre** rather than at its rear edge, so the plate sits
+  around the root instead of in front of it.
+- The chest core sits in a shallow round depression pressed into the torso
+  itself. `dish_amount` describes that recess once; the torso mesh is
+  displaced by it and the chest rings are placed on it, so the recess and the
+  parts sitting in it cannot drift apart.
+
+Two of those corrections moved the band's root, and the corridor check caught
+what that broke each time. The lessons are now in the geometry rather than in
+tuned constants: the arc aims its **upper edge** at a height above the crown
+instead of a fixed rise above the root, the apex additionally clears the head
+sampled underneath it, the fall is placed behind the **head** rather than
+behind the root, and a rear-flowing ribbon roots on the rear half of the crown,
+because rooted further forward the broad band has to turn over the dome itself
+and cuts into the shell while it does.
+
 None of this is a Character approval. The recipe stays `diagnostic` and the
 refinement items in `TODO.md` stay open until the owner accepts them.
 

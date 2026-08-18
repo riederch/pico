@@ -259,20 +259,28 @@ def superellipse_distance(x, y, centre_y, radius_x, radius_y, exponent=2.4):
 
 def visor_surface_z(
     x, y, centre_y, radius_x, radius_y, support_profile,
-    offset, bulge, flattening,
+    offset, bulge, flattening, rim=0.0, sink=0.0,
 ):
-    # A modest blend toward the centre plane gives the display its own shallow
+    # A blend toward the centre plane gives the display its own shallow
     # curvature instead of copying the much rounder helmet one-to-one.
     supported = support_surface_z(support_profile, x, y)
     centre_depth = support_surface_z(support_profile, 0.0, centre_y)
     base = supported * (1.0 - flattening) + centre_depth * flattening
     distance = superellipse_distance(x, y, centre_y, radius_x, radius_y)
-    return base + offset + bulge * (1.0 - distance ** 2.2)
+    surface = base + offset + bulge * (1.0 - distance ** 2.2)
+    if rim > 0.0:
+        # Across the outer rim the patch runs back past the plain shell and
+        # ends slightly inside it. That is what the concept shows: the helmet
+        # closes over the display, so the face has no visible cut edge.
+        blend = min(1.0, max(0.0, (distance - (1.0 - rim)) / rim))
+        blend = blend * blend * (3.0 - 2.0 * blend)
+        surface = surface * (1.0 - blend) + (supported - sink) * blend
+    return surface
 
 
 def superellipse_patch(
     name, centre_y, radius_x, radius_y, support_profile,
-    offset, bulge, flattening, mat, zone,
+    offset, bulge, flattening, mat, zone, rim=0.0, sink=0.0,
 ):
     # A smooth, deliberately authored visor surface. Concentric superellipse
     # rings produce the rounded-rectangle outline of the concept without
@@ -285,7 +293,7 @@ def superellipse_patch(
         centre_y,
         visor_surface_z(
             0.0, centre_y, centre_y, radius_x, radius_y, support_profile,
-            offset, bulge, flattening,
+            offset, bulge, flattening, rim, sink,
         ),
     )]
     faces = []
@@ -301,7 +309,7 @@ def superellipse_patch(
             )
             z = visor_surface_z(
                 x, y, centre_y, radius_x, radius_y, support_profile,
-                offset, bulge, flattening,
+                offset, bulge, flattening, rim, sink,
             )
             vertices.append((x, y, z))
     for segment in range(around):
@@ -341,7 +349,7 @@ def conforming_marker_patch(
         return visor_surface_z(
             x, y,
             FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
-            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
+            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING, FACE_RIM, FACE_SINK,
         ) + 0.0025
 
     vertices = [(marker_x, marker_y, depth(marker_x, marker_y))]
@@ -588,6 +596,35 @@ def oriented_ellipsoid_between(
     return obj
 
 
+def tangent_plate(
+    name, centre, normal, along, half_width, half_length, half_thickness,
+    mat, zone, target, parent,
+):
+    """A low oval plate lying flat on a surface, thin axis along its normal.
+
+    Placing a plate between two surface points tilts it: the chord cuts across
+    the curvature, so the plate stands at an angle to the shell it is meant to
+    lie on. Orienting it by the surface normal at its own centre is what makes
+    it sit flat.
+    """
+    up = Vector(normal).normalized()
+    forward = Vector(along)
+    forward = forward - up * forward.dot(up)
+    if forward.length < 0.0001:
+        forward = Vector((0.0, 0.0, 1.0))
+        forward = forward - up * forward.dot(up)
+    forward.normalize()
+    side = forward.cross(up).normalized()
+    obj = uv_sphere(
+        name, tuple(centre), (half_width, half_thickness, half_length),
+        mat, zone, target=target, segments=64, rings=40,
+    )
+    obj.rotation_mode = "QUATERNION"
+    obj.rotation_quaternion = Matrix((side, up, forward)).transposed().to_quaternion()
+    parent_preserve_world(obj, parent)
+    return obj
+
+
 def leaf_blade(
     name, base, control, tip, width, thickness, mat, zone, target, parent,
     width_reference=(1.0, 0.0, 0.0),
@@ -659,7 +696,7 @@ def leaf_blade(
     return obj
 
 
-def continuous_tube_path(name, points, radius, mat, zone, target, parent):
+def continuous_tube_path(name, points, radius, mat, zone, target, parent, closed=False):
     """Create one connected mechanical spine through an arbitrary path."""
     curve = bpy.data.curves.new(f"{name}.Curve", "CURVE")
     curve.dimensions = "3D"
@@ -670,6 +707,7 @@ def continuous_tube_path(name, points, radius, mat, zone, target, parent):
     curve.fill_mode = "FULL"
     spline = curve.splines.new("BEZIER")
     spline.bezier_points.add(len(points) - 1)
+    spline.use_cyclic_u = closed
     for point, value in zip(spline.bezier_points, points):
         point.co = Vector(value)
         point.handle_left_type = "AUTO"
@@ -718,6 +756,59 @@ def ribbon_transport_frames(curve_point, steps, twist_degrees, lateral_reference
             tangent, width_axis, tangent.cross(width_axis).normalized(),
         ))
     return frames
+
+
+def dish_amount(point, centre, radius, depth):
+    """How deep a shallow round depression cuts in at one point.
+
+    The dish is described once and read twice: the torso mesh is displaced by
+    it and the chest rings are placed on it, so the recess and the parts
+    sitting in it can never drift apart.
+    """
+    distance = (Vector(point) - Vector(centre)).length
+    if distance >= radius:
+        return 0.0
+    return depth * 0.5 * (1.0 + math.cos(math.pi * distance / radius))
+
+
+def apply_dish(obj, centre, radius, depth):
+    """Press a round depression into a body revolved around the Y axis."""
+    mesh = obj.data
+    for vertex in mesh.vertices:
+        amount = dish_amount(vertex.co, centre, radius, depth)
+        if amount <= 0.0:
+            continue
+        outward = Vector((vertex.co.x, 0.0, vertex.co.z))
+        if outward.length < 1e-6:
+            continue
+        vertex.co -= outward.normalized() * amount
+    mesh.update()
+    return obj
+
+
+def conforming_ring(
+    name, centre_y, radius, tube_radius, inset, support_profile, mat, zone,
+    target, parent, segments=96, dish=None,
+):
+    """A ring set into a curved surface, following it all the way round.
+
+    A torus lies in one plane. On a body that curves in both directions such a
+    ring surfaces on one side and disappears on the other, which reads as a
+    crescent rather than as a recess. Sampling the surface per angle keeps the
+    inset constant instead.
+    """
+    points = []
+    for index in range(segments):
+        angle = 2.0 * math.pi * index / segments
+        x = radius * math.cos(angle)
+        y = centre_y + radius * math.sin(angle)
+        z = support_surface_z(support_profile, x, y)
+        if dish is not None:
+            z -= dish_amount((x, y, z), *dish)
+        points.append((x, y, z - inset))
+    return continuous_tube_path(
+        name, points, tube_radius, mat, zone, target, parent, closed=True,
+    )
 
 
 def light_guide_ribbon_mesh(
@@ -1035,7 +1126,7 @@ def preview_face(support_profile):
         z = visor_surface_z(
             x, y,
             FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, support_profile,
-            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
+            FACE_OFFSET, FACE_BULGE, FACE_FLATTENING, FACE_RIM, FACE_SINK,
         ) + 0.0035
         point.co = (x, y, z, 1.0)
     mouth = bpy.data.objects.new("PREVIEW.Status.Mouth", curve)
@@ -1148,11 +1239,17 @@ def rear_ribbon_guide(support_profile, amounts):
     # The fitting lies on the sampled crown surface and is sunk into it.
     # `anchor` slides it along the crown. It never sits on a stalk, and the
     # personal colour only starts at its rear edge.
-    fitting_x = side_direction * (0.052 + abs(side_amount) * 0.070)
+    # The plate sits on the centre line of the crown; `side` still shifts it,
+    # but no longer off a constant lateral offset the concept does not have.
+    fitting_x = side_amount * 0.055
     fitting_half_length = 0.075 + root_spread * 0.42
     fitting_half_width = 0.082 + root_spread * 0.44
     fitting_half_thickness = 0.028 + root_spread * 0.115
-    fitting_z = 0.070 - anchor_amount * 0.150
+    # A rear-flowing ribbon roots on the rear half of the crown. `anchor`
+    # still slides the plate, but within that half: rooted further forward the
+    # broad band has to turn over the dome itself, and its lower edge cuts
+    # into the shell while it does — which the corridor check catches.
+    fitting_z = -0.105 - anchor_amount * 0.135
     front_z = fitting_z + fitting_half_length
     rear_z = fitting_z - fitting_half_length
 
@@ -1161,13 +1258,15 @@ def rear_ribbon_guide(support_profile, amounts):
 
     def root_curve_point(amount):
         z = front_z + (rear_z - front_z) * amount
-        return crown_point(fitting_x * (0.70 + 0.52 * amount), z)
+        return crown_point(fitting_x, z)
 
     fitting_front = root_curve_point(0.0)
     fitting_rear = root_curve_point(1.0)
     fitting_normal = head_surface_normal(support_profile, fitting_x, fitting_z)
     embed = fitting_normal * fitting_half_thickness * 0.40
-    root = fitting_rear - fitting_normal * fitting_half_thickness * 0.55
+    # The hair leaves the plate at its centre, so the plate sits around the
+    # root rather than in front of it.
+    root = root_curve_point(0.52) - fitting_normal * fitting_half_thickness * 0.30
 
     lateral_reach = (
         0.190 + length_amount * 0.170 + abs(side_amount) * 0.100
@@ -1181,13 +1280,30 @@ def rear_ribbon_guide(support_profile, amounts):
     # Measured against the concept: the band's upper edge clears the local
     # crown by about one sixth of the head height, not by a third. The apex is
     # the centre line, so half the band width sits above it.
-    arch_height = (
-        0.060 + lift_amount * 0.085 + max(0.0, crown_bias) * 0.028
+    base_width = 0.098 + width_amount * 0.062
+    # The silhouette is the band's upper edge, not its centre line, and it is
+    # read against the crown rather than against the root. `anchor` slides the
+    # plate along the crown, so a fixed rise above the root either grazed the
+    # head at the front or turned into a spike at the back.
+    head_top = support_profile[0][0]
+    apex_top_y = (
+        head_top + 0.110 + lift_amount * 0.075 + max(0.0, crown_bias) * 0.025
     )
+    # At the apex the band stands on edge, so its lower edge has to clear the
+    # crown as well. The apex position in x and z is already known here, so
+    # the head height underneath it can be sampled directly.
+    apex_x = root.x + side_direction * lateral_reach * 0.34
+    apex_z = root.z - rear_reach * 0.42
+    clearance_apex_y = (
+        head_surface_y(support_profile, apex_x, apex_z) + base_width + 0.030
+    )
+    apex_y = max(clearance_apex_y, apex_top_y - base_width)
+    arch_height = max(0.050, apex_y - root.y)
     drop = (
         0.215 + length_amount * 0.225
         + max(0.0, sweep_amount) * 0.030
     )
+    thickness = 0.008 + width_amount * 0.005
     curl_lift = 0.055 + abs(curl_amount) * 0.160
 
     # A short, full, strongly rounded top arc. The apex sits early along the
@@ -1198,10 +1314,15 @@ def rear_ribbon_guide(support_profile, amounts):
         arch_height,
         -rear_reach * 0.42,
     ))
-    hanging = root + Vector((
-        side_direction * lateral_reach,
-        -drop,
-        -rear_reach,
+    # The band falls behind the head, so the fall is placed against the head's
+    # rear rather than against the root. Measured from the root alone, a plate
+    # sitting far forward sent the fall straight down through the skull.
+    head_half_depth = max(row[2] for row in support_profile)
+    rear_limit = -(head_half_depth + thickness + 0.022)
+    hanging = Vector((
+        root.x + side_direction * lateral_reach,
+        root.y - drop,
+        min(root.z - rear_reach, rear_limit),
     ))
     tip = hanging + Vector((
         side_direction * (0.160 + abs(curl_amount) * 0.220),
@@ -1210,11 +1331,14 @@ def rear_ribbon_guide(support_profile, amounts):
     ))
 
     rise_controls = (
-        root + Vector((
-            side_direction * lateral_reach * 0.02,
-            arch_height * 0.88,
-            -rear_reach * 0.02,
-        )),
+        # Hair leaves its root along the root's own normal, far enough that the
+        # broad band has turned clear of the crown before it curves back. The
+        # band is wide, so half its width is the distance that matters: with a
+        # shorter lead-in its lower edge dipped into the shell early in the
+        # rise, which the corridor check caught at `anchor = 0`.
+        root
+        + fitting_normal * max(arch_height * 0.92, base_width * 0.85)
+        + Vector((side_direction * lateral_reach * 0.02, 0.0, 0.0)),
         arch + Vector((
             -side_direction * lateral_reach * 0.30,
             arch_height * 0.05,
@@ -1258,8 +1382,6 @@ def rear_ribbon_guide(support_profile, amounts):
             (amount - fall_end) / (1.0 - fall_end),
         )
 
-    base_width = 0.098 + width_amount * 0.062
-    thickness = 0.008 + width_amount * 0.005
     # The concept band always turns; `twist` modulates that turn rather than
     # switching it on. Roughly half a turn over the whole length shows the
     # outer face on the arc and the darker inner face on the fall. It stays
@@ -1282,6 +1404,9 @@ def rear_ribbon_guide(support_profile, amounts):
         "root_curve_point": root_curve_point,
         "fitting_front": fitting_front,
         "fitting_rear": fitting_rear,
+        # The chord midpoint sits a sagitta below the shell. Taking the sampled
+        # surface point instead is what keeps the plate low but visible.
+        "fitting_centre": crown_point(fitting_x, fitting_z),
         "fitting_normal": fitting_normal,
         "fitting_half_width": fitting_half_width,
         "fitting_half_thickness": fitting_half_thickness,
@@ -1536,14 +1661,22 @@ def make_procedural_head_variant(
         carrier["pico_head_module_section"] = "carrier"
         carrier["pico_spans_root_and_hair"] = True
 
+        fitting_centre = guide["fitting_centre"] - embed
+        fitting_along = guide["fitting_rear"] - guide["fitting_front"]
+
         # Exactly one dark mechanical collar under the fitting, with exactly
-        # one mounting point where the carrier leaves it.
-        collar = oriented_ellipsoid_between(
+        # one mounting point where the carrier leaves it. It shares the
+        # fitting's tangential orientation and sits deeper, so it reads as a
+        # dark seam beneath the bright plate instead of riding on top of it.
+        collar = tangent_plate(
             f"HeadModule.{name}.RootCollar",
-            root_curve_point(0.20) - embed * 0.30,
-            root_curve_point(0.86) - embed * 0.30,
-            guide["fitting_half_width"] * 0.72,
-            guide["fitting_half_thickness"] * 0.62,
+            fitting_centre
+            - guide["fitting_normal"] * guide["fitting_half_thickness"] * 0.42,
+            guide["fitting_normal"],
+            fitting_along,
+            guide["fitting_half_width"] * 0.92,
+            fitting_along.length * 0.52,
+            guide["fitting_half_thickness"] * 0.72,
             TRIM,
             "trim",
             target,
@@ -1552,11 +1685,13 @@ def make_procedural_head_variant(
         collar["pico_head_module_section"] = "root_collar"
         collar["pico_mount_points"] = 1
 
-        root_shell = oriented_ellipsoid_between(
+        root_shell = tangent_plate(
             f"HeadModule.{name}.HairRoot",
-            guide["fitting_front"] - embed,
-            guide["fitting_rear"] - embed,
+            fitting_centre,
+            guide["fitting_normal"],
+            fitting_along,
             guide["fitting_half_width"],
+            fitting_along.length * 0.56,
             guide["fitting_half_thickness"],
             SHELL,
             "trim",
@@ -1592,8 +1727,10 @@ def make_procedural_head_variant(
                 0.004 + part_depth * 0.003,
                 0.0,
             ))
+            # The hair now leaves the plate at its centre, so the seam has to
+            # stop short of that instead of running the whole plate length.
             seam_points = [
-                root_curve_point(index / 10.0 * 0.78)
+                root_curve_point(index / 10.0 * 0.42)
                 + seam_offset * (1.0 - index / 10.0)
                 for index in range(11)
             ]
@@ -2033,18 +2170,27 @@ revolved_mesh("Shell.Head", head_profile, SHELL, "shell", interpolate=False)
 FACE_CENTRE_Y = -0.035
 FACE_RADIUS_X = 0.347
 FACE_RADIUS_Y = 0.253
-FACE_OFFSET = 0.012
-FACE_BULGE = 0.018
-FACE_FLATTENING = 0.22
+# The display sits back in the helmet: at its centre it stays just proud of
+# the shell, and towards its rim it runs past the shell and ends inside it, so
+# the helmet closes over the face exactly as the concept board shows.
+FACE_OFFSET = -0.004
+FACE_BULGE = 0.009
+# The head reads as a helmet, not a ball, when the face area is noticeably
+# flatter than the shell around it.
+FACE_FLATTENING = 0.46
+FACE_RIM = 0.34
+FACE_SINK = 0.016
+FACE_FRAME_RIM = 0.44
+FACE_FRAME_SINK = 0.020
 superellipse_patch(
     "Trim.VisorFrame", -0.035, 0.360, 0.263, head_profile,
-    0.005, 0.012, 0.14,
-    TRIM, "trim",
+    -0.008, 0.007, 0.40,
+    TRIM, "trim", rim=FACE_FRAME_RIM, sink=FACE_FRAME_SINK,
 )
 superellipse_patch(
     "FaceDisplay.Visor", FACE_CENTRE_Y, FACE_RADIUS_X, FACE_RADIUS_Y, head_profile,
     FACE_OFFSET, FACE_BULGE, FACE_FLATTENING,
-    FACE, "face_display",
+    FACE, "face_display", rim=FACE_RIM, sink=FACE_SINK,
 )
 
 # A real neck remains visible between head and torso. It is trim, not a status
@@ -2072,7 +2218,7 @@ torso_profile = sample_bezier_segments([
         (-1.105, 0.1000, 0.055),
     ),
 ], steps=48)
-revolved_mesh("Shell.Torso", torso_profile, SHELL, "shell", interpolate=False)
+TORSO = revolved_mesh("Shell.Torso", torso_profile, SHELL, "shell", interpolate=False)
 surface_seam("Trim.TorsoSeam.Upper", torso_profile, -0.405, -0.505, TRIM, "trim")
 surface_seam("Trim.TorsoSeam.Lower", torso_profile, -0.833, -1.055, TRIM, "trim")
 
@@ -2088,12 +2234,42 @@ for side, sign in (("L", -1.0), ("R", 1.0)):
     )
 
 # Chest core: dark housing plus one member of the unified status group.
-cylinder("Trim.ChestCoreHousing", (0.0, -0.669, 0.310), 0.151, 0.060, (0.0, 0.0, 0.0), TRIM, "trim")
-torus(
-    "Status.ChestCoreBezel", (0.0, -0.669, 0.352), 0.130, 0.012,
-    STATUS, "status_emitters", rotation=(0.0, 0.0, 0.0),
+#
+# The emitter is set into the body rather than stuck onto it. Its front face is
+# flush with the torso surface on the centre line; because the torso curves
+# away, the ring around it then sits slightly inside the body on its own,
+# which is exactly the recess the concept shows.
+CHEST_Y = -0.669
+CHEST_CORE_RADIUS = 0.112
+CHEST_CORE_DEPTH = 0.022
+CHEST_BEZEL_RADIUS = 0.130
+CHEST_BEZEL_MINOR = 0.012
+CHEST_HOUSING_RADIUS = 0.151
+chest_surface = support_surface_z(torso_profile, 0.0, CHEST_Y)
+# The chest core sits in a shallow round depression rather than on a plain
+# belly. The dish is pressed into the torso itself, so it is a recess in the
+# body and not a ring laid over it.
+CHEST_DISH = (
+    (0.0, CHEST_Y, chest_surface),
+    0.208,
+    0.020,
 )
-cylinder("Status.ChestCore", (0.0, -0.669, 0.356), 0.112, 0.035, (0.0, 0.0, 0.0), STATUS, "status_emitters")
+apply_dish(TORSO, *CHEST_DISH)
+conforming_ring(
+    "Trim.ChestCoreHousing", CHEST_Y, CHEST_HOUSING_RADIUS, 0.014,
+    0.004, torso_profile, TRIM, "trim", MODEL, ROOT, dish=CHEST_DISH,
+)
+conforming_ring(
+    "Status.ChestCoreBezel", CHEST_Y, CHEST_BEZEL_RADIUS, CHEST_BEZEL_MINOR,
+    CHEST_BEZEL_MINOR * 0.55, torso_profile,
+    STATUS, "status_emitters", MODEL, ROOT, dish=CHEST_DISH,
+)
+cylinder(
+    "Status.ChestCore",
+    (0.0, CHEST_Y, chest_surface - CHEST_CORE_DEPTH * 0.5),
+    CHEST_CORE_RADIUS, CHEST_CORE_DEPTH, (0.0, 0.0, 0.0),
+    STATUS, "status_emitters",
+)
 
 make_arm("L")
 make_arm("R")
