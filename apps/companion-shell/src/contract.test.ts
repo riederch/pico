@@ -28,6 +28,7 @@ import {
   parsePicoCompanionDevices,
   picoCompanionDeviceAuthorityEndedLine,
   picoCompanionDeviceAuthorityLines,
+  picoCompanionDeviceAuthorityRenewedLine,
   picoCompanionDeviceAuthoritySummary,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionDeviceRevocationReasonLines,
@@ -605,6 +606,55 @@ describe('ADR 0130 E3 - which devices your Home answers to', () => {
     for (const line of lines) {
       expect(line.detail).not.toContain(line.delegationId);
     }
+  });
+
+  it('warns before an authority runs out, and says why it cannot wait', () => {
+    /**
+     * ADR 0104 pins a year, and renewal needs the delegation *active* - the
+     * ceremony wants it and so does the Link request that carries it. A
+     * device that lets its authority lapse cannot renew itself, which is why
+     * this is a sentence rather than a colour.
+     */
+    const soon = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true, validUntil: '2027-01-10T00:00:00.000Z' },
+      { delegationId: 'b', status: 'active', validUntil: '2027-01-10T00:00:00.000Z' },
+      { delegationId: 'c', status: 'active', validUntil: '2027-06-01T00:00:00.000Z' },
+    ]), new Date('2027-01-01T00:00:00.000Z'));
+    expect(soon[0]?.expiryWarning).toContain('in 9 days');
+    expect(soon[0]?.expiryWarning).toContain('cannot renew itself');
+    // Another device is a different answer, and it is said rather than left
+    // as a control that is missing: the ceremony needs that device's own key.
+    expect(soon[1]?.expiryWarning).toContain('in front of');
+    expect(soon[1]?.renewLabel).toBeNull();
+    // A year away is not a warning.
+    expect(soon[2]?.expiryWarning).toBeNull();
+
+    const lapsed = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true, validUntil: '2027-01-01T00:00:00.000Z' },
+    ]), new Date('2027-01-01T00:00:00.000Z'));
+    expect(lapsed[0]?.expiryWarning).toContain('today');
+
+    // Nothing to warn about on a row that already ended.
+    expect(picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'revoked' },
+    ]))[0]?.expiryWarning).toBeNull();
+  });
+
+  it('offers renewal only where it can be done', () => {
+    const own = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+      { delegationId: 'b', status: 'active' },
+      { delegationId: 'c', status: 'expired', isThisDevice: true },
+    ]));
+    expect(own[0]?.renewLabel).toBe('Keep it working for another year');
+    expect(own[1]?.renewLabel).toBeNull();
+    expect(own[2]?.renewLabel).toBeNull();
+    // And nowhere at all on a device that holds no identity key.
+    expect(picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+    ], false))[0]?.renewLabel).toBeNull();
+    expect(picoCompanionDeviceAuthorityRenewedLine({ validUntil: '2028-01-01T00:00:00.000Z' }))
+      .toContain('2028-01-01');
   });
 
   it('warns on the two rows that lock somebody out, and on no others', () => {

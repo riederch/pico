@@ -1,13 +1,21 @@
-import type { PicoIdentityRevocationReasonCategory } from '@pico/protocol';
+import type {
+  PicoIdentityDelegationScope,
+  PicoIdentityRevocationReasonCategory,
+} from '@pico/protocol';
 import type { VaultSodium } from '@pico/vault';
 import type { PicoVaultDaemonClient } from '@pico/vault-daemon/client';
 import {
+  picoHomeDeviceTargetSignerFromVault,
   readPicoHomeDeviceLifecycle,
+  renewPicoHomeDevice,
   revokePicoHomeDevice,
 } from '@pico/vault-daemon/device-lifecycle-ceremony';
 import type { PicoLinkDirectClient } from '@pico/vault-daemon/link-direct-client';
 import { picoPresenceIdForDeviceSigningKey } from './presence.js';
-import type { PicoCompanionProfile } from './profile.js';
+import {
+  writePicoCompanionProfile,
+  type PicoCompanionProfile,
+} from './profile.js';
 
 /**
  * ADR 0130 E3. Which devices your Home answers to, and ending one.
@@ -227,3 +235,92 @@ async function holdsIdentityKey(
       && session.keyFingerprintHex === identityKeyFingerprintHex,
   );
 }
+
+/**
+ * How long before an authority runs out this device starts saying so.
+ *
+ * ADR 0104 pins a year, and the last month of it is when a person can still
+ * act cheaply: renewal needs the delegation to be *active*, and the Link
+ * request that carries the renewal needs it too. A device that let its
+ * authority lapse cannot renew itself at all - it has to be enrolled again,
+ * or recovered. So the warning is not decoration; it is the difference
+ * between a minute and a ceremony.
+ */
+export const picoCompanionDeviceAuthorityWarningDays = 30;
+
+/**
+ * ADR 0109 renewal, for the device holding the identity root.
+ *
+ * **Renewal is replacement.** The identity root signs a new delegation and a
+ * revocation of the old one - two signatures, two approvals - and the target
+ * co-signs the activation with the same device key it already has. For this
+ * device those are one vault, which is why this one needs no exchange: the
+ * founding device is both the root and the target.
+ *
+ * A delegated second device is the same ceremony with the target across a
+ * camera, and it is the enrolment exchange with `action: 'renew'` in the
+ * activation. That surface is not here yet.
+ *
+ * **The profile is rewritten, and it has to be.** The new delegation replaces
+ * the old, the old is revoked in the same transition, and every Link request
+ * this device makes names its delegation id. A device that renewed and kept
+ * the old id in its profile would have signed itself out of its own Home at
+ * the moment it renewed.
+ */
+export async function renewPicoCompanionDeviceAuthority(input: {
+  profile: PicoCompanionProfile;
+  profilePath: string;
+  daemonClient: PicoVaultDaemonClient;
+  livingDeviceLinkClient: PicoLinkDirectClient;
+  sodium: VaultSodium;
+  validUntil: string;
+  scopes?: readonly PicoIdentityDelegationScope[];
+}): Promise<{
+  delegationId: string;
+  replacedDelegationId: string;
+  validUntil: string;
+}> {
+  if (!await holdsIdentityKey(input.daemonClient, input.profile.identity.keyFingerprintHex)) {
+    // The same fact the read reports: without the identity key there is
+    // nothing here that can sign a delegation, and the device that holds it
+    // is where this can be done.
+    throw new Error('pico_companion_device_holds_no_identity_key');
+  }
+
+  const result = await renewPicoHomeDevice({
+    rootClient: input.daemonClient,
+    sponsorLinkClient: input.livingDeviceLinkClient,
+    sodium: input.sodium,
+    identityKeyFingerprintHex: input.profile.identity.keyFingerprintHex,
+    sponsor: sender(input.profile),
+    target: await picoHomeDeviceTargetSignerFromVault(input.daemonClient, {
+      signingKeyFingerprintHex: input.profile.device.signingKeyFingerprintHex,
+      keyAgreementKeyFingerprintHex: input.profile.device.keyAgreementKeyFingerprintHex,
+    }),
+    replacedDelegationId: input.profile.device.delegationId,
+    scopes: [...(input.scopes ?? picoCompanionDeviceRenewalScopes)],
+    validUntil: input.validUntil,
+  });
+
+  const delegationId = result.submission.evidence.targetDelegationId;
+  writePicoCompanionProfile(input.profilePath, {
+    ...input.profile,
+    device: { ...input.profile.device, delegationId },
+  });
+
+  return Object.freeze({
+    delegationId,
+    replacedDelegationId: input.profile.device.delegationId,
+    validUntil: input.validUntil,
+  });
+}
+
+/**
+ * The first device's three, unchanged by a renewal.
+ *
+ * A renewal extends what a device may do; changing it while extending it
+ * would be two decisions wearing one control, and the person pressed a
+ * control that says "keep working".
+ */
+export const picoCompanionDeviceRenewalScopes: readonly PicoIdentityDelegationScope[] =
+  Object.freeze(['surface_session', 'decrypt_domain', 'receive_key_envelope']);

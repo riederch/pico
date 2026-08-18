@@ -100,7 +100,11 @@ Terminal, und damit waere Phase 4 von Phase 1 abgeschnitten.
   sondern wartet, bis das Home es als eines der seinen beantwortet. Flaechen auf
   beiden Seiten: eine dritte Erstlauf-Wahl, die ausdruecklich keine Art von
   Wiederherstellen ist, und "Add another device" in den Einstellungen.
-  *Opus 5 + xhigh.*
+  **Nachgezogen am selben Tag: Erneuerung.** Das Geraet mit der
+  Identitaetswurzel erneuert sich ohne Austausch, das Profil wird dabei neu
+  geschrieben (erneuern ist ersetzen), und die Zeile warnt im letzten Monat mit
+  der Folge statt mit einer Farbe: nach Ablauf kann sich ein Geraet nicht mehr
+  selbst erneuern. *Opus 5 + xhigh.*
 - **E4 Home-Kontinuitaet und Membership (erledigt 2026-08-18)** -
   `rotate-host-key` und `issue-membership` als Produktflaechen. Die Rotation
   endet sofort mit dem ADR-0115-U4-Repin: das Geraet, das sie ausgeloest hat,

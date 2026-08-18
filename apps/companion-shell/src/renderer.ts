@@ -8,6 +8,7 @@ import {
   picoCompanionPresentationTakesTheWindow,
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceAuthorityEndedLine,
+  picoCompanionDeviceAuthorityRenewedLine,
   picoCompanionDeviceAuthorityUnavailable,
   picoCompanionHomeMemberAdmittedLine,
   picoCompanionMembershipEndedLine,
@@ -113,6 +114,11 @@ declare global {
       ): Promise<{ credentialId: string; status: string }>;
       rotateHostKeys(reason: string): Promise<unknown>;
       getDeviceAuthority(): Promise<unknown>;
+      renewDeviceAuthority(): Promise<{
+        delegationId: string;
+        replacedDelegationId: string;
+        validUntil: string;
+      }>;
       endDeviceAuthority(delegationId: string, reason: string): Promise<{
         delegationId: string;
         endedThisDevice: boolean;
@@ -957,6 +963,17 @@ function refreshDevices(): void {
             });
         },
         authority,
+        () => {
+          void window.picoCompanion.renewDeviceAuthority().then((renewed) => {
+            deviceStatus.textContent = picoCompanionDeviceAuthorityRenewedLine(renewed);
+            refreshDevices();
+          }, (error: unknown) => {
+            deviceStatus.textContent = refusalText(
+              error,
+              'This device\u2019s authority is unchanged.',
+            );
+          });
+        },
       );
       if (authority === undefined) {
         deviceAuthoritySummary.textContent = picoCompanionDeviceAuthorityUnavailable;

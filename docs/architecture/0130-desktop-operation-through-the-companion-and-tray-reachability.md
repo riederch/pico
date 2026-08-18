@@ -8,6 +8,29 @@ the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
 
+Status note, 2026-08-18: **renewal, because ADR 0104's year would otherwise
+end every device on a date the window shows.**
+
+The device that holds the identity root renews itself with no exchange at
+all - root and target are one vault - and that is the case worth having
+first: it is the device everything else is done from.
+
+**Renewal is replacement, so the profile is rewritten.** The new delegation
+and the revocation of the old one are one transition, and every Link request
+this device makes names its delegation id; a device that renewed and kept
+the old id would have signed itself out of its own Home at the moment it
+renewed. The test holds the same line the host rotation is held to: the
+replaced delegation stops answering, asserted against the same call
+succeeding beforehand.
+
+**The warning is the load-bearing half.** Renewal needs the delegation
+active - the ceremony wants it and so does the Link request that carries it
+- so a device that lets its authority lapse cannot renew itself at all. The
+row says how many days are left inside the last month, and says the
+consequence rather than colouring the date. On another device it says the
+other true thing: that renewing it has to happen with that device in front
+of you, and this window cannot do that yet.
+
 Status note, 2026-08-18: **E5 was measured before it was built, and the
 measurement said not to build it yet.**
 
@@ -477,10 +500,10 @@ Node host beside each of them.
   and Platform Keystore binding, closing the ADR 0113 residual.
 - **E3 - Device lifecycle vertical (implemented):** delegate, enroll, renew,
   revoke, inspect - each under ADR 0099 approval and ADR 0106 rendering.
-  Inspect, revoke and enrolment are product surfaces since 2026-08-18;
-  delegate is the primitive inside enrolment rather than a surface of its
-  own, and renewing a device is the same exchange with the same three codes,
-  which the status notes above record.
+  Inspect, revoke, enrolment and renewal of the device a person is holding
+  are product surfaces since 2026-08-18. Delegate is the primitive inside
+  enrolment rather than a surface of its own; renewing *another* device is
+  the same three codes with `action: 'renew'` and is not built.
 - **E4 - Home continuity and membership vertical (implemented):**
   `rotate-host-key` and `issue-membership` as product surfaces, with the
   reading half that turned out to be missing: over Link a Home Host Pico

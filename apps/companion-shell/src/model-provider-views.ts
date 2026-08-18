@@ -402,6 +402,8 @@ export function renderPicoCompanionDevices(
    * can still act as the person.
    */
   authority?: unknown,
+  /** ADR 0104. Another year for this device; absent where it cannot be done. */
+  renew?: () => void,
 ): void {
   const devices = parsePicoCompanionDevices(value);
   const view = authority === undefined
@@ -477,7 +479,7 @@ export function renderPicoCompanionDevices(
     const authorityLine = unplaced.get(line.presenceId);
     if (authorityLine !== undefined) {
       unplaced.delete(line.presenceId);
-      item.append(deviceAuthorityBlock(root.document, authorityLine, act));
+      item.append(deviceAuthorityBlock(root.document, authorityLine, act, renew));
     }
     root.list.append(item);
   }
@@ -500,7 +502,7 @@ export function renderPicoCompanionDevices(
     detail.className = 'detail';
     detail.textContent = 'It has not said what it can do here.';
 
-    item.append(headline, detail, deviceAuthorityBlock(root.document, line, act));
+    item.append(headline, detail, deviceAuthorityBlock(root.document, line, act, renew));
     root.list.append(item);
   }
 }
@@ -522,6 +524,7 @@ function deviceAuthorityBlock(
     delegationId: string;
     reason: PicoCompanionDeviceRevocationReasonLine['reason'];
   }) => void,
+  renew?: () => void,
 ): HTMLElement {
   const block = document.createElement('div');
   block.className = 'device-authority';
@@ -531,6 +534,28 @@ function deviceAuthorityBlock(
   detail.className = 'detail';
   detail.textContent = line.detail;
   block.append(detail);
+
+  /**
+   * ADR 0104's year, while something can still be done about it. Its own
+   * line rather than a colour: a device that lets its authority lapse cannot
+   * renew itself, and that is a sentence rather than an emphasis.
+   */
+  if (line.expiryWarning !== null) {
+    const warning = document.createElement('p');
+    warning.className = 'detail';
+    warning.dataset.warning = 'expiry';
+    warning.textContent = line.expiryWarning;
+    block.append(warning);
+  }
+
+  if (line.renewLabel !== null && renew !== undefined) {
+    const renewButton = document.createElement('button');
+    renewButton.type = 'button';
+    renewButton.dataset.renewAuthority = line.delegationId;
+    renewButton.textContent = line.renewLabel;
+    renewButton.addEventListener('click', () => renew());
+    block.append(renewButton);
+  }
 
   if (line.endLabel === null) {
     return block;

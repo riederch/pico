@@ -8,6 +8,7 @@ import sodium from 'libsodium-wrappers-sumo';
 import type { VaultSodium } from '@pico/vault';
 import {
   readPicoCompanionDeviceAuthority,
+  renewPicoCompanionDeviceAuthority,
   revokePicoCompanionDeviceAuthority,
 } from '@pico/companion/device-lifecycle';
 import {
@@ -266,6 +267,72 @@ describe('ADR 0130 E3 - the device lifecycle from the Client', () => {
     expect(picoCompanionDeviceAuthoritySummary(view))
       .toBe('Your Home answers to one device.');
   }, 180_000);
+
+  it('renews this device, and the old authority stops working', async () => {
+    /**
+     * ADR 0104 pins a year. Without this, every device stops on a date the
+     * window shows and nothing can extend it - and renewal is exactly the
+     * thing that stops being possible once it has run out: the ceremony wants
+     * the delegation active, and so does the Link request that carries it.
+     *
+     * **Renewal is replacement.** The new delegation and the revocation of
+     * the old one are one transition, which is why the profile has to be
+     * rewritten: every Link request this device makes names its delegation
+     * id, and a device that kept the old one would have signed itself out of
+     * its own Home at the moment it renewed.
+     */
+    await sodium.ready;
+    const { profilePath, session } = await foundedDevice();
+    const before = readPicoCompanionProfile(profilePath);
+    const beforeClient = await createPicoCompanionLinkClient({
+      profile: before,
+      daemonClient: session.consumerClient,
+      sodium: sodium as unknown as VaultSodium,
+    });
+    expect((await beforeClient.request('home.device.lifecycle.read', {})).outcome).toBe('ok');
+
+    const renewed = await renewPicoCompanionDeviceAuthority({
+      profile: before,
+      profilePath,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: beforeClient,
+      sodium: sodium as unknown as VaultSodium,
+      validUntil: '2028-01-01T00:00:00.000Z',
+    });
+    expect(renewed.replacedDelegationId).toBe(before.device.delegationId);
+    expect(renewed.delegationId).not.toBe(before.device.delegationId);
+
+    const after = readPicoCompanionProfile(profilePath);
+    expect(after.device.delegationId).toBe(renewed.delegationId);
+    // The keys are the same device's; only the authority over them is new.
+    expect(after.device.signingKeyFingerprintHex).toBe(before.device.signingKeyFingerprintHex);
+
+    const view = await readPicoCompanionDeviceAuthority({
+      profile: after,
+      daemonClient: session.consumerClient,
+      livingDeviceLinkClient: await createPicoCompanionLinkClient({
+        profile: after,
+        daemonClient: session.consumerClient,
+        sodium: sodium as unknown as VaultSodium,
+      }),
+    });
+    const active = view.devices.filter((device) => device.status === 'active');
+    expect(active).toHaveLength(1);
+    expect(active[0]?.delegationId).toBe(renewed.delegationId);
+    expect(active[0]?.validUntil).toBe('2028-01-01T00:00:00.000Z');
+    expect(view.devices.find(
+      (device) => device.delegationId === before.device.delegationId,
+    )?.status).toBe('revoked');
+
+    /**
+     * And the old authority is gone rather than merely superseded - the same
+     * shape the host rotation is held to. A Home that still answered the
+     * replaced delegation would have renewed nothing.
+     */
+    await expect(
+      beforeClient.request('home.device.lifecycle.read', {}),
+    ).rejects.toThrow();
+  }, 300_000);
 
   it('ends a device, and the ending takes the ability to ask with it', async () => {
     await sodium.ready;

@@ -79,6 +79,8 @@ export const picoCompanionIpcChannels = Object.freeze({
    */
   getDeviceAuthority: 'pico:device-authority:get',
   endDeviceAuthority: 'pico:device-authority:end',
+  /** ADR 0104. Another year for the device the person is holding. */
+  renewDeviceAuthority: 'pico:device-authority:renew',
   /**
    * ADR 0130 E4. The Home rather than a device: who else lives in it, and the
    * keys it is known by.
@@ -1545,6 +1547,18 @@ export interface PicoCompanionDeviceAuthorityLine {
   /** What this device may do for the person, now. */
   headline: string;
   detail: string;
+  /**
+   * ADR 0104's year, said while something can still be done about it.
+   *
+   * Renewal needs the delegation to be active - the ceremony wants it and so
+   * does the Link request that carries it - so a device that lets its
+   * authority lapse cannot renew itself at all. The warning is the difference
+   * between a minute and a ceremony, which is why it is a sentence of its own
+   * and not a colour.
+   */
+  expiryWarning: string | null;
+  /** Absent where renewal cannot be done from here. */
+  renewLabel: string | null;
   /** Absent when this row cannot be ended from here. */
   endLabel: string | null;
   /**
@@ -1612,6 +1626,7 @@ export function picoCompanionDeviceAuthoritySummary(
 
 export function picoCompanionDeviceAuthorityLines(
   view: PicoCompanionDeviceAuthorityView,
+  now: Date = new Date(),
 ): readonly PicoCompanionDeviceAuthorityLine[] {
   const active = view.devices.filter((device) => device.status === 'active');
   return Object.freeze(view.devices.map((device) => {
@@ -1623,6 +1638,10 @@ export function picoCompanionDeviceAuthorityLines(
         ? 'This device'
         : 'Another of your devices',
       detail: picoCompanionDeviceAuthorityDetail(device),
+      expiryWarning: picoCompanionDeviceAuthorityExpiry(device, now),
+      renewLabel: endable && device.isThisDevice
+        ? 'Keep it working for another year'
+        : null,
       endLabel: endable ? "End this device's authority" : null,
       endWarning: !endable
         ? null
@@ -1637,6 +1656,37 @@ export function picoCompanionDeviceAuthorityLines(
             : null,
     });
   }));
+}
+
+/** ADR 0104's year, counted in days a person still has. */
+export const picoCompanionDeviceAuthorityWarningDays = 30;
+
+function picoCompanionDeviceAuthorityExpiry(
+  device: PicoCompanionDeviceAuthority,
+  now: Date,
+): string | null {
+  if (device.status !== 'active') {
+    return null;
+  }
+  const days = Math.floor(
+    (Date.parse(device.validUntil) - now.getTime()) / (24 * 60 * 60 * 1_000),
+  );
+  if (days > picoCompanionDeviceAuthorityWarningDays) {
+    return null;
+  }
+  const when = days <= 0
+    ? 'today'
+    : days === 1
+      ? 'tomorrow'
+      : `in ${days} days`;
+  return device.isThisDevice
+    ? `That is ${when}. Renew it before then - a device whose authority has run out `
+      + 'cannot renew itself, and would have to be set up again from your Recovery Card.'
+    // Said rather than left as a control that is not there. The ceremony
+    // needs the other device's own key, and holding two screens up to each
+    // other for a renewal is not built yet.
+    : `That is ${when}, and renewing it has to happen with that device in front of `
+      + 'you. This window cannot do that yet.';
 }
 
 function picoCompanionDeviceAuthorityDetail(device: PicoCompanionDeviceAuthority): string {
@@ -1696,6 +1746,13 @@ export function picoCompanionDeviceAuthorityEndedLine(ended: {
   return ended.endedThisDevice
     ? `Ended, and it was this one - this machine can no longer act as you. ${left}`
     : `Ended. ${left}`;
+}
+
+export function picoCompanionDeviceAuthorityRenewedLine(renewed: {
+  validUntil: string;
+}): string {
+  return `Renewed. This device can act as you until ${renewed.validUntil.slice(0, 10)}, and `
+    + 'the authority it had before is retired.';
 }
 
 export function parsePicoCompanionDeviceAuthority(

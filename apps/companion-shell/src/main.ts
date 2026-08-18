@@ -1243,6 +1243,24 @@ function registerIpc(): void {
     },
   );
   ipcMain.handle(
+    picoCompanionIpcChannels.renewDeviceAuthority,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      if (productOperationActive) {
+        throw new Error('companion_operation_in_progress');
+      }
+      try {
+        productOperationActive = true;
+        return await runtime.renewDeviceAuthority();
+      } finally {
+        productOperationActive = false;
+      }
+    },
+  );
+  ipcMain.handle(
     picoCompanionIpcChannels.endDeviceAuthority,
     async (event: IpcMainInvokeEvent, request: unknown) => {
       assertRendererSender(event);

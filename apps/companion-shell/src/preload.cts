@@ -48,6 +48,7 @@ const channels = Object.freeze({
   endHomeMembership: 'pico:home-member:end',
   rotateHostKeys: 'pico:home-host-keys:rotate',
   getDeviceAuthority: 'pico:device-authority:get',
+  renewDeviceAuthority: 'pico:device-authority:renew',
   endDeviceAuthority: 'pico:device-authority:end',
   getRelays: 'pico:relays:get',
   claimRelay: 'pico:relay:claim',
@@ -215,6 +216,8 @@ contextBridge.exposeInMainWorld('picoCompanion', Object.freeze({
     await ipcRenderer.invoke(channels.rotateHostKeys, reason),
   getDeviceAuthority: async (): Promise<unknown> =>
     await ipcRenderer.invoke(channels.getDeviceAuthority),
+  renewDeviceAuthority: async (): Promise<unknown> =>
+    await ipcRenderer.invoke(channels.renewDeviceAuthority),
   endDeviceAuthority: async (delegationId: string, reason: string): Promise<unknown> =>
     await ipcRenderer.invoke(channels.endDeviceAuthority, { delegationId, reason }),
   getRelays: async (): Promise<unknown> => await ipcRenderer.invoke(channels.getRelays),

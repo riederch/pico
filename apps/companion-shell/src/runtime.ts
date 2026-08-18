@@ -246,6 +246,18 @@ export interface PicoCompanionShellRuntime {
     delegationId: string;
     targetSigningKeyFingerprintHex: string;
   }>;
+  /**
+   * ADR 0104. Another year for this device, and the profile that follows it.
+   *
+   * No arguments: which delegation is replaced is this device's own, and a
+   * window naming one would be the surface choosing which authority to
+   * retire.
+   */
+  renewDeviceAuthority(): Promise<{
+    delegationId: string;
+    replacedDelegationId: string;
+    validUntil: string;
+  }>;
   revokeDeviceAuthority(input: {
     targetDelegationId: string;
     reason: PicoCompanionDeviceRevocationReason;
@@ -891,6 +903,25 @@ export async function startPicoCompanionShellRuntime(input: {
           offerCode,
           validUntil,
           exchange,
+        });
+      }),
+      renewDeviceAuthority: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const { renewPicoCompanionDeviceAuthority } =
+          await import('@pico/companion/device-lifecycle');
+        const profile = readPicoCompanionProfile(profilePath);
+        return await renewPicoCompanionDeviceAuthority({
+          profile,
+          profilePath,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          validUntil: picoCompanionFoundingDelegationValidUntil(new Date()),
         });
       }),
       revokeDeviceAuthority: async ({ targetDelegationId, reason }) => await serialized(async () => {
