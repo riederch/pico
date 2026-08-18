@@ -3,6 +3,40 @@
 Offene, noch nicht entschiedene Vorhaben. Architekturentscheidungen gehoeren in
 ADRs, Arbeitsstand in `.agent-context.md`, Fortschritt in `progress.md`.
 
+## Morgen, 2026-08-19
+
+Tagesplan aus dem Stand vom 2026-08-18, in dieser Reihenfolge:
+
+1. **Electron-44-Wache.** `npm view electron dist-tags` - solange `latest`
+   43.4.0 ist, gibt es nichts zu tun (das Gate verlangt
+   `pin === latestStableVersion`, der Pin ist unbeweglich). Sobald 44.0.0
+   stable ist: Pin in `apps/companion-shell/package.json` und
+   `electron-support.json` gemeinsam heben, `release:verify` fahren. Die
+   Vorabmessung mit 44.0.0-beta.5 (ADR 0113, Statusnotiz 2026-08-18) sagt:
+   `Private_Dirty + Private_Hugetlb` *fiel* - erwartet billig. Harte Kante
+   bleibt der 2026-08-25, danach blockiert das Gate jeden anderen Block.
+
+2. **ADR 0131 A1, Restschritt: nodejs-mobile in einer APK.** Der Primitivpfad
+   ist auf dem Galaxy A55 gruen (Zahlen in ADR 0131s Statusnotiz); was fehlt,
+   ist derselbe Lauf unter dem *eingebetteten* Runtime statt des
+   Termux-Proxys. Konkret: nodejs-mobile-AAR aus den GitHub-Releases, eine
+   minimale App mit `android:process`-getrenntem Custody-Service (die
+   entschiedene A2-Form), `tools/android-runtime-probe/probe.mjs` als Asset,
+   Report ueber eine Datei statt stdout. Danach als zweiter Schritt die
+   Fixture-Suiten mit einer Dev-Deps-Stage (`pnpm deploy` ohne `--prod`).
+   Telefon per USB; Termux (Debug-Build) ist noch installiert.
+
+3. **Den Tagesstand auf den CI-Runner bringen.** Der 2026-08-18 liegt nur
+   lokal: ~25 Commits, darunter zwei CI-Reparaturen (Relay-Smoke-Test,
+   E1-Notification-Tuer), die der Runner noch nie ausgefuehrt hat. Pushen und
+   den Lauf ansehen; bekannte Flacker-Kandidaten unter Last sind die zwei
+   vault-daemon-Timeout-Tests (`approval_denied`, `locks on duration
+   expiry`), die allein sofort gruen laufen.
+
+Bewusst nicht morgen: ADR 0130 E5 (hat kein Subjekt - braucht zuerst einen
+Reader-Custody-Schreibweg), ADR 0126 P3s zweite Haelfte (wartet auf A1) und
+das 3D-Modell-Review (wartet auf das Signal, dass der Stand reif ist).
+
 ## Lizenzbedingungen: anwaltliche Durchsicht
 
 Die Bedingungen sind geaendert und als ADR 0111 dokumentiert: betriebliche
