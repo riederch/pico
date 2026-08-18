@@ -8,8 +8,14 @@ ADR 0125 diagnostic.
 Nothing here is a production Character asset:
 
 - `prototype/pico-character-core-v0.blend` is an editable authoring checkpoint.
+- `prototype/pico-character-feature-drafts-v0.blend` is a separate board of
+  deliberately rough, diagnostic feature placeholders. Its complete inventory
+  and source mapping live in `FEATURE_DRAFTS.md`; none of its primitives are
+  part of the core checkpoint.
 - `create_pico_character.py` rebuilds the checkpoint, previews and a diagnostic
   GLB under `/tmp/pico-character-core-v0`.
+- `create_pico_feature_drafts.py` rebuilds the 28 rough feature collections and
+  three overview renders under `/tmp/pico-character-feature-drafts`.
 - `render_inspection.py` produces the reference, front, side, rear, top and
   bottom inspection views from an opened checkpoint.
 - `validate_head_variants.py` checks the authored head mount, geometry bounds
@@ -17,6 +23,9 @@ Nothing here is a production Character asset:
 - `validate_glb_world_bounds.py` reimports the generated standard-antenna GLB
   and verifies its world envelope and that diagnostic head modules did not
   leak into it.
+- `validate_feature_drafts.py` reopens the draft board and checks its order,
+  diagnostic labels, first two hair foundations and the status/context
+  separation rules.
 
 The generated GLB and PNG previews deliberately stay outside the repository.
 ADR 0124 PR1 requires a normative mesh to enter as a separately registered,
@@ -63,6 +72,15 @@ Set `PICO_BLENDER` to the Blender executable, then run:
 "$PICO_BLENDER" --background -noaudio --factory-startup --disable-autoexec \
   --python-exit-code 1 \
   --python tools/character-modeling/validate_glb_world_bounds.py
+
+"$PICO_BLENDER" --background -noaudio --factory-startup --disable-autoexec \
+  --python-exit-code 1 \
+  --python tools/character-modeling/create_pico_feature_drafts.py
+
+"$PICO_BLENDER" \
+  /tmp/pico-character-feature-drafts/pico-character-feature-drafts-v0.blend \
+  --background -noaudio --disable-autoexec --python-exit-code 1 \
+  --python tools/character-modeling/validate_feature_drafts.py
 ```
 
 During visual iteration, `PICO_CHARACTER_HEADWEAR_ONLY=1` skips the three core
