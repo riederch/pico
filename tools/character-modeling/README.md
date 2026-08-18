@@ -96,6 +96,54 @@ colour. Root and hair share the same continuous carrier and remain one module.
 The two selectors therefore choose diagnostic recipes; they do not add
 `procedural_comb` or another public head-identity kind.
 
+## Hair style 3: the refined concept tail
+
+`head-long-neon-tail` was pulled through the detail pass in `TODO.md` section 1
+and now follows the concept board rather than the first rough proposal:
+
+- The fitting is placed on the **sampled crown surface**. `head_surface_y`
+  solves the authored head profile for the height at a point, so the plate lies
+  tangentially on the shell and is sunk into it. The earlier version put it at a
+  fixed mount height, which left it floating above the crown on a stalk.
+- The guide curve is one short, full, strongly rounded arc: it rises from the
+  fitting's rear edge, loops over the crown, falls behind the head without
+  reaching below it, and ends in a tip that swings outward and upward and
+  closes as a dome instead of a cut-off stump.
+- The band is one closed light guide with two material slots. Outer and inner
+  face are the same personal colour, the inner one shaded, so the authored roll
+  of roughly half a turn alternately shows both without ever splitting into a
+  second strand.
+- `ribbon_transport_frames` anchors the flat face on the head's lateral axis.
+  Parallel transport drifted once the curve turned through a full arc and left
+  the top arc standing on its edge. The shell, the dark carrier and the narrow
+  status edge all read those same frames, so the edge stays on the band border.
+- The shell is shaded from the **analytic** ellipse normal. Averaging normals
+  over a 12:1 flat cross section made the band look like woven leather.
+- Personal colour and status colour are separate materials by construction: the
+  status edge uses `PICO_ZONE_status_emitters`, the same material as eyes,
+  mouth, chest core, underside and hover ring.
+
+Two checks run inside the generator, because both are claims about the whole
+PAS corridor rather than about one authored recipe:
+
+- `check_rear_ribbon_corridor` walks every corridor endpoint of every geometry
+  field, rebuilds the guide through the same code path the module is built
+  from, and fails the build if the band penetrates head, visor or side module
+  anywhere outside the intended root embedding.
+- `report_personal_colour_corridor` prints the personal shell colour and
+  transmission for hue, chroma and translucency samples and fails if two
+  different recipes ever produce the same colour.
+
+`validate_head_variants.py` then re-opens the checkpoint and checks the
+silhouette contract itself: a flat fitting that is measurably embedded in the
+head shell, exactly one dark collar with one mounting point, no antenna while
+the tail is active, one connected shell, the arc/fall/tip landmarks, the width
+profile, the roll, the shared status material and a parting seam that ends
+before the band.
+
+None of this is a Character approval. The recipe stays `diagnostic` and the
+refinement items in `TODO.md` stay open until the owner accepts them.
+
 ## Rebuild and validate
 
 Set `PICO_BLENDER` to the Blender executable, then run:
