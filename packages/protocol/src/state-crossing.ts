@@ -1,8 +1,8 @@
 /**
  * ADR 0126 P3 - what may cross from a presence into an identity, named.
  *
- * A closed list, and short on purpose: today there is exactly one crossing in
- * this tree, and the second is waiting on a runtime with a sensor. Naming the
+ * A closed list, and short on purpose: two crossings exist in this tree today
+ * and the third is waiting on a runtime with a sensor. Naming the
  * kinds rather than letting each caller invent a string is what makes an audit
  * record answerable later - "what has this identity accepted from its devices"
  * is a question about a vocabulary, not about free text.
@@ -13,6 +13,15 @@ export const picoStateCrossingKinds = [
    * before it had a name.
    */
   'recall_answer',
+  /**
+   * ADR 0116 W5 and ADR 0117 X2. The named values of a model read a person
+   * kept - the recall's sibling, and the same act: material a device was
+   * shown becoming something the identity keeps.
+   *
+   * It went straight into the store until 2026-08-18, which is the defect
+   * this vocabulary exists to make impossible to repeat quietly.
+   */
+  'answered_read',
   /**
    * ADR 0129. A memory item derived on a device from readings the Home never
    * saw. Declared here and unused until a presence with a sensor exists -

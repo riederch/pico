@@ -356,6 +356,8 @@ type PicoLinkSend = (
   operation: 'home.recall.ask'
     | 'home.recall.read'
     | 'home.recall.keep'
+    | 'home.model.read.keep'
+    | 'home.memory.forget'
     | 'home.model.reads.read'
     | 'home.model.providers.read'
     | 'home.model.provider.credential.submit'
@@ -387,6 +389,7 @@ async function bootWithLinkDevice(options: {
   app: AppWithInject;
   databasePath: string;
   send: PicoLinkSend;
+  picoIdentityFingerprintHex: string;
 }> {
   const dir = mkdtempSync(join(tmpdir(), 'pico-provider-link-'));
   dirs.push(dir);
@@ -435,6 +438,14 @@ async function bootWithLinkDevice(options: {
   return {
     app,
     databasePath,
+    /** ADR 0126 P3. Whose jobs a test may write into the queue. */
+    picoIdentityFingerprintHex: sealedClaim.claimantIdentityKeyRecord.publicKeyHex === undefined
+      ? ''
+      : (await EventStore.open(databasePath, {}).then(async (opened) => {
+        const founding = opened.picoHomeFoundingRecord();
+        opened.close();
+        return founding?.founding.homeHostPicoIdentityFingerprintHex ?? '';
+      })),
     send: async (operation, args) => await sendPicoLinkDirectRequest(app, {
       operation,
       args,
@@ -1289,5 +1300,101 @@ describe('ADR 0116 W5 - an answer becomes a memory only when somebody says so', 
     const kept = await setup.send('home.recall.keep', { jobId });
     expect(kept.response.outcome).toBe('invalid_arguments');
     expect(String(kept.result.refusal)).toContain('Derivation source is deleted');
+  });
+});
+
+/**
+ * ADR 0126 P3. Keeping an answered read is the same crossing as keeping a
+ * recall answer, and it was not going through the door.
+ *
+ * The two acts are one act: a person is shown derived material their device
+ * is holding, they say keep, and it becomes something the identity keeps. P3
+ * put the recall half through `crossPicoStateBoundary` - item and audit record
+ * in one write, because "a rule a surface enforces is a rule anything else
+ * walks past". The model-read half wrote the item directly, on both the Link
+ * operation and the Foundation route, and never told the job what it became -
+ * so `home.memory.forget`, which finds a kept item through its job, could not
+ * find it.
+ */
+describe('ADR 0126 P3 - keeping an answered read crosses the same boundary', () => {
+  const readJobId = 'job_read_kept_0001';
+
+  async function answeredReadFor(
+    setup: { databasePath: string; picoIdentityFingerprintHex: string },
+  ): Promise<void> {
+    const store = await EventStore.open(setup.databasePath, {});
+    const queue = store.picoModelJobQueue();
+    const at = Date.now();
+    queue.enqueue({
+      job: parsePicoModelJob({
+        schema: 'pico.model.job.v1',
+        jobId: readJobId,
+        role: 'reader',
+        units: [{ originClass: 'person_present', text: 'What is due?' }],
+        references: [{
+          schema: 'pico.model.context.ref.v1',
+          contextRefId: 'ref_read_kept_0001',
+          jobId: readJobId,
+          originClass: 'own_pico',
+          privacyDomain: 'domain-private',
+          excerpt: 'The boiler service is due in March.',
+          materializedAt: new Date(at - 60_000).toISOString(),
+          expiresAt: new Date(at + 5 * 60_000).toISOString(),
+        }],
+        expects: [{ name: 'month', type: 'token' }],
+        carries: 'live_turn_and_retrieved_memory',
+      }, at),
+      picoIdentityFingerprintHex: setup.picoIdentityFingerprintHex,
+      entryId: 'a-measured-host',
+      derivedFrom: {
+        supplierIdentifier: 'a-library',
+        commit: 'c'.repeat(40),
+        pinCoversContent: false,
+      },
+      at: new Date(at).toISOString(),
+    });
+    queue.settle({
+      jobId: readJobId,
+      outcome: 'answered',
+      result: {
+        values: [{ name: 'month', type: 'token', value: 'march', originClass: 'own_pico' }],
+      },
+      at: new Date(at).toISOString(),
+    });
+    store.close();
+  }
+
+  it('records the crossing, and lets the person unmake what they kept', async () => {
+    const setup = await bootWithLinkDevice();
+    await answeredReadFor(setup);
+
+    const kept = await setup.send('home.model.read.keep', { jobId: readJobId });
+    expect(kept.response.outcome).toBe('ok');
+    const memoryItemId = (kept.result as { memoryItemId: string }).memoryItemId;
+
+    /**
+     * Read from the event log rather than from the answer: the point of the
+     * door is that the record exists whether or not the caller looked, and it
+     * is content-free, so what crossed stays the memory item's business.
+     */
+    const tail = (await setup.app.inject({
+      method: 'GET',
+      url: '/api/events/tail?limit=50',
+    })).json() as { events: Array<{ type: string; payload: Record<string, unknown> }> };
+    const crossed = tail.events.filter((event) => event.type === 'home.state_crossed');
+    expect(crossed).toHaveLength(1);
+    expect(crossed[0]?.payload.kind).toBe('answered_read');
+    expect(crossed[0]?.payload.privacyDomain).toBe('domain-private');
+    expect(JSON.stringify(crossed[0]?.payload)).not.toContain('march');
+
+    /**
+     * ADR 0071, the half that made the recall path go through the door in the
+     * first place: a person who can make a memory must be able to unmake it,
+     * and `home.memory.forget` finds a kept item through the job that recorded
+     * what it became.
+     */
+    const forgotten = await setup.send('home.memory.forget', { memoryItemId });
+    expect(forgotten.response.outcome).toBe('ok');
+    expect(forgotten.result.forgotten).toBe(true);
   });
 });

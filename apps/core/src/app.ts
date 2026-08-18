@@ -4713,19 +4713,61 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
           }
           const memoryItemId = `memory_${createHash('sha256')
             .update(`kept\u0000${args.jobId}`).digest('hex').slice(0, 32)}`;
+          /**
+           * ADR 0126 P3. The same door the recall keep goes through, because
+           * it is the same act: material a device was shown becoming
+           * something the identity keeps. This wrote the item straight into
+           * the store until 2026-08-18 - explicit and unaudited, which is
+           * exactly what P3 was written to end.
+           */
+          const releasedRead = typeof args.presenceId === 'string'
+            && store.picoPresenceRegistry()
+              .forIdentity(principal.picoIdentityFingerprintHex, Date.now())
+              .some((presence) => presence.presenceId === args.presenceId)
+            ? args.presenceId
+            : undefined;
           try {
-            store.memory().create({
-              memoryItemId,
+            const crossed = crossPicoStateBoundary({
+              store,
+              kind: 'answered_read',
+              ...(releasedRead === undefined ? {} : { presenceId: releasedRead }),
               privacyDomain: kept.privacyDomain,
               owner: `pico:identity:${principal.picoIdentityFingerprintHex}`,
               controller: `pico:identity:${principal.picoIdentityFingerprintHex}`,
               contentType: 'application/json',
               content: JSON.stringify(kept.values),
+              // One read, one source: the supplier revision the derivation
+              // names. Counting the values would count fields, not sources.
+              sourceCount: 1,
+              deviceId: config.deviceId,
+              memoryItemId,
               derivedFrom: buildPicoLibraryDerivation({
                 supplierIdentifier: kept.supplierIdentifier,
                 pin: { kind: 'commit', value: kept.commit },
                 pinCoversContent: kept.pinCoversContent,
               }),
+              appendEvent: ({ type, payload }) => {
+                const crossingEvent = factory.create({
+                  deviceId: config.deviceId,
+                  type,
+                  payload,
+                });
+                store.append(crossingEvent);
+                broadcast(crossingEvent);
+              },
+            });
+            if (!crossed.ok) {
+              return { outcome: 'invalid_arguments', result: { refusal: crossed.refusal } };
+            }
+            /**
+             * ADR 0071. The job names what it became, so a person can unmake
+             * it: `home.memory.forget` finds a kept item through its job, and
+             * without this line everything kept this way was permanent.
+             */
+            store.picoModelJobQueue().markKept({
+              jobId: args.jobId,
+              memoryItemId,
+              privacyDomain: kept.privacyDomain,
             });
           } catch (error) {
             return {
@@ -6674,8 +6716,15 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
     const memoryItemId = `memory_${createHash('sha256')
       .update(`kept\u0000${jobId}`).digest('hex').slice(0, 32)}`;
     try {
-      const item = store.memory().create({
-        memoryItemId,
+      /**
+       * ADR 0126 P3, the same door as the Link operation above. No presence
+       * is named here and that is honest rather than missing: this arrives
+       * over a Foundation session, which is a person at a browser rather than
+       * a device that has announced itself.
+       */
+      const crossed = crossPicoStateBoundary({
+        store,
+        kind: 'answered_read',
         privacyDomain: kept.privacyDomain,
         owner: `pico:identity:${person}`,
         controller: `pico:identity:${person}`,
@@ -6684,13 +6733,34 @@ export async function buildApp(config: CoreConfig): Promise<FastifyInstance> {
         // reader's answer to named values, and flattening them into a sentence
         // here would give back the channel that closed.
         content: JSON.stringify(kept.values),
+        sourceCount: 1,
+        deviceId: config.deviceId,
+        memoryItemId,
         derivedFrom: buildPicoLibraryDerivation({
           supplierIdentifier: kept.supplierIdentifier,
           pin: { kind: 'commit', value: kept.commit },
           pinCoversContent: kept.pinCoversContent,
         }),
+        appendEvent: ({ type, payload }) => {
+          const crossingEvent = factory.create({
+            deviceId: config.deviceId,
+            type,
+            payload,
+          });
+          store.append(crossingEvent);
+          broadcast(crossingEvent);
+        },
       });
-      return sendNoStore(reply.code(201), { memoryItemId: item.memoryItemId });
+      if (!crossed.ok) {
+        return sendNoStore(reply.code(400), { error: crossed.refusal });
+      }
+      // ADR 0071. What the job became, so the person can unmake it.
+      store.picoModelJobQueue().markKept({
+        jobId,
+        memoryItemId,
+        privacyDomain: kept.privacyDomain,
+      });
+      return sendNoStore(reply.code(201), { memoryItemId: crossed.item.memoryItemId });
     } catch (error) {
       return sendNoStore(reply.code(400), {
         error: error instanceof Error ? error.message : 'pico_kept_memory_refused',

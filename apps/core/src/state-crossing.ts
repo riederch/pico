@@ -1,3 +1,4 @@
+import type { PicoLibraryDerivation } from '@pico/protocol/library-pin';
 import type { EventStore } from './event-store.js';
 import type { MemoryItem } from './memory-store.js';
 import {
@@ -60,7 +61,20 @@ export interface PicoStateCrossingInput {
   controller: string;
   contentType: string;
   content: string;
-  origin: MemoryItem['origin'];
+  /**
+   * ADR 0116 W2's class, when the caller has one.
+   *
+   * Optional because "not yet classified" is a real state the store models -
+   * a context assembler refuses unlabeled content rather than defaulting it -
+   * and a door that invented a class here would be labelling material on
+   * behalf of a caller that deliberately did not.
+   */
+  origin?: MemoryItem['origin'];
+  /**
+   * ADR 0136 BR6. The revision a library read was taken at, carried into the
+   * item so provenance travels with the content.
+   */
+  derivedFrom?: PicoLibraryDerivation;
   /** What it was derived from, for the count in the record. Never the ids. */
   sourceCount: number;
   deviceId: string;
@@ -104,7 +118,8 @@ export function crossPicoStateBoundary(
       controller: input.controller,
       contentType: input.contentType,
       content: input.content,
-      origin: input.origin,
+      ...(input.origin === undefined ? {} : { origin: input.origin }),
+      ...(input.derivedFrom === undefined ? {} : { derivedFrom: input.derivedFrom }),
     });
   } catch (error) {
     // ADR 0119 Q5's ceiling arrives here as a store error. Named at the

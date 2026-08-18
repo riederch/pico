@@ -3,7 +3,8 @@
 ## Status
 
 Accepted as an architecture boundary; P1 and P5 implemented, P2/P3/P6 open
-and P4 blocked. The number was
+and P4 blocked. P3's door was widened on 2026-08-18 to the sibling keep that
+was walking past it - see the gate. The number was
 reserved on 2026-08-02 with the work order in
 `docs/development/briefs/multi-presence.md`. The two terminology
 collisions that order left open were decided by the user on 2026-08-09:
@@ -299,9 +300,31 @@ version of a concept, and the versions drift where nobody is looking.
   What P2 does not do is the half ADR 0126 already calls the hard one:
   ownership, selection and takeover are P4, and P4 stays blocked on an Action
   Runner that does not exist.
-- **P3 - The state crossing (half implemented 2026-08-16, half deferred by
-  the user):** the crossing exists as a door; the SR2 buffer stays where it
-  is until a runtime with a sensor exists.
+- **P3 - The state crossing (half implemented 2026-08-16, widened 2026-08-18,
+  half deferred by the user):** the crossing exists as a door and both keeps
+  now go through it; the SR2 buffer stays where it is until a runtime with a
+  sensor exists.
+
+  **The door had a sibling walking past it.** ADR 0116 W5 has two keeps -
+  a recall answer and a model read's named values - and they are one act: a
+  person is shown derived material their device is holding, they say keep,
+  and it becomes something the identity keeps. P3 put the recall half through
+  `crossPicoStateBoundary` in 2026-08-16 and left the other half writing
+  straight into the store, on the Link operation *and* the Foundation route.
+  Found on 2026-08-18 by asking who else creates a memory item.
+
+  Two things were missing, and the second is the worse one. There was no
+  `home.state_crossed` record, so the audit trail answered "what has this
+  identity accepted from its devices" with half the truth. And the job was
+  never told what it became, so `home.memory.forget` - which finds a kept
+  item through its job - could not find it: **everything kept from a model
+  read was permanent**, on a surface that offers a forget control beside the
+  keep. ADR 0071's rule had the same hole the recall path had before P3, in
+  the path nobody re-read.
+
+  The vocabulary gained `answered_read`, which is what makes the next one of
+  these hard to add quietly: a crossing kind is a closed list, and a caller
+  that wants a new one has to name it here.
 
   **The crossing had already happened once before it had a name.** Keeping a
   recall answer is exactly this gate's subject - a derived sentence a device
