@@ -1041,7 +1041,7 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
         side_direction = 1.0 if side_amount >= 0.0 else -1.0
         root = Vector((
             side_direction * (0.075 + abs(side_amount) * 0.085),
-            mount.location.y + 0.016,
+            mount.location.y + 0.062,
             0.020 - anchor_amount * 0.170,
         ))
         lateral_reach = (
@@ -1167,10 +1167,45 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             )
             return edge_axis, face_axis, local_width
 
+        # The concept first shows a broad, crown-hugging hair root and only
+        # then the long translucent hair. Both sections follow one guide and
+        # overlap at their transition, so they remain one head module rather
+        # than reading as an accessory plus an unrelated tail.
+        root_start = Vector((
+            root.x
+            - side_direction * (0.165 + root_spread * 0.10)
+            + side_direction * part_offset * root_spread * 0.10,
+            mount.location.y + 0.036 - part_depth * 0.003,
+            root.z + 0.061,
+        ))
+        root_control_a = root_start + Vector((
+            side_direction * root_spread * 0.16,
+            0.026,
+            -0.050,
+        ))
+        root_control_b = root + Vector((
+            -side_direction * root_spread * 0.28,
+            -0.012,
+            0.042,
+        ))
+
+        def root_curve_point(amount):
+            return cubic_point(
+                root_start,
+                root_control_a,
+                root_control_b,
+                root,
+                amount,
+            )
+
+        root_shell_width = max(ribbon_base_width * 0.88, root_spread * 0.84)
+
         # One connected mechanical spine remains visible through the personal
         # shell. It is deliberately non-emissive and begins in one root collar.
         spine_points = []
-        for index in range(41):
+        for index in range(9):
+            spine_points.append(root_curve_point(index / 8.0))
+        for index in range(1, 41):
             amount = index / 40.0
             edge_axis, _, local_width = ribbon_frame(amount)
             edge_offset = min(1.0, amount / 0.14) * local_width * -0.46
@@ -1184,22 +1219,35 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             target,
             mount,
         )
-        collar_end = curve_point(0.10)
-        collar_root = root + Vector((0.0, -0.050, 0.0))
+        collar_end = root_curve_point(0.44)
+        collar_root = root_start + Vector((0.0, -0.030, 0.0))
         oriented_ellipsoid_between(
             f"HeadModule.{name}.RootCollar",
             collar_root,
             collar_end,
-            0.030 + root_spread * 0.16,
-            0.015,
+            0.026 + root_spread * 0.12,
+            0.012,
             TRIM,
             "trim",
             target,
             mount,
         )
 
-        light_guide_ribbon_mesh(
-            f"HeadModule.{name}.TranslucentShell",
+        root_shell = oriented_ellipsoid_between(
+            f"HeadModule.{name}.HairRoot",
+            root_start,
+            root,
+            root_shell_width,
+            ribbon_thickness * 2.15,
+            SHELL,
+            "trim",
+            target,
+            mount,
+        )
+        root_shell["pico_head_module_section"] = "hair_root"
+
+        translucent_hair = light_guide_ribbon_mesh(
+            f"HeadModule.{name}.TranslucentHair",
             curve_point,
             segments,
             ribbon_base_width,
@@ -1211,6 +1259,8 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             target,
             mount,
         )
+        translucent_hair["pico_head_module_section"] = "hair_length"
+        translucent_hair["pico_follows_section"] = "hair_root"
 
         if part_depth > 0.0:
             seam_offset = Vector((
@@ -1219,7 +1269,8 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
                 0.0,
             ))
             seam_points = [
-                curve_point(index / 70.0) + seam_offset * (1.0 - index / 10.0)
+                root_curve_point(index / 10.0)
+                + seam_offset * (1.0 - index / 10.0)
                 for index in range(11)
             ]
             continuous_tube_path(

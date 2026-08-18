@@ -42,6 +42,9 @@ The personal shell colour is generated from the recipe's `hue`, `chroma` and
 `translucency` values. It is a transmissive, non-emissive light guide over one
 dark connected carrier. The narrow emitter is a separate material and always
 uses the same runtime status material as eyes, mouth, chest and hover light.
+The rear-ribbon recipe first passes through a low, chassis-finished hair-root
+cover on the crown; only the following translucent hair uses the personal
+colour. Root and hair share the same continuous carrier and remain one module.
 The two selectors therefore choose diagnostic recipes; they do not add
 `procedural_comb` or another public head-identity kind.
 

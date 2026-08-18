@@ -118,6 +118,21 @@ for identity_index, (
     assert sum("InnerCarrier" in name for name in names) == 1
     assert sum("RootCollar" in name for name in names) == 1
     assert sum("Status.HeadAccent" in name for name in names) == 1
+    if expected_vector == "head-long-neon-tail":
+        root_shell = bpy.data.objects[
+            "HeadModule.Tail.HairRoot"
+        ]
+        hair_length = bpy.data.objects[
+            "HeadModule.Tail.TranslucentHair"
+        ]
+        assert root_shell["pico_head_module_section"] == "hair_root"
+        assert hair_length["pico_head_module_section"] == "hair_length"
+        assert hair_length["pico_follows_section"] == "hair_root"
+        assert root_shell["pico_material_zone"] == "trim"
+        assert root_shell.data.materials[0].name == "PICO_ZONE_shell"
+        assert hair_length["pico_material_zone"] == "head_module"
+        assert sum("HairRoot" in name for name in names) == 1
+        assert sum("TranslucentHair" in name for name in names) == 1
     assert not any("Antenna" in name for name in names)
     assert set(zones) == {"head_module", "trim", "status_emitters"}
     shell_objects = [
