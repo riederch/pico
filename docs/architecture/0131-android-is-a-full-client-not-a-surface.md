@@ -300,6 +300,28 @@ local-first product's most security-critical moment.
   `check-companion-boundary.mjs` now walks the shell-free core the way it
   already walked the tray, so the next wide import is a named error rather
   than weight discovered on a phone.
+
+  **The probe exists and its host baseline is green**
+  (`tools/android-runtime-probe/`). It runs the real modules - keyfile
+  create/open at the vault's own argon2id `moderate` profile, the daemon on
+  a pathname AF_UNIX socket, the founding bootstrap, the whole ADR 0099
+  approval binding with the signature verified against the canonical bytes,
+  and 200 IPC round trips - and reports timings as JSON lines. Host
+  baseline (x86_64, Node 22): sodium ready 12 ms, keyfile create 833 ms /
+  open 582 ms, founding bootstrap 1.75 s, daemon unlock 585 ms, IPC round
+  trip 0.36 ms mean. The probe also taught the roles the hard way: the
+  connection that made the unlock is the *hold* connection and approvals
+  route to it - a watcher on any other connection is refused as
+  `approval_wait_forbidden`.
+
+  **The on-device half is blocked on this host, and the block is measured:**
+  the Android emulator cannot boot here at all. Emulator 36.3.10 and
+  37.2.5 both SIGSEGV in their host renderer/scene path on Fedora 44 /
+  kernel 7.1.8, in every GPU mode (`swiftshader_indirect`, `off`,
+  default), with coredumps on record - `RenderThread` in one, the mesh3d
+  scene init in the other. `run-on-device.sh` therefore targets whatever
+  `adb` sees, and a real phone over USB is the better evidence anyway: an
+  x86_64 guest's argon2id timing says nothing about a phone.
 - **A2 - Process and authority boundary (open):** separate custody process
   over an app-private AF_UNIX socket, or an in-process seam over the same
   request families; decided with A1, with the ADR 0099 approval binding
