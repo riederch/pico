@@ -89,3 +89,12 @@ hair style comes second, and every remaining requirement follows afterwards.
 The separate checkpoint is deliberate. Nothing on these boards may silently
 enter `pico-character-core-v0.blend`, the normative-candidate GLB or a product
 surface merely because a primitive exists.
+
+## Next milestone
+
+The complete implementation contract for turning every group into an
+individually addressable stub is
+[`character-feature-stub-set.md`](../../docs/development/briefs/character-feature-stub-set.md).
+It preserves this order, distinguishes geometry from state/presentation stubs
+and requires one shared Character Core source. These draft boards remain the
+visual sketch and are not renamed into that later stub set.
