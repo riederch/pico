@@ -60,6 +60,12 @@ import {
   switchPicoCompanionDevice,
   type PicoCompanionPresenceProbe,
 } from '@pico/companion/presence';
+import {
+  readPicoCompanionDeviceAuthority,
+  revokePicoCompanionDeviceAuthority,
+  type PicoCompanionDeviceAuthorityView,
+  type PicoCompanionDeviceRevocationReason,
+} from '@pico/companion/device-lifecycle';
 import { picoPresenceLeaseMs } from '@pico/protocol/presence';
 import {
   claimPicoCompanionRelay,
@@ -205,6 +211,26 @@ export interface PicoCompanionShellRuntime {
     enabled: boolean;
   }): Promise<void>;
   forgetDevice(presenceId: string): Promise<void>;
+  /**
+   * ADR 0130 E3. The other half of the same devices: which of them your Home
+   * still answers to, and ending one that it should not.
+   *
+   * Two calls rather than one merged row, because they fail differently. Not
+   * knowing which devices are here is an absence (ADR 0118 O4) and reads as
+   * an empty presence list; not knowing which devices may act as you is not,
+   * and this one throws rather than answering "none".
+   */
+  readDeviceAuthority(): Promise<PicoCompanionDeviceAuthorityView>;
+  revokeDeviceAuthority(input: {
+    targetDelegationId: string;
+    reason: PicoCompanionDeviceRevocationReason;
+  }): Promise<{
+    delegationId: string;
+    endedThisDevice: boolean;
+    /** `null` when this device could not ask afterwards, which is what ending
+     * its own authority does to it. */
+    activeDevicesLeft: number | null;
+  }>;
   /**
    * ADR 0154. Relays this person operates - a different hat from having a
    * Pico, and one this device holds the only credential for.
@@ -785,6 +811,37 @@ export async function startPicoCompanionShellRuntime(input: {
             ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
           }),
           presenceId,
+        });
+      }),
+      readDeviceAuthority: async () => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        return await readPicoCompanionDeviceAuthority({
+          profile,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+        });
+      }),
+      revokeDeviceAuthority: async ({ targetDelegationId, reason }) => await serialized(async () => {
+        await input.automaticVaultUnlock?.ensureUnlocked();
+        const profile = readPicoCompanionProfile(profilePath);
+        return await revokePicoCompanionDeviceAuthority({
+          profile,
+          daemonClient,
+          livingDeviceLinkClient: await createPicoCompanionLinkClient({
+            profile,
+            daemonClient,
+            sodium: input.sodium,
+            ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
+          }),
+          sodium: input.sodium,
+          targetDelegationId,
+          reason,
         });
       }),
       readRelays: async () => await serialized(async () => {

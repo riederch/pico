@@ -22,6 +22,10 @@
       "types": "./dist/approval-carrier.d.ts",
       "import": "./dist/approval-carrier.js"
     },
+    "./device-lifecycle": {
+      "types": "./dist/device-lifecycle.d.ts",
+      "import": "./dist/device-lifecycle.js"
+    },
     "./domain-read-grant": {
       "types": "./dist/domain-read-grant.d.ts",
       "import": "./dist/domain-read-grant.js"

@@ -59,6 +59,15 @@ export const picoCompanionIpcChannels = Object.freeze({
   getDevices: 'pico:devices:get',
   switchDevice: 'pico:device:switch',
   forgetDevice: 'pico:device:forget',
+  /**
+   * ADR 0130 E3, and deliberately not `getDevices` above. That one asks the
+   * Home which devices are here and what each offers; this one asks which of
+   * them it still answers to. Same machines, two different questions, and a
+   * window that merged them would have to invent an answer whenever only one
+   * of the two reads came back.
+   */
+  getDeviceAuthority: 'pico:device-authority:get',
+  endDeviceAuthority: 'pico:device-authority:end',
   getRelays: 'pico:relays:get',
   claimRelay: 'pico:relay:claim',
   createRelayAccount: 'pico:relay-account:create',
@@ -1286,6 +1295,233 @@ export function parsePicoCompanionDevices(value: unknown): readonly PicoCompanio
       lastSeenAt: record.lastSeenAt,
     });
   }));
+}
+
+/**
+ * ADR 0130 E3 - which devices your Home answers to, in the words of what that
+ * means.
+ *
+ * A delegation carries a delegation id, two key fingerprints, a lifecycle
+ * order and an expiry. None of that is a sentence, and every one of those
+ * fields is a thing a person cannot check. What they can decide is whether a
+ * machine should still be able to act as them, so the row says that and shows
+ * the identifier only as the label the control needs.
+ *
+ * The rows join ADR 0126's presences on `presenceId`, which both sides derive
+ * from the same device signing key - one device with two facts rather than
+ * two lists to reconcile.
+ */
+export interface PicoCompanionDeviceAuthority {
+  delegationId: string;
+  presenceId: string;
+  deviceSigningKeyFingerprintHex: string;
+  status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
+  validUntil: string;
+  isThisDevice: boolean;
+}
+
+export interface PicoCompanionDeviceAuthorityView {
+  devices: readonly PicoCompanionDeviceAuthority[];
+  mayEndAuthority: boolean;
+}
+
+export interface PicoCompanionDeviceAuthorityLine {
+  delegationId: string;
+  presenceId: string;
+  /** What this device may do for the person, now. */
+  headline: string;
+  detail: string;
+  /** Absent when this row cannot be ended from here. */
+  endLabel: string | null;
+  /**
+   * What ending it costs, when that is more than the row itself. Never a
+   * generic caution: the two cases it fires on are the two that lock somebody
+   * out, and a warning on every row would train the eye past both.
+   */
+  endWarning: string | null;
+}
+
+/**
+ * ADR 0114's categories, as the three a person picks between.
+ *
+ * `key_rotated` and `membership_removed` are the machinery's: renewal writes
+ * the first as part of its own transition, and the second is a membership
+ * decision (ADR 0130 E4). They are named in `device-lifecycle.ts` rather than
+ * filtered silently, and `contract.test.ts` fails if the protocol grows a
+ * sixth category that neither list claims.
+ */
+export interface PicoCompanionDeviceRevocationReasonLine {
+  reason: 'lost_device' | 'suspected_compromise' | 'device_retired';
+  label: string;
+}
+
+export function picoCompanionDeviceRevocationReasonLines(
+): readonly PicoCompanionDeviceRevocationReasonLine[] {
+  return Object.freeze([
+    Object.freeze({
+      reason: 'lost_device' as const,
+      label: 'I lost it, or somebody took it',
+    }),
+    Object.freeze({
+      reason: 'suspected_compromise' as const,
+      label: 'Somebody may have got into it',
+    }),
+    Object.freeze({
+      reason: 'device_retired' as const,
+      label: 'I do not use it any more',
+    }),
+  ]);
+}
+
+/**
+ * The sentence the whole section leads with, or the one that says why it
+ * offers nothing.
+ *
+ * A device that holds no identity key cannot sign a revocation, and ADR 0115
+ * U4 makes that ordinary rather than exceptional - only the device that
+ * founded the Home holds that key. Saying it once, at the top, is what keeps
+ * every row below from carrying a disabled control with no explanation.
+ */
+export function picoCompanionDeviceAuthoritySummary(
+  view: PicoCompanionDeviceAuthorityView,
+): string {
+  const active = view.devices.filter((device) => device.status === 'active').length;
+  const counted = active === 1
+    ? 'Your Home answers to one device.'
+    : `Your Home answers to ${active} devices.`;
+  if (view.mayEndAuthority) {
+    return counted;
+  }
+  return `${counted} Ending one is signed with your identity key, and this device `
+    + 'does not hold it. The device you founded your Home with does.';
+}
+
+export function picoCompanionDeviceAuthorityLines(
+  view: PicoCompanionDeviceAuthorityView,
+): readonly PicoCompanionDeviceAuthorityLine[] {
+  const active = view.devices.filter((device) => device.status === 'active');
+  return Object.freeze(view.devices.map((device) => {
+    const endable = view.mayEndAuthority && device.status === 'active';
+    return Object.freeze({
+      delegationId: device.delegationId,
+      presenceId: device.presenceId,
+      headline: device.isThisDevice
+        ? 'This device'
+        : 'Another of your devices',
+      detail: picoCompanionDeviceAuthorityDetail(device),
+      endLabel: endable ? "End this device's authority" : null,
+      endWarning: !endable
+        ? null
+        : active.length === 1
+          // The one a person cannot undo from here. It is said as what is
+          // left rather than as a prohibition: it is their identity.
+          ? 'This is the only device your Home still answers to. Ending it leaves '
+            + 'your Recovery Card as the only way back in.'
+          : device.isThisDevice
+            ? 'This is the device you are using. Ending it here signs you out of '
+              + 'your own Home on this machine.'
+            : null,
+    });
+  }));
+}
+
+function picoCompanionDeviceAuthorityDetail(device: PicoCompanionDeviceAuthority): string {
+  switch (device.status) {
+    case 'active':
+      // The date is the fact a person acts on: an authority nobody renews
+      // stops working on a day, and that day is worth seeing before it.
+      return `It can act as you until ${device.validUntil.slice(0, 10)}.`;
+    case 'not_yet_valid':
+      return 'It cannot act as you yet. Its authority starts later.';
+    case 'expired':
+      return `It can no longer act as you. Its authority ran out on `
+        + `${device.validUntil.slice(0, 10)}.`;
+    case 'revoked':
+    default:
+      return 'It can no longer act as you. You ended its authority.';
+  }
+}
+
+/**
+ * The read that did not come back, said as itself.
+ *
+ * ADR 0118 O4 in the direction it is usually forgotten: an absence must not
+ * render as a fact. A failed authority read leaves the offers on screen and
+ * says which question went unanswered, rather than leaving rows that quietly
+ * look like devices with nothing to their name.
+ */
+export const picoCompanionDeviceAuthorityUnavailable =
+  'Pico could not ask your Home which of these devices it still answers to. What each '
+  + 'device offers is here; what it may do as you is not.';
+
+/**
+ * What ending an authority did, in what is left of it.
+ *
+ * Counted from the Home's answer after the fact rather than from the request,
+ * and said in devices rather than in records: nothing else can observe this,
+ * and the number that matters is how many ways back in remain.
+ */
+export function picoCompanionDeviceAuthorityEndedLine(ended: {
+  endedThisDevice: boolean;
+  activeDevicesLeft: number | null;
+}): string {
+  if (ended.activeDevicesLeft === null) {
+    // ADR 0118 O4. The count is missing, and the sentence says why rather
+    // than reaching for a zero - which on this row would be the scariest
+    // possible way to be wrong.
+    return ended.endedThisDevice
+      ? 'Ended, and it was this one. This machine can no longer act as you, which is '
+        + 'also why it can no longer ask your Home what is left.'
+      : 'Ended. Pico could not ask your Home afterwards what is left.';
+  }
+  const left = ended.activeDevicesLeft === 0
+    ? 'Your Home now answers to no device, so your Recovery Card is the way back in.'
+    : ended.activeDevicesLeft === 1
+      ? 'Your Home answers to one device now.'
+      : `Your Home answers to ${ended.activeDevicesLeft} devices now.`;
+  return ended.endedThisDevice
+    ? `Ended, and it was this one - this machine can no longer act as you. ${left}`
+    : `Ended. ${left}`;
+}
+
+export function parsePicoCompanionDeviceAuthority(
+  value: unknown,
+): PicoCompanionDeviceAuthorityView {
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('invalid_pico_companion_device_authority');
+  }
+  const record = value as Record<string, unknown>;
+  if (!Array.isArray(record.devices) || typeof record.mayEndAuthority !== 'boolean') {
+    throw new Error('invalid_pico_companion_device_authority');
+  }
+  return Object.freeze({
+    mayEndAuthority: record.mayEndAuthority,
+    devices: Object.freeze(record.devices.map((entry) => {
+      if (typeof entry !== 'object' || entry === null) {
+        throw new Error('invalid_pico_companion_device_authority_row');
+      }
+      const device = entry as Record<string, unknown>;
+      if (typeof device.delegationId !== 'string'
+        || typeof device.presenceId !== 'string'
+        || typeof device.deviceSigningKeyFingerprintHex !== 'string'
+        || typeof device.validUntil !== 'string'
+        || typeof device.isThisDevice !== 'boolean'
+        || (device.status !== 'active'
+          && device.status !== 'not_yet_valid'
+          && device.status !== 'expired'
+          && device.status !== 'revoked')) {
+        throw new Error('invalid_pico_companion_device_authority_row');
+      }
+      return Object.freeze({
+        delegationId: device.delegationId,
+        presenceId: device.presenceId,
+        deviceSigningKeyFingerprintHex: device.deviceSigningKeyFingerprintHex,
+        status: device.status,
+        validUntil: device.validUntil,
+        isThisDevice: device.isThisDevice,
+      });
+    })),
+  });
 }
 
 /**

@@ -38,6 +38,7 @@ import {
   picoCompanionFoundingStepLine,
   picoCompanionFoundingDelegationValidUntil,
   picoCompanionIpcChannels,
+  picoCompanionDeviceRevocationReasonLines,
   type PicoCompanionFirstRunScanSource,
   type PicoCompanionPresentation,
 } from './contract.js';
@@ -1164,6 +1165,50 @@ function registerIpc(): void {
         throw new Error('invalid_device_forget');
       }
       await runtime.forgetDevice(presenceId);
+    },
+  );
+  /**
+   * ADR 0130 E3. Both of these throw, and the read throwing is the point.
+   *
+   * `getDevices` above answers `[]` when the read fails, because not knowing
+   * which devices are here is an absence (ADR 0118 O4). Not knowing which
+   * devices may act as you is not an absence - answering `[]` would tell a
+   * person their Home answers to nothing, which is the one thing that can
+   * never be true of a founded Home.
+   */
+  ipcMain.handle(
+    picoCompanionIpcChannels.getDeviceAuthority,
+    async (event: IpcMainInvokeEvent) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      return await runtime.readDeviceAuthority();
+    },
+  );
+  ipcMain.handle(
+    picoCompanionIpcChannels.endDeviceAuthority,
+    async (event: IpcMainInvokeEvent, request: unknown) => {
+      assertRendererSender(event);
+      if (runtime === null) {
+        throw new Error('companion_service_unavailable');
+      }
+      const record = request as Record<string, unknown> | undefined;
+      /**
+       * Read out of the same list the window offered rather than repeated
+       * here. The vocabulary is the person's three and not the protocol's
+       * five, and a third copy of it in this file is how the boundary and the
+       * surface would come to disagree about what a person may say.
+       */
+      const offered = picoCompanionDeviceRevocationReasonLines();
+      const reason = offered.find((line) => line.reason === record?.reason);
+      if (typeof record?.delegationId !== 'string' || reason === undefined) {
+        throw new Error('invalid_device_authority_end');
+      }
+      return await runtime.revokeDeviceAuthority({
+        targetDelegationId: record.delegationId,
+        reason: reason.reason,
+      });
     },
   );
   /**

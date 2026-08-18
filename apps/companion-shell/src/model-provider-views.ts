@@ -11,6 +11,12 @@ import {
   picoCompanionRelayAccountIssued,
   parsePicoCompanionRelays,
   picoCompanionDeviceLines,
+  picoCompanionDeviceAuthorityLines,
+  picoCompanionDeviceAuthoritySummary,
+  picoCompanionDeviceRevocationReasonLines,
+  parsePicoCompanionDeviceAuthority,
+  type PicoCompanionDeviceAuthorityLine,
+  type PicoCompanionDeviceRevocationReasonLine,
   parsePicoCompanionDevices,
   picoCompanionSupplierLines,
   parsePicoCompanionSuppliers,
@@ -364,15 +370,46 @@ export function renderPicoCompanionRelayAccountIssued(
  * actually acts on.
  */
 export function renderPicoCompanionDevices(
-  root: { list: HTMLElement; section: HTMLElement; document: Document },
+  root: {
+    list: HTMLElement;
+    section: HTMLElement;
+    document: Document;
+    /** ADR 0130 E3. Where the one sentence about the whole set goes. */
+    summary?: HTMLElement;
+  },
   value: unknown,
   act: (input:
     | { action: 'switch'; presenceId: string; affordance?: string; enabled: boolean }
-    | { action: 'forget'; presenceId: string }) => void,
+    | { action: 'forget'; presenceId: string }
+    | {
+      action: 'end-authority';
+      presenceId: string;
+      delegationId: string;
+      reason: PicoCompanionDeviceRevocationReasonLine['reason'];
+    }) => void,
+  /**
+   * ADR 0130 E3. What the Home still answers to, when that read came back.
+   *
+   * `undefined` is the read having failed, and the rows then say nothing
+   * about authority at all. That is the whole reason it is a separate
+   * argument: an empty view and a failed read would otherwise both render as
+   * a device with no authority, and one of those is a lie about a device that
+   * can still act as the person.
+   */
+  authority?: unknown,
 ): void {
   const devices = parsePicoCompanionDevices(value);
-  root.section.hidden = devices.length === 0;
+  const view = authority === undefined
+    ? null
+    : parsePicoCompanionDeviceAuthority(authority);
+  const authorityLines = view === null ? [] : picoCompanionDeviceAuthorityLines(view);
+  const unplaced = new Map(authorityLines.map((line) => [line.presenceId, line]));
+  root.section.hidden = devices.length === 0 && authorityLines.length === 0;
   root.list.replaceChildren();
+  if (root.summary !== undefined) {
+    root.summary.textContent = view === null ? '' : picoCompanionDeviceAuthoritySummary(view);
+    root.summary.hidden = view === null;
+  }
 
   for (const line of picoCompanionDeviceLines(devices)) {
     const item = root.document.createElement('li');
@@ -432,8 +469,106 @@ export function renderPicoCompanionDevices(
     forget.addEventListener('click', () => act({ action: 'forget', presenceId: line.presenceId }));
 
     item.append(headline, detail, offers, deviceToggle, forget);
+    const authorityLine = unplaced.get(line.presenceId);
+    if (authorityLine !== undefined) {
+      unplaced.delete(line.presenceId);
+      item.append(deviceAuthorityBlock(root.document, authorityLine, act));
+    }
     root.list.append(item);
   }
+
+  /**
+   * ADR 0130 E3. A device the Home answers to that has never announced itself
+   * here - which is exactly the shape of the device somebody is looking for
+   * when they open this: the one they lost.
+   */
+  for (const line of unplaced.values()) {
+    const item = root.document.createElement('li');
+    item.className = 'device-line';
+    item.dataset.presenceId = line.presenceId;
+
+    const headline = root.document.createElement('p');
+    headline.className = 'headline';
+    headline.textContent = line.headline;
+
+    const detail = root.document.createElement('p');
+    detail.className = 'detail';
+    detail.textContent = 'It has not said what it can do here.';
+
+    item.append(headline, detail, deviceAuthorityBlock(root.document, line, act));
+    root.list.append(item);
+  }
+}
+
+/**
+ * The authority half of a device row: what it may do for the person, and the
+ * control that ends it.
+ *
+ * The reasons are behind the control rather than beside it, and the warning
+ * appears with them: a person pressing "end" is asked why in the same moment
+ * they are told what it costs, which is the only moment either is useful.
+ */
+function deviceAuthorityBlock(
+  document: Document,
+  line: PicoCompanionDeviceAuthorityLine,
+  act: (input: {
+    action: 'end-authority';
+    presenceId: string;
+    delegationId: string;
+    reason: PicoCompanionDeviceRevocationReasonLine['reason'];
+  }) => void,
+): HTMLElement {
+  const block = document.createElement('div');
+  block.className = 'device-authority';
+  block.dataset.delegationId = line.delegationId;
+
+  const detail = document.createElement('p');
+  detail.className = 'detail';
+  detail.textContent = line.detail;
+  block.append(detail);
+
+  if (line.endLabel === null) {
+    return block;
+  }
+
+  const reasons = document.createElement('div');
+  reasons.className = 'device-authority-reasons';
+  reasons.hidden = true;
+
+  if (line.endWarning !== null) {
+    const warning = document.createElement('p');
+    warning.className = 'detail';
+    warning.dataset.warning = 'true';
+    warning.textContent = line.endWarning;
+    reasons.append(warning);
+  }
+
+  for (const reason of picoCompanionDeviceRevocationReasonLines()) {
+    const choice = document.createElement('button');
+    choice.type = 'button';
+    choice.dataset.reason = reason.reason;
+    choice.textContent = reason.label;
+    choice.addEventListener('click', () => act({
+      action: 'end-authority',
+      presenceId: line.presenceId,
+      delegationId: line.delegationId,
+      reason: reason.reason,
+    }));
+    reasons.append(choice);
+  }
+
+  const end = document.createElement('button');
+  end.type = 'button';
+  end.className = 'quiet';
+  end.dataset.endAuthority = line.delegationId;
+  end.textContent = line.endLabel;
+  end.addEventListener('click', () => {
+    reasons.hidden = false;
+    end.hidden = true;
+  });
+
+  block.append(end, reasons);
+  return block;
 }
 
 /**

@@ -7,6 +7,8 @@ import {
   picoCompanionFloorAssurance,
   picoCompanionPresentationTakesTheWindow,
   picoCompanionRelayRevocationLine,
+  picoCompanionDeviceAuthorityEndedLine,
+  picoCompanionDeviceAuthorityUnavailable,
   picoCompanionWindowViewLines,
   type PicoCompanionWindowView,
   type PicoCompanionCondition,
@@ -93,6 +95,12 @@ declare global {
         enabled: boolean,
       ): Promise<void>;
       forgetDevice(presenceId: string): Promise<void>;
+      getDeviceAuthority(): Promise<unknown>;
+      endDeviceAuthority(delegationId: string, reason: string): Promise<{
+        delegationId: string;
+        endedThisDevice: boolean;
+        activeDevicesLeft: number | null;
+      }>;
       getRelays(): Promise<unknown>;
       claimRelay(baseUrl: string, claimCode: string): Promise<{ operator: string }>;
       createRelayAccount(
@@ -699,21 +707,53 @@ depotFetchNow.addEventListener('click', () => {
 const deviceSection = requireElement('devices');
 const deviceList = requireElement('device-list');
 const deviceStatus = requireElement('device-status');
+const deviceAuthoritySummary = requireElement('device-authority-summary');
 
 /**
- * ADR 0126 P2/P6. The person's devices, and their word about each one.
+ * ADR 0126 P2/P6 with ADR 0130 E3. The person's devices, their word about
+ * each one, and which of them their Home still answers to.
  *
- * Fails quietly like its neighbours (ADR 0118 O4): not knowing which devices
- * you have is an absence, and an absence must not render a working thing as
- * broken. What a person pressed always answers.
+ * Two reads, awaited together and failing apart. The presence read fails
+ * quietly like its neighbours (ADR 0118 O4): not knowing which devices you
+ * have is an absence, and an absence must not render a working thing as
+ * broken. The authority read does not get that treatment - it says instead
+ * that it could not ask, because "no authority" is a sentence about a device
+ * that can still act as the person. What a person pressed always answers.
  */
 function refreshDevices(): void {
-  void window.picoCompanion.getDevices()
-    .then((devices) => {
+  void Promise.all([
+    window.picoCompanion.getDevices(),
+    window.picoCompanion.getDeviceAuthority().then(
+      (view) => view,
+      // Kept apart from the presence read on purpose: one unanswered question
+      // must not take the other's answer off the screen.
+      (): undefined => undefined,
+    ),
+  ])
+    .then(([devices, authority]) => {
       renderPicoCompanionDevices(
-        { list: deviceList, section: deviceSection, document },
+        {
+          list: deviceList,
+          section: deviceSection,
+          document,
+          summary: deviceAuthoritySummary,
+        },
         devices,
         (action) => {
+          if (action.action === 'end-authority') {
+            void window.picoCompanion
+              .endDeviceAuthority(action.delegationId, action.reason)
+              .then((ended) => {
+                deviceStatus.textContent = picoCompanionDeviceAuthorityEndedLine(ended);
+                refreshDevices();
+              }, (error: unknown) => {
+                deviceStatus.textContent = refusalText(
+                  error,
+                  'That device can still act as you.',
+                );
+              });
+            return;
+          }
           if (action.action === 'forget') {
             void window.picoCompanion.forgetDevice(action.presenceId).then(() => {
               deviceStatus.textContent = 'Forgotten, with everything you had decided '
@@ -736,7 +776,16 @@ function refreshDevices(): void {
               deviceStatus.textContent = refusalText(error, 'That was not changed.');
             });
         },
+        authority,
       );
+      if (authority === undefined) {
+        deviceAuthoritySummary.textContent = picoCompanionDeviceAuthorityUnavailable;
+        deviceAuthoritySummary.hidden = false;
+        // And the section stays open to say it. A device that has announced
+        // nothing yet leaves the list empty, and hiding the whole thing then
+        // would hide the fact that Pico could not ask.
+        deviceSection.hidden = false;
+      }
     }, () => {
       deviceSection.hidden = true;
     });

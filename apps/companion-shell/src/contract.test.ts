@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { picoPresenceAffordances } from '@pico/protocol/presence';
+import { picoIdentityRevocationReasonCategories } from '@pico/protocol';
+import {
+  picoCompanionDeviceRevocationReasons,
+  picoCompanionMachineOnlyRevocationReasons,
+} from '@pico/companion/device-lifecycle';
 import {
   picoCompanionFirstRunChoiceLines,
   picoCompanionFoundingStepLine,
@@ -18,6 +23,13 @@ import {
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceLines,
   parsePicoCompanionDevices,
+  picoCompanionDeviceAuthorityEndedLine,
+  picoCompanionDeviceAuthorityLines,
+  picoCompanionDeviceAuthoritySummary,
+  picoCompanionDeviceAuthorityUnavailable,
+  picoCompanionDeviceRevocationReasonLines,
+  parsePicoCompanionDeviceAuthority,
+  type PicoCompanionDeviceAuthorityView,
   picoCompanionViewReads,
   picoCompanionWindowViewLines,
   picoCompanionWindowViews,
@@ -498,5 +510,181 @@ describe('ADR 0130 E2 - the two situations a device with no Home can be in', () 
     expect(picoCompanionFoundingDelegationValidUntil(new Date('2026-01-01T00:00:00.000Z')))
       .toBe('2027-01-01T00:00:00.000Z');
     expect(picoCompanionFoundingDelegationDays).toBe(365);
+  });
+});
+
+describe('ADR 0130 E3 - which devices your Home answers to', () => {
+  const view = (
+    devices: readonly {
+      delegationId: string;
+      status: 'active' | 'not_yet_valid' | 'expired' | 'revoked';
+      isThisDevice?: boolean;
+      validUntil?: string;
+    }[],
+    mayEndAuthority = true,
+  ): PicoCompanionDeviceAuthorityView => ({
+    mayEndAuthority,
+    devices: devices.map((device, index) => ({
+      // The shape a real one has, so "the sentence never shows the record's
+      // id" is asserted against something that could actually appear in it.
+      delegationId: `delegation_${device.delegationId.repeat(32)}`,
+      presenceId: `device-${index}`,
+      deviceSigningKeyFingerprintHex: `${index}`.repeat(64),
+      status: device.status,
+      validUntil: device.validUntil ?? '2027-01-01T00:00:00.000Z',
+      isThisDevice: device.isThisDevice ?? false,
+    })),
+  });
+
+  it('offers the reasons a person has, and names the ones it does not', () => {
+    /**
+     * ADR 0117 X1 over two closed lists. The protocol has five revocation
+     * categories, a person is offered three, and the other two are named in
+     * `device-lifecycle.ts` with why. A sixth category would otherwise appear
+     * in neither and be silently unavailable - the drift this asserts against.
+     */
+    const offered = picoCompanionDeviceRevocationReasonLines().map((line) => line.reason);
+    expect(offered).toEqual(['lost_device', 'suspected_compromise', 'device_retired']);
+    /**
+     * And the window's list is the companion's list. They are separate
+     * because one carries sentences and the other is typed against the
+     * protocol, which is two jobs - but a person offered a reason the
+     * ceremony then refuses would be the drift that split buys.
+     */
+    expect(offered).toEqual([...picoCompanionDeviceRevocationReasons]);
+    const machineOnly = Object.keys(picoCompanionMachineOnlyRevocationReasons);
+    for (const category of picoIdentityRevocationReasonCategories) {
+      expect(
+        (offered as readonly string[]).includes(category)
+        || machineOnly.includes(category),
+      ).toBe(true);
+    }
+    expect(offered.length + machineOnly.length)
+      .toBe(picoIdentityRevocationReasonCategories.length);
+    // And each offered reason says something a person would say about a
+    // machine, rather than repeating the protocol's word back at them.
+    for (const line of picoCompanionDeviceRevocationReasonLines()) {
+      expect(line.label).not.toContain('_');
+      expect(line.label.startsWith('I ') || line.label.startsWith('Somebody')).toBe(true);
+    }
+  });
+
+  it('says what each status means for the person, not for the record', () => {
+    const lines = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+      { delegationId: 'b', status: 'expired', validUntil: '2026-05-01T00:00:00.000Z' },
+      { delegationId: 'c', status: 'revoked' },
+      { delegationId: 'd', status: 'not_yet_valid' },
+    ]));
+    expect(lines[0]?.headline).toBe('This device');
+    expect(lines[1]?.headline).toBe('Another of your devices');
+    expect(lines[0]?.detail).toBe('It can act as you until 2027-01-01.');
+    expect(lines[1]?.detail).toContain('ran out on 2026-05-01');
+    expect(lines[2]?.detail).toContain('You ended its authority');
+    expect(lines[3]?.detail).toContain('cannot act as you yet');
+    // Nothing anybody can end but the one that is still active.
+    expect(lines.map((line) => line.endLabel !== null)).toEqual([true, false, false, false]);
+    for (const line of lines) {
+      expect(line.detail).not.toContain(line.delegationId);
+    }
+  });
+
+  it('warns on the two rows that lock somebody out, and on no others', () => {
+    const only = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+    ]));
+    expect(only[0]?.endWarning).toContain('only device');
+    expect(only[0]?.endWarning).toContain('Recovery Card');
+
+    const two = picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+      { delegationId: 'b', status: 'active' },
+    ]));
+    expect(two[0]?.endWarning).toContain('device you are using');
+    /**
+     * The row a warning would be noise on. A caution under every control is
+     * how a person learns to press through all of them, including the two
+     * above.
+     */
+    expect(two[1]?.endWarning).toBeNull();
+  });
+
+  it('says once, at the top, when this device cannot end anything', () => {
+    const summary = picoCompanionDeviceAuthoritySummary(view([
+      { delegationId: 'a', status: 'active', isThisDevice: true },
+      { delegationId: 'b', status: 'active' },
+    ], false));
+    expect(summary).toContain('Your Home answers to 2 devices.');
+    // The fact and where the key is, rather than a permission error.
+    expect(summary).toContain('identity key');
+    expect(summary).toContain('founded your Home');
+    expect(picoCompanionDeviceAuthoritySummary(view([
+      { delegationId: 'a', status: 'active' },
+      { delegationId: 'b', status: 'revoked' },
+    ]))).toBe('Your Home answers to one device.');
+    // No control anywhere below it, rather than controls that fail at the vault.
+    expect(picoCompanionDeviceAuthorityLines(view([
+      { delegationId: 'a', status: 'active' },
+    ], false)).map((line) => line.endLabel)).toEqual([null]);
+  });
+
+  it('tells a count it does not have apart from a count of none', () => {
+    // ADR 0118 O4, on the one row where being wrong is worst.
+    expect(picoCompanionDeviceAuthorityEndedLine({
+      endedThisDevice: true,
+      activeDevicesLeft: null,
+    })).toContain('can no longer ask your Home');
+    expect(picoCompanionDeviceAuthorityEndedLine({
+      endedThisDevice: false,
+      activeDevicesLeft: null,
+    })).toContain('could not ask your Home');
+    expect(picoCompanionDeviceAuthorityEndedLine({
+      endedThisDevice: false,
+      activeDevicesLeft: 0,
+    })).toContain('Recovery Card');
+    expect(picoCompanionDeviceAuthorityEndedLine({
+      endedThisDevice: false,
+      activeDevicesLeft: 1,
+    })).toBe('Ended. Your Home answers to one device now.');
+    expect(picoCompanionDeviceAuthorityEndedLine({
+      endedThisDevice: true,
+      activeDevicesLeft: 2,
+    })).toContain('it was this one');
+    // A missing count never reads as none.
+    expect(picoCompanionDeviceAuthorityEndedLine({
+      endedThisDevice: true,
+      activeDevicesLeft: null,
+    })).not.toContain('no device');
+  });
+
+  it('refuses an authority answer it cannot read, rather than showing none', () => {
+    expect(() => parsePicoCompanionDeviceAuthority({ devices: [] }))
+      .toThrow('invalid_pico_companion_device_authority');
+    expect(() => parsePicoCompanionDeviceAuthority({
+      mayEndAuthority: true,
+      devices: [{
+        delegationId: 'a',
+        presenceId: 'device-a',
+        deviceSigningKeyFingerprintHex: 'ff',
+        status: 'retired',
+        validUntil: '2027-01-01T00:00:00.000Z',
+        isThisDevice: false,
+      }],
+    })).toThrow('invalid_pico_companion_device_authority_row');
+    expect(parsePicoCompanionDeviceAuthority({
+      mayEndAuthority: false,
+      devices: [{
+        delegationId: 'a',
+        presenceId: 'device-a',
+        deviceSigningKeyFingerprintHex: 'ff',
+        status: 'active',
+        validUntil: '2027-01-01T00:00:00.000Z',
+        isThisDevice: true,
+      }],
+    }).devices).toHaveLength(1);
+    // The sentence for a read that did not come back says which question went
+    // unanswered, and never that there is no authority.
+    expect(picoCompanionDeviceAuthorityUnavailable).toContain('could not ask');
+    expect(picoCompanionDeviceAuthorityUnavailable).not.toContain('no ');
   });
 });

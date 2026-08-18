@@ -3,10 +3,41 @@
 ## Status
 
 Accepted as a product-surface and platform-order decision; E1, E2 and E6
-implemented, E3-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
+implemented, E3 partially (inspect and revoke), E4-E5 and E7-E8 open. The user decided on 2026-08-09 that desktop operation runs entirely through
 the background companion, that `pico-vault` stays a tool rather than a
 product path, and that the platform order is Linux, then Windows, then
 macOS.
+
+Status note, 2026-08-18: **E3 is half a vertical, and the half is the
+half a person is in when something goes wrong.**
+
+Inspect and revoke are product surfaces now. The read turned out to be
+running already - ADR 0112's alarm carrier polls
+`home.device.lifecycle.read` on a schedule and keeps three fields from it,
+so the device list came back on every poll and had nowhere to go. The rows
+join ADR 0126's presences on the presence id both sides derive from the
+device signing key, which keeps this one list of devices with two facts
+rather than two lists over one subject.
+
+Revoke is the ceremony that had to come with it: losing a device is not a
+moment for argument parsing. It signs with the identity root under ADR 0099
+approval - proved by counting the approvals the ceremony raises against a
+real daemon, so "under approval" is a number rather than a claim - and the
+person picks from three of ADR 0114's five reason categories, the other two
+being renewal's and membership's rather than theirs.
+
+**Ending a device's authority ends its ability to ask what happened**, and
+that is reported rather than smoothed over: the count of what is left comes
+back as `null` when the read that follows is refused, and the sentence says
+which question went unanswered. On the row that ends the last line into a
+Home, a `0` invented by this process would be the scariest possible way to
+be wrong.
+
+Delegate, enroll and renew stay open because enrolment is genuinely a
+two-device ceremony - the target vault co-signs a four-minute activation
+with its own key - and that exchange is a product decision this gate does
+not carry. Renewing *this* device is the single-device case inside it and
+waits for the same block, so that the surface is designed once.
 
 Status note, 2026-08-18: **E1 is closed, and the tray is now measured rather
 than assumed.**
@@ -337,8 +368,11 @@ Node host beside each of them.
 - **E2 - Founding and binding vertical (implemented):** `claim-home`,
   `open-identity-session`, and the first production write of the profile
   and Platform Keystore binding, closing the ADR 0113 residual.
-- **E3 - Device lifecycle vertical (open):** delegate, enroll, renew,
-  revoke, inspect - each under ADR 0099 approval and ADR 0106 rendering.
+- **E3 - Device lifecycle vertical (partially implemented):** delegate,
+  enroll, renew, revoke, inspect - each under ADR 0099 approval and ADR 0106
+  rendering. Inspect and revoke are product surfaces since 2026-08-18;
+  delegate, enroll and renew are not, and the reason is in the status note
+  above rather than in this line.
 - **E4 - Home continuity and membership vertical (open):**
   `rotate-host-key` and `issue-membership` as product surfaces.
 - **E5 - Domain and readership vertical (open):** create/rotate domain,

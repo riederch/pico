@@ -204,6 +204,21 @@ describe('every view fetches what it shows', () => {
     }
   });
 
+  it('asks the second question the devices section now answers', () => {
+    /**
+     * ADR 0130 E3. The authority read sits inside `refreshDevices` as a
+     * second call, and it is the one allowed to fail on its own - so what is
+     * asserted is that it is asked at all, that a failure renders as the
+     * sentence about a failure, and that the control a row grows reaches the
+     * bridge rather than stopping in the view.
+     */
+    const refresh = /function refreshDevices[\s\S]*?\n\}/u.exec(renderer)?.[0] ?? '';
+    expect(refresh).toContain('getDeviceAuthority()');
+    expect(refresh).toContain('picoCompanionDeviceAuthorityUnavailable');
+    expect(refresh).toContain('endDeviceAuthority(');
+    expect(refresh).toContain('picoCompanionDeviceAuthorityEndedLine(');
+  });
+
   it('asks the occasion view for nothing a setting owns', () => {
     // ADR 0113. The window used to send six reads on every open, four of them
     // for lists a person answering an approval will never look at.

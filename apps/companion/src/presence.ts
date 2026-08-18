@@ -48,7 +48,21 @@ const alwaysOffered: readonly PicoPresenceAffordance[] = ['display', 'notificati
  * machine look like two.
  */
 export function picoCompanionPresenceId(profile: PicoCompanionProfile): string {
-  return `device-${profile.device.signingKeyFingerprintHex.slice(0, 24)}`;
+  return picoPresenceIdForDeviceSigningKey(profile.device.signingKeyFingerprintHex);
+}
+
+/**
+ * The same id, for a device that is not this one.
+ *
+ * ADR 0130 E3 joins the Home's delegations to these rows, and a delegation
+ * carries the signing key fingerprint without carrying a profile. One
+ * derivation with two callers rather than a second `slice` somewhere else -
+ * a join that drifted from the id it joins on would show one machine as two.
+ */
+export function picoPresenceIdForDeviceSigningKey(
+  signingKeyFingerprintHex: string,
+): string {
+  return `device-${signingKeyFingerprintHex.slice(0, 24)}`;
 }
 
 export function picoCompanionAnnouncement(input: {
