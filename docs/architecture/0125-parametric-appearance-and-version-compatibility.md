@@ -3,8 +3,10 @@
 ## Status
 
 Proposed. The contract, the `@pico/appearance` package, the protocol
-specification and the fixtures exist; no renderer, no Pico Link sync, no
-persistence and no character approval exist. This ADR approves no graphics.
+specification and the fixtures exist. A development-only Blender diagnostic
+for two governance recipes exists under `tools/character-modeling`; no product
+renderer, Pico Link sync, persistence or character approval exists. This ADR
+approves no graphics.
 
 Clarified on 2026-08-09, after `TODO.md` asked whether Appearance replaces
 the style presets from ADR 0013 or forms a fourth axis beside them. Neither:

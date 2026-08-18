@@ -21,11 +21,11 @@ print(
 )
 
 assert "PICO_MOUNT_head_module" in names
-assert "PICO_HEAD_IDENTITY_standard_antenna" in names
+assert "PICO_HEAD_SELECTOR_standard_antenna" in names
 assert "Trim.AntennaStem" in names
 assert "Status.AntennaSphere" in names
-assert "PICO_HEAD_IDENTITY_procedural_hair" not in names
-assert "PICO_HEAD_IDENTITY_procedural_comb" not in names
+assert "PICO_HEAD_SELECTOR_head_raised_crown" not in names
+assert "PICO_HEAD_SELECTOR_head_long_neon_tail" not in names
 assert not any(name.startswith("HeadModule.") for name in names)
 assert not any(name.startswith("Status.HeadAccent.") for name in names)
 # Blender converts the glTF Y-up contract back into its native Z-up view on

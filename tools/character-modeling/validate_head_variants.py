@@ -44,7 +44,7 @@ antenna = [
     bpy.data.objects["Status.AntennaSphere"],
 ]
 antenna_carrier = bpy.data.objects[
-    "PICO_HEAD_IDENTITY_standard_antenna"
+    "PICO_HEAD_SELECTOR_standard_antenna"
 ]
 assert antenna_carrier.parent == mount
 assert all(obj.parent == antenna_carrier for obj in antenna)
@@ -61,8 +61,9 @@ print(
 
 variant_expectations = (
     (
-        "HEAD_VARIANT_procedural_hair",
+        "HEAD_RECIPE_head_raised_crown",
         "head-raised-crown",
+        {"hue": 198, "chroma": 138, "translucency": 168},
         lambda minimum, maximum: (
             minimum[1] > 0.30
             and maximum[1] > 0.60
@@ -71,20 +72,23 @@ variant_expectations = (
         ),
     ),
     (
-        "HEAD_VARIANT_procedural_comb",
+        "HEAD_RECIPE_head_long_neon_tail",
         "head-long-neon-tail",
+        {"hue": 286, "chroma": 156, "translucency": 184},
         lambda minimum, maximum: (
-            minimum[1] > 0.00
+            minimum[1] > -0.25
+            and minimum[1] < 0.05
             and minimum[2] < -0.65
             and maximum[0] > 0.32
             and maximum[1] > 0.60
-            and max(abs(minimum[0]), abs(maximum[0])) < 0.50
+            and max(abs(minimum[0]), abs(maximum[0])) < 0.70
         ),
     ),
 )
 for identity_index, (
     collection_name,
     expected_vector,
+    expected_material,
     concept_envelope,
 ) in enumerate(variant_expectations, start=1):
     mount["pico_head_identity_index"] = identity_index
@@ -99,11 +103,42 @@ for identity_index, (
     assert collection["pico_generator_version"] == 2
     assert collection["pico_vector_name"] == expected_vector
     assert collection["pico_head_identity"] == "procedural_neon_hair"
+    assert collection["pico_material_hue"] == expected_material["hue"]
+    assert collection["pico_material_chroma"] == expected_material["chroma"]
+    assert (
+        collection["pico_material_translucency"]
+        == expected_material["translucency"]
+    )
+    for field in (
+        "anchor", "side", "length", "lift", "sweep", "curl", "width",
+        "taper", "twist", "segments", "partOffset", "partDepth",
+        "crownBias", "rootSpread",
+    ):
+        assert f"pico_geometry_{field}" in collection
     assert sum("InnerCarrier" in name for name in names) == 1
     assert sum("RootCollar" in name for name in names) == 1
     assert sum("Status.HeadAccent" in name for name in names) == 1
     assert not any("Antenna" in name for name in names)
     assert set(zones) == {"head_module", "trim", "status_emitters"}
+    shell_objects = [
+        obj for obj in objects
+        if obj.get("pico_material_zone") == "head_module"
+        and obj.data is not None
+        and hasattr(obj.data, "materials")
+    ]
+    shell_materials = {
+        material
+        for obj in shell_objects
+        for material in obj.data.materials
+    }
+    assert len(shell_materials) == 1
+    shell_material = shell_materials.pop()
+    assert shell_material["pico_material_role"] == "personal_translucent_shell"
+    assert shell_material["pico_free_emission"] is False
+    shader = shell_material.node_tree.nodes["Principled BSDF"]
+    assert shader.inputs["Transmission Weight"].default_value > 0.20
+    assert shader.inputs["Alpha"].default_value == 1.0
+    assert shader.inputs["Emission Strength"].default_value == 0.0
     minimum, maximum = world_bounds(objects)
     print(
         f"PICO_HEAD_VARIANT={collection_name} "
@@ -113,8 +148,13 @@ for identity_index, (
 
 carriers = {
     0: antenna_carrier,
-    1: bpy.data.objects["PICO_HEAD_IDENTITY_procedural_hair"],
-    2: bpy.data.objects["PICO_HEAD_IDENTITY_procedural_comb"],
+    1: bpy.data.objects["PICO_HEAD_SELECTOR_head_raised_crown"],
+    2: bpy.data.objects["PICO_HEAD_SELECTOR_head_long_neon_tail"],
+}
+selector_semantics = {
+    0: ("standard_antenna", "none"),
+    1: ("procedural_neon_hair", "head-raised-crown"),
+    2: ("procedural_neon_hair", "head-long-neon-tail"),
 }
 for identity_index in range(3):
     mount["pico_head_identity_index"] = identity_index
@@ -128,11 +168,15 @@ for identity_index in range(3):
             for value in carrier.scale
         )
         if expected_scale == 1.0:
-            visible.append(carrier["pico_head_identity"])
+            visible.append((
+                carrier["pico_head_identity"],
+                carrier["pico_recipe_name"],
+            ))
     assert len(visible) == 1
+    assert visible[0] == selector_semantics[identity_index]
     print(
         f"PICO_HEAD_SELECTOR=index_{identity_index} "
-        f"visible={visible[0]}"
+        f"identity={visible[0][0]} recipe={visible[0][1]}"
     )
 
 mount["pico_head_identity_index"] = 0

@@ -7,6 +7,8 @@ coverage/
 .DS_Store
 .idea/
 *.log
+__pycache__/
+*.py[cod]
 .pnpm-store/
 apps/core/data/
 apps/companion-shell/out/

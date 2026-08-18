@@ -1,5 +1,4 @@
 import bpy
-import colorsys
 import math
 import os
 from mathutils import Matrix, Vector
@@ -645,30 +644,29 @@ def light_guide_ribbon_mesh(
         before = curve_point(max(0.0, amount - 0.002))
         after = curve_point(min(1.0, amount + 0.002))
         tangent = (after - before).normalized()
-        width_axis = previous_width_axis or Vector((0.0, 1.0, 0.0))
-        width_axis = width_axis - tangent * width_axis.dot(tangent)
-        if width_axis.length < 0.001:
-            width_axis = Vector((0.0, 0.0, 1.0))
-            width_axis = width_axis - tangent * width_axis.dot(tangent)
-        width_axis.normalize()
+        transport_axis = previous_width_axis or Vector((0.0, 1.0, 0.0))
+        transport_axis = transport_axis - tangent * transport_axis.dot(tangent)
+        if transport_axis.length < 0.001:
+            transport_axis = Vector((0.0, 0.0, 1.0))
+            transport_axis = transport_axis - tangent * transport_axis.dot(tangent)
+        transport_axis.normalize()
+        previous_width_axis = transport_axis.copy()
         twist_radians = math.radians(48.0 * twist_amount * amount)
-        width_axis = Matrix.Rotation(twist_radians, 4, tangent) @ width_axis
+        width_axis = Matrix.Rotation(twist_radians, 4, tangent) @ transport_axis
         thickness_axis = tangent.cross(width_axis).normalized()
-        previous_width_axis = width_axis
 
-        width = base_width * (1.0 - 0.72 * taper_amount * amount ** 1.35)
+        width = base_width * (1.0 - 0.55 * taper_amount * amount ** 1.35)
         # The PAS segments are shallow light-guide joints in one shell, not
         # separate beads. A narrow groove at each boundary preserves the
         # segment count without breaking the silhouette or topology.
         segment_phase = amount * segment_count
         distance_to_joint = abs(segment_phase - round(segment_phase))
         joint = math.exp(-((distance_to_joint / 0.075) ** 2))
-        root_softening = min(1.0, amount / 0.045)
         tip_softening = min(1.0, (1.0 - amount) / 0.035)
-        end_envelope = max(0.10, math.sin(math.pi * amount) ** 0.18)
-        half_width = width * (1.0 - 0.055 * joint) * end_envelope
+        tip_envelope = 0.70 + 0.30 * tip_softening ** 0.28
+        half_width = width * (1.0 - 0.055 * joint) * tip_envelope
         half_thickness = thickness * (1.0 - 0.12 * joint)
-        half_thickness *= 0.72 + 0.28 * min(root_softening, tip_softening)
+        half_thickness *= 0.72 + 0.28 * tip_softening
         for segment in range(around):
             angle = 2.0 * math.pi * segment / around
             offset = (
@@ -941,15 +939,29 @@ def head_module_material(name, hue, chroma, translucency):
     # reflections and the separate status core.
     chroma_amount = chroma / 255.0
     translucency_amount = translucency / 255.0
-    saturation = min(0.88, 0.28 + 0.78 * chroma_amount ** 1.25)
-    value = 0.68 + 0.24 * translucency_amount
-    rgb = colorsys.hsv_to_rgb((hue % 360) / 360.0, saturation, value)
+    # Hue 286 is blue-violet in the PAS concept. HSV would turn it pink, so the
+    # diagnostic renderer uses a bounded OKLCH-like material corridor and hands
+    # Blender linear RGB values. This mapping remains diagnostic, not frozen.
+    lightness = 0.500 + 0.140 * translucency_amount
+    corridor_chroma = 0.040 + 0.180 * chroma_amount
+    hue_radians = math.radians(hue % 360)
+    axis_a = corridor_chroma * math.cos(hue_radians)
+    axis_b = corridor_chroma * math.sin(hue_radians)
+    cone_l = lightness + 0.3963377774 * axis_a + 0.2158037573 * axis_b
+    cone_m = lightness - 0.1055613458 * axis_a - 0.0638541728 * axis_b
+    cone_s = lightness - 0.0894841775 * axis_a - 1.2914855480 * axis_b
+    cone_l, cone_m, cone_s = cone_l ** 3, cone_m ** 3, cone_s ** 3
+    rgb = tuple(max(0.0, min(1.0, channel)) for channel in (
+        4.0767416621 * cone_l - 3.3077115913 * cone_m + 0.2309699292 * cone_s,
+        -1.2684380046 * cone_l + 2.6097574011 * cone_m - 0.3413193965 * cone_s,
+        -0.0041960863 * cone_l - 0.7034186147 * cone_m + 1.7076147010 * cone_s,
+    ))
     result = material(
         f"PICO_ZONE_head_module.{name}", rgb,
         metallic=0.02,
-        roughness=0.20 - 0.08 * translucency_amount,
-        transmission=0.18 + 0.58 * translucency_amount,
-        alpha=0.90 - 0.30 * translucency_amount,
+        roughness=0.19 - 0.06 * translucency_amount,
+        transmission=0.12 + 0.38 * translucency_amount,
+        alpha=1.0,
         ior=1.46,
         coat=0.32,
     )
@@ -1028,7 +1040,7 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
     if long_rear_ribbon:
         side_direction = 1.0 if side_amount >= 0.0 else -1.0
         root = Vector((
-            side_amount * 0.055,
+            side_direction * (0.075 + abs(side_amount) * 0.085),
             mount.location.y + 0.016,
             0.020 - anchor_amount * 0.170,
         ))
@@ -1041,10 +1053,10 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             + max(0.0, crown_bias) * 0.050
         )
         arch_height = (
-            0.140 + lift_amount * 0.120 + max(0.0, crown_bias) * 0.040
+            0.090 + lift_amount * 0.080 + max(0.0, crown_bias) * 0.025
         )
         drop = (
-            0.290 + length_amount * 0.160
+            0.390 + length_amount * 0.160
             + max(0.0, sweep_amount) * 0.050
         )
         curl_lift = 0.070 + abs(curl_amount) * 0.150
@@ -1060,7 +1072,7 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             -rear_reach,
         ))
         tip = hanging + Vector((
-            side_direction * (0.065 + abs(curl_amount) * 0.100),
+            side_direction * (0.090 + abs(curl_amount) * 0.140),
             curl_lift if curl_amount >= 0.0 else -curl_lift,
             rear_reach * (0.12 + abs(curl_amount) * 0.08),
         ))
@@ -1127,25 +1139,56 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
                 (amount - 0.80) / 0.20,
             )
 
+        ribbon_base_width = 0.073 + width_amount * 0.052
+        ribbon_thickness = 0.013 + width_amount * 0.009
+
+        def ribbon_frame(amount):
+            tangent = (
+                curve_point(min(1.0, amount + 0.002))
+                - curve_point(max(0.0, amount - 0.002))
+            ).normalized()
+            edge_axis = Vector((0.0, 1.0, 0.0))
+            edge_axis = edge_axis - tangent * edge_axis.dot(tangent)
+            if edge_axis.length < 0.001:
+                edge_axis = Vector((0.0, 0.0, 1.0))
+                edge_axis = edge_axis - tangent * edge_axis.dot(tangent)
+            edge_axis.normalize()
+            edge_axis = (
+                Matrix.Rotation(
+                    math.radians(48.0 * twist_amount * amount),
+                    4,
+                    tangent,
+                )
+                @ edge_axis
+            )
+            face_axis = tangent.cross(edge_axis).normalized()
+            local_width = ribbon_base_width * (
+                1.0 - 0.55 * taper_amount * amount ** 1.35
+            )
+            return edge_axis, face_axis, local_width
+
         # One connected mechanical spine remains visible through the personal
         # shell. It is deliberately non-emissive and begins in one root collar.
-        spine_points = [
-            curve_point(index / 40.0)
-            for index in range(41)
-        ]
+        spine_points = []
+        for index in range(41):
+            amount = index / 40.0
+            edge_axis, _, local_width = ribbon_frame(amount)
+            edge_offset = min(1.0, amount / 0.14) * local_width * -0.46
+            spine_points.append(curve_point(amount) + edge_axis * edge_offset)
         continuous_tube_path(
             f"HeadModule.{name}.InnerCarrier",
             spine_points,
-            0.017 + width_amount * 0.010,
+            0.010 + width_amount * 0.006,
             TRIM,
             "trim",
             target,
             mount,
         )
         collar_end = curve_point(0.10)
+        collar_root = root + Vector((0.0, -0.050, 0.0))
         oriented_ellipsoid_between(
             f"HeadModule.{name}.RootCollar",
-            root,
+            collar_root,
             collar_end,
             0.030 + root_spread * 0.16,
             0.015,
@@ -1159,8 +1202,8 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             f"HeadModule.{name}.TranslucentShell",
             curve_point,
             segments,
-            0.073 + width_amount * 0.052,
-            0.013 + width_amount * 0.009,
+            ribbon_base_width,
+            ribbon_thickness,
             taper_amount,
             twist_amount,
             module_mat,
@@ -1189,11 +1232,16 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
                 mount,
             )
 
-        status_points = [
-            curve_point(0.07 + index * 0.84 / 30.0)
-            + Vector((side_direction * 0.010, 0.003, 0.006))
-            for index in range(31)
-        ]
+        status_points = []
+        for index in range(31):
+            amount = 0.07 + index * 0.84 / 30.0
+            centre = curve_point(amount)
+            edge_axis, face_axis, local_width = ribbon_frame(amount)
+            status_points.append(
+                centre
+                + edge_axis * local_width * 0.72
+                + face_axis * ribbon_thickness * 0.88
+            )
         continuous_tube_path(
             f"Status.HeadAccent.{name}",
             status_points,
@@ -1213,7 +1261,7 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             0.070 - anchor_amount * 0.090,
         ))
         total_lift = (
-            0.130 + lift_amount * 0.170
+            0.145 + lift_amount * 0.185
             + max(0.0, -crown_bias) * 0.035
         )
         rear_lean = (
@@ -1236,9 +1284,9 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             centred = amount - 0.5
             root_x = (
                 start.x + part_offset * root_spread * 0.18
-                + centred * root_spread * 0.24
+                + centred * root_spread * 0.72
             )
-            root_z = start.z - centred * root_spread * 2.15
+            root_z = start.z - centred * root_spread * 1.85
             crown_radius = math.sqrt(root_x * root_x + root_z * root_z)
             root_y = 0.420 - crown_radius * 0.24
             base = Vector((root_x, root_y, root_z))
@@ -1247,7 +1295,7 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
             blade_height = total_lift * (0.54 + 0.46 * peak)
             lean = rear_lean * (0.58 + 0.42 * peak)
             tip = base + Vector((
-                side_amount * 0.018 + centred * 0.050,
+                side_amount * 0.018 + centred * 0.135,
                 blade_height + max(0.0, curl_amount) * 0.018 * peak,
                 -lean * (0.25 + 0.75 * peak)
                 + centred * 0.045
@@ -1259,7 +1307,7 @@ def make_procedural_head_variant(name, vector_name, recipe, target, mount):
                 -lean * 0.12 + centred * 0.018,
             ))
             blade_width = (
-                0.066 + width_amount * 0.047
+                0.052 + width_amount * 0.040
             ) * (0.82 + 0.18 * peak) * (1.0 - taper_amount * 0.10)
             blade_thickness = max(0.012, blade_width * 0.17)
             leaf_blade(
@@ -1367,15 +1415,19 @@ def add_head_identity_scale_driver(obj, mount, visible_index):
         driver.expression = f"head_identity == {visible_index}"
 
 
-def make_head_identity_carrier(name, target, mount, visible_index, objects):
-    carrier = bpy.data.objects.new(f"PICO_HEAD_IDENTITY_{name}", None)
+def make_head_identity_carrier(
+    selector_name, identity_kind, recipe_name, target, mount, visible_index,
+    objects,
+):
+    carrier = bpy.data.objects.new(f"PICO_HEAD_SELECTOR_{selector_name}", None)
     target.objects.link(carrier)
     carrier.parent = mount
     carrier.matrix_parent_inverse = Matrix.Identity(4)
     carrier.matrix_basis = Matrix.Identity(4)
     carrier.empty_display_type = "CIRCLE"
     carrier.empty_display_size = 0.045
-    carrier["pico_head_identity"] = name
+    carrier["pico_head_identity"] = identity_kind
+    carrier["pico_recipe_name"] = recipe_name
     carrier["pico_material_zone"] = "head_module"
     carrier["pico_exclusive_visible_index"] = visible_index
     for obj in objects:
@@ -1394,22 +1446,29 @@ def install_head_identity_selector(mount):
             "1 concept crown crest, 2 concept rear ribbon"
         ),
     )
-    identity_sources = (
-        ("standard_antenna", MODEL, STANDARD_ANTENNA_OBJECTS),
+    selector_sources = (
         (
-            "procedural_hair",
-            HEAD_VARIANT_COLLECTIONS["procedural_hair"],
-            tuple(HEAD_VARIANT_COLLECTIONS["procedural_hair"].all_objects),
+            "standard_antenna", "standard_antenna", "none",
+            MODEL, STANDARD_ANTENNA_OBJECTS,
         ),
         (
-            "procedural_comb",
-            HEAD_VARIANT_COLLECTIONS["procedural_comb"],
-            tuple(HEAD_VARIANT_COLLECTIONS["procedural_comb"].all_objects),
+            "head_raised_crown", "procedural_neon_hair", "head-raised-crown",
+            HEAD_RECIPE_COLLECTIONS["head-raised-crown"],
+            tuple(HEAD_RECIPE_COLLECTIONS["head-raised-crown"].all_objects),
+        ),
+        (
+            "head_long_neon_tail", "procedural_neon_hair", "head-long-neon-tail",
+            HEAD_RECIPE_COLLECTIONS["head-long-neon-tail"],
+            tuple(HEAD_RECIPE_COLLECTIONS["head-long-neon-tail"].all_objects),
         ),
     )
-    for visible_index, (name, target, objects) in enumerate(identity_sources):
-        HEAD_IDENTITY_CARRIERS[name] = make_head_identity_carrier(
-            name,
+    for visible_index, (
+        selector_name, identity_kind, recipe_name, target, objects,
+    ) in enumerate(selector_sources):
+        HEAD_IDENTITY_CARRIERS[selector_name] = make_head_identity_carrier(
+            selector_name,
+            identity_kind,
+            recipe_name,
             target,
             mount,
             visible_index,
@@ -1421,8 +1480,8 @@ def install_head_identity_selector(mount):
 def select_head_identity(name):
     indices = {
         "standard_antenna": 0,
-        "procedural_hair": 1,
-        "procedural_comb": 2,
+        "head_raised_crown": 1,
+        "head_long_neon_tail": 2,
     }
     mount["pico_head_identity_index"] = indices[name]
     mount.update_tag(refresh={"OBJECT"})
@@ -1438,14 +1497,14 @@ def select_head_identity(name):
 def force_head_identity_for_offline_render(name):
     indices = {
         "standard_antenna": 0,
-        "procedural_hair": 1,
-        "procedural_comb": 2,
+        "head_raised_crown": 1,
+        "head_long_neon_tail": 2,
     }
     selected = indices[name]
     for index, carrier_name in enumerate((
         "standard_antenna",
-        "procedural_hair",
-        "procedural_comb",
+        "head_raised_crown",
+        "head_long_neon_tail",
     )):
         carrier = HEAD_IDENTITY_CARRIERS[carrier_name]
         for fcurve in carrier.animation_data.drivers:
@@ -1530,8 +1589,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 MODEL = collection("PICO_CHARACTER_CORE")
 PREVIEW = collection("PICO_PREVIEW_ONLY")
 HEAD_VARIANTS = collection("PICO_HEAD_VARIANTS_DIAGNOSTIC")
-HEAD_HAIR = collection("HEAD_VARIANT_procedural_hair", HEAD_VARIANTS)
-HEAD_COMB = collection("HEAD_VARIANT_procedural_comb", HEAD_VARIANTS)
+HEAD_CROWN = collection("HEAD_RECIPE_head_raised_crown", HEAD_VARIANTS)
+HEAD_TAIL = collection("HEAD_RECIPE_head_long_neon_tail", HEAD_VARIANTS)
 SCENE_COLLECTION = collection("PICO_RENDER_SCENE")
 
 ROOT = bpy.data.objects.new("PICO.CharacterCore.Root", None)
@@ -1666,13 +1725,13 @@ for antenna_part in (antenna_stem, antenna_sphere):
     antenna_part["pico_head_identity"] = "standard_antenna"
 STANDARD_ANTENNA_OBJECTS = (antenna_stem, antenna_sphere)
 
-HEAD_VARIANT_COLLECTIONS = {
-    "procedural_hair": HEAD_HAIR,
-    "procedural_comb": HEAD_COMB,
+HEAD_RECIPE_COLLECTIONS = {
+    "head-raised-crown": HEAD_CROWN,
+    "head-long-neon-tail": HEAD_TAIL,
 }
 HEAD_IDENTITY_CARRIERS = {}
 make_procedural_head_variant(
-    "Hair",
+    "Crown",
     "head-raised-crown",
     {
         "geometry": {
@@ -1683,11 +1742,11 @@ make_procedural_head_variant(
         },
         "material": {"hue": 198, "chroma": 138, "translucency": 168},
     },
-    HEAD_HAIR,
+    HEAD_CROWN,
     mount,
 )
 make_procedural_head_variant(
-    "Comb",
+    "Tail",
     "head-long-neon-tail",
     {
         "geometry": {
@@ -1698,7 +1757,7 @@ make_procedural_head_variant(
         },
         "material": {"hue": 286, "chroma": 156, "translucency": 184},
     },
-    HEAD_COMB,
+    HEAD_TAIL,
     mount,
 )
 install_head_identity_selector(mount)
@@ -1734,33 +1793,37 @@ background.inputs["Color"].default_value = (0.006, 0.025, 0.060, 1.0)
 background.inputs["Strength"].default_value = 0.50
 scene.view_settings.look = "AgX - Medium High Contrast"
 
+headwear_only = os.environ.get("PICO_CHARACTER_HEADWEAR_ONLY") == "1"
+if headwear_only:
+    scene.render.resolution_percentage = 67
+if not headwear_only:
+    render(
+        os.path.join(OUTPUT_DIR, "pico-mesh-reference.png"),
+        (2.35, 0.32, 6.45),
+        show_preview=False,
+        transparent=True,
+    )
+    render(
+        os.path.join(OUTPUT_DIR, "pico-preview-reference.png"),
+        (2.35, 0.32, 6.45),
+        show_preview=True,
+    )
+    render(
+        os.path.join(OUTPUT_DIR, "pico-preview-front.png"),
+        (0.0, 0.12, 6.8),
+        show_preview=True,
+    )
 render(
-    os.path.join(OUTPUT_DIR, "pico-mesh-reference.png"),
-    (2.35, 0.32, 6.45),
-    show_preview=False,
-    transparent=True,
-)
-render(
-    os.path.join(OUTPUT_DIR, "pico-preview-reference.png"),
-    (2.35, 0.32, 6.45),
-    show_preview=True,
-)
-render(
-    os.path.join(OUTPUT_DIR, "pico-preview-front.png"),
-    (0.0, 0.12, 6.8),
-    show_preview=True,
-)
-render(
-    os.path.join(OUTPUT_DIR, "pico-preview-head-hair.png"),
-    (2.35, 0.32, 6.45),
-    show_preview=True,
-    head_identity="procedural_hair",
-)
-render(
-    os.path.join(OUTPUT_DIR, "pico-preview-head-comb.png"),
+    os.path.join(OUTPUT_DIR, "pico-preview-head-raised-crown.png"),
     (2.35, 0.32, 6.45),
     show_preview=True,
-    head_identity="procedural_comb",
+    head_identity="head_raised_crown",
+)
+render(
+    os.path.join(OUTPUT_DIR, "pico-preview-head-long-neon-tail.png"),
+    (2.35, 0.32, 6.45),
+    show_preview=True,
+    head_identity="head_long_neon_tail",
 )
 select_head_identity("standard_antenna")
 force_head_identity_for_offline_render("standard_antenna")
@@ -1772,21 +1835,22 @@ bpy.ops.wm.save_as_mainfile(filepath=BLEND_PATH)
 
 # Export only the authored model. Cameras, lights and preview face remain in
 # the .blend for inspection but cannot leak into the normative candidate.
-for obj in scene.objects:
-    obj.select_set(False)
-for obj in MODEL.objects:
-    obj.select_set(True)
-bpy.context.view_layer.objects.active = ROOT
-bpy.ops.export_scene.gltf(
-    filepath=GLB_PATH,
-    export_format="GLB",
-    use_selection=True,
-    # The authoring coordinates already follow the Character contract's Y-up
-    # convention. Blender's normal Z-up to Y-up conversion would rotate them a
-    # second time and make the exported character Z-up again.
-    export_yup=False,
-    export_apply=True,
-)
+if not headwear_only:
+    for obj in scene.objects:
+        obj.select_set(False)
+    for obj in MODEL.objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = ROOT
+    bpy.ops.export_scene.gltf(
+        filepath=GLB_PATH,
+        export_format="GLB",
+        use_selection=True,
+        # The authoring coordinates already follow the Character contract's Y-up
+        # convention. Blender's normal Z-up to Y-up conversion would rotate them a
+        # second time and make the exported character Z-up again.
+        export_yup=False,
+        export_apply=True,
+    )
 
 print(f"PICO_BLEND={BLEND_PATH}")
 print(f"PICO_GLB={GLB_PATH}")
