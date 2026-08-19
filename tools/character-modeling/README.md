@@ -288,6 +288,37 @@ then **turns them**: the shoulder must move the arm and the hand, the arm
 joint must move the hand and leave the arm where it is. A mount that does not
 drive its children is decoration.
 
+### The arm, shortened and rounded into its joint (ninth review)
+
+Two changes, both to `Shell.Arm.<side>`:
+
+**Shorter.** The measured path from the concept board ran 0.491 over its two
+segments, which read long against the torso once the arm was one continuous
+piece. Both joints are pulled in along the same line from the shoulder, by a
+seventh, so the arm keeps the board's measured angles and only loses length.
+The hand keeps its own size and follows the wrist in. The GLB envelope moves
+with it, from ±0.792 back to ±0.740.
+
+**Round at the top.** The upper end was a tube cut off against the torso, with
+a visible rim where it met the shoulder ball. Over the first fifth of the
+curve the radius now follows a circle instead of a taper, so the arm closes as
+a dome that turns over into the joint. The widest point of the upper arm
+therefore sits *below* the shoulder, where an arm is widest, rather than at
+its very top; the shoulder radius dropped from 0.086 to 0.082 with it.
+
+The dome closes the arm itself, so its start no longer has to be buried deep
+in the torso to hide a rim — but it still has to be seated far enough that the
+dome's foot is clearly inside rather than lying on the torso surface. At 0.014
+the two shells were coplanar along the upper edge and the renderer speckled the
+seam; 0.026 seats it.
+
+**A seam artefact that stayed.** Where the arm emerges from the torso the two
+shells meet at a shallow angle, and at close zoom that intersection curve
+renders speckled. It is not new — a render of the previous arm from the same
+camera shows the same band — and it is invisible at figure scale. Two smooth
+shells crossing tangentially do this; removing it means changing how the arm
+joins the body, not how the arm ends.
+
 ### One joint per digit, and a head that turns (eighth review)
 
 The hand was one closed shell, so a finger could not move without the palm.

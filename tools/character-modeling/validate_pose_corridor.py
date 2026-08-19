@@ -45,9 +45,9 @@ ROOT_DIR = os.path.dirname(os.path.dirname(HERE))
 # envelope is: a renderer reserves a frame in advance, and a pose that grows
 # past it crops silently.
 POSED_ENVELOPE = {
-    "x": (-1.05, 1.10),
+    "x": (-0.95, 1.06),
     "y": (-1.34, 0.64),
-    "z": (-0.80, 0.82),
+    "z": (-0.78, 0.80),
 }
 
 

@@ -1197,14 +1197,19 @@ def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
 
 def arm_shell(
     name, shoulder, elbow, wrist, radius_shoulder, radius_elbow, radius_wrist,
-    mat, zone, around=40, along=30,
+    mat, zone, around=40, along=36, shoulder_dome=0.20,
 ):
     """One continuous arm from the shoulder to the wrist.
 
     The concept board draws the arm as a single tapering piece, not as shells
     threaded onto a string of joint spheres. It bends through the elbow rather
-    than being hinged at it, and its shoulder end is a rounded cap that closes
-    against the torso.
+    than being hinged at it.
+
+    Its upper end runs *round* into the shoulder joint: over the first
+    `shoulder_dome` of the curve the radius follows a circle rather than a
+    taper, so the arm closes as a dome that meets the joint ball instead of a
+    tube cut off against the torso. The widest point of the upper arm therefore
+    sits below the shoulder, where an arm is widest, not at its very top.
     """
     shoulder = Vector(shoulder)
     elbow = Vector(elbow)
@@ -1235,9 +1240,13 @@ def arm_shell(
         else:
             local = (amount - 0.5) / 0.5
             radius = radius_elbow + (radius_wrist - radius_elbow) * local
-        # both ends close as domes rather than as cut tubes
-        if amount < 0.06:
-            radius *= math.sqrt(max(0.0, 1.0 - ((0.06 - amount) / 0.06) ** 2)) * 0.6 + 0.4
+        # The shoulder end is a dome: inside the first stretch the radius is
+        # the circle's, so the surface turns over into the joint instead of
+        # ending on a rim. Outside it the taper is untouched.
+        if amount < shoulder_dome:
+            local = 1.0 - amount / shoulder_dome
+            radius = radius_shoulder * math.sqrt(max(0.0, 1.0 - local * local))
+        # the wrist keeps its shallower cap, which the hand closes over
         if amount > 0.94:
             radius *= math.sqrt(max(0.0, 1.0 - ((amount - 0.94) / 0.06) ** 2)) * 0.5 + 0.5
         rings.append([
@@ -1406,16 +1415,22 @@ def make_arm(side):
     # rooted too low, which is why it read wrong however its parts were built.
     #
     # The shoulder sits on the torso surface at that height, not inside it.
+    #
+    # Shortened by a seventh on 2026-08-19: 0.491 along the two segments read
+    # long against the torso once the arm was one piece. The path keeps its
+    # measured angles -- both joints are pulled in along the same line from the
+    # shoulder -- so the arm reads shorter without leaving the board's pose.
+    # The hand keeps its own size and simply follows the wrist in.
     if side == "L":
         shoulder = Vector((-0.352, -0.450, 0.000))
-        elbow = Vector((-0.610, -0.629, 0.028))
-        wrist = Vector((-0.724, -0.755, 0.072))
-        palm = Vector((-0.724, -0.820, 0.088))
+        elbow = Vector((-0.574, -0.604, 0.024))
+        wrist = Vector((-0.672, -0.712, 0.062))
+        palm = Vector((-0.672, -0.777, 0.078))
     else:
         shoulder = Vector((0.352, -0.450, 0.000))
-        elbow = Vector((0.610, -0.629, 0.036))
-        wrist = Vector((0.724, -0.755, 0.072))
-        palm = Vector((0.724, -0.820, 0.088))
+        elbow = Vector((0.574, -0.604, 0.031))
+        wrist = Vector((0.672, -0.712, 0.062))
+        palm = Vector((0.672, -0.777, 0.078))
     # One continuous arm, as on the concept board: no shoulder, elbow or
     # wrist spheres threaded onto shell segments. The shoulder end is pushed
     # slightly into the torso so it closes against the body instead of
@@ -1443,11 +1458,16 @@ def make_arm(side):
     # The board draws a dark ball at the shoulder and one light shell running
     # from it. Its elbow band is deliberately not reproduced: a band where no
     # joint is would promise a joint the character does not have.
-    torso_seat = shoulder + (shoulder - elbow).normalized() * 0.030
+    # The dome closes the arm itself, so its start no longer has to be buried
+    # deep in the torso to hide a rim. It does have to be seated far enough
+    # that the dome's foot is clearly inside rather than lying on the torso
+    # surface: at 0.014 the two shells were coplanar along the upper edge and
+    # the renderer speckled the seam.
+    torso_seat = shoulder + (shoulder - elbow).normalized() * 0.026
     arm = arm_shell(
         f"Shell.Arm.{side}",
         torso_seat, elbow, wrist,
-        0.086, 0.066, 0.050,
+        0.082, 0.066, 0.050,
         SHELL, "shell",
     )
     parent_preserve_world(arm, shoulder_mount)
