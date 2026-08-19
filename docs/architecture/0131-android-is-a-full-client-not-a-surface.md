@@ -556,11 +556,33 @@ local-first product's most security-critical moment.
   a phone in use, unmeasured for a phone left alone - and the unmeasured
   case is exactly the one the desktop anchor exists for.
 
-  Outstanding: Samsung's own "put unused apps to sleep" toggle in Device
-  Care, which needs a person tapping in a settings UI. `force-stop` is the
-  harsher case and it is measured; the branded softer one is not. The probe
-  is left installed on the test phone so that step can be taken without
-  rebuilding anything.
+  **The manufacturer's own switch, measured 2026-08-19 after the user set
+  it: it does not throttle the cadence, it ends it.** Samsung's per-app
+  "Restricted" is not a hint - it sets the `RUN_ANY_IN_BACKGROUND` app-op to
+  `ignore` and moves the app from standby bucket 10 (`ACTIVE`) straight to
+  45 (`RESTRICTED`). Within about thirty minutes Samsung's own freezer had
+  logged 304 attempts against the app, and `ActivityManager` killed the
+  foreground-service process: `Killing ... :reach (adj 905): empty`. That
+  adjacency and that reason say the foreground service was no longer
+  counted as running by then, which is Android's documented treatment of a
+  background-restricted app: its foreground services stop when it leaves
+  the foreground. Sixty minutes after the switch: no service, no process,
+  and **not one heartbeat** where the same job had been averaging one every
+  14.8 minutes.
+
+  The part that matters for ADR 0112 is what stays behind. Unlike
+  `force-stop`, which deletes the periodic job, the job here remains
+  registered and reports `waiting` - so nothing looks broken from the
+  outside while nothing at all is running. A person who tapped one switch
+  their phone actively recommends ("this app is using battery") has ended
+  the recovery alarm's cadence, and neither the phone nor the app has any
+  way to tell them that a scheduled check simply stopped happening.
+
+  With this, A4's four questions are all measured: the foreground service,
+  the interval, the alarm with and without the restricted permission, and
+  battery optimisation with two task-killers - Android's own force-stop and
+  the manufacturer's switch. No ADR 0112 claim for Android survives them
+  intact, which is the answer this gate existed to get.
 - **A5 - Ceremony parity (open, and measured 2026-08-19):** the ADR 0130
   verticals, in the same order, on Android.
 
