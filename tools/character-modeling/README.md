@@ -296,21 +296,18 @@ drive its children is decoration.
 The owner wrote out the arm and hand form, and with it settled two questions
 this work had been circling.
 
-**The elbow collar is back, as a marker.** An earlier pass left it out with
-"a band where no joint is promises a joint". The description says it belongs
-there as a technical marking of the bend zone, standing clear of the arm all
-round and never dividing it. So it exists now, and its geometry carries that
-reading: `bend_collar` takes the arm's own curve, its own frame and its own
-radius at the bend, and sits a ring at that radius plus a gap. Placed by hand
-it would be pierced first on the inside of the bend, where a curved shell leans
-towards it and nobody looks.
+**The elbow collar was built and then removed again**, both on the owner's
+call, within the same afternoon. It was built as a marker of the bend rather
+than a joint — `bend_collar` took the arm's own curve, frame and radius there
+and sat a ring at that radius plus a gap, which is what kept the inside of the
+bend clear where a hand-placed ring would have been pierced first. Seen on the
+figure it read as a hoop around the arm, and it is gone.
 
-The rule in `validate_head_variants.py` changed with it. It used to ban the
-string `Elbow` from every object name, which is a rule about spelling. It now
-says what it means: no object carries `pico_joint = "elbow"`, the collar owns
-nothing, the arm stays one object per side, and the collar keeps more than
-0.004 clearance from the arm all the way round. Measured: 0.0090 on both sides,
-zero triangle intersections.
+The rule in `validate_head_variants.py` outlived it, and is better for the
+detour. It used to ban the string `Elbow` from every object name, which is a
+rule about spelling. It now says what it means: no object carries
+`pico_joint = "elbow"`, no collar object exists, and the arm stays one shell
+per side. What the rule protects is the continuous arm, not a name.
 
 **The hand stays five objects**, on the owner's decision. "One closed mesh"
 cannot be posed per digit with this rig, and one joint per finger was itself an
@@ -324,12 +321,21 @@ rather than a knob, finger roots sunk into the palm so no end caps show through
 it, a longer middle finger with the outer two at 88 per cent, and the neutral
 pose with the back of the hand outward, the palm inward and the thumb forward.
 
-**The shoulder ball now sits deep in the torso**, with only its outer cap
-showing — 32 per cent of it outside, against 58 before — and it touches the
-arm's dome, so the two meet without a gap. It is pushed *in towards the body*,
-not back along the arm: along the arm it rides up out of the shoulder whenever
-the limb's angle changes, which is exactly what happened when it was first
-tried that way.
+**The shoulders sit lower on the torso** and the ball sits deep in it, with
+only its outer cap showing. Lowering the shoulder from y −0.450 to −0.492 moved
+*only* the shoulder; the elbow and wrist stay on the reference's arm table, so
+the limb hangs a little steeper instead of sliding down as a whole. That turned
+out to fit the table better, not worse: the outer edge is now within 0.027 at
+every row, against 0.044 before.
+
+The ball is pushed *in towards the body*, not back along the arm — along the
+arm it rides up out of the shoulder whenever the limb's angle changes, which is
+what happened when it was first tried that way. How deep took two goes.
+Measuring only "outside the torso" said 32 per cent, but the arm covers much of
+that: counting the ball's surface that is outside the torso **and** outside the
+arm gave 7 per cent, which is not a cap any more. At 0.026 inward it is 18 per
+cent genuinely visible, and it still touches the arm's dome, so the two meet
+without a gap.
 
 The wrist ball the description mentions is deliberately left for later, on the
 owner's call.
@@ -347,16 +353,18 @@ radius at each height turns those into a centreline, and the joints sit on it:
 
 | y | reference outer | before | after |
 |---:|---:|---:|---:|
-| −0.438 | −0.430 | −0.479 | −0.474 |
-| −0.492 | −0.510 | −0.539 | −0.530 |
-| −0.546 | −0.560 | −0.589 | −0.578 |
-| −0.653 | −0.650 | −0.633 | **−0.650** |
+| −0.438 | −0.430 | −0.479 | −0.457 |
+| −0.492 | −0.510 | −0.539 | −0.519 |
+| −0.546 | −0.560 | −0.589 | −0.577 |
+| −0.653 | −0.650 | −0.633 | **−0.653** |
 | −0.761 | −0.690 | −0.664 | −0.688 |
 | −0.868 | −0.710 | *no arm* | −0.722 |
 
-Lowest point −0.937 against the reference's −0.949. Whole-figure silhouette
-coverage went from 89.6 to 91.7 per cent; the core is unchanged at 94.6, which
-is right, because the core measurement excludes arms.
+After the shoulders were lowered the outer edge sits within 0.027 at every row
+and within 0.017 at five of six. Lowest point −0.937 against the reference's
+−0.949. Whole-figure silhouette coverage went from 89.6 to 91.7 per cent; the
+core is 94.7, essentially unchanged, which is right — the core measurement
+excludes arms.
 
 The table's *inner* edges are not used. Between −0.487 and −0.702 the reference
 merges arm and torso — its own torso table says so — and the inner edge there

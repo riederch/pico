@@ -393,26 +393,16 @@ assert sorted(joints) == sorted(expected_joints), sorted(joints)
 assert not any(
     obj.get("pico_joint") == "elbow" for obj in bpy.data.objects
 ), "an elbow joint survives"
+# The arm is one continuous shell per side, with nothing dividing it at the
+# bend. The collar that briefly marked the bend was removed again on the
+# owner's call; what the rule protects is the shell, not a name.
 for side in ("L", "R"):
-    collar = bpy.data.objects[f"Trim.ElbowCollar.{side}"]
-    assert collar.get("pico_joint") is None, side
-    assert not collar.children, f"the collar at {side} carries something"
+    assert not any(
+        obj.name.startswith(f"Trim.ElbowCollar.{side}") for obj in bpy.data.objects
+    ), side
     assert len([
         obj for obj in bpy.data.objects if obj.name.startswith(f"Shell.Arm.{side}")
     ]) == 1, f"the arm at {side} is split in two"
-    # And it stands clear of the arm all the way round, including on the inside
-    # of the bend, where a ring placed by hand would be pierced first.
-    arm = bpy.data.objects[f"Shell.Arm.{side}"]
-    arm_tree = BVHTree.FromPolygons(
-        [arm.matrix_world @ vertex.co for vertex in arm.data.vertices],
-        [tuple(polygon.vertices) for polygon in arm.data.polygons],
-    )
-    clearance = min(
-        arm_tree.find_nearest(collar.matrix_world @ vertex.co)[3]
-        for vertex in collar.data.vertices
-    )
-    assert clearance > 0.004, (side, clearance)
-    print(f"PICO_ELBOW_COLLAR side={side} clearance={clearance:.4f}")
 
 for side in ("L", "R"):
     shoulder_mount = joints[f"PICO_MOUNT_shoulder.{side}"]
