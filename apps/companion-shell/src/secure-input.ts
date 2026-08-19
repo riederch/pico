@@ -4,6 +4,16 @@ export interface PicoCompanionSecureInputPrompt {
   title: string;
   instruction: string;
   maximumLength: number;
+  /**
+   * ADR 0113 C2. What this field wanted, said when a value is refused.
+   *
+   * Required rather than optional, because the whole point is that a prompt
+   * cannot be silent: the window used to answer every refusal with "the value
+   * is not valid yet", and four defects found on 2026-08-19 hid behind that
+   * sentence. A fixed sentence per prompt also keeps the refusal from
+   * describing the *value*, which the page must never learn.
+   */
+  refusal: string;
   validate(value: string): boolean;
 }
 

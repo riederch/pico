@@ -569,10 +569,37 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
  * numbers are interpolated into the sentence for the same reason - prose that
  * disagrees with the rule is a third copy waiting to drift.
  */
+/**
+ * ADR 0113 C2. What the window says while a secret is being typed.
+ *
+ * The body used to end with "the value is not valid yet" for every prompt,
+ * which says *that* something is wrong and never *what*. Four defects found on
+ * 2026-08-19 were invisible because of it - a Recovery Card code that could
+ * not be typed at all, a founding line from a Home's second boot, and two
+ * rules copied out of the core - and in each of them the person did the right
+ * thing and watched a counter blink at them.
+ *
+ * The refusal is the prompt's own sentence, fixed before anything is typed.
+ * That is deliberate and it is the ADR 0113 boundary, not a shortcut: a
+ * refusal computed from the value would be the obvious next step and would
+ * carry a fact about the secret to a page that is not allowed to learn one.
+ * The page still receives a count and nothing else.
+ */
+export function picoCompanionSecureInputBody(
+  prompt: { instruction: string; refusal: string },
+  count: number,
+  invalid: boolean,
+): string {
+  const typed = `${count} character${count === 1 ? '' : 's'} entered`;
+  return `${prompt.instruction} ${typed}${invalid ? `. ${prompt.refusal}` : ''}. `
+    + 'The page receives neither keystrokes nor value.';
+}
+
 export function picoCompanionCardPinPrompt(purpose: 'choose' | 'enter' = 'choose'): {
   title: string;
   instruction: string;
   maximumLength: number;
+  refusal: string;
   validate(value: string): boolean;
 } {
   const minLength = 6;
@@ -592,6 +619,8 @@ export function picoCompanionCardPinPrompt(purpose: 'choose' | 'enter' = 'choose
         + 'Keep this PIN somewhere the card is not.'
       : 'Type the PIN you chose when this card was printed, then press Enter.',
     maximumLength: maxLength,
+    refusal: `A Card PIN is ${minLength}\u2013${maxLength} digits or lowercase letters, `
+      + 'and nothing else.',
     validate: (value: string) => pattern.test(value),
   };
 }
@@ -611,6 +640,7 @@ export function picoCompanionRecoveryCardEntryPrompt(prefix: string): {
   title: string;
   instruction: string;
   maximumLength: number;
+  refusal: string;
   validate(value: string): boolean;
 } {
   return {
@@ -618,6 +648,8 @@ export function picoCompanionRecoveryCardEntryPrompt(prefix: string): {
     instruction: 'Use a USB scanner, or type the code printed under the QR block, then '
       + 'press Enter.',
     maximumLength: 8_192,
+    refusal: `A Recovery Card code begins with ${prefix} - check that you copied the whole `
+      + 'line under the QR block.',
     validate: (value: string) => value.startsWith(prefix) && value.length > prefix.length,
   };
 }

@@ -50,6 +50,7 @@ import {
   picoCompanionCardPinPrompt,
   picoCompanionEnrolmentValidUntil,
   picoCompanionRecoveryCardEntryPrompt,
+  picoCompanionSecureInputBody,
   picoCompanionFirstRunFailureBody,
   picoCompanionHostRotationLine,
   picoCompanionHostRotationReasonLines,
@@ -792,6 +793,7 @@ function registerIpc(): void {
         instruction: 'Type what this machine asks Pico to prove itself with, then press '
           + 'Enter. Your Home seals it; this device keeps no copy.',
         maximumLength: 4_096,
+        refusal: 'A credential cannot be empty.',
         validate: (value: string) => value.length > 0,
       });
       await runtime.widenModelProvider({
@@ -1375,6 +1377,7 @@ function registerIpc(): void {
           instruction: 'Paste the identity fingerprint the other person reads out of their '
             + 'own Pico. It is public, it names nobody, and they do not have to agree to '
             + 'anything - a membership is given rather than accepted.',
+          refusal: 'An identity fingerprint is 64 hexadecimal characters.',
           maximumLength: 128,
           validate: (value: string) => /^[0-9a-f]{64}$/u.test(value.trim()),
         });
@@ -1689,6 +1692,7 @@ async function runFirstRun(source: PicoCompanionFirstRunScanSource): Promise<voi
       ? 'This passphrase protects the keys Pico is about to create on this device. It is not the Card PIN.'
       : 'Type the Vault passphrase you chose when this device started its setup, then press Enter.',
     maximumLength: 1_024,
+    refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   });
 
@@ -1752,6 +1756,7 @@ async function captureSecret(prompt: {
   title: string;
   instruction: string;
   maximumLength: number;
+  refusal: string;
   validate: (value: string) => boolean;
   /** ADR 0130 E3. A code that stays visible while this is answered. */
   code?: PicoCompanionDeviceCode;
@@ -1788,6 +1793,7 @@ async function runFounding(): Promise<void> {
     instruction: 'Type the address it is reachable at, then press Enter. '
       + 'For a Home on this machine that is usually http://127.0.0.1:3100.',
     maximumLength: 2_048,
+    refusal: 'An address starts with http:// or https:// and has no spaces in it.',
     validate: (value: string) => /^https?:\/\/\S+$/u.test(value.trim()),
   });
   const announcementLine = await captureSecret({
@@ -1796,6 +1802,7 @@ async function runFounding(): Promise<void> {
       + 'your Home to. Pico checks it against the Home before using it, which is why it '
       + 'comes from your own log rather than from the Home itself.',
     maximumLength: 8_192,
+    refusal: 'That line is the whole JSON object your Home printed, braces included.',
     /**
      * The transport's shape, not the protocol's. This used to check for the
      * move-in code's field name, which made the parser's own distinction
@@ -1816,6 +1823,7 @@ async function runFounding(): Promise<void> {
     instruction: 'It protects the keys this device is about to make. Nothing can recover '
       + 'them without it, and Pico never sends it anywhere.',
     maximumLength: 1_024,
+    refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   });
 
@@ -1902,6 +1910,8 @@ async function readDeviceCode(
     title: line.title,
     instruction: `${line.body} Paste it, or use a scanner, then press Enter.`,
     maximumLength: 8_192,
+    refusal: `That code begins with ${prefix} - it is the one the other device is showing `
+      + 'you now, not one from an earlier step.',
     validate: (value: string) => value.startsWith(prefix),
     ...(showing === undefined ? {} : { code: showing }),
   });
@@ -2029,6 +2039,7 @@ async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promi
     instruction: 'It protects the keys this device is about to make for itself. Your other '
       + 'device keeps its own; nothing can recover either without its passphrase.',
     maximumLength: 1_024,
+    refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   });
 
@@ -2143,6 +2154,7 @@ async function runRecoveryCardIssuance(
     title: 'Enter the Vault passphrase',
     instruction: 'Type this device\'s Vault passphrase, then press Enter. It is not the Recovery Phrase or Card PIN.',
     maximumLength: 1_024,
+    refusal: 'A passphrase cannot be empty.',
     validate: (value: string) => value.length > 0,
   };
   const passphrase = await collectPicoCompanionSecureInput({
@@ -2250,7 +2262,12 @@ const approvalDecisionPort: PicoCompanionApprovalDecisionPort = {
 };
 
 async function presentSecureInput(
-  prompt: { title: string; instruction: string; code?: PicoCompanionDeviceCode },
+  prompt: {
+    title: string;
+    instruction: string;
+    refusal: string;
+    code?: PicoCompanionDeviceCode;
+  },
   count: number,
   invalid: boolean,
 ): Promise<void> {
@@ -2260,7 +2277,7 @@ async function presentSecureInput(
     symbol: invalid ? '×' : '!',
     decision: 'none',
     title: prompt.title,
-    body: `${prompt.instruction} ${count} character${count === 1 ? '' : 's'} entered${invalid ? '; the value is not valid yet' : ''}. The page receives neither keystrokes nor value.`,
+    body: picoCompanionSecureInputBody(prompt, count, invalid),
     // ADR 0130 E3. Kept on screen while the answer is typed: the code this
     // device is showing is what the other device is answering.
     ...(prompt.code === undefined ? {} : { code: prompt.code }),

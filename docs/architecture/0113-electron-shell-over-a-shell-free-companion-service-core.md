@@ -2,6 +2,27 @@
 
 ## Status
 
+Status note, 2026-08-19: **a refused secret says what the field wanted now.**
+C2's secure input answered every rejected value with the same sentence -
+"the value is not valid yet" - and a character count. It said *that*
+something was wrong and never *what*, for every prompt in the product.
+
+That silence was not a small thing. Four defects found the same day hid
+behind it: a Recovery Card code that could not be typed at all because the
+window demanded a prefix no card carries (ADR 0112), a founding line from a
+Home's second boot whose refusal the core had words for (ADR 0130 E2), and
+two rules copied out of the core that could drift apart from it. In each
+case a person did exactly the right thing and watched a counter blink.
+
+`refusal` is now a **required** field on `PicoCompanionSecureInputPrompt`, so
+a prompt cannot be silent and the type system names every one that tries -
+it named ten when the field was added. The sentence is the prompt's own,
+fixed before anything is typed, and that is the C2 boundary rather than a
+shortcut: a refusal computed from the value would be the obvious next step
+and would carry a fact about the secret to a page that must never learn one.
+A test plants exactly that and fails.
+
+
 Status note, 2026-08-19: **currency step 43.4.0 to 43.4.1**, the same shape
 as the 2026-08-12 step: the patch shipped upstream, the check cannot notice a
 release and can only expire, so the pin moves by hand and the evidence file
