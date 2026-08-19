@@ -153,27 +153,39 @@ kann.
 Ein bis zwei Bloecke. **Fable 5 + xhigh** - der Umzug eines Stores mit
 Custody- und Datenschutzfolgen.
 
-## Phase 4 - Android-Fundament
+## Phase 4 - Android-Fundament (durchgelaufen am 2026-08-19)
 
-Startet nach E3. Alles hier faellt unter ADR 0131.
+Startet nach E3. Alles hier faellt unter ADR 0131. Zahlen und Begruendungen
+stehen in ADR 0131s Gate-Text; hier nur, was jetzt gilt.
 
-- **A1 Runtime und Primitive** - der JavaScript-Runtime, der den shellfreien
-  Kern traegt, plus ein gepruefter libsodium-Build; die vorhandenen
-  Fixture-Suiten muessen on-device gruen sein. *Opus 5 + xhigh.*
-- **A2 Prozess- und Autoritaetsgrenze** - eigener Custody-Prozess ueber einen
-  app-privaten AF_UNIX-Socket, oder eine In-Process-Naht ueber dieselben
-  Request-Familien. Die ADR-0099-Bindung ueberlebt in beiden Faellen.
-  *Fable 5 + xhigh.*
-- **A3 Keystore-Tranche** - Android Keystore und BiometricPrompt als
-  ADR-0081-P3-Aequivalent, kanonisches Keyfile-Format unveraendert.
-  *Opus 5 + xhigh.*
-- **A4 Erreichbarkeit gemessen** - Foreground Service, Pruefintervall,
-  Alarmlautstaerke mit und ohne die restringierte Full-Screen-Permission,
-  Battery-Optimization und mindestens ein Hersteller-Taskkiller, auf echter
-  Hardware. Vorher gilt keine ADR-0112-Zusage fuer Android. *Opus 5 + high.*
+- **A1 Runtime und Primitive - implementiert.** nodejs-mobile v18.20.4 traegt
+  den shellfreien Kern auf einem Galaxy A55: Founding-Bootstrap, kompletter
+  ADR-0099-Loop ueber eine echte Prozessgrenze, und **937 Fixture-Tests gruen
+  auf dem Geraet**. Zwei Suiten bleiben benannt host-seitig (sie booten
+  sqlite-gestuetzte Server).
+- **A2 Prozess- und Autoritaetsgrenze - entschieden** (Nutzer, 2026-08-19):
+  **eigener Custody-Prozess**. nodejs-mobile haelt eine Node-Instanz pro
+  Prozess, Android haelt Prozesse pro App - die Teilung bildet also direkt ab.
+  Gemessener Preis: 1,639 ms pro Signatur-IPC auf dem Telefon.
+- **A3 Keystore-Tranche - analysiert auf gemessener Evidenz.** Schluessel
+  landen im TEE (zweifach bestaetigt: `getSecurityLevel()` *und* eine
+  signaturgeprueffte Attestationskette zu Googles CA), StrongBox gibt es auf
+  dieser Geraeteklasse nicht und ihr Fehlen ist ehrlich, biometrisch
+  gebundene Schluessel verweigern fail-closed. Die Umsetzung wartet auf eine
+  Android-Flaeche (Phase 5), und mit ihr das, was eine Sonde nicht faelschen
+  darf: gepinnte Wurzel, geparste Extension.
+- **A4 Erreichbarkeit gemessen.** Das Intervall ist ein Fenster, das nicht
+  eingehalten werden muss (15 min Periode mit 15 min Flex; Doze schiebt es bis
+  zum Aufwachen), einen Wanduhr-Anker gibt es nicht (`canScheduleExactAlarms`
+  ist per Default false), und `force-stop` **loescht** den persistierten Job.
+  Der Alarm degradiert erkennbar. Fazit: die ADR-0112-Kadenz haelt fuer ein
+  *benutztes* Telefon und faellt fuer ein liegengelassenes - was die
+  Verankerung der Garantie am Desktop bestaetigt. Offen ist nur noch Samsungs
+  eigener Device-Care-Schalter, der einen Menschen in einer Settings-UI
+  braucht.
 
-Ergebnis: eine App, die einen Vault haelt, sich als delegiertes Geraet an einem
-bestehenden Home anmeldet und den Alarm traegt - im Heimnetz.
+Ergebnis: der Kern laeuft auf dem Telefon und die Grenzen sind vermessen. Was
+fehlt, ist die Flaeche - also Phase 5.
 
 ## Phase 5 - Android-Ceremonies
 
@@ -181,6 +193,27 @@ bestehenden Home anmeldet und den Alarm traegt - im Heimnetz.
 Der shellfreie Kern traegt sie bereits; was hier entsteht, sind Flaeche und
 Adapter. Genau dafuer wurde die ADR-0113-Grenze bezahlt - wenn diese Phase teuer
 wird, ist die Grenze verletzt worden und das ist der Befund, nicht der Aufwand.
+
+**Am 2026-08-19 vorab vermessen, und die Grenze haelt.** E2, E3 und E4 sind
+zusammen ~1.500 Zeilen Kern, die A1 auf dem Telefon bereits ausgefuehrt hat.
+Was Android wirklich bauen muss, ist Plattformarbeit: Kamera- und
+Tipp-Erfassung der drei Codes, Praesentation, Secure Input, A3-Bindung. Die
+Zeremonie-Logik ist **nicht** der Preis.
+
+Dabei fiel auf, was die Grenze *doch* ueberschritten hatte, und es wurde
+zurueckgeholt: die Paarung "welcher Schritt erwartet welches Praefix" (sechs
+Literale in `main.ts`, jetzt `@pico/companion/enrolment-steps` samt
+`wire:check`) und die **Schrittfolge** beider fragender Geraete (jetzt
+`runPicoCompanionAskingDeviceExchange`, das die Regel haelt: die Acceptance
+wird gezeigt, *bevor* auf `confirm` gewartet wird). Der Shell bleiben drei
+Verben - Code zeigen, Code lesen, sagen wo im Walk die Person steht.
+
+Praktischer Hinweis fuer den, der Phase 5 anfaengt: auf dieser Maschine gibt
+es **kein Gradle und kein AndroidX im Cache**. Die beiden bisherigen APKs
+wurden von Hand gebaut (aapt2 + d8 + apksigner, siehe
+`tools/android-runtime-probe/apk/`). Eine Compose-Oberfläche heisst erst
+einmal Gradle-Wrapper und hunderte MB Artefakte neben PhpStorm und Blender auf
+16 GB - das ist eine Entscheidung, keine Nebensache.
 
 ## Phase 6 - die erste echte Nuetzlichkeit
 
