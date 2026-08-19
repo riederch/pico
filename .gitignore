@@ -23,3 +23,8 @@ yarn.lock
 # is not. It accumulates per-session one-offs, machine-specific absolute paths
 # and reads scoped to other repositories on this machine.
 /.claude/settings.local.json
+
+# Staged deploys for the Android lab (tools/android-runtime-probe). They must
+# live inside the workspace: a `pnpm deploy` target outside it makes pnpm walk
+# up to `/` looking for a workspace root and then try to write there.
+.pico-stage/

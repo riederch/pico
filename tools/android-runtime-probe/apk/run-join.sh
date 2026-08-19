@@ -56,18 +56,26 @@ zip -qX base.apk lib/arm64-v8a/*.so
   --out pico-a1-probe.apk aligned.apk
 
 echo "== staging the shell-free core"
-stage="$work/probe-stage"
+# Inside the workspace, deliberately: a deploy target outside it makes pnpm
+# walk up to `/` for a workspace root and fail writing there.
+stage="$repo/.pico-stage/probe-stage"
+mkdir -p "$repo/.pico-stage"
 rm -rf "$stage"
-(cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion deploy --prod --frozen-lockfile "$stage")
+# The store this repository installs from, named explicitly: without it pnpm
+# resolves a cache of its own and has been seen to land somewhere unwritable.
+(cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
+  deploy --prod --frozen-lockfile "$stage")
 cp "$here/join.mjs" "$here/daemon.mjs" "$here/preload.cjs" "$stage/"
-tar -C "$work" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
+tar -C "$repo/.pico-stage" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
 
 adb install -r "$work/pico-a1-probe.apk"
 adb shell pm grant "$pkg" android.permission.POST_NOTIFICATIONS 2>/dev/null || true
 adb push "$work/probe-stage.tar" /data/local/tmp/probe-stage.tar > /dev/null
 # A join starts from a device that holds nothing: the offer's key bootstrap
 # refuses a vault that already has keyfiles, which is the rule, not a nuisance.
-adb shell "run-as $pkg sh -c 'cd files && rm -rf stage vault fdata fbackup ui.sock profile.json join.log daemon.log && /system/bin/tar -xf /data/local/tmp/probe-stage.tar && mv probe-stage stage'"
+# `files` does not exist until the app has run once, and a fresh install has
+# not. Making it here keeps the first join from needing a rehearsal.
+adb shell "run-as $pkg sh -c 'mkdir -p files && cd files && rm -rf stage vault fdata fbackup ui.sock profile.json join.log daemon.log && /system/bin/tar -xf /data/local/tmp/probe-stage.tar && mv probe-stage stage'"
 adb shell am start -n "$pkg/.JoinActivity" > /dev/null
 echo
 echo "The phone is showing the first step. Type a passphrase there; it will make"

@@ -50,11 +50,17 @@ zip -qX base.apk lib/arm64-v8a/*.so
   --out pico-a1-probe.apk aligned.apk
 
 echo "== staging the shell-free core"
-stage="$work/probe-stage"
+# Inside the workspace, deliberately: a deploy target outside it makes pnpm
+# walk up to `/` for a workspace root and fail writing there.
+stage="$repo/.pico-stage/probe-stage"
+mkdir -p "$repo/.pico-stage"
 rm -rf "$stage"
-(cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion deploy --prod --frozen-lockfile "$stage")
+# The store this repository installs from, named explicitly: without it pnpm
+# resolves a cache of its own and has been seen to land somewhere unwritable.
+(cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion --store-dir /tmp/pico-pnpm-store \
+  deploy --prod --frozen-lockfile "$stage")
 cp "$here/daemon.mjs" "$here/client.mjs" "$here/preload.cjs" "$stage/"
-tar -C "$work" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
+tar -C "$repo/.pico-stage" -c --hard-dereference -f "$work/probe-stage.tar" probe-stage
 
 echo "== device"
 [ "$(adb devices | sed -n '2p' | awk '{print $2}')" = "device" ] || die "no adb device"

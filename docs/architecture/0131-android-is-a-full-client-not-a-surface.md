@@ -682,9 +682,40 @@ local-first product's most security-critical moment.
   passphrase is typed into the same process. That is not the desktop's rule
   relaxed - it is the rule with nothing to separate.
 
-  Unrun on the device: it needs a sponsor - a Home reachable from the phone
-  and a desktop companion signed in to it - and the phone left the USB bus
-  before that lab existed. `run-join.sh` is one command when it returns.
+  **It ran** (2026-08-19, Galaxy A55). The sponsor is
+  `tools/android-runtime-probe/lab/`: a headless Home founded on the laptop
+  with the Foundation API on loopback and only the Link intake published,
+  plus the device that founded it acting as the granting device. On the
+  phone: both processes came up, the core announced its socket, the surface
+  asked for a passphrase in the words the contract gives it, and **this
+  phone made its own device keys through its own custody daemon and showed
+  an offer code** - a real ADR 0130 E3 step, on Android, through the same
+  core the desktop runs. The phone left the USB bus before the grant could
+  be carried back, so the second half of the walk is still unwitnessed;
+  `finish-join.sh` resumes it without founding a second Home.
+
+  Two findings came out of the lab that no amount of reading would have
+  produced.
+
+  **Android 16 says nodejs-mobile is not 16 KB-page compatible.** A system
+  dialog covers the app on first launch and names all three libraries -
+  `libnode.so`, `libc++_shared.so` and this project's own JNI shim - as
+  having mismatched LOAD segments. This phone uses 4 KB pages, so it runs;
+  devices that use 16 KB pages will not load them at all. The shim is a
+  linker flag away (`-Wl,-z,max-page-size=16384`); `libnode.so` comes from
+  nodejs-mobile's release and would have to be rebuilt. That is a shipping
+  constraint for A1's runtime choice, found on the first launch of the first
+  surface.
+
+  **The phone could not reach the laptop, and the reason was not a
+  firewall.** It had no default route at all - two on-link subnets and
+  nothing else - so the laptop's wifi address was unroutable from it, and
+  the laptop's second interface, despite sharing the phone's /24, sat on a
+  different segment using the same range. The lab therefore bridges the
+  intake over `adb reverse` and says so in its own output: on Android
+  loopback is reachable by every app on the device, which is fine for a lab
+  and wrong for a deployment. A deployment publishes the intake on a LAN
+  both devices are actually on.
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on
