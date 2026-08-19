@@ -2,6 +2,25 @@
 
 ## Status
 
+Status note, 2026-08-19 (second): **and so does a refused action.** The
+window put `error.message` into its status lines unchanged, so pressing a
+second button while the first was working produced
+`companion_operation_in_progress` on screen, beside the button. The comment
+over that code said each refusal "names something to do next", which is true
+of the vocabulary and not of the sentence a person needs.
+
+The contract now turns a refusal into one of three shapes, because the
+refusals are three kinds of event. An operational one - busy, not started
+yet, an approval already waiting - is a state to wait out or act on, and gets
+a sentence. A person's own mistake, of which `recovery_pin_mismatch` is the
+only one, gets a sentence about doing it again with the word "defect"
+nowhere near it. And an `invalid_*` refusal means this window sent the
+boundary something it disallows, which is a defect in Pico rather than
+anything the person did: it says so, and keeps the word, because a report
+needs it. Anything else - including the Home's own vocabulary, which this
+file does not own - keeps the call site's sentence and carries the word
+after it.
+
 Status note, 2026-08-19: **a refused secret says what the field wanted now.**
 C2's secure input answered every rejected value with the same sentence -
 "the value is not valid yet" - and a character count. It said *that*

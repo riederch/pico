@@ -6,6 +6,7 @@ import {
   picoCompanionOwnMachineUndeclared,
   picoCompanionFloorAssurance,
   picoCompanionPresentationTakesTheWindow,
+  picoCompanionRefusalLine,
   picoCompanionRelayRevocationLine,
   picoCompanionDeviceAuthorityEndedLine,
   picoCompanionDeviceAuthorityRenewedLine,
@@ -1139,10 +1140,19 @@ relayClaim.addEventListener('click', () => {
     });
 });
 
+/**
+ * ADR 0113 C2. The window's own word turned into the person's.
+ *
+ * This used to print `error.message` unchanged, which put refusals like
+ * `companion_operation_in_progress` into a status line beside a button
+ * somebody had just pressed. The contract owns the sentences now; here the
+ * only job left is unwrapping the error.
+ */
 function refusalText(error: unknown, fallback: string): string {
-  return error instanceof Error
-    ? error.message.replace(/^Error: /u, '')
-    : fallback;
+  return picoCompanionRefusalLine(
+    error instanceof Error ? error.message.replace(/^Error: /u, '') : '',
+    fallback,
+  );
 }
 
 /**

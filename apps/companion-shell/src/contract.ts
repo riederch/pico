@@ -585,6 +585,61 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
  * carry a fact about the secret to a page that is not allowed to learn one.
  * The page still receives a count and nothing else.
  */
+/**
+ * ADR 0113 C2. A refusal, as a person can read it.
+ *
+ * The window used to put `error.message` into a status line unchanged, so
+ * pressing a second button while the first was working produced
+ * `companion_operation_in_progress` on screen. The comment above that code
+ * said each refusal "names something to do next", which is true of the
+ * vocabulary and not true of the sentence a person needs.
+ *
+ * Three shapes, because the refusals are three different kinds of event:
+ *
+ *  - an **operational** one is a state the person can wait out or act on,
+ *    and gets a sentence;
+ *  - **their own** mistake gets a sentence that says how to do it again,
+ *    without the word "defect" anywhere near it;
+ *  - an **`invalid_*`** refusal means this window sent the boundary
+ *    something it disallows. That is a defect in Pico rather than anything
+ *    a person did, and saying so is the difference between "you typed it
+ *    wrong" and "report this" - so the word stays in the sentence, because
+ *    a report needs it.
+ *
+ * Anything else keeps the caller's own sentence and carries the word after
+ * it. Refusals travel from the Home too, in a vocabulary this file does not
+ * own, and the call site is the thing that knows what was being attempted.
+ */
+export function picoCompanionRefusalLine(message: string, fallback: string): string {
+  if (message === '') {
+    return fallback;
+  }
+  const spoken: Record<string, string> = {
+    companion_operation_in_progress:
+      'Pico is already doing something for you. Wait for it to finish, then try again.',
+    companion_approval_already_pending:
+      'An approval is already waiting for you. Answer that one first.',
+    companion_service_unavailable:
+      'Pico is not running yet on this device. It starts with the window; give it a moment.',
+    companion_window_unavailable:
+      'This window closed before Pico could ask you. Open it and start again.',
+    no_presence_session:
+      'This device is not connected to your Home right now, so nothing was sent.',
+    recovery_pin_mismatch:
+      'The two PINs were not the same. Nothing was printed - choose the PIN again.',
+    untrusted_companion_ipc_sender:
+      'Pico refused a request that did not come from this window, and did nothing.',
+  };
+  if (spoken[message] !== undefined) {
+    return spoken[message];
+  }
+  if (message.startsWith('invalid_')) {
+    return `Pico refused what this window sent (${message}). That is a defect in Pico and `
+      + 'not something you did; nothing was changed.';
+  }
+  return `${fallback} (${message})`;
+}
+
 export function picoCompanionSecureInputBody(
   prompt: { instruction: string; refusal: string },
   count: number,
