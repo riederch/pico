@@ -657,6 +657,34 @@ local-first product's most security-critical moment.
   of them a package naming its own schema, which is exactly right - so
   inventions stay the business of tests that build a real value and require
   the surface to accept it.
+
+  **The first surface exists** (`tools/android-runtime-probe/apk/`,
+  `JoinActivity` + `join.mjs`): this phone asking a Home to let it in, in the
+  decided two-process shape - custody in `:custody`, the shell-free core and
+  the surface in the main process. Built by hand for the same reason the
+  probes were: this machine has no Gradle and no AndroidX, and a Compose
+  build would start with a wrapper, hundreds of megabytes and a daemon beside
+  the work already running. **Typed path only, no camera** - which is why the
+  desktop's typed path had to be repaired first (ADR 0112, the same day).
+
+  The shell side is short, and that is the measurement rather than the
+  aesthetic: `join.mjs` owns three verbs and no ceremony, because
+  `runPicoCompanionAskingDeviceExchange` owns the walk. The three verbs
+  travel over an **app-private AF_UNIX socket, not a localhost port** - on
+  Android every app can reach 127.0.0.1, and this conversation carries a
+  ceremony. The approval is a real question with the daemon's own ADR 0106
+  statement on screen and a tap for an answer; answering it in code would
+  have kept the ceremony working and removed the only thing it is for.
+
+  One difference from the desktop is named rather than left to be discovered:
+  ADR 0113 C2 keeps secrets out of the renderer because a renderer is a
+  second, less trusted context. Here the Activity *is* the app, so the
+  passphrase is typed into the same process. That is not the desktop's rule
+  relaxed - it is the rule with nothing to separate.
+
+  Unrun on the device: it needs a sponsor - a Home reachable from the phone
+  and a desktop companion signed in to it - and the phone left the USB bus
+  before that lab existed. `run-join.sh` is one command when it returns.
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

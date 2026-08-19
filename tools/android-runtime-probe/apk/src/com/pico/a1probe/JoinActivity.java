@@ -1,0 +1,264 @@
+package com.pico.a1probe;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.net.LocalSocket;
+import android.net.LocalSocketAddress;
+import android.os.Bundle;
+import android.text.InputType;
+import android.util.TypedValue;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
+
+/**
+ * ADR 0131 A5, first vertical - this phone asking a Home to let it in.
+ *
+ * Deliberately plain: no Gradle, no AndroidX, no layout resources, no camera.
+ * Every view is built in code so the app assembles with build-tools and the
+ * NDK alone, which is what this machine has. What that costs is the camera
+ * path; what it buys is that the seam being proven here - shell-free core
+ * under an embedded runtime, driving a real surface - is not tangled up with
+ * a build system nobody has decided on yet.
+ *
+ * The three verbs arrive over an app-private AF_UNIX socket rather than a
+ * localhost port, because on Android every app can reach 127.0.0.1 and this
+ * conversation carries a ceremony.
+ *
+ * One difference from the desktop worth naming rather than discovering: ADR
+ * 0113 C2 keeps secrets out of the renderer because a renderer is a second,
+ * less trusted context. Here there is no second context - the Activity *is*
+ * the app - so the passphrase is typed into this process. That is not the
+ * desktop rule relaxed; it is the rule having nothing to separate.
+ */
+public final class JoinActivity extends Activity {
+  private TextView title;
+  private TextView body;
+  private TextView code;
+  private EditText answer;
+  private Button send;
+  private TextView status;
+
+  private LocalSocket socket;
+  private OutputStream out;
+
+  @Override protected void onCreate(Bundle savedInstanceState) {
+    super.onCreate(savedInstanceState);
+    // Custody first, in its own process (ADR 0131 A2), then this process's
+    // own Node instance running the shell side of the ceremony.
+    startForegroundService(new Intent(this, CustodyService.class));
+    setContentView(buildView());
+    NodeRuntime.runScript(
+      new File(getFilesDir(), "stage/join.mjs").getAbsolutePath(),
+      new File(getFilesDir(), "join.log").getAbsolutePath());
+    new Thread(this::connect, "pico-ui-bridge").start();
+  }
+
+  private View buildView() {
+    LinearLayout column = new LinearLayout(this);
+    column.setOrientation(LinearLayout.VERTICAL);
+    column.setPadding(48, 96, 48, 48);
+    column.setBackgroundColor(Color.parseColor("#0d1117"));
+
+    title = text(column, 22, Color.parseColor("#e6edf3"), Typeface.DEFAULT_BOLD);
+    title.setText("Add this phone to your Home");
+    body = text(column, 15, Color.parseColor("#9aa7b4"), Typeface.DEFAULT);
+    body.setText("Your other device grants this one. Nothing is sent until you say so.");
+
+    code = text(column, 13, Color.parseColor("#7ee787"), Typeface.MONOSPACE);
+    code.setTextIsSelectable(true);
+    code.setVisibility(View.GONE);
+
+    answer = new EditText(this);
+    answer.setTextColor(Color.parseColor("#e6edf3"));
+    answer.setHint("");
+    answer.setVisibility(View.GONE);
+    column.addView(answer, wide());
+
+    send = new Button(this);
+    send.setText("Continue");
+    send.setVisibility(View.GONE);
+    send.setOnClickListener(view -> submit());
+    column.addView(send, wide());
+
+    status = text(column, 13, Color.parseColor("#8b949e"), Typeface.DEFAULT);
+    status.setText("Starting Pico on this device...");
+
+    ScrollView scroller = new ScrollView(this);
+    scroller.addView(column);
+    return scroller;
+  }
+
+  private TextView text(LinearLayout parent, int size, int colour, Typeface face) {
+    TextView view = new TextView(this);
+    view.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
+    view.setTextColor(colour);
+    view.setTypeface(face);
+    view.setPadding(0, 24, 0, 0);
+    parent.addView(view, wide());
+    return view;
+  }
+
+  private static LinearLayout.LayoutParams wide() {
+    return new LinearLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+  }
+
+  /** The runtime starts when the app does; the socket appears when it is ready. */
+  private void connect() {
+    File path = new File(getFilesDir(), "ui.sock");
+    for (int attempt = 0; attempt < 120; attempt++) {
+      try {
+        LocalSocket candidate = new LocalSocket();
+        candidate.connect(new LocalSocketAddress(
+          path.getAbsolutePath(), LocalSocketAddress.Namespace.FILESYSTEM));
+        socket = candidate;
+        out = candidate.getOutputStream();
+        write(new JSONObject().put("v", "begin"));
+        listen();
+        return;
+      } catch (Throwable retry) {
+        try { Thread.sleep(500); } catch (InterruptedException stop) { return; }
+      }
+    }
+    runOnUiThread(() -> status.setText("Pico did not start on this device."));
+  }
+
+  private void listen() throws Exception {
+    BufferedReader reader = new BufferedReader(
+      new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
+    String line;
+    while ((line = reader.readLine()) != null) {
+      JSONObject message = new JSONObject(line);
+      runOnUiThread(() -> render(message));
+    }
+  }
+
+  private void render(JSONObject message) {
+    String verb = message.optString("v");
+    String step = message.optString("step");
+    switch (verb) {
+      case "show":
+        title.setText(titleFor(step));
+        body.setText(bodyFor(step));
+        code.setText(message.optString("code"));
+        code.setVisibility(View.VISIBLE);
+        answer.setVisibility(View.GONE);
+        send.setVisibility(View.GONE);
+        status.setText("Hold this up to your other device, or type it there.");
+        break;
+      case "ask":
+        title.setText(titleFor(step));
+        body.setText(message.has("statement")
+          ? message.optString("statement") : bodyFor(step));
+        // The code being shown stays on screen while the answer is typed:
+        // the other device is reading it at that moment.
+        code.setVisibility(message.has("showing") ? View.VISIBLE : code.getVisibility());
+        answer.setInputType("secret".equals(message.optString("kind"))
+          ? InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD
+          : InputType.TYPE_CLASS_TEXT);
+        answer.setText("");
+        answer.setVisibility("approval".equals(message.optString("kind"))
+          ? View.GONE : View.VISIBLE);
+        send.setText("approval".equals(message.optString("kind")) ? "Yes, sign it" : "Continue");
+        send.setVisibility(View.VISIBLE);
+        send.setTag(message.optString("kind"));
+        status.setText("");
+        break;
+      case "say":
+        status.setText(bodyFor(step));
+        answer.setVisibility(View.GONE);
+        send.setVisibility(View.GONE);
+        break;
+      case "done":
+        title.setText("This phone is part of your Home");
+        body.setText("It has its own keys and its own Vault passphrase. "
+          + "Your other device keeps its own.");
+        code.setVisibility(View.GONE);
+        answer.setVisibility(View.GONE);
+        send.setVisibility(View.GONE);
+        status.setText("");
+        break;
+      case "failed":
+        title.setText("This phone was not added");
+        body.setText("Nothing was changed at your Home.");
+        status.setText(message.optString("reason"));
+        answer.setVisibility(View.GONE);
+        send.setVisibility(View.GONE);
+        break;
+      default:
+        break;
+    }
+  }
+
+  private void submit() {
+    String value = "approval".equals(String.valueOf(send.getTag()))
+      ? "yes" : answer.getText().toString();
+    answer.setText("");
+    answer.setVisibility(View.GONE);
+    send.setVisibility(View.GONE);
+    status.setText("Working...");
+    new Thread(() -> {
+      try {
+        write(new JSONObject().put("v", "value").put("text", value));
+      } catch (Throwable error) {
+        runOnUiThread(() -> status.setText("Pico stopped listening on this device."));
+      }
+    }, "pico-ui-send").start();
+  }
+
+  private void write(JSONObject message) throws Exception {
+    out.write((message.toString() + "\n").getBytes(StandardCharsets.UTF_8));
+    out.flush();
+  }
+
+  /**
+   * The words, in one place. They are the desktop's own step names (ADR 0130
+   * E3) said for a phone; a second vocabulary would be a second thing to keep
+   * true.
+   */
+  private static String titleFor(String step) {
+    switch (step) {
+      case "passphrase": return "Choose a Vault passphrase";
+      case "show_offer": return "Show this to your other device";
+      case "read_grant": return "Type what your other device shows";
+      case "show_acceptance": return "Show this back";
+      case "approval": return "Sign this?";
+      default: return "Add this phone to your Home";
+    }
+  }
+
+  private static String bodyFor(String step) {
+    switch (step) {
+      case "passphrase":
+        return "It protects the keys this phone is about to make for itself. "
+          + "Nothing can recover them without it, and it never leaves this phone.";
+      case "show_offer":
+        return "These are the keys this phone made. Your other device needs them "
+          + "to write the grant.";
+      case "read_grant":
+        return "Your other device is showing a grant. Type it here.";
+      case "show_acceptance":
+        return "Your other device reads this and carries it to your Home.";
+      case "waiting":
+        return "Waiting for your Home to say yes. Your other device is carrying "
+          + "the answer.";
+      case "joined":
+        return "Done.";
+      default:
+        return "";
+    }
+  }
+}

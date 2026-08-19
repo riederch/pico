@@ -23,6 +23,16 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
+    <!-- ADR 0131 A5, first vertical: this phone asking to be let in. Plain
+         views, typed path only - no camera, because that would mean a
+         dependency this machine has no build system for. -->
+    <activity android:name=".JoinActivity" android:exported="true"
+        android:label="Pico">
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+    </activity>
     <!-- ADR 0131 A4: the reachability contract. Its own process, because
          what is being measured is what the system does to a process that
          only wants to keep checking. -->
