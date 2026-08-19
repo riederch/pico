@@ -78,6 +78,12 @@ phone.
 
 The cadence half needs hours, not minutes. `start` now, `read` later.
 
+Measured 2026-08-19 (Galaxy A55, Android 16): the 15-minute floor is assigned
+with a 15-minute flex, deep doze deferred it past its due time by 5 min 17 s
+and released it only when doze ended, exact alarms are unavailable by default,
+and `am force-stop` deletes the persisted job outright. Numbers and what they
+do to the ADR 0112 claim are in ADR 0131's A4 gate.
+
 ## Status
 
 2026-08-18: **green on real hardware.** Samsung SM-A556B (Galaxy A55),

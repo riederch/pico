@@ -476,11 +476,73 @@ local-first product's most security-critical moment.
   live where the Linux one lives: the shell-free core never sees a
   `KeyInfo`, so on Android the platform code judges and what crosses into the
   core is a verdict with its evidence, not a backend name to be judged there.
-- **A4 - Reachability contract measured (open):** foreground service,
-  periodic check interval, alarm loudness with and without the restricted
-  full-screen permission, and behaviour under battery optimisation and at
-  least one manufacturer task-killer, measured on real hardware before any
-  ADR 0112 claim is made for Android.
+- **A4 - Reachability contract measured (measured 2026-08-19, one item
+  outstanding):** foreground service, periodic check interval, alarm
+  loudness with and without the restricted full-screen permission, and
+  behaviour under battery optimisation and at least one manufacturer
+  task-killer, measured on real hardware before any ADR 0112 claim is made
+  for Android.
+
+  Measured on a Galaxy A55 (Android 16, patch 2026-07-05) with
+  `tools/android-runtime-probe/apk/run-reachability-probe.sh`. ADR 0112's
+  claim is a cadence claim - six hours against a 48-hour window "gives a
+  running device at least seven independent chances to see the alarm" - so
+  every number below is about whether that sentence survives Android.
+
+  **The interval is a window, and the window is not kept.** JobScheduler
+  accepted the documented 15-minute floor and assigned it with a *flex of
+  15 minutes*: the platform models a period as a range, not a point. Then,
+  in forced deep doze with the screen off, the period fell due and nothing
+  ran for twenty minutes; the job fired 20 min 17 s after the previous beat,
+  seconds after doze was lifted and while the screen was still off. So the
+  deferral is not jitter around the period - the work waits for the device
+  to stir.
+
+  **There is no wall-clock anchor to fall back on.**
+  `AlarmManager.canScheduleExactAlarms()` is **false** for this app by
+  default: exact alarms are withheld from anything that is not a clock or
+  calendar. A six-hour cadence can be *requested* on Android; it cannot be
+  *promised*.
+
+  **A task manager deletes the cadence, it does not pause it.** After
+  `am force-stop` - the harshest thing a manufacturer's task manager does,
+  and the case every Samsung owner can reach - the process stayed gone, no
+  heartbeat followed in four minutes, and
+  `cmd jobscheduler get-job-state` answered *"Could not find job 164"*: the
+  `setPersisted(true)` periodic job was **removed**, not suspended. Nothing
+  brings it back until the person opens the app. A recovery alarm's cadence
+  can therefore be ended silently by one tap, and the client cannot learn
+  this by asking - it can only notice that too long has passed since its
+  last successful check, which is A7's rule one layer down.
+
+  **The alarm degrades exactly as this ADR predicted, and the degradation
+  is detectable.** With the app-op denied, `canUseFullScreenIntent()`
+  returns false while the channel keeps `IMPORTANCE_HIGH`, its alarm sound
+  and its vibration: what is lost is the full-screen takeover, not the
+  loudness. Because the app can read that state, "the degradation is shown
+  to the person" is implementable rather than aspirational. One correction
+  to this ADR's assumption: on this device the restricted permission is
+  **granted by default** to a freshly installed app that merely declares
+  it, so the degraded path had to be entered deliberately to be seen at
+  all. What is denied by default here is exact alarms, not full-screen
+  intents.
+
+  **Battery optimisation is on by default** (`isIgnoringBatteryOptimizations`
+  false) and background restriction is off. `notificationsEnabled` reads
+  true only because the probe granted it over adb; a real client has to ask
+  the person and handle a refusal.
+
+  **What this does to the ADR 0112 claim: it confirms the sequencing this
+  ADR already chose.** Seven chances in 48 hours holds for a phone that is
+  *used* - every unlock ends doze - and fails for a phone left untouched on
+  a table, and ends outright if anything force-stops the app. That is why
+  the reachable-veto guarantee stays anchored on the desktop or appliance
+  client with Android as an additional channel, and the measurement is now
+  the reason rather than the caution.
+
+  Outstanding: Samsung's own "put unused apps to sleep" toggle in Device
+  Care, which needs a person tapping in a settings UI. `force-stop` is the
+  harsher case and it is measured; the branded softer one is not.
 - **A5 - Ceremony parity (open):** the ADR 0130 verticals, in the same
   order, on Android.
 - **A6 - Identity root founding on Android (closed; three conditions to

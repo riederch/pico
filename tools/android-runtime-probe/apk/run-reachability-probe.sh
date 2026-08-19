@@ -8,15 +8,18 @@
 # cannot be answered in a minute, and pretending otherwise would be the
 # measurement lying.
 #
-#   run-reachability-probe.sh start [--full-screen]
+#   run-reachability-probe.sh start [--full-screen|--no-full-screen]
 #   run-reachability-probe.sh read
 #   run-reachability-probe.sh force-stop     # the harshest task-killer case
 #   run-reachability-probe.sh stop
 #
-# `--full-screen` flips the app-op that Android 14+ withholds from
-# non-calling apps, so the same alarm can be posted under both states. It is
-# a deliberate second run, never the default: what a first run meets is the
-# denied state.
+# The two flags set the app-op that gates the full-screen presentation, so
+# the same alarm can be posted under both states - which is what A4 asks for.
+# The header used to say the denied state is what a first run meets; measuring
+# it said otherwise on a One UI Android 16 device, where a freshly installed
+# app that merely declares the permission reports `canUseFullScreenIntent()`
+# as true. So `--no-full-screen` is not a formality here: on this device it is
+# the only way to see the degraded path at all.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -80,16 +83,29 @@ zip -qX base.apk lib/arm64-v8a/*.so
   --out pico-a1-probe.apk aligned.apk
 
 adb install -r "$work/pico-a1-probe.apk"
-# Notifications are a runtime permission on 33+; granting it is not what this
-# probe measures, so it is granted rather than left to confound the result.
+# Notifications are a runtime permission on 33+, and this grants it - so
+# `notificationsEnabled` in the log is this line's doing, not a fact about a
+# first run. A real client has to ask the person and handle a refusal, which
+# is a product surface rather than something a probe can measure. Said here
+# because an unlabelled `true` in a measurement is worse than no measurement.
 adb shell pm grant "$pkg" android.permission.POST_NOTIFICATIONS 2>/dev/null || true
-if [ "${2:-}" = "--full-screen" ]; then
-  adb shell appops set "$pkg" USE_FULL_SCREEN_INTENT allow
-  echo "== full-screen intent app-op: allowed (deliberate second run)"
-else
-  adb shell appops set "$pkg" USE_FULL_SCREEN_INTENT default 2>/dev/null || true
-  echo "== full-screen intent app-op: left at the default a first run meets"
-fi
+case "${2:-}" in
+  --full-screen)
+    adb shell appops set "$pkg" USE_FULL_SCREEN_INTENT allow
+    echo "== full-screen intent app-op: allowed"
+    ;;
+  --no-full-screen)
+    # The half ADR 0131 describes as the degraded one. On a device that
+    # grants the permission by default it is the *only* way to see the
+    # degradation at all, which is why it is a mode and not a footnote.
+    adb shell appops set "$pkg" USE_FULL_SCREEN_INTENT deny
+    echo "== full-screen intent app-op: denied (the degraded path)"
+    ;;
+  *)
+    adb shell appops set "$pkg" USE_FULL_SCREEN_INTENT default 2>/dev/null || true
+    echo "== full-screen intent app-op: left at the default a first run meets"
+    ;;
+esac
 adb shell "run-as $pkg sh -c 'rm -f files/reachability.log'"
 adb shell am start-foreground-service -n "$pkg/.ReachabilityProbeService" > /dev/null
 sleep 6
