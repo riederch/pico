@@ -1,7 +1,7 @@
 {
   "name": "pico",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "license": "SEE LICENSE IN LICENSE",
   "description": "Local-first personal AI companion foundation.",
   "type": "module",

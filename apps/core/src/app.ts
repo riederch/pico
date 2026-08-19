@@ -298,7 +298,7 @@ import {
 } from './share-envelope.js';
 import type { ReaderCustodyFailureReason } from './reader-custody.js';
 
-const SERVICE_VERSION = '0.2.0';
+const SERVICE_VERSION = '0.2.1';
 // The wire-contract version, owned by @pico/protocol and deliberately not tied
 // to SERVICE_VERSION: a packaging or documentation release must not advertise a
 // protocol change that did not happen (ADR 0025).

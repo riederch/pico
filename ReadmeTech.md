@@ -54,7 +54,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.2.0
+0.2.1
 ```
 
 Implemented or prepared:
@@ -350,7 +350,7 @@ docker run -d \
   -p 3200:3200 \
   -v /srv/pico-relay:/data \
   -e PICO_RELAY_OPERATOR=relay.example.org \
-  ghcr.io/riederch/pico/relay:0.2.0
+  ghcr.io/riederch/pico/relay:0.2.1
 ```
 
 | Variable | Default | Meaning |
@@ -443,10 +443,10 @@ The add-on uses the prebuilt container image:
 ghcr.io/riederch/pico/home
 ```
 
-`pico_home/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.2.0` is:
+`pico_home/config.yaml` intentionally stores the image name without a literal tag. The versioned release artifact for add-on version `0.2.1` is:
 
 ```text
-ghcr.io/riederch/pico/home:0.2.0
+ghcr.io/riederch/pico/home:0.2.1
 ```
 
 The published Git tag must match the add-on version and root package version exactly, for example `v0.2.0` for version `0.2.0`. Normal pushes to `main` publish only `main` and `sha-*` image tags and must not mutate existing semver image tags.
@@ -454,7 +454,7 @@ The published Git tag must match the add-on version and root package version exa
 Current tag:
 
 ```text
-0.2.0
+0.2.1
 ```
 
 The add-on exposes Pico Home Core on port `3100`, serves the foundation dashboard at `/`, and defines a watchdog against:

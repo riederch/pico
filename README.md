@@ -101,7 +101,7 @@ Pico is in the foundation phase.
 Current version:
 
 ```text
-0.2.0
+0.2.1
 ```
 
 Three things are built and shipped as separate deliverables:

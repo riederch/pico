@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.1
+
+**The first tag this add-on was actually published under.** 0.2.0 existed as
+a version string but its release tag was never pushed, so the Supervisor met
+a 404 where the image should have been - this release exists so your Home
+Assistant sees a new version and pulls a container that is really there:
+
+```text
+ghcr.io/riederch/pico/home:0.2.1
+```
+
+Everything 0.2.0's notes describe below is included, plus the work since:
+founding a Home from the Pico Client with no terminal in the walk, adding and
+renewing a second device by holding two screens up to each other, ending a
+device's authority or a membership from the window that granted it, and
+rotating the Home's host keys with the Recovery Card warning said out loud.
+
+The Pico Relay remains **deliberately not an add-on** (ADR 0153): a relay has
+to stay reachable while a household's Supervisor restarts, so it ships as a
+standalone container (`ghcr.io/riederch/pico/relay:0.2.1`) you run beside
+Home Assistant, not inside it.
+
 ## 0.2.0
 
 **This add-on replaces `Pico Core`, and it is not an update of it.**
