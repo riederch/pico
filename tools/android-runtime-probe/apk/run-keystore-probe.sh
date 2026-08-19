@@ -38,8 +38,14 @@ fi
 
 cd "$work"
 rm -rf classes classes.dex base.apk aligned.apk pico-a1-probe.apk
-"$javac_bin" --release 11 -classpath "$aj" -d classes src/com/pico/a1probe/*.java
-"$bt/d8" --lib "$aj" --output . classes/com/pico/a1probe/*.class
+# ZXing's `core`, a pure-Java jar with no resources - the one shape of
+# dependency a hand-assembled APK can take, and what makes the camera path
+# possible without Gradle.
+zxing="${PICO_ZXING_JAR:-$HOME/.cache/pico-apk-libs/zxing-core.jar}"
+[ -f "$zxing" ] || curl -sL -o "$zxing" --create-dirs \
+  https://repo1.maven.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar
+"$javac_bin" --release 11 -classpath "$aj:$zxing" -d classes src/com/pico/a1probe/*.java
+"$bt/d8" --lib "$aj" --output . classes/com/pico/a1probe/*.class "$zxing"
 "$bt/aapt2" link -o base.apk --manifest AndroidManifest.xml -I "$aj"
 zip -q base.apk classes.dex
 zip -qX base.apk lib/arm64-v8a/*.so

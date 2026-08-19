@@ -50,9 +50,15 @@ public final class JoinActivity extends Activity {
   private EditText answer;
   private Button send;
   private TextView status;
+  private Button scan;
 
   private LocalSocket socket;
   private OutputStream out;
+  /** The prefix the open question expects, so a scan can refuse the wrong code. */
+  private String expecting = "";
+
+  private static final int SCAN_REQUEST = 0xA5;
+  private static final int CAMERA_PERMISSION = 0xCA;
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -92,6 +98,17 @@ public final class JoinActivity extends Activity {
     send.setVisibility(View.GONE);
     send.setOnClickListener(view -> submit());
     column.addView(send, wide());
+
+    /**
+     * ADR 0131 A5. The camera, offered wherever a code is read - and the only
+     * usable way to read a grant, which runs to about eleven hundred
+     * characters and expires in four minutes.
+     */
+    scan = new Button(this);
+    scan.setText("Scan it with the camera");
+    scan.setVisibility(View.GONE);
+    scan.setOnClickListener(view -> startScan());
+    column.addView(scan, wide());
 
     status = text(column, 13, Color.parseColor("#8b949e"), Typeface.DEFAULT);
     status.setText("Starting Pico on this device...");
@@ -175,12 +192,17 @@ public final class JoinActivity extends Activity {
         send.setText("approval".equals(message.optString("kind")) ? "Yes, sign it" : "Continue");
         send.setVisibility(View.VISIBLE);
         send.setTag(message.optString("kind"));
+        expecting = message.optString("prefix", "");
+        // A code is read either way; a secret and an approval are not.
+        scan.setVisibility("code".equals(message.optString("kind"))
+          ? View.VISIBLE : View.GONE);
         status.setText("");
         break;
       case "say":
         status.setText(bodyFor(step));
         answer.setVisibility(View.GONE);
         send.setVisibility(View.GONE);
+        scan.setVisibility(View.GONE);
         break;
       case "done":
         title.setText("This phone is part of your Home");
@@ -203,12 +225,53 @@ public final class JoinActivity extends Activity {
     }
   }
 
+  private void startScan() {
+    if (checkSelfPermission(android.Manifest.permission.CAMERA)
+        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      // Asked at the moment it is needed and for the reason it is needed,
+      // which is the only honest time to ask for a camera.
+      requestPermissions(new String[] { android.Manifest.permission.CAMERA },
+        CAMERA_PERMISSION);
+      return;
+    }
+    Intent scanner = new Intent(this, ScanActivity.class);
+    scanner.putExtra(ScanActivity.EXTRA_PREFIX, expecting);
+    startActivityForResult(scanner, SCAN_REQUEST);
+  }
+
+  @Override public void onRequestPermissionsResult(
+      int request, String[] permissions, int[] granted) {
+    super.onRequestPermissionsResult(request, permissions, granted);
+    if (request == CAMERA_PERMISSION
+        && granted.length > 0
+        && granted[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      startScan();
+    } else if (request == CAMERA_PERMISSION) {
+      status.setText("Without the camera this code has to be typed, "
+        + "and a grant is too long to type.");
+    }
+  }
+
+  @Override protected void onActivityResult(int request, int result, Intent data) {
+    super.onActivityResult(request, result, data);
+    if (request != SCAN_REQUEST || result != Activity.RESULT_OK || data == null) {
+      return;
+    }
+    String value = data.getStringExtra(ScanActivity.EXTRA_VALUE);
+    if (value == null || value.isEmpty()) {
+      return;
+    }
+    answer.setText(value);
+    submit();
+  }
+
   private void submit() {
     String value = "approval".equals(String.valueOf(send.getTag()))
       ? "yes" : answer.getText().toString();
     answer.setText("");
     answer.setVisibility(View.GONE);
     send.setVisibility(View.GONE);
+    scan.setVisibility(View.GONE);
     status.setText("Working...");
     new Thread(() -> {
       try {

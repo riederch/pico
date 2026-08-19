@@ -23,7 +23,10 @@ import {
   acceptPicoCompanionEnrolment,
   offerPicoCompanionEnrolment,
 } from '@pico/companion/enrolment';
-import { runPicoCompanionAskingDeviceExchange } from '@pico/companion/enrolment-steps';
+import {
+  picoCompanionEnrolmentReadPrefix,
+  runPicoCompanionAskingDeviceExchange,
+} from '@pico/companion/enrolment-steps';
 
 const stage = dirname(fileURLToPath(import.meta.url));
 const files = dirname(stage);
@@ -74,6 +77,9 @@ const surface = {
     send({ v: 'show', step, code });
   },
   readCode: async (step, showing) => await ask('code', step, {
+    // The surface is told which prefix this step expects, so a camera can
+    // refuse a code from an earlier step instead of handing it on.
+    prefix: picoCompanionEnrolmentReadPrefix(step),
     ...(showing === undefined ? {} : { showing }),
   }),
   announce: async (step) => {

@@ -716,6 +716,23 @@ local-first product's most security-critical moment.
   rather than from an opinion - which is what the lab was for. The offer,
   at 213 characters, is the one code a person could carry by hand.
 
+  **The camera was then built, without Gradle** (`ScanActivity`): platform
+  Camera2 for the frames and ZXing's `core` for the decoding - a pure-Java
+  jar with no resources, which is the one shape of dependency a
+  hand-assembled APK can take, dexed beside the app's own classes. The
+  permission is asked at the moment it is needed and for the reason it is
+  needed. The step's expected prefix travels to the surface, so the scanner
+  refuses a code from an earlier step rather than handing it on. And the
+  camera never meets the ceremony: what it produces is a string, carried to
+  the walk over the same bridge a typed one uses - the split ADR 0113 draws
+  on the desktop, where the scanner is shell code and the core is told only
+  what was read. The sponsor lab shows the grant as a QR image for it, the
+  way the desktop window does.
+
+  What is left is a person's: unlock the phone, tap the camera, hold it to
+  the code, and answer the approval. The lab stopped at a PIN, which is the
+  right place for a lab to stop.
+
   Two more findings came out of the lab that no amount of reading would have
   produced.
 

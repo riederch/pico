@@ -51,6 +51,10 @@ const requireFromVault = createRequire(
   realpathSync(join(here, 'node_modules/@pico/vault/package.json')),
 );
 const sodium = (await import(requireFromVault.resolve('libsodium-wrappers-sumo'))).default;
+/** `qrcode` is the vault daemon's dependency - the Recovery Card draws with it. */
+const requireFromDaemon = createRequire(
+  realpathSync(join(here, 'node_modules/@pico/vault-daemon/package.json')),
+);
 const CORE = join(repoRoot, 'apps', 'core', 'dist', 'index.js');
 const CLI = join(repoRoot, 'apps', 'vault-daemon', 'dist', 'cli.js');
 const PASSPHRASE = process.env.PICO_LAB_PASSPHRASE ?? 'a-passphrase-for-the-lab';
@@ -314,8 +318,25 @@ const enrolled = await enrolPicoCompanionDevice({
   offerCode,
   validUntil: '2027-01-01T00:00:00.000Z',
   exchange: async (grantCode) => {
+    /**
+     * Shown, not printed. A grant is about eleven hundred characters and
+     * lives four minutes; the phone reads it with its camera because that is
+     * the only way it can be carried, which is what the desktop shell does
+     * with the same code and what this lab has to imitate to be a sponsor at
+     * all.
+     */
+    const png = join(profileDirectory, 'grant.png');
+    const qrcode = (await import(requireFromDaemon.resolve('qrcode'))).default;
+    await qrcode.toFile(png, grantCode, {
+      errorCorrectionLevel: 'M',
+      margin: 2,
+      width: 1400,
+    });
+    spawn('xdg-open', [png], { detached: true, stdio: 'ignore' }).unref();
     say('');
-    say('== type this grant on the phone:');
+    say(`== showing the grant as a QR code: ${png}`);
+    say('   hold the phone in front of it; it is ~1100 characters, so give the');
+    say('   camera a moment and keep the whole square in view');
     say('');
     say(grantCode);
     say('');
