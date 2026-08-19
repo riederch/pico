@@ -268,6 +268,15 @@ public final class JoinActivity extends Activity {
   private void submit() {
     String value = "approval".equals(String.valueOf(send.getTag()))
       ? "yes" : answer.getText().toString();
+    /**
+     * An empty answer is not an answer. Sending one hands the ceremony a
+     * blank code, which it refuses as a malformed one - and the person reads
+     * "this phone was not added" for a button they pressed too early.
+     */
+    if (value.isEmpty()) {
+      status.setText("There is nothing in the field yet.");
+      return;
+    }
     answer.setText("");
     answer.setVisibility(View.GONE);
     send.setVisibility(View.GONE);

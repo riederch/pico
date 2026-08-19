@@ -5,6 +5,7 @@ import {
 import {
   decodeBase64Url,
   decodeCanonicalElements,
+  decodeCanonicalText,
   encodeBase64Url,
   encodeCanonicalElements,
   picoBase64UrlPattern,
@@ -317,11 +318,7 @@ function decode(
   for (const [index, [key, elementKind]] of fields.entries()) {
     const element = elements[index]!;
     if (elementKind === 'text') {
-      try {
-        values[key] = new TextDecoder('utf-8', { fatal: true }).decode(element);
-      } catch {
-        throw new Error(reason);
-      }
+      values[key] = decodeCanonicalText(element, reason);
     } else {
       values[key] = picoBytesToHex(element);
     }

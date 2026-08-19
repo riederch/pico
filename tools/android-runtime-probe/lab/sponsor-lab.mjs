@@ -236,34 +236,6 @@ const profile = readPicoCompanionProfile(profilePath);
 say(`   Home ${profile.home.homeHostPicoIdentityFingerprintHex.slice(0, 12)} founded`);
 say(`   profile now points at ${profile.coreUrl}, which is what the grant carries`);
 
-/**
- * All three keys, not only the identity one. A Link client seals with the
- * device key agreement key and signs with the device signing key; unlocking
- * the identity alone gets as far as `link_device_signing_key_not_unlocked`,
- * which is the daemon being right about what it was asked for.
- */
-const session = await openPicoCompanionVaultProductSession({
-  socketPath,
-  unlock: [
-    {
-      keyRole: 'pico_identity',
-      keyFingerprintHex: profile.identity.keyFingerprintHex,
-      passphrase: PASSPHRASE,
-    },
-    {
-      keyRole: 'device_signing',
-      keyFingerprintHex: profile.device.signingKeyFingerprintHex,
-      passphrase: PASSPHRASE,
-    },
-    {
-      keyRole: 'device_key_agreement',
-      keyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
-      passphrase: PASSPHRASE,
-    },
-  ],
-  decisions: { decideApproval: async () => true },
-});
-
 say('');
 say('== the Home is up. The phone is not asked for an address: the grant it');
 say('   reads carries one, which is why the line above had to be right.');
@@ -305,6 +277,43 @@ const nextCode = async (name) => {
 };
 
 const offerCode = await nextCode('offer');
+
+/**
+ * Unlocked here rather than at startup, because a Vault locks itself when
+ * nothing has needed it - and a lab waiting for a person to walk to another
+ * screen is exactly nothing needing it. Unlocking at the start looked
+ * tidier and produced `link_device_signing_key_not_unlocked` at the moment
+ * of granting, which is the daemon keeping the promise ADR 0081 makes about
+ * idle locking.
+ */
+/**
+ * All three keys, not only the identity one. A Link client seals with the
+ * device key agreement key and signs with the device signing key; unlocking
+ * the identity alone gets as far as `link_device_signing_key_not_unlocked`,
+ * which is the daemon being right about what it was asked for.
+ */
+const session = await openPicoCompanionVaultProductSession({
+  socketPath,
+  unlock: [
+    {
+      keyRole: 'pico_identity',
+      keyFingerprintHex: profile.identity.keyFingerprintHex,
+      passphrase: PASSPHRASE,
+    },
+    {
+      keyRole: 'device_signing',
+      keyFingerprintHex: profile.device.signingKeyFingerprintHex,
+      passphrase: PASSPHRASE,
+    },
+    {
+      keyRole: 'device_key_agreement',
+      keyFingerprintHex: profile.device.keyAgreementKeyFingerprintHex,
+      passphrase: PASSPHRASE,
+    },
+  ],
+  decisions: { decideApproval: async () => true },
+});
+
 say('== granting');
 const enrolled = await enrolPicoCompanionDevice({
   profile,
@@ -334,6 +343,11 @@ const enrolled = await enrolPicoCompanionDevice({
     });
     spawn('xdg-open', [png], { detached: true, stdio: 'ignore' }).unref();
     say('');
+    let sum = 0;
+    for (let index = 0; index < grantCode.length; index += 1) {
+      sum = (sum * 31 + grantCode.charCodeAt(index)) >>> 0;
+    }
+    say(`== grant: ${grantCode.length} chars, checksum ${sum}`);
     say(`== showing the grant as a QR code: ${png}`);
     say('   hold the phone in front of it; it is ~1100 characters, so give the');
     say('   camera a moment and keep the whole square in view');

@@ -118,6 +118,36 @@ export function encodeCanonicalElements(elements: readonly Uint8Array[]): Uint8A
   return output;
 }
 
+/**
+ * Text out of a canonical element, strictly, without needing ICU.
+ *
+ * The obvious spelling is `new TextDecoder('utf-8', { fatal: true })`, and it
+ * was the spelling here until 2026-08-19. It throws `ERR_NO_ICU` on a runtime
+ * built without ICU - which is what nodejs-mobile ships, the runtime ADR 0131
+ * A2 chose for Android. Every enrolment code and every Recovery Card was
+ * refused on the phone because of it, and the refusal named the body rather
+ * than the cause, so the codes looked malformed rather than unreadable.
+ *
+ * Strictness is kept by the same means this file already uses for base64url:
+ * decode, re-encode, and require the bytes back. A broken sequence becomes
+ * U+FFFD, whose own encoding differs from what came in, so it cannot survive
+ * the comparison - and text that legitimately contains U+FFFD does survive,
+ * because its bytes are the ones that were read.
+ */
+export function decodeCanonicalText(bytes: Uint8Array, reason: string): string {
+  const text = new TextDecoder().decode(bytes);
+  const reEncoded = new TextEncoder().encode(text);
+  if (reEncoded.length !== bytes.length) {
+    throw new Error(reason);
+  }
+  for (let index = 0; index < reEncoded.length; index += 1) {
+    if (reEncoded[index] !== bytes[index]) {
+      throw new Error(reason);
+    }
+  }
+  return text;
+}
+
 export function decodeCanonicalElements(
   input: Uint8Array,
   expectedElements: number,

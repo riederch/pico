@@ -22,7 +22,9 @@ import android.util.TypedValue;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import com.google.zxing.BinaryBitmap;
 import com.google.zxing.DecodeHintType;
@@ -72,6 +74,10 @@ public final class ScanActivity extends Activity {
   private MultiFormatReader decoder;
   private String prefix = "";
   private boolean answered = false;
+  private LinearLayout lenses;
+  private final Map<String, String> physicalParents = new java.util.HashMap<>();
+  private String openId = "";
+  private Size captureSize = new Size(1280, 960);
 
   @Override protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
@@ -93,6 +99,26 @@ public final class ScanActivity extends Activity {
     status.setText("Hold the code on your other device in front of the camera.");
     frame.addView(status, new FrameLayout.LayoutParams(
       ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+    /**
+     * ADR 0131 A5. The lens is the person's choice, not a guess.
+     *
+     * A phone has several back cameras and only some of them can read a
+     * dense code: the ultra-wide and the macro have no autofocus and see a
+     * 177-module QR as porridge. This was picked by a heuristic first -
+     * autofocus, then sensor size - and the heuristic is still what opens
+     * first, but a heuristic that is wrong leaves a person stuck in front of
+     * a code their phone can see and cannot read. So the lenses are named
+     * and offered.
+     */
+    lenses = new LinearLayout(this);
+    lenses.setOrientation(LinearLayout.HORIZONTAL);
+    lenses.setBackgroundColor(Color.parseColor("#aa000000"));
+    lenses.setPadding(18, 18, 18, 18);
+    FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+    bottom.gravity = android.view.Gravity.BOTTOM;
+    frame.addView(lenses, bottom);
     setContentView(frame);
 
     Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
@@ -118,15 +144,51 @@ public final class ScanActivity extends Activity {
     handler = new Handler(thread.getLooper());
     CameraManager manager = getSystemService(CameraManager.class);
     try {
+      /**
+       * The *main* back camera, not the first one listed.
+       *
+       * A phone has several: on this one the first back-facing id is the
+       * ultra-wide, which has no autofocus and cannot resolve a
+       * 177-module grant QR at reading distance. Taking whichever came
+       * first produced a camera that saw the code and could never read it.
+       *
+       * Scored rather than guessed: autofocus decides it, and among the
+       * cameras that have it the largest sensor output wins - which is the
+       * main lens on every phone this has been looked at on.
+       */
       String chosen = null;
+      long best = -1;
       for (String id : manager.getCameraIdList()) {
-        Integer facing = manager.getCameraCharacteristics(id)
-          .get(CameraCharacteristics.LENS_FACING);
-        if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+        CameraCharacteristics traits = manager.getCameraCharacteristics(id);
+        Integer facing = traits.get(CameraCharacteristics.LENS_FACING);
+        if (facing == null || facing != CameraCharacteristics.LENS_FACING_BACK) {
+          continue;
+        }
+        int[] focus = traits.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+        boolean focuses = false;
+        if (focus != null) {
+          for (int mode : focus) {
+            if (mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+              || mode == CaptureRequest.CONTROL_AF_MODE_AUTO) {
+              focuses = true;
+            }
+          }
+        }
+        long pixels = 0;
+        android.hardware.camera2.params.StreamConfigurationMap streams =
+          traits.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+        if (streams != null) {
+          for (Size option : streams.getOutputSizes(ImageFormat.YUV_420_888)) {
+            pixels = Math.max(pixels, (long) option.getWidth() * option.getHeight());
+          }
+        }
+        long score = (focuses ? 1_000_000_000L : 0L) + pixels;
+        if (score > best) {
+          best = score;
           chosen = id;
-          break;
         }
       }
+      final String chosenId = chosen;
       if (chosen == null) {
         fail("This device has no back camera.");
         return;
@@ -139,19 +201,123 @@ public final class ScanActivity extends Activity {
       Size size = new Size(1280, 960);
       reader = ImageReader.newInstance(size.getWidth(), size.getHeight(), ImageFormat.YUV_420_888, 2);
       reader.setOnImageAvailableListener(this::onFrame, handler);
-      manager.openCamera(chosen, new CameraDevice.StateCallback() {
+      captureSize = size;
+      /**
+       * Every lens the device will admit to, not only the back-facing ones
+       * the ceremony expects. Two reasons, both learned here: a phone
+       * reports four cameras and only two were being offered, and which of
+       * them can read a dense code is a fact about optics that the person
+       * holding it can see and this code cannot.
+       */
+      final List<String> offered = new ArrayList<>();
+      for (String id : manager.getCameraIdList()) {
+        offered.add(id);
+        /**
+         * A logical camera hides its physical lenses - the macro usually
+         * lives here, invisible to `getCameraIdList`. They can be opened
+         * only through their parent, which `use` handles.
+         */
+        for (String physical : manager.getCameraCharacteristics(id).getPhysicalCameraIds()) {
+          if (!offered.contains(physical)) {
+            offered.add(physical);
+            physicalParents.put(physical, id);
+          }
+        }
+      }
+      runOnUiThread(() -> showLenses(manager, offered));
+      use(chosenId);
+    } catch (CameraAccessException | SecurityException error) {
+      fail("Pico may not use the camera on this device.");
+    }
+  }
+
+  /**
+   * One button per back camera, labelled the way a person tells lenses
+   * apart: how wide it is, and whether it can focus. The 35 mm equivalent
+   * comes from the focal length and the sensor's own width, which is the
+   * only pair of numbers a phone reliably reports about its optics.
+   */
+  private void showLenses(CameraManager manager, List<String> ids) {
+    lenses.removeAllViews();
+    for (String id : ids) {
+      Button button = new Button(this);
+      button.setText(label(manager, id));
+      button.setOnClickListener(view -> use(id));
+      lenses.addView(button, new LinearLayout.LayoutParams(0,
+        ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+    }
+  }
+
+  private String label(CameraManager manager, String id) {
+    try {
+      CameraCharacteristics traits = manager.getCameraCharacteristics(id);
+      float[] focal = traits.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
+      android.util.SizeF sensor = traits.get(CameraCharacteristics.SENSOR_INFO_PHYSICAL_SIZE);
+      int[] focus = traits.get(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES);
+      boolean focuses = false;
+      if (focus != null) {
+        for (int mode : focus) {
+          if (mode == CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+            || mode == CaptureRequest.CONTROL_AF_MODE_AUTO) {
+            focuses = true;
+          }
+        }
+      }
+      String wide = "";
+      if (focal != null && focal.length > 0 && sensor != null && sensor.getWidth() > 0) {
+        wide = Math.round(focal[0] * 36f / sensor.getWidth()) + "mm";
+      }
+      Integer facing = traits.get(CameraCharacteristics.LENS_FACING);
+      String side = facing == null ? "?"
+        : facing == CameraCharacteristics.LENS_FACING_BACK ? "back"
+        : facing == CameraCharacteristics.LENS_FACING_FRONT ? "front" : "other";
+      return id + (physicalParents.containsKey(id) ? "*" : "")
+        + "\n" + side + " " + wide + (focuses ? "\nfocus" : "\nfixed");
+    } catch (CameraAccessException error) {
+      return id;
+    }
+  }
+
+  /** Switch to a lens: close what is open, then open the chosen one. */
+  private void use(String id) {
+    if (id == null || id.equals(openId)) {
+      return;
+    }
+    closeCamera();
+    openId = id;
+    CameraManager manager = getSystemService(CameraManager.class);
+    final String parent = physicalParents.get(id);
+    physicalTarget = parent == null ? null : id;
+    runOnUiThread(() -> status.setText(
+      "Camera " + id + (parent == null ? "" : " (through " + parent + ")")
+        + ". Hold the code in front of it."));
+    try {
+      manager.openCamera(parent == null ? id : parent, new CameraDevice.StateCallback() {
         @Override public void onOpened(CameraDevice opened) {
           camera = opened;
-          start(size);
+          start(captureSize);
         }
         @Override public void onDisconnected(CameraDevice opened) { opened.close(); }
         @Override public void onError(CameraDevice opened, int error) {
           opened.close();
-          fail("The camera could not be opened (" + error + ").");
+          fail("Camera " + id + " could not be opened (" + error + "). Try another lens.");
         }
       }, handler);
     } catch (CameraAccessException | SecurityException error) {
-      fail("Pico may not use the camera on this device.");
+      fail("Pico may not use camera " + id + " on this device.");
+    }
+  }
+
+  private String physicalTarget = null;
+
+  private void closeCamera() {
+    if (session != null) {
+      session.close();
+      session = null;
+    }
+    if (camera != null) {
+      camera.close();
+      camera = null;
     }
   }
 
@@ -168,6 +334,32 @@ public final class ScanActivity extends Activity {
       request.addTarget(reader.getSurface());
       request.set(CaptureRequest.CONTROL_AF_MODE,
         CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+      if (physicalTarget != null) {
+        // A physical lens is reached by naming it on each output, never by
+        // opening it: the parent is what the system hands out.
+        List<android.hardware.camera2.params.OutputConfiguration> outputs = new ArrayList<>();
+        for (Surface surface : surfaces) {
+          android.hardware.camera2.params.OutputConfiguration output =
+            new android.hardware.camera2.params.OutputConfiguration(surface);
+          output.setPhysicalCameraId(physicalTarget);
+          outputs.add(output);
+        }
+        camera.createCaptureSessionByOutputConfigurations(outputs,
+          new CameraCaptureSession.StateCallback() {
+            @Override public void onConfigured(CameraCaptureSession configured) {
+              session = configured;
+              try {
+                configured.setRepeatingRequest(request.build(), null, handler);
+              } catch (CameraAccessException error) {
+                fail("That lens stopped before it started.");
+              }
+            }
+            @Override public void onConfigureFailed(CameraCaptureSession configured) {
+              fail("That lens cannot be used for this. Try another.");
+            }
+          }, handler);
+        return;
+      }
       camera.createCaptureSession(surfaces, new CameraCaptureSession.StateCallback() {
         @Override public void onConfigured(CameraCaptureSession configured) {
           session = configured;
@@ -208,6 +400,9 @@ public final class ScanActivity extends Activity {
       String text = result.getText();
       if (text != null && text.startsWith(prefix)) {
         answered = true;
+        // What the decoder produced, before any view has touched it.
+        android.util.Log.i("PicoScan", "decoded " + text.length() + " chars, tail "
+          + text.substring(Math.max(0, text.length() - 12)));
         runOnUiThread(() -> answer(text));
       } else if (text != null) {
         runOnUiThread(() -> status.setText(
@@ -234,14 +429,7 @@ public final class ScanActivity extends Activity {
 
   @Override protected void onPause() {
     super.onPause();
-    if (session != null) {
-      session.close();
-      session = null;
-    }
-    if (camera != null) {
-      camera.close();
-      camera = null;
-    }
+    closeCamera();
     if (reader != null) {
       reader.close();
       reader = null;

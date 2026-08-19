@@ -729,9 +729,46 @@ local-first product's most security-critical moment.
   what was read. The sponsor lab shows the grant as a QR image for it, the
   way the desktop window does.
 
-  What is left is a person's: unlock the phone, tap the camera, hold it to
-  the code, and answer the approval. The lab stopped at a PIN, which is the
-  right place for a lab to stop.
+  **And then the camera found the thing the fixture suites could not.**
+
+  With the scan working, every grant was still refused as
+  `invalid_pico_device_enrolment_grant_body` - the same 1,127 characters the
+  desktop accepts. The transport was innocent: the decoder read 1,127
+  characters and the walk received 1,127 with an identical checksum, and the
+  built `device-enrolment.js` on the phone had the same md5 as the one on
+  the laptop. Same code, same bytes, opposite answers.
+
+  A stack trace from inside the embedded runtime named the line: the `catch`
+  around `new TextDecoder('utf-8', { fatal: true })`. A self-test in that
+  runtime named the cause: **nodejs-mobile v18.20.4 is built without ICU**,
+  `Intl` is absent, and constructing a `TextDecoder` with *any* option
+  throws `ERR_NO_ICU`. Plain `new TextDecoder()` works.
+
+  So the canonical decoder - the one that reads enrolment codes *and*
+  Recovery Cards - could not read a single text element on the runtime this
+  ADR chose. Every code was refused as malformed, which is the worst kind of
+  wrong answer: it accuses the code.
+
+  Fixed in `@pico/protocol` as `decodeCanonicalText`, which keeps the
+  strictness by the means this transport already uses everywhere else -
+  decode, re-encode, require the bytes back. A broken sequence becomes
+  U+FFFD, whose encoding differs from what came in; text that legitimately
+  contains U+FFFD survives, because its bytes are the ones that were read.
+  Both parsers use it now. Planting the round-trip away, and planting
+  `fatal: true` back, each fail the new tests.
+
+  **This is what A1's "fixture suites green on-device" did not cover, and
+  the gap is worth naming.** Those suites ran under Termux's Node, which has
+  full ICU. The product runs under the embedded one, which does not. A suite
+  green on a proxy runtime is evidence about the proxy.
+
+  With the fix, the ceremony ran: the phone scanned the grant, parsed it,
+  raised the ADR 0099 approval, showed its acceptance, and the sponsor
+  reported **`delegation_656fc2573f4480c5101bfd7ba4c029a7`** - a phone
+  delegated by a Home over three codes and a camera. The phone's own last
+  step timed out at its two-minute confirmation window, because carrying the
+  acceptance back through a script took longer than a person standing at two
+  screens would; the Home has the delegation either way.
 
   Two more findings came out of the lab that no amount of reading would have
   produced.

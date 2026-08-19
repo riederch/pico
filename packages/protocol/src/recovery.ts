@@ -12,6 +12,7 @@ import {
 import {
   canonicalJson,
   decodeBase64Url,
+  decodeCanonicalText,
   encodeBase64Url,
   picoBase64UrlPattern,
 } from './canonical-transport.js';
@@ -795,7 +796,9 @@ const maxPicoRecoveryCardScanChars = picoRecoveryCardScanPrefix.length
 
 function decodeUtf8Element(value: Uint8Array): string {
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(value);
+    // ICU-free, for the reason `decodeCanonicalText` gives: a Recovery Card
+    // that a phone cannot read is the one card that matters.
+    return decodeCanonicalText(value, 'invalid_recovery_card_utf8');
   } catch {
     throw new Error('invalid_recovery_card_utf8');
   }

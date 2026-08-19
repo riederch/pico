@@ -36,6 +36,40 @@ const requireFromVault = createRequire(
 const sodium = (await import(requireFromVault.resolve('libsodium-wrappers-sumo'))).default;
 await sodium.ready;
 
+/**
+ * A runtime self-test, run before anything else, because the answer decides
+ * whether the shell-free core can be trusted on this runtime at all.
+ *
+ * `decodeCanonicalElements` hands `TextDecoder` a **subarray** - a view into
+ * a larger buffer - and the canonical decoder reads it with `fatal: true`.
+ * If a runtime decodes the whole underlying buffer instead of the view, the
+ * bytes after the element turn into invalid sequences and a perfectly good
+ * code is refused as malformed. That is exactly the refusal a grant scanned
+ * on this phone produced.
+ */
+{
+  const backing = new Uint8Array(32);
+  const text = new TextEncoder().encode('pico');
+  backing.set(text, 4);
+  const view = backing.subarray(4, 4 + text.length);
+  const attempt = (what) => {
+    try {
+      return { ok: what() };
+    } catch (error) {
+      return { threw: String(error && (error.code || error.message)) };
+    }
+  };
+  process.stdout.write(`${JSON.stringify({
+    step: 'runtime_selftest',
+    node: process.version,
+    hasIntl: typeof Intl !== 'undefined' && typeof Intl.Collator === 'function',
+    fatalOnView: attempt(() => new TextDecoder('utf-8', { fatal: true }).decode(view)),
+    fatalOnCopy: attempt(() => new TextDecoder('utf-8', { fatal: true }).decode(view.slice())),
+    plainDecoder: attempt(() => new TextDecoder().decode(view)),
+    bufferToString: attempt(() => Buffer.from(view).toString('utf8')),
+  })}\n`);
+}
+
 const socketPath = join(files, 'ui.sock');
 if (existsSync(socketPath)) {
   unlinkSync(socketPath);
@@ -110,7 +144,30 @@ createServer((connection) => {
       if (parsed.v === 'value' && pendingAnswer !== null) {
         const answer = pendingAnswer;
         pendingAnswer = null;
-        answer(String(parsed.text ?? ''));
+        const value = String(parsed.text ?? '');
+        /**
+         * Length and both ends, never the middle: enough to tell a code that
+         * arrived whole from one that was cut, reordered or re-encoded, and
+         * not enough to be a copy of it in a log.
+         */
+        if (lastQuestion?.kind === 'code') {
+          // A checksum as well as the ends: a code can arrive the right
+          // length with the right head and tail and still be wrong in the
+          // middle, which is the one shape the eye cannot catch.
+          let sum = 0;
+          for (let index = 0; index < value.length; index += 1) {
+            sum = (sum * 31 + value.charCodeAt(index)) >>> 0;
+          }
+          process.stdout.write(`${JSON.stringify({
+            step: 'answered',
+            of: lastQuestion.step,
+            length: value.length,
+            checksum: sum,
+            head: value.slice(0, 24),
+            tail: value.slice(-12),
+          })}\n`);
+        }
+        answer(value);
       }
       if (parsed.v === 'begin') {
         if (walking) {
@@ -148,7 +205,54 @@ async function walkTheJoin() {
         });
         return offered;
       },
-      accept: async (grantCode, madeOffer) => await acceptPicoCompanionEnrolment({
+      accept: async (grantCode, madeOffer) => {
+        /**
+         * The same checks the parser makes, one at a time, in the runtime
+         * that is refusing. The desktop accepts this exact string - same
+         * build, same bytes, same checksum - so whatever fails here is a
+         * fact about the embedded runtime rather than about the code, and a
+         * refusal that names only "body" cannot say which.
+         */
+        try {
+          const { picoDeviceEnrolmentGrantPrefix } =
+            await import('@pico/protocol/device-enrolment');
+          // The built file directly: these helpers are internal to the
+          // protocol and have no public subpath, which is right - a
+          // diagnostic is the one caller that may reach past that.
+          const { decodeBase64Url, encodeBase64Url, picoBase64UrlPattern } =
+            await import(new URL(
+              './node_modules/@pico/protocol/dist/canonical-transport.js',
+              import.meta.url,
+            ).href);
+          const body = grantCode.slice(picoDeviceEnrolmentGrantPrefix.length);
+          const decoded = decodeBase64Url(body, 'diagnostic');
+          const { parsePicoDeviceEnrolmentGrant } =
+            await import('@pico/protocol/device-enrolment');
+          let where = 'parsed';
+          try {
+            parsePicoDeviceEnrolmentGrant(grantCode);
+          } catch (refused) {
+            // The stack, not the message: the message is the same word for
+            // three different checks, and which one it is decides whether
+            // this is data, code or runtime.
+            where = String(refused && refused.stack).split('\n').slice(0, 3).join(' | ');
+          }
+          process.stdout.write(`${JSON.stringify({
+            step: 'grant_checks',
+            bodyLength: body.length,
+            lengthModFour: body.length % 4,
+            charset: picoBase64UrlPattern.test(body),
+            decodedBytes: decoded.byteLength,
+            reEncodes: encodeBase64Url(decoded) === body,
+            where,
+          })}\n`);
+        } catch (diagnosticFailed) {
+          process.stdout.write(`${JSON.stringify({
+            step: 'grant_checks_failed',
+            reason: String(diagnosticFailed && diagnosticFailed.message),
+          })}\n`);
+        }
+        return await acceptPicoCompanionEnrolment({
         socketPath: daemonSocketPath,
         passphrase,
         grantCode,
@@ -167,11 +271,16 @@ async function walkTheJoin() {
           }) === 'yes',
         },
         device: madeOffer.device,
-      }),
+        });
+      },
       outcome: 'joined',
     });
     send({ v: 'done', step: 'joined' });
   } catch (error) {
-    send({ v: 'failed', reason: error instanceof Error ? error.message : String(error) });
+    const reason = error instanceof Error ? error.message : String(error);
+    // To the log as well as to the surface: a failure a person sees and a
+    // failure anybody can diagnose are not automatically the same event.
+    process.stdout.write(`${JSON.stringify({ step: 'failed', reason })}\n`);
+    send({ v: 'failed', reason });
   }
 }
