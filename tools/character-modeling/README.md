@@ -148,21 +148,23 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
-### Arms, shoulders and hand roll after the sixth review
+### Arms and hand roll after the sixth review
 
-Analysed against `docs/assets/pico-design-concept.png` at high magnification:
+Read against `docs/assets/pico-design-concept.png` at high magnification. A
+first pass rebuilt each arm as one continuous piece; the owner rejected it,
+and a closer look at the board shows why:
 
-- The board draws each arm as **one continuous tapering piece** from the
-  shoulder to the wrist. It bends *through* the elbow rather than being hinged
-  at it, so the shoulder, elbow and wrist spheres with shell segments threaded
-  between them are gone; `arm_shell` lofts the whole arm along one curve.
-- The board closes the arm against the torso with a **dark collar**, and marks
-  the elbow the same way. `joint_collar` builds those cuffs: slightly wider
-  than the arm underneath and barrelled a little, so each reads as a fitted
-  band rather than a sleeve. That is how the shoulder terminates.
+- The arm stays **articulated**. The board draws a dark ball at the shoulder,
+  a light upper shell, a dark elbow and a second light shell — not one smooth
+  tube.
+- What makes it read as an arm rather than as beads on a string is that each
+  joint is seated *inside* what it connects: the shoulder ball is mostly
+  buried in the torso and the shells cap over the balls, so a joint shows as a
+  thin dark seam. Left exposed, the same balls read as knobs bolted between
+  barrels — which is exactly what the first restoration looked like.
 - Both hands are rolled so the **back of the hand faces outward** and the palm
-  turns toward the body, which is what makes the hand read narrow from the
-  front. The thumbs point forward.
+  turns toward the body, which is what makes a hanging hand read narrow from
+  the front. The thumbs point forward.
 - The head reaches exactly as far back as the torso.
 
 ### Head depth, arm pose and floor light after the fifth review

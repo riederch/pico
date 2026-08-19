@@ -1188,116 +1188,6 @@ def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
     return rings
 
 
-def joint_collar(name, start, end, radius, mat, zone, around=40, along=12):
-    """A dark cuff wrapping the arm where it meets the body or bends.
-
-    The concept board closes the arm against the torso with a collar rather
-    than letting the shell run into the body, and marks the elbow the same
-    way. The cuff is slightly wider than the arm underneath and barrels a
-    little, so it reads as a fitted band and not as a sleeve.
-    """
-    start, end = Vector(start), Vector(end)
-    axis = (end - start).normalized()
-    side = axis.cross(Vector((0.0, 0.0, 1.0)))
-    if side.length < 0.001:
-        side = axis.cross(Vector((0.0, 1.0, 0.0)))
-    side.normalize()
-    up = axis.cross(side).normalized()
-    rings = []
-    for index in range(along + 1):
-        amount = index / along
-        centre = start + (end - start) * amount
-        local = radius * (0.90 + 0.10 * math.sin(math.pi * amount))
-        rings.append([
-            tuple(
-                centre
-                + side * (local * math.cos(2.0 * math.pi * s / around))
-                + up * (local * math.sin(2.0 * math.pi * s / around))
-            )
-            for s in range(around)
-        ])
-    vertices = []
-    faces = []
-    _loft(vertices, faces, rings, around)
-    mesh = bpy.data.meshes.new(f"{name}.Mesh")
-    mesh.from_pydata(vertices, [], faces)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    MODEL.objects.link(obj)
-    obj.parent = ROOT
-    apply_material(obj, mat, zone)
-    smooth(obj)
-    return obj
-
-
-def arm_shell(
-    name, shoulder, elbow, wrist, radius_shoulder, radius_elbow, radius_wrist,
-    mat, zone, around=40, along=30,
-):
-    """One continuous arm from the shoulder to the wrist.
-
-    The concept board draws the arm as a single tapering piece, not as shells
-    threaded onto a string of joint spheres. It bends through the elbow rather
-    than being hinged at it, and its shoulder end is a rounded cap that closes
-    against the torso.
-    """
-    shoulder = Vector(shoulder)
-    elbow = Vector(elbow)
-    wrist = Vector(wrist)
-    # a quadratic whose control is placed so the curve passes through the elbow
-    control = elbow * 2.0 - (shoulder + wrist) * 0.5
-
-    rings = []
-    for index in range(along + 1):
-        amount = index / along
-        inverse = 1.0 - amount
-        centre = (
-            inverse * inverse * shoulder
-            + 2.0 * inverse * amount * control
-            + amount * amount * wrist
-        )
-        tangent = (
-            2.0 * inverse * (control - shoulder) + 2.0 * amount * (wrist - control)
-        ).normalized()
-        side = tangent.cross(Vector((0.0, 0.0, 1.0)))
-        if side.length < 0.001:
-            side = tangent.cross(Vector((0.0, 1.0, 0.0)))
-        side.normalize()
-        up = tangent.cross(side).normalized()
-        if amount <= 0.5:
-            local = amount / 0.5
-            radius = radius_shoulder + (radius_elbow - radius_shoulder) * local
-        else:
-            local = (amount - 0.5) / 0.5
-            radius = radius_elbow + (radius_wrist - radius_elbow) * local
-        # both ends close as domes rather than as cut tubes
-        if amount < 0.06:
-            radius *= math.sqrt(max(0.0, 1.0 - ((0.06 - amount) / 0.06) ** 2)) * 0.6 + 0.4
-        if amount > 0.94:
-            radius *= math.sqrt(max(0.0, 1.0 - ((amount - 0.94) / 0.06) ** 2)) * 0.5 + 0.5
-        rings.append([
-            tuple(
-                centre
-                + side * (radius * math.cos(2.0 * math.pi * s / around))
-                + up * (radius * math.sin(2.0 * math.pi * s / around))
-            )
-            for s in range(around)
-        ])
-
-    vertices = []
-    faces = []
-    _loft(vertices, faces, rings, around)
-    mesh = bpy.data.meshes.new(f"{name}.Mesh")
-    mesh.from_pydata(vertices, [], faces)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    MODEL.objects.link(obj)
-    obj.parent = ROOT
-    apply_material(obj, mat, zone)
-    smooth(obj)
-    return obj
-
-
 def hand_shell(
     name, wrist, knuckles, palm_normal, half_width, half_thickness, mat, zone,
     thumb_toward=(1.0, 0.0, 0.0), finger_length=0.100, palm_hollow=0.55,
@@ -1432,26 +1322,40 @@ def make_arm(side):
     # wrist spheres threaded onto shell segments. The shoulder end is pushed
     # slightly into the torso so it closes against the body instead of
     # floating beside it.
-    torso_seat = shoulder + (shoulder - elbow).normalized() * 0.030
-    arm_shell(
-        f"Shell.Arm.{side}",
-        torso_seat, elbow, wrist,
-        0.086, 0.066, 0.050,
-        SHELL, "shell",
-    )
     upper_direction = (elbow - shoulder).normalized()
-    joint_collar(
-        f"Trim.Shoulder.{side}",
-        shoulder - upper_direction * 0.026,
-        shoulder + upper_direction * 0.030,
-        0.094, TRIM, "trim",
-    )
     lower_direction = (wrist - elbow).normalized()
-    joint_collar(
-        f"Trim.Elbow.{side}",
-        elbow - upper_direction * 0.024,
-        elbow + lower_direction * 0.026,
-        0.072, TRIM, "trim",
+    # The concept board keeps the arm articulated: a dark ball at the shoulder,
+    # a light upper shell, a dark elbow and a second light shell. Building the
+    # arm as one smooth piece threw all of that away.
+    #
+    # The board seats each joint *inside* what it connects: the shoulder ball
+    # is mostly buried in the torso and the shells cap over the balls, so a
+    # joint reads as a thin dark seam rather than as a bead on a string. Left
+    # exposed, the same balls read as knobs bolted between barrels.
+    uv_sphere(
+        f"Trim.Shoulder.{side}", shoulder - upper_direction * 0.052,
+        (0.082, 0.086, 0.082),
+        TRIM, "trim", segments=64, rings=40,
+    )
+    tapered_shell_between(
+        f"Shell.UpperArm.{side}",
+        shoulder - upper_direction * 0.016,
+        elbow - upper_direction * 0.004,
+        0.092, 0.072, SHELL, "shell", cap_fraction=0.30,
+    )
+    uv_sphere(
+        f"Trim.Elbow.{side}", elbow, (0.058, 0.060, 0.058),
+        TRIM, "trim", segments=64, rings=40,
+    )
+    tapered_shell_between(
+        f"Shell.Forearm.{side}",
+        elbow + lower_direction * 0.004,
+        wrist - lower_direction * 0.004,
+        0.078, 0.056, SHELL, "shell", cap_fraction=0.30,
+    )
+    uv_sphere(
+        f"Trim.Wrist.{side}", wrist, (0.040, 0.042, 0.040),
+        TRIM, "trim", segments=64, rings=40,
     )
 
     # The back of the hand faces outward, so the palm turns toward the body and
