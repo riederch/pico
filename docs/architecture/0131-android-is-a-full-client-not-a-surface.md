@@ -616,6 +616,25 @@ local-first product's most security-critical moment.
   the walk they are - over its own canvas, camera and typed input. An Android
   client supplies its own three and inherits the order rather than reading it
   out of a desktop file.
+
+  **The copy has a gate now, so the next client cannot inherit one.**
+  `scripts/check-wire-labels.mjs` fails when any of the protocol's 72
+  exported wire labels - signature-input labels, schema names, the prefixes
+  people read off each other's screens - is spelled out anywhere else in
+  product code. Two exemptions carry arguments rather than permissions: a
+  migration must *not* follow a renamed constant, because the rows it
+  describes keep the old word, and ADR 0099's approval-exempt list must fail
+  closed, since importing the constants would carry an exemption onto a
+  renamed label while a literal turns a rename into "ask the person". Tests
+  may spell labels out: pinning exact bytes is what a fixture is for.
+
+  The gate says what it cannot do, because a check trusted for more than it
+  does is worse than none. It catches a copy, not an invention:
+  `pico-recovery-card-v2:` matched no constant at all. A rule against unknown
+  labels was measured before being written - 46 in product code, nearly all
+  of them a package naming its own schema, which is exactly right - so
+  inventions stay the business of tests that build a real value and require
+  the surface to accept it.
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on
