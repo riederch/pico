@@ -85,19 +85,22 @@ if (overlayPath !== undefined) {
 
 // ---------------------------------------------------------------- reference
 
-function referenceMask() {
-  const bytes = readFileSync(join(repoRoot, 'docs/design-system', referencePath));
-  assertRegisteredReference(bytes);
-  const image = decodePng(bytes);
-  const { width, height, channels, pixels } = image;
-
-  // The background is dark and reaches the border. The visor is dark too, but
-  // the bright shell encloses it, so a fill from the edge never arrives there
-  // and it stays part of the figure.
+/**
+ * Which dark pixels are the ground behind the figure.
+ *
+ * The background is dark and reaches the border. The visor is dark too, but
+ * the bright shell encloses it, so a fill from the edge never arrives there
+ * and it stays part of the figure. Thresholding alone cannot tell the two
+ * apart, and a figure whose visor is as dark as the ground then measures with
+ * a hole where its face is.
+ */
+function darkBackground(width, height, channels, pixels) {
   const lit = new Uint8Array(width * height);
   for (let i = 0; i < width * height; i += 1) {
     const o = i * channels;
-    const luminance = 0.2126 * pixels[o] + 0.7152 * pixels[o + 1] + 0.0722 * pixels[o + 2];
+    const luminance = channels >= 3
+      ? 0.2126 * pixels[o] + 0.7152 * pixels[o + 1] + 0.0722 * pixels[o + 2]
+      : pixels[o];
     lit[i] = luminance >= 52 ? 1 : 0;
   }
   const background = new Uint8Array(width * height);
@@ -113,6 +116,17 @@ function referenceMask() {
     if (y > 0) stack.push(index - width);
     if (y < height - 1) stack.push(index + width);
   }
+  return background;
+}
+
+
+function referenceMask() {
+  const bytes = readFileSync(join(repoRoot, 'docs/design-system', referencePath));
+  assertRegisteredReference(bytes);
+  const image = decodePng(bytes);
+  const { width, height, channels, pixels } = image;
+
+  const background = darkBackground(width, height, channels, pixels);
 
   const mask = new Uint8Array(width * height);
   const { hologramFromX, captionToY, emissiveFromY } = REFERENCE.exclude;
@@ -160,16 +174,19 @@ function candidateMask(image) {
       transparent = pixels[i * channels + channels - 1] < 250;
     }
   }
-  for (let i = 0; i < width * height; i += 1) {
-    const o = i * channels;
-    if (hasAlpha && transparent) {
-      mask[i] = pixels[o + channels - 1] > 128 ? 1 : 0;
-    } else {
-      const luminance = channels >= 3
-        ? 0.2126 * pixels[o] + 0.7152 * pixels[o + 1] + 0.0722 * pixels[o + 2]
-        : pixels[o];
-      mask[i] = luminance >= 52 ? 1 : 0;
+  if (hasAlpha && transparent) {
+    for (let i = 0; i < width * height; i += 1) {
+      mask[i] = pixels[i * channels + channels - 1] > 128 ? 1 : 0;
     }
+    return { width, height, mask };
+  }
+  // The same rule the reference gets: the ground is what a fill from the
+  // border reaches. Thresholding here instead cost a candidate its whole
+  // visor, and with it twenty-two points of coverage that had nothing to do
+  // with its shape.
+  const background = darkBackground(width, height, channels, pixels);
+  for (let i = 0; i < width * height; i += 1) {
+    mask[i] = background[i] === 1 ? 0 : 1;
   }
   return { width, height, mask };
 }

@@ -41,6 +41,22 @@ The exclusions are calibrated against the exact bytes of
 against the character asset registry and refuses to run if the reference has
 changed, rather than reporting confident nonsense.
 
+## Both masks are built the same way
+
+The ground is what a flood fill from the image border reaches. The visor is as
+dark as the ground, but the bright shell encloses it, so the fill never arrives
+there and it stays part of the figure.
+
+The reference always had that rule. The candidate did not: its dark-ground path
+thresholded instead, so a render whose visor is as dark as its background
+measured with a hole where its face is. The same figure scored **71.7 %** as an
+opaque render and **93.2 %** as an alpha one — twenty-one points that had
+nothing to do with its shape, against a threshold the acceptance gate reads.
+Both paths now flood, and the two renders agree at 93.2 %.
+
+An alpha channel is still honoured when one is present, and is still the
+cleaner input. It is no longer the difference between a pass and a fail.
+
 ## What it cannot do
 
 Coverage is necessary and never sufficient.
