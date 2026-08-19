@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.pico.a1probe">
+  <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <application android:label="Pico A1 Probe" android:debuggable="true"
+      android:extractNativeLibs="true">
+    <service android:name=".CustodyService" android:process=":custody"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a1_runtime_probe" />
+    </service>
+    <service android:name=".ClientService"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a1_runtime_probe" />
+    </service>
+  </application>
+</manifest>

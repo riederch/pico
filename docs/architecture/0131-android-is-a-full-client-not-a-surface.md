@@ -2,6 +2,45 @@
 
 ## Status
 
+Status note, 2026-08-19 (later): **the probe ran under nodejs-mobile
+itself, in the decided two-process shape, and A1 is implemented.** A
+hand-assembled APK (`tools/android-runtime-probe/apk/` - build-tools and NDK
+clang, no gradle, because the whole app is two foreground services and a
+30-line JNI shim over `node::Start`) hosts one embedded Node v18.20.4 per
+process: the `:custody` service runs the real vault daemon, the client
+service walks the custody path across the app-private AF_UNIX socket.
+On the Galaxy A55: founding bootstrap 3,336 ms, unlock 993 ms, **the ADR
+0099 approval loop across real process boundaries with the signature
+verified against the canonical bytes**, IPC 1.639 ms mean per call - against
+0.877 ms same-process under Termux Node and 0.36 ms on the desktop. The
+sticky-service restarts that followed re-ran the client against the founded
+vault and were refused with `founding_bootstrap_requires_fresh_vault`, which
+is the daemon being right, twice.
+
+Hosting the embedded runtime taught four things the product client will
+inherit:
+
+- **Node 18 has webcrypto but not the global.** The reviewed libsodium's
+  ESM build refuses to load without `globalThis.crypto.getRandomValues`
+  (automatic from Node 19), so the embedder preloads a two-line shim
+  (`preload.cjs`). The dual-build packaging made this look nondeterministic
+  first: a `require.resolve` path got the CJS build and worked while the
+  ESM import path died.
+- **One Node instance per process** is nodejs-mobile's own constraint, so
+  the A2 split maps to Android processes (`android:process=":custody"`),
+  exactly as decided - and it works.
+- **Foreground services are the only shape a locked Samsung leaves
+  running.** An activity - even `showWhenLocked` with the screen forced on
+  - was culled by the launcher within seconds, twice. The product client
+  was always going to be a foreground service (this ADR's own tray
+  analogue); the probe now proves that shape and nothing else survives.
+- **The embedded runtime has no `process.execPath` to spawn**, so
+  vitest-style forked suites cannot run under it. That bounds the test
+  harness, not the product: the client closure's one `child_process` use is
+  the desktop notification adapter. The fixture-suite evidence therefore
+  stands on Termux Node (same kernel, Bionic, V8 family), and the embedded
+  evidence is this probe.
+
 Status note, 2026-08-19: **the existing fixture suites are green on the
 phone - A1's own words, run.** Galaxy A55, Android 16, arm64, Termux Node 24
 as proxy runtime, `tools/android-runtime-probe/run-suites-on-device.sh`:
@@ -340,7 +379,7 @@ local-first product's most security-critical moment.
 
 ## Gates
 
-- **A1 - Runtime and primitive path (open, and measured 2026-08-18):** the
+- **A1 - Runtime and primitive path (implemented 2026-08-19):** the
   JavaScript runtime that hosts the shell-free core on Android, and the
   reviewed libsodium build behind it, with the existing fixture suites
   passing on-device.
