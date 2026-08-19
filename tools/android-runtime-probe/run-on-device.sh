@@ -26,7 +26,10 @@ die() { echo "$*" >&2; exit 1; }
 
 echo "== staging the shell-free core (pnpm deploy)"
 rm -rf "$stage"
-(cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion deploy --prod "$stage")
+# --frozen-lockfile, because deploy otherwise rewrites the workspace
+# lockfile's importers to `file:` specifiers as a side effect - a staging
+# step must not edit the repository it stages from. It did, once.
+(cd "$repo" && npx pnpm@9.0.0 --filter @pico/companion deploy --prod --frozen-lockfile "$stage")
 cp "$here/probe.mjs" "$stage/"
 # Symlinks stay symlinks - the strict pnpm layout carries its transitive
 # resolution through their topology, and Termux's home holds them fine.

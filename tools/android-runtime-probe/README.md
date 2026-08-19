@@ -24,7 +24,7 @@ on re-implementations would prove the re-implementations.
 
 Host baseline (should always be green):
 
-    npx pnpm@9.0.0 --filter @pico/companion deploy --prod /tmp/probe-stage
+    npx pnpm@9.0.0 --filter @pico/companion deploy --prod --frozen-lockfile /tmp/probe-stage
     cp tools/android-runtime-probe/probe.mjs /tmp/probe-stage/
     (cd /tmp/probe-stage && node probe.mjs)
 
