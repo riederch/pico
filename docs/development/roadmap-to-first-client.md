@@ -208,6 +208,21 @@ Literale in `main.ts`, jetzt `@pico/companion/enrolment-steps` samt
 wird gezeigt, *bevor* auf `confirm` gewartet wird). Der Shell bleiben drei
 Verben - Code zeigen, Code lesen, sagen wo im Walk die Person steht.
 
+**Wie ein Telefon das Home ueberhaupt erreicht** (am 2026-08-19 im Code
+nachgesehen, weil der Aufbau sonst falsch geraten wird): *nicht* ueber den
+Foundation-Port. Der bindet per Default an `127.0.0.1` und verweigert eine
+routbare Adresse, bis jemand `PICO_FOUNDATION_ACCESS_MODE` ausdruecklich
+waehlt - dort einen Token zu publizieren waere der naheliegende und falsche
+Weg, denn er macht die Diagnosefläche erreichbar.
+
+Der richtige Weg ist der **eigene Link-Intake-Listener**:
+`PICO_LINK_INTAKE_HOST` und `PICO_LINK_INTAKE_PORT` (nur zusammen gueltig).
+Der Companion postet versiegelte Umschlaege an `${coreUrl}/api/home/link`,
+und diese Route traegt die Zugriffsklasse `link-intake` - **weder Session
+noch Token**, weil die Authentifizierung im Umschlag sitzt, wo eine Signatur
+Absender, Adressat und Argumente aneinanderbindet. Genau das erlaubt, diese
+eine Route erreichbar zu machen, waehrend alles darueber lokal bleibt.
+
 Praktischer Hinweis fuer den, der Phase 5 anfaengt: auf dieser Maschine gibt
 es **kein Gradle und kein AndroidX im Cache**. Die beiden bisherigen APKs
 wurden von Hand gebaut (aapt2 + d8 + apksigner, siehe
