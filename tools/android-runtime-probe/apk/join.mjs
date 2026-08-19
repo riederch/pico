@@ -14,7 +14,7 @@
  * app's UID can open it, which is the same argument the custody socket makes
  * one process over.
  */
-import { existsSync, mkdirSync, realpathSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
@@ -59,8 +59,29 @@ await sodium.ready;
       return { threw: String(error && (error.code || error.message)) };
     }
   };
+  /**
+   * Can this runtime's `fetch` reach the Home at all? A Link client that
+   * cannot is indistinguishable, from the outside, from a Home that will not
+   * answer - and the confirmation loop spent two minutes on exactly that
+   * confusion before it learned to say what it heard.
+   */
+  let reach = 'not tried';
+  try {
+    const portFile = join(stage, 'lab-port.txt');
+    if (existsSync(portFile)) {
+      const port = readFileSync(portFile, 'utf8').trim();
+      const answer = await fetch(`http://127.0.0.1:${port}/api/home/link`, { method: 'GET' })
+        .then((response) => `status ${response.status}`)
+        .catch((error) => `threw ${error?.message} (${error?.cause?.code ?? error?.cause ?? 'no cause'})`);
+      reach = `${port}: ${answer}`;
+    }
+  } catch (error) {
+    reach = `probe failed: ${error?.message}`;
+  }
   process.stdout.write(`${JSON.stringify({
     step: 'runtime_selftest',
+    fetchToHome: reach,
+    hasFetch: typeof fetch === 'function',
     node: process.version,
     hasIntl: typeof Intl !== 'undefined' && typeof Intl.Collator === 'function',
     fatalOnView: attempt(() => new TextDecoder('utf-8', { fatal: true }).decode(view)),

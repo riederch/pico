@@ -762,13 +762,39 @@ local-first product's most security-critical moment.
   full ICU. The product runs under the embedded one, which does not. A suite
   green on a proxy runtime is evidence about the proxy.
 
-  With the fix, the ceremony ran: the phone scanned the grant, parsed it,
-  raised the ADR 0099 approval, showed its acceptance, and the sponsor
-  reported **`delegation_656fc2573f4480c5101bfd7ba4c029a7`** - a phone
-  delegated by a Home over three codes and a camera. The phone's own last
-  step timed out at its two-minute confirmation window, because carrying the
-  acceptance back through a script took longer than a person standing at two
-  screens would; the Home has the delegation either way.
+  **The ceremony then ran end to end.** The phone made its own keys through
+  its own custody daemon, showed its offer, read the grant with its camera,
+  parsed it, raised the ADR 0099 approval and had it answered by the person
+  holding it, showed its acceptance, confirmed with the Home, and wrote its
+  profile: *"This phone is part of your Home."* The Home's side reports
+  `delegation_b675f359f33b51d4f6d3a59caa10ad1b`, and the phone's profile
+  carries the same delegation, its own signing and key-agreement
+  fingerprints, and the Home's identity. A phone is a device of a Home over
+  three codes and a camera.
+
+  Two more findings stood between the grant and that sentence, and both were
+  invisible from the outside.
+
+  **The app had no `INTERNET` permission**, so the Link client could not open
+  a socket at all: Android answered `EPERM`, `fetch` said only "fetch
+  failed", and the confirmation loop spent two minutes concluding that the
+  Home never answered. The Home was answering; nothing was allowed to ask.
+  One line of manifest - but the *diagnosis* took a runtime self-test that
+  tried the Home directly, because every layer above it reported the same
+  shrug.
+
+  **And the confirmation loop had been shrugging on purpose.** It swallowed
+  every refusal, because a refusal is the ordinary state before the sponsor
+  submits - and then, on timeout, said only that the device "was not
+  accepted". It carries the last thing it heard now. That is the same rule
+  the desktop learned the same day for its secure input and its refusal
+  lines: a refusal that names nothing is a refusal nobody can act on, and the
+  one thing worth keeping out of a timeout is what kept happening.
+
+  A third, smaller one, worth naming for the product client: **the walk lives
+  in the Activity's process**, so pressing Back ended the ceremony and a
+  restart began it again from the passphrase. Custody already lives in its
+  own foreground service; the ceremony should too.
 
   Two more findings came out of the lab that no amount of reading would have
   produced.

@@ -509,6 +509,17 @@ export async function acceptPicoCompanionEnrolment(input: {
           ...(input.fetch === undefined ? {} : { fetch: input.fetch }),
         });
         const deadline = now().getTime() + picoCompanionEnrolmentConfirmationMs;
+        /**
+         * The last thing the Home said, kept for the refusal at the end.
+         *
+         * A read refused is the ordinary state before the sponsor has
+         * submitted - this device is nobody to the Home yet - so the loop
+         * swallows it. But swallowing it *forever* leaves a device that
+         * waited two minutes saying only that it was not accepted, which
+         * tells the person nothing and whoever has to diagnose it less. The
+         * one thing worth carrying out of a timeout is what kept happening.
+         */
+        let lastRefusal = 'no answer from your Home';
         for (;;) {
           const accepted = await readPicoHomeDeviceLifecycle(linkClient, {
             identityKeyFingerprintHex: profile.identity.keyFingerprintHex,
@@ -516,14 +527,15 @@ export async function acceptPicoCompanionEnrolment(input: {
           }).then((view) => view.devices.some(
             (candidate) => candidate.delegationId === profile.device.delegationId
               && candidate.status === 'active',
-          // A read refused is the ordinary state before the sponsor has
-          // submitted: this device is nobody to the Home yet.
-          )).catch(() => false);
+          )).catch((refused: unknown) => {
+            lastRefusal = refused instanceof Error ? refused.message : String(refused);
+            return false;
+          });
           if (accepted) {
             break;
           }
           if (now().getTime() >= deadline) {
-            throw new Error('pico_companion_enrolment_was_not_accepted');
+            throw new Error(`pico_companion_enrolment_was_not_accepted:${lastRefusal}`);
           }
           await new Promise((resolve) => setTimeout(resolve, 1_000));
         }

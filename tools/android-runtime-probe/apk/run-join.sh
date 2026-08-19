@@ -82,6 +82,15 @@ adb push "$work/probe-stage.tar" /data/local/tmp/probe-stage.tar > /dev/null
 # `files` does not exist until the app has run once, and a fresh install has
 # not. Making it here keeps the first join from needing a rehearsal.
 adb shell "run-as $pkg sh -c 'mkdir -p files && cd files && rm -rf stage vault fdata fbackup ui.sock profile.json join.log daemon.log && /system/bin/tar -xf /data/local/tmp/probe-stage.tar && mv probe-stage stage'"
+# The lab's port, so the runtime self-test can try to reach the Home before
+# anybody scans anything. Lab-only: a real client learns its address from the
+# grant.
+if [ -f "$repo/.pico-stage/lab.json" ]; then
+  python3 -c "import json;print(json.load(open('$repo/.pico-stage/lab.json'))['intakePort'])" \
+    > "$repo/.pico-stage/lab-port.txt"
+  adb push "$repo/.pico-stage/lab-port.txt" /data/local/tmp/lab-port.txt > /dev/null
+  adb shell "run-as $pkg sh -c 'cp /data/local/tmp/lab-port.txt files/stage/lab-port.txt'"
+fi
 adb shell am start -n "$pkg/.JoinActivity" > /dev/null
 echo
 echo "The phone is showing the first step. Type a passphrase there; it will make"
