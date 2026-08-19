@@ -4,7 +4,31 @@ import {
   picoDeviceEnrolmentGrantPrefix,
   picoDeviceEnrolmentOfferPrefix,
 } from '@pico/protocol/device-enrolment';
-import { picoCompanionEnrolmentCodeSteps } from './enrolment-steps.js';
+import {
+  picoCompanionEnrolmentCodeSteps,
+  picoCompanionSponsorExchange,
+  runPicoCompanionAskingDeviceExchange,
+} from './enrolment-steps.js';
+
+/** Records what a surface was asked to do, in the order it was asked. */
+function recordingSurface(grantCode = 'pico-device-grant-v1:GRANT') {
+  const calls: string[] = [];
+  return {
+    calls,
+    surface: {
+      showCode: async (step: string, code: string) => {
+        calls.push(`show:${step}:${code}`);
+      },
+      readCode: async (step: string, showing?: string) => {
+        calls.push(`read:${step}:${showing ?? 'nothing shown'}`);
+        return grantCode;
+      },
+      announce: async (step: string) => {
+        calls.push(`announce:${step}`);
+      },
+    },
+  };
+}
 
 describe('ADR 0131 A5 - the code exchange states its own steps', () => {
   it('pairs every read with the prefix the protocol defines for that code', () => {
@@ -46,5 +70,83 @@ describe('ADR 0131 A5 - the code exchange states its own steps', () => {
       Object.values(picoCompanionEnrolmentCodeSteps).map((step) => step.kind),
     );
     expect([...kinds].sort()).toEqual(['acceptance', 'grant', 'offer']);
+  });
+});
+
+describe('ADR 0131 A5 - the asking device walks one sequence', () => {
+  it('shows what it has, reads the answer, and shows its acceptance before waiting', async () => {
+    /**
+     * The order is the contract between two devices, not a preference. In
+     * particular the acceptance is shown *before* `confirm` is awaited: the
+     * other device cannot finish without reading it, so a sequence that
+     * waited first would leave both devices waiting for each other with no
+     * error anywhere - the failure this test exists to make impossible.
+     */
+    const { calls, surface } = recordingSurface();
+    let confirmed = false;
+
+    await runPicoCompanionAskingDeviceExchange({
+      surface,
+      offer: async () => ({ offerCode: 'pico-device-offer-v1:OFFER' }),
+      accept: async (grantCode, offered) => {
+        // The walk hands back what the offer produced, so a joining device
+        // can accept with the keys its own offer just made.
+        calls.push(`accept:${grantCode}:${offered.offerCode}`);
+        return {
+          acceptanceCode: 'pico-device-acceptance-v1:ACCEPT',
+          confirm: async () => {
+            confirmed = true;
+            calls.push('confirm');
+            return { delegationId: 'delegation_x' };
+          },
+        };
+      },
+      outcome: 'joined',
+    });
+
+    expect(calls).toEqual([
+      'show:show_offer:pico-device-offer-v1:OFFER',
+      'read:read_grant:pico-device-offer-v1:OFFER',
+      'accept:pico-device-grant-v1:GRANT:pico-device-offer-v1:OFFER',
+      'show:show_acceptance:pico-device-acceptance-v1:ACCEPT',
+      'announce:waiting',
+      'confirm',
+      'announce:joined',
+    ]);
+    expect(confirmed).toBe(true);
+  });
+
+  it('says which of the two things happened at the end', async () => {
+    // ADR 0130 E3: joining and keeping are different sentences to the person,
+    // and the sequence that produces them is the same one.
+    const { calls, surface } = recordingSurface();
+
+    await runPicoCompanionAskingDeviceExchange({
+      surface,
+      offer: async () => ({ offerCode: 'pico-device-offer-v1:OFFER' }),
+      accept: async () => ({
+        acceptanceCode: 'pico-device-acceptance-v1:ACCEPT',
+        confirm: async () => ({ delegationId: 'delegation_x' }),
+      }),
+      outcome: 'kept',
+    });
+
+    expect(calls.at(-1)).toBe('announce:kept');
+  });
+
+  it('keeps the grant on screen while the sponsor reads the answer', async () => {
+    // The sponsor's half. The grant stays shown while the acceptance is read,
+    // because on the camera path the other device is reading it at that
+    // moment and on the typed path the person still needs it in front of them.
+    const { calls, surface } = recordingSurface('pico-device-acceptance-v1:ACCEPT');
+
+    const exchange = picoCompanionSponsorExchange(surface);
+    const acceptance = await exchange('pico-device-grant-v1:GRANT');
+
+    expect(acceptance).toBe('pico-device-acceptance-v1:ACCEPT');
+    expect(calls).toEqual([
+      'show:show_grant:pico-device-grant-v1:GRANT',
+      'read:read_acceptance:pico-device-grant-v1:GRANT',
+    ]);
   });
 });

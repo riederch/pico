@@ -578,12 +578,26 @@ local-first product's most security-critical moment.
   binds every read to the protocol's own constant, and the shell reads it
   from there.
 
-  Named as still shell-side, because saying so is the point: the *sequence*
-  of the joining and renewing devices (offer, show, read grant, accept, show
-  acceptance, wait, confirm) is still written in `main.ts`. The sponsor's
-  half is already core-owned through the `exchange` callback. Moving the
-  other half behind the same seam is the next piece of A5 that needs no
-  Android client to be worth doing.
+  **The sequence followed the pairing, the same day.** Both halves of the
+  walk are core-owned now. `picoCompanionSponsorExchange` states the
+  sponsor's two beats - show the grant, read the acceptance while it stays
+  shown - and `runPicoCompanionAskingDeviceExchange` states the asking
+  device's seven, walked identically by a device that has nothing and by one
+  whose year ran out; what differs is `offer` and `accept` and the sentence
+  at the end, which is why those are arguments and the walk is not.
+
+  The ordering rule that walk exists to hold: **the acceptance is shown
+  before `confirm` is awaited.** The other device cannot finish without
+  reading it, so a client that waited first would leave two devices waiting
+  for each other, each convinced it is the one being kept waiting, with no
+  error raised anywhere. Planting that inversion fails the test, as does
+  clearing the grant before the acceptance is read.
+
+  What the desktop shell keeps is exactly what a platform owes the ceremony:
+  three verbs - put a code in front of a person, take one back, say where in
+  the walk they are - over its own canvas, camera and typed input. An Android
+  client supplies its own three and inherits the order rather than reading it
+  out of a desktop file.
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

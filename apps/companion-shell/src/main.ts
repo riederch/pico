@@ -21,7 +21,12 @@ import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
-import { picoCompanionEnrolmentReadPrefix } from '@pico/companion/enrolment-steps';
+import {
+  picoCompanionEnrolmentReadPrefix,
+  picoCompanionSponsorExchange,
+  runPicoCompanionAskingDeviceExchange,
+  type PicoCompanionEnrolmentSurface,
+} from '@pico/companion/enrolment-steps';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
@@ -1913,6 +1918,30 @@ async function presentDeviceCode(
   }));
 }
 
+/**
+ * ADR 0131 A5. The three verbs the ceremony needs, over this platform's
+ * canvas, camera and typed input. The walk itself is the shell-free core's -
+ * a second client supplies its own three and inherits the order.
+ */
+function enrolmentSurface(source: PicoCompanionFirstRunScanSource): PicoCompanionEnrolmentSurface {
+  return {
+    showCode: async (step, code) => {
+      const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
+      await presentDeviceCode(step, picoCompanionDeviceCode(code));
+    },
+    readCode: async (step, showing) => {
+      if (showing === undefined) {
+        return await readDeviceCode(step, source);
+      }
+      const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
+      return await readDeviceCode(step, source, picoCompanionDeviceCode(showing));
+    },
+    announce: async (step) => {
+      await presentEnrolmentStep(step);
+    },
+  };
+}
+
 async function presentEnrolmentStep(step: PicoCompanionEnrolmentStep): Promise<void> {
   const line = picoCompanionEnrolmentStepLine(step);
   await presentationPort.present(parsePicoCompanionPresentation({
@@ -1931,21 +1960,11 @@ async function runEnrolment(
   source: PicoCompanionFirstRunScanSource,
   service: PicoCompanionShellRuntime,
 ): Promise<void> {
-  const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
   const offerCode = await readDeviceCode('read_offer', source);
   const enrolled = await service.enrolDevice({
     offerCode,
     validUntil: picoCompanionEnrolmentValidUntil(new Date()),
-    exchange: async (grantCode: string) => {
-      const shown = picoCompanionDeviceCode(grantCode);
-      await presentDeviceCode('show_grant', shown);
-      /**
-       * The grant stays on screen while the answer is read. On the camera
-       * path the other device is reading it at that moment; on the typed one
-       * the person still needs it in front of them.
-       */
-      return await readDeviceCode('read_acceptance', source, shown);
-    },
+    exchange: picoCompanionSponsorExchange(enrolmentSurface(source)),
   });
   const line = picoCompanionEnrolmentStepLine('added');
   await presentationPort.present(parsePicoCompanionPresentation({
@@ -1969,16 +1988,11 @@ async function runRenewOtherDevice(
   source: PicoCompanionFirstRunScanSource,
   service: PicoCompanionShellRuntime,
 ): Promise<void> {
-  const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
   const offerCode = await readDeviceCode('read_offer', source);
   await service.renewDeviceOverCodes({
     offerCode,
     validUntil: picoCompanionEnrolmentValidUntil(new Date()),
-    exchange: async (grantCode: string) => {
-      const shown = picoCompanionDeviceCode(grantCode);
-      await presentDeviceCode('show_grant', shown);
-      return await readDeviceCode('read_acceptance', source, shown);
-    },
+    exchange: picoCompanionSponsorExchange(enrolmentSurface(source)),
   });
   await presentEnrolmentStep('renewed');
 }
@@ -1991,32 +2005,18 @@ async function runRenewFromOtherDevice(
   source: PicoCompanionFirstRunScanSource,
   service: PicoCompanionShellRuntime,
 ): Promise<void> {
-  const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
-  const offer = await service.offerOwnRenewal();
-  const shownOffer = picoCompanionDeviceCode(offer.offerCode);
-  await presentDeviceCode('show_offer', shownOffer);
-  const grantCode = await readDeviceCode('read_grant', source, shownOffer);
-  const accepted = await service.acceptOwnRenewal(grantCode);
-  await presentDeviceCode(
-    'show_acceptance',
-    picoCompanionDeviceCode(accepted.acceptanceCode),
-  );
-  const waiting = presentEnrolmentStep('waiting');
-  try {
-    await accepted.confirm();
-  } finally {
-    await waiting;
-  }
-  await presentEnrolmentStep('kept');
+  await runPicoCompanionAskingDeviceExchange({
+    surface: enrolmentSurface(source),
+    offer: async () => await service.offerOwnRenewal(),
+    accept: async (grantCode) => await service.acceptOwnRenewal(grantCode),
+    outcome: 'kept',
+  });
 }
 
 /** The device that has nothing: it makes keys, signs, and waits to be let in. */
 async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promise<void> {
-  const [{ acceptPicoCompanionEnrolment, offerPicoCompanionEnrolment }, { picoCompanionDeviceCode }] =
-    await Promise.all([
-      import('@pico/companion/enrolment'),
-      import('./enrolment-code.js'),
-    ]);
+  const { acceptPicoCompanionEnrolment, offerPicoCompanionEnrolment } =
+    await import('@pico/companion/enrolment');
 
   const passphrase = await captureSecret({
     title: 'Choose a Vault passphrase for this device',
@@ -2026,41 +2026,28 @@ async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promi
     validate: (value: string) => value.length > 0,
   });
 
-  const offer = await offerPicoCompanionEnrolment({
-    socketPath: defaultPicoVaultDaemonSocketPath(),
-    passphrase,
-  });
-  const shownOffer = picoCompanionDeviceCode(offer.offerCode);
-  await presentDeviceCode('show_offer', shownOffer);
-  const grantCode = await readDeviceCode('read_grant', source, shownOffer);
-
-  const accepted = await acceptPicoCompanionEnrolment({
-    socketPath: defaultPicoVaultDaemonSocketPath(),
-    passphrase,
-    grantCode,
-    profilePath: defaultPicoCompanionProfilePath(),
-    sodium: sodium as never,
-    decisions: approvalDecisionPort,
-    device: offer.device,
-    ...(await firstRunPlatformSecrets()),
-  });
-  await presentDeviceCode(
-    'show_acceptance',
-    picoCompanionDeviceCode(accepted.acceptanceCode),
-  );
-
   /**
-   * The wait, and it is the person's too: the other device has to carry the
-   * answer to the Home before this one is anybody. `confirm` ends when the
-   * Home says so, and the profile is written then and not before.
+   * `confirm`, inside the walk, is what writes the profile - and it ends when
+   * the Home says so, not when this device has finished asking.
    */
-  const waiting = presentEnrolmentStep('waiting');
-  try {
-    await accepted.confirm();
-  } finally {
-    await waiting;
-  }
-  await presentEnrolmentStep('joined');
+  await runPicoCompanionAskingDeviceExchange({
+    surface: enrolmentSurface(source),
+    offer: async () => await offerPicoCompanionEnrolment({
+      socketPath: defaultPicoVaultDaemonSocketPath(),
+      passphrase,
+    }),
+    accept: async (grantCode, offered) => await acceptPicoCompanionEnrolment({
+      socketPath: defaultPicoVaultDaemonSocketPath(),
+      passphrase,
+      grantCode,
+      profilePath: defaultPicoCompanionProfilePath(),
+      sodium: sodium as never,
+      decisions: approvalDecisionPort,
+      device: offered.device,
+      ...(await firstRunPlatformSecrets()),
+    }),
+    outcome: 'joined',
+  });
   await startServiceCore();
 }
 
