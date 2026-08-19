@@ -375,7 +375,7 @@ print(
 joints = {
     obj.name: obj for obj in bpy.data.objects if obj.get("pico_joint")
 }
-expected_joints = ["PICO_MOUNT_head"]
+expected_joints = ["PICO_MOUNT_body", "PICO_MOUNT_head"]
 for side in ("L", "R"):
     expected_joints += [
         f"PICO_MOUNT_arm.{side}",
@@ -405,7 +405,8 @@ for side in ("L", "R"):
 # The head is one piece turning on the neck: the pivot height is the top of
 # the neck column, not a number that could drift away from it.
 head_mount = joints["PICO_MOUNT_head"]
-assert head_mount.parent is bpy.data.objects["PICO.CharacterCore.Root"]
+body_mount = joints["PICO_MOUNT_body"]
+assert head_mount.parent is body_mount
 assert head_mount["pico_joint_degrees_of_freedom"] == "pitch|yaw|roll"
 neck = bpy.data.objects["Trim.Neck"]
 neck_top = max((neck.matrix_world @ vertex.co).y for vertex in neck.data.vertices)
@@ -431,6 +432,29 @@ assert set(faces) <= head_children, sorted(set(faces) - head_children)
 for standing in ("Trim.Neck", "Shell.Torso", "Status.ChestCore",
                  "PICO_MOUNT_shoulder.L", "PICO_MOUNT_shoulder.R"):
     assert standing not in head_children, standing
+
+# The body leans and turns on the point it hovers on: the lowest point of the
+# torso, straight above the floor glow -- again read off the geometry rather
+# than typed in.
+assert body_mount.parent is bpy.data.objects["PICO.CharacterCore.Root"]
+assert body_mount["pico_joint_degrees_of_freedom"] == "pitch|yaw|roll"
+torso = bpy.data.objects["Shell.Torso"]
+torso_base = min((torso.matrix_world @ vertex.co).y for vertex in torso.data.vertices)
+assert abs(body_mount.matrix_world.translation.y - torso_base) < 1e-6, (
+    body_mount.matrix_world.translation.y, torso_base
+)
+body_children = {child.name for child in body_mount.children}
+for carried in ("PICO_MOUNT_head", "PICO_MOUNT_shoulder.L", "PICO_MOUNT_shoulder.R",
+                "Shell.Torso", "Status.ChestCore", "Status.Underside", "Trim.Neck"):
+    assert carried in body_children, carried
+# the glow lies flat on the floor: a tilted floor light reads as a lamp
+# pointing sideways, not as a character leaning, so it stays at the root.
+root_children = {
+    child.name for child in bpy.data.objects["PICO.CharacterCore.Root"].children
+}
+for on_the_floor in ("Status.HoverRing", "Status.HoverCore"):
+    assert on_the_floor not in body_children, on_the_floor
+    assert on_the_floor in root_children, on_the_floor
 
 # A mount only means something if turning it turns what hangs off it.
 def evaluated_centre(name):
@@ -518,8 +542,29 @@ for axis, name_of_axis in enumerate(("pitch", "yaw", "roll")):
 head_mount.rotation_euler = (0.0, 0.0, 0.0)
 bpy.context.view_layer.update()
 
+# Leaning and turning the whole body takes head, torso and hands along and
+# leaves the glow lying on the floor.
+carried_by_body = ("Shell.Head", "Shell.Torso", "Trim.Hand.L", "PREVIEW.Eye.open.L")
+on_the_floor = ("Status.HoverRing", "Status.HoverCore")
+rest_body = {
+    name: evaluated_points(name) for name in carried_by_body + on_the_floor
+}
+for axis, name_of_axis in enumerate(("lean", "turn", "side lean")):
+    body_mount.rotation_euler = tuple(
+        0.25 if index == axis else 0.0 for index in range(3)
+    )
+    bpy.context.view_layer.update()
+    for name in carried_by_body:
+        moved = max_shift(name, rest_body)
+        assert moved > 0.005, f"{name_of_axis}: {name} stays behind ({moved:.5f})"
+    for name in on_the_floor:
+        moved = max_shift(name, rest_body)
+        assert moved < 1e-6, f"{name_of_axis}: the body drags {name} ({moved:.5f})"
+body_mount.rotation_euler = (0.0, 0.0, 0.0)
+bpy.context.view_layer.update()
+
 print(
-    f"PICO_JOINT_SET={len(joints)} head+shoulder+arm+digits, no elbow, "
+    f"PICO_JOINT_SET={len(joints)} body+head+shoulder+arm+digits, no elbow, "
     "chain verified"
 )
 

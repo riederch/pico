@@ -2946,6 +2946,27 @@ for _obj in list(PREVIEW.objects):
     if _obj.name.startswith(("PREVIEW.Eye.", "PREVIEW.Mouth.")):
         parent_preserve_world(_obj, HEAD_PIVOT)
 
+# The whole body leans and turns on one more mount, placed at the point the
+# body hovers on: the lowest point of the torso, straight above the floor
+# glow. A hovering figure that leans swings from there like a top on its tip,
+# and a turn about the same axis is a turn in place.
+#
+# The glow on the floor deliberately stays behind. It lies flat on the ground
+# plane and its two floor axes were made equal on purpose; tilting it would
+# read as a lamp pointing sideways rather than as a character leaning.
+bpy.context.view_layer.update()
+TORSO = bpy.data.objects["Shell.Torso"]
+floor_glow = (bpy.data.objects["Status.HoverRing"], bpy.data.objects["Status.HoverCore"])
+carried_by_body = [obj for obj in ROOT.children if obj not in floor_glow]
+BODY_PIVOT = empty(
+    "PICO_MOUNT_body",
+    (0.0, min((TORSO.matrix_world @ vertex.co).y for vertex in TORSO.data.vertices), 0.0),
+)
+BODY_PIVOT["pico_joint"] = "body"
+BODY_PIVOT["pico_joint_degrees_of_freedom"] = "pitch|yaw|roll"
+for _obj in carried_by_body:
+    parent_preserve_world(_obj, BODY_PIVOT)
+
 CAMERA = camera("Camera.Reference")
 area_light("Key", (3.3, 2.7, 4.8), 950.0, (1.0, 0.82, 0.68), 4.0)
 area_light("Fill", (-3.8, 0.6, 3.0), 650.0, (0.28, 0.56, 1.0), 3.2)

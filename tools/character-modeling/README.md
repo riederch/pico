@@ -207,7 +207,7 @@ appearance document defines 0 as *not pinned to a released authored character
 core* because ADR 0124 has released none — so the change is free today and has
 to be frozen with the first released core.
 
-`validate_head_variants.py` holds the set to exactly those thirteen mounts,
+`validate_head_variants.py` holds the set to exactly those fourteen mounts,
 asserts no object named `Elbow` survives, checks what each mount owns, and
 then **turns them**: the shoulder must move the arm and the hand, the arm
 joint must move the hand and leave the arm where it is. A mount that does not
@@ -257,6 +257,30 @@ A digit rotated far enough sweeps into the palm — at −70° the base visibly
 intersects it. That is a **pose limit** and belongs to the gesture corridor
 still being designed, not to the model: the joint has to be able to reach
 further than the corridor will allow.
+
+### The body leans and turns on what it hovers on
+
+`PICO_MOUNT_body` sits between the root and everything else and carries the
+whole figure — head pivot, both shoulders, torso, neck, chest group and the
+underside emitter. Its height is again read off the geometry: the lowest point
+of `Shell.Torso`, straight above the floor glow. A hovering figure that leans
+swings from there like a top on its tip, and a turn about the same axis is a
+turn in place.
+
+Two objects deliberately stay at the root: `Status.HoverRing` and
+`Status.HoverCore`. The floor glow lies flat on the ground plane and its two
+floor axes were made equal on purpose; tilting it would read as a lamp
+pointing sideways rather than as a character leaning. So the root carries the
+body **and** the glow, and only the body mount turns.
+
+Three more mutations are caught: the glow parented into the body, the head
+mount taken out of it, and the pivot moved off the torso base.
+
+The last one needed a **second attempt at the mutation, not at the rule**. The
+first version moved the pivot together with everything hanging off it, so the
+torso moved too and the pivot was still at its base — the file was not broken,
+just floating higher, and the contract was right to pass it. The honest
+mutation moves the pivot *against* the body, and then the rule bites.
 
 ### Arm pose, measured (seventh review)
 
