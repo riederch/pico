@@ -456,6 +456,21 @@ pointing forward. It is rooted at the palm's edge instead of proud of its face,
 so folding carries it *across* the hand the way the fingers fold rather than
 swinging it further into the open.
 
+**The joint ball is the socket, and stays with the body.** It used to hang off
+the shoulder mount, and its centre sits 0.026 to the side of that mount's
+pivot — so every rotation swung it in an arc out of the shoulder, roll worst of
+all. It now belongs to the body and the arm turns inside it.
+
+Only the roll axis was asked for. It is decoupled on all three, because a
+per-axis exception would need a constraint and a constraint does not travel:
+the demo viewer composes the joint chain itself from the exported mounts and
+would go on rolling the ball while Blender did not. A socket that stays put on
+every axis is also what a socket does.
+
+The contract turns each shoulder about all three axes and requires the ball's
+whole vertex cloud to stay within `1e-6`. Reparenting the ball back onto the
+shoulder mount fails it.
+
 **A tension worth naming, because it will come back.** A seam-free knuckle
 wants the palm and the digits to be one surface, and the digits are five
 separate objects so that each can turn on its own joint. Two overlapping shells

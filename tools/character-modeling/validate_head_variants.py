@@ -422,7 +422,9 @@ for side in ("L", "R"):
     # what each joint owns: the shoulder carries the arm, the arm the palm,
     # and every digit hangs off the palm on a joint of its own.
     assert bpy.data.objects[f"Shell.Arm.{side}"].parent is shoulder_mount, side
-    assert bpy.data.objects[f"Trim.Shoulder.{side}"].parent is shoulder_mount, side
+    # The joint ball is the socket and belongs to the body, not to the limb.
+    ball = bpy.data.objects[f"Trim.Shoulder.{side}"]
+    assert ball.parent is bpy.data.objects["PICO_MOUNT_body"], side
     assert bpy.data.objects[f"Trim.Hand.{side}"].parent is arm_mount, side
     for label in [f"finger.{side}.{index}" for index in (1, 2, 3)] + [f"thumb.{side}"]:
         digit_mount = joints[f"PICO_MOUNT_{label}"]
@@ -485,6 +487,35 @@ root_children = {
 for on_the_floor in ("Status.HoverRing", "Status.HoverCore"):
     assert on_the_floor not in body_children, on_the_floor
     assert on_the_floor in root_children, on_the_floor
+
+# Turning a shoulder must leave its ball exactly where it was, on every axis.
+# The ball's centre is offset from the mount's pivot, so a ball that followed
+# would swing out of the shoulder in an arc rather than spin in place.
+def evaluated_cloud(name):
+    evaluated = bpy.data.objects[name].evaluated_get(
+        bpy.context.evaluated_depsgraph_get()
+    )
+    matrix = evaluated.matrix_world
+    return [matrix @ vertex.co for vertex in evaluated.data.vertices]
+
+
+for side in ("L", "R"):
+    # not `mount`: that name holds the head-module mount the identity selector
+    # is checked against further down. The same slip cost an afternoon once.
+    shoulder_joint = joints[f"PICO_MOUNT_shoulder.{side}"]
+    rest_ball = evaluated_cloud(f"Trim.Shoulder.{side}")
+    for axis in range(3):
+        shoulder_joint.rotation_euler = tuple(
+            0.4 if index == axis else 0.0 for index in range(3)
+        )
+        bpy.context.view_layer.update()
+        moved = max(
+            (point - reference).length
+            for point, reference in zip(evaluated_cloud(f"Trim.Shoulder.{side}"), rest_ball)
+        )
+        assert moved < 1e-6, (side, axis, moved)
+    shoulder_joint.rotation_euler = (0.0, 0.0, 0.0)
+    bpy.context.view_layer.update()
 
 # A mount only means something if turning it turns what hangs off it.
 def evaluated_centre(name):

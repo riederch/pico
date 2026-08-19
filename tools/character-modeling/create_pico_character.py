@@ -1551,7 +1551,16 @@ def make_arm(side):
         (0.094, 0.098, 0.094),
         TRIM, "trim", segments=64, rings=40,
     )
-    parent_preserve_world(ball, shoulder_mount)
+    # The ball is the socket, not part of the limb: it stays with the body and
+    # the arm turns inside it. It used to hang off the shoulder mount, and its
+    # centre sits 0.026 to the side of that mount's pivot, so every rotation --
+    # roll worst of all -- swung it in an arc out of the shoulder.
+    #
+    # It is left on the root here; the body mount picks it up later along with
+    # everything else the torso carries. Fixing only the roll axis would need a
+    # constraint, and a constraint does not travel: the demo viewer composes
+    # the joint chain itself from the exported mounts and would go on rolling
+    # the ball while Blender did not.
 
     # The back of the hand faces outward, so the palm turns toward the body and
     # the hand reads narrow from the front. Facing the palm forward turns the
