@@ -459,11 +459,44 @@ local-first product's most security-critical moment.
   the Card printed and laminated and warns against the file export, so a
   root on a phone whose owner has no printer is one loss from identity
   loss - and that is exactly the person A6 would be opened for.
-- **A7 - The home-network limit is spoken (open):** the client names an
-  unreachable Home rather than presenting it as a quiet one, and no product
-  surface or document claims away-from-home function. Decided 2026-08-09
-  together with the sequencing in
+- **A7 - The home-network limit is spoken (half implemented 2026-08-19):**
+  the client names an unreachable Home rather than presenting it as a quiet
+  one, and no product surface or document claims away-from-home function.
+  Decided 2026-08-09 together with the sequencing in
   `docs/development/roadmap-to-first-client.md`.
+
+  **The client half was missing, and not only on Android.** The alarm
+  carrier's own comment said read failures "are counted and visible"; they
+  were counted in a status object **nothing outside that file ever read**.
+  So a failed authenticated lifecycle read produced no statement anywhere -
+  the tray, the window and the condition list looked exactly as they do when
+  the Home answered and had nothing to report. That is the precise thing
+  this gate forbids, and ADR 0118 O4 already forbade it for the model and
+  storage reads: "nothing is waiting" and "nobody looked" are different
+  claims. The read that carries the ADR 0112 recovery alarm was the one
+  without the rule.
+
+  `home_unreachable` is now a stated condition, reported on every check in
+  both directions. It is deliberately **not** `no_network` renamed: that one
+  is the device's own link, which the shell reads from Electron, while this
+  one is the Home not answering over a link that works - the state a phone
+  is in from the moment it leaves the house. When the link *is* down, the
+  network condition explains it and this one stays silent, because a refusal
+  must not be an inventory (ADR 0077 C4).
+
+  The already-armed alarm was never at risk: a failed read returns early
+  without clearing `alarmActive`, so a raised alarm stays raised. What was
+  missing was telling the person that the check itself had stopped landing.
+
+  **The document half was audited the same day and holds:** every
+  "remote access" and "away from home" occurrence across documents and
+  product strings is a statement *denying* the function, not claiming it.
+  No check enforces this, deliberately - a forbidden-phrase gate over prose
+  would flag this ADR, which has to discuss the limit to set it.
+
+  What keeps A7 from closing: an Android product surface to speak the limit
+  on. The condition and its wording are in the shell-free core and the
+  contract, so that surface inherits them rather than reinventing them.
 
 ## Consequences
 

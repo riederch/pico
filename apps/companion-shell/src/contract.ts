@@ -142,6 +142,7 @@ export type PicoCompanionPresentationSeverity = 'active' | 'warning' | 'blocked'
  */
 export const picoCompanionConditionKinds = [
   'no_network',
+  'home_unreachable',
   'no_model',
   'storage_reserved',
   'storage_exhausted',
@@ -541,6 +542,7 @@ const decisions = new Set<PicoCompanionPresentationDecision>([
  */
 export function picoCompanionConditionsFor(input: {
   online?: boolean;
+  homeReachable?: boolean;
   modelReachable?: boolean;
   storage?: 'normal' | 'reserved' | 'exhausted';
 }): readonly PicoCompanionCondition[] {
@@ -549,6 +551,23 @@ export function picoCompanionConditionsFor(input: {
     conditions.push({
       kind: 'no_network',
       remedy: 'Already approved sends wait for a route. Nothing else is affected.',
+    });
+  }
+  /**
+   * ADR 0131 A7. Only when the link itself is not the explanation: with no
+   * network this is the same fact told twice, and a refusal must not be an
+   * inventory (ADR 0077 C4).
+   *
+   * This is the condition a phone lives in. ADR 0107 carries envelopes to
+   * the person's own Home directly, so away from the home network there is
+   * no Home to reach - and the rule this ADR family keeps restating is that
+   * an unreachable Home must never look like a quiet one.
+   */
+  if (input.homeReachable === false && input.online !== false) {
+    conditions.push({
+      kind: 'home_unreachable',
+      remedy: 'Your Home is not answering, so this is not a report that nothing is waiting. '
+        + 'Recall, entry and capture continue here.',
     });
   }
   if (input.modelReachable === false) {

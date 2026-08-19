@@ -320,6 +320,7 @@ function renderConditions(state: PicoCompanionPresentation): void {
 
 const conditionLabels: Record<PicoCompanionCondition['kind'], string> = {
   no_network: 'No network',
+  home_unreachable: 'Home not reached',
   no_model: 'No model',
   storage_reserved: 'Storage is running low',
   storage_exhausted: 'Storage is full',

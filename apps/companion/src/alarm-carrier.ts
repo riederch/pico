@@ -99,6 +99,19 @@ export interface PicoCompanionNotificationAdapter {
    * different, and only one of them should clear a standing condition.
    */
   reportModelReachability?(reachable: boolean | undefined): void | Promise<void>;
+  /**
+   * ADR 0131 A7. Whether the authenticated lifecycle read reached the Home.
+   *
+   * Reported on every check, in both directions, because this is a state and
+   * not an edge - and because it was previously reported nowhere at all: a
+   * failed read incremented a counter in {@link PicoCompanionAlarmCarrierStatus}
+   * that nothing outside this file ever read, so a Home nobody could reach
+   * presented exactly like a Home with nothing to say.
+   *
+   * `undefined` is in the signature to match the other reports, not because
+   * this carrier produces it: it either completed a read or it did not.
+   */
+  reportHomeReachable?(reachable: boolean | undefined): void | Promise<void>;
 }
 
 /**
@@ -294,6 +307,19 @@ export async function startPicoCompanionAlarmCarrier(
     }
   };
 
+  /**
+   * ADR 0131 A7. The same posture as the reports above - a broken notifier is
+   * counted, never fatal - for the one fact this carrier already knew and
+   * told nobody.
+   */
+  const tellHomeReachable = async (reachable: boolean): Promise<void> => {
+    try {
+      await input.notifications.reportHomeReachable?.(reachable);
+    } catch {
+      status.notifyFailures += 1;
+    }
+  };
+
   const performCheck = async (): Promise<PicoCompanionAlarmCheck> => {
     const checkedAt = now().toISOString();
     await readStorage();
@@ -305,6 +331,7 @@ export async function startPicoCompanionAlarmCarrier(
     } catch {
       status.readFailures += 1;
       status.consecutiveReadFailures += 1;
+      await tellHomeReachable(false);
       const check: PicoCompanionAlarmCheck = {
         status: 'read_failed',
         pendingRecovery: null,
@@ -314,6 +341,7 @@ export async function startPicoCompanionAlarmCarrier(
       return check;
     }
     status.consecutiveReadFailures = 0;
+    await tellHomeReachable(true);
 
     const pending = snapshot.pendingRecovery;
     if (pending === null) {

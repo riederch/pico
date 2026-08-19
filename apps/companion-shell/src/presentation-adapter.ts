@@ -52,6 +52,13 @@ export type PicoCompanionShellNotifications = PicoCompanionNotificationAdapter
     reportNetworkState(online: boolean): Promise<void>;
     /** ADR 0118 O4. Whether the model this person decided on is answering. */
     reportModelReachability(reachable: boolean | undefined): Promise<void>;
+    /**
+     * ADR 0131 A7. Whether the authenticated lifecycle read reached the Home.
+     * Unlike the network state this is not a local device fact - the link can
+     * be fine while the Home is not there, which is what a phone leaving the
+     * house looks like.
+     */
+    reportHomeReachable(reachable: boolean | undefined): Promise<void>;
   };
 
 export function createPicoCompanionPresentationAdapter(
@@ -130,6 +137,10 @@ export function createPicoCompanionPresentationAdapter(
      */
     reportModelReachability: async (reachable) => {
       await observe(reachable === undefined ? {} : { modelReachable: reachable });
+    },
+    /** ADR 0131 A7. Carried like the others, not knowable included. */
+    reportHomeReachable: async (reachable) => {
+      await observe(reachable === undefined ? {} : { homeReachable: reachable });
     },
     /**
      * ADR 0118 O1. States that something is due, and since when.

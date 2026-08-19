@@ -23,11 +23,22 @@ function presentation(conditions?: unknown): Record<string, unknown> {
 }
 
 describe('ADR 0118 O4 / ADR 0119 Q5 stated conditions', () => {
-  it('names the three facts the person has to tell apart', () => {
+  it('names the four facts the person has to tell apart', () => {
     // ADR 0009 offered one state, "offline or degraded", for facts with
     // different decisions behind them.
-    expect([...picoCompanionConditionKinds])
-      .toEqual(['no_network', 'no_model', 'storage_reserved', 'storage_exhausted']);
+    //
+    // `home_unreachable` joined them on 2026-08-19 (ADR 0131 A7). It is not
+    // `no_network` wearing another name: the link can be perfectly fine while
+    // the Home is not there, which is what leaving the house looks like - and
+    // until it existed, a Home nobody could reach presented exactly like a
+    // Home with nothing to say.
+    expect([...picoCompanionConditionKinds]).toEqual([
+      'no_network',
+      'home_unreachable',
+      'no_model',
+      'storage_reserved',
+      'storage_exhausted',
+    ]);
   });
 
   it('carries several at once, independently', () => {

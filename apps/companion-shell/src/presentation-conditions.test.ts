@@ -46,6 +46,35 @@ describe('ADR 0118 O4 conditions ride every presentation', () => {
     expect(last?.conditions.map((condition) => condition.kind)).toEqual(['storage_exhausted']);
   });
 
+  it('names an unreachable Home instead of showing a quiet one', async () => {
+    // ADR 0131 A7. The Home not answering and the Home having nothing to say
+    // produced identical surfaces until 2026-08-19.
+    const { notifications, presented } = adapter();
+
+    await notifications.reportHomeReachable?.(false);
+
+    expect(presented.at(-1)?.conditions.map((condition) => condition.kind))
+      .toEqual(['home_unreachable']);
+
+    await notifications.reportHomeReachable?.(true);
+    expect(presented.at(-1)?.conditions).toEqual([]);
+  });
+
+  it('does not say the Home is unreachable twice over one broken link', async () => {
+    /**
+     * A refusal must not be an inventory (ADR 0077 C4). With no network, the
+     * Home being unreachable is the same fact told a second time - and two
+     * rows for one cause teach the person to read neither.
+     */
+    const { notifications, presented } = adapter();
+
+    await notifications.reportNetworkState?.(false);
+    await notifications.reportHomeReachable?.(false);
+
+    expect(presented.at(-1)?.conditions.map((condition) => condition.kind))
+      .toEqual(['no_network']);
+  });
+
   it('says nothing again when nothing changed', async () => {
     const { notifications, presented } = adapter();
 

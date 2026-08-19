@@ -27,8 +27,10 @@ interface RecordingAdapter {
   alarms: PicoCompanionPendingRecoveryAlarm[];
   clears: number;
   failNext: boolean;
+  homeReachable: (boolean | undefined)[];
   notifyPendingRecovery(alarm: PicoCompanionPendingRecoveryAlarm): void;
   clearPendingRecovery(): void;
+  reportHomeReachable(reachable: boolean | undefined): void;
 }
 
 function recordingAdapter(): RecordingAdapter {
@@ -36,6 +38,10 @@ function recordingAdapter(): RecordingAdapter {
     alarms: [],
     clears: 0,
     failNext: false,
+    homeReachable: [],
+    reportHomeReachable(reachable) {
+      this.homeReachable.push(reachable);
+    },
     notifyPendingRecovery(alarm) {
       if (this.failNext) {
         this.failNext = false;
@@ -122,6 +128,41 @@ describe('Companion alarm carrier (ADR 0113 C1 over the ADR 0112 contract)', () 
       .rejects.toThrow('invalid_alarm_check_interval');
     await expect(startPicoCompanionAlarmCarrier({ ...input, checkIntervalMs: 0.5 }))
       .rejects.toThrow('invalid_alarm_check_interval');
+  });
+
+  it('says the Home could not be reached, rather than letting it look quiet', async () => {
+    /**
+     * ADR 0131 A7, and ADR 0118 O4's rule applied to the read that carries
+     * the ADR 0112 alarm. A failed lifecycle read was counted in the
+     * carrier's status and read by nobody: the tray, the window and the
+     * condition list all looked exactly as they do when the Home answered
+     * and had nothing to report. On a desktop in the house that is rare; on
+     * a phone it is what leaving the house looks like.
+     *
+     * `undefined` is not tested as an input here because the carrier always
+     * knows: it either completed a read or it did not.
+     */
+    let failReads = 1;
+    const adapter = recordingAdapter();
+    const carrier = await startPicoCompanionAlarmCarrier({
+      readLifecycle: async () => {
+        if (failReads > 0) {
+          failReads -= 1;
+          throw new Error('network_down');
+        }
+        return snapshot(null);
+      },
+      notifications: adapter,
+    });
+
+    expect(carrier.status().lastCheck?.status).toBe('read_failed');
+    expect(adapter.homeReachable).toEqual([false]);
+
+    await vi.advanceTimersByTimeAsync(picoCompanionAlarmCheckIntervalMs);
+
+    // And the recovery is stated too: a condition that never clears is a
+    // condition the person learns to ignore.
+    expect(adapter.homeReachable).toEqual([false, true]);
   });
 
   it('survives read and notify failures, counts them and recovers on the next tick', async () => {

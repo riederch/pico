@@ -17,5 +17,12 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
           android:value="pico_a1_runtime_probe" />
     </service>
+    <!-- ADR 0131 A3: no Node, no stage - pure platform API, so it neither
+         loads libnode nor shares a process with anything that does. -->
+    <service android:name=".KeystoreProbeService" android:process=":keystore"
+        android:exported="true" android:foregroundServiceType="specialUse">
+      <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+          android:value="pico_a3_keystore_probe" />
+    </service>
   </application>
 </manifest>
