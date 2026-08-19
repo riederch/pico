@@ -1159,8 +1159,24 @@ def _loft(vertices, faces, rings, around, cap_start=True, cap_end=True):
             faces.append((centre, last + segment, last + (segment + 1) % around))
 
 
-def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
-    """Rings along one rounded, tapering finger following a quadratic curve."""
+def _digit_rings(
+    base, control, tip, radius_base, radius_tip, around, along=17,
+    root_flare=1.22, root_span=0.26,
+):
+    """Rings along one rounded, tapering finger following a quadratic curve.
+
+    The root swells before it tapers. A digit of even radius meets the palm on
+    a hard rim -- a rod pushed into a shell -- and the owner's description asks
+    for knuckles that pass softly into the hand. The swelling sits inside the
+    palm, so what shows outside is the shoulder of that swelling running into
+    the palm's surface rather than the edge of a tube.
+
+    The flare falls off as a square, so its rate of change is zero where it
+    rejoins the taper and no crease appears at the handover. It also has to
+    stay under the palm's own thickness: a first attempt at 1.62 made the root
+    wider than the palm is thick, and the swellings came out through both faces
+    as wedges.
+    """
     base, control, tip = Vector(base), Vector(control), Vector(tip)
     rings = []
     for index in range(along + 1):
@@ -1180,6 +1196,8 @@ def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
         side.normalize()
         up = tangent.cross(side).normalized()
         radius = radius_base + (radius_tip - radius_base) * amount
+        if amount < root_span:
+            radius *= 1.0 + (root_flare - 1.0) * (1.0 - amount / root_span) ** 2
         # a rounded fingertip rather than a cut-off stub
         if amount > 0.80:
             closing = (amount - 0.80) / 0.20
@@ -1364,8 +1382,8 @@ def hand_shell(
         base = (
             knuckles
             + axis_side * (half_width * offset)
-            - forward * (palm_length * 0.34)
-            - axis_palm * (half_thickness * 0.20)
+            - forward * (palm_length * 0.42)
+            - axis_palm * (half_thickness * 0.12)
         )
         # The digits curl *towards* the palm. `axis_palm` points at the cupped
         # face -- the one turned to the body -- so the curl is +axis_palm.
@@ -1393,11 +1411,14 @@ def hand_shell(
     # standing apart has no readable handedness: the eye takes whichever
     # reading fits, and both hands can look like the other one's.
     thumb_length = finger_length * 0.74
+    # It is rooted at the palm's edge rather than proud of its face, so that
+    # folding towards the palm carries it *across* the hand the way the fingers
+    # fold, instead of swinging it further out into the open.
     thumb_base = (
         wrist
         + forward * (palm_length * 0.46)
         + axis_side * (half_width * 0.68)
-        + axis_palm * (half_thickness * 0.55)
+        + axis_palm * (half_thickness * 0.20)
     )
     digits.append({
         "kind": "thumb",
@@ -1405,9 +1426,9 @@ def hand_shell(
         "base": thumb_base,
         "control": (
             thumb_base
-            + axis_side * (thumb_length * 0.24)
-            + forward * (thumb_length * 0.32)
-            + axis_palm * (thumb_length * 0.04)
+            + axis_side * (thumb_length * 0.22)
+            + forward * (thumb_length * 0.34)
+            + axis_palm * (thumb_length * 0.12)
         ),
         # and it curls back towards the fingers rather than splaying outward,
         # which is what makes it read as opposing them. It stays on the palm
@@ -1416,9 +1437,9 @@ def hand_shell(
         # closing it.
         "tip": (
             thumb_base
-            + axis_side * (thumb_length * 0.20)
-            + forward * (thumb_length * 0.82)
-            + axis_palm * (thumb_length * 0.16)
+            + axis_side * (thumb_length * 0.16)
+            + forward * (thumb_length * 0.80)
+            + axis_palm * (thumb_length * 0.40)
         ),
         "radius_base": digit_radius * 1.04,
         "radius_tip": digit_radius * 0.88,

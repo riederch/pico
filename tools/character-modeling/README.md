@@ -443,8 +443,26 @@ The fingertips tuck in further than they reached out, so the GLB envelope came
 in with them, ±0.759 to ±0.711. Whole-figure silhouette coverage 91.4 → 92.0 per
 cent.
 
-**Still open:** the digit roots step into the palm rather than blending, which
-the owner's description asks for at the knuckles.
+**The knuckles now swell before they taper.** A digit of even radius meets the
+palm on a hard rim — a rod pushed into a shell. Each digit's root flares by
+1.22 over its first quarter, falling off as a square so its rate of change is
+zero where it rejoins the taper and no crease appears at the handover, and the
+roots sit deeper in the palm. A first attempt at 1.62 made the root wider than
+the palm is thick and the swellings came out through both faces as wedges;
+the flare has to stay under the palm's own thickness.
+
+**The thumb folds towards the palm** like the fingers, rather than only
+pointing forward. It is rooted at the palm's edge instead of proud of its face,
+so folding carries it *across* the hand the way the fingers fold rather than
+swinging it further into the open.
+
+**A tension worth naming, because it will come back.** A seam-free knuckle
+wants the palm and the digits to be one surface, and the digits are five
+separate objects so that each can turn on its own joint. Two overlapping shells
+always leave an intersection line; what the flare does is make that line fall
+where a knuckle would be and keep it from cutting across a flat face. Removing
+it entirely means a boolean union, and that is the single closed mesh the owner
+ruled out.
 
 ### The measured reference, finally read by a check (eleventh review)
 
