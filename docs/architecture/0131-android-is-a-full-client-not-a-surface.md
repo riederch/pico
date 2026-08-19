@@ -543,8 +543,47 @@ local-first product's most security-critical moment.
   Outstanding: Samsung's own "put unused apps to sleep" toggle in Device
   Care, which needs a person tapping in a settings UI. `force-stop` is the
   harsher case and it is measured; the branded softer one is not.
-- **A5 - Ceremony parity (open):** the ADR 0130 verticals, in the same
-  order, on Android.
+- **A5 - Ceremony parity (open, and measured 2026-08-19):** the ADR 0130
+  verticals, in the same order, on Android.
+
+  **What parity actually costs was measured before any of it was built**, by
+  asking of each vertical how much lives in the shell-free core - which
+  Android inherits, and which A1 already ran on the device - and how much
+  lives in the desktop shell, which it would have to rebuild.
+
+  E2 founding (`founding.ts`), E3 device lifecycle (`enrolment.ts`,
+  `device-lifecycle.ts`) and E4 home continuity (`home-authority.ts`) are
+  about 1,500 lines of core, and A1's on-device run already exercised them:
+  founding bootstrap, the approval loop and the ADR 0112 carrier ran under
+  the embedded runtime, and 937 fixture tests passed on the phone. E1's
+  reachability half is A4's territory and is measured there. So the ceremony
+  *logic* is not the cost.
+
+  What Android must genuinely build is platform work and rightly so: camera
+  and typed capture of the three codes, the presentations, the secure input,
+  and the A3 keystore binding. The desktop's own `readDeviceCode` splitting
+  camera from typed is exactly the shape a second client re-implements
+  differently and correctly.
+
+  **One thing was in the wrong place, and it was the dangerous kind.** The
+  pairing of each exchange step with the prefix a read must accept lived as
+  six string literals in `apps/companion-shell/src/main.ts`, and the
+  protocol's three constants sat unused beside them. That pairing is not
+  presentation: two devices have to agree on it, and disagreeing does not
+  fail loudly - a client that reads an acceptance while validating the offer
+  prefix refuses a code that is correct, in front of two people who both did
+  what they were asked, and the refusal reads as the other device's fault.
+  A second client would have inherited a seventh copy by reading a desktop
+  file. It now lives in `@pico/companion/enrolment-steps` with a test that
+  binds every read to the protocol's own constant, and the shell reads it
+  from there.
+
+  Named as still shell-side, because saying so is the point: the *sequence*
+  of the joining and renewing devices (offer, show, read grant, accept, show
+  acceptance, wait, confirm) is still written in `main.ts`. The sponsor's
+  half is already core-owned through the `exchange` callback. Moving the
+  other half behind the same seam is the next piece of A5 that needs no
+  Android client to be worth doing.
 - **A6 - Identity root founding on Android (closed; three conditions to
   reopen):** A3 measured, an ADR 0027 appliance image in existence, and a
   Recovery Card reachable without a printer. The trigger was sharpened on

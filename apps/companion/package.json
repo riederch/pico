@@ -34,6 +34,10 @@
       "types": "./dist/enrolment.d.ts",
       "import": "./dist/enrolment.js"
     },
+    "./enrolment-steps": {
+      "types": "./dist/enrolment-steps.d.ts",
+      "import": "./dist/enrolment-steps.js"
+    },
     "./first-run": {
       "types": "./dist/first-run.d.ts",
       "import": "./dist/first-run.js"

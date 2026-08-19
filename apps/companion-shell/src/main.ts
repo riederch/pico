@@ -21,6 +21,7 @@ import {
   defaultPicoCompanionProfilePath,
   readPicoCompanionProfile,
 } from '@pico/companion/profile';
+import { picoCompanionEnrolmentReadPrefix } from '@pico/companion/enrolment-steps';
 import type { PicoCompanionAutomaticVaultUnlock } from '@pico/companion/platform-unlock';
 import type { PicoCompanionPlatformSecretPort } from '@pico/companion/platform-secrets';
 import type { PicoCompanionFirstRunOutcome } from '@pico/companion/first-run';
@@ -1859,12 +1860,18 @@ async function runFounding(): Promise<void> {
  * a Home by, and nothing that authorises reaches the renderer. The window
  * chose the situation and whether the camera or the keyboard reads.
  */
+/**
+ * ADR 0131 A5. The prefix comes from the step, and the step's prefix is the
+ * shell-free core's to state: this file used to carry six copies of the
+ * protocol's three, which is how a second client would have inherited a
+ * seventh.
+ */
 async function readDeviceCode(
-  step: PicoCompanionEnrolmentStep,
-  prefix: string,
+  step: 'read_offer' | 'read_grant' | 'read_acceptance',
   source: PicoCompanionFirstRunScanSource,
   showing?: PicoCompanionDeviceCode,
 ): Promise<string> {
+  const prefix = picoCompanionEnrolmentReadPrefix(step);
   const line = picoCompanionEnrolmentStepLine(step);
   if (source === 'camera') {
     await presentationPort.present(parsePicoCompanionPresentation({
@@ -1925,11 +1932,7 @@ async function runEnrolment(
   service: PicoCompanionShellRuntime,
 ): Promise<void> {
   const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
-  const offerCode = await readDeviceCode(
-    'read_offer',
-    'pico-device-offer-v1:',
-    source,
-  );
+  const offerCode = await readDeviceCode('read_offer', source);
   const enrolled = await service.enrolDevice({
     offerCode,
     validUntil: picoCompanionEnrolmentValidUntil(new Date()),
@@ -1941,12 +1944,7 @@ async function runEnrolment(
        * path the other device is reading it at that moment; on the typed one
        * the person still needs it in front of them.
        */
-      return await readDeviceCode(
-        'read_acceptance',
-        'pico-device-acceptance-v1:',
-        source,
-        shown,
-      );
+      return await readDeviceCode('read_acceptance', source, shown);
     },
   });
   const line = picoCompanionEnrolmentStepLine('added');
@@ -1972,19 +1970,14 @@ async function runRenewOtherDevice(
   service: PicoCompanionShellRuntime,
 ): Promise<void> {
   const { picoCompanionDeviceCode } = await import('./enrolment-code.js');
-  const offerCode = await readDeviceCode('read_offer', 'pico-device-offer-v1:', source);
+  const offerCode = await readDeviceCode('read_offer', source);
   await service.renewDeviceOverCodes({
     offerCode,
     validUntil: picoCompanionEnrolmentValidUntil(new Date()),
     exchange: async (grantCode: string) => {
       const shown = picoCompanionDeviceCode(grantCode);
       await presentDeviceCode('show_grant', shown);
-      return await readDeviceCode(
-        'read_acceptance',
-        'pico-device-acceptance-v1:',
-        source,
-        shown,
-      );
+      return await readDeviceCode('read_acceptance', source, shown);
     },
   });
   await presentEnrolmentStep('renewed');
@@ -2002,12 +1995,7 @@ async function runRenewFromOtherDevice(
   const offer = await service.offerOwnRenewal();
   const shownOffer = picoCompanionDeviceCode(offer.offerCode);
   await presentDeviceCode('show_offer', shownOffer);
-  const grantCode = await readDeviceCode(
-    'read_grant',
-    'pico-device-grant-v1:',
-    source,
-    shownOffer,
-  );
+  const grantCode = await readDeviceCode('read_grant', source, shownOffer);
   const accepted = await service.acceptOwnRenewal(grantCode);
   await presentDeviceCode(
     'show_acceptance',
@@ -2044,12 +2032,7 @@ async function runJoinFromDevice(source: PicoCompanionFirstRunScanSource): Promi
   });
   const shownOffer = picoCompanionDeviceCode(offer.offerCode);
   await presentDeviceCode('show_offer', shownOffer);
-  const grantCode = await readDeviceCode(
-    'read_grant',
-    'pico-device-grant-v1:',
-    source,
-    shownOffer,
-  );
+  const grantCode = await readDeviceCode('read_grant', source, shownOffer);
 
   const accepted = await acceptPicoCompanionEnrolment({
     socketPath: defaultPicoVaultDaemonSocketPath(),
