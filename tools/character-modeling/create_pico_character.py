@@ -2696,6 +2696,23 @@ if face_shader is not None and "Specular IOR Level" in face_shader.inputs:
 # points are collinear across that join, so the profile has a continuous
 # tangent there: with the depth slope flipping sign the back of the head
 # carried a visible crease.
+#
+# The lower segment was fitted to the head profile in
+# `Character_Geometry_Measurements.md` on 2026-08-19. It used to taper to a
+# rim half the width the reference has, which left the largest deviation in
+# that whole table -- 0.559 against 0.388 head widths at y -0.384 -- and, in
+# the picture, a visible lit neck where the reference has a broad head
+# underside handing straight over to the shoulders. Refitting the two free
+# control points brings every row of the lower profile inside 0.027 and the
+# worst row from 0.171 to 0.008.
+#
+# The depth channel keeps each control point's authored z/x ratio. The
+# reference is one view and fixes no depth; scaling it with the width is the
+# choice that decides nothing.
+#
+# The rim also reaches seven thousandths lower than before, so it covers the
+# table's last row rather than ending a thousandth of a head width above it
+# and letting the neck read as the silhouette there.
 head_profile = sample_bezier_segments([
     (
         (0.395, 0.005, 0.020),
@@ -2706,8 +2723,8 @@ head_profile = sample_bezier_segments([
     (
         (-0.062, 0.500, 0.432),
         (-0.1404, 0.5068, 0.432),
-        (-0.300, 0.380, 0.320),
-        (-0.395, 0.200, 0.180),
+        (-0.220, 0.432, 0.364),
+        (-0.402, 0.284, 0.256),
     ),
 ], steps=48)
 HEAD_SHELL = revolved_mesh("Shell.Head", head_profile, SHELL, "shell", interpolate=False)

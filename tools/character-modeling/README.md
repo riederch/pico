@@ -30,6 +30,9 @@ Nothing here is a production Character asset:
   manifest contract: one linked core library, 28 stubs in manifest order,
   antenna/hair exclusivity, one status material across the whole status group,
   context colour outside the status group and clothing as an overlay.
+- `validate_reference_profile.py` holds the authored head to the head profile
+  measured from the registered reference, in head widths. It is the first check
+  that reads `Character_Geometry_Measurements.md` at all.
 - `export_demo_viewer.py` writes a self-contained WebGL demo viewer to
   `/tmp/pico-demo-viewer`, using `demo-viewer/viewer-template.html` as its
   page. The viewer shows the authored core, switches each part group on and
@@ -287,6 +290,55 @@ asserts no object named `Elbow` survives, checks what each mount owns, and
 then **turns them**: the shoulder must move the arm and the hand, the arm
 joint must move the hand and leave the arm where it is. A mount that does not
 drive its children is decoration.
+
+### The measured reference, finally read by a check (eleventh review)
+
+`Character_Geometry_Measurements.md` states what is measurable on the
+registered reference and calls itself the target for an authored model under
+ADR 0124, gate PR6. Nothing read it. The numbers lived in a document while the
+model drifted beside them, and it took an external review brief pointing at the
+file to notice.
+
+The lower head profile had drifted the furthest: **0.388 head widths where the
+reference has 0.559**, the largest deviation in the whole table. In the picture
+that is the difference between a head whose underside stays broad and hands
+straight over to the shoulders, and one that tapers to a narrow rim above a
+visible lit neck.
+
+**It was not the neck.** The reference's own narrowest point, 0.516 at y
+−0.364, is the *underside of the head shell* — below it sits a dark, blue-lit
+recess and no lit neck column at all. Measuring the reference image
+independently reproduces 0.516 at −0.364 exactly, and lifting its shadows shows
+what that number is measuring. So the earlier owner instruction to make the
+neck narrower never conflicted with the reference; the neck is almost entirely
+covered either way.
+
+The lower Bézier segment was refitted to the four table rows below the widest
+section. Its two free control points moved from `(-0.300, 0.380, 0.320)` and
+`(-0.395, 0.200, 0.180)` to `(-0.220, 0.432, 0.364)` and
+`(-0.402, 0.284, 0.256)`:
+
+| y | reference | before | after |
+|---:|---:|---:|---:|
+| −0.223 | 0.823 | 0.801 | 0.816 |
+| −0.277 | 0.742 | 0.693 | 0.730 |
+| −0.331 | 0.613 | 0.557 | 0.642 |
+| −0.384 | 0.559 | **0.388** | **0.555** |
+
+Every row improved and none got worse. Core silhouette coverage went from
+93.2 to 94.5 per cent.
+
+The depth channel keeps each control point's authored z/x ratio. One view fixes
+no depth, so scaling depth with width is the choice that decides nothing.
+
+`validate_reference_profile.py` now reads the table and holds the head to it
+within 0.06 head widths, measuring in the reference's own unit and cutting the
+outline with planes through the triangles rather than sampling vertices in a
+slab. Run against the checkpoint from before the refit it fails on exactly the
+row that was wrong. The torso rows are printed and **not** asserted: their
+deviation is the open question of whether the head is about four per cent large
+against the body, and asserting a number nobody has decided would freeze a
+guess as a contract.
 
 ### The board's arms, read again and measured (tenth review)
 
