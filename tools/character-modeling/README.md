@@ -336,6 +336,12 @@ would read as a mitten. The taper went from 1.64 to 2 to one with it.
 
 The GLB envelope follows: ±0.740 → ±0.693.
 
+The **shoulder ball then dropped 0.026** below the shoulder point, on the
+owner's call. The offset runs along the body's own down axis rather than along
+the arm: sliding it down the limb would carry it outward as well, and the ball
+belongs on the torso's shoulder. From the side it now reads closer to the
+board's dark collar — the arm passes through it rather than perching on it.
+
 **Deliberately not built.** The wrist cuff sits exactly where the hand covers
 it; it is worth building only if the hand is later set off from the wrist. The
 lengthwise seam is a surface detail on a shell whose section is not final. Both

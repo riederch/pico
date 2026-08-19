@@ -1474,8 +1474,12 @@ def make_arm(side):
         SHELL, "shell",
     )
     parent_preserve_world(arm, shoulder_mount)
+    # Dropped a little below the shoulder point. The offset is along the body's
+    # own down axis, not along the arm: sliding it down the limb would move the
+    # ball outward as well, and it belongs on the torso's shoulder.
     ball = uv_sphere(
-        f"Trim.Shoulder.{side}", shoulder - upper_direction * 0.034,
+        f"Trim.Shoulder.{side}",
+        shoulder - upper_direction * 0.034 + Vector((0.0, -0.026, 0.0)),
         (0.094, 0.098, 0.094),
         TRIM, "trim", segments=64, rings=40,
     )
