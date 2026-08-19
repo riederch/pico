@@ -2,6 +2,19 @@
 
 ## Status
 
+Status note, 2026-08-19: **currency step 43.4.0 to 43.4.1**, the same shape
+as the 2026-08-12 step: the patch shipped upstream, the check cannot notice a
+release and can only expire, so the pin moves by hand and the evidence file
+records the review date. `verify:linux` green on the same host in the same
+`user_namespace` mode, all three ADR 0130 E1 door lines intact. The gated
+class `Private_Dirty + Private_Hugetlb` reads 103,325,696 against 43.4.0's
+100,339,712 (budget 110,000,000); total private is 112,357,376 against
+102,420,480, with `Private_Clean` up from 2.1 MB to 9.0 MB - the columns
+moved together with a process-count change (6 roles against 7), which is the
+band this ADR already records as movement rather than growth. PSS 224,292,864,
+reported and not asserted in this mode. 44.0.0 stable has still not shipped;
+2026-08-25 holds.
+
 Status note, 2026-08-18: **Electron 44 was measured before it exists as a
 release, and the risk the roadmap flagged is not there.**
 
