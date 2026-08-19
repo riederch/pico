@@ -425,11 +425,26 @@ backwards — a dish moves the centroid *away* from itself — and the second wa
 camera at 0.55 units with an 80 mm lens, which framed the wrist and not the
 hand. Only the raycast answered the question it was asked.
 
-**Still open, and visible in the renders:** the hand reads as a flat slab with
-separate blocks hanging under it. The owner's description forbids exactly that —
-"no ball with finger rods attached", knuckle roots that pass softly into the
-palm. The digit roots step rather than blend, and the palm's cross-section is
-too boxy. That is a shape question, not a naming one, and it is untouched here.
+**The digits curled the wrong way.** `axis_palm` points at the cupped face, the
+one turned towards the body, and every finger's control and tip carried a
+*negative* `axis_palm` term — so the fingers bent away from the palm and the
+relaxed hand read as bent backwards. They now curl towards the palm, at 0.28 of
+each digit's length rather than the 0.46 the first correction used, which had
+tucked them out of sight behind the hand. The thumb curls with them and stays on
+the palm side: crossing to the back of the hand would open the grip instead of
+closing it.
+
+**The palm's section was a rounded rectangle.** It used a superellipse with an
+exponent below one, which gives four soft corners and a flat face — that is what
+made the hand read as a slab with digits hanging off it. It is a plain ellipse
+now.
+
+The fingertips tuck in further than they reached out, so the GLB envelope came
+in with them, ±0.759 to ±0.711. Whole-figure silhouette coverage 91.4 → 92.0 per
+cent.
+
+**Still open:** the digit roots step into the palm rather than blending, which
+the owner's description asks for at the knuckles.
 
 ### The measured reference, finally read by a check (eleventh review)
 

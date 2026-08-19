@@ -32,14 +32,15 @@ assert not any(name.startswith("Status.HeadAccent.") for name in names)
 # import, so Character +Y is observed as Blender +Z here. Exported bevels add
 # less than one per cent to the authored hand envelope.
 #
-# The arm was placed three times on 2026-08-19 and the envelope followed each
-# time: +-0.792 from the concept board's angles, +-0.693 after two passes at
-# the board's proportions, and +-0.759 once it was placed from the arm table in
+# The arm was placed several times on 2026-08-19 and the envelope followed each
+# time: +-0.792 from the concept board's angles, +-0.693 after two passes at the
+# board's proportions, +-0.759 once it was placed from the arm table in
 # `Character_Geometry_Measurements.md` -- the registered reference, which
-# outranks the board. The two arms are mirrored, so a single figure covers both
-# sides.
-assert abs(minimum[0] + 0.759) < 0.01
-assert abs(maximum[0] - 0.759) < 0.01
+# outranks the board -- and +-0.711 after the digits were turned to curl towards
+# the palm instead of away from it, which pulls the fingertips back in. The two
+# arms are mirrored, so a single figure covers both sides.
+assert abs(minimum[0] + 0.711) < 0.01
+assert abs(maximum[0] - 0.711) < 0.01
 assert abs(minimum[0] + maximum[0]) < 0.002, "the arms are mirrored"
 assert abs(maximum[2] - 0.562) < 0.001
 

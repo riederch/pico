@@ -1332,8 +1332,12 @@ def hand_shell(
         ring = []
         for segment in range(around):
             angle = 2.0 * math.pi * segment / around
-            across = math.copysign(abs(math.cos(angle)) ** (2.0 / 2.6), math.cos(angle))
-            depth = math.copysign(abs(math.sin(angle)) ** (2.0 / 2.6), math.sin(angle))
+            # A true ellipse. The section used to be a superellipse with an
+            # exponent below one, which is a rounded *rectangle*: it gave the
+            # palm four soft corners and a flat face, and the hand read as a
+            # slab with digits hanging off it.
+            across = math.cos(angle)
+            depth = math.sin(angle)
             point = centre + axis_side * (width * across) + axis_palm * (thick * depth)
             hollow = (
                 palm_hollow * half_thickness
@@ -1363,16 +1367,20 @@ def hand_shell(
             - forward * (palm_length * 0.34)
             - axis_palm * (half_thickness * 0.20)
         )
+        # The digits curl *towards* the palm. `axis_palm` points at the cupped
+        # face -- the one turned to the body -- so the curl is +axis_palm.
+        # It used to be negative, which bent every finger away from the palm
+        # and made the relaxed hand read as bent backwards.
         digits.append({
             "kind": "finger",
             "index": index,
             "base": base,
-            "control": base + forward * (length * 0.66) - axis_palm * (length * 0.04),
+            "control": base + forward * (length * 0.70) + axis_palm * (length * 0.06),
             "tip": (
                 base
-                + forward * (length * 0.84)
-                - axis_palm * (length * 0.52)
-                + axis_side * (half_width * offset * 0.26)
+                + forward * (length * 0.88)
+                + axis_palm * (length * 0.28)
+                + axis_side * (half_width * offset * 0.20)
             ),
             "radius_base": digit_radius,
             "radius_tip": digit_radius * 0.86,
@@ -1397,17 +1405,20 @@ def hand_shell(
         "base": thumb_base,
         "control": (
             thumb_base
-            + axis_side * (thumb_length * 0.30)
-            + forward * (thumb_length * 0.30)
-            - axis_palm * (thumb_length * 0.10)
+            + axis_side * (thumb_length * 0.24)
+            + forward * (thumb_length * 0.32)
+            + axis_palm * (thumb_length * 0.04)
         ),
         # and it curls back towards the fingers rather than splaying outward,
-        # which is what makes it read as opposing them.
+        # which is what makes it read as opposing them. It stays on the palm
+        # side while doing so, because that is the side the fingers now curl
+        # to; crossing to the back of the hand would open the grip instead of
+        # closing it.
         "tip": (
             thumb_base
-            + axis_side * (thumb_length * 0.26)
-            + forward * (thumb_length * 0.86)
-            - axis_palm * (thumb_length * 0.34)
+            + axis_side * (thumb_length * 0.20)
+            + forward * (thumb_length * 0.82)
+            + axis_palm * (thumb_length * 0.16)
         ),
         "radius_base": digit_radius * 1.04,
         "radius_tip": digit_radius * 0.88,
