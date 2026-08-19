@@ -207,11 +207,56 @@ appearance document defines 0 as *not pinned to a released authored character
 core* because ADR 0124 has released none — so the change is free today and has
 to be frozen with the first released core.
 
-`validate_head_variants.py` holds the set to exactly those four mounts,
+`validate_head_variants.py` holds the set to exactly those thirteen mounts,
 asserts no object named `Elbow` survives, checks what each mount owns, and
 then **turns them**: the shoulder must move the arm and the hand, the arm
 joint must move the hand and leave the arm where it is. A mount that does not
 drive its children is decoration.
+
+### One joint per digit, and a head that turns (eighth review)
+
+The hand was one closed shell, so a finger could not move without the palm.
+`hand_shell` now returns the palm and a description of each digit, and
+`digit_shell` builds every finger and the thumb as its own object under its
+own mount:
+
+| mount | carries |
+|---|---|
+| `PICO_MOUNT_finger.<side>.1..3` | `Trim.Finger.<side>.1..3` |
+| `PICO_MOUNT_thumb.<side>` | `Trim.Thumb.<side>` |
+
+Both hang off `PICO_MOUNT_arm.<side>`, so the wrist still carries the whole
+hand and each digit moves alone inside it. The contract checks that too: it
+turns one digit and requires its three neighbours to stay put to within
+`1e-6`, and that each digit joint owns exactly one digit — one joint per
+finger means one finger per joint.
+
+The head had no pivot at all. Shell, visor, frame, side modules, status caps,
+the face drawings and the head-module mount all hung directly off the root, so
+nothing could nod, turn or tilt without dragging the body along.
+`PICO_MOUNT_head` now sits between them and the root and carries all of it,
+tagged `pico_joint_degrees_of_freedom = "pitch|yaw|roll"`.
+
+Its height is **read off the neck**, not typed in: the pivot sits at the top
+vertex of `Trim.Neck` (currently `y = -0.336`). The head turns against the
+neck, so if the neck is reshaped again the pivot follows it instead of
+drifting into the shell. The neck itself deliberately stays with the body.
+
+The contract turns the head about each of the three axes and requires the
+shell, the visor and a face drawing to move while the torso and the neck stay
+still to within `1e-6`. Measuring the **vertex cloud** rather than the centroid
+is what makes the yaw check work at all: the head is nearly symmetric about
+its own vertical axis, so its centre of mass barely moves when it turns — a
+centroid probe passed a head that was in fact standing still.
+
+Five mutations were run against the checkpoint and each is caught: a dropped
+finger joint, two digits sharing one joint, a pivot moved off the neck edge,
+the neck parented into the head, and a face drawing left behind by the head.
+
+A digit rotated far enough sweeps into the palm — at −70° the base visibly
+intersects it. That is a **pose limit** and belongs to the gesture corridor
+still being designed, not to the model: the joint has to be able to reach
+further than the corridor will allow.
 
 ### Arm pose, measured (seventh review)
 

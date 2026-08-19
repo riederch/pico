@@ -368,26 +368,69 @@ print(
 )
 
 # ---------------------------------------------------------------------------
-# The authored joint set: shoulder and arm, and no elbow.
+# The authored joint set: head, shoulder, arm and one joint per digit -- and
+# no elbow.
 # ---------------------------------------------------------------------------
 
 joints = {
     obj.name: obj for obj in bpy.data.objects if obj.get("pico_joint")
 }
-assert sorted(joints) == [
-    "PICO_MOUNT_arm.L", "PICO_MOUNT_arm.R",
-    "PICO_MOUNT_shoulder.L", "PICO_MOUNT_shoulder.R",
-], sorted(joints)
+expected_joints = ["PICO_MOUNT_head"]
+for side in ("L", "R"):
+    expected_joints += [
+        f"PICO_MOUNT_arm.{side}",
+        f"PICO_MOUNT_shoulder.{side}",
+        f"PICO_MOUNT_thumb.{side}",
+    ] + [f"PICO_MOUNT_finger.{side}.{index}" for index in (1, 2, 3)]
+assert sorted(joints) == sorted(expected_joints), sorted(joints)
 assert not any("Elbow" in name for name in bpy.data.objects.keys()), "an elbow survives"
 
 for side in ("L", "R"):
     shoulder_mount = joints[f"PICO_MOUNT_shoulder.{side}"]
     arm_mount = joints[f"PICO_MOUNT_arm.{side}"]
     assert arm_mount.parent is shoulder_mount, side
-    # what each joint owns: the shoulder carries the arm, the arm the hand.
+    # what each joint owns: the shoulder carries the arm, the arm the palm,
+    # and every digit hangs off the palm on a joint of its own.
     assert bpy.data.objects[f"Shell.Arm.{side}"].parent is shoulder_mount, side
     assert bpy.data.objects[f"Trim.Shoulder.{side}"].parent is shoulder_mount, side
     assert bpy.data.objects[f"Trim.Hand.{side}"].parent is arm_mount, side
+    for label in [f"finger.{side}.{index}" for index in (1, 2, 3)] + [f"thumb.{side}"]:
+        digit_mount = joints[f"PICO_MOUNT_{label}"]
+        piece = "Trim." + label.replace("finger", "Finger").replace("thumb", "Thumb")
+        assert digit_mount.parent is arm_mount, label
+        assert bpy.data.objects[piece].parent is digit_mount, label
+        # one joint per digit means exactly one digit per joint.
+        assert [child.name for child in digit_mount.children] == [piece], label
+
+# The head is one piece turning on the neck: the pivot height is the top of
+# the neck column, not a number that could drift away from it.
+head_mount = joints["PICO_MOUNT_head"]
+assert head_mount.parent is bpy.data.objects["PICO.CharacterCore.Root"]
+assert head_mount["pico_joint_degrees_of_freedom"] == "pitch|yaw|roll"
+neck = bpy.data.objects["Trim.Neck"]
+neck_top = max((neck.matrix_world @ vertex.co).y for vertex in neck.data.vertices)
+assert abs(head_mount.matrix_world.translation.y - neck_top) < 1e-6, (
+    head_mount.matrix_world.translation.y, neck_top
+)
+head_children = {child.name for child in head_mount.children}
+for carried in (
+    "Shell.Head", "FaceDisplay.Visor", "Trim.VisorFrame",
+    "Trim.HeadSideModule.L", "Trim.HeadSideModule.R",
+    "Status.HeadSideCap.L", "Status.HeadSideCap.R",
+    "PICO_MOUNT_head_module",
+):
+    assert carried in head_children, carried
+# every drawn face shape turns with the head, or the face would stay behind.
+faces = [
+    obj.name for obj in bpy.data.objects
+    if obj.name.startswith(("PREVIEW.Eye.", "PREVIEW.Mouth."))
+]
+assert faces, "no face shapes to check"
+assert set(faces) <= head_children, sorted(set(faces) - head_children)
+# what the head turns against stays with the body.
+for standing in ("Trim.Neck", "Shell.Torso", "Status.ChestCore",
+                 "PICO_MOUNT_shoulder.L", "PICO_MOUNT_shoulder.R"):
+    assert standing not in head_children, standing
 
 # A mount only means something if turning it turns what hangs off it.
 def evaluated_centre(name):
@@ -413,7 +456,72 @@ assert (evaluated_centre("Shell.Arm.L") - rest_arm).length < 0.001, "arm follows
 assert (evaluated_centre("Trim.Hand.L") - rest_hand).length > 0.01
 joints["PICO_MOUNT_arm.L"].rotation_euler = (0.0, 0.0, 0.0)
 bpy.context.view_layer.update()
-print(f"PICO_JOINT_SET={len(joints)} shoulder+arm, no elbow, chain verified")
+
+# A digit joint moves its own digit and leaves its neighbours standing.
+# A centroid is blind to turning a part about its own axis of symmetry -- the
+# head yaws a long way while its centre of mass stays put. Compare the vertex
+# clouds instead and take the largest displacement any point suffers.
+def evaluated_points(name):
+    evaluated = bpy.data.objects[name].evaluated_get(
+        bpy.context.evaluated_depsgraph_get()
+    )
+    matrix = evaluated.matrix_world
+    return [matrix @ vertex.co for vertex in evaluated.data.vertices]
+
+
+def max_shift(name, rest):
+    return max(
+        (point - reference).length
+        for point, reference in zip(evaluated_points(name), rest[name])
+    )
+
+
+left_digits = [
+    ("PICO_MOUNT_finger.L.1", "Trim.Finger.L.1"),
+    ("PICO_MOUNT_finger.L.2", "Trim.Finger.L.2"),
+    ("PICO_MOUNT_finger.L.3", "Trim.Finger.L.3"),
+    ("PICO_MOUNT_thumb.L", "Trim.Thumb.L"),
+]
+rest_digits = {piece: evaluated_points(piece) for _, piece in left_digits}
+for mount_name, turned in left_digits:
+    # not `mount`: that name already holds the head-module mount the identity
+    # selector is checked against further down.
+    digit_joint = joints[mount_name]
+    digit_joint.rotation_euler = (0.0, 0.0, 0.5)
+    bpy.context.view_layer.update()
+    for name in rest_digits:
+        moved = max_shift(name, rest_digits)
+        if name == turned:
+            assert moved > 0.005, f"{turned} does not follow its own joint ({moved:.5f})"
+        else:
+            assert moved < 1e-6, f"{turned} drags {name} ({moved:.5f})"
+    digit_joint.rotation_euler = (0.0, 0.0, 0.0)
+    bpy.context.view_layer.update()
+
+# Nod, turn and side tilt: each axis moves the whole head and leaves the body.
+carried_by_head = ("Shell.Head", "FaceDisplay.Visor", "PREVIEW.Eye.open.L")
+standing_still = ("Shell.Torso", "Trim.Neck")
+rest_head = {
+    name: evaluated_points(name) for name in carried_by_head + standing_still
+}
+for axis, name_of_axis in enumerate(("pitch", "yaw", "roll")):
+    head_mount.rotation_euler = tuple(
+        0.30 if index == axis else 0.0 for index in range(3)
+    )
+    bpy.context.view_layer.update()
+    for name in carried_by_head:
+        moved = max_shift(name, rest_head)
+        assert moved > 0.005, f"{name_of_axis}: {name} stays behind ({moved:.5f})"
+    for name in standing_still:
+        moved = max_shift(name, rest_head)
+        assert moved < 1e-6, f"{name_of_axis}: the head drags {name} ({moved:.5f})"
+head_mount.rotation_euler = (0.0, 0.0, 0.0)
+bpy.context.view_layer.update()
+
+print(
+    f"PICO_JOINT_SET={len(joints)} head+shoulder+arm+digits, no elbow, "
+    "chain verified"
+)
 
 # ---------------------------------------------------------------------------
 # The avatar state faces cover exactly the vocabulary the protocol ships.
@@ -494,7 +602,7 @@ for identity_index in range(3):
         assert all(
             abs(value - expected_scale) < 0.000001
             for value in carrier.scale
-        )
+        ), (identity_index, carrier.name, tuple(carrier.scale), expected_scale)
         if expected_scale == 1.0:
             visible.append((
                 carrier["pico_head_identity"],

@@ -1263,18 +1263,38 @@ def arm_shell(
     return obj
 
 
+def digit_shell(
+    name, base, control, tip, radius_base, radius_tip, mat, zone, around=26,
+):
+    """One finger or thumb as its own object, so a joint can turn it."""
+    vertices = []
+    faces = []
+    _loft(
+        vertices, faces,
+        _digit_rings(base, control, tip, radius_base, radius_tip, around),
+        around,
+    )
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    MODEL.objects.link(obj)
+    obj.parent = ROOT
+    apply_material(obj, mat, zone)
+    smooth(obj)
+    return obj
+
+
 def hand_shell(
     name, wrist, knuckles, palm_normal, half_width, half_thickness, mat, zone,
     thumb_toward=(1.0, 0.0, 0.0), finger_length=0.100, palm_hollow=0.55,
     around=26, along=16,
 ):
-    """One hand: a cupped palm carrying three fingers and a thumb.
+    """The cupped palm, plus where its four digits start and where they end.
 
-    The concept hand is a single piece with four clearly separated, rounded
-    digits, not a mitten and not a ball with sticks on it. Palm and digits are
-    therefore built into one mesh and one object: they overlap where a hand's
-    knuckles are, so the result reads as one form while each digit still tells
-    itself apart.
+    The palm is one object and each digit is another, because one joint per
+    digit means each has to turn on its own. They still overlap where a hand's
+    knuckles are, so the hand reads as one form.
 
     The palm is cupped rather than solid. A sphere reads as a knob; a real
     hand is a shell with a hollow in it.
@@ -1294,8 +1314,6 @@ def hand_shell(
 
     vertices = []
     faces = []
-
-    # --- the palm -------------------------------------------------------
     rings = []
     for index in range(along + 1):
         u = index / along
@@ -1317,66 +1335,65 @@ def hand_shell(
             ring.append(tuple(point - axis_palm * hollow))
         rings.append(ring)
     _loft(vertices, faces, rings, around)
+    mesh = bpy.data.meshes.new(f"{name}.Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    palm = bpy.data.objects.new(name, mesh)
+    MODEL.objects.link(palm)
+    palm.parent = ROOT
+    apply_material(palm, mat, zone)
+    smooth(palm)
 
-    # --- three fingers off the knuckle line ------------------------------
     digit_radius = half_width * 0.31
-    for offset in (-0.54, 0.0, 0.54):
+    digits = []
+    for index, offset in enumerate((-0.54, 0.0, 0.54), start=1):
         length = finger_length * (1.0 if offset == 0.0 else 0.88)
-        start = (
+        base = (
             knuckles
             + axis_side * (half_width * offset)
             - forward * (palm_length * 0.34)
             - axis_palm * (half_thickness * 0.20)
         )
-        control = start + forward * (length * 0.66) - axis_palm * (length * 0.04)
-        end = (
-            start
-            + forward * (length * 0.84)
-            - axis_palm * (length * 0.52)
-            + axis_side * (half_width * offset * 0.26)
-        )
-        _loft(
-            vertices, faces,
-            _digit_rings(start, control, end, digit_radius, digit_radius * 0.86, around),
-            around,
-        )
+        digits.append({
+            "kind": "finger",
+            "index": index,
+            "base": base,
+            "control": base + forward * (length * 0.66) - axis_palm * (length * 0.04),
+            "tip": (
+                base
+                + forward * (length * 0.84)
+                - axis_palm * (length * 0.52)
+                + axis_side * (half_width * offset * 0.26)
+            ),
+            "radius_base": digit_radius,
+            "radius_tip": digit_radius * 0.86,
+        })
 
-    # --- one thumb off the side of the palm ------------------------------
     thumb_length = finger_length * 0.74
     thumb_base = (
         wrist
         + forward * (palm_length * 0.46)
         + axis_side * (half_width * 0.42)
     )
-    thumb_control = (
-        thumb_base
-        + axis_side * (thumb_length * 0.46)
-        + forward * (thumb_length * 0.30)
-    )
-    thumb_end = (
-        thumb_base
-        + axis_side * (thumb_length * 0.52)
-        + forward * (thumb_length * 0.86)
-        - axis_palm * (thumb_length * 0.20)
-    )
-    _loft(
-        vertices, faces,
-        _digit_rings(
-            thumb_base, thumb_control, thumb_end,
-            digit_radius * 1.04, digit_radius * 0.88, around,
+    digits.append({
+        "kind": "thumb",
+        "index": 1,
+        "base": thumb_base,
+        "control": (
+            thumb_base
+            + axis_side * (thumb_length * 0.46)
+            + forward * (thumb_length * 0.30)
         ),
-        around,
-    )
-
-    mesh = bpy.data.meshes.new(f"{name}.Mesh")
-    mesh.from_pydata(vertices, [], faces)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    MODEL.objects.link(obj)
-    obj.parent = ROOT
-    apply_material(obj, mat, zone)
-    smooth(obj)
-    return obj
+        "tip": (
+            thumb_base
+            + axis_side * (thumb_length * 0.52)
+            + forward * (thumb_length * 0.86)
+            - axis_palm * (thumb_length * 0.20)
+        ),
+        "radius_base": digit_radius * 1.04,
+        "radius_tip": digit_radius * 0.88,
+    })
+    return palm, digits
 
 
 def make_arm(side):
@@ -1446,7 +1463,7 @@ def make_arm(side):
     # same hand into a raised, open gesture; the thumb then points forward.
     palm_normal = (-sign, 0.0, 0.0)
     hand_direction = (palm - wrist).normalized()
-    hand = hand_shell(
+    hand, digits = hand_shell(
         f"Trim.Hand.{side}",
         wrist - hand_direction * 0.020,
         wrist + hand_direction * 0.082,
@@ -1456,6 +1473,24 @@ def make_arm(side):
         finger_length=0.116,
     )
     parent_preserve_world(hand, arm_mount)
+    # One joint per digit. Each mount sits at the digit's own root, so turning
+    # it curls that digit alone and nothing else in the hand moves.
+    for digit in digits:
+        label = (
+            f"{digit['kind']}.{side}.{digit['index']}"
+            if digit["kind"] == "finger" else f"{digit['kind']}.{side}"
+        )
+        mount = empty(f"PICO_MOUNT_{label}", tuple(digit["base"]))
+        mount["pico_joint"] = digit["kind"]
+        mount["pico_joint_side"] = side
+        parent_preserve_world(mount, arm_mount)
+        piece = digit_shell(
+            f"Trim.{digit['kind'].title()}.{side}"
+            + (f".{digit['index']}" if digit["kind"] == "finger" else ""),
+            digit["base"], digit["control"], digit["tip"],
+            digit["radius_base"], digit["radius_tip"], TRIM, "trim",
+        )
+        parent_preserve_world(piece, mount)
 
 
 # Eye and mouth shapes are drawn once each, and a state is a *pairing* of one
@@ -2881,6 +2916,35 @@ torus("Status.HoverRing", (0.0, -1.245, 0.0), 0.345, 0.016, STATUS, "status_emit
 uv_sphere("Status.HoverCore", (0.0, -1.245, 0.0), (0.155, 0.010, 0.155), STATUS, "status_emitters", segments=64, rings=40)
 
 preview_face(head_profile)
+
+# The head turns as one piece: nod, turn and side tilt about a pivot at the
+# neck, not about the head's own centre. The pivot height is read off the neck
+# column rather than typed in, so it keeps following the neck if that is
+# reshaped again. Everything the head carries hangs off the pivot -- shell,
+# visor and its frame, the side modules with their status caps, the face
+# drawings and the head-module mount with whatever identity is selected. The
+# neck itself stays with the body, because it is what the head turns against.
+NECK = bpy.data.objects["Trim.Neck"]
+HEAD_PIVOT = empty(
+    "PICO_MOUNT_head",
+    (0.0, max((NECK.matrix_world @ v.co).y for v in NECK.data.vertices), 0.0),
+)
+HEAD_PIVOT["pico_joint"] = "head"
+HEAD_PIVOT["pico_joint_degrees_of_freedom"] = "pitch|yaw|roll"
+for _name in (
+    "Shell.Head",
+    "FaceDisplay.Visor",
+    "Trim.VisorFrame",
+    "Trim.HeadSideModule.L",
+    "Trim.HeadSideModule.R",
+    "Status.HeadSideCap.L",
+    "Status.HeadSideCap.R",
+    "PICO_MOUNT_head_module",
+):
+    parent_preserve_world(bpy.data.objects[_name], HEAD_PIVOT)
+for _obj in list(PREVIEW.objects):
+    if _obj.name.startswith(("PREVIEW.Eye.", "PREVIEW.Mouth.")):
+        parent_preserve_world(_obj, HEAD_PIVOT)
 
 CAMERA = camera("Camera.Reference")
 area_light("Key", (3.3, 2.7, 4.8), 950.0, (1.0, 0.82, 0.68), 4.0)
