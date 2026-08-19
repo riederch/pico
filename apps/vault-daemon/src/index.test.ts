@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createConnection, createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -246,6 +246,15 @@ function expectReason(response: PicoVaultDaemonResponse, reason: string): void {
   }
 }
 
+/**
+ * As in `apps/core/src/app.test.ts`: the declared version rather than a copy
+ * of the number. `DAEMON_VERSION` is bound to `package.json` by
+ * `check-version.mjs`; pinning it here again only made release bumps red.
+ */
+const packagedVersion: string = JSON.parse(
+  readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+).version;
+
 describe('Pico Vault daemon custody boundary (ADR 0097 D2)', () => {
   it('starts private, refuses a second live daemon and restarts locked after close', async () => {
     const paths = makeHome();
@@ -363,7 +372,7 @@ describe('Pico Vault daemon wire contract (ADR 0097 D3)', () => {
     if (helloResponse.ok) {
       expect(helloResponse.result).toEqual({
         protocolVersion: 1,
-        daemonVersion: '0.2.0',
+        daemonVersion: packagedVersion,
         locked: true,
       });
     }

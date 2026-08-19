@@ -153,6 +153,20 @@ afterEach(() => {
   }
 });
 
+/**
+ * The version this package declares, not a fourth copy of it.
+ *
+ * `SERVICE_VERSION` is a literal in `app.ts`, `check-version.mjs` binds it to
+ * `package.json`, and these payload assertions used to pin the number a third
+ * time - so a release bump passed every version gate and turned the suite red
+ * afterwards. It did, on 2026-08-19. Reading the declared version keeps this
+ * an end-to-end assertion that the served payload is right, without adding a
+ * copy that can drift.
+ */
+const packagedVersion: string = JSON.parse(
+  readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+).version;
+
 describe('ADR 0110 R6 recovery anchor re-seed marker', () => {
   it('blocks until an operator places the marker, then restores service without reviving anything', async () => {
     const databasePath = createDatabasePath();
@@ -360,7 +374,7 @@ describe('Pico Home Core app', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({
       service: 'pico-home-core',
-      version: '0.2.0',
+      version: packagedVersion,
       protocolVersion: '0.1.7',
     });
 
@@ -381,7 +395,7 @@ describe('Pico Home Core app', () => {
     expect(response.headers['cache-control']).toBe('no-store');
     expect(response.json()).toEqual({
       service: 'pico-home-core',
-      version: '0.2.0',
+      version: packagedVersion,
       protocolVersion: '0.1.7',
       deviceId: 'test-core',
       capabilities: protocolCapabilities,
