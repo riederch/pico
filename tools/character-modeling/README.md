@@ -189,6 +189,30 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
+### Joint set: shoulder and arm, no elbow
+
+The authored joint set is two joints per side. The arm turns at the shoulder,
+the hand turns at the arm joint, and the shell between them bends without
+being hinged. Each joint is an empty that owns what hangs off it —
+`PICO_MOUNT_shoulder.<side>` carries the arm shell and the shoulder ball,
+`PICO_MOUNT_arm.<side>` carries the hand — so a later runtime pose rotates a
+mount instead of reaching into geometry.
+
+The concept board draws a dark elbow band. It is deliberately not reproduced:
+a band where no joint is would promise a joint the character does not have.
+
+This is a change to the authored joint set, which `coreModelVersion` covers
+and which is part of identity. That field currently reads 0, and the
+appearance document defines 0 as *not pinned to a released authored character
+core* because ADR 0124 has released none — so the change is free today and has
+to be frozen with the first released core.
+
+`validate_head_variants.py` holds the set to exactly those four mounts,
+asserts no object named `Elbow` survives, checks what each mount owns, and
+then **turns them**: the shoulder must move the arm and the hand, the arm
+joint must move the hand and leave the arm where it is. A mount that does not
+drive its children is decoration.
+
 ### Arm pose, measured (seventh review)
 
 Three passes changed how the arm was *built* while its **pose** stayed wrong,

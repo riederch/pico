@@ -1195,48 +1195,6 @@ def _digit_rings(base, control, tip, radius_base, radius_tip, around, along=13):
     return rings
 
 
-def joint_collar(name, start, end, radius, mat, zone, around=40, along=12):
-    """A dark cuff wrapping the arm where it meets the body or bends.
-
-    The concept board closes the arm against the torso with a collar rather
-    than letting the shell run into the body, and marks the elbow the same
-    way. The cuff is slightly wider than the arm underneath and barrels a
-    little, so it reads as a fitted band and not as a sleeve.
-    """
-    start, end = Vector(start), Vector(end)
-    axis = (end - start).normalized()
-    side = axis.cross(Vector((0.0, 0.0, 1.0)))
-    if side.length < 0.001:
-        side = axis.cross(Vector((0.0, 1.0, 0.0)))
-    side.normalize()
-    up = axis.cross(side).normalized()
-    rings = []
-    for index in range(along + 1):
-        amount = index / along
-        centre = start + (end - start) * amount
-        local = radius * (0.90 + 0.10 * math.sin(math.pi * amount))
-        rings.append([
-            tuple(
-                centre
-                + side * (local * math.cos(2.0 * math.pi * s / around))
-                + up * (local * math.sin(2.0 * math.pi * s / around))
-            )
-            for s in range(around)
-        ])
-    vertices = []
-    faces = []
-    _loft(vertices, faces, rings, around)
-    mesh = bpy.data.meshes.new(f"{name}.Mesh")
-    mesh.from_pydata(vertices, [], faces)
-    mesh.update()
-    obj = bpy.data.objects.new(name, mesh)
-    MODEL.objects.link(obj)
-    obj.parent = ROOT
-    apply_material(obj, mat, zone)
-    smooth(obj)
-    return obj
-
-
 def arm_shell(
     name, shoulder, elbow, wrist, radius_shoulder, radius_elbow, radius_wrist,
     mat, zone, around=40, along=30,
@@ -1447,43 +1405,48 @@ def make_arm(side):
     # floating beside it.
     upper_direction = (elbow - shoulder).normalized()
     lower_direction = (wrist - elbow).normalized()
-    # One continuous arm, as the concept board draws it: it bends *through*
-    # the elbow instead of being hinged at it, so there is no string of shell
-    # segments threaded onto joint spheres.
+    # Two joints, no elbow: the arm turns at the shoulder, the hand turns at
+    # the arm joint, and the shell between them bends without being hinged.
+    # Each joint is an empty that owns what hangs off it, so a later runtime
+    # pose rotates a mount instead of reaching into the geometry.
     #
-    # The shoulder keeps its ball. It is what the arm turns on, and without it
-    # the arm just grows out of the torso. It is seated deep enough that only
-    # its outer cap shows past the shell, the way the board draws it: exposed,
-    # it reads as a knob rather than as a joint.
+    # This changes the authored joint set, which `coreModelVersion` covers and
+    # which is part of identity. It currently reads 0 -- the appearance
+    # document defines that as "not pinned to a released authored core",
+    # because ADR 0124 has released none -- so the change is free today and
+    # has to be frozen with the first released core.
+    shoulder_mount = empty(f"PICO_MOUNT_shoulder.{side}", tuple(shoulder))
+    shoulder_mount["pico_joint"] = "shoulder"
+    shoulder_mount["pico_joint_side"] = side
+    arm_mount = empty(f"PICO_MOUNT_arm.{side}", tuple(wrist))
+    arm_mount["pico_joint"] = "arm"
+    arm_mount["pico_joint_side"] = side
+    parent_preserve_world(arm_mount, shoulder_mount)
+
+    # The board draws a dark ball at the shoulder and one light shell running
+    # from it. Its elbow band is deliberately not reproduced: a band where no
+    # joint is would promise a joint the character does not have.
     torso_seat = shoulder + (shoulder - elbow).normalized() * 0.030
-    arm_shell(
+    arm = arm_shell(
         f"Shell.Arm.{side}",
         torso_seat, elbow, wrist,
         0.086, 0.066, 0.050,
         SHELL, "shell",
     )
-    uv_sphere(
+    parent_preserve_world(arm, shoulder_mount)
+    ball = uv_sphere(
         f"Trim.Shoulder.{side}", shoulder - upper_direction * 0.034,
         (0.094, 0.098, 0.094),
         TRIM, "trim", segments=64, rings=40,
     )
-    # The collar has to clear the arm all the way round. The arm bends through
-    # the elbow, so on the inside of the bend it sits closer to the collar's
-    # wall than the nominal radius suggests and pokes through a band sized to
-    # that radius alone.
-    joint_collar(
-        f"Trim.Elbow.{side}",
-        elbow - upper_direction * 0.020,
-        elbow + lower_direction * 0.022,
-        0.080, TRIM, "trim",
-    )
+    parent_preserve_world(ball, shoulder_mount)
 
     # The back of the hand faces outward, so the palm turns toward the body and
     # the hand reads narrow from the front. Facing the palm forward turns the
     # same hand into a raised, open gesture; the thumb then points forward.
     palm_normal = (-sign, 0.0, 0.0)
     hand_direction = (palm - wrist).normalized()
-    hand_shell(
+    hand = hand_shell(
         f"Trim.Hand.{side}",
         wrist - hand_direction * 0.020,
         wrist + hand_direction * 0.082,
@@ -1492,6 +1455,7 @@ def make_arm(side):
         thumb_toward=(0.0, 0.0, 1.0),
         finger_length=0.116,
     )
+    parent_preserve_world(hand, arm_mount)
 
 
 # Eye and mouth shapes are drawn once each, and a state is a *pairing* of one
@@ -1596,6 +1560,17 @@ def preview_face(support_profile):
             )
     for shape in MOUTH_SHAPES:
         preview_mouth(f"PREVIEW.Mouth.{shape}", support_profile, shape)
+
+    # All shapes live in the file, but a render must show one face, not eight
+    # mouths at once. Only the idle pairing renders; `hide_render` leaves the
+    # dependency graph alone, so the exporter still reads every shape.
+    idle_state, idle_eye, idle_mouth = AVATAR_STATE_FACES[0]
+    for obj in PREVIEW.objects:
+        if obj.name.startswith("PREVIEW.Eye."):
+            obj.hide_render = obj.name.split(".")[2] != idle_eye
+        elif obj.name.startswith("PREVIEW.Mouth."):
+            obj.hide_render = obj.name.split(".")[2] != idle_mouth
+    PREVIEW["pico_avatar_state_rendered"] = idle_state
 
     # The mapping travels with the file, so the exporter and anything else
     # reading the checkpoint resolve a state the same way this generator does.

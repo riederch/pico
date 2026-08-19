@@ -368,6 +368,54 @@ print(
 )
 
 # ---------------------------------------------------------------------------
+# The authored joint set: shoulder and arm, and no elbow.
+# ---------------------------------------------------------------------------
+
+joints = {
+    obj.name: obj for obj in bpy.data.objects if obj.get("pico_joint")
+}
+assert sorted(joints) == [
+    "PICO_MOUNT_arm.L", "PICO_MOUNT_arm.R",
+    "PICO_MOUNT_shoulder.L", "PICO_MOUNT_shoulder.R",
+], sorted(joints)
+assert not any("Elbow" in name for name in bpy.data.objects.keys()), "an elbow survives"
+
+for side in ("L", "R"):
+    shoulder_mount = joints[f"PICO_MOUNT_shoulder.{side}"]
+    arm_mount = joints[f"PICO_MOUNT_arm.{side}"]
+    assert arm_mount.parent is shoulder_mount, side
+    # what each joint owns: the shoulder carries the arm, the arm the hand.
+    assert bpy.data.objects[f"Shell.Arm.{side}"].parent is shoulder_mount, side
+    assert bpy.data.objects[f"Trim.Shoulder.{side}"].parent is shoulder_mount, side
+    assert bpy.data.objects[f"Trim.Hand.{side}"].parent is arm_mount, side
+
+# A mount only means something if turning it turns what hangs off it.
+def evaluated_centre(name):
+    evaluated = bpy.data.objects[name].evaluated_get(
+        bpy.context.evaluated_depsgraph_get()
+    )
+    matrix = evaluated.matrix_world
+    points = [matrix @ vertex.co for vertex in evaluated.data.vertices]
+    return sum(points, Vector()) / len(points)
+
+
+rest_arm = evaluated_centre("Shell.Arm.L")
+rest_hand = evaluated_centre("Trim.Hand.L")
+joints["PICO_MOUNT_shoulder.L"].rotation_euler = (0.0, 0.0, 0.35)
+bpy.context.view_layer.update()
+assert (evaluated_centre("Shell.Arm.L") - rest_arm).length > 0.01
+assert (evaluated_centre("Trim.Hand.L") - rest_hand).length > 0.01
+joints["PICO_MOUNT_shoulder.L"].rotation_euler = (0.0, 0.0, 0.0)
+bpy.context.view_layer.update()
+joints["PICO_MOUNT_arm.L"].rotation_euler = (0.0, 0.0, 0.45)
+bpy.context.view_layer.update()
+assert (evaluated_centre("Shell.Arm.L") - rest_arm).length < 0.001, "arm follows its own joint"
+assert (evaluated_centre("Trim.Hand.L") - rest_hand).length > 0.01
+joints["PICO_MOUNT_arm.L"].rotation_euler = (0.0, 0.0, 0.0)
+bpy.context.view_layer.update()
+print(f"PICO_JOINT_SET={len(joints)} shoulder+arm, no elbow, chain verified")
+
+# ---------------------------------------------------------------------------
 # The avatar state faces cover exactly the vocabulary the protocol ships.
 # ---------------------------------------------------------------------------
 
