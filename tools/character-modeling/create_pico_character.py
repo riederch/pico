@@ -1416,18 +1416,24 @@ def hand_shell(
 
 def make_arm(side):
     sign = -1.0 if side == "L" else 1.0
+    # Measured off docs/assets/pico-design-concept.png rather than estimated.
+    # Calibrating on the torso width and the head-top-to-chest-core height, the
+    # board's arm leaves the shoulder at 34.7 degrees below horizontal for
+    # 0.314, then the forearm at 48.0 degrees for 0.170. The previous arm hung
+    # at 46.5 and 66.8 degrees over 0.421 in total: too steep, too short, and
+    # rooted too low, which is why it read wrong however its parts were built.
+    #
+    # The shoulder sits on the torso surface at that height, not inside it.
     if side == "L":
-        # The reference pose is deliberately not mirrored: its left arm hangs
-        # farther out and exposes more of the articulated hand.
-        shoulder = Vector((-0.395, -0.490, 0.000))
-        elbow = Vector((-0.580, -0.685, 0.025))
-        wrist = Vector((-0.640, -0.825, 0.075))
-        palm = Vector((-0.640, -0.890, 0.090))
+        shoulder = Vector((-0.352, -0.450, 0.000))
+        elbow = Vector((-0.610, -0.629, 0.028))
+        wrist = Vector((-0.724, -0.755, 0.072))
+        palm = Vector((-0.724, -0.820, 0.088))
     else:
-        shoulder = Vector((0.395, -0.490, 0.000))
-        elbow = Vector((0.570, -0.690, 0.035))
-        wrist = Vector((0.600, -0.835, 0.075))
-        palm = Vector((0.600, -0.900, 0.090))
+        shoulder = Vector((0.352, -0.450, 0.000))
+        elbow = Vector((0.610, -0.629, 0.036))
+        wrist = Vector((0.724, -0.755, 0.072))
+        palm = Vector((0.724, -0.820, 0.088))
     # One continuous arm, as on the concept board: no shoulder, elbow or
     # wrist spheres threaded onto shell segments. The shoulder end is pushed
     # slightly into the torso so it closes against the body instead of

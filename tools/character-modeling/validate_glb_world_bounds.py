@@ -31,8 +31,14 @@ assert not any(name.startswith("Status.HeadAccent.") for name in names)
 # Blender converts the glTF Y-up contract back into its native Z-up view on
 # import, so Character +Y is observed as Blender +Z here. Exported bevels add
 # less than one per cent to the authored hand envelope.
-assert abs(minimum[0] + 0.712) < 0.01
-assert abs(maximum[0] - 0.672) < 0.01
+#
+# The arm angles and lengths were measured off the concept board on
+# 2026-08-19, which reaches further out than the earlier estimate did: the
+# envelope moved from -0.712/+0.672 to a symmetric +-0.792. The two arms are
+# now mirrored, so a single figure covers both sides.
+assert abs(minimum[0] + 0.792) < 0.01
+assert abs(maximum[0] - 0.792) < 0.01
+assert abs(minimum[0] + maximum[0]) < 0.002, "the arms are mirrored"
 assert abs(maximum[2] - 0.562) < 0.001
 
 print("PICO_GLB_WORLD_BOUNDS=valid")

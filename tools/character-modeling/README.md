@@ -148,7 +148,30 @@ the tail is active, one connected shell, the arc/fall/tip landmarks, the width
 profile, the roll, the shared status material and a parting seam that ends
 before the band.
 
-### Arms and hand roll after the sixth review
+### Arm pose, measured (seventh review)
+
+Three passes changed how the arm was *built* while its **pose** stayed wrong,
+so the seventh pass measured the board instead of estimating from it.
+Calibrating on the torso width and the head-top-to-chest-core height:
+
+| | board | before | |
+|---|---:|---:|---|
+| upper arm angle | 34.7° | 46.5° | 12° too steep |
+| forearm angle | 48.0° | 66.8° | 19° too steep |
+| total length | 0.484 | 0.421 | 15% too short |
+| wrist reach | 0.722 | 0.640 | 0.082 too far in |
+| shoulder height | −0.406 | −0.490 | 0.084 too low |
+
+The arm hung too steeply, was too short and was rooted too low, which is why it
+read wrong however its parts were built. The joints now follow those angles and
+lengths, with the shoulder placed on the torso surface at that height rather
+than inside it, and the wrist lands at 0.724 against the board's 0.722.
+
+That reach is wider than the old envelope, so `validate_glb_world_bounds.py`
+moves from −0.712/+0.672 to a symmetric ±0.792 and additionally asserts that
+the two arms are mirrored.
+
+### Arm build and hand roll after the sixth review
 
 Read against `docs/assets/pico-design-concept.png` at high magnification.
 
